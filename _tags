@@ -1,0 +1,2 @@
+<src/*>: true
+true: use_menhir
