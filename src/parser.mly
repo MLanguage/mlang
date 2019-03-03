@@ -9,7 +9,7 @@
 %token PLUS MINUS TIMES DIV
 %token GTE LTE GT LT NEQ EQUALS
 %token SEMICOLON COLON COMMA
-%token AND OR NOTIN
+%token AND OR NOTIN NOT
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
@@ -25,8 +25,9 @@
 
 %type <unit> source_file
 
-%right SEMICOLON
-%right EQUALS
+%nonassoc SEMICOLON
+%left OR AND
+%nonassoc NOT
 %nonassoc SYMBOL
 
 %start source_file
@@ -119,17 +120,17 @@ formula_kind:
 | for_formula { () }
 
 for_formula:
-| FOR loop_variables COLON formula { () }
+| FOR loop_variables COLON formula{ () }
 
 formula:
 | SYMBOL brackets? EQUALS expression { () }
 
 verification:
-| VERIFICATION ; s = SYMBOL ; SYMBOL+ ; COLON ; application_reference ;
-  SEMICOLON ; verification_condition ; verification_condition+ { () }
+| VERIFICATION symbol_or_int+ COLON application_reference
+  SEMICOLON verification_condition+ { () }
 
 verification_condition:
-| IF ; expression ; THEN ; ERROR ; SYMBOL+ ; SEMICOLON { () }
+| IF expression THEN ERROR SYMBOL+ SEMICOLON { () }
 
 
 error_:
@@ -152,17 +153,19 @@ brackets:
 | LBRACKET SYMBOL RBRACKET { () }
 
 loop_variables:
-| separated_nonempty_list(AND, loop_variable1) { () }
-| separated_nonempty_list(SEMICOLON, loop_variable2) { () }
-
-loop_variable1:
-| ONE SYMBOL IN enumeration { () }
-
-loop_variable2:
+| loop_variables_ranges { () }
 | SYMBOL EQUALS enumeration { () }
 
+loop_variables_ranges:
+| loop_variables_range { () }
+| loop_variables_range AND loop_variables_ranges { () }
+
+loop_variables_range:
+| ONE SYMBOL IN enumeration { () }
+
 enumeration:
-| separated_nonempty_list(COMMA, enumeration_item) { () }
+| enumeration_item { () }
+| enumeration_item COMMA enumeration { () }
 
 enumeration_item:
 | interval { () }
@@ -170,23 +173,16 @@ enumeration_item:
 | SYMBOL { () }
 
 interval:
-| SYMBOL RANGE SYMBOL { () } (* Some intervals are "03..06" so we must keep the prefix "0" *)
+| symbol_or_int RANGE symbol_or_int { () } (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
-| expression_item { () }
-| expression_item AND expression { () }
-| expression_item OR expression { () }
-
-expression_item:
-| comparison { () }
-
-/* expression_item_rest:
-| NOTIN LPAREN enumeration RPAREN { () }
-| IN LPAREN enumeration RPAREN { () } */
-
-comparison:
-| sum_expression { () }
+| sum_expression NOTIN LPAREN enumeration RPAREN { () }
+| sum_expression IN LPAREN enumeration RPAREN { () }
 | sum_expression comparison_op sum_expression { () }
+| sum_expression { () }
+| expression AND expression { () }
+| expression OR expression { () }
+| NOT expression { () }
 
 sum_expression:
 | product_expression { () }
@@ -205,13 +201,13 @@ product_operator:
 | DIV { () }
 
 factor:
-| FOR loop_expression { () }
+| LPAREN FOR loop_expression RPAREN { () }
 | MINUS factor { () }
 | ternary_operator { () }
 | function_call { () }
 | SYMBOL brackets { () }
 | factor_literal { () }
-| group { () }
+| LPAREN expression RPAREN { () }
 
 loop_expression:
 | loop_variables COLON expression { () }
@@ -236,12 +232,9 @@ function_call_args:
 | function_arguments { () }
 
 function_arguments:
-| expression { () }
-| expression COMMA function_arguments { () }
+| sum_expression { () }
+| sum_expression COMMA function_arguments { () }
 
-
-group:
-| LPAREN expression RPAREN { () }
 
 symbol_or_int:
 | SYMBOL { () }

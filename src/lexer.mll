@@ -103,6 +103,8 @@ rule token = parse
   { LT }
 | "non dans"
   { NOTIN }
+| "non"
+  { NOT }
 | "regle"
   { RULE }
 | "si"

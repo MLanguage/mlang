@@ -20,20 +20,6 @@ let parse_cli_args () =
        "M parser"
   in Arg.parse speclist print_endline usage_msg
 
-let pp_token (t:Parser.token) : string = match t with
-  | Parser.RULE -> "RULE"
-  | Parser.SYMBOL s -> Printf.sprintf "SYMBOL(%s)" s
-  | Parser.COLON -> "COLON"
-  | Parser.SEMICOLON -> "SEMICOLON"
-  | Parser.APPLICATION -> "APPLICATION"
-  | Parser.EQUALS -> "EQUALS"
-  | Parser.LPAREN -> "LPAREN"
-  | Parser.RPAREN -> "LPAREN"
-  | Parser.INT i -> Printf.sprintf "INT(%d)" i
-  | Parser.PLUS -> "PLUS"
-  | Parser.MINUS -> "MINUS"
-  | _ -> "?"
-
 let main () =
   parse_cli_args ();
   let (filebuf, input) = if !source_file <> "" then
