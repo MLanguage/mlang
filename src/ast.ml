@@ -10,19 +10,76 @@ type rule_name = string list
 type variable_name = string
 [@@deriving show]
 
+type func_name =
+  | Unknown of string
+[@@deriving show]
+
 type variable_generic_name = {
   base: string;
   parameters: char list
 }
 [@@deriving show]
 
+type variable =
+  | Normal of variable_name
+  | Generic of variable_generic_name
+[@@deriving show]
+
+type literal =
+  | Variable of variable
+  | Int of int
+  | Float of float
+[@@deriving show]
+
 type table_index =
   | LiteralIndex of int
   | GenericIndex
-  | SymbolIndex of variable_name
+  | SymbolIndex of variable
 [@@deriving show]
 
-type expression = unit
+type set_value =
+  | VarValue of variable
+  | Interval of int * int
+[@@deriving show]
+
+type comp_op =
+  | Gt
+  | Gte
+  | Lt
+  | Lte
+  | Eq
+  | Neq
+[@@deriving show]
+
+type binop =
+  | And
+  | Or
+  | Add
+  | Sub
+  | Mul
+  | Div
+[@@deriving show]
+
+type unop =
+  | Not
+  | Minus
+[@@deriving show]
+
+type expression =
+  | TestInSet of bool * expression * set_value list
+  | Comparison of comp_op * expression * expression
+  | Binop of binop * expression * expression
+  | Unop of unop * expression
+  | Index of variable * table_index
+  | Conditional of expression * expression * expression option
+  | FunctionCall of func_name * func_args
+  | Literal of literal
+  | Loop of unit
+[@@deriving show]
+
+and func_args =
+    | ArgList of expression list
+  | LoopList of unit
 [@@deriving show]
 
 type formula_decl =

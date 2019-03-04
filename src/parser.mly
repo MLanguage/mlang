@@ -1,7 +1,7 @@
 %{
  open Ast
  open Lexing
- open Cli
+ open Parse_utils
 %}
 
 %token<string> SYMBOL STRING
@@ -192,83 +192,87 @@ loop_variables_range:
 | ONE SYMBOL IN enumeration { () }
 
 enumeration:
-| enumeration_item { () }
-| enumeration_item COMMA enumeration { () }
+| i = enumeration_item { [i] }
+| i = enumeration_item COMMA is = enumeration { i::is }
 
 enumeration_item:
-| interval { () }
-| SYMBOL { () }
+| bounds = interval { bounds  }
+| s = SYMBOL { VarValue (parse_variable $sloc s) }
 
 interval:
-| SYMBOL RANGE SYMBOL { () } (* Some intervals are "03..06" so we must keep the prefix "0" *)
+| i1 = SYMBOL RANGE i2 = SYMBOL
+ { Interval (parse_int $sloc i1, parse_int $sloc i2) }
+ (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
-| sum_expression NOTIN LPAREN enumeration RPAREN { () }
-| sum_expression IN LPAREN enumeration RPAREN { () }
-| sum_expression comparison_op sum_expression { () }
-| sum_expression { () }
-| expression AND expression { () }
-| expression OR expression { () }
-| NOT expression { () }
+| e = sum_expression NOTIN LPAREN s = enumeration RPAREN { TestInSet (false, e, s) }
+| e = sum_expression IN LPAREN s = enumeration RPAREN { TestInSet (true, e, s) }
+| e1 = sum_expression op = comparison_op e2 = sum_expression { Comparison (op, e1, e2) }
+| e = sum_expression { e }
+| e1 = expression AND e2 = expression { Binop (And, e1, e2) }
+| e1 = expression OR e2 = expression { Binop (Or, e1, e2) }
+| NOT e = expression { Unop (Not, e) }
 
 sum_expression:
-| product_expression { () }
-| product_expression sum_operator sum_expression { () }
+| e = product_expression { e }
+| e1 = product_expression op = sum_operator e2 = sum_expression { Binop (op, e1, e2) }
 
 sum_operator:
-| PLUS { () }
-| MINUS { () }
+| PLUS { Add }
+| MINUS { Sub }
 
 product_expression:
-| factor { () }
-| factor product_operator product_expression { () }
+| e = factor { e }
 
+| e1 = factor op = product_operator e2 = product_expression { Binop (op, e1, e2) }
 product_operator:
-| TIMES { () }
-| DIV { () }
+| TIMES { Mul }
+| DIV { Div }
 
 factor:
-| FOR loop_expression { () }
-| MINUS factor { () }
-| ternary_operator { () }
-| function_call { () }
-| SYMBOL brackets { () }
-| factor_literal { () }
-| LPAREN expression RPAREN { () }
+| FOR loop_expression { Loop () }
+| MINUS e = factor { Unop (Minus, e) }
+| e = ternary_operator { e }
+| e = function_call { e }
+| s = SYMBOL i = brackets { Index (parse_variable $sloc s, i) }
+| l = factor_literal { Literal l }
+| LPAREN e = expression RPAREN { e }
 
 loop_expression:
 | loop_variables COLON expression { () }
 
 ternary_operator:
-| IF expression THEN expression else_branch? ENDIF { () }
+| IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF
+{ Conditional (e1, e2, e3) }
 
 else_branch:
-| ELSE expression { () }
+| ELSE e = expression { e }
 
 factor_literal:
-| SYMBOL { () }(*
+| s = SYMBOL { parse_literal $sloc s }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
 function_call:
-| SYMBOL LPAREN function_call_args RPAREN { () }
+| s = SYMBOL LPAREN args = function_call_args RPAREN
+  { FunctionCall (parse_func_name $sloc s, args) }
 
 function_call_args:
-| loop_expression { () }
-| function_arguments { () }
+| loop_expression { LoopList () }
+| args = function_arguments { ArgList (args) }
 
 function_arguments:
-| sum_expression { () }
-| sum_expression COMMA function_arguments { () }
+| e = sum_expression { [e] }
+| e = sum_expression COMMA es = function_arguments { e::es }
 
 
 comparison_op:
-| GTE  { () }
-| LTE  { () }
-| LT { () }
-| GT { () }
-| NEQ  { () }
-| EQUALS { () }
+| GTE  { Gte }
+| LTE  { Lte }
+| LT { Lt }
+| GT { Gt }
+| NEQ  { Neq }
+| EQUALS { Eq }
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, SYMBOL) { ss }

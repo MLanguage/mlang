@@ -38,14 +38,16 @@ let main () =
       in
       try
         let commands = Parser.source_file token filebuf in
-        Cli.debug_print (Printf.sprintf "Parsed AST:\n%s" (Ast.show_source_file commands))
+        Cli.debug_print
+          (Printf.sprintf "Parsed AST:\n%s"
+             (Format_ast.format_source_file commands))
       with
-      | Lexer.LexingError msg | Cli.ParsingError msg ->
+      | Lexer.LexingError msg | Parse_utils.ParsingError msg ->
         error_print msg
       | Parser.Error -> begin
           error_print
             (Printf.sprintf "Lexer error at position %s"
-               (print_lexer_position filebuf.lex_curr_p));
+               (Parse_utils.print_lexer_position filebuf.lex_curr_p));
           begin match input with
             | Some input -> close_in input
             | None -> ()

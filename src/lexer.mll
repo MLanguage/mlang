@@ -1,7 +1,7 @@
 {
   open Lexing
   open Parser
-  open Cli
+  open Parse_utils
 
   exception LexingError of string
 

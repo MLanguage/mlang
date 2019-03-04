@@ -5,6 +5,7 @@ application : iliad , batch ;
 
 DLMRN1TXM = - min(0,MIB_NETCT *(1-positif(MIBNETPTOT))
                           +SPENETCT * (1 - positif(SPENETPF)));
+
 DLMRN1 = ((1-positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)) * abs(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
                  + positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
                  * positif_ou_nul(DEFBIC5+DEFBIC4+DEFBIC3+DEFBIC2+DEFBIC1-(somme(i=V,C,P:BICNPi)+MIB_NETNPCT))
