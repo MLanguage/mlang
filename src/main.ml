@@ -37,13 +37,15 @@ let main () =
                     }
       in
       try
-        let _commands = Parser.source_file Lexer.token filebuf in
-        ()
+        let commands = Parser.source_file token filebuf in
+        Cli.debug_print (Printf.sprintf "Parsed AST:\n%s" (Ast.show_source_file commands))
       with
-      | Lexer.Error msg ->
-        Printf.eprintf "%s%!" msg
+      | Lexer.LexingError msg | Cli.ParsingError msg ->
+        error_print msg
       | Parser.Error -> begin
-          Printf.eprintf "At offset %s: syntax error.\n%!" (print_position filebuf);
+          error_print
+            (Printf.sprintf "Lexer error at position %s"
+               (print_lexer_position filebuf.lex_curr_p));
           begin match input with
             | Some input -> close_in input
             | None -> ()

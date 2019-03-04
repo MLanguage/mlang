@@ -1,9 +1,9 @@
 %{
  open Ast
+ open Lexing
+ open Cli
 %}
 
-%token<string> FLOAT
-%token<int> INT
 %token<string> SYMBOL STRING
 
 %token PLUS MINUS TIMES DIV
@@ -42,7 +42,7 @@ source_file:
 source_file_item:
 | a = application { Application a }
 | c = chaining { Chaining c }
-| v = variable { Variable v }
+| v = variable_decl { Variable v }
 | r = rule { Rule r }
 | ver = verification { Verification ver }
 | e = error_ { Error e }
@@ -52,28 +52,28 @@ application:
 | APPLICATION s = SYMBOL SEMICOLON { () }
 
 application_reference:
-| APPLICATION COLON symbol_enumeration { () }
+| APPLICATION COLON ss = symbol_enumeration { ss }
 
 chaining:
 | CHAINING s = SYMBOL application_reference SEMICOLON { () }
 
 chaining_reference:
-| CHAINING COLON SYMBOL SEMICOLON { () }
+| CHAINING COLON c = SYMBOL SEMICOLON { c }
 
-variable:
+variable_decl:
 | computed_variable  { () }
 | const_variable  { () }
 | input_variable  { () }
 
 const_variable:
-| SYMBOL COLON CONST EQUALS FLOAT SEMICOLON { () }
+| SYMBOL COLON CONST EQUALS SYMBOL SEMICOLON { () }
 
 computed_variable:
 | SYMBOL COLON computed_variable_table? COMPUTED computed_variable_subtype*
   COLON STRING value_type? SEMICOLON { () }
 
 computed_variable_table:
-| TABLE LBRACKET INT RBRACKET { () }
+| TABLE LBRACKET SYMBOL RBRACKET { () }
 
 computed_variable_subtype:
 | BASE { () }
@@ -88,7 +88,7 @@ input_variable_alias:
 | ALIAS SYMBOL { () }
 
 input_variable_attribute:
-| SYMBOL EQUALS INT { () }
+| SYMBOL EQUALS SYMBOL { () }
 
 input_variable_subtype:
 | CONTEXT { () }
@@ -108,25 +108,47 @@ value_type_prim:
 | REAL { () }
 
 rule:
-| RULE symbol_or_int+ COLON application_reference SEMICOLON chaining_reference?
-  formula_list { () }
+| RULE name = SYMBOL+ COLON apps = application_reference
+  SEMICOLON c = chaining_reference?
+  formulaes = formula_list
+  { {
+      name = name;
+      applications = apps;
+      chaining = c;
+      formulaes = formulaes;
+    }
+  }
 
 formula_list:
-| formula_kind SEMICOLON { () }
-| formula_kind SEMICOLON formula_list { () }
+| f = formula_kind SEMICOLON { [f] }
+| f = formula_kind SEMICOLON fs = formula_list { f::fs }
 
 formula_kind:
-| formula { () }
-| for_formula { () }
+| f = formula_one { SingleFormula f }
+| fs = for_formula { MultipleFormulaes fs }
 
 for_formula:
-| FOR loop_variables COLON formula{ () }
+| FOR loop_variables COLON formula_two{ () }
 
-formula:
-| SYMBOL brackets? EQUALS expression { () }
+formula_two:
+| s = variable_generic i = brackets? EQUALS e = expression { () }
+
+formula_one:
+| s = variable i = brackets? EQUALS e = expression { {
+    variable = s;
+    index = i;
+    formula =  e
+  } }
+
+variable_generic:
+| s = SYMBOL { parse_variable_generic_name $sloc s }
+
+
+variable:
+| s = SYMBOL { parse_variable_name $sloc s }
 
 verification:
-| VERIFICATION symbol_or_int+ COLON application_reference
+| VERIFICATION SYMBOL+ COLON application_reference
   SEMICOLON verification_condition+ { () }
 
 verification_condition:
@@ -150,7 +172,7 @@ output:
 | OUTPUT LPAREN s = SYMBOL RPAREN SEMICOLON { () }
 
 brackets:
-| LBRACKET symbol_or_int RBRACKET { () }
+| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
 
 loop_variables:
 | loop_variables_ranges { () }
@@ -175,11 +197,10 @@ enumeration:
 
 enumeration_item:
 | interval { () }
-| INT { () }
 | SYMBOL { () }
 
 interval:
-| symbol_or_int RANGE symbol_or_int { () } (* Some intervals are "03..06" so we must keep the prefix "0" *)
+| SYMBOL RANGE SYMBOL { () } (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
 | sum_expression NOTIN LPAREN enumeration RPAREN { () }
@@ -225,8 +246,7 @@ else_branch:
 | ELSE expression { () }
 
 factor_literal:
-| FLOAT { () }
-| symbol_or_int { () }(*
+| SYMBOL { () }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
@@ -242,10 +262,6 @@ function_arguments:
 | sum_expression COMMA function_arguments { () }
 
 
-symbol_or_int:
-| SYMBOL { () }
-| INT { () }
-
 comparison_op:
 | GTE  { () }
 | LTE  { () }
@@ -255,4 +271,4 @@ comparison_op:
 | EQUALS { () }
 
 symbol_enumeration:
-| separated_nonempty_list(COMMA, SYMBOL) { () }
+| ss = separated_nonempty_list(COMMA, SYMBOL) { ss }

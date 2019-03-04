@@ -1,20 +1,15 @@
 {
-  open Parser
   open Lexing
+  open Parser
+  open Cli
 
-  exception Error of string
+  exception LexingError of string
 
-  let print_position (lexbuf : Lexing.lexbuf) : string =
-    let pos = lexbuf.lex_curr_p in
-    Printf.sprintf "%s:%d:%d" pos.pos_fname
-      pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
-
-
-  let error lexbuf   =
-    Printf.sprintf "Incorrect character (%s) at position %s\n"
-      (Lexing.lexeme lexbuf)
-      (print_position lexbuf)
-
+  let lexer_error lexbuf  =
+    Printf.sprintf "Incorrect character (%s) at position %s in file %s\n"
+     (Lexing.lexeme lexbuf)
+     (print_lexer_position lexbuf.lex_curr_p)
+     (lexbuf.lex_curr_p.pos_fname)
 }
 rule token = parse
 | [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)
@@ -135,15 +130,11 @@ rule token = parse
   { INFORMATIVE }
 | "sortie"
   { OUTPUT }
-| ['0'-'9']+ '.' ['0'-'9']+ as f
-  { FLOAT f }
-| ['0'-'9']+ as i
-  { INT (int_of_string i) }
 | '"' [^'"']* '"' as s
   { STRING s }
-| ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
+| ['a'-'z' 'A'-'Z' '0'-'9' '_' '.']+ as s
   { SYMBOL s }
 | eof
   { EOF }
 | _
-  { raise (Error (error lexbuf)) }
+  { raise (LexingError (lexer_error lexbuf)) }
