@@ -4,8 +4,16 @@
 
   exception Error of string
 
-  let error msg   =
-    Printf.sprintf "Incorrect character (%s)"  msg
+  let print_position (lexbuf : Lexing.lexbuf) : string =
+    let pos = lexbuf.lex_curr_p in
+    Printf.sprintf "%s:%d:%d" pos.pos_fname
+      pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
+
+
+  let error lexbuf   =
+    Printf.sprintf "Incorrect character (%s) at position %s\n"
+      (Lexing.lexeme lexbuf)
+      (print_position lexbuf)
 
 }
 rule token = parse
@@ -131,11 +139,11 @@ rule token = parse
   { FLOAT f }
 | ['0'-'9']+ as i
   { INT (int_of_string i) }
-| '"' [^'"'] '"' as s
+| '"' [^'"']* '"' as s
   { STRING s }
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
 | eof
   { EOF }
 | _
-  { raise (Error (error (Lexing.lexeme lexbuf))) }
+  { raise (Error (error lexbuf)) }

@@ -1,5 +1,5 @@
 %{
-
+ open Ast
 %}
 
 %token<string> FLOAT
@@ -23,7 +23,7 @@
 
 %token EOF
 
-%type <unit> source_file
+%type <Ast.source_file> source_file
 
 %nonassoc SEMICOLON
 %left OR AND
@@ -35,18 +35,18 @@
 %%
 
 source_file:
-| source_file_item source_file { () }
-| EOF { () }
+| i = source_file_item is = source_file { i::is }
+| EOF { [] }
 
 
 source_file_item:
-| application { () }
-| chaining { () }
-| variable { () }
-| rule { () }
-| verification { () }
-| error_ { () }
-| output { () }
+| a = application { Application a }
+| c = chaining { Chaining c }
+| v = variable { Variable v }
+| r = rule { Rule r }
+| ver = verification { Verification ver }
+| e = error_ { Error e }
+| o = output { Output o }
 
 application:
 | APPLICATION s = SYMBOL SEMICOLON { () }
@@ -134,12 +134,12 @@ verification_condition:
 
 
 error_:
-| n = SYMBOL ; type_error;  COLON ;  STRING ; COLON ;
-   STRING ; COLON ;  STRING ; COLON ;  STRING ;
-  SEMICOLON ; error_message? ; SEMICOLON { () }
+| n = SYMBOL COLON type_error COLON STRING COLON
+   STRING COLON STRING COLON STRING
+   error_message? SEMICOLON { () }
 
 error_message:
-| COLON ;  STRING { () }
+| COLON  STRING { () }
 
 type_error:
 | ANOMALY { () }
@@ -150,10 +150,16 @@ output:
 | OUTPUT LPAREN s = SYMBOL RPAREN SEMICOLON { () }
 
 brackets:
-| LBRACKET SYMBOL RBRACKET { () }
+| LBRACKET symbol_or_int RBRACKET { () }
 
 loop_variables:
 | loop_variables_ranges { () }
+| loop_variables_values { () }
+
+loop_variables_values:
+| separated_nonempty_list(SEMICOLON, loop_variables_value) { () }
+
+loop_variables_value:
 | SYMBOL EQUALS enumeration { () }
 
 loop_variables_ranges:
@@ -201,7 +207,7 @@ product_operator:
 | DIV { () }
 
 factor:
-| LPAREN FOR loop_expression RPAREN { () }
+| FOR loop_expression { () }
 | MINUS factor { () }
 | ternary_operator { () }
 | function_call { () }
