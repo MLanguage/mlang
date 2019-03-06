@@ -46,17 +46,17 @@ let format_unop (op: unop) : string = match op with
 
 let rec format_expression (e: expression) : string = match e with
   | TestInSet (belong, e, values) ->
-    Printf.sprintf "%s %sdans %s"
+    Printf.sprintf "(%s %sdans %s)"
       (format_expression e)
       (if belong then "" else "non ")
       (String.concat ", " (List.map (fun value -> format_set_value value) values))
   | Comparison (op, e1, e2) ->
-    Printf.sprintf "%s %s %s"
+    Printf.sprintf "(%s %s %s)"
       (format_expression e1)
       (format_comp_op op)
       (format_expression e2)
   | Binop (op, e1, e2) ->
-    Printf.sprintf "%s %s %s"
+    Printf.sprintf "(%s %s %s)"
       (format_expression e1)
       (format_binop op)
       (format_expression e2)
@@ -65,7 +65,7 @@ let rec format_expression (e: expression) : string = match e with
   | Index (v, i) ->
     Printf.sprintf "%s[%s]" (format_variable v) (format_table_index i)
   | Conditional (e1, e2, e3) ->
-    Printf.sprintf "si %s alors %s %sfinsi"
+    Printf.sprintf "(si %s alors %s %sfinsi)"
       (format_expression e1)
       (format_expression e2)
       (match e3 with
