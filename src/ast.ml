@@ -25,6 +25,12 @@ type variable =
   | Generic of variable_generic_name
 [@@deriving show]
 
+type lvalue = {
+  var: variable;
+  index: variable option
+}
+[@@deriving show]
+
 type literal =
   | Variable of variable
   | Int of int
@@ -65,6 +71,14 @@ type unop =
   | Minus
 [@@deriving show]
 
+type loop_variable = variable * set_value list
+[@@deriving show]
+
+type loop_variables =
+  | ValueSets of loop_variable list
+  | Ranges of loop_variable list
+[@@deriving show]
+
 type expression =
   | TestInSet of bool * expression * set_value list
   | Comparison of comp_op * expression * expression
@@ -74,7 +88,7 @@ type expression =
   | Conditional of expression * expression * expression option
   | FunctionCall of func_name * func_args
   | Literal of literal
-  | Loop of unit
+  | Loop of loop_variables * expression
 [@@deriving show]
 
 and func_args =
@@ -84,7 +98,7 @@ and func_args =
 
 type formula_decl =
   {
-    variable: variable_name;
+    lvalue: lvalue;
     index: table_index option;
     formula: expression;
   }
@@ -92,7 +106,7 @@ type formula_decl =
 
 type formula =
   | SingleFormula of formula_decl
-  | MultipleFormulaes of unit
+  | MultipleFormulaes of loop_variables * formula_decl
 [@@deriving show]
 
 type rule = {

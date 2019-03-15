@@ -125,17 +125,21 @@ formula_list:
 
 formula_kind:
 | f = formula_one { SingleFormula f }
-| fs = for_formula { MultipleFormulaes fs }
+| fs = for_formula { let (lv, ft) = fs in MultipleFormulaes (lv, ft) }
 
 for_formula:
-| FOR loop_variables COLON formula_two{ () }
+| FOR lv = loop_variables COLON ft = formula_two { (lv, ft) }
 
 formula_two:
-| s = variable_generic i = brackets? EQUALS e = expression { () }
+| s = variable_generic i = brackets? EQUALS e = expression { {
+    lvalue = { var = Generic s; index = None} ;
+    index = i;
+    formula =  e
+  } }
 
 formula_one:
 | s = variable i = brackets? EQUALS e = expression { {
-    variable = s;
+    lvalue = { var = Normal s; index = None} ;
     index = i;
     formula =  e
   } }
@@ -175,21 +179,25 @@ brackets:
 | LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
 
 loop_variables:
-| loop_variables_ranges { () }
-| loop_variables_values { () }
+| lrs = loop_variables_ranges { Ranges lrs }
+| lvs = loop_variables_values { ValueSets lvs }
 
 loop_variables_values:
-| separated_nonempty_list(SEMICOLON, loop_variables_value) { () }
+| lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
 
 loop_variables_value:
-| SYMBOL EQUALS enumeration { () }
+| s = SYMBOL EQUALS e = enumeration {
+    (Generic (parse_variable_generic_name $sloc s), e)
+  }
 
 loop_variables_ranges:
-| loop_variables_range { () }
-| loop_variables_range AND loop_variables_ranges { () }
+| r = loop_variables_range { [r] }
+| r = loop_variables_range AND rs = loop_variables_ranges { r::rs }
 
 loop_variables_range:
-| ONE SYMBOL IN enumeration { () }
+| ONE s = SYMBOL IN e = enumeration {
+   ((Generic (parse_variable_generic_name $sloc s), e))
+ }
 
 enumeration:
 | i = enumeration_item { [i] }
@@ -230,7 +238,7 @@ product_operator:
 | DIV { Div }
 
 factor:
-| FOR loop_expression { Loop () }
+| FOR le =  loop_expression { le }
 | MINUS e = factor { Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
@@ -239,7 +247,7 @@ factor:
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
-| loop_variables COLON expression { () }
+| lvs = loop_variables COLON e = expression { Loop (lvs, e) }
 
 ternary_operator:
 | IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF

@@ -10,6 +10,12 @@ let format_variable (v: variable) : string = match v with
   | Normal v -> v
   | Generic v -> format_variable_generic_name v
 
+let format_lvalue (lv: lvalue) : string =
+  Printf.sprintf "%s%s" (format_variable lv.var) (match lv.index with
+      | Some vi -> "[" ^ (format_variable vi) ^ "]"
+      | None -> ""
+    )
+
 let format_literal (l:literal) : string = match l with
   | Variable v -> format_variable v
   | Int i -> string_of_int i
@@ -19,6 +25,30 @@ let format_table_index (i:table_index) : string = match i with
   | LiteralIndex i -> string_of_int i
   | GenericIndex -> "X"
   | SymbolIndex v -> format_variable v
+
+let format_set_value (sv: set_value) : string = match sv with
+  | VarValue v -> format_variable v
+  | Interval (i1, i2) -> Printf.sprintf "%d..%d" i1 i2
+
+let format_loop_variable_ranges ((v, vs): loop_variable) =
+  Printf.sprintf "un %s dans %s"
+    (format_variable v)
+    (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
+
+let format_loop_variable_value_set ((v, vs): loop_variable) =
+  Printf.sprintf "%s=%s"
+    (format_variable v)
+    (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
+
+let format_loop_variables (lvs: loop_variables) : string =
+  Printf.sprintf "pour %s:" (match lvs with
+      | Ranges vvs ->
+        String.concat " et "
+          (List.map (fun (v, vs) -> format_loop_variable_ranges (v,vs)) vvs)
+      | ValueSets vvs ->
+        String.concat ";"
+          (List.map (fun (v, vs) -> format_loop_variable_value_set (v,vs)) vvs)
+    )
 
 let format_set_value (v:set_value) : string = match v with
   | VarValue v -> format_variable v
@@ -75,7 +105,10 @@ let rec format_expression (e: expression) : string = match e with
     Printf.sprintf "%s(%s)" (format_func_name f)
       (format_func_args args)
   | Literal l -> format_literal l
-  | Loop () -> "pour [...]"
+  | Loop (lvs, e) ->
+    Printf.sprintf "%s%s"
+      (format_loop_variables lvs)
+      (format_expression e)
 
 and format_func_args (args:func_args) : string = match args with
   | ArgList args -> String.concat ", "
@@ -84,14 +117,17 @@ and format_func_args (args:func_args) : string = match args with
 
 let format_formula_decl (f:formula_decl) : string =
   Printf.sprintf "%s%s = %s"
-    (f.variable)
+    (format_lvalue f.lvalue)
     (match f.index with None -> "" | Some i ->
         "[" ^ format_table_index i ^ "]")
     (format_expression f.formula)
 
 let format_formula (f:formula) : string = match f with
   | SingleFormula f -> format_formula_decl f
-  | MultipleFormulaes () -> "[...]"
+  | MultipleFormulaes (lvs, f) ->
+    Printf.sprintf "%s\n%s"
+      (format_loop_variables lvs)
+      (format_formula_decl f)
 
 let format_rule (r: rule) : string =
   Printf.sprintf "regle %s:\napplication %s;\n%s\n"
