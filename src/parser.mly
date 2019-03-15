@@ -41,7 +41,7 @@ source_file:
 
 source_file_item:
 | a = application { Application a }
-| c = chaining { Chaining c }
+| c = chaining { let (s, aps) = c in Chaining (s, aps) }
 | v = variable_decl { Variable v }
 | r = rule { Rule r }
 | ver = verification { Verification ver }
@@ -49,63 +49,82 @@ source_file_item:
 | o = output { Output o }
 
 application:
-| APPLICATION s = SYMBOL SEMICOLON { () }
+| APPLICATION s = SYMBOL SEMICOLON { s }
 
 application_reference:
 | APPLICATION COLON ss = symbol_enumeration { ss }
 
 chaining:
-| CHAINING s = SYMBOL application_reference SEMICOLON { () }
+| CHAINING s = SYMBOL aps = application_reference SEMICOLON { (s, aps) }
 
 chaining_reference:
 | CHAINING COLON c = SYMBOL SEMICOLON { c }
 
 variable_decl:
-| computed_variable  { () }
-| const_variable  { () }
-| input_variable  { () }
+| v = computed_variable  { v }
+| v = const_variable  { v }
+| v = input_variable  { v }
 
 const_variable:
-| SYMBOL COLON CONST EQUALS SYMBOL SEMICOLON { () }
+| name = SYMBOL COLON CONST EQUALS value = SYMBOL SEMICOLON
+  { ConstVar (name, parse_literal $sloc value) }
 
 computed_variable:
-| SYMBOL COLON computed_variable_table? COMPUTED computed_variable_subtype*
-  COLON STRING value_type? SEMICOLON { () }
+| name = SYMBOL COLON size = computed_variable_table? COMPUTED
+  subtyp = computed_variable_subtype*
+  COLON descr = STRING typ = value_type? SEMICOLON
+  { ComputedVar {
+    comp_name = Normal (parse_variable_name $sloc name);
+    comp_table = size;
+    comp_subtyp = subtyp;
+    comp_description = descr;
+    comp_typ = typ;
+  } }
 
 computed_variable_table:
-| TABLE LBRACKET SYMBOL RBRACKET { () }
+| TABLE LBRACKET size = SYMBOL RBRACKET { int_of_string size }
 
 computed_variable_subtype:
-| BASE { () }
-| GIVEN_BACK { () }
+| BASE { Base }
+| GIVEN_BACK { GivenBack }
 
 input_variable:
-| SYMBOL COLON INPUT input_variable_subtype input_variable_attribute*
-  GIVEN_BACK? input_variable_alias COLON STRING value_type?
-  SEMICOLON { () }
+| name = SYMBOL COLON INPUT subtyp = input_variable_subtype
+  attrs = input_variable_attribute*
+  g = GIVEN_BACK? alias = input_variable_alias COLON descr = STRING
+  typ = value_type?
+  SEMICOLON { InputVar {
+    input_name = parse_variable_name $sloc name;
+    input_subtyp = subtyp;
+    input_attributes = attrs;
+    input_given_back = (match g with Some _ -> true | None -> false);
+    input_alias = alias;
+    input_typ = typ;
+    input_description = descr;
+  } }
 
 input_variable_alias:
-| ALIAS SYMBOL { () }
+| ALIAS alias = SYMBOL { parse_variable_name $sloc alias }
 
 input_variable_attribute:
-| SYMBOL EQUALS SYMBOL { () }
+| attr = SYMBOL EQUALS lit = SYMBOL { (attr, parse_literal $sloc lit) }
 
 input_variable_subtype:
-| CONTEXT { () }
-| FAMILY { () }
-| PENALITY { () }
-| INCOME { () }
+| CONTEXT { Context }
+| FAMILY { Family }
+| PENALITY { Penality }
+| INCOME { Income }
 
 value_type:
-| TYPE value_type_prim { () }
+| TYPE typ = value_type_prim { typ }
 
 value_type_prim:
-| BOOLEAN { () }
-| DATE_YEAR { () }
-| DATE_DAY_MONTH_YEAR { () }
-| DATE_MONTH { () }
-| INTEGER { () }
-| REAL { () }
+| BOOLEAN { Boolean }
+| DATE_YEAR { DateYear }
+| DATE_DAY_MONTH_YEAR { DateDayMonthYear }
+| DATE_MONTH { DateMonth }
+| INTEGER { Integer }
+| REAL { Real }
 
 rule:
 | RULE name = SYMBOL+ COLON apps = application_reference

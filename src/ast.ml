@@ -117,10 +117,60 @@ type rule = {
 }
 [@@deriving show]
 
+type computed_typ =
+  | Base
+  | GivenBack
+[@@deriving show]
+
+type input_variable_subtype =
+  | Context
+  | Family
+  | Penality
+  | Income
+[@@deriving show]
+
+type input_variable_attribute = string
+[@@deriving show]
+
+type value_typ =
+  | Boolean
+  | DateYear
+  | DateDayMonthYear
+  | DateMonth
+  | Integer
+  | Real
+[@@deriving show]
+
+type input_variable = {
+  input_name: variable_name;
+  input_subtyp: input_variable_subtype;
+  input_attributes: (input_variable_attribute * literal) list;
+  input_given_back: bool;
+  input_alias: variable_name;
+  input_description: string;
+  input_typ: value_typ option;
+}
+[@@deriving show]
+
+type computed_variable = {
+  comp_name: variable;
+  comp_table: int option; (* size of the table *)
+  comp_subtyp: computed_typ list;
+  comp_typ: value_typ option;
+  comp_description: string;
+}
+[@@deriving show]
+
+type variable_decl =
+  | ComputedVar of computed_variable
+  | ConstVar of variable_name * literal
+  | InputVar of input_variable
+[@@deriving show]
+
 type source_file_item =
-  | Application of unit
-  | Chaining of unit
-  | Variable of unit
+  | Application of application
+  | Chaining of chaining * application list
+  | Variable of variable_decl
   | Rule of rule
   | Verification of unit
   | Error of unit
