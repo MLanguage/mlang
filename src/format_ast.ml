@@ -131,9 +131,9 @@ let format_formula (f:formula) : string = match f with
 
 let format_rule (r: rule) : string =
   Printf.sprintf "regle %s:\napplication %s;\n%s\n"
-    (String.concat " " r.name)
-    (String.concat ", " r.applications)
-    (String.concat ";\n" (List.map (fun f -> format_formula f) r.formulaes))
+    (String.concat " " r.rule_name)
+    (String.concat ", " r.rule_applications)
+    (String.concat ";\n" (List.map (fun f -> format_formula f) r.rule_formulaes))
 
 let format_source_file_item (i:source_file_item) : string = match i with
   | Rule r -> format_rule r

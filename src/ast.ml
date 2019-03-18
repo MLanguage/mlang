@@ -25,6 +25,12 @@ type variable =
   | Generic of variable_generic_name
 [@@deriving show]
 
+type verification_name = string list
+[@@deriving show]
+
+type error_name = string
+[@@deriving show]
+
 type lvalue = {
   var: variable;
   index: variable option
@@ -110,10 +116,10 @@ type formula =
 [@@deriving show]
 
 type rule = {
-  name: rule_name;
-  applications: application list;
-  chaining: chaining option;
-  formulaes: formula list;
+  rule_name: rule_name;
+  rule_applications: application list;
+  rule_chaining: chaining option;
+  rule_formulaes: formula list;
 }
 [@@deriving show]
 
@@ -167,14 +173,40 @@ type variable_decl =
   | InputVar of input_variable
 [@@deriving show]
 
+type verification_condition = {
+  verif_cond_expr: expression;
+  verif_cond_errors: error_name list
+}
+[@@deriving show]
+
+type verification = {
+  verif_name: verification_name;
+  verif_applications: application list;
+  verif_conditions: verification_condition list;
+}
+[@@deriving show]
+
+type error_typ =
+  | Anomaly
+  | Discordance
+  | Information
+[@@deriving show]
+
+type error_ = {
+  error_name: error_name;
+  error_typ: error_typ;
+  error_descr: string list;
+}
+[@@deriving show]
+
 type source_file_item =
   | Application of application
   | Chaining of chaining * application list
   | Variable of variable_decl
   | Rule of rule
-  | Verification of unit
-  | Error of unit
-  | Output of unit
+  | Verification of verification
+  | Error of error_
+  | Output of variable_name
 [@@deriving show]
 
 type source_file = source_file_item list

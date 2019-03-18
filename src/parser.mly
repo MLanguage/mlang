@@ -131,10 +131,10 @@ rule:
   SEMICOLON c = chaining_reference?
   formulaes = formula_list
   { {
-      name = name;
-      applications = apps;
-      chaining = c;
-      formulaes = formulaes;
+      rule_name = name;
+      rule_applications = apps;
+      rule_chaining = c;
+      rule_formulaes = formulaes;
     }
   }
 
@@ -171,28 +171,41 @@ variable:
 | s = SYMBOL { parse_variable_name $sloc s }
 
 verification:
-| VERIFICATION SYMBOL+ COLON application_reference
-  SEMICOLON verification_condition+ { () }
+| VERIFICATION name = SYMBOL+ COLON apps = application_reference
+  SEMICOLON conds = verification_condition+ { {
+  verif_name = name;
+  verif_applications = apps;
+  verif_conditions = conds;
+} }
 
 verification_condition:
-| IF expression THEN ERROR SYMBOL+ SEMICOLON { () }
+| IF e = expression THEN ERROR e_names = SYMBOL+ SEMICOLON { {
+    verif_cond_expr = e;
+    verif_cond_errors = e_names;
+  } }
 
 
 error_:
-| n = SYMBOL COLON type_error COLON STRING COLON
-   STRING COLON STRING COLON STRING
-   error_message? SEMICOLON { () }
+| n = SYMBOL COLON t = type_error COLON s1 = STRING COLON
+   s2 = STRING COLON s3 = STRING COLON s4 = STRING
+   s5 = error_message? SEMICOLON { {
+      error_name = n;
+      error_typ = t;
+      error_descr = s1::s2::s3::s4::(match s5 with
+        | None -> []
+        | Some s5 -> [s5]);
+    } }
 
 error_message:
-| COLON  STRING { () }
+| COLON  s = STRING { s }
 
 type_error:
-| ANOMALY { () }
-| DISCORDANCE { () }
-| INFORMATIVE { () }
+| ANOMALY { Anomaly }
+| DISCORDANCE { Discordance }
+| INFORMATIVE { Information }
 
 output:
-| OUTPUT LPAREN s = SYMBOL RPAREN SEMICOLON { () }
+| OUTPUT LPAREN s = SYMBOL RPAREN SEMICOLON { parse_variable_name $sloc s }
 
 brackets:
 | LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
