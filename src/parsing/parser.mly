@@ -40,16 +40,19 @@ source_file:
 
 
 source_file_item:
-| a = application { Application a }
-| c = chaining { let (s, aps) = c in Chaining (s, aps) }
-| v = variable_decl { Variable v }
-| r = rule { Rule r }
-| ver = verification { Verification ver }
-| e = error_ { Error e }
-| o = output { Output o }
+| a = application { (Application a, mk_position $sloc) }
+| c = chaining { let (s, aps) = c in (Chaining (s, aps), mk_position $sloc) }
+| v = variable_decl { (Variable v, mk_position $sloc) }
+| r = rule { (Rule r, mk_position $sloc) }
+| ver = verification { (Verification ver, mk_position $sloc) }
+| e = error_ { (Error e, mk_position $sloc) }
+| o = output { (Output o, mk_position $sloc) }
+
+application_name:
+| s = SYMBOL { (s, mk_position $sloc) }
 
 application:
-| APPLICATION s = SYMBOL SEMICOLON { s }
+| APPLICATION s = application_name SEMICOLON { s }
 
 application_reference:
 | APPLICATION COLON ss = symbol_enumeration { ss }
@@ -151,15 +154,13 @@ for_formula:
 
 formula_two:
 | s = variable_generic i = brackets? EQUALS e = expression { {
-    lvalue = { var = Generic s; index = None} ;
-    index = i;
+    lvalue = { var = Generic s; index = i} ;
     formula =  e
   } }
 
 formula_one:
 | s = variable i = brackets? EQUALS e = expression { {
-    lvalue = { var = Normal s; index = None} ;
-    index = i;
+    lvalue = { var = Normal s; index = i} ;
     formula =  e
   } }
 
@@ -314,5 +315,8 @@ comparison_op:
 | NEQ  { Neq }
 | EQUALS { Eq }
 
+marked_symbol:
+| s = SYMBOL { (s, mk_position $sloc) }
+
 symbol_enumeration:
-| ss = separated_nonempty_list(COMMA, SYMBOL) { ss }
+| ss = separated_nonempty_list(COMMA, marked_symbol) { ss }

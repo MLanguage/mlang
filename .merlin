@@ -1,5 +1,5 @@
-S src
-B _build/src
+S src/**
+B _build/**
 PKG ppx_deriving.std
 PKG ANSITerminal
 PKG str

@@ -1,3 +1,20 @@
+type position = {
+  pos_filename: string;
+  pos_loc: (Lexing.position * Lexing.position)
+}
+
+let pp_position f (pos:position) : unit =
+  let (s, e) = pos.pos_loc in
+  Format.fprintf f "%s %d:%d--%d:%d"
+    pos.pos_filename
+    s.Lexing.pos_lnum (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+    e.Lexing.pos_lnum (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+
+type 'a marked = ('a * position)
+[@@deriving show]
+
+let unmark ((x, _) : 'a marked) : 'a = x
+
 type application = string
 [@@deriving show]
 
@@ -31,12 +48,6 @@ type verification_name = string list
 type error_name = string
 [@@deriving show]
 
-type lvalue = {
-  var: variable;
-  index: variable option
-}
-[@@deriving show]
-
 type literal =
   | Variable of variable
   | Int of int
@@ -48,6 +59,14 @@ type table_index =
   | GenericIndex
   | SymbolIndex of variable
 [@@deriving show]
+
+
+type lvalue = {
+  var: variable;
+  index: table_index option
+}
+[@@deriving show]
+
 
 type set_value =
   | VarValue of variable
@@ -105,7 +124,6 @@ and func_args =
 type formula_decl =
   {
     lvalue: lvalue;
-    index: table_index option;
     formula: expression;
   }
 [@@deriving show]
@@ -117,8 +135,8 @@ type formula =
 
 type rule = {
   rule_name: rule_name;
-  rule_applications: application list;
-  rule_chaining: chaining option;
+  rule_applications: application marked list;
+  rule_chaining: chaining  option;
   rule_formulaes: formula list;
 }
 [@@deriving show]
@@ -181,7 +199,7 @@ type verification_condition = {
 
 type verification = {
   verif_name: verification_name;
-  verif_applications: application list;
+  verif_applications: application marked list;
   verif_conditions: verification_condition list;
 }
 [@@deriving show]
@@ -200,8 +218,8 @@ type error_ = {
 [@@deriving show]
 
 type source_file_item =
-  | Application of application
-  | Chaining of chaining * application list
+  | Application of application marked
+  | Chaining of chaining * application marked list
   | Variable of variable_decl
   | Rule of rule
   | Verification of verification
@@ -209,5 +227,5 @@ type source_file_item =
   | Output of variable_name
 [@@deriving show]
 
-type source_file = source_file_item list
+type source_file = source_file_item marked list
 [@@deriving show]

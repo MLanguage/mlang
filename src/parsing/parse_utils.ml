@@ -1,6 +1,13 @@
 
 exception ParsingError of string
 
+let current_file: string ref = ref ""
+
+let mk_position sloc = {
+  Ast.pos_filename = !current_file;
+  Ast.pos_loc = sloc;
+}
+
 let print_lexer_position (pos : Lexing.position) : string =
   Printf.sprintf "%d:%d"
     pos.Lexing.pos_lnum (pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)

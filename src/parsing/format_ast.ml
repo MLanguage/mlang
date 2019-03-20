@@ -10,9 +10,14 @@ let format_variable (v: variable) : string = match v with
   | Normal v -> v
   | Generic v -> format_variable_generic_name v
 
+let format_table_index (i:table_index) : string = match i with
+  | LiteralIndex i -> string_of_int i
+  | GenericIndex -> "X"
+  | SymbolIndex v -> format_variable v
+
 let format_lvalue (lv: lvalue) : string =
   Printf.sprintf "%s%s" (format_variable lv.var) (match lv.index with
-      | Some vi -> "[" ^ (format_variable vi) ^ "]"
+      | Some vi -> "[" ^ (format_table_index vi) ^ "]"
       | None -> ""
     )
 
@@ -20,11 +25,6 @@ let format_literal (l:literal) : string = match l with
   | Variable v -> format_variable v
   | Int i -> string_of_int i
   | Float f -> string_of_float f
-
-let format_table_index (i:table_index) : string = match i with
-  | LiteralIndex i -> string_of_int i
-  | GenericIndex -> "X"
-  | SymbolIndex v -> format_variable v
 
 let format_set_value (sv: set_value) : string = match sv with
   | VarValue v -> format_variable v
@@ -116,10 +116,8 @@ and format_func_args (args:func_args) : string = match args with
   | LoopList () -> "[...]"
 
 let format_formula_decl (f:formula_decl) : string =
-  Printf.sprintf "%s%s = %s"
+  Printf.sprintf "%s = %s"
     (format_lvalue f.lvalue)
-    (match f.index with None -> "" | Some i ->
-        "[" ^ format_table_index i ^ "]")
     (format_expression f.formula)
 
 let format_formula (f:formula) : string = match f with
@@ -132,7 +130,7 @@ let format_formula (f:formula) : string = match f with
 let format_rule (r: rule) : string =
   Printf.sprintf "regle %s:\napplication %s;\n%s\n"
     (String.concat " " r.rule_name)
-    (String.concat ", " r.rule_applications)
+    (String.concat ", " (List.map unmark r.rule_applications))
     (String.concat ";\n" (List.map (fun f -> format_formula f) r.rule_formulaes))
 
 let format_source_file_item (i:source_file_item) : string = match i with
@@ -140,4 +138,4 @@ let format_source_file_item (i:source_file_item) : string = match i with
   | _ -> "[...]"
 
 let format_source_file (f: source_file) : string =
-  String.concat "\n" (List.map (fun i -> format_source_file_item i) f)
+  String.concat "\n" (List.map (fun i -> format_source_file_item (unmark i)) f)

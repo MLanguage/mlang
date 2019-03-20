@@ -37,6 +37,7 @@ let main () =
                     }
       in
       try
+        Parse_utils.current_file := source_file;
         let commands = Parser.source_file token filebuf in
         Cli.debug_print
           (Printf.sprintf "Parsed AST:\n%s"
