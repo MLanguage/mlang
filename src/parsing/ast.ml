@@ -136,7 +136,7 @@ type formula =
 type rule = {
   rule_name: rule_name;
   rule_applications: application marked list;
-  rule_chaining: chaining  option;
+  rule_chaining: chaining marked option;
   rule_formulaes: formula list;
 }
 [@@deriving show]

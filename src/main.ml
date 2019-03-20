@@ -47,7 +47,8 @@ let main () =
         error_print msg
       | Parser.Error -> begin
           error_print
-            (Printf.sprintf "Lexer error at position %s"
+            (Printf.sprintf "Lexer error in file %s at position %s"
+               (!Parse_utils.current_file)
                (Parse_utils.print_lexer_position filebuf.lex_curr_p));
           begin match input with
             | Some input -> close_in input

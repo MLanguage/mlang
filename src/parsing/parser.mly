@@ -60,8 +60,11 @@ application_reference:
 chaining:
 | CHAINING s = SYMBOL aps = application_reference SEMICOLON { (s, aps) }
 
+chaining_reference_name:
+| c = SYMBOL { (c, mk_position $sloc) }
+
 chaining_reference:
-| CHAINING COLON c = SYMBOL SEMICOLON { c }
+| CHAINING COLON c = chaining_reference_name SEMICOLON { c }
 
 variable_decl:
 | v = computed_variable  { v }

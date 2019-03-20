@@ -1,0 +1,189 @@
+
+** Conflict (shift/reduce) in state 117.
+** Token involved: COLON
+** This state is reached from source_file after reading:
+
+SYMBOL 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+source_file 
+source_file_item source_file 
+variable_decl 
+(?)
+
+** In state 117, looking ahead at COLON, shifting is permitted
+** because of the following sub-derivation:
+
+computed_variable 
+SYMBOL . COLON option(computed_variable_table) COMPUTED list(computed_variable_subtype) COLON STRING option(value_type) SEMICOLON 
+
+** In state 117, looking ahead at COLON, reducing production
+** const_variable_name -> SYMBOL 
+** is permitted because of the following sub-derivation:
+
+const_variable 
+const_variable_name COLON CONST EQUALS const_variable_literal SEMICOLON // lookahead token appears
+SYMBOL . 
+
+** Conflict (shift/reduce) in state 84.
+** Tokens involved: OR AND
+** The following explanations concentrate on token OR.
+** This state is reached from source_file after reading:
+
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON IF FOR loop_variables COLON expression 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+source_file 
+source_file_item source_file 
+verification 
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON nonempty_list(verification_condition) 
+                                                                         verification_condition 
+                                                                         IF expression THEN ERROR nonempty_list(SYMBOL) SEMICOLON 
+                                                                            (?)
+
+** In state 84, looking ahead at OR, shifting is permitted
+** because of the following sub-derivation:
+
+sum_expression NOTIN LPAREN enumeration RPAREN 
+product_expression 
+factor 
+FOR loop_expression 
+    loop_variables COLON expression 
+                         expression . OR expression 
+
+** In state 84, looking ahead at OR, reducing production
+** loop_expression -> loop_variables COLON expression 
+** is permitted because of the following sub-derivation:
+
+expression OR expression // lookahead token appears
+sum_expression // lookahead token is inherited
+product_expression // lookahead token is inherited
+factor // lookahead token is inherited
+FOR loop_expression // lookahead token is inherited
+    loop_variables COLON expression . 
+
+** Conflict (shift/reduce) in state 79.
+** Tokens involved: TIMES DIV
+** The following explanations concentrate on token TIMES.
+** This state is reached from source_file after reading:
+
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON IF FOR loop_variables COLON factor 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+source_file 
+source_file_item source_file 
+verification 
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON nonempty_list(verification_condition) 
+                                                                         verification_condition 
+                                                                         IF expression THEN ERROR nonempty_list(SYMBOL) SEMICOLON 
+                                                                            sum_expression NOTIN LPAREN enumeration RPAREN 
+                                                                            product_expression 
+                                                                            (?)
+
+** In state 79, looking ahead at TIMES, reducing production
+** product_expression -> factor 
+** is permitted because of the following sub-derivation:
+
+factor product_operator product_expression // lookahead token appears because product_operator can begin with TIMES
+FOR loop_expression // lookahead token is inherited
+    loop_variables COLON expression // lookahead token is inherited
+                         sum_expression // lookahead token is inherited
+                         product_expression // lookahead token is inherited
+                         factor . 
+
+** In state 79, looking ahead at TIMES, shifting is permitted
+** because of the following sub-derivation:
+
+factor 
+FOR loop_expression 
+    loop_variables COLON expression 
+                         sum_expression NOTIN LPAREN enumeration RPAREN 
+                         product_expression 
+                         factor product_operator product_expression 
+                                . TIMES 
+
+** Conflict (shift/reduce) in state 72.
+** Tokens involved: PLUS MINUS
+** The following explanations concentrate on token PLUS.
+** This state is reached from source_file after reading:
+
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON IF FOR loop_variables COLON product_expression 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+source_file 
+source_file_item source_file 
+verification 
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON nonempty_list(verification_condition) 
+                                                                         verification_condition 
+                                                                         IF expression THEN ERROR nonempty_list(SYMBOL) SEMICOLON 
+                                                                            sum_expression NOTIN LPAREN enumeration RPAREN 
+                                                                            (?)
+
+** In state 72, looking ahead at PLUS, reducing production
+** sum_expression -> product_expression 
+** is permitted because of the following sub-derivation:
+
+product_expression sum_operator sum_expression // lookahead token appears because sum_operator can begin with PLUS
+factor // lookahead token is inherited
+FOR loop_expression // lookahead token is inherited
+    loop_variables COLON expression // lookahead token is inherited
+                         sum_expression // lookahead token is inherited
+                         product_expression . 
+
+** In state 72, looking ahead at PLUS, shifting is permitted
+** because of the following sub-derivation:
+
+product_expression 
+factor 
+FOR loop_expression 
+    loop_variables COLON expression 
+                         sum_expression NOTIN LPAREN enumeration RPAREN 
+                         product_expression sum_operator sum_expression 
+                                            . PLUS 
+
+** Conflict (shift/reduce) in state 55.
+** Tokens involved: NOTIN NEQ LTE LT IN GTE GT EQUALS
+** The following explanations concentrate on token NOTIN.
+** This state is reached from source_file after reading:
+
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON IF FOR loop_variables COLON sum_expression 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+source_file 
+source_file_item source_file 
+verification 
+VERIFICATION nonempty_list(SYMBOL) COLON application_reference SEMICOLON nonempty_list(verification_condition) 
+                                                                         verification_condition 
+                                                                         IF expression THEN ERROR nonempty_list(SYMBOL) SEMICOLON 
+                                                                            (?)
+
+** In state 55, looking ahead at NOTIN, shifting is permitted
+** because of the following sub-derivation:
+
+sum_expression NOTIN LPAREN enumeration RPAREN 
+product_expression 
+factor 
+FOR loop_expression 
+    loop_variables COLON expression 
+                         sum_expression . NOTIN LPAREN enumeration RPAREN 
+
+** In state 55, looking ahead at NOTIN, reducing production
+** expression -> sum_expression 
+** is permitted because of the following sub-derivation:
+
+sum_expression NOTIN LPAREN enumeration RPAREN // lookahead token appears
+product_expression // lookahead token is inherited
+factor // lookahead token is inherited
+FOR loop_expression // lookahead token is inherited
+    loop_variables COLON expression // lookahead token is inherited
+                         sum_expression . 
