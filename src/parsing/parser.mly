@@ -201,8 +201,11 @@ formula_one:
 variable_generic:
 | s = SYMBOL { parse_variable_generic_name $sloc s }
 
+verification_name:
+| name = SYMBOL { (name, mk_position $sloc) }
+
 verification:
-| VERIFICATION name = SYMBOL+ COLON apps = application_reference
+| VERIFICATION name = verification_name+ COLON apps = application_reference
   SEMICOLON conds = verification_condition+ { {
   verif_name = name;
   verif_applications = apps;
@@ -210,15 +213,20 @@ verification:
 } }
 
 verification_condition:
-| IF e = expression THEN ERROR e_names = SYMBOL+ SEMICOLON { {
+| IF e = expression THEN ERROR e_names = verification_name+ SEMICOLON { ({
     verif_cond_expr = e;
     verif_cond_errors = e_names;
-  } }
+  }, mk_position $sloc) }
 
+error_name:
+n = SYMBOL COLON { (n, mk_position $sloc) }
+
+error_descr:
+s = STRING { (s, mk_position $sloc) }
 
 error_:
-| n = SYMBOL COLON t = type_error COLON s1 = STRING COLON
-   s2 = STRING COLON s3 = STRING COLON s4 = STRING
+| n = error_name t = type_error COLON s1 = error_descr COLON
+   s2 = error_descr COLON s3 = error_descr COLON s4 = error_descr
    s5 = error_message? SEMICOLON { {
       error_name = n;
       error_typ = t;
@@ -228,15 +236,18 @@ error_:
     } }
 
 error_message:
-| COLON  s = STRING { s }
+| COLON  s = error_descr { s }
 
 type_error:
-| ANOMALY { Anomaly }
-| DISCORDANCE { Discordance }
-| INFORMATIVE { Information }
+| ANOMALY { (Anomaly, mk_position $sloc) }
+| DISCORDANCE { (Discordance, mk_position $sloc) }
+| INFORMATIVE { (Information, mk_position $sloc) }
+
+output_name:
+s = SYMBOL { (parse_variable_name $sloc s, mk_position $sloc) }
 
 output:
-| OUTPUT LPAREN s = SYMBOL RPAREN SEMICOLON { parse_variable_name $sloc s }
+| OUTPUT LPAREN s = output_name RPAREN SEMICOLON { s }
 
 brackets:
 | LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }

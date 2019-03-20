@@ -42,7 +42,7 @@ type variable =
   | Generic of variable_generic_name
 [@@deriving show]
 
-type verification_name = string list
+type verification_name = string marked list
 [@@deriving show]
 
 type error_name = string
@@ -195,14 +195,14 @@ type variable_decl =
 
 type verification_condition = {
   verif_cond_expr: expression marked;
-  verif_cond_errors: error_name list
+  verif_cond_errors: error_name marked list
 }
 [@@deriving show]
 
 type verification = {
   verif_name: verification_name;
   verif_applications: application marked list;
-  verif_conditions: verification_condition list;
+  verif_conditions: verification_condition marked list;
 }
 [@@deriving show]
 
@@ -213,9 +213,9 @@ type error_typ =
 [@@deriving show]
 
 type error_ = {
-  error_name: error_name;
-  error_typ: error_typ;
-  error_descr: string list;
+  error_name: error_name marked;
+  error_typ: error_typ marked;
+  error_descr: string marked list;
 }
 [@@deriving show]
 
@@ -226,7 +226,7 @@ type source_file_item =
   | Rule of rule
   | Verification of verification
   | Error of error_
-  | Output of variable_name
+  | Output of variable_name marked
 [@@deriving show]
 
 type source_file = source_file_item marked list
