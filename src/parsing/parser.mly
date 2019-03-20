@@ -91,13 +91,13 @@ computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
   subtyp = computed_variable_subtype*
   COLON descr = computed_variable_descr typ = value_type? SEMICOLON
-  { ComputedVar {
+  { ComputedVar ({
     comp_name = (let (name, nloc) = name in (Normal name, nloc));
     comp_table = size;
     comp_subtyp = subtyp;
     comp_description = descr;
     comp_typ = typ;
-  } }
+  }, mk_position $sloc) }
 
 computed_variable_table:
 | TABLE LBRACKET size = SYMBOL RBRACKET { (int_of_string size, mk_position $sloc) }
@@ -106,43 +106,55 @@ computed_variable_subtype:
 | BASE { (Base, mk_position $sloc) }
 | GIVEN_BACK { (GivenBack, mk_position $sloc) }
 
+input_variable_name:
+| name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
+
 input_variable:
-| name = SYMBOL COLON INPUT subtyp = input_variable_subtype
+| name = input_variable_name INPUT
+  subtyp = input_variable_subtype
   attrs = input_variable_attribute*
   g = GIVEN_BACK? alias = input_variable_alias COLON descr = STRING
   typ = value_type?
-  SEMICOLON { InputVar {
-    input_name = parse_variable_name $sloc name;
+  SEMICOLON { InputVar ({
+    input_name = name;
     input_subtyp = subtyp;
     input_attributes = attrs;
     input_given_back = (match g with Some _ -> true | None -> false);
     input_alias = alias;
     input_typ = typ;
     input_description = descr;
-  } }
+  }, mk_position $sloc) }
 
 input_variable_alias:
-| ALIAS alias = SYMBOL { parse_variable_name $sloc alias }
+| ALIAS alias = SYMBOL { (parse_variable_name $sloc alias, mk_position $sloc) }
+
+input_variable_attribute_name:
+| attr = SYMBOL { (attr, mk_position $sloc) }
+
+input_variable_attribute_value:
+ lit = SYMBOL { (parse_literal $sloc lit, mk_position $sloc) }
 
 input_variable_attribute:
-| attr = SYMBOL EQUALS lit = SYMBOL { (attr, parse_literal $sloc lit) }
+| attr = input_variable_attribute_name EQUALS
+  lit = input_variable_attribute_value
+{ (attr, lit) }
 
 input_variable_subtype:
-| CONTEXT { Context }
-| FAMILY { Family }
-| PENALITY { Penality }
-| INCOME { Income }
+| CONTEXT { (Context, mk_position $sloc) }
+| FAMILY { (Family, mk_position $sloc) }
+| PENALITY { (Penality, mk_position $sloc) }
+| INCOME { (Income, mk_position $sloc) }
 
 value_type:
 | TYPE typ = value_type_prim { typ }
 
 value_type_prim:
-| BOOLEAN { Boolean }
-| DATE_YEAR { DateYear }
-| DATE_DAY_MONTH_YEAR { DateDayMonthYear }
-| DATE_MONTH { DateMonth }
-| INTEGER { Integer }
-| REAL { Real }
+| BOOLEAN { (Boolean, mk_position $sloc) }
+| DATE_YEAR { (DateYear, mk_position $sloc) }
+| DATE_DAY_MONTH_YEAR { (DateDayMonthYear, mk_position $sloc) }
+| DATE_MONTH { (DateMonth, mk_position $sloc) }
+| INTEGER { (Integer, mk_position $sloc) }
+| REAL { (Real, mk_position $sloc) }
 
 rule:
 | RULE name = SYMBOL+ COLON apps = application_reference

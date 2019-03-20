@@ -166,13 +166,14 @@ type value_typ =
 [@@deriving show]
 
 type input_variable = {
-  input_name: variable_name;
-  input_subtyp: input_variable_subtype;
-  input_attributes: (input_variable_attribute * literal) list;
+  input_name: variable_name marked;
+  input_subtyp: input_variable_subtype marked;
+  input_attributes:
+    (input_variable_attribute marked * literal marked) list;
   input_given_back: bool;
-  input_alias: variable_name;
+  input_alias: variable_name marked;
   input_description: string;
-  input_typ: value_typ option;
+  input_typ: value_typ marked option;
 }
 [@@deriving show]
 
@@ -180,15 +181,15 @@ type computed_variable = {
   comp_name: variable marked;
   comp_table: int marked option; (* size of the table *)
   comp_subtyp: computed_typ marked list;
-  comp_typ: value_typ option;
+  comp_typ: value_typ marked option;
   comp_description: string marked;
 }
 [@@deriving show]
 
 type variable_decl =
-  | ComputedVar of computed_variable
+  | ComputedVar of computed_variable marked
   | ConstVar of variable_name marked * literal marked
-  | InputVar of input_variable
+  | InputVar of input_variable marked
 [@@deriving show]
 
 type verification_condition = {
