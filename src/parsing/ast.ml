@@ -63,14 +63,14 @@ type table_index =
 
 type lvalue = {
   var: variable;
-  index: table_index option
+  index: table_index marked option
 }
 [@@deriving show]
 
 
 type set_value =
-  | VarValue of variable
-  | Interval of int * int
+  | VarValue of variable marked
+  | Interval of int marked * int marked
 [@@deriving show]
 
 type comp_op =
@@ -96,7 +96,7 @@ type unop =
   | Minus
 [@@deriving show]
 
-type loop_variable = variable * set_value list
+type loop_variable = variable marked * set_value list
 [@@deriving show]
 
 type loop_variables =
@@ -106,10 +106,10 @@ type loop_variables =
 
 type expression =
   | TestInSet of bool * expression marked * set_value list
-  | Comparison of comp_op * expression marked * expression marked
-  | Binop of binop * expression marked * expression marked
-  | Unop of unop * expression marked
-  | Index of variable * table_index
+  | Comparison of comp_op marked * expression marked * expression marked
+  | Binop of binop marked * expression marked * expression marked
+  | Unop of unop  * expression marked
+  | Index of variable marked * table_index marked
   | Conditional of
       expression marked * expression marked * expression marked option
   | FunctionCall of func_name * func_args
@@ -119,7 +119,7 @@ type expression =
 
 and func_args =
     | ArgList of expression marked list
-  | LoopList of unit
+  | LoopList of loop_variables marked * expression marked
 [@@deriving show]
 
 type formula_decl =

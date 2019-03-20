@@ -250,7 +250,7 @@ output:
 | OUTPUT LPAREN s = output_name RPAREN SEMICOLON { s }
 
 brackets:
-| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
+| LBRACKET i = SYMBOL RBRACKET { (parse_table_index $sloc i, mk_position $sloc) }
 
 loop_variables:
 | lrs = loop_variables_ranges { (Ranges lrs, mk_position $sloc) }
@@ -259,9 +259,12 @@ loop_variables:
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
 
+loop_variable_value_name:
+s = SYMBOL { (parse_variable_generic_name $sloc s, mk_position $sloc) }
+
 loop_variables_value:
-| s = SYMBOL EQUALS e = enumeration {
-    (Generic (parse_variable_generic_name $sloc s), e)
+| s = loop_variable_value_name EQUALS e = enumeration {
+    let (s,loc) = s in ((Generic s, loc), e)
   }
 
 loop_variables_ranges:
@@ -269,8 +272,8 @@ loop_variables_ranges:
 | r = loop_variables_range AND rs = loop_variables_ranges { r::rs }
 
 loop_variables_range:
-| ONE s = SYMBOL IN e = enumeration {
-   ((Generic (parse_variable_generic_name $sloc s), e))
+| ONE s = loop_variable_value_name IN e = enumeration {
+   let (s, loc) = s in ((Generic s, loc), e)
  }
 
 enumeration:
@@ -279,11 +282,12 @@ enumeration:
 
 enumeration_item:
 | bounds = interval { bounds  }
-| s = SYMBOL { VarValue (parse_variable $sloc s) }
+| s = SYMBOL { VarValue (parse_variable $sloc s, mk_position $sloc) }
 
 interval:
 | i1 = SYMBOL RANGE i2 = SYMBOL
- { Interval (parse_int $sloc i1, parse_int $sloc i2) }
+ { Interval ((parse_int $sloc i1, mk_position $sloc),
+   (parse_int $sloc i2, mk_position $sloc)) }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
@@ -294,19 +298,22 @@ expression:
 | e1 = sum_expression op = comparison_op e2 = sum_expression
   { (Comparison (op, e1, e2), mk_position $sloc) }
 | e = sum_expression { e }
-| e1 = expression AND e2 = expression
-  { (Binop (And, e1, e2), mk_position $sloc) }
-| e1 = expression OR e2 = expression
-  { (Binop (Or, e1, e2), mk_position $sloc) }
+| e1 = expression op = logical_binop e2 = expression
+  { (Binop (op, e1, e2), mk_position $sloc) }
 | NOT e = expression { (Unop (Not, e), mk_position $sloc) }
+
+logical_binop:
+| AND { (And, mk_position $sloc) }
+| OR { (And, mk_position $sloc) }
+
 
 sum_expression:
 | e = product_expression { e }
 | e1 = product_expression op = sum_operator e2 = sum_expression { (Binop (op, e1, e2), mk_position $sloc) }
 
 sum_operator:
-| PLUS { Add }
-| MINUS { Sub }
+| PLUS { (Add, mk_position $sloc) }
+| MINUS { (Sub, mk_position $sloc) }
 
 product_expression:
 | e = factor { e }
@@ -314,20 +321,23 @@ product_expression:
 { (Binop (op, e1, e2), mk_position $sloc) }
 
 product_operator:
-| TIMES { Mul }
-| DIV { Div }
+| TIMES { (Mul, mk_position $sloc) }
+| DIV { (Div, mk_position $sloc) }
+
+table_index_name:
+s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
 
 factor:
-| FOR le =  loop_expression { le }
+| FOR le =  loop_expression { let (l1, l2, loc) = le in (Loop(l1,l2), loc) }
 | MINUS e = factor { (Unop (Minus, e), mk_position $sloc) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = SYMBOL i = brackets { (Index (parse_variable $sloc s, i), mk_position $sloc) }
+| s = table_index_name i = brackets { (Index (s, i), mk_position $sloc) }
 | l = factor_literal { (Literal l, mk_position $sloc) }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
-| lvs = loop_variables COLON e = expression { (Loop (lvs, e), mk_position $sloc) }
+| lvs = loop_variables COLON e = expression { (lvs, e, mk_position $sloc) }
 
 ternary_operator:
 | IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF
@@ -346,7 +356,7 @@ function_call:
   { (FunctionCall (parse_func_name $sloc s, args), mk_position $sloc) }
 
 function_call_args:
-| loop_expression { LoopList () }
+| l = loop_expression { let (l1, l2, _) = l in LoopList (l1, l2) }
 | args = function_arguments { ArgList (args) }
 
 function_arguments:
@@ -355,12 +365,12 @@ function_arguments:
 
 
 comparison_op:
-| GTE  { Gte }
-| LTE  { Lte }
-| LT { Lt }
-| GT { Gt }
-| NEQ  { Neq }
-| EQUALS { Eq }
+| GTE  { (Gte, mk_position $sloc) }
+| LTE  { (Lte,  mk_position $sloc) }
+| LT { (Lt,  mk_position $sloc) }
+| GT { (Gt,  mk_position $sloc) }
+| NEQ  { (Neq,  mk_position $sloc) }
+| EQUALS { (Eq,  mk_position $sloc) }
 
 marked_symbol:
 | s = SYMBOL { (s, mk_position $sloc) }
