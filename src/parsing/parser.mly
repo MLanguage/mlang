@@ -156,8 +156,11 @@ value_type_prim:
 | INTEGER { (Integer, mk_position $sloc) }
 | REAL { (Real, mk_position $sloc) }
 
+rule_name_symbol:
+name = SYMBOL { (name, mk_position $sloc) }
+
 rule:
-| RULE name = SYMBOL+ COLON apps = application_reference
+| RULE name = rule_name_symbol+ COLON apps = application_reference
   SEMICOLON c = chaining_reference?
   formulaes = formula_list
   { {
@@ -173,30 +176,30 @@ formula_list:
 | f = formula_kind SEMICOLON fs = formula_list { f::fs }
 
 formula_kind:
-| f = formula_one { SingleFormula f }
-| fs = for_formula { let (lv, ft) = fs in MultipleFormulaes (lv, ft) }
+| f = formula_one { (SingleFormula f, mk_position $sloc) }
+| fs = for_formula
+  { let (lv, ft) = fs in (MultipleFormulaes (lv, ft), mk_position $sloc) }
 
 for_formula:
 | FOR lv = loop_variables COLON ft = formula_two { (lv, ft) }
 
+lvalue:
+| s = variable_generic i = brackets? { ({ var = Generic s; index = i}, mk_position $sloc) }
+
 formula_two:
-| s = variable_generic i = brackets? EQUALS e = expression { {
-    lvalue = { var = Generic s; index = i} ;
+| l = lvalue EQUALS e = expression { {
+    lvalue = l;
     formula =  e
   } }
 
 formula_one:
-| s = variable i = brackets? EQUALS e = expression { {
-    lvalue = { var = Normal s; index = i} ;
+| l = lvalue EQUALS e = expression { {
+    lvalue = l;
     formula =  e
   } }
 
 variable_generic:
 | s = SYMBOL { parse_variable_generic_name $sloc s }
-
-
-variable:
-| s = SYMBOL { parse_variable_name $sloc s }
 
 verification:
 | VERIFICATION name = SYMBOL+ COLON apps = application_reference
@@ -239,8 +242,8 @@ brackets:
 | LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
 
 loop_variables:
-| lrs = loop_variables_ranges { Ranges lrs }
-| lvs = loop_variables_values { ValueSets lvs }
+| lrs = loop_variables_ranges { (Ranges lrs, mk_position $sloc) }
+| lvs = loop_variables_values { (ValueSets lvs, mk_position $sloc) }
 
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
@@ -273,17 +276,22 @@ interval:
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
-| e = sum_expression NOTIN LPAREN s = enumeration RPAREN { TestInSet (false, e, s) }
-| e = sum_expression IN LPAREN s = enumeration RPAREN { TestInSet (true, e, s) }
-| e1 = sum_expression op = comparison_op e2 = sum_expression { Comparison (op, e1, e2) }
+| e = sum_expression NOTIN LPAREN s = enumeration RPAREN
+  { (TestInSet (false, e, s), mk_position $sloc) }
+| e = sum_expression IN LPAREN s = enumeration RPAREN
+  { (TestInSet (true, e, s), mk_position $sloc) }
+| e1 = sum_expression op = comparison_op e2 = sum_expression
+  { (Comparison (op, e1, e2), mk_position $sloc) }
 | e = sum_expression { e }
-| e1 = expression AND e2 = expression { Binop (And, e1, e2) }
-| e1 = expression OR e2 = expression { Binop (Or, e1, e2) }
-| NOT e = expression { Unop (Not, e) }
+| e1 = expression AND e2 = expression
+  { (Binop (And, e1, e2), mk_position $sloc) }
+| e1 = expression OR e2 = expression
+  { (Binop (Or, e1, e2), mk_position $sloc) }
+| NOT e = expression { (Unop (Not, e), mk_position $sloc) }
 
 sum_expression:
 | e = product_expression { e }
-| e1 = product_expression op = sum_operator e2 = sum_expression { Binop (op, e1, e2) }
+| e1 = product_expression op = sum_operator e2 = sum_expression { (Binop (op, e1, e2), mk_position $sloc) }
 
 sum_operator:
 | PLUS { Add }
@@ -291,27 +299,28 @@ sum_operator:
 
 product_expression:
 | e = factor { e }
+| e1 = factor op = product_operator e2 = product_expression
+{ (Binop (op, e1, e2), mk_position $sloc) }
 
-| e1 = factor op = product_operator e2 = product_expression { Binop (op, e1, e2) }
 product_operator:
 | TIMES { Mul }
 | DIV { Div }
 
 factor:
 | FOR le =  loop_expression { le }
-| MINUS e = factor { Unop (Minus, e) }
+| MINUS e = factor { (Unop (Minus, e), mk_position $sloc) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = SYMBOL i = brackets { Index (parse_variable $sloc s, i) }
-| l = factor_literal { Literal l }
+| s = SYMBOL i = brackets { (Index (parse_variable $sloc s, i), mk_position $sloc) }
+| l = factor_literal { (Literal l, mk_position $sloc) }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
-| lvs = loop_variables COLON e = expression { Loop (lvs, e) }
+| lvs = loop_variables COLON e = expression { (Loop (lvs, e), mk_position $sloc) }
 
 ternary_operator:
 | IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF
-{ Conditional (e1, e2, e3) }
+{ (Conditional (e1, e2, e3), mk_position $sloc) }
 
 else_branch:
 | ELSE e = expression { e }
@@ -323,7 +332,7 @@ factor_literal:
 
 function_call:
 | s = SYMBOL LPAREN args = function_call_args RPAREN
-  { FunctionCall (parse_func_name $sloc s, args) }
+  { (FunctionCall (parse_func_name $sloc s, args), mk_position $sloc) }
 
 function_call_args:
 | loop_expression { LoopList () }

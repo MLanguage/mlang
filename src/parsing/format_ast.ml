@@ -77,61 +77,61 @@ let format_unop (op: unop) : string = match op with
 let rec format_expression (e: expression) : string = match e with
   | TestInSet (belong, e, values) ->
     Printf.sprintf "(%s %sdans %s)"
-      (format_expression e)
+      (format_expression (unmark e))
       (if belong then "" else "non ")
       (String.concat ", " (List.map (fun value -> format_set_value value) values))
   | Comparison (op, e1, e2) ->
     Printf.sprintf "(%s %s %s)"
-      (format_expression e1)
+      (format_expression (unmark e1))
       (format_comp_op op)
-      (format_expression e2)
+      (format_expression (unmark e2))
   | Binop (op, e1, e2) ->
     Printf.sprintf "(%s %s %s)"
-      (format_expression e1)
+      (format_expression (unmark e1))
       (format_binop op)
-      (format_expression e2)
+      (format_expression (unmark e2))
   | Unop (op, e) ->
-    (format_unop op) ^ " " ^ (format_expression e)
+    (format_unop op) ^ " " ^ (format_expression (unmark e))
   | Index (v, i) ->
     Printf.sprintf "%s[%s]" (format_variable v) (format_table_index i)
   | Conditional (e1, e2, e3) ->
     Printf.sprintf "(si %s alors %s %sfinsi)"
-      (format_expression e1)
-      (format_expression e2)
+      (format_expression (unmark e1))
+      (format_expression (unmark e2))
       (match e3 with
        | None -> ""
-       | Some e3 -> (format_expression e3)^ " ")
+       | Some e3 -> (format_expression (unmark e3))^ " ")
   | FunctionCall (f, args) ->
     Printf.sprintf "%s(%s)" (format_func_name f)
       (format_func_args args)
   | Literal l -> format_literal l
   | Loop (lvs, e) ->
     Printf.sprintf "%s%s"
-      (format_loop_variables lvs)
-      (format_expression e)
+      (format_loop_variables (unmark lvs))
+      (format_expression (unmark e))
 
 and format_func_args (args:func_args) : string = match args with
   | ArgList args -> String.concat ", "
-                      (List.map (fun arg -> format_expression arg) args)
+                      (List.map (fun arg -> format_expression (unmark arg)) args)
   | LoopList () -> "[...]"
 
 let format_formula_decl (f:formula_decl) : string =
   Printf.sprintf "%s = %s"
-    (format_lvalue f.lvalue)
-    (format_expression f.formula)
+    (format_lvalue (unmark f.lvalue))
+    (format_expression (unmark f.formula))
 
 let format_formula (f:formula) : string = match f with
   | SingleFormula f -> format_formula_decl f
   | MultipleFormulaes (lvs, f) ->
     Printf.sprintf "%s\n%s"
-      (format_loop_variables lvs)
+      (format_loop_variables (unmark lvs))
       (format_formula_decl f)
 
 let format_rule (r: rule) : string =
   Printf.sprintf "regle %s:\napplication %s;\n%s\n"
-    (String.concat " " r.rule_name)
+    (String.concat " " (List.map unmark r.rule_name))
     (String.concat ", " (List.map unmark r.rule_applications))
-    (String.concat ";\n" (List.map (fun f -> format_formula f) r.rule_formulaes))
+    (String.concat ";\n" (List.map (fun f -> format_formula (unmark f)) r.rule_formulaes))
 
 let format_source_file_item (i:source_file_item) : string = match i with
   | Rule r -> format_rule r

@@ -21,7 +21,7 @@ type application = string
 type chaining = string
 [@@deriving show]
 
-type rule_name = string list
+type rule_name = string marked list
 [@@deriving show]
 
 type variable_name = string
@@ -105,39 +105,40 @@ type loop_variables =
 [@@deriving show]
 
 type expression =
-  | TestInSet of bool * expression * set_value list
-  | Comparison of comp_op * expression * expression
-  | Binop of binop * expression * expression
-  | Unop of unop * expression
+  | TestInSet of bool * expression marked * set_value list
+  | Comparison of comp_op * expression marked * expression marked
+  | Binop of binop * expression marked * expression marked
+  | Unop of unop * expression marked
   | Index of variable * table_index
-  | Conditional of expression * expression * expression option
+  | Conditional of
+      expression marked * expression marked * expression marked option
   | FunctionCall of func_name * func_args
   | Literal of literal
-  | Loop of loop_variables * expression
+  | Loop of loop_variables marked * expression marked
 [@@deriving show]
 
 and func_args =
-    | ArgList of expression list
+    | ArgList of expression marked list
   | LoopList of unit
 [@@deriving show]
 
 type formula_decl =
   {
-    lvalue: lvalue;
-    formula: expression;
+    lvalue: lvalue marked;
+    formula: expression marked;
   }
 [@@deriving show]
 
 type formula =
   | SingleFormula of formula_decl
-  | MultipleFormulaes of loop_variables * formula_decl
+  | MultipleFormulaes of loop_variables marked * formula_decl
 [@@deriving show]
 
 type rule = {
   rule_name: rule_name;
   rule_applications: application marked list;
   rule_chaining: chaining marked option;
-  rule_formulaes: formula list;
+  rule_formulaes: formula marked list;
 }
 [@@deriving show]
 
@@ -193,7 +194,7 @@ type variable_decl =
 [@@deriving show]
 
 type verification_condition = {
-  verif_cond_expr: expression;
+  verif_cond_expr: expression marked;
   verif_cond_errors: error_name list
 }
 [@@deriving show]
