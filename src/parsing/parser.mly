@@ -71,16 +71,28 @@ variable_decl:
 | v = const_variable  { v }
 | v = input_variable  { v }
 
+const_variable_name:
+| name = SYMBOL COLON CONST { (parse_variable_name $sloc name, mk_position $sloc)}
+
+const_variable_value:
+| value = SYMBOL { (parse_literal $sloc value, mk_position $sloc) }
+
 const_variable:
-| name = SYMBOL COLON CONST EQUALS value = SYMBOL SEMICOLON
-  { ConstVar (name, parse_literal $sloc value) }
+| name = const_variable_name EQUALS value = const_variable_value SEMICOLON
+  { ConstVar (name, value) }
+
+computed_variable_name:
+| name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc)}
+
+computed_variable_descr:
+| descr = STRING { (descr, mk_position $sloc) }
 
 computed_variable:
-| name = SYMBOL COLON size = computed_variable_table? COMPUTED
+| name = computed_variable_name size = computed_variable_table? COMPUTED
   subtyp = computed_variable_subtype*
-  COLON descr = STRING typ = value_type? SEMICOLON
+  COLON descr = computed_variable_descr typ = value_type? SEMICOLON
   { ComputedVar {
-    comp_name = Normal (parse_variable_name $sloc name);
+    comp_name = (let (name, nloc) = name in (Normal name, nloc));
     comp_table = size;
     comp_subtyp = subtyp;
     comp_description = descr;
@@ -88,11 +100,11 @@ computed_variable:
   } }
 
 computed_variable_table:
-| TABLE LBRACKET size = SYMBOL RBRACKET { int_of_string size }
+| TABLE LBRACKET size = SYMBOL RBRACKET { (int_of_string size, mk_position $sloc) }
 
 computed_variable_subtype:
-| BASE { Base }
-| GIVEN_BACK { GivenBack }
+| BASE { (Base, mk_position $sloc) }
+| GIVEN_BACK { (GivenBack, mk_position $sloc) }
 
 input_variable:
 | name = SYMBOL COLON INPUT subtyp = input_variable_subtype

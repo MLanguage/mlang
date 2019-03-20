@@ -177,17 +177,17 @@ type input_variable = {
 [@@deriving show]
 
 type computed_variable = {
-  comp_name: variable;
-  comp_table: int option; (* size of the table *)
-  comp_subtyp: computed_typ list;
+  comp_name: variable marked;
+  comp_table: int marked option; (* size of the table *)
+  comp_subtyp: computed_typ marked list;
   comp_typ: value_typ option;
-  comp_description: string;
+  comp_description: string marked;
 }
 [@@deriving show]
 
 type variable_decl =
   | ComputedVar of computed_variable
-  | ConstVar of variable_name * literal
+  | ConstVar of variable_name marked * literal marked
   | InputVar of input_variable
 [@@deriving show]
 
