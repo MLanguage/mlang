@@ -173,7 +173,7 @@ type input_variable = {
     (input_variable_attribute marked * literal marked) list;
   input_given_back: bool;
   input_alias: variable_name marked;
-  input_description: string;
+  input_description: string marked;
   input_typ: value_typ marked option;
 }
 [@@deriving show]

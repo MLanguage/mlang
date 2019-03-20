@@ -109,11 +109,14 @@ computed_variable_subtype:
 input_variable_name:
 | name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
 
+input_descr:
+descr = STRING { (descr, mk_position $sloc) }
+
 input_variable:
 | name = input_variable_name INPUT
   subtyp = input_variable_subtype
   attrs = input_variable_attribute*
-  g = GIVEN_BACK? alias = input_variable_alias COLON descr = STRING
+  g = GIVEN_BACK? alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
   SEMICOLON { InputVar ({
     input_name = name;
