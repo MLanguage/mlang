@@ -1,6 +1,7 @@
 open Lexer
 open Lexing
 open Cli
+open Cfg
 
 let parse_cli_args () =
   (** Code block to retrieve and parse command-line arguments. *)

@@ -303,6 +303,7 @@ expression:
 | e = sum_expression { e }
 | e1 = expression op = logical_binop e2 = expression
   { (Binop (op, e1, e2), mk_position $sloc) }
+| FOR le =  loop_expression { let (l1, l2, loc) = le in (Loop(l1,l2), loc) }
 | NOT e = expression { (Unop (Not, e), mk_position $sloc) }
 
 logical_binop:
@@ -331,7 +332,6 @@ table_index_name:
 s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
 
 factor:
-| FOR le =  loop_expression { let (l1, l2, loc) = le in (Loop(l1,l2), loc) }
 | MINUS e = factor { (Unop (Minus, e), mk_position $sloc) }
 | e = ternary_operator { e }
 | e = function_call { e }
