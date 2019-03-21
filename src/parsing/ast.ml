@@ -231,3 +231,6 @@ type source_file_item =
 
 type source_file = source_file_item marked list
 [@@deriving show]
+
+type program = source_file list
+[@@deriving show]

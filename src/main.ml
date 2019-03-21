@@ -1,7 +1,6 @@
 open Lexer
 open Lexing
 open Cli
-open Cfg
 
 let parse_cli_args () =
   (** Code block to retrieve and parse command-line arguments. *)
@@ -21,6 +20,7 @@ let parse_cli_args () =
 let main () =
   parse_cli_args ();
   Cli.debug_print "Reading files...";
+  let program = ref [] in
   List.iter (fun source_file ->
       let (filebuf, input) = if source_file <> "" then
           let input = open_in source_file in
@@ -42,7 +42,8 @@ let main () =
         let commands = Parser.source_file token filebuf in
         Cli.debug_print
           (Printf.sprintf "Parsed AST:\n%s"
-             (Format_ast.format_source_file commands))
+             (Format_ast.format_source_file commands));
+        program := commands::!program
       with
       | Lexer.LexingError msg | Parse_utils.ParsingError msg ->
         error_print msg
@@ -56,6 +57,7 @@ let main () =
             | None -> ()
           end
         end
-    ) !source_files
+    ) !source_files;
+  ignore (Ast_to_cfg.fill_variable_map !program)
 
 let _ = main ()
