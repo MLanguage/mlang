@@ -5,6 +5,7 @@
 %}
 
 %token<string> SYMBOL STRING
+%token<char> PARAMETER
 
 %token PLUS MINUS TIMES DIV
 %token GTE LTE GT LT NEQ EQUALS
@@ -263,11 +264,11 @@ loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
 
 loop_variable_value_name:
-s = SYMBOL { (parse_variable_generic_name $sloc s, mk_position $sloc) }
+s = PARAMETER { (s, mk_position $sloc) }
 
 loop_variables_value:
 | s = loop_variable_value_name EQUALS e = enumeration {
-    let (s,loc) = s in ((Generic s, loc), e)
+    let (s,loc) = s in ((s, loc), e)
   }
 
 loop_variables_ranges:
@@ -276,7 +277,7 @@ loop_variables_ranges:
 
 loop_variables_range:
 | ONE s = loop_variable_value_name IN e = enumeration {
-   let (s, loc) = s in ((Generic s, loc), e)
+   let (s, loc) = s in ((s, loc), e)
  }
 
 enumeration:

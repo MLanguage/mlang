@@ -118,7 +118,7 @@ type unop =
   | Minus
 [@@deriving show]
 
-type loop_variable = variable marked * set_value list
+type loop_variable = char marked * set_value list
 [@@deriving show]
 
 type loop_variables =

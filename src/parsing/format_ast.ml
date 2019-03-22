@@ -77,13 +77,13 @@ let format_unop (op: unop) : string = match op with
   | Minus -> "-"
 
 let format_loop_variable_ranges ((v, vs): loop_variable) =
-  Printf.sprintf "un %s dans %s"
-    (format_variable (unmark v))
+  Printf.sprintf "un %c dans %s"
+    (unmark v)
     (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
 
 let format_loop_variable_value_set ((v, vs): loop_variable) =
-  Printf.sprintf "%s=%s"
-    (format_variable (unmark v))
+  Printf.sprintf "%c=%s"
+    (unmark v)
     (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
 
 let format_loop_variables (lvs: loop_variables) : string =

@@ -125,6 +125,8 @@ rule token = parse
   { OUTPUT }
 | '"' [^'"']* '"' as s
   { STRING s }
+| ['a'-'z'] as s
+    { PARAMETER s }
 | ['a'-'z' 'A'-'Z' '0'-'9' '_' '.']+ as s
   { SYMBOL s }
 | eof
