@@ -21,8 +21,7 @@ let format_rule_name (rn : rule_name) : string =
 let format_variable_name (v: variable_name) : string =
   v
 
-let format_func_name (f:func_name) : string = match f with
-  | Unknown s -> s
+let format_func_name (f:func_name) : string = f
 
 let format_variable_generic_name (v: variable_generic_name) : string =
   v.base
@@ -127,7 +126,7 @@ let rec format_expression (e: expression) : string = match e with
        | None -> ""
        | Some e3 -> (format_expression (unmark e3))^ " ")
   | FunctionCall (f, args) ->
-    Printf.sprintf "%s(%s)" (format_func_name f)
+    Printf.sprintf "%s(%s)" (format_func_name (Ast.unmark f))
       (format_func_args args)
   | Literal l -> format_literal l
   | Loop (lvs, e) ->

@@ -354,9 +354,12 @@ factor_literal:
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
+function_name:
+s = SYMBOL { (parse_func_name $sloc s, mk_position $sloc) }
+
 function_call:
-| s = SYMBOL LPAREN args = function_call_args RPAREN
-  { (FunctionCall (parse_func_name $sloc s, args), mk_position $sloc) }
+| s = function_name LPAREN args = function_call_args RPAREN
+  { (FunctionCall (s, args), mk_position $sloc) }
 
 function_call_args:
 | l = loop_expression { let (l1, l2, _) = l in LoopList (l1, l2) }

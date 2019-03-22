@@ -63,5 +63,7 @@ let main () =
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e)
+  | Errors.Unimplemented (msg,pos) ->
+    error_print (Printf.sprintf "unimplemented for expression %s (code %s)" (Format_ast.format_position pos) msg)
 
 let _ = main ()

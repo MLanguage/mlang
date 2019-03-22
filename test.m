@@ -1,8 +1,12 @@
+MIB_NETCT : calculee : "BIC  plus ou moins values a court terme du foyer" ;
+MIBNETPTOT : calculee restituee : "Avis : micro bic net total foyer (sauf + V 16%)" ;
+SPENETCT : calculee : "Net imposable prof. BNC regime special PV a court terme" ;
+SPENETNPF : calculee restituee : "Net imposable non prof. BNC regime special" ;
+SPENETPF : calculee restituee : "Net imposable prof. BNC regime special" ;
+DLMRN1TXM : calculee : "avis IR : deficits non imputes annee N - 1" ;
+
 regle 111320:
 application : iliad , batch ;
-
-
-
 DLMRN1TXM = - min(0,MIB_NETCT *(1-positif(MIBNETPTOT))
                           +SPENETCT * (1 - positif(SPENETPF)));
 
@@ -22,7 +26,7 @@ DSxyz = max( QFxyz - LIM_BAR1 , 0 ) * (TAUX1   / 100)
       + max( QFxyz - LIM_BAR4 , 0 ) * (TAUX4   / 100)
       + max( QFxyz - LIM_BAR5 , 0 ) * (TAUX5   / 100);
 
-SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
+ SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
             * max(ISF4BASE,0)
             + (1 - positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X))
 	     * max(0,ISF4BASE - (TISF4BASE[FLAG_DERSTTR]));

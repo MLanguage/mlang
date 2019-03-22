@@ -63,7 +63,7 @@ let parse_literal sloc (s: string) : Ast.literal =
       Ast.Variable (parse_variable sloc s)
 
 let parse_func_name sloc (s: string) : Ast.func_name =
-  Ast.Unknown (s)
+  (s)
 
 let parse_int sloc (s: string) : int =
   try int_of_string s with

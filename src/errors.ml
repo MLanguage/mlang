@@ -26,9 +26,15 @@ let parser_error (sloc_start, sloc_end) (msg: string) =
 
 type typ_error =
   | Variable of string
+  | Numeric of string
+  | Function of string
 
 
 exception TypeError of typ_error
 
 let format_typ_error (e: typ_error) : string = match e with
   | Variable s -> Printf.sprintf "Variable error: %s" s
+  | Numeric s -> Printf.sprintf "Numeric error: %s" s
+  | Function s -> Printf.sprintf "Function error: %s" s
+
+exception Unimplemented of string * Ast.position 

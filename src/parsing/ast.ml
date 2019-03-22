@@ -17,6 +17,15 @@ let pp_position f (pos:position) : unit =
 type 'a marked = ('a * position)
 [@@deriving show]
 
+let no_pos : position =
+  let zero_pos =
+    { Lexing.pos_fname = ""; Lexing.pos_lnum = 0; Lexing.pos_cnum = 0; Lexing.pos_bol = 0 }
+  in
+  {
+    pos_filename = "unknwon position";
+    pos_loc = (zero_pos, zero_pos)
+  }
+
 let unmark ((x, _) : 'a marked) : 'a = x
 
 let get_position ((_,x) : 'a marked) : position = x
@@ -41,8 +50,7 @@ type rule_name = string marked list
 type variable_name = string
 [@@deriving show]
 
-type func_name =
-  | Unknown of string
+type func_name = string
 [@@deriving show]
 
 type variable_generic_name = {
@@ -63,7 +71,6 @@ type error_name = string
 [@@deriving show]
 
 type literal =
-  | Bool of bool
   | Variable of variable
   | Int of int
   | Float of float
@@ -127,7 +134,7 @@ type expression =
   | Index of variable marked * table_index marked
   | Conditional of
       expression marked * expression marked * expression marked option
-  | FunctionCall of func_name * func_args
+  | FunctionCall of func_name marked * func_args
   | Literal of literal
   | Loop of loop_variables marked * expression marked
 [@@deriving show]
