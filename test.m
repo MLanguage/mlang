@@ -26,3 +26,6 @@ SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
             * max(ISF4BASE,0)
             + (1 - positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X))
 	     * max(0,ISF4BASE - (TISF4BASE[FLAG_DERSTTR]));
+
+
+sortie (TRUC);

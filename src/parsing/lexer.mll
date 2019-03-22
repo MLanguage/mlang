@@ -2,14 +2,7 @@
   open Lexing
   open Parser
   open Parse_utils
-
-  exception LexingError of string
-
-  let lexer_error lexbuf  =
-    Printf.sprintf "Incorrect character (%s) at position %s in file %s\n"
-     (Lexing.lexeme lexbuf)
-     (print_lexer_position lexbuf.lex_curr_p)
-     (lexbuf.lex_curr_p.pos_fname)
+  open Errors
 }
 rule token = parse
 | [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)

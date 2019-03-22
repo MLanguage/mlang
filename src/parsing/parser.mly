@@ -92,7 +92,7 @@ computed_variable:
   subtyp = computed_variable_subtype*
   COLON descr = computed_variable_descr typ = value_type? SEMICOLON
   { ComputedVar ({
-    comp_name = (let (name, nloc) = name in (Normal name, nloc));
+    comp_name = (let (name, nloc) = name in (name, nloc));
     comp_table = size;
     comp_subtyp = subtyp;
     comp_description = descr;

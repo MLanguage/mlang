@@ -1,3 +1,7 @@
+(** Abstract Syntax Tree for M *)
+
+(** {2 Source code position} *)
+
 type position = {
   pos_filename: string;
   pos_loc: (Lexing.position * Lexing.position)
@@ -14,6 +18,10 @@ type 'a marked = ('a * position)
 [@@deriving show]
 
 let unmark ((x, _) : 'a marked) : 'a = x
+
+let get_position ((_,x) : 'a marked) : position = x
+
+(** {2 Abstract Syntax Tree } *)
 
 type application = string
 [@@deriving show]
@@ -118,7 +126,7 @@ type expression =
 [@@deriving show]
 
 and func_args =
-    | ArgList of expression marked list
+  | ArgList of expression marked list
   | LoopList of loop_variables marked * expression marked
 [@@deriving show]
 
@@ -179,7 +187,7 @@ type input_variable = {
 [@@deriving show]
 
 type computed_variable = {
-  comp_name: variable marked;
+  comp_name: variable_name marked;
   comp_table: int marked option; (* size of the table *)
   comp_subtyp: computed_typ marked list;
   comp_typ: value_typ marked option;
@@ -234,3 +242,14 @@ type source_file = source_file_item marked list
 
 type program = source_file list
 [@@deriving show]
+
+
+(** {2 Helper functions } *)
+
+let get_variable_name (v: variable) : string = match v with
+  | Normal s -> s
+  | Generic s -> s.base
+
+let unmark_option (x: 'a marked option) : 'a option = match x with
+  | Some x -> Some (unmark x)
+  | None -> None

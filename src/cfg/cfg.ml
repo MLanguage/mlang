@@ -1,6 +1,8 @@
+(** Main data structure for M analysis *)
+
 module Variable = struct
   type t = {
-    name: string;
+    name: string Ast.marked;
     id: int;
   }
 
@@ -11,7 +13,7 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string) : t = {
+  let new_var (name: string Ast.marked) : t = {
     name; id = fresh_id ()
   }
 

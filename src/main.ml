@@ -45,19 +45,23 @@ let main () =
              (Format_ast.format_source_file commands));
         program := commands::!program
       with
-      | Lexer.LexingError msg | Parse_utils.ParsingError msg ->
+      | Errors.LexingError msg | Errors.ParsingError msg ->
         error_print msg
       | Parser.Error -> begin
           error_print
             (Printf.sprintf "Lexer error in file %s at position %s"
                (!Parse_utils.current_file)
-               (Parse_utils.print_lexer_position filebuf.lex_curr_p));
+               (Errors.print_lexer_position filebuf.lex_curr_p));
           begin match input with
             | Some input -> close_in input
             | None -> ()
           end
         end
     ) !source_files;
-  ignore (Ast_to_cfg.fill_variable_map !program)
+  try
+    ignore (Ast_to_cfg.get_variables !program)
+  with
+  | Errors.TypeError e ->
+    error_print (Errors.format_typ_error e)
 
 let _ = main ()

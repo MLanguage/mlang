@@ -1,8 +1,10 @@
+(** AST pretty_printer *)
+
 open Ast
 
 let format_position (pos: position) : string =
   let (s, e) = pos.pos_loc in
-  Printf.sprintf "In file %s, from %d:%d to %d:%d"
+  Printf.sprintf "in file %s, from %d:%d to %d:%d"
     pos.pos_filename
     s.Lexing.pos_lnum (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
     e.Lexing.pos_lnum (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
@@ -196,7 +198,7 @@ let format_input_variable (v:input_variable) : string =
 
 let format_computed_variable (v: computed_variable) : string =
   Printf.sprintf "%s%s calculee %s : %s%s;"
-    (format_variable (unmark v.comp_name))
+    (unmark v.comp_name)
     (match v.comp_table with
      | None -> ""
      | Some t -> " " ^ (string_of_int (unmark t)))

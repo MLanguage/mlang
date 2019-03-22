@@ -1,3 +1,5 @@
+(** Command-line interface helpers *)
+
 let source_files : string list ref = ref []
 let verify_flag = ref false
 let debug_flag = ref false
