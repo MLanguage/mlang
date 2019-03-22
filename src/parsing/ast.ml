@@ -21,6 +21,12 @@ let unmark ((x, _) : 'a marked) : 'a = x
 
 let get_position ((_,x) : 'a marked) : position = x
 
+let map_under_mark (f: 'a -> 'b) ((x, y) :'a marked) : 'b marked =
+  (f x, y)
+
+let same_pos_as (x: 'a) ((_, y) : 'b marked) : 'a marked =
+  (x,y)
+
 (** {2 Abstract Syntax Tree } *)
 
 type application = string
@@ -57,6 +63,7 @@ type error_name = string
 [@@deriving show]
 
 type literal =
+  | Bool of bool
   | Variable of variable
   | Int of int
   | Float of float

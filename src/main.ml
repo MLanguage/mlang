@@ -59,7 +59,7 @@ let main () =
         end
     ) !source_files;
   try
-    ignore (Ast_to_cfg.get_variables !program)
+    ignore (Ast_to_cfg.translate !program)
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e)

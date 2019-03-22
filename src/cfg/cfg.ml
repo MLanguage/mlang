@@ -21,6 +21,26 @@ module Variable = struct
     compare var1.id var2.id
 end
 
+module LocalVariable = struct
+  type t = {
+    id: int;
+  }
+
+  let counter : int ref = ref 0
+
+  let fresh_id () : int=
+    let v = !counter in
+    counter := !counter + 1;
+    v
+
+  let new_var () : t = {
+    id = fresh_id ()
+  }
+
+  let compare (var1 :t) (var2 : t) =
+    compare var1.id var2.id
+end
+
 module Function = struct
   type t = {
     name: string;
@@ -62,6 +82,8 @@ type expression =
   | FunctionCall of Function.t * expression Ast.marked list
   | Literal of literal
   | Var of Variable.t
+  | LocalVar of LocalVariable.t
+  | LocalLet of LocalVariable.t * expression * expression
 
 module VariableMap = Map.Make(Variable)
 
@@ -73,5 +95,4 @@ type function_data = unit
 
 type program = {
   variables: variable_data VariableMap.t;
-  functions: function_data FunctionMap.t
 }
