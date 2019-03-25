@@ -267,7 +267,7 @@ loop_variable_value_name:
 s = PARAMETER { (s, mk_position $sloc) }
 
 loop_variables_value:
-| s = loop_variable_value_name EQUALS e = enumeration {
+| s = loop_variable_value_name EQUALS e = enumeration_loop {
     let (s,loc) = s in ((s, loc), e)
   }
 
@@ -276,9 +276,22 @@ loop_variables_ranges:
 | r = loop_variables_range AND rs = loop_variables_ranges { r::rs }
 
 loop_variables_range:
-| ONE s = loop_variable_value_name IN e = enumeration {
+| ONE s = loop_variable_value_name IN e = enumeration_loop {
    let (s, loc) = s in ((s, loc), e)
  }
+
+ enumeration_loop:
+ | i = enumeration_loop_item { [i] }
+ | i = enumeration_loop_item COMMA is = enumeration_loop { i::is }
+
+ enumeration_loop_item:
+ | bounds = interval_loop { bounds  }
+ | s = PARAMETER { VarParam (s, mk_position $sloc) }
+
+ interval_loop:
+ | i1 = SYMBOL RANGE i2 = SYMBOL
+  { IntervalLoop ((parse_int $sloc i1, mk_position $sloc),
+    (parse_int $sloc i2, mk_position $sloc)) }
 
 enumeration:
 | i = enumeration_item { [i] }

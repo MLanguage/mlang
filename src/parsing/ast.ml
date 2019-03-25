@@ -95,6 +95,12 @@ type set_value =
   | Interval of int marked * int marked
 [@@deriving show]
 
+type set_value_loop =
+  | VarParam of char marked
+  | IntervalLoop of int marked * int marked
+[@@deriving show]
+
+
 type comp_op =
   | Gt
   | Gte
@@ -118,7 +124,7 @@ type unop =
   | Minus
 [@@deriving show]
 
-type loop_variable = char marked * set_value list
+type loop_variable = char marked * set_value_loop list
 [@@deriving show]
 
 type loop_variables =

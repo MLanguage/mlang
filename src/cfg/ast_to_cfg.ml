@@ -118,7 +118,7 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
 
-module ParamsMap = Map.Make(String)
+module ParamsMap = Map.Make(Char)
 
 type loop_context = char ParamsMap.t
 
@@ -126,6 +126,9 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
   ((loop_context -> Cfg.expression Ast.marked) -> Cfg.expression Ast.marked list) =
   match Ast.unmark lvs with
   | Ast.ValueSets lvs -> (fun translator ->
+      let varying_domain = List.fold_left (fun domain (param, values) ->
+          assert false
+        ) ParamsMap.empty lvs in
       assert false
     )
   | Ast.Ranges _ -> raise (Errors.Unimplemented ("TODO4", Ast.get_position lvs))
@@ -178,6 +181,10 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
                or_chain
              )) f
          ) (Ast.same_pos_as (Cfg.Literal (Cfg.Bool false)) f) values in
+       let or_chain = if negative then
+           Ast.same_pos_as (Cfg.Unop (Ast.Not, or_chain)) or_chain
+         else or_chain
+       in
        Cfg.LocalLet (local_var, new_e, or_chain)
      | Ast.Comparison (op, e1, e2) ->
        let new_e1 = translate_expression ctx e1 in

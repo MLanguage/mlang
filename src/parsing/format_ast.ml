@@ -56,6 +56,10 @@ let format_set_value (sv: set_value) : string = match sv with
   | VarValue v -> format_variable (unmark v)
   | Interval (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
 
+let format_set_value_loop (sv: set_value_loop) : string = match sv with
+  | VarParam v -> Printf.sprintf "%c" (unmark v)
+  | IntervalLoop (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
+
 let format_comp_op (op: comp_op) : string = match op with
   | Gt -> ">"
   | Gte -> ">="
@@ -79,12 +83,12 @@ let format_unop (op: unop) : string = match op with
 let format_loop_variable_ranges ((v, vs): loop_variable) =
   Printf.sprintf "un %c dans %s"
     (unmark v)
-    (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
+    (String.concat "," (List.map (fun sv -> format_set_value_loop sv) vs))
 
 let format_loop_variable_value_set ((v, vs): loop_variable) =
   Printf.sprintf "%c=%s"
     (unmark v)
-    (String.concat "," (List.map (fun sv -> format_set_value sv) vs))
+    (String.concat "," (List.map (fun sv -> format_set_value_loop sv) vs))
 
 let format_loop_variables (lvs: loop_variables) : string =
   Printf.sprintf "%s:" (match lvs with
