@@ -57,7 +57,7 @@ let format_set_value (sv: set_value) : string = match sv with
   | Interval (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
 
 let format_set_value_loop (sv: set_value_loop) : string = match sv with
-  | VarParam v -> Printf.sprintf "%c" (unmark v)
+  | VarParam v -> Printf.sprintf "%s" (unmark v)
   | IntervalLoop (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
 
 let format_comp_op (op: comp_op) : string = match op with

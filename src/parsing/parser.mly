@@ -286,7 +286,7 @@ loop_variables_range:
 
  enumeration_loop_item:
  | bounds = interval_loop { bounds  }
- | s = PARAMETER { VarParam (s, mk_position $sloc) }
+ | s = SYMBOL { VarParam (parse_variable_name $sloc s, mk_position $sloc) }
 
  interval_loop:
  | i1 = SYMBOL RANGE i2 = SYMBOL

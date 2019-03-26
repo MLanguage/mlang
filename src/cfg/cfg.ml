@@ -5,6 +5,7 @@ module Variable = struct
     name: string Ast.marked;
     id: int;
   }
+  [@@deriving show]
 
   let counter : int ref = ref 0
 
@@ -25,6 +26,7 @@ module LocalVariable = struct
   type t = {
     id: int;
   }
+  [@@deriving show]
 
   let counter : int ref = ref 0
 
@@ -40,22 +42,28 @@ module LocalVariable = struct
   let compare (var1 :t) (var2 : t) =
     compare var1.id var2.id
 end
+
 type table_index =
   | LiteralIndex of int
   | GenericIndex
   | SymbolIndex of Variable.t
+[@@deriving show]
 
 type literal =
   | Int of int
   | Float of float
   | Bool of bool
+[@@deriving show]
 
 type func =
   | SumFunc
   | AbsFunc
   | MinFunc
+  | MaxFunc
   | GtzFunc
   | GtezFunc
+  | NullFunc
+[@@deriving show]
 
 type expression =
   | Comparison of Ast.comp_op Ast.marked * expression Ast.marked * expression Ast.marked
@@ -68,14 +76,14 @@ type expression =
   | Var of Variable.t
   | LocalVar of LocalVariable.t
   | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
+[@@deriving show]
 
 module VariableMap = Map.Make(Variable)
 
 type variable_data = {
   var_expr: expression Ast.marked;
 }
-
-type function_data = unit
+[@@deriving show]
 
 type program = {
   variables: variable_data VariableMap.t;

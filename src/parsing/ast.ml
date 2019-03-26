@@ -22,7 +22,7 @@ let no_pos : position =
     { Lexing.pos_fname = ""; Lexing.pos_lnum = 0; Lexing.pos_cnum = 0; Lexing.pos_bol = 0 }
   in
   {
-    pos_filename = "unknwon position";
+    pos_filename = "unknown position";
     pos_loc = (zero_pos, zero_pos)
   }
 
@@ -96,7 +96,7 @@ type set_value =
 [@@deriving show]
 
 type set_value_loop =
-  | VarParam of char marked
+  | VarParam of variable_name marked
   | IntervalLoop of int marked * int marked
 [@@deriving show]
 
@@ -146,7 +146,7 @@ type expression =
 [@@deriving show]
 
 and func_args =
-  | ArgList of expression marked list
+    | ArgList of expression marked list
   | LoopList of loop_variables marked * expression marked
 [@@deriving show]
 

@@ -13,13 +13,43 @@ type var_decl_data = {
   var_decl_io: io_status;
 }
 
+module ParamsMap = Map.Make(Char)
+
+type loop_param_value =
+  | VarName of Ast.variable_name
+  | RangeInt of int
+
+let format_loop_param_value (v: loop_param_value) : string = match v with
+  | VarName v -> v
+  | RangeInt i -> string_of_int i
+
+type loop_context = loop_param_value ParamsMap.t
+
+type loop_domain = loop_param_value list ParamsMap.t
+
+let format_loop_context (ld: loop_context) : string = ParamsMap.fold (fun param value acc ->
+    acc ^ "; " ^ (Printf.sprintf "%c=" param)  ^
+    format_loop_param_value value
+  ) ld ""
+
+
+let format_loop_domain (ld: loop_domain) : string = ParamsMap.fold (fun param values acc ->
+    acc ^ "; " ^ (Printf.sprintf "%c=" param)  ^
+    (String.concat "," (List.map (fun value -> format_loop_param_value value) values))
+  ) ld ""
+
 module VarNameToID = Map.Make(String)
 type idmap = Cfg.Variable.t VarNameToID.t
 
+type translating_context = {
+  idmap : idmap;
+  lc: loop_context option;
+}
+
+
 let get_var_from_name (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.Variable.t =
-  match VarNameToID.find_opt (Ast.unmark name) d with
-  | Some var -> var
-  | None ->
+  try VarNameToID.find (Ast.unmark name) d with
+  | Not_found ->
     raise (Errors.TypeError
              (Errors.Variable
                 (Printf.sprintf "variable %s used %s, has not been declared"
@@ -76,15 +106,13 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
     ) (Cfg.VariableMap.empty, VarNameToID.empty, []) p in
   let vars : var_decl_data Cfg.VariableMap.t = List.fold_left (fun vars out ->
       let out_var = get_var_from_name idmap out in
-      match Cfg.VariableMap.find_opt out_var vars with
-      | Some data -> Cfg.VariableMap.add out_var { data with var_decl_io = Output } vars
-      | None -> assert false (* should not happen *)
+      try
+        let data = Cfg.VariableMap.find out_var vars in
+        Cfg.VariableMap.add out_var { data with var_decl_io = Output } vars
+      with
+      | Not_found -> assert false (* should not happen *)
     ) vars out_list in
   (vars, idmap)
-
-type translating_context = {
-  idmap : idmap;
-}
 
 let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Cfg.expression Ast.marked =
   match Ast.unmark var with
@@ -110,35 +138,80 @@ let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.mar
 let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_name with
   | "somme" -> Cfg.SumFunc
   | "min" -> Cfg.MinFunc
+  | "max" -> Cfg.MaxFunc
   | "abs" -> Cfg.AbsFunc
   | "positif" -> Cfg.GtzFunc
   | "positif_ou_nul" -> Cfg.GtezFunc
+  | "null" -> Cfg.NullFunc
   | x -> raise (Errors.TypeError (
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
 
-module ParamsMap = Map.Make(Char)
+let rec iterate_all_combinations (ld: loop_domain) (acc: loop_context list) : loop_context list =
+  Printf.printf "Called with %s\n" (format_loop_domain ld);
+  let out = ParamsMap.fold (fun param values acc ->
+      match values with
+      | [] -> ParamsMap.empty::acc 
+      | hd::[] ->
+        let new_ld = ParamsMap.remove param ld in
+        let all_contexts = iterate_all_combinations new_ld acc in
+        (List.map (fun c -> ParamsMap.add param hd c) all_contexts)@acc
+      | hd::tl ->
+        let new_ld = ParamsMap.add param tl ld in
+        let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld acc in
+        let new_ld = ParamsMap.add param [hd] ld in
+        let all_context_with_hd_val_for_param = iterate_all_combinations new_ld acc in
+        all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param@acc
+    ) ld acc
+  in
+  Printf.printf "Returning !\n";
+  List.iter (fun c -> Printf.printf "One context!\n") out;
+  out
 
-type loop_context = char ParamsMap.t
+let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
+  if i1 = i2 then [] else
+    let tl = make_range_list (i1 + 1) i2 in
+    (RangeInt i1)::tl
 
 let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
   ((loop_context -> Cfg.expression Ast.marked) -> Cfg.expression Ast.marked list) =
   match Ast.unmark lvs with
   | Ast.ValueSets lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
-          assert false
+          let values = List.map (fun value -> match value with
+              | Ast.VarParam v -> VarName (Ast.unmark v)
+              | Ast.IntervalLoop _ -> assert false (* should not happen *)
+            ) values in
+          ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
-      assert false
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain [])
     )
-  | Ast.Ranges _ -> raise (Errors.Unimplemented ("TODO4", Ast.get_position lvs))
+  | Ast.Ranges lvs -> (fun translator ->
+      let varying_domain = List.fold_left (fun domain (param, values) ->
+          let values = List.map (fun value -> match value with
+              | Ast.VarParam v -> assert false (* should not happen *)
+              | Ast.IntervalLoop (i1, i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+            ) values in
+          ParamsMap.add (Ast.unmark param) (List.flatten values) domain
+        ) ParamsMap.empty lvs in
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain [])
+    )
 
 let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : Cfg.expression Ast.marked list =
   match args with
   | Ast.ArgList args -> List.map (fun arg ->
       translate_expression ctx arg
     ) args
-  | Ast.LoopList (lvs, e) -> raise (Errors.Unimplemented ("TODO3", Ast.get_position lvs))
+  | Ast.LoopList (lvs, e) ->
+    let loop_context_provider = translate_loop_variables ctx lvs in
+    let translator = fun lc ->
+      let new_ctx = {ctx with lc = Some lc } in
+      translate_expression new_ctx e
+    in
+    let out = loop_context_provider translator in
+    List.iter (fun out -> Cfg.pp_expression Format.std_formatter (Ast.unmark out)) out;
+    out
 
 and translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Cfg.expression Ast.marked =
   Ast.same_pos_as
@@ -240,7 +313,7 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
           | Ast.Rule r -> List.fold_left (fun var_data formula ->
               match Ast.unmark formula with
               | Ast.SingleFormula f ->
-                let ctx = { idmap } in
+                let ctx = { idmap; lc = None } in
                 let var_expr = translate_expression ctx f.Ast.formula in
                 let var_lvalue = translate_lvalue ctx f.Ast.lvalue in
                 Cfg.VariableMap.add var_lvalue { Cfg.var_expr = var_expr } var_data
@@ -255,4 +328,7 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
 let translate (p: Ast.program) : Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
   let var_data = get_var_data idmap p in
-  assert false
+  Cfg.VariableMap.iter (fun var data ->
+      Cfg.pp_variable_data Format.std_formatter data;
+    ) var_data;
+  raise (Errors.Unimplemented ("TODO6", Ast.no_pos))

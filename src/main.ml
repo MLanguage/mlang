@@ -40,9 +40,9 @@ let main () =
       try
         Parse_utils.current_file := source_file;
         let commands = Parser.source_file token filebuf in
-        Cli.debug_print
-          (Printf.sprintf "Parsed AST:\n%s"
-             (Format_ast.format_source_file commands));
+        (* Cli.debug_print
+           (Printf.sprintf "Parsed AST:\n%s"
+             (Format_ast.format_source_file commands)); *)
         program := commands::!program
       with
       | Errors.LexingError msg | Errors.ParsingError msg ->
@@ -55,7 +55,8 @@ let main () =
           begin match input with
             | Some input -> close_in input
             | None -> ()
-          end
+          end;
+          exit (-1)
         end
     ) !source_files;
   try
