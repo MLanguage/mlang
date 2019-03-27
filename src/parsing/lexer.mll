@@ -127,7 +127,7 @@ rule token = parse
   { STRING s }
 | ['a'-'z'] as s
     { PARAMETER s }
-| ['a'-'z' 'A'-'Z' '0'-'9' '_' '.']+ as s
+| (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0' - '9']+ '.' ['0' - '9']+) as s
   { SYMBOL s }
 | eof
   { EOF }

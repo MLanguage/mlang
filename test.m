@@ -25,22 +25,25 @@ MIBNETNPTOT : calculee restituee : "Avis : micro bic net total foyer (sauf + V 1
 DLMRN1 : calculee restituee : "avis IR : deficits non imputes annee N - 1" ;
 FLAG_RETARD : saisie penalite alias V_FLAG_RETA : "nouveau cor : indicateur de retard 2042" ;
 FLAG_RECTIF : saisie penalite alias V_FLAG_RECTF : "nouv cor : indicateur de rectification" ;
+BICNPV : calculee : "Montant net imposable BIC non pro" ;
+BICNPC : calculee : "Montant net imposable BIC non pro" ;
+BICNPP : calculee : "Montant net imposable BIC non pro" ;
 
 regle 111320:
 application : iliad , batch ;
 BINNC = somme(i=V,C,P:BICNPi);
 
-#DLMRN1TXM = - min(0,MIB_NETCT *(1-positif(MIBNETPTOT))
-#                          +SPENETCT * (1 - positif(SPENETPF)));
+DLMRN1TXM = - min(0,MIB_NETCT *(1-positif(MIBNETPTOT))
+                          +SPENETCT * (1 - positif(SPENETPF)));
 
-#DLMRN1 = ((1-positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)) * abs(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
-#                 + positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
-#                 * positif_ou_nul(DEFBIC5+DEFBIC4+DEFBIC3+DEFBIC2+DEFBIC1-(somme(i=V,C,P:BICNPi)+MIB_NETNPCT))
-#                 * (DEFBIC5+DEFBIC4+DEFBIC3+DEFBIC2+DEFBIC1-(somme(i=V,C,P:BICNPi)+MIB_NETNPCT))
-#                 * null(DLMRN6P+DLMRN5P+DLMRN4P+DLMRN3P+DLMRN2P)) * null(4 - V_IND_TRAIT)
-#                 + null(5 - V_IND_TRAIT)*
-#                                   ( max(0,DEFBICNPF-DEFNPI) * positif(DEFBICNPF)
-#                                    + (max(0,-(BINNV+BINNC+BINNP+MIBNETNPTOT))) * null(DEFBICNPF));
+DLMRN1 = ((1-positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)) * abs(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
+                 + positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)
+                 * positif_ou_nul(DEFBIC5+DEFBIC4+DEFBIC3+DEFBIC2+DEFBIC1-(somme(i=V,C,P:BICNPi)+MIB_NETNPCT))
+                 * (somme(un i dans 1..5:DEFBICi)-(somme(i=V,C,P:BICNPi)+MIB_NETNPCT))
+                 * null(DLMRN6P+DLMRN5P+DLMRN4P+DLMRN3P+DLMRN2P)) * null(4 - V_IND_TRAIT)
+                 + null(5 - V_IND_TRAIT)*
+                                   ( max(0,DEFBICNPF-DEFNPI) * positif(DEFBICNPF)
+                                    + (max(0,-(BINNV+BINNC+BINNP+MIBNETNPTOT))) * null(DEFBICNPF));
 
 #pour x=0,5;y=1,2;z=1,2:
 #DSxyz = max( QFxyz - LIM_BAR1 , 0 ) * (TAUX1   / 100)

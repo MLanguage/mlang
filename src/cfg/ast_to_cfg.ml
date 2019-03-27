@@ -121,8 +121,20 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
   | Ast.Generic gen_name ->
     if List.length gen_name.Ast.parameters == 0 then
       translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
-    else
-      raise (Errors.Unimplemented ("TODO1", Ast.get_position var))
+    else match ctx.lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc ->
+        let new_var_name = ParamsMap.fold (fun param value var_name ->
+            match value with
+            | VarName value ->
+              Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
+            | RangeInt i ->
+              Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) (string_of_int i) var_name
+          ) lc gen_name.Ast.base
+        in
+        translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.table_index Ast.marked =
   match Ast.unmark i with
@@ -149,14 +161,16 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
       )))
 
 let rec iterate_all_combinations (ld: loop_domain) (acc: loop_context list) : loop_context list =
-  Printf.printf "Called with %s\n" (format_loop_domain ld);
-  let out = ParamsMap.fold (fun param values acc ->
+  ParamsMap.fold (fun param values acc ->
       match values with
-      | [] -> ParamsMap.empty::acc 
+      | [] -> ParamsMap.empty::acc
       | hd::[] ->
         let new_ld = ParamsMap.remove param ld in
         let all_contexts = iterate_all_combinations new_ld acc in
-        (List.map (fun c -> ParamsMap.add param hd c) all_contexts)@acc
+        if List.length all_contexts = 0 then
+          (ParamsMap.singleton param hd)::acc
+        else
+          (List.map (fun c -> ParamsMap.add param hd c) all_contexts)@acc
       | hd::tl ->
         let new_ld = ParamsMap.add param tl ld in
         let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld acc in
@@ -164,13 +178,9 @@ let rec iterate_all_combinations (ld: loop_domain) (acc: loop_context list) : lo
         let all_context_with_hd_val_for_param = iterate_all_combinations new_ld acc in
         all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param@acc
     ) ld acc
-  in
-  Printf.printf "Returning !\n";
-  List.iter (fun c -> Printf.printf "One context!\n") out;
-  out
 
 let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
-  if i1 = i2 then [] else
+  if i1 > i2 then [] else
     let tl = make_range_list (i1 + 1) i2 in
     (RangeInt i1)::tl
 
@@ -209,9 +219,7 @@ let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : C
       let new_ctx = {ctx with lc = Some lc } in
       translate_expression new_ctx e
     in
-    let out = loop_context_provider translator in
-    List.iter (fun out -> Cfg.pp_expression Format.std_formatter (Ast.unmark out)) out;
-    out
+    loop_context_provider translator
 
 and translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Cfg.expression Ast.marked =
   Ast.same_pos_as
@@ -328,7 +336,4 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
 let translate (p: Ast.program) : Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
   let var_data = get_var_data idmap p in
-  Cfg.VariableMap.iter (fun var data ->
-      Cfg.pp_variable_data Format.std_formatter data;
-    ) var_data;
   raise (Errors.Unimplemented ("TODO6", Ast.no_pos))
