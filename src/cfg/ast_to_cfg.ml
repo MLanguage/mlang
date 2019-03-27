@@ -160,24 +160,25 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
 
-let rec iterate_all_combinations (ld: loop_domain) (acc: loop_context list) : loop_context list =
-  ParamsMap.fold (fun param values acc ->
-      match values with
-      | [] -> ParamsMap.empty::acc
-      | hd::[] ->
-        let new_ld = ParamsMap.remove param ld in
-        let all_contexts = iterate_all_combinations new_ld acc in
-        if List.length all_contexts = 0 then
-          (ParamsMap.singleton param hd)::acc
-        else
-          (List.map (fun c -> ParamsMap.add param hd c) all_contexts)@acc
-      | hd::tl ->
-        let new_ld = ParamsMap.add param tl ld in
-        let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld acc in
-        let new_ld = ParamsMap.add param [hd] ld in
-        let all_context_with_hd_val_for_param = iterate_all_combinations new_ld acc in
-        all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param@acc
-    ) ld acc
+let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
+  try let param, values = ParamsMap.choose ld in
+    match values with
+    | [] -> []
+    | hd::[] ->
+      let new_ld = ParamsMap.remove param ld in
+      let all_contexts = iterate_all_combinations new_ld in
+      if List.length all_contexts = 0 then
+        [ParamsMap.singleton param hd]
+      else
+        (List.map (fun c -> ParamsMap.add param hd c) all_contexts)
+    | hd::tl ->
+      let new_ld = ParamsMap.add param tl ld in
+      let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld in
+      let new_ld = ParamsMap.add param [hd] ld in
+      let all_context_with_hd_val_for_param = iterate_all_combinations new_ld in
+      all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param
+  with
+  | Not_found -> []
 
 let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
   if i1 > i2 then [] else
@@ -185,7 +186,7 @@ let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
     (RangeInt i1)::tl
 
 let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
-  ((loop_context -> Cfg.expression Ast.marked) -> Cfg.expression Ast.marked list) =
+  ((loop_context -> 'a) -> 'a list) =
   match Ast.unmark lvs with
   | Ast.ValueSets lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
@@ -195,7 +196,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
             ) values in
           ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain [])
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
   | Ast.Ranges lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
@@ -205,7 +206,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
         ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain [])
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
 
 let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : Cfg.expression Ast.marked list =
@@ -325,8 +326,19 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
                 let var_expr = translate_expression ctx f.Ast.formula in
                 let var_lvalue = translate_lvalue ctx f.Ast.lvalue in
                 Cfg.VariableMap.add var_lvalue { Cfg.var_expr = var_expr } var_data
-              | Ast.MultipleFormulaes _ ->
-                raise (Errors.Unimplemented ("TODO5", Ast.get_position formula))
+              | Ast.MultipleFormulaes (lvs, f) ->
+                let ctx = { idmap; lc = None } in
+                let loop_context_provider = translate_loop_variables ctx lvs in
+                let translator = fun lc ->
+                  let new_ctx = {ctx with lc = Some lc } in
+                  let var_expr = translate_expression new_ctx f.Ast.formula in
+                  let var_lvalue = translate_lvalue new_ctx f.Ast.lvalue in
+                  (var_lvalue, { Cfg.var_expr = var_expr })
+                in
+                let data_to_add = loop_context_provider translator in
+                List.fold_left (fun acc (var_lvalue, var_expr) ->
+                    Cfg.VariableMap.add var_lvalue var_expr acc
+                  ) var_data data_to_add
             ) var_data r.Ast.rule_formulaes
           | _ -> var_data
         ) var_data source_file

@@ -28,6 +28,49 @@ FLAG_RECTIF : saisie penalite alias V_FLAG_RECTF : "nouv cor : indicateur de rec
 BICNPV : calculee : "Montant net imposable BIC non pro" ;
 BICNPC : calculee : "Montant net imposable BIC non pro" ;
 BICNPP : calculee : "Montant net imposable BIC non pro" ;
+QF011 : calculee : "Quotient familial" ;
+QF012 : calculee : "Quotient familial" ;
+QF014 : calculee : "Quotient familial" ;
+QF015 : calculee : "Quotient familial" ;
+QF016 : calculee : "Quotient familial 8VV art.168" ;
+QF02 : calculee : "Quotient familial" ;
+QF021 : calculee : "Quotient familial" ;
+QF022 : calculee : "Quotient familial" ;
+QF024 : calculee : "Quotient familial" ;
+QF025 : calculee : "Quotient familial tx moyen 2 parts tx moyen" ;
+QF026 : calculee : "Quotient familial 8VV art.168" ;
+QF511 : calculee : "Quotient familial" ;
+QF512 : calculee : "Quotient familial" ;
+QF515 : calculee : "Quotient familial" ;
+QF521 : calculee : "Quotient familial" ;
+QF522 : calculee : "Quotient familial" ;
+QF525 : calculee : "Quotient familial tx moyen 2 parts" ;
+LIM_BAR1 : const=0.00000  ;
+LIM_BAR2 : const=9700.00000  ;
+LIM_BAR3 : const=26791.00000  ;
+LIM_BAR4 : const=71826.00000  ;
+LIM_BAR5 : const=152108.00000  ;
+TAUX1 : calculee : "calcul des droits simple: TAUX 1 tranche" ;
+TAUX2 : calculee : "calcul des droits simple: TAUX 2 tranche" ;
+TAUX3 : calculee : "calcul des droits simple: TAUX 3 tranche" ;
+TAUX4 : calculee : "calcul des droits simple: TAUX 4 tranche" ;
+TAUX5 : calculee : "calcul des droits simple: TAUX 5 tranche" ;
+DS511 : calculee : "Droits simples issus du bareme" ;
+DS512 : calculee : "Droits simples issus du bareme" ;
+DS515 : calculee : "Droits simples issus du bareme" ;
+DS521 : calculee : "Droits simples issus du bareme" ;
+DS522 : calculee : "Droits simples issus du bareme" ;
+DS525 : calculee : "Droits simples issus du bareme avant plaf. quotient fam tx moyen" ;
+DS011 : calculee : "Droits simples issus du bareme" ;
+DS012 : calculee : "Droits simples issus du bareme" ;
+DS014 : calculee : "Droits simples issus du bareme" ;
+DS015 : calculee : "Droits simples issus du bareme" ;
+DS016 : calculee : "Droits simples issus du bareme 8VV art. 168" ;
+DS021 : calculee : "Droits simples issus du bareme" ;
+DS022 : calculee : "Droits simples issus du bareme" ;
+DS024 : calculee : "Droits simples issus du bareme" ;
+DS025 : calculee : "Droits simples issus du bareme tx moyen" ;
+DS026 : calculee : "Droits simples issus du bareme 8VV art. 168" ;
 
 regle 111320:
 application : iliad , batch ;
@@ -45,12 +88,12 @@ DLMRN1 = ((1-positif_ou_nul(somme(i=V,C,P:BICNPi)+MIB_NETNPCT)) * abs(somme(i=V,
                                    ( max(0,DEFBICNPF-DEFNPI) * positif(DEFBICNPF)
                                     + (max(0,-(BINNV+BINNC+BINNP+MIBNETNPTOT))) * null(DEFBICNPF));
 
-#pour x=0,5;y=1,2;z=1,2:
-#DSxyz = max( QFxyz - LIM_BAR1 , 0 ) * (TAUX1   / 100)
-#      + max( QFxyz - LIM_BAR2 , 0 ) * (TAUX2   / 100)
-#      + max( QFxyz - LIM_BAR3 , 0 ) * (TAUX3   / 100)
-#      + max( QFxyz - LIM_BAR4 , 0 ) * (TAUX4   / 100)
-#      + max( QFxyz - LIM_BAR5 , 0 ) * (TAUX5   / 100);
+pour x=0,5;y=1,2;z=1,2:
+DSxyz = max( QFxyz - LIM_BAR1 , 0 ) * (TAUX1   / 100)
+      + max( QFxyz - LIM_BAR2 , 0 ) * (TAUX2   / 100)
+      + max( QFxyz - LIM_BAR3 , 0 ) * (TAUX3   / 100)
+      + max( QFxyz - LIM_BAR4 , 0 ) * (TAUX4   / 100)
+      + max( QFxyz - LIM_BAR5 , 0 ) * (TAUX5   / 100);
 
 #SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
 #            * max(ISF4BASE,0)
