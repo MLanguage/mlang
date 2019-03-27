@@ -63,6 +63,8 @@ type func =
   | GtzFunc
   | GtezFunc
   | NullFunc
+  | ArrFunc
+  | PresentFunc
 [@@deriving show]
 
 type expression =

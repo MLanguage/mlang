@@ -44,6 +44,19 @@ let parse_variable sloc (s:string) =
     | Errors.ParsingError _ ->
       Errors.parser_error sloc "invalid variable name"
 
+type parse_val =
+  | ParseVar of Ast.variable
+  | ParseInt of int
+
+let parse_variable_or_int sloc (s:string) : parse_val  =
+  try ParseInt (int_of_string s) with
+  | Failure _ ->
+    try ParseVar (Ast.Normal (parse_variable_name sloc s)) with
+    | Errors.ParsingError _ ->
+      try ParseVar (Ast.Generic (parse_variable_generic_name sloc s)) with
+      | Errors.ParsingError _ ->
+        Errors.parser_error sloc "invalid variable name"
+
 let parse_table_index sloc (s: string) : Ast.table_index =
   if String.equal s "X" then
     Ast.GenericIndex

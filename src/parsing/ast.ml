@@ -91,6 +91,7 @@ type lvalue = {
 
 
 type set_value =
+  | IntValue of int marked
   | VarValue of variable marked
   | Interval of int marked * int marked
 [@@deriving show]

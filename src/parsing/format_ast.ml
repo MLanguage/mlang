@@ -55,6 +55,7 @@ let format_lvalue (lv: lvalue) : string =
 let format_set_value (sv: set_value) : string = match sv with
   | VarValue v -> format_variable (unmark v)
   | Interval (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
+  | IntValue i -> string_of_int (Ast.unmark i)
 
 let format_set_value_loop (sv: set_value_loop) : string = match sv with
   | VarParam v -> Printf.sprintf "%s" (unmark v)

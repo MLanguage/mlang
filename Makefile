@@ -7,7 +7,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(wildcard $(SOURCE_DIR)/*.m)
+		./main.native $(wildcard $(SOURCE_DIR)/*.m) --debug
 
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc

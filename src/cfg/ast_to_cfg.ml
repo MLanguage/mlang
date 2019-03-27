@@ -155,6 +155,8 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
   | "positif" -> Cfg.GtzFunc
   | "positif_ou_nul" -> Cfg.GtezFunc
   | "null" -> Cfg.NullFunc
+  | "arr" -> Cfg.ArrFunc
+  | "present" -> Cfg.PresentFunc
   | x -> raise (Errors.TypeError (
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
@@ -190,10 +192,10 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
   match Ast.unmark lvs with
   | Ast.ValueSets lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
-          let values = List.map (fun value -> match value with
-              | Ast.VarParam v -> VarName (Ast.unmark v)
-              | Ast.IntervalLoop _ -> assert false (* should not happen *)
-            ) values in
+          let values = List.flatten (List.map (fun value -> match value with
+              | Ast.VarParam v -> [VarName (Ast.unmark v)]
+              | Ast.IntervalLoop (i1,i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+            ) values) in
           ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
       List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
@@ -209,6 +211,23 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
 
+let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.position) : translating_context =
+  match ctx.lc with
+  | None -> { ctx with lc = Some new_lc }
+  | Some old_lc ->
+    let merged_lc = ParamsMap.merge (fun param old_val new_val ->
+        match (old_val, new_val) with
+        | (Some _ , Some _) ->
+          raise (Errors.TypeError
+                   (Errors.LoopParam
+                      (Printf.sprintf "Same loop parameter %c used in two nested loop contexts, %s"
+                         param (Format_ast.format_position pos))))
+        | (Some v, None) | (None, Some v) -> Some v
+        | (None, None) -> assert false (* should not happen *)
+      ) old_lc new_lc
+    in
+    { ctx with lc = Some merged_lc }
+
 let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : Cfg.expression Ast.marked list =
   match args with
   | Ast.ArgList args -> List.map (fun arg ->
@@ -217,7 +236,7 @@ let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : C
   | Ast.LoopList (lvs, e) ->
     let loop_context_provider = translate_loop_variables ctx lvs in
     let translator = fun lc ->
-      let new_ctx = {ctx with lc = Some lc } in
+      let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
       translate_expression new_ctx e
     in
     loop_context_provider translator
@@ -235,6 +254,11 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
                  Ast.same_pos_as Ast.Eq set_var,
                  Ast.same_pos_as local_var_expr e,
                  translate_variable ctx set_var
+               )
+             | Ast.IntValue i -> Cfg.Comparison (
+                 Ast.same_pos_as Ast.Eq i,
+                 Ast.same_pos_as local_var_expr e,
+                 Ast.same_pos_as (Cfg.Literal (Cfg.Int (Ast.unmark i))) i
                )
              | Ast.Interval (bn,en) ->
                if Ast.unmark bn > Ast.unmark en then
@@ -318,6 +342,7 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
 
 let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.VariableMap.t =
   List.fold_left (fun var_data source_file ->
+      Cli.debug_print (Printf.sprintf "Translating %s to cleaner form" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
       List.fold_left (fun var_data source_file_item -> match Ast.unmark source_file_item with
           | Ast.Rule r -> List.fold_left (fun var_data formula ->
               match Ast.unmark formula with

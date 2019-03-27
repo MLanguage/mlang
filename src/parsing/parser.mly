@@ -299,7 +299,11 @@ enumeration:
 
 enumeration_item:
 | bounds = interval { bounds  }
-| s = SYMBOL { VarValue (parse_variable $sloc s, mk_position $sloc) }
+| s = SYMBOL {
+    match parse_variable_or_int $sloc s with
+    | ParseVar v -> VarValue (v, mk_position $sloc)
+    | ParseInt i -> IntValue (i, mk_position $sloc)
+}
 
 interval:
 | i1 = SYMBOL RANGE i2 = SYMBOL
