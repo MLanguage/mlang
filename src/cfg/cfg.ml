@@ -64,6 +64,7 @@ type func =
   | GtezFunc
   | NullFunc
   | ArrFunc
+  | InfFunc
   | PresentFunc
 [@@deriving show]
 

@@ -187,8 +187,12 @@ formula_kind:
 for_formula:
 | FOR lv = loop_variables COLON ft = formula_two { (lv, ft) }
 
+
+lvalue_name:
+| s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
+
 lvalue:
-| s = variable_generic i = brackets? { ({ var = Generic s; index = i}, mk_position $sloc) }
+| s = lvalue_name i = brackets? { ({ var = s; index = i}, mk_position $sloc) }
 
 formula_two:
 | l = lvalue EQUALS e = expression { {
@@ -201,9 +205,6 @@ formula_one:
     lvalue = l;
     formula =  e
   } }
-
-variable_generic:
-| s = SYMBOL { parse_variable_generic_name $sloc s }
 
 verification_name:
 | name = SYMBOL { (name, mk_position $sloc) }

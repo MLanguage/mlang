@@ -84,7 +84,7 @@ type table_index =
 
 
 type lvalue = {
-  var: variable;
+  var: variable marked;
   index: table_index marked option
 }
 [@@deriving show]

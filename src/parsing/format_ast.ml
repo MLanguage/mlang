@@ -47,7 +47,7 @@ let format_table_index (i:table_index) : string = match i with
   | SymbolIndex v -> format_variable v
 
 let format_lvalue (lv: lvalue) : string =
-  Printf.sprintf "%s%s" (format_variable lv.var) (match lv.index with
+  Printf.sprintf "%s%s" (format_variable (Ast.unmark lv.var)) (match lv.index with
       | Some vi -> "[" ^ (format_table_index (unmark vi)) ^ "]"
       | None -> ""
     )

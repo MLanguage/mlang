@@ -30,7 +30,6 @@ type typ_error =
   | Function of string
   | LoopParam of string
 
-
 exception TypeError of typ_error
 
 let format_typ_error (e: typ_error) : string = match e with

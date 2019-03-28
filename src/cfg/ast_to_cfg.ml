@@ -46,6 +46,64 @@ type translating_context = {
   lc: loop_context option;
 }
 
+let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
+  try let param, values = ParamsMap.choose ld in
+    match values with
+    | [] -> []
+    | hd::[] ->
+      let new_ld = ParamsMap.remove param ld in
+      let all_contexts = iterate_all_combinations new_ld in
+      if List.length all_contexts = 0 then
+        [ParamsMap.singleton param hd]
+      else
+        (List.map (fun c -> ParamsMap.add param hd c) all_contexts)
+    | hd::tl ->
+      let new_ld = ParamsMap.add param tl ld in
+      let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld in
+      let new_ld = ParamsMap.add param [hd] ld in
+      let all_context_with_hd_val_for_param = iterate_all_combinations new_ld in
+      all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param
+  with
+  | Not_found -> []
+
+let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
+  if i1 > i2 then [] else
+    let tl = make_range_list (i1 + 1) i2 in
+    (RangeInt i1)::tl
+
+
+let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
+  ((loop_context -> 'a) -> 'a list) =
+  match Ast.unmark lvs with
+  | Ast.ValueSets lvs -> (fun translator ->
+      let varying_domain = List.fold_left (fun domain (param, values) ->
+          let values = List.flatten (List.map (fun value -> match value with
+              | Ast.VarParam v -> [VarName (Ast.unmark v)]
+              | Ast.IntervalLoop (i1,i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+            ) values) in
+          ParamsMap.add (Ast.unmark param) values domain
+        ) ParamsMap.empty lvs in
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
+    )
+  | Ast.Ranges lvs -> (fun translator ->
+      let varying_domain = List.fold_left (fun domain (param, values) ->
+          let values = List.map (fun value -> match value with
+              | Ast.VarParam v -> assert false (* should not happen *)
+              | Ast.IntervalLoop (i1, i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+            ) values in
+          ParamsMap.add (Ast.unmark param) (List.flatten values) domain
+        ) ParamsMap.empty lvs in
+      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
+    )
+
+let instantiate_generic_variables_parameters (lc: loop_context) (gen_name:Ast.variable_generic_name) : string =
+  ParamsMap.fold (fun param value var_name ->
+      match value with
+      | VarName value ->
+        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
+      | RangeInt i ->
+        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) (string_of_int i) var_name
+    ) lc gen_name.Ast.base
 
 let get_var_from_name (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.Variable.t =
   try VarNameToID.find (Ast.unmark name) d with
@@ -100,6 +158,63 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                 let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
                 (new_vars, new_idmap, out_list)
             end
+          | Ast.Rule r ->
+            List.fold_left (fun (vars, idmap, out_list) formula ->
+                match Ast.unmark formula with
+                | Ast.SingleFormula f ->
+                  begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
+                    | Ast.Normal name ->
+                      let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                      let new_var_data = {
+                        var_decl_typ = None;
+                        var_decl_is_table = None;
+                        var_decl_descr = None;
+                        var_decl_io = Constant;
+                      } in
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add name new_var idmap in
+                      (new_vars, new_idmap, out_list)
+                    | Ast.Generic name ->
+                      raise (Errors.TypeError
+                               (Errors.Variable
+                                  (Printf.sprintf "variable %s defined %s lacks generic parameters context"
+                                     name.Ast.base
+                                     (Format_ast.format_position (Ast.get_position f.Ast.lvalue))
+                                  )))
+                  end
+                | Ast.MultipleFormulaes (lvs, f) ->
+                  let ctx = { idmap; lc = None } in
+                  let loop_context_provider = translate_loop_variables ctx lvs in
+                  let translator = fun lc ->
+                    begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
+                      | Ast.Normal name ->
+                        let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                        let new_var_data = {
+                          var_decl_typ = None;
+                          var_decl_is_table = None;
+                          var_decl_descr = None;
+                          var_decl_io = Constant;
+                        } in
+                        (name, new_var, new_var_data)
+                      | Ast.Generic name ->
+                        let real_name = instantiate_generic_variables_parameters lc name in
+                        let new_var  = Cfg.Variable.new_var (Ast.same_pos_as real_name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                        let new_var_data = {
+                          var_decl_typ = None;
+                          var_decl_is_table = None;
+                          var_decl_descr = None;
+                          var_decl_io = Constant;
+                        } in
+                        (real_name, new_var, new_var_data)
+                    end
+                  in
+                  let var_defined = loop_context_provider translator in
+                  List.fold_left (fun (vars, idmap, out_list) (name, new_var, new_var_data) ->
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add name new_var idmap in
+                      (new_vars, new_idmap, out_list)
+                    ) (vars, idmap, out_list) var_defined
+              ) (vars, idmap, out_list) r.Ast.rule_formulaes
           | Ast.Output out_name -> (vars, idmap, out_name::out_list)
           | _ -> (vars, idmap, out_list)
         ) (vars, idmap, out_list) source_file
@@ -126,14 +241,7 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc ->
-        let new_var_name = ParamsMap.fold (fun param value var_name ->
-            match value with
-            | VarName value ->
-              Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
-            | RangeInt i ->
-              Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) (string_of_int i) var_name
-          ) lc gen_name.Ast.base
-        in
+        let new_var_name = instantiate_generic_variables_parameters lc gen_name in
         translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.table_index Ast.marked =
@@ -156,60 +264,12 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
   | "positif_ou_nul" -> Cfg.GtezFunc
   | "null" -> Cfg.NullFunc
   | "arr" -> Cfg.ArrFunc
+  | "inf" -> Cfg.InfFunc
   | "present" -> Cfg.PresentFunc
   | x -> raise (Errors.TypeError (
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
-
-let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
-  try let param, values = ParamsMap.choose ld in
-    match values with
-    | [] -> []
-    | hd::[] ->
-      let new_ld = ParamsMap.remove param ld in
-      let all_contexts = iterate_all_combinations new_ld in
-      if List.length all_contexts = 0 then
-        [ParamsMap.singleton param hd]
-      else
-        (List.map (fun c -> ParamsMap.add param hd c) all_contexts)
-    | hd::tl ->
-      let new_ld = ParamsMap.add param tl ld in
-      let all_contexts_minus_hd_val_for_param = iterate_all_combinations new_ld in
-      let new_ld = ParamsMap.add param [hd] ld in
-      let all_context_with_hd_val_for_param = iterate_all_combinations new_ld in
-      all_context_with_hd_val_for_param@all_contexts_minus_hd_val_for_param
-  with
-  | Not_found -> []
-
-let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
-  if i1 > i2 then [] else
-    let tl = make_range_list (i1 + 1) i2 in
-    (RangeInt i1)::tl
-
-let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
-  ((loop_context -> 'a) -> 'a list) =
-  match Ast.unmark lvs with
-  | Ast.ValueSets lvs -> (fun translator ->
-      let varying_domain = List.fold_left (fun domain (param, values) ->
-          let values = List.flatten (List.map (fun value -> match value with
-              | Ast.VarParam v -> [VarName (Ast.unmark v)]
-              | Ast.IntervalLoop (i1,i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
-            ) values) in
-          ParamsMap.add (Ast.unmark param) values domain
-        ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
-    )
-  | Ast.Ranges lvs -> (fun translator ->
-      let varying_domain = List.fold_left (fun domain (param, values) ->
-          let values = List.map (fun value -> match value with
-              | Ast.VarParam v -> assert false (* should not happen *)
-              | Ast.IntervalLoop (i1, i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
-            ) values in
-          ParamsMap.add (Ast.unmark param) (List.flatten values) domain
-        ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
-    )
 
 let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.position) : translating_context =
   match ctx.lc with
@@ -335,7 +395,7 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
   match (Ast.unmark lval).Ast.index with
   | Some _ -> raise (Errors.Unimplemented ("TODO6", Ast.get_position lval))
   | None -> begin match
-        Ast.unmark (translate_variable ctx (Ast.same_pos_as (Ast.unmark lval).Ast.var lval)) with
+        Ast.unmark (translate_variable ctx  (Ast.unmark lval).Ast.var) with
     | Cfg.Var var -> var
     | _ -> assert false (* should not happen *)
     end
@@ -367,7 +427,7 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
             ) var_data r.Ast.rule_formulaes
           | _ -> var_data
         ) var_data source_file
-    ) Cfg.VariableMap.empty p
+    ) Cfg.VariableMap.empty (List.rev p)
 
 
 let translate (p: Ast.program) : Cfg.program =
