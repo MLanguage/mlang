@@ -84,11 +84,17 @@ type expression =
 
 module VariableMap = Map.Make(Variable)
 
+module IndexMap = Map.Make(struct type t = int let compare = compare end)
+
+type index_def =
+  | NoIndex of expression Ast.marked
+  | IndexTable of (expression Ast.marked) IndexMap.t
+  | IndexGeneric of expression Ast.marked
+
 type variable_data = {
-  var_expr: expression Ast.marked;
-  is_table: int option;
+  var_expr: index_def;
 }
-[@@deriving show]
+
 
 type program = {
   variables: variable_data VariableMap.t;
