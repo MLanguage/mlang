@@ -44,6 +44,7 @@ type idmap = Cfg.Variable.t VarNameToID.t
 type translating_context = {
   idmap : idmap;
   lc: loop_context option;
+  is_table : bool;
 }
 
 let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
@@ -183,7 +184,11 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                                   )))
                   end
                 | Ast.MultipleFormulaes (lvs, f) ->
-                  let ctx = { idmap; lc = None } in
+                  let ctx =
+                    { idmap; lc = None ;
+                      is_table = match (Ast.unmark f.Ast.lvalue).Ast.index with
+                          None -> false | Some _ -> true
+                    } in
                   let loop_context_provider = translate_loop_variables ctx lvs in
                   let translator = fun lc ->
                     begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
@@ -400,25 +405,45 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
     | _ -> assert false (* should not happen *)
     end
 
-let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.VariableMap.t =
+let get_var_data
+    (idmap: idmap)
+    (var_decl_data: var_decl_data Cfg.VariableMap.t)
+    (p: Ast.program)
+  : Cfg.variable_data Cfg.VariableMap.t =
   List.fold_left (fun var_data source_file ->
       Cli.debug_print (Printf.sprintf "Translating %s to cleaner form" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
       List.fold_left (fun var_data source_file_item -> match Ast.unmark source_file_item with
           | Ast.Rule r -> List.fold_left (fun var_data formula ->
               match Ast.unmark formula with
               | Ast.SingleFormula f ->
-                let ctx = { idmap; lc = None } in
+                let ctx =
+                  { idmap; lc = None ;
+                    is_table = match (Ast.unmark f.Ast.lvalue).Ast.index with
+                        None -> false | Some _ -> true
+                  } in
                 let var_expr = translate_expression ctx f.Ast.formula in
                 let var_lvalue = translate_lvalue ctx f.Ast.lvalue in
-                Cfg.VariableMap.add var_lvalue { Cfg.var_expr = var_expr } var_data
+                let var_lvalue_decl_data = Cfg.VariableMap.find var_lvalue var_decl_data in
+                Cfg.VariableMap.add
+                  var_lvalue
+                  { Cfg.var_expr = var_expr;
+                    Cfg.is_table = var_lvalue_decl_data.var_decl_is_table }
+                  var_data
               | Ast.MultipleFormulaes (lvs, f) ->
-                let ctx = { idmap; lc = None } in
+                let ctx =
+                  { idmap; lc = None ;
+                    is_table = match (Ast.unmark f.Ast.lvalue).Ast.index with
+                        None -> false | Some _ -> true
+                  } in
                 let loop_context_provider = translate_loop_variables ctx lvs in
                 let translator = fun lc ->
                   let new_ctx = {ctx with lc = Some lc } in
                   let var_expr = translate_expression new_ctx f.Ast.formula in
                   let var_lvalue = translate_lvalue new_ctx f.Ast.lvalue in
-                  (var_lvalue, { Cfg.var_expr = var_expr })
+                  let var_lvalue_decl_data = Cfg.VariableMap.find var_lvalue var_decl_data in
+                  (var_lvalue,
+                   { Cfg.var_expr = var_expr;
+                     Cfg.is_table = var_lvalue_decl_data.var_decl_is_table })
                 in
                 let data_to_add = loop_context_provider translator in
                 List.fold_left (fun acc (var_lvalue, var_expr) ->
@@ -432,5 +457,5 @@ let get_var_data (idmap: idmap) (p: Ast.program) : Cfg.variable_data Cfg.Variabl
 
 let translate (p: Ast.program) : Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
-  let var_data = get_var_data idmap p in
-  raise (Errors.Unimplemented ("TODO6", Ast.no_pos))
+  let var_data = get_var_data idmap var_decl_data p in
+  raise (Errors.Unimplemented ("TODO10", Ast.no_pos))

@@ -78,6 +78,7 @@ type expression =
   | Literal of literal
   | Var of Variable.t
   | LocalVar of LocalVariable.t
+  | GenericTableIndex
   | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
 [@@deriving show]
 
@@ -85,6 +86,7 @@ module VariableMap = Map.Make(Variable)
 
 type variable_data = {
   var_expr: expression Ast.marked;
+  is_table: int option;
 }
 [@@deriving show]
 
