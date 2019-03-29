@@ -556,12 +556,45 @@ let get_var_data
                     add_var_def var_data var_lvalue var_expr def_kind var_decl_data
                   ) var_data data_to_add
             ) var_data r.Ast.rule_formulaes
+          | Ast.Variable (Ast.ConstVar (name, lit)) ->
+            let var = get_var_from_name idmap name in
+            add_var_def var_data var (Ast.same_pos_as (Cfg.Literal (begin match Ast.unmark lit with
+                | Ast.Variable var ->
+                  raise (Errors.TypeError (
+                      Errors.Variable (
+                        Printf.sprintf "const variable %s declared %s cannot be defined as another variable"
+                          (Format_ast.format_variable var)
+                          (Format_ast.format_position (Ast.get_position source_file_item))
+                      )))
+                | Ast.Int i -> Cfg.Int i
+                | Ast.Float f -> Cfg.Float f
+              end)) lit) NoIndex var_decl_data
           | _ -> var_data
         ) var_data source_file
     ) Cfg.VariableMap.empty (List.rev p)
+
+let check_if_all_variables_defined
+    (var_data: Cfg.program)
+    (var_decl_data: var_decl_data Cfg.VariableMap.t)
+  : unit =
+  ignore (Cfg.VariableMap.merge (fun var data decl -> match data, decl with
+      | (Some _, Some _) -> None
+      | (None, Some decl) -> begin match decl.var_decl_io with
+          | Output | Regular | Constant ->
+            raise (Errors.TypeError (
+                Errors.Variable (
+                  Printf.sprintf "variable %s declared %s is never defined"
+                    (Ast.unmark var.Cfg.Variable.name)
+                    (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))
+                )))
+          | Input -> None
+        end
+      | _ -> assert false (* should not happen *)
+    ) var_data var_decl_data)
 
 
 let translate (p: Ast.program) : Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
   let var_data = get_var_data idmap var_decl_data p in
+  check_if_all_variables_defined var_data var_decl_data;
   var_data
