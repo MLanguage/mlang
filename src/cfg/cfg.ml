@@ -59,12 +59,6 @@ module LocalVariable = struct
     compare var1.id var2.id
 end
 
-type table_index =
-  | LiteralIndex of int
-  | GenericIndex
-  | SymbolIndex of Variable.t
-[@@deriving show]
-
 type literal =
   | Int of int
   | Float of float
@@ -88,7 +82,7 @@ type expression =
   | Comparison of Ast.comp_op Ast.marked * expression Ast.marked * expression Ast.marked
   | Binop of Ast.binop Ast.marked * expression Ast.marked * expression Ast.marked
   | Unop of Ast.unop * expression Ast.marked
-  | Index of Variable.t Ast.marked * table_index Ast.marked
+  | Index of Variable.t Ast.marked * expression Ast.marked
   | Conditional of expression Ast.marked * expression Ast.marked * expression Ast.marked option
   | FunctionCall of func * expression Ast.marked list
   | Literal of literal
@@ -103,15 +97,12 @@ module VariableMap = Map.Make(Variable)
 module IndexMap = Map.Make(struct type t = int let compare = compare end)
 
 type index_def =
-  | NoIndex of expression Ast.marked
   | IndexTable of (expression Ast.marked) IndexMap.t
   | IndexGeneric of expression Ast.marked
 
-type variable_data = {
-  var_expr: index_def;
-}
+type variable_data =
+  | SimpleVar of expression Ast.marked
+  | TableVar of int * index_def
 
 
-type program = {
-  variables: variable_data VariableMap.t;
-}
+type program = variable_data VariableMap.t

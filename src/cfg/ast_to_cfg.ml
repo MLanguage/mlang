@@ -27,6 +27,7 @@ type var_decl_data = {
   var_decl_is_table: int option;
   var_decl_descr: string option;
   var_decl_io: io_status;
+  var_pos: Ast.position;
 }
 
 module ParamsMap = Map.Make(Char)
@@ -148,7 +149,8 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                   var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
                   var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
                   var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
-                  var_decl_io = Regular
+                  var_decl_io = Regular;
+                  var_pos = Ast.get_position source_file_item;
                 }
                 in
                 let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
@@ -161,7 +163,8 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                   var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
                   var_decl_is_table = None;
                   var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
-                  var_decl_io = Input
+                  var_decl_io = Input;
+                  var_pos = Ast.get_position source_file_item;
                 } in
                 let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
                 let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
@@ -173,68 +176,74 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                   var_decl_is_table = None;
                   var_decl_descr = None;
                   var_decl_io = Constant;
+                  var_pos = Ast.get_position source_file_item;
                 } in
                 let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
                 let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
                 (new_vars, new_idmap, out_list)
             end
-          | Ast.Rule r ->
+          (* Below is the code to extract variable declarations from lvalues, but we require that they are all defined *)
+          (*
+            | Ast.Rule r ->
             List.fold_left (fun (vars, idmap, out_list) formula ->
-                match Ast.unmark formula with
-                | Ast.SingleFormula f ->
-                  begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
-                    | Ast.Normal name ->
-                      let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
-                      let new_var_data = {
-                        var_decl_typ = None;
-                        var_decl_is_table = None;
-                        var_decl_descr = None;
-                        var_decl_io = Constant;
-                      } in
-                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = VarNameToID.add name new_var idmap in
-                      (new_vars, new_idmap, out_list)
-                    | Ast.Generic name ->
-                      raise (Errors.TypeError
-                               (Errors.Variable
-                                  (Printf.sprintf "variable %s defined %s lacks generic parameters context"
-                                     name.Ast.base
-                                     (Format_ast.format_position (Ast.get_position f.Ast.lvalue))
-                                  )))
-                  end
-                | Ast.MultipleFormulaes (lvs, f) ->
-                  let ctx = { idmap; lc = None } in
-                  let loop_context_provider = translate_loop_variables ctx lvs in
-                  let translator = fun lc ->
-                    begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
-                      | Ast.Normal name ->
-                        let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
-                        let new_var_data = {
-                          var_decl_typ = None;
-                          var_decl_is_table = None;
-                          var_decl_descr = None;
-                          var_decl_io = Constant;
-                        } in
-                        (name, new_var, new_var_data)
-                      | Ast.Generic name ->
-                        let real_name = instantiate_generic_variables_parameters lc name in
-                        let new_var  = Cfg.Variable.new_var (Ast.same_pos_as real_name (Ast.unmark f.Ast.lvalue).Ast.var) in
-                        let new_var_data = {
-                          var_decl_typ = None;
-                          var_decl_is_table = None;
-                          var_decl_descr = None;
-                          var_decl_io = Constant;
-                        } in
-                        (real_name, new_var, new_var_data)
-                    end
-                  in
-                  let var_defined = loop_context_provider translator in
-                  List.fold_left (fun (vars, idmap, out_list) (name, new_var, new_var_data) ->
-                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = VarNameToID.add name new_var idmap in
-                      (new_vars, new_idmap, out_list)
-                    ) (vars, idmap, out_list) var_defined
-              ) (vars, idmap, out_list) r.Ast.rule_formulaes
+            match Ast.unmark formula with
+            | Ast.SingleFormula f ->
+              begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
+                | Ast.Normal name ->
+                  let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                  let new_var_data = {
+                    var_decl_typ = None;
+                    var_decl_is_table = None;
+                    var_decl_descr = None;
+                    var_decl_io = Constant;
+                    var_pos = Ast.get_position source_file_item;
+                  } in
+                  let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                  let new_idmap = VarNameToID.add name new_var idmap in
+                  (new_vars, new_idmap, out_list)
+                | Ast.Generic name ->
+                  raise (Errors.TypeError
+                           (Errors.Variable
+                              (Printf.sprintf "variable %s defined %s lacks generic parameters context"
+                                 name.Ast.base
+                                 (Format_ast.format_position (Ast.get_position f.Ast.lvalue))
+                              )))
+              end
+            | Ast.MultipleFormulaes (lvs, f) ->
+              let ctx = { idmap; lc = None } in
+              let loop_context_provider = translate_loop_variables ctx lvs in
+              let translator = fun lc ->
+                begin match Ast.unmark (Ast.unmark f.Ast.lvalue).Ast.var with
+                  | Ast.Normal name ->
+                    let new_var  = Cfg.Variable.new_var (Ast.same_pos_as name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                    let new_var_data = {
+                      var_decl_typ = None;
+                      var_decl_is_table = None;
+                      var_decl_descr = None;
+                      var_decl_io = Constant;
+                      var_pos = Ast.get_position source_file_item;
+                    } in
+                    (name, new_var, new_var_data)
+                  | Ast.Generic name ->
+                    let real_name = instantiate_generic_variables_parameters lc name in
+                    let new_var  = Cfg.Variable.new_var (Ast.same_pos_as real_name (Ast.unmark f.Ast.lvalue).Ast.var) in
+                    let new_var_data = {
+                      var_decl_typ = None;
+                      var_decl_is_table = None;
+                      var_decl_descr = None;
+                      var_decl_io = Constant;
+                      var_pos = Ast.get_position source_file_item;
+                    } in
+                    (real_name, new_var, new_var_data)
+                end
+              in
+              let var_defined = loop_context_provider translator in
+              List.fold_left (fun (vars, idmap, out_list) (name, new_var, new_var_data) ->
+                  let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                  let new_idmap = VarNameToID.add name new_var idmap in
+                  (new_vars, new_idmap, out_list)
+                ) (vars, idmap, out_list) var_defined
+            ) (vars, idmap, out_list) r.Ast.rule_formulaes*)
           | Ast.Output out_name -> (vars, idmap, out_name::out_list)
           | _ -> (vars, idmap, out_list)
         ) (vars, idmap, out_list) source_file
@@ -264,16 +273,13 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
         let new_var_name = instantiate_generic_variables_parameters lc gen_name in
         translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
 
-let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.table_index Ast.marked =
+let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.expression Ast.marked =
   match Ast.unmark i with
-  | Ast.LiteralIndex i' -> Ast.same_pos_as (Cfg.LiteralIndex i') i
-  | Ast.GenericIndex -> raise (Errors.Unimplemented ("TODO2", Ast.get_position i))
+  | Ast.LiteralIndex i' -> Ast.same_pos_as (Cfg.Literal (Cfg.Int i')) i
+  | Ast.GenericIndex -> Ast.same_pos_as Cfg.GenericTableIndex i
   | Ast.SymbolIndex v ->
     let var = translate_variable ctx (Ast.same_pos_as v i) in
-    Ast.same_pos_as (Cfg.SymbolIndex (match Ast.unmark var with
-        | Cfg.Var v -> v
-        | _ -> assert false (* should not happen *)))
-      var
+    var
 
 let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_name with
   | "somme" -> Cfg.SumFunc
@@ -408,8 +414,22 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
          | Ast.Int i -> Cfg.Literal (Cfg.Int i)
          | Ast.Float f -> Cfg.Literal (Cfg.Float f)
        end
-     | Ast.Loop (lvs, e) -> raise (Errors.Unimplemented ("TODO7", Ast.get_position lvs)))
-    f
+     (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
+     | Ast.Loop (lvs, e) ->
+       let loop_context_provider = translate_loop_variables ctx lvs in
+       let translator = fun lc ->
+         let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
+         translate_expression new_ctx e
+       in
+       let loop_exprs = loop_context_provider translator in
+       List.fold_left (fun acc loop_expr ->
+           Cfg.Binop(
+             Ast.same_pos_as Ast.Or e,
+             Ast.same_pos_as acc e,
+             loop_expr
+           )
+         ) (Cfg.Literal (Cfg.Bool false)) loop_exprs
+    ) f
 
 type index_def =
   | NoIndex
@@ -439,34 +459,35 @@ let add_var_def
     (var_lvalue: Cfg.Variable.t)
     (var_expr : Cfg.expression Ast.marked)
     (def_kind : index_def)
+    (var_decl_data: var_decl_data Cfg.VariableMap.t)
   : Cfg.variable_data Cfg.VariableMap.t =
   try
     let old_var_expr = Cfg.VariableMap.find var_lvalue var_data in
-    match (old_var_expr.Cfg.var_expr, def_kind) with
-    | (Cfg.NoIndex old_e, SingleIndex _) | (Cfg.NoIndex old_e, GenericIndex) ->
+    match (old_var_expr, def_kind) with
+    | (Cfg.SimpleVar old_e, SingleIndex _) | (Cfg.SimpleVar old_e, GenericIndex) ->
       raise (Errors.TypeError (Errors.Variable (
           Printf.sprintf "variable definition %s is indexed but previous definition %s was not"
             (Format_ast.format_position (Ast.get_position var_expr))
             (Format_ast.format_position (Ast.get_position old_e))
         )))
-    | (Cfg.IndexGeneric _, NoIndex) | (Cfg.IndexTable _, NoIndex) ->
+    | (Cfg.TableVar (_, Cfg.IndexGeneric _), NoIndex) | (Cfg.TableVar (_, Cfg.IndexTable _), NoIndex) ->
       raise (Errors.TypeError (Errors.Variable (
           Printf.sprintf "variable definition %s is not indexed but previous definitions were"
             (Format_ast.format_position (Ast.get_position var_expr))
         )))
-    | (Cfg.IndexGeneric old_e, SingleIndex _) | (Cfg.IndexGeneric old_e, GenericIndex)
-    | (Cfg.NoIndex old_e, NoIndex) ->
+    | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), SingleIndex _) | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), GenericIndex)
+    | (Cfg.SimpleVar old_e, NoIndex) ->
       Cli.warning_print
         (Printf.sprintf "dropping definition %s because variable was previously defined %s"
            (Format_ast.format_position (Ast.get_position var_expr))
            (Format_ast.format_position (Ast.get_position old_e)));
       var_data
-    | (Cfg.IndexTable _, GenericIndex) ->
+    | (Cfg.TableVar (size, Cfg.IndexTable _), GenericIndex) ->
       Cli.warning_print
         (Printf.sprintf "definition %s will supercede partial definitions of the same variables"
            (Format_ast.format_position (Ast.get_position var_expr)));
-      Cfg.VariableMap.add var_lvalue { Cfg.var_expr = Cfg.IndexGeneric var_expr} var_data
-    | (Cfg.IndexTable old_defs, SingleIndex i) -> begin try
+      Cfg.VariableMap.add var_lvalue (Cfg.TableVar (size, Cfg.IndexGeneric var_expr)) var_data
+    | (Cfg.TableVar (size, Cfg.IndexTable old_defs), SingleIndex i) -> begin try
           let old_def = Cfg.IndexMap.find i old_defs in
           Cli.warning_print
             (Printf.sprintf "dropping definition %s because variable was previously defined %s"
@@ -476,13 +497,35 @@ let add_var_def
         with
         | Not_found ->
           let new_defs = Cfg.IndexMap.add i var_expr old_defs in
-          Cfg.VariableMap.add var_lvalue { Cfg.var_expr = Cfg.IndexTable new_defs } var_data
+          Cfg.VariableMap.add var_lvalue (Cfg.TableVar (size, Cfg.IndexTable new_defs)) var_data
       end
   with
-  | Not_found -> Cfg.VariableMap.add var_lvalue (match def_kind with
-      | NoIndex -> { Cfg.var_expr = Cfg.NoIndex var_expr }
-      | SingleIndex i-> { Cfg.var_expr = Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr) }
-      | GenericIndex -> { Cfg.var_expr = Cfg.IndexGeneric var_expr}) var_data
+  | Not_found -> Cfg.VariableMap.add var_lvalue (
+      if def_kind = NoIndex then Cfg.SimpleVar var_expr else
+        try match (Cfg.VariableMap.find var_lvalue var_decl_data).var_decl_is_table with
+          | Some size -> begin
+              match def_kind with
+              | NoIndex -> assert false (* should not happen*)
+              | SingleIndex i ->
+                (Cfg.TableVar (size, Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr)))
+              | GenericIndex ->
+                (Cfg.TableVar (size, Cfg.IndexGeneric var_expr))
+            end
+          | None -> raise (Errors.TypeError (
+              Errors.Variable (
+                Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
+                  (Ast.unmark var_lvalue.Cfg.Variable.name)
+                  (Format_ast.format_position (Ast.get_position var_expr))
+                  (Format_ast.format_position (Cfg.VariableMap.find var_lvalue var_decl_data).var_pos)
+              )
+            ))
+        with
+        | Not_found -> assert false
+        (*
+          should not happen since we already looked into idmap to get the var value
+          from its name
+        *)
+    ) var_data
 
 let get_var_data
     (idmap: idmap)
@@ -498,7 +541,7 @@ let get_var_data
                 let ctx = { idmap; lc = None } in
                 let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
                 let var_expr = translate_expression ctx f.Ast.formula in
-                add_var_def var_data var_lvalue var_expr def_kind
+                add_var_def var_data var_lvalue var_expr def_kind var_decl_data
               | Ast.MultipleFormulaes (lvs, f) ->
                 let ctx = { idmap; lc = None } in
                 let loop_context_provider = translate_loop_variables ctx lvs in
@@ -510,7 +553,7 @@ let get_var_data
                 in
                 let data_to_add = loop_context_provider translator in
                 List.fold_left (fun acc (var_lvalue, var_expr, def_kind) ->
-                    add_var_def var_data var_lvalue var_expr def_kind
+                    add_var_def var_data var_lvalue var_expr def_kind var_decl_data
                   ) var_data data_to_add
             ) var_data r.Ast.rule_formulaes
           | _ -> var_data
@@ -521,4 +564,4 @@ let get_var_data
 let translate (p: Ast.program) : Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
   let var_data = get_var_data idmap var_decl_data p in
-  raise (Errors.Unimplemented ("TODO10", Ast.no_pos))
+  var_data

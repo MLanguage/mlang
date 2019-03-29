@@ -25,6 +25,7 @@ MIBNETNPTOT : calculee restituee : "Avis : micro bic net total foyer (sauf + V 1
 DLMRN1 : calculee restituee : "avis IR : deficits non imputes annee N - 1" ;
 FLAG_RETARD : saisie penalite alias V_FLAG_RETA : "nouveau cor : indicateur de retard 2042" ;
 FLAG_RECTIF : saisie penalite alias V_FLAG_RECTF : "nouv cor : indicateur de rectification" ;
+FLAG_DERSTTR: calculee : "UNKWOWN";
 BICNPV : calculee : "Montant net imposable BIC non pro" ;
 BICNPC : calculee : "Montant net imposable BIC non pro" ;
 BICNPP : calculee : "Montant net imposable BIC non pro" ;
@@ -71,6 +72,9 @@ DS022 : calculee : "Droits simples issus du bareme" ;
 DS024 : calculee : "Droits simples issus du bareme" ;
 DS025 : calculee : "Droits simples issus du bareme tx moyen" ;
 DS026 : calculee : "Droits simples issus du bareme 8VV art. 168" ;
+ISF4BASE : calculee : "base des penalites en ISF" ;
+TISF4BASE : calculee : "base des penalites en ISF" ;
+SUPISF : tableau[25] calculee base : " UNKOWN" ;
 
 regle 111320:
 application : iliad , batch ;
@@ -95,7 +99,7 @@ DSxyz = max( QFxyz - LIM_BAR1 , 0 ) * (TAUX1   / 100)
       + max( QFxyz - LIM_BAR4 , 0 ) * (TAUX4   / 100)
       + max( QFxyz - LIM_BAR5 , 0 ) * (TAUX5   / 100);
 
-#SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
-#            * max(ISF4BASE,0)
-#            + (1 - positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X))
-#	     * max(0,ISF4BASE - (TISF4BASE[FLAG_DERSTTR]));
+SUPISF[X] = positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X)
+            * max(ISF4BASE,0)
+            + (1 - positif(FLAG_RETARD) * positif(FLAG_RECTIF) * null(X))
+	     * max(0,ISF4BASE - (TISF4BASE[FLAG_DERSTTR]));
