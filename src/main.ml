@@ -56,9 +56,6 @@ let main () =
       try
         Parse_utils.current_file := source_file;
         let commands = Parser.source_file token filebuf in
-        (* Cli.debug_print
-           (Printf.sprintf "Parsed AST:\n%s"
-             (Format_ast.format_source_file commands)); *)
         program := commands::!program
       with
       | Errors.LexingError msg | Errors.ParsingError msg ->
@@ -76,7 +73,9 @@ let main () =
         end
     ) !source_files;
   try
-    ignore (Ast_to_cfg.translate !program)
+    let program = Ast_to_cfg.translate !program in
+    let typing_info = Typechecker.typecheck program in
+    assert false
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e)

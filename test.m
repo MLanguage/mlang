@@ -1,15 +1,14 @@
-Z : saisie revenu alias Z : "UNKOWN" ;
-M : const=1.00000  ;
-X1 : calculee : "UNKNOWN";
-X2 : calculee : "UNKNOWN";
-X3 : calculee : "UNKNOWN";
-X4 : calculee : "UNKNOWN";
-X5 : calculee : "UNKNOWN";
-X6 : calculee : "UNKNOWN";
-X7 : calculee : "UNKNOWN";
-X8 : calculee : "UNKNOWN";
-X9 : calculee : "UNKNOWN";
-Y : tableau[9] calculee base : " UNKOWN" ;
+Z : saisie revenu alias Z : "UNKOWN" type ENTIER;
+X1 : calculee : "UNKNOWN" type ENTIER;
+X2 : calculee : "UNKNOWN" type ENTIER;
+X3 : calculee : "UNKNOWN" type ENTIER;
+X4 : calculee : "UNKNOWN" type ENTIER;
+X5 : calculee : "UNKNOWN" type ENTIER;
+X6 : calculee : "UNKNOWN" type ENTIER;
+X7 : calculee : "UNKNOWN" type ENTIER;
+X8 : calculee : "UNKNOWN" type ENTIER;
+X9 : calculee : "UNKNOWN" type ENTIER;
+Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
 
 regle 1:
 application : truc  ;

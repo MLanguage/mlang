@@ -45,6 +45,7 @@ type typ_error =
   | Numeric of string
   | Function of string
   | LoopParam of string
+  | Typing of string
 
 exception TypeError of typ_error
 
@@ -53,5 +54,6 @@ let format_typ_error (e: typ_error) : string = match e with
   | Numeric s -> Printf.sprintf "Numeric error: %s" s
   | Function s -> Printf.sprintf "Function error: %s" s
   | LoopParam s -> Printf.sprintf "Loop parameter error: %s" s
+  | Typing s -> Printf.sprintf "Typing error: %s" s
 
 exception Unimplemented of string * Ast.position

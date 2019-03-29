@@ -461,9 +461,19 @@ let add_var_def
     (def_kind : index_def)
     (var_decl_data: var_decl_data Cfg.VariableMap.t)
   : Cfg.variable_data Cfg.VariableMap.t =
+  let var_decl = try Cfg.VariableMap.find var_lvalue var_decl_data with
+    | Not_found -> assert false (* should not happen *)
+  in
+  let var_typ = match var_decl.var_decl_typ with
+    | Some Ast.Integer -> Some Cfg.Integer
+    | Some Ast.Boolean -> Some Cfg.Boolean
+    | Some Ast.Real -> Some Cfg.Real
+    | Some _ -> raise (Errors.Unimplemented ("date types are not supported", var_decl.var_pos))
+    | None -> None
+  in
   try
     let old_var_expr = Cfg.VariableMap.find var_lvalue var_data in
-    match (old_var_expr, def_kind) with
+    match (old_var_expr.Cfg.var_definition, def_kind) with
     | (Cfg.SimpleVar old_e, SingleIndex _) | (Cfg.SimpleVar old_e, GenericIndex) ->
       raise (Errors.TypeError (Errors.Variable (
           Printf.sprintf "variable definition %s is indexed but previous definition %s was not"
@@ -486,7 +496,10 @@ let add_var_def
       Cli.warning_print
         (Printf.sprintf "definition %s will supercede partial definitions of the same variables"
            (Format_ast.format_position (Ast.get_position var_expr)));
-      Cfg.VariableMap.add var_lvalue (Cfg.TableVar (size, Cfg.IndexGeneric var_expr)) var_data
+      Cfg.VariableMap.add var_lvalue
+        { old_var_expr with
+          Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexGeneric var_expr);
+        } var_data
     | (Cfg.TableVar (size, Cfg.IndexTable old_defs), SingleIndex i) -> begin try
           let old_def = Cfg.IndexMap.find i old_defs in
           Cli.warning_print
@@ -497,19 +510,30 @@ let add_var_def
         with
         | Not_found ->
           let new_defs = Cfg.IndexMap.add i var_expr old_defs in
-          Cfg.VariableMap.add var_lvalue (Cfg.TableVar (size, Cfg.IndexTable new_defs)) var_data
+          Cfg.VariableMap.add var_lvalue
+            { old_var_expr with
+              Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable new_defs)
+            } var_data
       end
   with
   | Not_found -> Cfg.VariableMap.add var_lvalue (
-      if def_kind = NoIndex then Cfg.SimpleVar var_expr else
+      if def_kind = NoIndex then
+        { Cfg.var_definition = Cfg.SimpleVar var_expr; Cfg.var_typ = var_typ }
+      else
         try match (Cfg.VariableMap.find var_lvalue var_decl_data).var_decl_is_table with
           | Some size -> begin
               match def_kind with
               | NoIndex -> assert false (* should not happen*)
               | SingleIndex i ->
-                (Cfg.TableVar (size, Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr)))
+                {
+                  Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr));
+                  Cfg.var_typ = var_typ
+                }
               | GenericIndex ->
-                (Cfg.TableVar (size, Cfg.IndexGeneric var_expr))
+                {
+                  Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexGeneric var_expr);
+                  Cfg.var_typ = var_typ
+                }
             end
           | None -> raise (Errors.TypeError (
               Errors.Variable (

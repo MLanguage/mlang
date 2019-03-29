@@ -59,6 +59,11 @@ module LocalVariable = struct
     compare var1.id var2.id
 end
 
+type typ =
+  | Integer
+  | Real
+  | Boolean
+
 type literal =
   | Int of int
   | Float of float
@@ -100,9 +105,14 @@ type index_def =
   | IndexTable of (expression Ast.marked) IndexMap.t
   | IndexGeneric of expression Ast.marked
 
-type variable_data =
+type variable_def =
   | SimpleVar of expression Ast.marked
   | TableVar of int * index_def
+
+type variable_data = {
+  var_definition: variable_def;
+  var_typ : typ option;
+}
 
 
 type program = variable_data VariableMap.t
