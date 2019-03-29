@@ -30,6 +30,14 @@ type var_decl_data = {
   var_pos: Ast.position;
 }
 
+let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Cfg.typ option =
+  match typ with
+  | Some Ast.Integer -> Some Cfg.Integer
+  | Some Ast.Boolean -> Some Cfg.Boolean
+  | Some Ast.Real -> Some Cfg.Real
+  | Some _ -> raise (Errors.Unimplemented ("date types are not supported", var_decl.var_pos))
+  | None -> None
+
 module ParamsMap = Map.Make(Char)
 
 type loop_param_value =
@@ -399,8 +407,9 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
        let new_e1 = translate_expression ctx e1 in
        let new_e2 = translate_expression ctx e2 in
        let new_e3 = match e3 with
-         | Some e3 -> Some (translate_expression ctx e3)
-         | None -> None
+         | Some e3 -> translate_expression ctx e3
+         | None -> Ast.same_pos_as Cfg.Error e2
+         (* the absence of a else branch for a ternary operators can yield a runtime error *)
        in
        Cfg.Conditional (new_e1, new_e2, new_e3)
      | Ast.FunctionCall (f_name, args) ->
@@ -593,6 +602,12 @@ let get_var_data
                 | Ast.Int i -> Cfg.Int i
                 | Ast.Float f -> Cfg.Float f
               end)) lit) NoIndex var_decl_data
+          | Ast.Variable (Ast.InputVar (var, _)) ->
+            let var = get_var_from_name idmap var.Ast.input_name in
+            Cfg.VariableMap.add
+              var
+              { Cfg.var_definition = Cfg.InputVar; Cfg.var_typ = None }
+              var_data
           | _ -> var_data
         ) var_data source_file
     ) Cfg.VariableMap.empty (List.rev p)

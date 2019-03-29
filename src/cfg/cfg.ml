@@ -88,12 +88,13 @@ type expression =
   | Binop of Ast.binop Ast.marked * expression Ast.marked * expression Ast.marked
   | Unop of Ast.unop * expression Ast.marked
   | Index of Variable.t Ast.marked * expression Ast.marked
-  | Conditional of expression Ast.marked * expression Ast.marked * expression Ast.marked option
+  | Conditional of expression Ast.marked * expression Ast.marked * expression Ast.marked
   | FunctionCall of func * expression Ast.marked list
   | Literal of literal
   | Var of Variable.t
   | LocalVar of LocalVariable.t
   | GenericTableIndex
+  | Error
   | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
 [@@deriving show]
 
@@ -108,6 +109,7 @@ type index_def =
 type variable_def =
   | SimpleVar of expression Ast.marked
   | TableVar of int * index_def
+  | InputVar 
 
 type variable_data = {
   var_definition: variable_def;

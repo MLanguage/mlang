@@ -1,7 +1,7 @@
 open Cfg
 
 type ctx = {
-  foo: unit
+  ctx_program : program;
 }
 
 let rec typecheck_top_down
@@ -44,30 +44,44 @@ let rec typecheck_top_down
             )))
     else
       let (ctx, t2) = typecheck_bottom_up ctx e2 in
-      assert false
-(*
-                     let (ctx, t3) = typecheck_bottom_up ctx e3 in
-                     if t2 = t3 && t2 = t then
-                     ctx
-                     else
-                     raise (Errors.TypeError (
-                     Errors.Typing
-                     (Printf.sprintf "expression %s of type %s has not the same type than expression %s of type %s, and both should be of type %s"
-                     (Format_ast.format_position (Ast.get_position e1))
-                     (Format_cfg.format_typ t1)
-                     (Format_ast.format_position (Ast.get_position e2))
-                     (Format_cfg.format_typ t2)
-                     (Format_cfg.format_typ t)
-                     )))*)
+
+      let (ctx, t3) = typecheck_bottom_up ctx e3 in
+      if t2 = t3 && t2 = t then
+        ctx
+      else
+        raise (Errors.TypeError (
+            Errors.Typing
+              (Printf.sprintf "expression %s of type %s has not the same type than expression %s of type %s, and both should be of type %s"
+                 (Format_ast.format_position (Ast.get_position e1))
+                 (Format_cfg.format_typ t1)
+                 (Format_ast.format_position (Ast.get_position e2))
+                 (Format_cfg.format_typ t2)
+                 (Format_cfg.format_typ t)
+              )))
   | (FunctionCall (func, args), t) ->
     assert false
   | (Literal (Int _), Integer)
   | (Literal (Float _), Real)
   | (Literal (Bool _), Boolean) -> ctx
   | (Var var, t) ->
-    assert false
+    begin try match (VariableMap.find var ctx.ctx_program).var_typ with
+      | Some t' -> if t = t' then ctx else
+          raise (Errors.TypeError (
+              Errors.Typing
+                (Printf.sprintf "variable %s used %s should be of type %s but has been declared of type %s"
+                   (Ast.unmark var.Variable.name)
+                   (Format_ast.format_position (Ast.get_position e))
+                   (Format_cfg.format_typ t)
+                   (Format_cfg.format_typ t')
+                )))
+      | None -> assert false
+      with
+      | Not_found -> Printf.printf "var:%s" ((Ast.unmark var.Variable.name));assert false (* should not happen *) 
+    end
   | (LocalLet (var, e1, e2), t) ->
     assert false
+  | (Error, t) ->
+    ctx
   | (LocalVar var, t) ->
     assert false
   | (GenericTableIndex, Integer) -> ctx
@@ -96,6 +110,6 @@ let typecheck (p: program) : typ VariableMap.t =
             assert false
         end
       | None -> assert false
-    ) p (Cfg.VariableMap.empty, { foo = () })
+    ) p (Cfg.VariableMap.empty, { ctx_program = p })
   in
   assert false
