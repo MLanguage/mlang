@@ -109,7 +109,7 @@ type index_def =
 type variable_def =
   | SimpleVar of expression Ast.marked
   | TableVar of int * index_def
-  | InputVar 
+  | InputVar
 
 type variable_data = {
   var_definition: variable_def;

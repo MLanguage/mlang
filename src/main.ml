@@ -74,11 +74,12 @@ let main () =
     ) !source_files;
   try
     let program = Ast_to_cfg.translate !program in
+    Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
-    assert false
+    ignore (typing_info)
   with
   | Errors.TypeError e ->
-    error_print (Errors.format_typ_error e)
+    error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg,pos) ->
     error_print (Printf.sprintf "unimplemented for expression %s (code %s)" (Format_ast.format_position pos) msg)
 
