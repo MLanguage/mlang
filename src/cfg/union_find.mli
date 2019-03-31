@@ -27,10 +27,10 @@ sig
   val create : elt -> t
   (** [create i] creates a new node with element [i] *)
 
-  val find : t -> t
+  val find: t -> elt
   (** [find n] finds the representative of node [n] *)
 
-  val find_repr: t -> elt
+  val get_elt: t -> elt
 
   val union : t -> t -> unit
   (** [union n1 n2] merges nodes [n1] and [n2], performing

@@ -18,23 +18,27 @@ open Cfg
 
 module Typ =
 struct
-  let t_eq t1 t2 =  match (t1, t2) with
-    | (None, None) -> true
-    | (Some _ , None) | (None, Some _) -> false
-    | (Some Integer, Some Integer)
-    | (Some Real, Some Real) | (Some Boolean, Some Boolean) -> true
-    | _ -> false
 
   module UF = Union_find.Make(struct
       type t = typ option
-      let equal t1 t2 = t_eq t1 t2
+      let equal t1 t2 = t1 = t2
     end)
 
-  type t = UF.t
+  module UB = Union_find.Make(struct
+      type t = bool option
+      let equal t1 t2 = t1 = t2
+    end)
 
-  let integer : t = UF.create (Some Integer)
-  let real : t = UF.create (Some Real)
-  let boolean : t = UF.create (Some Boolean)
+  type t = {
+    uf_typ: UF.t;
+    uf_is_bool: UB.t;
+  }
+
+  let integer : t = { uf_typ = UF.create (Some Integer); uf_is_bool = UB.create None }
+  let real : t = { uf_typ = UF.create (Some Real); uf_is_bool = UB.create None }
+  let boolean : t = { uf_typ = UF.create (Some Boolean); uf_is_bool = UB.create None }
+  let only_non_boolean : t = { uf_typ = UF.create None; uf_is_bool = UB.create (Some false) }
+  let only_boolean : t = { uf_typ = UF.create None; uf_is_bool = UB.create (Some true) }
 
   let create_concrete (t: typ) : t =
     match t with
@@ -42,47 +46,59 @@ struct
     | Real -> real
     | Boolean -> boolean
 
-  let create_variable () : t = UF.create None
+  let create_variable () : t = { uf_typ = UF.create None; uf_is_bool = UB.create None }
 
   let is_boolean (t: t) : bool =
-    t_eq (UF.find_repr t) (UF.find_repr boolean)
+    UF.find t.uf_typ = UF.find boolean.uf_typ
 
   let is_integer (t: t) : bool =
-    t_eq (UF.find_repr t) (UF.find_repr integer)
+    UF.find t.uf_typ = UF.find integer.uf_typ
 
   let is_real (t:t) : bool =
-    t_eq (UF.find_repr t) (UF.find_repr real)
+    UF.find t.uf_typ = UF.find real.uf_typ
 
-  exception UnificationError of typ * typ
+  exception UnificationError of string * string
+
+  let format_unification_error_type (t: t) : string = match UF.get_elt t.uf_typ with
+    | Some Integer ->  Format_cfg.format_typ Integer
+    | Some Real -> Format_cfg.format_typ Real
+    | Some Boolean -> Format_cfg.format_typ Boolean
+    | None -> "uknwon"
 
   let unify (t1: t) (t2: t) : unit =
-    UF.union t1 t2;
-    if t_eq (UF.find_repr integer) (UF.find_repr real) then
-      raise (UnificationError (Integer, Real))
-    else if t_eq (UF.find_repr integer) (UF.find_repr boolean) then
-      raise (UnificationError (Integer, Boolean))
-    else if t_eq (UF.find_repr real) (UF.find_repr boolean) then
-      raise (UnificationError (Real, Boolean))
+    UF.union t1.uf_typ t2.uf_typ;
+    UB.union t1.uf_is_bool t2.uf_is_bool;
+    if UF.find integer.uf_typ = UF.find real.uf_typ ||
+       UF.find integer.uf_typ = UF.find boolean.uf_typ ||
+       UF.find real.uf_typ = UF.find boolean.uf_typ ||
+       UB.find only_non_boolean.uf_is_bool = UB.find only_boolean.uf_is_bool then
+      raise (UnificationError (format_unification_error_type t1, format_unification_error_type t2))
     else
       ()
 
   let to_concrete (t: t) : typ =
-    if t_eq (UF.find_repr t) (UF.find_repr real) then
+    if UF.find t.uf_typ = UF.find real.uf_typ then
       Real
-    else if t_eq (UF.find_repr t) (UF.find_repr boolean) then
+    else if UF.find t.uf_typ = UF.find boolean.uf_typ then
       Boolean
-    else if t_eq (UF.find_repr real) (UF.find_repr integer) then
+    else if UF.find real.uf_typ = UF.find integer.uf_typ then
       Integer
-    else Boolean
+    else if UB.find t.uf_is_bool = UB.find only_non_boolean.uf_is_bool then
+      Integer
+    else
+      Boolean
 
   let format_typ (t:t) =
-    if t_eq (UF.find_repr t) (UF.find_repr real) then
+    if UF.find t.uf_typ = UF.find real.uf_typ then
       Format_cfg.format_typ Real
-    else if t_eq (UF.find_repr t) (UF.find_repr boolean) then
+    else if UF.find t.uf_typ = UF.find boolean.uf_typ then
       Format_cfg.format_typ Boolean
-    else if t_eq (UF.find_repr real) (UF.find_repr integer) then
+    else if UF.find t.uf_typ = UF.find integer.uf_typ then
       Format_cfg.format_typ Integer
-    else "unknown"
+    else if UB.find t.uf_is_bool = UB.find only_non_boolean.uf_is_bool then
+      "integer or real"
+    else
+      "unknown ()"
 
 end
 
@@ -104,7 +120,8 @@ let rec typecheck_top_down
       | Typ.UnificationError _ ->
         raise (Errors.TypeError (
             Errors.Typing
-              (Printf.sprintf "expression %s of type %s has not the same type than expression %s of type %s"
+              (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
+                 (Format_cfg.format_expression (Ast.unmark e1))
                  (Format_ast.format_position (Ast.get_position e1))
                  (Typ.format_typ t1)
                  (Format_ast.format_position (Ast.get_position e2))
@@ -132,7 +149,8 @@ let rec typecheck_top_down
           | Typ.UnificationError _ ->
             raise (Errors.TypeError (
                 Errors.Typing
-                  (Printf.sprintf "expression %s of type %s has not the same type than expression %s of type %s, and both should be of type %s"
+                  (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s, and both should be of type %s"
+                     (Format_cfg.format_expression (Ast.unmark e1))
                      (Format_ast.format_position (Ast.get_position e1))
                      (Typ.format_typ t1)
                      (Format_ast.format_position (Ast.get_position e2))
@@ -144,7 +162,8 @@ let rec typecheck_top_down
       | Typ.UnificationError _ ->
         raise (Errors.TypeError (
             Errors.Typing
-              (Printf.sprintf "expression %s of type %s should be of type boolean"
+              (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
+                 (Format_cfg.format_expression (Ast.unmark e1))
                  (Format_ast.format_position (Ast.get_position e1))
                  (Typ.format_typ t1)
               )))
@@ -156,7 +175,8 @@ let rec typecheck_top_down
       | Typ.UnificationError _ ->
         raise (Errors.TypeError (
             Errors.Typing
-              (Printf.sprintf "function call %s return type is %s but should be %s"
+              (Printf.sprintf "function call to %s (%s) return type is %s but should be %s"
+                 (Format_cfg.format_func func)
                  (Format_ast.format_position (Ast.get_position e))
                  (Typ.format_typ t')
                  (Format_cfg.format_typ t)
@@ -189,7 +209,8 @@ let rec typecheck_top_down
   | (GenericTableIndex, Integer) -> ctx
   | _ -> raise (Errors.TypeError (
       Errors.Typing
-        (Printf.sprintf "expression %s should be of type %s, but is of type %s"
+        (Printf.sprintf "expression %s (%s) should be of type %s, but is of type %s"
+           (Format_cfg.format_expression (Ast.unmark e))
            (Format_ast.format_position (Ast.get_position e))
            (Format_cfg.format_typ t)
            (
@@ -210,29 +231,22 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                   )))
     else
       let (ctx, t1) = typecheck_bottom_up ctx (List.hd args) in
-      if Typ.is_integer t1 || Typ.is_real t1 then
-        let ctx = List.fold_left (fun ctx arg ->
-            let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-            begin try Typ.unify t_arg t1; ctx with
-              | Typ.UnificationError _ ->
-                raise (Errors.TypeError
-                         (Errors.Typing
-                            (Printf.sprintf "function argument %s has type %s but should have type %s"
-                               (Format_ast.format_position (Ast.get_position arg))
-                               (Typ.format_typ t_arg)
-                               (Typ.format_typ t1)
-                            )))
-            end
-          ) ctx args
-        in
-        (ctx, t1)
-      else
-        raise (Errors.TypeError
-                 (Errors.Typing
-                    (Printf.sprintf "sum function argument %s has type %s which is incompatible"
-                       (Format_ast.format_position (Ast.get_position  (List.hd args)))
-                       (Typ.format_typ t1)
-                    )))
+      let ctx = List.fold_left (fun ctx arg ->
+          let (ctx, t_arg) = typecheck_bottom_up ctx arg in
+          begin try Typ.unify t_arg t1; Typ.unify t_arg Typ.only_non_boolean; ctx with
+            | Typ.UnificationError (t_arg_msg,t2_msg) ->
+              raise (Errors.TypeError
+                       (Errors.Typing
+                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_ast.format_position (Ast.get_position arg))
+                             t_arg_msg
+                             t2_msg
+                          )))
+          end
+        ) ctx args
+      in
+      (ctx, t1)
   | _ -> assert false
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
@@ -255,19 +269,20 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
     begin try Typ.unify t1 t2; (ctx, t1) with
-      | Typ.UnificationError (t1, t2) ->
+      | Typ.UnificationError (t1_msg, t2_msg) ->
         raise (Errors.TypeError
                  (Errors.Typing
                     (Printf.sprintf "arguments of operator (%s) %s have to be of the same type but instead are of type %s and %s"
                        (Format_ast.format_binop (Ast.unmark op))
                        (Format_ast.format_position (Ast.get_position op))
-                       (Format_cfg.format_typ t1)
-                       (Format_cfg.format_typ t2)
+                       t1_msg
+                       t2_msg
                     )))
     end
   | _ -> raise (Errors.TypeError (
       Errors.Typing
-        (Printf.sprintf "cannot determine type of expression %s"
+        (Printf.sprintf "cannot determine type of expression %s (%s)"
+           (Format_cfg.format_expression (Ast.unmark e))
            (Format_ast.format_position (Ast.get_position e))
         )))
 

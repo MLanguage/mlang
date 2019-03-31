@@ -20,3 +20,43 @@ let format_typ (t: typ) : string = match t with
   | Integer -> "integer"
   | Real -> "real"
   | Boolean -> "boolean"
+
+let format_func (f: func) : string = match f with
+  | SumFunc -> "somme"
+  | AbsFunc -> "abs"
+  | MinFunc -> "min"
+  | MaxFunc -> "max"
+  | GtzFunc -> "positif"
+  | GtezFunc -> "positif_ou_nul"
+  | NullFunc -> "null"
+  | ArrFunc -> "arr"
+  | InfFunc -> "inf"
+  | PresentFunc -> "present"
+
+let format_literal (l: literal) : string = match l with
+  | Int i -> string_of_int i
+  | Float f -> string_of_float f
+  | Bool b -> string_of_bool b
+
+let rec format_expression (e: expression) : string = match e with
+  | Comparison ((op, _), (e1, _), (e2, _)) ->
+    (format_expression e1) ^ " " ^ (Format_ast.format_comp_op op) ^ "" ^ (format_expression e2)
+  | Binop ((op, _), (e1, _), (e2, _)) ->
+    (format_expression e1) ^ " " ^ (Format_ast.format_binop op) ^ "" ^ (format_expression e2)
+  | Unop (op, (e, _)) ->
+    (Format_ast.format_unop op) ^ " " ^ (format_expression e)
+  | Conditional ((e1, _), (e2, _), (e3, _)) ->
+    "si " ^ (format_expression e1) ^ " alors " ^ (format_expression e2) ^
+    " sinon " ^ (format_expression e3)
+  | FunctionCall(f, args) -> Printf.sprintf "%s(%s)"
+                               (format_func f )
+                               (String.concat "," (List.map (fun e -> format_expression (Ast.unmark e)) args))
+  | Literal lit -> format_literal lit
+  | Var var -> Ast.unmark var.Variable.name
+  | LocalVar lvar -> "x" ^ (string_of_int lvar.LocalVariable.id)
+  | GenericTableIndex -> "X"
+  | Error -> "indéfini"
+  | LocalLet (lvar, (e1, _), (e2, _)) ->
+    "soit x" ^ (string_of_int lvar.LocalVariable.id) ^ "= "^
+    (format_expression e1) ^ " dans " ^ (format_expression e2)
+  | _ -> assert false

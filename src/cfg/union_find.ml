@@ -28,8 +28,8 @@ sig
   type t
 
   val create : elt -> t
-  val find : t -> t
-  val find_repr: t -> elt
+  val find: t -> elt
+  val get_elt: t -> elt
   val union : t -> t -> unit
 end
 
@@ -60,25 +60,27 @@ struct
 
   (* Do a find() on a given node, searching
      for its representative *)
-  let rec find (Node inst) =
+  let rec find_aux (Node inst) =
     if inst.parent != (Node inst) then
       (* Path-compression here *)
-      let _ = inst.parent <- find (inst.parent) in
+      let _ = inst.parent <- find_aux (inst.parent) in
       inst.parent
     else
       inst.parent
 
-  let find_repr n =
-    let (Node r) = find n in
+  let find n =
+    let (Node r) = find_aux n in
     r.elem
+
+  let get_elt (Node inst) = inst.elem
 
   (* Union function, performs union by rank and
      uses find() for path compression *)
   let union node_a node_b =
     if node_a == node_b then ()
     else
-      let (Node root_a) = find node_a
-      and (Node root_b) = find node_b in
+      let (Node root_a) = find_aux node_a
+      and (Node root_b) = find_aux node_b in
       if (root_a.rank > root_b.rank) then
         let _ = root_b.parent <- (Node root_a)
         in ()
