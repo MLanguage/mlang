@@ -105,6 +105,7 @@ end
 type ctx = {
   ctx_program : program;
   ctx_var_typ: Typ.t VariableMap.t;
+  ctx_local_var_typ: Typ.t LocalVariableMap.t;
 }
 
 let rec typecheck_top_down
@@ -196,16 +197,52 @@ let rec typecheck_top_down
                    (Format_cfg.format_typ t)
                    (Format_cfg.format_typ t')
                 )))
-      | None -> assert false
+      | None ->
+        let (ctx, t') = typecheck_bottom_up ctx e in
+        begin try Typ.unify t' (Typ.create_concrete t); ctx with
+          | Typ.UnificationError (t_msg, _) ->
+            raise (Errors.TypeError (
+                Errors.Typing
+                  (Printf.sprintf "variable %s %s is of type %s but should be %s"
+                     (Ast.unmark var.Variable.name)
+                     (Format_ast.format_position (Ast.get_position var.Variable.name))
+                     t_msg
+                     (Format_cfg.format_typ t)
+                  )))
+        end
       with
       | Not_found -> assert false (* should not happen *)
     end
-  | (LocalLet (var, e1, e2), t) ->
-    assert false
+  | (LocalLet (local_var, e1, e2), t) ->
+    let (ctx, t1) = typecheck_bottom_up ctx e1 in
+    let ctx = { ctx with ctx_local_var_typ = LocalVariableMap.add local_var t1 ctx.ctx_local_var_typ } in
+    let (ctx, t2) = typecheck_bottom_up ctx e2 in
+    begin try Typ.unify t2 (Typ.create_concrete t); ctx with
+      | Typ.UnificationError (t2_msg, _) ->
+        raise (Errors.TypeError (
+            Errors.Typing
+              (Printf.sprintf "expression %s has type %s but should be %s"
+                 (Format_ast.format_position (Ast.get_position e))
+                 t2_msg
+                 (Format_cfg.format_typ t)
+              )))
+    end
   | (Error, t) ->
     ctx
-  | (LocalVar var, t) ->
-    assert false
+  | (LocalVar local_var, t) ->
+    let t' = try LocalVariableMap.find local_var ctx.ctx_local_var_typ with
+      | Not_found -> assert false (* should not happen *)
+    in
+    begin try Typ.unify t' (Typ.create_concrete t); ctx with
+      | Typ.UnificationError (t_msg, _) ->
+        raise (Errors.TypeError (
+            Errors.Typing
+              (Printf.sprintf "expression %s has type %s but should be %s"
+                 (Format_ast.format_position (Ast.get_position e))
+                 t_msg
+                 (Format_cfg.format_typ t)
+              )))
+    end
   | (GenericTableIndex, Integer) -> ctx
   | _ -> raise (Errors.TypeError (
       Errors.Typing
@@ -247,7 +284,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
         ) ctx args
       in
       (ctx, t1)
-  | _ -> assert false
+  | _ -> assert false (* unimplemented, do other functions *)
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with
@@ -268,7 +305,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Binop ((Ast.Add, _ | Ast.Sub, _ | Ast.Mul, _ | Ast.Div, _) as op, e1, e2) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
-    begin try Typ.unify t1 t2; (ctx, t1) with
+    begin try Typ.unify t1 t2; Typ.unify t1 Typ.only_non_boolean; (ctx, t1) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -279,12 +316,109 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
                        t2_msg
                     )))
     end
-  | _ -> raise (Errors.TypeError (
-      Errors.Typing
-        (Printf.sprintf "cannot determine type of expression %s (%s)"
-           (Format_cfg.format_expression (Ast.unmark e))
-           (Format_ast.format_position (Ast.get_position e))
-        )))
+  | Comparison (op, e1, e2) ->
+    let (ctx, t1) = typecheck_bottom_up ctx e1 in
+    let (ctx, t2) = typecheck_bottom_up ctx e2 in
+    begin try Typ.unify t1 t2; (ctx, Typ.boolean) with
+      | Typ.UnificationError _ ->
+        raise (Errors.TypeError (
+            Errors.Typing
+              (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
+                 (Format_cfg.format_expression (Ast.unmark e1))
+                 (Format_ast.format_position (Ast.get_position e1))
+                 (Typ.format_typ t1)
+                 (Format_ast.format_position (Ast.get_position e2))
+                 (Typ.format_typ t2)
+              )))
+    end
+  | Unop (Ast.Not, e) ->
+    let ctx = typecheck_top_down ctx e Boolean in
+    (ctx, Typ.boolean)
+  | Unop (Ast.Minus, e') ->
+    let (ctx, t) = typecheck_bottom_up ctx e' in
+    begin try Typ.unify t Typ.only_non_boolean; (ctx, t) with
+      | Typ.UnificationError (t1_msg, t2_msg) ->
+        raise (Errors.TypeError
+                 (Errors.Typing
+                    (Printf.sprintf "arguments of operator (%s) %s has type %s but should be of type %s"
+                       (Format_ast.format_unop (Ast.Minus))
+                       (Format_ast.format_position (Ast.get_position e))
+                       t1_msg
+                       t2_msg
+                    )))
+    end
+  | GenericTableIndex -> (ctx, Typ.integer)
+  | Index ((var, var_pos), e') ->
+    let ctx = typecheck_top_down ctx e' Integer in
+    let var_data = VariableMap.find var ctx.ctx_program in
+    begin match var_data.Cfg.var_definition with
+      | SimpleVar _ | InputVar ->
+        raise (Errors.TypeError
+                 (Errors.Typing
+                    (Printf.sprintf "variable %s is accessed %s as a table but it is not defined as one %s"
+                       (Ast.unmark var.Variable.name)
+                       (Format_ast.format_position var_pos)
+                       (Format_ast.format_position (Ast.get_position var.Variable.name))
+                    )))
+      | TableVar _ ->
+        begin try (ctx, VariableMap.find var ctx.ctx_var_typ) with
+          | Not_found ->
+            let t = Typ.create_variable () in
+            let ctx = { ctx with ctx_var_typ = VariableMap.add var t ctx.ctx_var_typ } in
+            (ctx, t)
+        end
+    end
+  | Conditional (e1, e2, e3) ->
+    let (ctx, t1) = typecheck_bottom_up ctx e1 in
+    begin try
+        Typ.unify t1 Typ.boolean;
+        let (ctx, t2) = typecheck_bottom_up ctx e2 in
+        let (ctx, t3) = typecheck_bottom_up ctx e3 in
+        begin try
+            Typ.unify t2 t3; (ctx, t2)
+          with
+          | Typ.UnificationError _ ->
+            raise (Errors.TypeError (
+                Errors.Typing
+                  (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
+                     (Format_cfg.format_expression (Ast.unmark e1))
+                     (Format_ast.format_position (Ast.get_position e1))
+                     (Typ.format_typ t1)
+                     (Format_ast.format_position (Ast.get_position e2))
+                     (Typ.format_typ t2)
+                  )))
+        end
+      with
+      | Typ.UnificationError _ ->
+        raise (Errors.TypeError (
+            Errors.Typing
+              (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
+                 (Format_cfg.format_expression (Ast.unmark e1))
+                 (Format_ast.format_position (Ast.get_position e1))
+                 (Typ.format_typ t1)
+              )))
+    end
+  | FunctionCall(func, args) ->
+    let typechecker = typecheck_func_args func (Ast.get_position e) in
+    let (ctx, t') = typechecker ctx args in
+    (ctx, t')
+  | Error -> (ctx, Typ.create_variable ())
+  | LocalVar local_var ->
+    begin try (ctx, LocalVariableMap.find local_var ctx.ctx_local_var_typ) with
+      | Not_found -> assert false (* should not happen *)
+    end
+  | LocalLet (local_var, e1, e2) ->
+    let (ctx, t1) = typecheck_bottom_up ctx e1 in
+    let ctx = { ctx with ctx_local_var_typ = LocalVariableMap.add local_var t1 ctx.ctx_local_var_typ } in
+    let (ctx, t2) = typecheck_bottom_up ctx e2 in
+    (ctx, t2)
+
+let determine_def_complete_cover (size: int) (defs: int list) : bool =
+  let defs_array = Array.make size false in
+  List.iter (fun def ->
+      defs_array.(def) <- true
+    ) defs;
+  Array.for_all (fun def -> def) defs_array
 
 let typecheck (p: program) : typ VariableMap.t =
   let (types, _) = Cfg.VariableMap.fold (fun var def (acc, ctx) ->
@@ -292,17 +426,69 @@ let typecheck (p: program) : typ VariableMap.t =
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
             let new_ctx = typecheck_top_down ctx e t in
-            (VariableMap.add var t acc, new_ctx)
+            (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let new_ctx = typecheck_top_down ctx e t in
-                (VariableMap.add var t acc, new_ctx)
-              | _ -> assert false
+                (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
+              | IndexTable es ->
+                let new_ctx = IndexMap.fold (fun _ e ctx ->
+                    let new_ctx = typecheck_top_down ctx e t in
+                    new_ctx
+                  ) es ctx in
+                if determine_def_complete_cover size
+                    (List.map (fun (x,_) -> x) (IndexMap.bindings es))
+                then
+                  (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
+                else
+                  raise (Errors.TypeError (
+                      Errors.Variable
+                        (Printf.sprintf "the definitions of table %s declared %s do not cover all of its indexes"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                        )))
             end
           | InputVar ->
             (acc, ctx)
         end
-      | None -> assert false
+      | None -> begin match def.var_definition with
+          | SimpleVar e ->
+            let (new_ctx, t) = typecheck_bottom_up ctx e in
+            (VariableMap.add var t acc, new_ctx)
+          | TableVar (size, defs) -> begin match defs with
+              | IndexGeneric e ->
+                let (new_ctx, t) = typecheck_bottom_up ctx e in
+                (VariableMap.add var t acc, new_ctx)
+              | IndexTable es ->
+                let (new_ctx, t) = IndexMap.fold (fun _ e (ctx, old_t) ->
+                    let (new_ctx, t) = typecheck_bottom_up ctx e in
+                    begin try Typ.unify t old_t; (new_ctx, t) with
+                      | Typ.UnificationError (t1_msg, t2_msg) ->
+                        raise (Errors.TypeError (
+                            Errors.Typing
+                              (Printf.sprintf "different definitions of specific index of table variable %s declared %s have different indexes: %s and %s"
+                                 (Ast.unmark var.Variable.name)
+                                 (Format_ast.format_position (Ast.get_position var.Variable.name))
+                                 t1_msg
+                                 t2_msg
+                              )))
+                    end
+                  ) es (ctx, Typ.create_variable ()) in
+                if determine_def_complete_cover size
+                    (List.map (fun (x,_) -> x) (IndexMap.bindings es))
+                then
+                  (VariableMap.add var t acc, new_ctx)
+                else
+                  raise (Errors.TypeError (
+                      Errors.Variable
+                        (Printf.sprintf "the definitions of table %s declared %s do not cover all its indexes"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                        )))
+            end
+          | InputVar ->
+            (acc, ctx)
+        end
     ) p (Cfg.VariableMap.empty,
          { ctx_program = p;
            ctx_var_typ = VariableMap.merge (fun _ _ def ->
@@ -312,7 +498,8 @@ let typecheck (p: program) : typ VariableMap.t =
                    | Some t -> Some (Typ.create_concrete t)
                    | None -> None
                  end
-             ) VariableMap.empty p
+             ) VariableMap.empty p;
+           ctx_local_var_typ = LocalVariableMap.empty;
          })
   in
-  types
+  VariableMap.map (fun t -> Typ.to_concrete t) types

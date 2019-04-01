@@ -82,6 +82,7 @@ let main () =
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph "dep_graph.dot" dep_graph;
+    Dependency.check_for_cycle dep_graph;
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1

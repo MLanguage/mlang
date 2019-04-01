@@ -12,7 +12,7 @@ Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
 
 regle 1:
 application : truc  ;
-X1 = Z + 1;
+X1 = X2 + 1;
 X2 = Z * 3;
 X3 = Z + 3;
 X4 = Z + 4;
@@ -22,4 +22,4 @@ Xi = Z + 45;
 
 X9 = somme(i=1..8:Xi);
 Y[0] = 4;
-Y[X] = X9 + somme(X3,X4) / (3*X - Z);
+Y[X] = 3*X - Z;

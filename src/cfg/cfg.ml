@@ -99,6 +99,7 @@ type expression =
 [@@deriving show]
 
 module VariableMap = Map.Make(Variable)
+module LocalVariableMap = Map.Make(LocalVariable)
 
 module IndexMap = Map.Make(struct type t = int let compare = compare end)
 

@@ -14,7 +14,7 @@
   limitations under the License.
 *)
 
-module DepGraph = Graph.Persistent.Graph.Concrete(struct
+module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
     type t = Cfg.Variable.t
     let hash v = v.Cfg.Variable.id
     let compare v1 v2 = compare v1.Cfg.Variable.id v2.Cfg.Variable.id
@@ -46,7 +46,8 @@ let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: D
   | Cfg.Literal _
   | Cfg.GenericTableIndex
   | Cfg.Error -> acc
-  | Cfg.Var var -> DepGraph.add_edge acc lvar var
+  | Cfg.Var var ->
+    DepGraph.add_edge acc lvar var
 
 
 let create_dependency_graph (p: Cfg.program) : DepGraph.t =
@@ -62,14 +63,29 @@ let create_dependency_graph (p: Cfg.program) : DepGraph.t =
         end
     ) p DepGraph.empty
 
+module CycleDetector = Graph.Components.Make(DepGraph)
+
+let check_for_cycle (g: DepGraph.t) : unit =
+  (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
+  let sccs = CycleDetector.scc_list g in
+  if List.length sccs < DepGraph.nb_vertex g then
+    raise
+      (Errors.TypeError
+         (Errors.Variable
+            (Printf.sprintf "the following variables are defined circularly: %s"
+               (String.concat " <-> "
+                  (List.map
+                     (fun var -> Ast.unmark var.Cfg.Variable.name)
+                     (List.find (fun scc -> List.length scc > 1) sccs)))
+            )))
 
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 
-    let edge_attributes _ = [`Color 4711]
+    let edge_attributes _ = []
     let default_edge_attributes _ = []
     let get_subgraph _ = None
-    let vertex_attributes _ = [`Shape `Box]
+    let vertex_attributes _ = []
     let vertex_name v = Ast.unmark v.Cfg.Variable.name
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
