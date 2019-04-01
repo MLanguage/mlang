@@ -26,14 +26,19 @@ parse_all: build
 
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc
+ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
+GRAPH_FOLDER = $(shell ocamlfind query ocamlgraph)
 OCAML_INCLUDES = \
 	-I _build/src \
 	-I _build/src/parsing \
 	-I _build/src/cfg \
-	-I $(OPAM_SWITCH_PREFIX)/lib/ANSITerminal
+	-I _build/src/analysis \
+	-I $(ANSI_FOLDER) \
+	-I $(GRAPH_FOLDER) \
 
 doc:
 	mkdir -p $(DOC_FOLDER)
+	opam config env
 	ocamldoc \
 		$(OCAML_INCLUDES) \
 		-html -keep-code -m p -sort \

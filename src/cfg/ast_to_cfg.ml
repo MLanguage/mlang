@@ -443,13 +443,14 @@ let add_var_def
     | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), SingleIndex _) | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), GenericIndex)
     | (Cfg.SimpleVar old_e, NoIndex) ->
       Cli.warning_print
-        (Printf.sprintf "dropping definition %s because variable was previously defined %s"
+        (Printf.sprintf "Dropping definition %s because variable was previously defined %s"
            (Format_ast.format_position (Ast.get_position var_expr))
            (Format_ast.format_position (Ast.get_position old_e)));
       var_data
     | (Cfg.TableVar (size, Cfg.IndexTable _), GenericIndex) ->
       Cli.warning_print
-        (Printf.sprintf "definition %s will supercede partial definitions of the same variables"
+        (Printf.sprintf "Definition of %s %s will supercede previous partial definitions"
+           (Ast.unmark var_lvalue.Cfg.Variable.name)
            (Format_ast.format_position (Ast.get_position var_expr)));
       Cfg.VariableMap.add var_lvalue
         { old_var_expr with
@@ -458,7 +459,7 @@ let add_var_def
     | (Cfg.TableVar (size, Cfg.IndexTable old_defs), SingleIndex i) -> begin try
           let old_def = Cfg.IndexMap.find i old_defs in
           Cli.warning_print
-            (Printf.sprintf "dropping definition %s because variable was previously defined %s"
+            (Printf.sprintf "Dropping definition %s because variable was previously defined %s"
                (Format_ast.format_position (Ast.get_position var_expr))
                (Format_ast.format_position (Ast.get_position old_def)));
           var_data
@@ -512,7 +513,7 @@ let get_var_data
     (p: Ast.program)
   : Cfg.variable_data Cfg.VariableMap.t =
   List.fold_left (fun var_data source_file ->
-      Cli.debug_print (Printf.sprintf "Translating %s to cleaner form" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
+      Cli.debug_print (Printf.sprintf "Expanding definitions in %s" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
       List.fold_left (fun var_data source_file_item -> match Ast.unmark source_file_item with
           | Ast.Rule r -> List.fold_left (fun var_data formula ->
               match Ast.unmark formula with

@@ -17,6 +17,7 @@
 (** Command-line interface helpers *)
 
 let source_files : string list ref = ref []
+let dep_graph_file : string ref = ref "dep_graph.dot"
 let verify_flag = ref false
 let debug_flag = ref false
 

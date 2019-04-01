@@ -3,3 +3,4 @@ B _build/**
 PKG ppx_deriving.std
 PKG ANSITerminal
 PKG str
+PKG ocamlgraph

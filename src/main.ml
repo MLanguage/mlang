@@ -22,9 +22,11 @@ let parse_cli_args () =
   (** Code block to retrieve and parse command-line arguments. *)
   let speclist = Arg.align [
       ("--verify", Arg.Set verify_flag,
-       "Vérifie que les conditions sont valables dans tous les cas");
+       " Vérifie que les conditions sont valables dans tous les cas");
       ("--debug", Arg.Set debug_flag,
-       "Affiche des informations de débuggage")
+       " Affiche des informations de débuggage");
+      ("--dep_graph_file", Arg.Set_string dep_graph_file,
+       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)")
     ]
   in let usage_msg =
        "M parser"
@@ -76,7 +78,10 @@ let main () =
     let program = Ast_to_cfg.translate !program in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
-    ignore (typing_info)
+    ignore (typing_info);
+    Cli.debug_print "Analysing dependencies...";
+    let dep_graph = Dependency.create_dependency_graph program in
+    Dependency.print_dependency_graph "dep_graph.dot" dep_graph;
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1
