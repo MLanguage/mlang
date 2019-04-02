@@ -84,6 +84,7 @@ let main () =
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
     Dependency.check_for_cycle dep_graph;
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
+    let program = Constant_propagation.propagate_constants dep_graph program in
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in

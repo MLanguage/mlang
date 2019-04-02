@@ -4,3 +4,4 @@ PKG ppx_deriving.std
 PKG ANSITerminal
 PKG str
 PKG ocamlgraph
+PKG z3

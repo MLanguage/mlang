@@ -108,6 +108,20 @@ let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.
       not (is_necessary_to_output var)) (Cfg.VariableMap.map (fun _ -> ()) p)
 
 
+module Constability = Graph.Fixpoint.Make(DepGraph)
+    (struct
+      type vertex = DepGraph.E.vertex
+      type edge = DepGraph.E.t
+      type g = DepGraph.t
+      type data = bool
+      let direction = Graph.Fixpoint.Backward
+      let equal = (=)
+      let join = (&&)
+      let analyze _ = (fun x -> x)
+    end)
+
+module TopologicalOrder = Graph.Topological.Make(DepGraph)
+
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 

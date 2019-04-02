@@ -10,14 +10,14 @@ X8 : calculee : "UNKNOWN" type ENTIER;
 X9 : calculee : "UNKNOWN" type ENTIER;
 Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
 sortie (X9);
-sortie (X2); 
+sortie (X2);
 
 
 regle 1:
 application : truc  ;
 X1 = X2 + 1;
-X2 = Z * 3;
-X3 = Z + 3;
+X2 = 3;
+X3 = X2 + 3;
 X4 = Z + 4;
 
 pour i=5..8:

@@ -15,6 +15,9 @@
 
 SOURCE_DIR=calculette-impots-m-source-code/sources-latin1/sourcesm2015m_4_6
 
+deps:
+	opam install ppx_deriving ANSITerminal str ocamlgraph z3
+
 build:
 	ocamlbuild -use-ocamlfind src/main.native
 
