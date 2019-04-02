@@ -59,4 +59,12 @@ let rec format_expression (e: expression) : string = match e with
   | LocalLet (lvar, (e1, _), (e2, _)) ->
     "soit x" ^ (string_of_int lvar.LocalVariable.id) ^ "= "^
     (format_expression e1) ^ " dans " ^ (format_expression e2)
-  | _ -> assert false
+  | Index(var, i) ->
+    Printf.sprintf "%s[%s]"
+      (Ast.unmark (Ast.unmark var).Variable.name)
+      (format_expression (Ast.unmark i))
+
+let format_io (io: io) : string = match io with
+  | Input -> "input"
+  | Output -> "output"
+  | Regular -> "regular"

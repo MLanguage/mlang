@@ -81,8 +81,35 @@ let main () =
     ignore (typing_info);
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph "dep_graph.dot" dep_graph;
+    Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
     Dependency.check_for_cycle dep_graph;
+    Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
+    let unused_variables = Dependency.get_unused_variables dep_graph program in
+    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
+    let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+    let program : Cfg.program ref = ref program in
+    let nb_inlined_vars : int ref = ref max_int in
+    while (0 < !nb_inlined_vars) do
+      let dep_graph = Dependency.create_dependency_graph !program in
+      let single_use_vars = Dependency.single_use_vars dep_graph in
+      let to_inline_vars = Cfg.VariableMap.filter (fun var _ -> match (Cfg.VariableMap.find var !program).Cfg.var_io with
+          | Cfg.Input | Cfg.Output -> false
+          | Cfg.Regular -> true
+        ) single_use_vars in
+      nb_inlined_vars := Cfg.VariableMap.cardinal to_inline_vars;
+      if !nb_inlined_vars > 0 then begin
+        Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
+        let new_program = Inlining.inline_vars to_inline_vars !program in
+        program := new_program;
+      end
+    done;
+    let program = !program in
+    Cli.debug_print
+      (Printf.sprintf "Program variables count down to %d!"
+         (Cfg.VariableMap.cardinal program));
+    let dep_graph = Dependency.create_dependency_graph program in
+    Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph;
+    ignore program
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1

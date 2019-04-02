@@ -79,6 +79,35 @@ let check_for_cycle (g: DepGraph.t) : unit =
                      (List.find (fun scc -> List.length scc > 1) sccs)))
             )))
 
+let single_use_vars (g: DepGraph.t) : unit Cfg.VariableMap.t =
+  DepGraph.fold_vertex (fun var acc ->
+      if DepGraph.in_degree g var <= 1 then
+        Cfg.VariableMap.add var () acc
+      else
+        acc
+    ) g Cfg.VariableMap.empty
+
+module Reachability = Graph.Fixpoint.Make(DepGraph)
+    (struct
+      type vertex = DepGraph.E.vertex
+      type edge = DepGraph.E.t
+      type g = DepGraph.t
+      type data = bool
+      let direction = Graph.Fixpoint.Forward
+      let equal = (=)
+      let join = (||)
+      let analyze _ = (fun x -> true)
+    end)
+
+let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.t =
+  let is_output = fun var ->
+    (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+  in
+  let is_necessary_to_output = Reachability.analyze is_output g in
+  Cfg.VariableMap.filter (fun var _ ->
+      not (is_necessary_to_output var)) (Cfg.VariableMap.map (fun _ -> ()) p)
+
+
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 

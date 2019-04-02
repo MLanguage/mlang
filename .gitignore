@@ -1,4 +1,5 @@
 _build/
 doc/
 main.native
-dep_graph.dot
+dep_graph_before_optimization.dot
+dep_graph_after_optimization.dot

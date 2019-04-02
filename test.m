@@ -9,6 +9,9 @@ X7 : calculee : "UNKNOWN" type ENTIER;
 X8 : calculee : "UNKNOWN" type ENTIER;
 X9 : calculee : "UNKNOWN" type ENTIER;
 Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
+sortie (X9);
+sortie (X2); 
+
 
 regle 1:
 application : truc  ;
@@ -21,5 +24,5 @@ pour i=5..8:
 Xi = Z + 45;
 
 X9 = somme(i=1..8:Xi);
-Y[0] = 4;
-Y[X] = 3*X - Z;
+Y[0] = X9;
+Y[X] = 3*X - Z + X9 / 6;

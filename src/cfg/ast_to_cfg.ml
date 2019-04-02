@@ -473,22 +473,33 @@ let add_var_def
       end
   with
   | Not_found -> Cfg.VariableMap.add var_lvalue (
-      if def_kind = NoIndex then
-        { Cfg.var_definition = Cfg.SimpleVar var_expr; Cfg.var_typ = var_typ }
-      else
-        try match (Cfg.VariableMap.find var_lvalue var_decl_data).var_decl_is_table with
+      try
+        let decl_data = Cfg.VariableMap.find var_lvalue var_decl_data in
+        let io = match decl_data.var_decl_io with
+          | Input -> Cfg.Input
+          | Constant | Regular -> Cfg.Regular
+          | Output -> Cfg.Output
+        in
+        if def_kind = NoIndex then
+          { Cfg.var_definition = Cfg.SimpleVar var_expr;
+            Cfg.var_typ = var_typ;
+            Cfg.var_io = io }
+        else
+          match decl_data.var_decl_is_table with
           | Some size -> begin
               match def_kind with
               | NoIndex -> assert false (* should not happen*)
               | SingleIndex i ->
                 {
                   Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr));
-                  Cfg.var_typ = var_typ
+                  Cfg.var_typ = var_typ;
+                  Cfg.var_io = io
                 }
               | GenericIndex ->
                 {
                   Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexGeneric var_expr);
-                  Cfg.var_typ = var_typ
+                  Cfg.var_typ = var_typ;
+                  Cfg.var_io = io
                 }
             end
           | None -> raise (Errors.TypeError (
@@ -499,8 +510,8 @@ let add_var_def
                   (Format_ast.format_position (Cfg.VariableMap.find var_lvalue var_decl_data).var_pos)
               )
             ))
-        with
-        | Not_found -> assert false
+      with
+      | Not_found -> assert false
         (*
           should not happen since we already looked into idmap to get the var value
           from its name
@@ -560,7 +571,7 @@ let get_var_data
               ) in
             Cfg.VariableMap.add
               var
-              { Cfg.var_definition = Cfg.InputVar; Cfg.var_typ = typ }
+              { Cfg.var_definition = Cfg.InputVar; Cfg.var_typ = typ; Cfg.var_io = Cfg.Input }
               var_data
           | _ -> var_data
         ) var_data source_file

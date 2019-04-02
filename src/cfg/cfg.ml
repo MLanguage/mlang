@@ -112,9 +112,15 @@ type variable_def =
   | TableVar of int * index_def
   | InputVar
 
+type io =
+  | Input
+  | Output
+  | Regular
+
 type variable_data = {
   var_definition: variable_def;
   var_typ : typ option;
+  var_io: io;
 }
 
 
