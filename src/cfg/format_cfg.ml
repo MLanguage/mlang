@@ -21,6 +21,11 @@ let format_typ (t: typ) : string = match t with
   | Real -> "real"
   | Boolean -> "boolean"
 
+let format_io (io: io) : string = match io with
+  | Input -> "input"
+  | Output -> "output"
+  | Regular -> "regular"
+
 let format_func (f: func) : string = match f with
   | SumFunc -> "somme"
   | AbsFunc -> "abs"
@@ -40,9 +45,9 @@ let format_literal (l: literal) : string = match l with
 
 let rec format_expression (e: expression) : string = match e with
   | Comparison ((op, _), (e1, _), (e2, _)) ->
-    (format_expression e1) ^ " " ^ (Format_ast.format_comp_op op) ^ "" ^ (format_expression e2)
+    (format_expression e1) ^ " " ^ (Format_ast.format_comp_op op) ^ " " ^ (format_expression e2)
   | Binop ((op, _), (e1, _), (e2, _)) ->
-    (format_expression e1) ^ " " ^ (Format_ast.format_binop op) ^ "" ^ (format_expression e2)
+    (format_expression e1) ^ " " ^ (Format_ast.format_binop op) ^ " " ^ (format_expression e2)
   | Unop (op, (e, _)) ->
     (Format_ast.format_unop op) ^ " " ^ (format_expression e)
   | Conditional ((e1, _), (e2, _), (e3, _)) ->
@@ -63,6 +68,22 @@ let rec format_expression (e: expression) : string = match e with
     Printf.sprintf "%s[%s]"
       (Ast.unmark (Ast.unmark var).Variable.name)
       (format_expression (Ast.unmark i))
+
+let format_variable_def (def: variable_def) : string = match def  with
+  | SimpleVar e -> format_expression (Ast.unmark e) ^ "\n"
+  | InputVar -> "[User input]\n"
+  | TableVar (size, IndexGeneric e) -> "X -> " ^ (format_expression (Ast.unmark e)) ^ "\n"
+  | TableVar (size, IndexTable defs) -> IndexMap.fold (fun i e acc ->
+      acc ^ (Printf.sprintf "%d -> %s\n" i (format_expression (Ast.unmark e)))
+    ) defs ""
+
+let format_program (p: program) : string = VariableMap.fold (fun var def acc ->
+    acc ^ (Printf.sprintf "Variable %s of type %s, io %s:\n%s"
+             (Ast.unmark var.Variable.name)
+             (match def.var_typ with | None -> "unknown" | Some t -> format_typ t)
+             (format_io def.var_io)
+             (format_variable_def def.var_definition))
+  ) p ""
 
 let format_io (io: io) : string = match io with
   | Input -> "input"

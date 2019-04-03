@@ -84,10 +84,13 @@ let main () =
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
     Dependency.check_for_cycle dep_graph;
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
+    Cli.debug_print (Printf.sprintf "Propagating constants variables...");
     let program = Constant_propagation.propagate_constants dep_graph program in
+    Cli.debug_print (Printf.sprintf "Program:\n%s" (Format_cfg.format_program program));
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+    Cli.debug_print (Printf.sprintf "Program:\n%s" (Format_cfg.format_program program));
     let program : Cfg.program ref = ref program in
     let nb_inlined_vars : int ref = ref max_int in
     while (0 < !nb_inlined_vars) do
@@ -101,6 +104,7 @@ let main () =
       if !nb_inlined_vars > 0 then begin
         Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
         let new_program = Inlining.inline_vars to_inline_vars !program in
+        Cli.debug_print (Printf.sprintf "Program:\n%s" (Format_cfg.format_program new_program));
         program := new_program;
       end
     done;
