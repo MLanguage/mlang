@@ -162,6 +162,20 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
             )
         ) Error args
     ) e
+  | FunctionCall (AbsFunc, [arg]) ->
+    let arg_var = LocalVariable.new_var () in
+    Ast.same_pos_as
+      (LocalLet (
+          arg_var,
+          expand_functions_expr arg,
+          Ast.same_pos_as (Conditional (
+              (Ast.same_pos_as (Comparison (
+                   Ast.same_pos_as Ast.Lt e,
+                   Ast.same_pos_as (LocalVar arg_var) e,
+                   Ast.same_pos_as (Literal (Int 0)) e)) e,
+               Ast.same_pos_as (Unop (Ast.Minus, Ast.same_pos_as (LocalVar arg_var) e)) e,
+               Ast.same_pos_as (LocalVar arg_var) e
+              ))) e)) e
   | _ -> e
 
 let expand_functions (p: program) : program =

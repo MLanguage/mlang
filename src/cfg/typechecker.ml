@@ -301,6 +301,50 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
         ) ctx args
       in
       (ctx, t1)
+  | AbsFunc ->
+    fun ctx args ->
+      begin match args with
+        | [arg] ->
+          let (ctx, t_arg) = typecheck_bottom_up ctx arg in
+          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, t_arg) with
+            | Typ.UnificationError (t_arg_msg,t2_msg) ->
+              raise (Errors.TypeError
+                       (Errors.Typing
+                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_ast.format_position (Ast.get_position arg))
+                             t_arg_msg
+                             t2_msg
+                          )))
+          end
+        | _ -> raise (Errors.TypeError
+                        (Errors.Typing
+                           (Printf.sprintf "function abs %s should have only one arguemnt"
+                              (Format_ast.format_position pos)
+                           )))
+      end
+  | PresentFunc | NullFunc | GtzFunc | GtezFunc ->
+    fun ctx args ->
+      begin match args with
+        | [arg] ->
+          let (ctx, t_arg) = typecheck_bottom_up ctx arg in
+          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.boolean) with
+            | Typ.UnificationError (t_arg_msg,t2_msg) ->
+              raise (Errors.TypeError
+                       (Errors.Typing
+                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_ast.format_position (Ast.get_position arg))
+                             t_arg_msg
+                             t2_msg
+                          )))
+          end
+        | _ -> raise (Errors.TypeError
+                        (Errors.Typing
+                           (Printf.sprintf "function abs %s should have only one arguemnt"
+                              (Format_ast.format_position pos)
+                           )))
+      end
   | _ -> assert false (* unimplemented, do other functions *)
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
