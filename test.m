@@ -10,7 +10,6 @@ X8 : calculee : "UNKNOWN" type ENTIER;
 X9 : calculee : "UNKNOWN" type ENTIER;
 Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
 sortie (X9);
-sortie (Y);
 
 
 regle 1:
@@ -18,11 +17,14 @@ application : truc  ;
 X1 = X2 + 1;
 X2 = 3;
 X3 = X2 + 3;
-X4 = Z + 4;
 
-pour i=5..8:
+pour i=4..5:
 Xi = Z + 45;
 
-X9 = somme(i=1..8:Xi);
+X6 = X8;
+X7 = X8;
+X8 = Z;
+
+X9 = max(i=3..4:Xi);
 Y[0] = X9;
 Y[X] = 3*X - Z + X9 / 6;

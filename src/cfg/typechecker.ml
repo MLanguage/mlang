@@ -276,7 +276,7 @@ let rec typecheck_top_down
 and typecheck_func_args (f: func) (pos: Ast.position) :
   (ctx -> Cfg.expression Ast.marked list -> ctx * Typ.t) =
   match f with
-  | SumFunc -> fun ctx args ->
+  | SumFunc | MinFunc | MaxFunc -> fun ctx args ->
     if List.length args = 0 then
       raise (Errors.TypeError
                (Errors.Typing

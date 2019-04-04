@@ -68,9 +68,10 @@ let rec inline_vars_in_expr
   | Conditional (e1, e2, e3) ->
     Ast.same_pos_as
       (Conditional
-         (inline_vars_in_expr ctx inlined_vars e3,
-          inline_vars_in_expr ctx inlined_vars e1,
-          inline_vars_in_expr ctx inlined_vars e2
+         (
+           inline_vars_in_expr ctx inlined_vars e1,
+           inline_vars_in_expr ctx inlined_vars e2,
+           inline_vars_in_expr ctx inlined_vars e3
          )) e
   | FunctionCall (func, args) ->
     Ast.same_pos_as

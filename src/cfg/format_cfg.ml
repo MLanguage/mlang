@@ -68,19 +68,19 @@ let rec format_expression (e: expression) : string = match e with
   | Unop (op, (e, _)) ->
     (Format_ast.format_unop op) ^ " " ^ (format_expression e)
   | Conditional ((e1, _), (e2, _), (e3, _)) ->
-    "si " ^ (format_expression e1) ^ " alors " ^ (format_expression e2) ^
+    "si (" ^ (format_expression e1) ^ ") alors " ^ (format_expression e2) ^
     " sinon " ^ (format_expression e3)
   | FunctionCall(f, args) -> Printf.sprintf "%s(%s)"
                                (format_func f )
                                (String.concat "," (List.map (fun e -> format_expression (Ast.unmark e)) args))
   | Literal lit -> format_literal lit
   | Var var -> Ast.unmark var.Variable.name
-  | LocalVar lvar -> "x" ^ (string_of_int lvar.LocalVariable.id)
+  | LocalVar lvar -> "t" ^ (string_of_int lvar.LocalVariable.id)
   | GenericTableIndex -> "X"
   | Error -> "indéfini"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
-    "soit x" ^ (string_of_int lvar.LocalVariable.id) ^ "= "^
-    (format_expression e1) ^ " dans " ^ (format_expression e2)
+    "soit t" ^ (string_of_int lvar.LocalVariable.id) ^ " = ("^
+    (format_expression e1) ^ ") dans " ^ (format_expression e2)
   | Index(var, i) ->
     Printf.sprintf "%s[%s]"
       (Ast.unmark (Ast.unmark var).Variable.name)

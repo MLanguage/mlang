@@ -39,6 +39,7 @@ module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
   end)
 
 let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: DepGraph.t) : DepGraph.t =
+  let acc = DepGraph.add_vertex acc lvar in
   match Ast.unmark e with
   | Cfg.Comparison (_, e1, e2) | Cfg.Binop (_, e1, e2 )
   | Cfg.LocalLet (_, e1, e2) ->
@@ -122,7 +123,8 @@ let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.
   in
   let is_necessary_to_output = Reachability.analyze is_output g in
   Cfg.VariableMap.filter (fun var _ ->
-      not (is_necessary_to_output var)) (Cfg.VariableMap.map (fun _ -> ()) p)
+      not (is_necessary_to_output var)
+    ) (Cfg.VariableMap.map (fun _ -> ()) p)
 
 
 module Constability = Graph.Fixpoint.Make(DepGraph)

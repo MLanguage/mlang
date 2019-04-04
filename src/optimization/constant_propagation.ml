@@ -67,11 +67,13 @@ let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Cfg.Vari
     ) g g in
   TopologicalOrder.fold (fun var acc -> var::acc) subgraph []
 
-let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression Ast.marked =
+type ctx = expression Ast.marked LocalVariableMap.t
+
+let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
   match Ast.unmark e with
   | Comparison (op, e1, e2) ->
-    let new_e1 = partial_evaluation p e1 in
-    let new_e2 = partial_evaluation p e2 in
+    let new_e1 = partial_evaluation ctx p e1 in
+    let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
       | (Ast.Gt, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 > i2))
       | (Ast.Gte, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 >= i2))
@@ -88,8 +90,8 @@ let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression 
       | _ -> Comparison (op, new_e1, new_e2)
     end e
   | Binop (op, e1, e2) ->
-    let new_e1 = partial_evaluation p e1 in
-    let new_e2 = partial_evaluation p e2 in
+    let new_e1 = partial_evaluation ctx p e1 in
+    let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
       | (Ast.Add, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 + i2))
       | (Ast.Sub, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 - i2))
@@ -104,7 +106,7 @@ let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression 
       | _ -> Binop (op, new_e1, new_e2)
     end e
   | Unop (op, e1) ->
-    let new_e1 = partial_evaluation p e1 in
+    let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as begin match (op, Ast.unmark new_e1) with
       | (Ast.Not, Literal (Bool b1)) -> Literal (Bool (not b1))
       | (Ast.Minus, Literal (Int i1)) -> Literal (Int (- i1))
@@ -112,16 +114,16 @@ let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression 
       | _ -> Unop (op, new_e1)
     end e
   | Conditional (e1, e2, e3) ->
-    let new_e1 = partial_evaluation p e1 in
-    let new_e2 = partial_evaluation p e2 in
-    let new_e3 = partial_evaluation p e3 in
-    begin match Ast.unmark e1 with
+    let new_e1 = partial_evaluation ctx p e1 in
+    let new_e2 = partial_evaluation ctx p e2 in
+    let new_e3 = partial_evaluation ctx p e3 in
+    begin match Ast.unmark new_e1 with
       | Literal (Bool true) -> new_e2
       | Literal (Bool false) -> new_e3
       | _ -> Ast.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
     end
   | Index (var, e1) ->
-    let new_e1 = partial_evaluation p e1 in
+    let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as (Index(var, new_e1)) e
   | Literal _ -> e
   | Var var -> begin match (VariableMap.find var p).var_definition with
@@ -131,14 +133,46 @@ let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression 
         end
       | _ -> e
     end
-  | LocalVar _ -> e
+  | LocalVar lvar -> begin try LocalVariableMap.find lvar ctx with
+      | Not_found -> e
+    end
   | GenericTableIndex -> e
   | Error -> e
   | LocalLet (lvar, e1, e2) ->
-    let new_e1 = partial_evaluation p e1 in
-    let new_e2 = partial_evaluation p e2 in
-    Ast.same_pos_as (LocalLet(lvar, new_e1, new_e2)) e
-  | _ -> e
+    let new_e1 = partial_evaluation ctx p e1 in
+    begin match Ast.unmark new_e1 with
+      | Literal _ ->
+        let new_ctx = LocalVariableMap.add lvar new_e1 ctx in
+        let new_e2 = partial_evaluation new_ctx p e2 in
+        new_e2
+      | _ ->
+        let new_e2 = partial_evaluation ctx p e2 in
+        Ast.same_pos_as (LocalLet(lvar, new_e1, new_e2)) e
+    end
+  | FunctionCall (func, args) ->
+    Ast.same_pos_as
+      (FunctionCall
+         (func,
+          List.map
+            (fun arg -> partial_evaluation ctx p arg)
+            args))
+      e
+
+let partially_evaluate (p: program) : program =
+  VariableMap.map (fun def ->
+      let new_def = match def.var_definition with
+        | InputVar -> InputVar
+        | SimpleVar e -> SimpleVar (partial_evaluation LocalVariableMap.empty p e)
+        | TableVar (size, def) -> begin match def with
+            | IndexGeneric e ->
+              TableVar(size, IndexGeneric (partial_evaluation LocalVariableMap.empty p e))
+            | IndexTable es ->
+              TableVar(size, IndexTable (IndexMap.map (fun e -> partial_evaluation LocalVariableMap.empty p e) es))
+          end
+      in
+      { def with var_definition = new_def }
+    ) p
+
 
 let propagate_constants (g: DepGraph.t) (p: program) : program =
   let const_vars = get_const_variables_evaluation_order g p in
@@ -146,10 +180,10 @@ let propagate_constants (g: DepGraph.t) (p: program) : program =
       let const_var_data = VariableMap.find const_var p in
       let new_const_var_def = match const_var_data.var_definition with
         | InputVar -> assert false (* should not happen *)
-        | SimpleVar e -> SimpleVar (partial_evaluation p e)
+        | SimpleVar e -> SimpleVar (partial_evaluation LocalVariableMap.empty p e)
         | TableVar (size, def) -> begin match def with
             | IndexGeneric e ->
-              TableVar(size, IndexGeneric (partial_evaluation p e))
+              TableVar(size, IndexGeneric (partial_evaluation LocalVariableMap.empty p e))
             | IndexTable es ->
               assert false (* should not happen *)
           end
