@@ -87,6 +87,24 @@ let rec partial_evaluation (p: program) (e: expression Ast.marked) : expression 
       | Literal (Bool false) -> new_e3
       | _ -> Ast.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
     end
+  | Index (var, e1) ->
+    let new_e1 = partial_evaluation p e1 in
+    Ast.same_pos_as (Index(var, new_e1)) e
+  | Literal _ -> e
+  | Var var -> begin match (VariableMap.find var p).var_definition with
+      | SimpleVar e | TableVar (_, IndexGeneric e) -> begin match Ast.unmark e with
+          | Literal lit -> Ast.same_pos_as (Literal lit) e
+          | _ -> e
+        end
+      | _ -> e
+    end
+  | LocalVar _ -> e
+  | GenericTableIndex -> e
+  | Error -> e
+  | LocalLet (lvar, e1, e2) ->
+    let new_e1 = partial_evaluation p e1 in
+    let new_e2 = partial_evaluation p e2 in
+    Ast.same_pos_as (LocalLet(lvar, new_e1, new_e2)) e
   | _ -> e
 
 let propagate_constants (g: DepGraph.t) (p: program) : program =
