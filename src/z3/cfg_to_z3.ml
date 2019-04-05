@@ -44,7 +44,7 @@ let declare_var (var: Cfg.Variable.t) (typ: Z3_repr.repr) (ctx: Z3.context) : Z3
 
 let translate_program
     (p: Cfg.program)
-    (typing: Z3_repr.repr Cfg.VariableMap.t)
+    (typing: Z3_repr.repr_info)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : (Z3.Expr.expr * Z3_repr.repr) Cfg.VariableMap.t =
@@ -54,5 +54,5 @@ let translate_program
         (declare_var var typ ctx, typ)
       with
       | Not_found -> assert false (* should not happen *)
-    ) typing in
+    ) typing.Z3_repr.repr_info_var in
   z3_vars

@@ -369,7 +369,15 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
          | None -> Ast.same_pos_as Cfg.Error e2
          (* the absence of a else branch for a ternary operators can yield a runtime error *)
        in
-       Cfg.Conditional (new_e1, new_e2, new_e3)
+       let cond_var = Cfg.LocalVariable.new_var () in
+       (*
+         We put every conditional behind a local var to make it easier for later
+         when we infer the bitvec size of every expression for Z3
+       *)
+       Cfg.LocalLet(cond_var,
+                    Ast.same_pos_as (Cfg.Conditional (new_e1, new_e2, new_e3)) f,
+                    Ast.same_pos_as (Cfg.LocalVar cond_var) f
+                   )
      | Ast.FunctionCall (f_name, args) ->
        let f_correct = translate_function_name f_name in
        let new_args = translate_func_args ctx args in

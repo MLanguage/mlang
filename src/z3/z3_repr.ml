@@ -36,73 +36,125 @@ type repr =
   | Real of int
   | Boolean
 
+type repr_info = {
+  repr_info_var : repr Cfg.VariableMap.t;
+  repr_info_local_var : repr Cfg.LocalVariableMap.t
+}
+
 let rec find_bitvec_order_expr
     (e: Cfg.expression Ast.marked)
     (new_typing: repr Cfg.VariableMap.t)
-    (lvar_typing: int Cfg.LocalVariableMap.t)
-  : int = match Ast.unmark e with
-  | Cfg.Comparison _ -> 1
+    (lvar_typing: repr Cfg.LocalVariableMap.t)
+    (old_typing: Typechecker.typ_info)
+  : (int * repr Cfg.LocalVariableMap.t) = match Ast.unmark e with
+  | Cfg.Comparison _ -> (1, lvar_typing)
   | Cfg.Binop (((Ast.Add, _) | (Ast.Sub, _)), e1, e2)
   | Cfg.Conditional (_, e1, e2)  ->
-    let o1 = find_bitvec_order_expr e1 new_typing lvar_typing in
-    let o2 = find_bitvec_order_expr e2 new_typing lvar_typing in
-    max o1 o2
+    let (o1, lvar_typing) =
+      find_bitvec_order_expr e1 new_typing lvar_typing old_typing
+    in
+    let (o2, lvar_typing) =
+      find_bitvec_order_expr e2 new_typing lvar_typing old_typing
+    in
+    (max o1 o2, lvar_typing)
   | Cfg.Binop (((Ast.Mul, _) | (Ast.Div, _)), e1, e2) ->
-    let o1 = find_bitvec_order_expr e1 new_typing lvar_typing in
-    let o2 = find_bitvec_order_expr e2 new_typing lvar_typing in
-    o1 + o2
+    let (o1, lvar_typing) =
+      find_bitvec_order_expr e1 new_typing lvar_typing old_typing
+    in
+    let (o2, lvar_typing) =
+      find_bitvec_order_expr e2 new_typing lvar_typing old_typing
+    in
+    (o1 + o2, lvar_typing)
   | Cfg.Unop (_, e1) ->
-    find_bitvec_order_expr e1 new_typing lvar_typing
+    find_bitvec_order_expr e1 new_typing lvar_typing old_typing
   | Cfg.Index ((var, _), _) | Cfg.Var var ->
     begin try match Cfg.VariableMap.find var new_typing with
-      | Boolean -> 1
-      | Integer o | Real o -> o
+      | Boolean -> (1, lvar_typing)
+      | Integer o | Real o -> (o, lvar_typing)
       with
       | Not_found -> assert false (* should not happen *)
     end
   | Cfg.FunctionCall (Cfg.ArrFunc, [arg])
   | Cfg.FunctionCall (Cfg.InfFunc, [arg]) ->
-    find_bitvec_order_expr arg new_typing lvar_typing
-  | Cfg.Literal _ -> 1
+    find_bitvec_order_expr arg new_typing lvar_typing old_typing
+  | Cfg.Literal _ -> (1, lvar_typing)
   | Cfg.LocalVar lvar ->
-    Cfg.LocalVariableMap.find lvar lvar_typing
-  | Cfg.GenericTableIndex -> 1 (* should be changed... *)
-  | Cfg.Error -> 1
+    begin try match  Cfg.LocalVariableMap.find lvar lvar_typing with
+      | Boolean -> (1, lvar_typing)
+      | Integer o | Real o -> (o, lvar_typing)
+      with
+      | Not_found -> assert false (* should not happen *)
+    end
+  | Cfg.GenericTableIndex -> (1, lvar_typing) (* should be changed... *)
+  | Cfg.Error -> (1, lvar_typing)
   | Cfg.LocalLet (lvar, e1, e2) ->
-    let o1 = find_bitvec_order_expr e1 new_typing lvar_typing in
-    let lvar_typing = Cfg.LocalVariableMap.add lvar o1 lvar_typing in
-    find_bitvec_order_expr e2 new_typing lvar_typing
+    let (o1, lvar_typing) =
+      find_bitvec_order_expr e1 new_typing lvar_typing old_typing
+    in
+    let lvar_repr =
+      match Cfg.LocalVariableMap.find lvar old_typing.Typechecker.typ_info_local_var with
+      | Cfg.Boolean -> Boolean
+      | Cfg.Integer -> Integer o1
+      | Cfg.Real -> Real o1
+    in
+    let lvar_typing = Cfg.LocalVariableMap.add lvar lvar_repr lvar_typing in
+    find_bitvec_order_expr e2 new_typing lvar_typing old_typing
   | _ -> assert false (* should not happen *)
 
 let find_bitvec_order
     (program:Cfg.program)
     (var:Cfg.Variable.t)
-    (new_typing: repr Cfg.VariableMap.t)
-  : int =
+    (new_typing: repr_info)
+    (old_typing: Typechecker.typ_info)
+  : (int * repr_info) =
   let var_def = Cfg.VariableMap.find var program in
   match var_def.Cfg.var_definition with
-  | Cfg.InputVar -> 1
+  | Cfg.InputVar -> (1, new_typing)
   | Cfg.SimpleVar e ->
-    find_bitvec_order_expr e new_typing Cfg.LocalVariableMap.empty
+    let (o, lvar_new_typing) =
+      find_bitvec_order_expr
+        e
+        new_typing.repr_info_var
+        new_typing.repr_info_local_var
+        old_typing
+    in
+    (o, {new_typing with repr_info_local_var = lvar_new_typing})
   | Cfg.TableVar (size, def) -> begin match def with
       | Cfg.IndexGeneric e ->
-        find_bitvec_order_expr e new_typing Cfg.LocalVariableMap.empty
-      | Cfg.IndexTable es ->
-        let orders =
-          Cfg.IndexMap.map (fun e ->
-              find_bitvec_order_expr e new_typing Cfg.LocalVariableMap.empty
-            ) es
+        let (o, lvar_new_typing) =
+          find_bitvec_order_expr
+            e
+            new_typing.repr_info_var
+            new_typing.repr_info_local_var
+            old_typing
         in
-        List.fold_left (fun acc (_, order) ->
-            max order acc
-          ) 1 (Cfg.IndexMap.bindings orders)
+        (o, {new_typing with repr_info_local_var = lvar_new_typing})
+      | Cfg.IndexTable es ->
+        let (orders, new_typing) =
+          Cfg.IndexMap.fold (fun i e (acc, new_typing) ->
+              let (o, lvar_new_typing) =
+                find_bitvec_order_expr
+                  e
+                  new_typing.repr_info_var
+                  new_typing.repr_info_local_var
+                  old_typing
+              in
+              (
+                Cfg.IndexMap.add i o acc,
+                {new_typing with repr_info_local_var = lvar_new_typing}
+              )
+            ) es (Cfg.IndexMap.empty, new_typing)
+        in
+        (List.fold_left (fun acc (_, order) ->
+             max order acc
+           ) 1 (Cfg.IndexMap.bindings orders), new_typing)
     end
 
 let find_bitvec_repr
     (p: Cfg.program)
     (dep_graph : Dependency.DepGraph.t)
-    (old_typing: Cfg.typ Cfg.VariableMap.t)
-  : repr Cfg.VariableMap.t =
+    (old_typing: Typechecker.typ_info)
+  : repr_info =
   let vars =
     Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
   in
@@ -110,13 +162,23 @@ let find_bitvec_repr
     The variables are ordered starting from the input and by usage so when we find
     a variable B in the definition of A then B should already have been processed.
   *)
-  List.fold_left (fun new_typing var ->
-      match Cfg.VariableMap.find var old_typing with
-      | Cfg.Boolean -> Cfg.VariableMap.add var Boolean new_typing
+  List.fold_left (fun (new_typing : repr_info) var ->
+      match Cfg.VariableMap.find var old_typing.Typechecker.typ_info_var with
+      | Cfg.Boolean ->
+        {new_typing with
+         repr_info_var =
+           Cfg.VariableMap.add var Boolean new_typing.repr_info_var }
       | Cfg.Integer ->
-        let bitvec_order = find_bitvec_order p var new_typing in
-        Cfg.VariableMap.add var (Integer bitvec_order) new_typing
+        let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
+        {new_typing with
+         repr_info_var =
+           Cfg.VariableMap.add var (Integer bitvec_order) new_typing.repr_info_var }
       | Cfg.Real ->
-        let bitvec_order = find_bitvec_order p var new_typing in
-        Cfg.VariableMap.add var (Real bitvec_order) new_typing
-    ) Cfg.VariableMap.empty vars
+        let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
+        {new_typing with
+         repr_info_var =
+           Cfg.VariableMap.add var (Real bitvec_order) new_typing.repr_info_var }
+    ) {
+    repr_info_var = Cfg.VariableMap.empty ;
+    repr_info_local_var = Cfg.LocalVariableMap.empty;
+  } vars

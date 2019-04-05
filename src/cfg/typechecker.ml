@@ -125,6 +125,11 @@ type ctx = {
   ctx_local_var_typ: Typ.t LocalVariableMap.t;
 }
 
+type typ_info = {
+  typ_info_var : Cfg.typ Cfg.VariableMap.t;
+  typ_info_local_var : Cfg.typ Cfg.LocalVariableMap.t
+}
+
 let rec typecheck_top_down
     (ctx: ctx)
     (e: expression Ast.marked)
@@ -481,8 +486,8 @@ let determine_def_complete_cover (size: int) (defs: int list) : bool =
     ) defs;
   Array.for_all (fun def -> def) defs_array
 
-let typecheck (p: program) : typ VariableMap.t =
-  let (types, _) = Cfg.VariableMap.fold (fun var def (acc, ctx) ->
+let typecheck (p: program) : typ_info =
+  let (types, ctx) = Cfg.VariableMap.fold (fun var def (acc, ctx) ->
       match def.var_typ with
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
@@ -566,4 +571,7 @@ let typecheck (p: program) : typ VariableMap.t =
            ctx_local_var_typ = LocalVariableMap.empty;
          })
   in
-  VariableMap.map (fun t -> Typ.to_concrete t) types
+  {
+    typ_info_var = VariableMap.map (fun t -> Typ.to_concrete t) types;
+    typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
+  }

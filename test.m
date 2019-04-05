@@ -19,7 +19,7 @@ X2 = 3;
 X3 = X2 + 3;
 
 pour i=4..5:
-Xi = Z + 45;
+Xi = si Z > 2 alors 42 sinon 1 finsi;
 
 X6 = X8;
 X7 = X8;
