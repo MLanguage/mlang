@@ -153,6 +153,7 @@ let inline_vars
     (typing: Typechecker.typ_info)
     (p: program)
   : program * Typechecker.typ_info =
+  lvar_mapping := LocalVariableMap.empty;
   let new_program = VariableMap.fold (fun var def acc ->
       if VariableMap.mem var inlined_vars then
         acc
@@ -175,7 +176,6 @@ let inline_vars
   let new_typing =
     { typing with
       Typechecker.typ_info_local_var = LocalVariableMap.mapi (fun new_lvar old_lvar ->
-          Printf.printf "Searching for t%d\n" (new_lvar.LocalVariable.id);
           LocalVariableMap.find old_lvar typing.Typechecker.typ_info_local_var
         ) !lvar_mapping
     }

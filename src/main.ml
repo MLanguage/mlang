@@ -109,6 +109,7 @@ let main () =
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
     let program : Cfg.program ref = ref program in
     let typing_info : Typechecker.typ_info ref = ref typing_info in
+    Cli.debug_print (Printf.sprintf "The program so far:\n%s" (Format_cfg.format_program !program));
     let nb_inlined_vars : int ref = ref max_int in
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
