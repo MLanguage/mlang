@@ -33,21 +33,21 @@ knowledge of the CeCILL-B license and that you accept its terms.
 
 let bv_repr_ints_base = 20
 
-let declare_var (var: Cfg.Variable.t) (typ: Cfg.typ) (ctx: Z3.context) : Z3.Expr.expr =
+let declare_var (var: Cfg.Variable.t) (typ: Z3_repr.repr) (ctx: Z3.context) : Z3.Expr.expr =
   match typ with
-  | Cfg.Boolean ->
+  | Z3_repr.Boolean ->
     Z3.Boolean.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name)
-  | Cfg.Integer ->
-    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) bv_repr_ints_base
-  | Cfg.Real ->
-    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) bv_repr_ints_base
+  | Z3_repr.Integer o ->
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) (bv_repr_ints_base * o)
+  | Z3_repr.Real o ->
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) (bv_repr_ints_base * o)
 
 let translate_program
     (p: Cfg.program)
-    (typing: Cfg.typ Cfg.VariableMap.t)
+    (typing: Z3_repr.repr Cfg.VariableMap.t)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
-  : (Z3.Expr.expr * Cfg.typ) Cfg.VariableMap.t =
+  : (Z3.Expr.expr * Z3_repr.repr) Cfg.VariableMap.t =
   (* first we declare to Z3 all the variables *)
   let z3_vars = Cfg.VariableMap.mapi (fun var typ ->
       try

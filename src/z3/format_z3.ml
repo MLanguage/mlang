@@ -31,22 +31,27 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-B license and that you accept its terms.
 *)
 
-let format_z3_program (p: (Z3.Expr.expr * Cfg.typ) Cfg.VariableMap.t) (s: Z3.Solver.solver) : string =
+let format_z3_repr (t: Z3_repr.repr) : string = match t with
+  | Z3_repr.Integer _ -> Format_cfg.format_typ Cfg.Integer
+  | Z3_repr.Real _ -> Format_cfg.format_typ Cfg.Real
+  | Z3_repr.Boolean -> Format_cfg.format_typ Cfg.Boolean
+
+let format_z3_program (p: (Z3.Expr.expr * Z3_repr.repr) Cfg.VariableMap.t) (s: Z3.Solver.solver) : string =
   match Z3.Solver.get_model s with
   | Some model ->
     let l = Cfg.VariableMap.fold (fun var (e, typ) acc ->
         (Ast.unmark var.Cfg.Variable.name, begin match Z3.Model.eval model e true with
             | Some new_e -> begin match typ with
-                | Cfg.Integer -> string_of_int (Z3.BitVector.get_int new_e)
-                | Cfg.Real -> string_of_int (Z3.BitVector.get_int new_e)
-                | Cfg.Boolean -> (match Z3.Boolean.get_bool_value new_e with
+                | Z3_repr.Integer _ -> string_of_int (Z3.BitVector.get_int new_e)
+                | Z3_repr.Real _ -> string_of_float ((float_of_int (Z3.BitVector.get_int new_e)) /. 100.0)
+                | Z3_repr.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                     | Z3enums.L_FALSE -> "false"
                     | Z3enums.L_TRUE -> "true"
                     | Z3enums.L_UNDEF -> "undefined boolean"
                   )
               end
             | None -> "could not evaluate variable" end,
-         Format_cfg.format_typ typ
+         format_z3_repr typ
         )::acc
       ) p []
     in

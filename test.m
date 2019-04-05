@@ -25,6 +25,6 @@ X6 = X8;
 X7 = X8;
 X8 = Z;
 
-X9 = abs(X4);
+X9 = somme(i=1..8:Xi);
 Y[0] = X9;
 Y[X] = 3*X - Z + X9 / 6;

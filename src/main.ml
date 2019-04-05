@@ -95,7 +95,6 @@ let main () =
     let program = Ast_to_cfg.translate !program in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
-    typing_info;
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
@@ -136,6 +135,7 @@ let main () =
     let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
     let ctx = (Z3.mk_context cfg) in
     let s = Z3.Solver.mk_solver ctx None in
+    let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
     let z3_program = Cfg_to_z3.translate_program program typing_info ctx s in
     match Z3.Solver.check s [] with
     | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"
