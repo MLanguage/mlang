@@ -31,40 +31,37 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-B license and that you accept its terms.
 *)
 
-(** Command-line interface helpers *)
-
-let source_files : string list ref = ref []
-let dep_graph_file : string ref = ref "dep_graph"
-let verify_flag = ref false
-let debug_flag = ref false
-
-let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
-let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "
-let warning_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.yellow] "[WARNING] "
-let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.green] "[RESULT] "
-
-let debug_print (s: string) =
-  if !debug_flag then begin
-    debug_marker ();
-    Printf.printf "%s\n" s;
-    flush stdout;
-    flush stdout
-  end
-
-let error_print (s: string) =
-  error_marker ();
-  Printf.eprintf "%s\n" s;
-  flush stdout;
-  flush stdout
-
-let warning_print (s: string) =
-  warning_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
-
-let result_print (s: string) =
-  result_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
+let format_z3_program (p: (Z3.Expr.expr * Cfg.typ) Cfg.VariableMap.t) (s: Z3.Solver.solver) : string =
+  match Z3.Solver.get_model s with
+  | Some model ->
+    let l = Cfg.VariableMap.fold (fun var (e, typ) acc ->
+        (Ast.unmark var.Cfg.Variable.name, begin match Z3.Model.eval model e true with
+            | Some new_e -> begin match typ with
+                | Cfg.Integer -> string_of_int (Z3.BitVector.get_int new_e)
+                | Cfg.Real -> string_of_int (Z3.BitVector.get_int new_e)
+                | Cfg.Boolean -> (match Z3.Boolean.get_bool_value new_e with
+                    | Z3enums.L_FALSE -> "false"
+                    | Z3enums.L_TRUE -> "true"
+                    | Z3enums.L_UNDEF -> "undefined boolean"
+                  )
+              end
+            | None -> "could not evaluate variable" end,
+         Format_cfg.format_typ typ
+        )::acc
+      ) p []
+    in
+    "{\n"^
+    (String.concat
+       "\n"
+       (List.map
+          (fun (n, v, t) ->
+             Printf.sprintf
+               "\"%s\" : { \"value\" : \"%s\", \"type\": \"%s\" }"
+               n
+               v
+               t
+          )
+          l
+       ))
+    ^ "\n}\n"
+  | None -> "model not available"

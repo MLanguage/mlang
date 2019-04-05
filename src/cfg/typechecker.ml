@@ -510,7 +510,7 @@ let typecheck (p: program) : typ VariableMap.t =
                         )))
             end
           | InputVar ->
-            (acc, ctx)
+            (VariableMap.add var (Typ.create_concrete t) acc, ctx)
         end
       | None -> begin match def.var_definition with
           | SimpleVar e ->
@@ -548,7 +548,10 @@ let typecheck (p: program) : typ VariableMap.t =
                         )))
             end
           | InputVar ->
-            (acc, ctx)
+            if VariableMap.mem var acc then
+              (acc, ctx)
+            else
+              (VariableMap.add var (Typ.create_variable ()) acc, ctx)
         end
     ) p (Cfg.VariableMap.empty,
          { ctx_program = p;

@@ -63,7 +63,7 @@ let main () =
         else if source_file <> "" then
           (Lexing.from_string source_file, None)
         else
-          failwith "Il faut spécifier un fichier !"
+          failwith "You have to specify at least one file!"
       in
       Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
       let filebuf = {filebuf with
@@ -95,7 +95,7 @@ let main () =
     let program = Ast_to_cfg.translate !program in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
-    ignore (typing_info);
+    typing_info;
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
@@ -132,7 +132,20 @@ let main () =
          (Cfg.VariableMap.cardinal program));
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph;
-    ignore program
+    Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
+    let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
+    let ctx = (Z3.mk_context cfg) in
+    let s = Z3.Solver.mk_solver ctx None in
+    let z3_program = Cfg_to_z3.translate_program program typing_info ctx s in
+    match Z3.Solver.check s [] with
+    | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"
+    | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."
+    | Z3.Solver.SATISFIABLE ->
+      Cli.result_print "Z3 found an answer!";
+      let filename = "results.json" in
+      Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
+      let file = open_out filename in
+      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program s)
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1

@@ -47,13 +47,17 @@ OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc
 ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
 GRAPH_FOLDER = $(shell ocamlfind query ocamlgraph)
+Z3_FOLDER = $(shell ocamlfind query z3)
 OCAML_INCLUDES = \
 	-I _build/src \
 	-I _build/src/parsing \
 	-I _build/src/cfg \
 	-I _build/src/analysis \
+	-I _build/src/optimization \
+	-I _build/src/z3 \
 	-I $(ANSI_FOLDER) \
 	-I $(GRAPH_FOLDER) \
+	-I $(Z3_FOLDER)
 
 doc:
 	mkdir -p $(DOC_FOLDER)

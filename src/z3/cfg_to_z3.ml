@@ -31,40 +31,28 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-B license and that you accept its terms.
 *)
 
-(** Command-line interface helpers *)
+let bv_repr_ints_base = 20
 
-let source_files : string list ref = ref []
-let dep_graph_file : string ref = ref "dep_graph"
-let verify_flag = ref false
-let debug_flag = ref false
+let declare_var (var: Cfg.Variable.t) (typ: Cfg.typ) (ctx: Z3.context) : Z3.Expr.expr =
+  match typ with
+  | Cfg.Boolean ->
+    Z3.Boolean.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name)
+  | Cfg.Integer ->
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) bv_repr_ints_base
+  | Cfg.Real ->
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Cfg.Variable.name) bv_repr_ints_base
 
-let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
-let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "
-let warning_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.yellow] "[WARNING] "
-let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.green] "[RESULT] "
-
-let debug_print (s: string) =
-  if !debug_flag then begin
-    debug_marker ();
-    Printf.printf "%s\n" s;
-    flush stdout;
-    flush stdout
-  end
-
-let error_print (s: string) =
-  error_marker ();
-  Printf.eprintf "%s\n" s;
-  flush stdout;
-  flush stdout
-
-let warning_print (s: string) =
-  warning_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
-
-let result_print (s: string) =
-  result_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
+let translate_program
+    (p: Cfg.program)
+    (typing: Cfg.typ Cfg.VariableMap.t)
+    (ctx: Z3.context)
+    (s: Z3.Solver.solver)
+  : (Z3.Expr.expr * Cfg.typ) Cfg.VariableMap.t =
+  (* first we declare to Z3 all the variables *)
+  let z3_vars = Cfg.VariableMap.mapi (fun var typ ->
+      try
+        (declare_var var typ ctx, typ)
+      with
+      | Not_found -> assert false (* should not happen *)
+    ) typing in
+  z3_vars
