@@ -108,6 +108,7 @@ let main () =
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
     let program : Cfg.program ref = ref program in
+    let typing_info : Typechecker.typ_info ref = ref typing_info in
     let nb_inlined_vars : int ref = ref max_int in
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
@@ -119,11 +120,15 @@ let main () =
       nb_inlined_vars := Cfg.VariableMap.cardinal to_inline_vars;
       if !nb_inlined_vars > 0 then begin
         Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
-        let new_program = Inlining.inline_vars to_inline_vars !program in
+        let (new_program, new_typing_info) =
+          Inlining.inline_vars to_inline_vars !typing_info !program
+        in
         program := new_program;
+        typing_info := new_typing_info;
       end
     done;
     let program = !program in
+    let typing_info = !typing_info in
     Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
     let program = Constant_propagation.partially_evaluate program in
     Cli.debug_print
@@ -137,15 +142,29 @@ let main () =
     let s = Z3.Solver.mk_solver ctx None in
     let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
     let z3_program = Cfg_to_z3.translate_program program typing_info ctx s in
+    let t0 = Sys.time () in
+    Cli.debug_print
+      (Printf.sprintf
+         "The Z3 query will contain %d different variables"
+         (Cfg.VariableMap.cardinal z3_program.Z3_repr.repr_data_var +
+          Cfg.LocalVariableMap.cardinal z3_program.Z3_repr.repr_data_local_var)
+      );
     match Z3.Solver.check s [] with
     | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"
     | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."
     | Z3.Solver.SATISFIABLE ->
+      let t1 = Sys.time () in
       Cli.result_print "Z3 found an answer!";
       let filename = "results.json" in
       Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
       let file = open_out filename in
-      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program s)
+      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_repr.repr_data_var s);
+      Cli.result_print
+        (Printf.sprintf
+           "The query took %f seconds to execute. Here are some statistics about it:\n%s"
+           (t1 -. t0)
+           (Z3.Statistics.to_string (Z3.Solver.get_statistics s))
+        )
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1

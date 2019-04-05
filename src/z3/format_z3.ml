@@ -57,11 +57,11 @@ let format_z3_program (p: (Z3.Expr.expr * Z3_repr.repr) Cfg.VariableMap.t) (s: Z
     in
     "{\n"^
     (String.concat
-       "\n"
+       ",\n"
        (List.map
           (fun (n, v, t) ->
              Printf.sprintf
-               "\"%s\" : { \"value\" : \"%s\", \"type\": \"%s\" }"
+               "  \"%s\" : { \"value\" : \"%s\", \"type\": \"%s\" }"
                n
                v
                t

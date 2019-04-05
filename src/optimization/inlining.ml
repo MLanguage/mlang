@@ -36,9 +36,17 @@ open Cfg
 type ctx = {
   ctx_generic_table_index: expression Ast.marked option;
   ctx_program : program;
+  ctx_lvar_mapping : LocalVariable.t LocalVariableMap.t
 }
 
-let empty_ctx (p: program) : ctx = { ctx_generic_table_index = None ; ctx_program = p;}
+let empty_ctx (p: program) : ctx = {
+  ctx_generic_table_index = None ;
+  ctx_program = p;
+  ctx_lvar_mapping = LocalVariableMap.empty
+}
+
+let lvar_mapping : LocalVariable.t Cfg.LocalVariableMap.t ref =
+  ref LocalVariableMap.empty
 
 let rec inline_vars_in_expr
     (ctx: ctx)
@@ -79,17 +87,23 @@ let rec inline_vars_in_expr
          (func,
           List.map (fun arg -> inline_vars_in_expr ctx inlined_vars arg) args
          )) e
-  | Literal _ | LocalVar _ | Error -> e
+  | Literal _ | Error -> e
   | GenericTableIndex -> begin match ctx.ctx_generic_table_index with
       | None -> e
       | Some gen_index -> gen_index
     end
   | LocalLet (lvar, e1, e2) ->
+    let new_lvar =  LocalVariable.new_var () in
+    let new_ctx =
+      { ctx with ctx_lvar_mapping =
+                   LocalVariableMap.add lvar new_lvar ctx.ctx_lvar_mapping }
+    in
+    lvar_mapping := LocalVariableMap.add new_lvar lvar !lvar_mapping;
     Ast.same_pos_as
       (LocalLet
-         (lvar,
+         (new_lvar,
           inline_vars_in_expr ctx inlined_vars e1,
-          inline_vars_in_expr ctx inlined_vars e2
+          inline_vars_in_expr new_ctx inlined_vars e2
          )) e
   | Var var -> if VariableMap.mem var inlined_vars then
       begin match (VariableMap.find var ctx.ctx_program).var_definition with
@@ -98,6 +112,8 @@ let rec inline_vars_in_expr
         | TableVar _ -> assert false (* should not happen *)
       end else
       e
+  | LocalVar lvar ->
+    Ast.same_pos_as (LocalVar (LocalVariableMap.find lvar ctx.ctx_lvar_mapping)) e
   | Index (var, index) ->
     let new_index = inline_vars_in_expr ctx inlined_vars index in
     if VariableMap.mem (Ast.unmark var) inlined_vars then
@@ -132,8 +148,12 @@ let rec inline_vars_in_expr
       e
 
 
-let inline_vars (inlined_vars:unit VariableMap.t) (p: program) : program =
-  VariableMap.fold (fun var def acc ->
+let inline_vars
+    (inlined_vars:unit VariableMap.t)
+    (typing: Typechecker.typ_info)
+    (p: program)
+  : program * Typechecker.typ_info =
+  let new_program = VariableMap.fold (fun var def acc ->
       if VariableMap.mem var inlined_vars then
         acc
       else begin
@@ -151,4 +171,13 @@ let inline_vars (inlined_vars:unit VariableMap.t) (p: program) : program =
         in
         VariableMap.add var { def with var_definition = new_def } acc
       end
-    ) p VariableMap.empty
+    ) p VariableMap.empty in
+  let new_typing =
+    { typing with
+      Typechecker.typ_info_local_var = LocalVariableMap.mapi (fun new_lvar old_lvar ->
+          Printf.printf "Searching for t%d\n" (new_lvar.LocalVariable.id);
+          LocalVariableMap.find old_lvar typing.Typechecker.typ_info_local_var
+        ) !lvar_mapping
+    }
+  in
+  (new_program, new_typing)

@@ -41,6 +41,11 @@ type repr_info = {
   repr_info_local_var : repr Cfg.LocalVariableMap.t
 }
 
+type repr_data = {
+  repr_data_var : (Z3.Expr.expr * repr) Cfg.VariableMap.t;
+  repr_data_local_var : (Z3.Expr.expr * repr) Cfg.LocalVariableMap.t
+}
+
 let rec find_bitvec_order_expr
     (e: Cfg.expression Ast.marked)
     (new_typing: repr Cfg.VariableMap.t)
@@ -48,6 +53,8 @@ let rec find_bitvec_order_expr
     (old_typing: Typechecker.typ_info)
   : (int * repr Cfg.LocalVariableMap.t) = match Ast.unmark e with
   | Cfg.Comparison _ -> (1, lvar_typing)
+  | Cfg.Binop (((Ast.And, _) | (Ast.Or, _)), _, _) ->
+    (1, lvar_typing)
   | Cfg.Binop (((Ast.Add, _) | (Ast.Sub, _)), e1, e2)
   | Cfg.Conditional (_, e1, e2)  ->
     let (o1, lvar_typing) =
