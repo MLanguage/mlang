@@ -125,8 +125,10 @@ type ctx = {
   ctx_local_var_typ: Typ.t LocalVariableMap.t;
 }
 
+
+
 type typ_info = {
-  typ_info_var : Cfg.typ Cfg.VariableMap.t;
+  typ_info_var : (Cfg.typ * bool) Cfg.VariableMap.t; (* the bool flag is_table *)
   typ_info_local_var : Cfg.typ Cfg.LocalVariableMap.t
 }
 
@@ -492,11 +494,11 @@ let typecheck (p: program) : typ_info =
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
             let new_ctx = typecheck_top_down ctx e t in
-            (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
+            (VariableMap.add var (Typ.create_concrete t, false) acc, new_ctx)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let new_ctx = typecheck_top_down ctx e t in
-                (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
+                (VariableMap.add var (Typ.create_concrete t, true) acc, new_ctx)
               | IndexTable es ->
                 let new_ctx = IndexMap.fold (fun _ e ctx ->
                     let new_ctx = typecheck_top_down ctx e t in
@@ -505,7 +507,7 @@ let typecheck (p: program) : typ_info =
                 if determine_def_complete_cover size
                     (List.map (fun (x,_) -> x) (IndexMap.bindings es))
                 then
-                  (VariableMap.add var (Typ.create_concrete t) acc, new_ctx)
+                  (VariableMap.add var (Typ.create_concrete t, true) acc, new_ctx)
                 else
                   raise (Errors.TypeError (
                       Errors.Variable
@@ -515,16 +517,16 @@ let typecheck (p: program) : typ_info =
                         )))
             end
           | InputVar ->
-            (VariableMap.add var (Typ.create_concrete t) acc, ctx)
+            (VariableMap.add var (Typ.create_concrete t, false) acc, ctx)
         end
       | None -> begin match def.var_definition with
           | SimpleVar e ->
             let (new_ctx, t) = typecheck_bottom_up ctx e in
-            (VariableMap.add var t acc, new_ctx)
+            (VariableMap.add var (t, false) acc, new_ctx)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let (new_ctx, t) = typecheck_bottom_up ctx e in
-                (VariableMap.add var t acc, new_ctx)
+                (VariableMap.add var (t, true) acc, new_ctx)
               | IndexTable es ->
                 let (new_ctx, t) = IndexMap.fold (fun _ e (ctx, old_t) ->
                     let (new_ctx, t) = typecheck_bottom_up ctx e in
@@ -543,7 +545,7 @@ let typecheck (p: program) : typ_info =
                 if determine_def_complete_cover size
                     (List.map (fun (x,_) -> x) (IndexMap.bindings es))
                 then
-                  (VariableMap.add var t acc, new_ctx)
+                  (VariableMap.add var (t, true) acc, new_ctx)
                 else
                   raise (Errors.TypeError (
                       Errors.Variable
@@ -556,7 +558,7 @@ let typecheck (p: program) : typ_info =
             if VariableMap.mem var acc then
               (acc, ctx)
             else
-              (VariableMap.add var (Typ.create_variable ()) acc, ctx)
+              (VariableMap.add var (Typ.create_variable (), false) acc, ctx)
         end
     ) p (Cfg.VariableMap.empty,
          { ctx_program = p;
@@ -572,6 +574,6 @@ let typecheck (p: program) : typ_info =
          })
   in
   {
-    typ_info_var = VariableMap.map (fun t -> Typ.to_concrete t) types;
+    typ_info_var = VariableMap.map (fun (t, is_table) -> (Typ.to_concrete t, is_table)) types;
     typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
   }

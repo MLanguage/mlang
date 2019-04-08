@@ -30,19 +30,6 @@
 # knowledge of the CeCILL-B license and that you accept its terms.
 
 SOURCE_DIR=calculette-impots-m-source-code/sources-latin1/sourcesm2015m_4_6
-
-deps:
-	opam install ppx_deriving ANSITerminal str ocamlgraph z3
-
-build:
-	ocamlbuild -use-ocamlfind src/main.native
-
-test: build
-		./main.native --debug test.m
-
-parse_all: build
-		./main.native $(wildcard $(SOURCE_DIR)/*.m) --debug
-
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc
 ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
@@ -58,6 +45,20 @@ OCAML_INCLUDES = \
 	-I $(ANSI_FOLDER) \
 	-I $(GRAPH_FOLDER) \
 	-I $(Z3_FOLDER)
+
+
+deps:
+	opam install ppx_deriving ANSITerminal str ocamlgraph z3
+
+build:
+	ocamlbuild -use-ocamlfind src/main.native
+
+test: build
+	  export LD_LIBRARY_PATH=$(Z3_FOLDER)
+		./main.native --debug test.m
+
+parse_all: build
+		./main.native $(wildcard $(SOURCE_DIR)/*.m) --debug
 
 doc:
 	mkdir -p $(DOC_FOLDER)

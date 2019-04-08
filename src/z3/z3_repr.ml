@@ -31,20 +31,28 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-B license and that you accept its terms.
 *)
 
-type repr =
+type repr_kind =
   | Integer of int
   | Real of int
   | Boolean
+
+type repr = { repr_kind: repr_kind; is_table: bool }
 
 type repr_info = {
   repr_info_var : repr Cfg.VariableMap.t;
   repr_info_local_var : repr Cfg.LocalVariableMap.t
 }
 
+type var_repr =
+  | Regular of Z3.Expr.expr
+  | Table of (Z3.Expr.expr -> Z3.Expr.expr)
+
+
 type repr_data = {
-  repr_data_var : (Z3.Expr.expr * repr) Cfg.VariableMap.t;
-  repr_data_local_var : (Z3.Expr.expr * repr) Cfg.LocalVariableMap.t
+  repr_data_var : (var_repr * repr) Cfg.VariableMap.t;
+  repr_data_local_var : (var_repr * repr) Cfg.LocalVariableMap.t
 }
+
 
 let rec find_bitvec_order_expr
     (e: Cfg.expression Ast.marked)
@@ -75,7 +83,7 @@ let rec find_bitvec_order_expr
   | Cfg.Unop (_, e1) ->
     find_bitvec_order_expr e1 new_typing lvar_typing old_typing
   | Cfg.Index ((var, _), _) | Cfg.Var var ->
-    begin try match Cfg.VariableMap.find var new_typing with
+    begin try match (Cfg.VariableMap.find var new_typing).repr_kind with
       | Boolean -> (1, lvar_typing)
       | Integer o | Real o -> (o, lvar_typing)
       with
@@ -86,7 +94,7 @@ let rec find_bitvec_order_expr
     find_bitvec_order_expr arg new_typing lvar_typing old_typing
   | Cfg.Literal _ -> (1, lvar_typing)
   | Cfg.LocalVar lvar ->
-    begin try match  Cfg.LocalVariableMap.find lvar lvar_typing with
+    begin try match  (Cfg.LocalVariableMap.find lvar lvar_typing).repr_kind with
       | Boolean -> (1, lvar_typing)
       | Integer o | Real o -> (o, lvar_typing)
       with
@@ -99,10 +107,14 @@ let rec find_bitvec_order_expr
       find_bitvec_order_expr e1 new_typing lvar_typing old_typing
     in
     let lvar_repr =
-      match Cfg.LocalVariableMap.find lvar old_typing.Typechecker.typ_info_local_var with
-      | Cfg.Boolean -> Boolean
-      | Cfg.Integer -> Integer o1
-      | Cfg.Real -> Real o1
+      { repr_kind =
+          begin match Cfg.LocalVariableMap.find lvar old_typing.Typechecker.typ_info_local_var with
+            | Cfg.Boolean -> Boolean
+            | Cfg.Integer -> Integer o1
+            | Cfg.Real -> Real o1
+          end;
+        is_table = false
+      }
     in
     let lvar_typing = Cfg.LocalVariableMap.add lvar lvar_repr lvar_typing in
     find_bitvec_order_expr e2 new_typing lvar_typing old_typing
@@ -171,20 +183,23 @@ let find_bitvec_repr
   *)
   List.fold_left (fun (new_typing : repr_info) var ->
       match Cfg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-      | Cfg.Boolean ->
+      | (Cfg.Boolean, is_table) ->
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var Boolean new_typing.repr_info_var }
-      | Cfg.Integer ->
+           Cfg.VariableMap.add var { repr_kind = Boolean; is_table }
+             new_typing.repr_info_var }
+      | (Cfg.Integer, is_table) ->
         let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var (Integer bitvec_order) new_typing.repr_info_var }
-      | Cfg.Real ->
+           Cfg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
+             new_typing.repr_info_var }
+      | (Cfg.Real, is_table) ->
         let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var (Real bitvec_order) new_typing.repr_info_var }
+           Cfg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
+             new_typing.repr_info_var }
     ) {
     repr_info_var = Cfg.VariableMap.empty ;
     repr_info_local_var = Cfg.LocalVariableMap.empty;

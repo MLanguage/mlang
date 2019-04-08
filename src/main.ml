@@ -109,7 +109,6 @@ let main () =
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
     let program : Cfg.program ref = ref program in
     let typing_info : Typechecker.typ_info ref = ref typing_info in
-    Cli.debug_print (Printf.sprintf "The program so far:\n%s" (Format_cfg.format_program !program));
     let nb_inlined_vars : int ref = ref max_int in
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
@@ -137,12 +136,13 @@ let main () =
          (Cfg.VariableMap.cardinal program));
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph;
+    Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_cfg.format_program program));
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
     let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
     let ctx = (Z3.mk_context cfg) in
     let s = Z3.Solver.mk_solver ctx None in
     let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
-    let z3_program = Cfg_to_z3.translate_program program typing_info ctx s in
+    let z3_program = Cfg_to_z3.translate_program program dep_graph typing_info ctx s in
     let t0 = Sys.time () in
     Cli.debug_print
       (Printf.sprintf
@@ -159,7 +159,7 @@ let main () =
       let filename = "results.json" in
       Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
       let file = open_out filename in
-      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_repr.repr_data_var s);
+      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_repr.repr_data_var ctx s);
       Cli.result_print
         (Printf.sprintf
            "The query took %f seconds to execute. Here are some statistics about it:\n%s"
