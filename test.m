@@ -8,9 +8,11 @@ X6 : calculee : "UNKNOWN" type ENTIER;
 X7 : calculee : "UNKNOWN" type ENTIER;
 X8 : calculee : "UNKNOWN" type ENTIER;
 X9 : calculee : "UNKNOWN" type ENTIER;
+X10 : calculee : "UNKNOWN" type ENTIER;
 Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
 sortie (X9);
 sortie (Y);
+sortie (X10);
 
 
 regle 1:
@@ -29,3 +31,5 @@ X8 = Z;
 X9 = somme(i=1..8:Xi);
 Y[0] = X9;
 Y[X] = 3*X - Z + X9 / 6;
+
+X10 = Y[5];

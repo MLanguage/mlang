@@ -59,6 +59,15 @@ let declare_local_var (var: Cfg.LocalVariable.t) (typ: Z3_repr.repr) (ctx: Z3.co
 let int_const i ctx : Z3.Expr.expr =
   Z3.BitVector.mk_numeral ctx (string_of_int i) bv_repr_ints_base
 
+let dummy_param ctx typ =
+  match typ.Z3_repr.repr_kind with
+  | Z3_repr.Boolean ->
+    Z3.Boolean.mk_true ctx
+  | Z3_repr.Integer o ->
+    Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
+  | Z3_repr.Real o ->
+    Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
+
 let bool_const b ctx : Z3.Expr.expr =
   if b then
     Z3.Boolean.mk_true ctx
@@ -67,6 +76,24 @@ let bool_const b ctx : Z3.Expr.expr =
 
 let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
+
+let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3.Expr.expr * Z3.Expr.expr =
+  let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
+  let s2 = Z3.BitVector.get_size (Z3.Expr.get_sort e2) in
+  if s1 = s2 then
+    (e1, e2)
+  else if s1 < s2 then
+    (Z3.BitVector.mk_concat ctx
+       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
+       e1,
+     e2
+    )
+  else
+    (e1,
+     Z3.BitVector.mk_concat ctx
+       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
+       e2
+    )
 
 
 let rec translate_expression
@@ -80,14 +107,15 @@ let rec translate_expression
     | Cfg.Comparison (op, e1, e2) ->
       let z3_e1 = translate_expression repr_data e1 ctx s in
       let z3_e2 = translate_expression repr_data e2 ctx s in
+      let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
       begin match Ast.unmark op with
-        | Ast.Gt -> Z3.BitVector.mk_sgt ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Gte -> Z3.BitVector.mk_sge ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Lt -> Z3.BitVector.mk_slt ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Lte -> Z3.BitVector.mk_sle ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Eq -> Z3.Boolean.mk_eq ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+        | Ast.Gt -> Z3.BitVector.mk_sgt ctx z3_e1 z3_e2
+        | Ast.Gte -> Z3.BitVector.mk_sge ctx z3_e1 z3_e2
+        | Ast.Lt -> Z3.BitVector.mk_slt ctx z3_e1 z3_e2
+        | Ast.Lte -> Z3.BitVector.mk_sle ctx z3_e1 z3_e2
+        | Ast.Eq -> Z3.Boolean.mk_eq ctx z3_e1 z3_e2
         | Ast.Neq ->
-          Z3.Boolean.mk_not ctx (Z3.Boolean.mk_eq ctx (z3_e1 orig_arg) (z3_e2 orig_arg))
+          Z3.Boolean.mk_not ctx (Z3.Boolean.mk_eq ctx z3_e1 z3_e2)
       end
     | Cfg.Binop (op, e1, e2) ->
       let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -106,8 +134,14 @@ let rec translate_expression
         | Ast.Not -> Z3.Boolean.mk_not ctx (z3_e1 orig_arg)
         | Ast.Minus -> Z3.BitVector.mk_sub ctx (int_const 0 ctx) (z3_e1 orig_arg)
       end
-    | Cfg.Index (var, index) ->
-      assert false (* TODO: implement *)
+    | Cfg.Index ((var, _), index) ->
+      let (z3_var , _) = Cfg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
+      let z3_index = translate_expression repr_data index ctx s in
+      begin match z3_var with
+        | Z3_repr.Table z3_var ->
+          z3_var (z3_index orig_arg)
+        | _ -> assert false (* should not happen *)
+      end
     | Cfg.LocalLet (lvar1, (Cfg.Conditional (e1, e2, e3), _), (Cfg.LocalVar lvar2, _))
       when lvar1 = lvar2 ->
       let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -155,7 +189,7 @@ let rec translate_expression
           z3_lvar
         | _ -> assert false (* should not happen *)
       end
-    | Cfg.GenericTableIndex -> assert false (* TODO: implement *)
+    | Cfg.GenericTableIndex -> orig_arg
     | Cfg.Error -> error_const ctx
     | Cfg.LocalLet (lvar, e1, e2) ->
       let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -177,12 +211,6 @@ let translate_program
     (s: Z3.Solver.solver)
   : Z3_repr.repr_data =
   (* first we declare to Z3 all the local variables *)
-  (*let z3_vars = Cfg.VariableMap.mapi (fun var typ ->
-      try
-        (declare_var var typ ctx, typ)
-      with
-      | Not_found -> assert false (* should not happen *)
-    ) typing.Z3_repr.repr_info_var in*)
   let z3_local_vars =  Cfg.LocalVariableMap.mapi (fun lvar typ ->
       try
         (declare_local_var lvar typ ctx, typ)
@@ -197,9 +225,9 @@ let translate_program
     Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
   in
   let repr_data = List.fold_left (fun repr_data var ->
-      Printf.printf "Translating %s !\n" (Ast.unmark var.Cfg.Variable.name);
       let def = Cfg.VariableMap.find var p in
       let typ = Cfg.VariableMap.find var typing.Z3_repr.repr_info_var in
+      Printf.printf "Coucou %s\n" (Ast.unmark var.Cfg.Variable.name);
       match def.Cfg.var_definition with
       | Cfg.InputVar ->
         { repr_data with
@@ -212,7 +240,9 @@ let translate_program
       | Cfg.SimpleVar e ->
         let z3_e = translate_expression repr_data e ctx s in
         let z3_var = declare_var_not_table var typ ctx in
-        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var (z3_e (int_const 0 ctx))];
+        Printf.printf "z3_var: %s\n" (Z3.Expr.to_string z3_var);
+        Printf.printf "z3_e: %s\n" (Z3.Expr.to_string (z3_e (dummy_param ctx typ)));
+        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var (z3_e (dummy_param ctx typ))];
         { repr_data with
           Z3_repr.repr_data_var =
             Cfg.VariableMap.add
@@ -222,7 +252,14 @@ let translate_program
         }
       | Cfg.TableVar (size, def) -> begin match def with
           | Cfg.IndexGeneric e ->
-            (repr_data) (* TODO: implement *)
+            let z3_e = translate_expression repr_data e ctx s in
+            { repr_data with
+              Z3_repr.repr_data_var =
+                Cfg.VariableMap.add
+                  var
+                  (Z3_repr.Table z3_e, typ)
+                  repr_data.Z3_repr.repr_data_var
+            }
           | Cfg.IndexTable es ->
             (repr_data) (* TODO: implement *)
         end

@@ -268,6 +268,30 @@ let rec typecheck_top_down
               )))
     end
   | (GenericTableIndex, Integer) -> ctx
+  | (Index ((var, var_pos), e'), t) ->
+    let ctx = typecheck_top_down ctx e' Integer in
+    let var_data = VariableMap.find var ctx.ctx_program in
+    begin match var_data.Cfg.var_definition with
+      | SimpleVar _ | InputVar ->
+        raise (Errors.TypeError
+                 (Errors.Typing
+                    (Printf.sprintf "variable %s is accessed %s as a table but it is not defined as one %s"
+                       (Ast.unmark var.Variable.name)
+                       (Format_ast.format_position var_pos)
+                       (Format_ast.format_position (Ast.get_position var.Variable.name))
+                    )))
+      | TableVar _ ->
+        begin try Typ.unify (VariableMap.find var ctx.ctx_var_typ)  (Typ.create_concrete t); ctx with
+          | Typ.UnificationError (t_msg, _) ->
+            raise (Errors.TypeError (
+                Errors.Typing
+                  (Printf.sprintf "expression %s has type %s but should be %s"
+                     (Format_ast.format_position (Ast.get_position e))
+                     t_msg
+                     (Format_cfg.format_typ t)
+                  )))
+        end
+    end
   | _ -> raise (Errors.TypeError (
       Errors.Typing
         (Printf.sprintf "expression %s (%s) should be of type %s, but is of type %s"

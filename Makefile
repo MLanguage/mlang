@@ -51,7 +51,7 @@ deps:
 	opam install ppx_deriving ANSITerminal str ocamlgraph z3
 
 build:
-	ocamlbuild -use-ocamlfind src/main.native
+	ocamlbuild -cflag -g -use-ocamlfind src/main.native
 
 test: build
 	  export LD_LIBRARY_PATH=$(Z3_FOLDER)
