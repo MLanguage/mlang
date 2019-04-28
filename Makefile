@@ -3,9 +3,9 @@
 # This software is a computer program whose purpose is to compile and analyze
 # programs written in the M langage, created by thge DGFiP.
 #
-# This software is governed by the CeCILL-B license under French law and
+# This software is governed by the CeCILL-C license under French law and
 # abiding by the rules of distribution of free software.  You can  use,
-# modify and/ or redistribute the software under the terms of the CeCILL-B
+# modify and/ or redistribute the software under the terms of the CeCILL-C
 # license as circulated by CEA, CNRS and INRIA at the following URL
 # http://www.cecill.info.
 #
@@ -27,7 +27,7 @@
 # same conditions as regards security.
 #
 # The fact that you are presently reading this means that you have had
-# knowledge of the CeCILL-B license and that you accept its terms.
+# knowledge of the CeCILL-C license and that you accept its terms.
 
 SOURCE_DIR=calculette-impots-m-source-code/sources-latin1/sourcesm2015m_4_6
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
