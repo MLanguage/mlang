@@ -46,6 +46,7 @@ OCAML_INCLUDES = \
 	-I $(GRAPH_FOLDER) \
 	-I $(Z3_FOLDER)
 
+export LD_LIBRARY_PATH=$(Z3_FOLDER)
 
 deps:
 	opam install ppx_deriving ANSITerminal str ocamlgraph z3
@@ -54,7 +55,6 @@ build:
 	ocamlbuild -cflag -g -use-ocamlfind src/main.native
 
 test: build
-	  export LD_LIBRARY_PATH=$(Z3_FOLDER)
 		./main.native --debug test.m
 
 parse_all: build

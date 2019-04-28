@@ -52,8 +52,8 @@ let format_z3_program
         | Z3_repr.Regular e ->
           (Ast.unmark var.Cfg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e -> begin match typ.Z3_repr.repr_kind with
-                  | Z3_repr.Integer _ -> string_of_int (Z3.BitVector.get_int new_e)
-                  | Z3_repr.Real _ -> string_of_float ((float_of_int (Z3.BitVector.get_int new_e)) /. 100.0)
+                  | Z3_repr.Integer _ -> Big_int.string_of_big_int (Z3.Arithmetic.Integer.get_big_int new_e)
+                  | Z3_repr.Real _ -> string_of_float ((Big_int.float_of_big_int (Z3.Arithmetic.Integer.get_big_int new_e)) /. 100.0)
                   | Z3_repr.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                       | Z3enums.L_FALSE -> "false"
                       | Z3enums.L_TRUE -> "true"

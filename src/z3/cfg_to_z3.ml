@@ -103,104 +103,104 @@ let rec translate_expression
     (s: Z3.Solver.solver)
   : Z3.Expr.expr -> Z3.Expr.expr =
   fun orig_arg ->
-    match Ast.unmark e with
-    | Cfg.Comparison (op, e1, e2) ->
-      let z3_e1 = translate_expression repr_data e1 ctx s in
-      let z3_e2 = translate_expression repr_data e2 ctx s in
-      let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
-      begin match Ast.unmark op with
-        | Ast.Gt -> Z3.BitVector.mk_sgt ctx z3_e1 z3_e2
-        | Ast.Gte -> Z3.BitVector.mk_sge ctx z3_e1 z3_e2
-        | Ast.Lt -> Z3.BitVector.mk_slt ctx z3_e1 z3_e2
-        | Ast.Lte -> Z3.BitVector.mk_sle ctx z3_e1 z3_e2
-        | Ast.Eq -> Z3.Boolean.mk_eq ctx z3_e1 z3_e2
-        | Ast.Neq ->
-          Z3.Boolean.mk_not ctx (Z3.Boolean.mk_eq ctx z3_e1 z3_e2)
-      end
-    | Cfg.Binop (op, e1, e2) ->
-      let z3_e1 = translate_expression repr_data e1 ctx s in
-      let z3_e2 = translate_expression repr_data e2 ctx s in
-      begin match Ast.unmark op with
-        | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1 orig_arg; z3_e2 orig_arg]
-        | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1 orig_arg; z3_e2 orig_arg]
-        | Ast.Mul -> Z3.BitVector.mk_mul ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Div -> Z3.BitVector.mk_sdiv ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-        | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-      end
-    | Cfg.Unop (op, e1) ->
-      let z3_e1 = translate_expression repr_data e1 ctx s in
-      begin match op with
-        | Ast.Not -> Z3.Boolean.mk_not ctx (z3_e1 orig_arg)
-        | Ast.Minus -> Z3.BitVector.mk_sub ctx (int_const 0 ctx) (z3_e1 orig_arg)
-      end
-    | Cfg.Index ((var, _), index) ->
-      let (z3_var , _) = Cfg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
-      let z3_index = translate_expression repr_data index ctx s in
-      begin match z3_var with
-        | Z3_repr.Table z3_var ->
-          z3_var (z3_index orig_arg)
-        | _ -> assert false (* should not happen *)
-      end
-    | Cfg.LocalLet (lvar1, (Cfg.Conditional (e1, e2, e3), _), (Cfg.LocalVar lvar2, _))
-      when lvar1 = lvar2 ->
-      let z3_e1 = translate_expression repr_data e1 ctx s in
-      let z3_e2 = translate_expression repr_data e2 ctx s in
-      let z3_e3 = translate_expression repr_data e3 ctx s in
-      let (z3_lvar, _) = Cfg.LocalVariableMap.find lvar1 repr_data.Z3_repr.repr_data_local_var in
-      begin match z3_lvar with
-        | Z3_repr.Regular z3_lvar ->
-          Z3.Solver.add s [
-            Z3.Boolean.mk_implies ctx
-              (z3_e1 orig_arg)
-              (Z3.Boolean.mk_eq ctx z3_lvar (z3_e2 orig_arg));
-            Z3.Boolean.mk_implies ctx
-              (Z3.Boolean.mk_not ctx (z3_e1 orig_arg))
-              (Z3.Boolean.mk_eq ctx z3_lvar (z3_e3 orig_arg))
-          ];
-          z3_lvar
-        | _ -> assert false (* should not happen *)
-      end
-    | Cfg.Conditional _ -> assert false (* should not happen *)
-    | Cfg.FunctionCall (Cfg.ArrFunc , [arg]) ->
-      assert false (* TODO: implement *)
-    | Cfg.FunctionCall (Cfg.InfFunc , [arg]) ->
-      assert false (* TODO: implement *)
-    | Cfg.FunctionCall _ -> assert false (* should not happen *)
-    | Cfg.Literal (Cfg.Int i) ->
-      int_const i ctx
-    | Cfg.Literal (Cfg.Float f) ->
-      int_const (int_of_float (f *. 100.0)) ctx
-    | Cfg.Literal (Cfg.Bool b) ->
-      bool_const b ctx
-    | Cfg.Var var ->
-      let (z3_var , _) = Cfg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
-      begin match z3_var with
-        | Z3_repr.Regular z3_var ->
-          z3_var
-        | _ -> assert false (* should not happen *)
-      end
-    | Cfg.LocalVar lvar ->
-      let (z3_lvar , _) =
-        Cfg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var
-      in
-      begin match z3_lvar with
-        | Z3_repr.Regular z3_lvar ->
-          z3_lvar
-        | _ -> assert false (* should not happen *)
-      end
-    | Cfg.GenericTableIndex -> orig_arg
-    | Cfg.Error -> error_const ctx
-    | Cfg.LocalLet (lvar, e1, e2) ->
-      let z3_e1 = translate_expression repr_data e1 ctx s in
-      let z3_e2 = translate_expression repr_data e2 ctx s in
-      let (z3_lvar, _) = Cfg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var in
-      begin match z3_lvar with
-        | Z3_repr.Regular z3_lvar ->
-          Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_lvar (z3_e1 orig_arg)];
-          (z3_e2 orig_arg)
-        | _ -> assert false (* should not happen *)
-      end
+  match Ast.unmark e with
+  | Cfg.Comparison (op, e1, e2) ->
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
+    let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
+    begin match Ast.unmark op with
+      | Ast.Gt -> Z3.BitVector.mk_sgt ctx z3_e1 z3_e2
+      | Ast.Gte -> Z3.BitVector.mk_sge ctx z3_e1 z3_e2
+      | Ast.Lt -> Z3.BitVector.mk_slt ctx z3_e1 z3_e2
+      | Ast.Lte -> Z3.BitVector.mk_sle ctx z3_e1 z3_e2
+      | Ast.Eq -> Z3.Boolean.mk_eq ctx z3_e1 z3_e2
+      | Ast.Neq ->
+        Z3.Boolean.mk_not ctx (Z3.Boolean.mk_eq ctx z3_e1 z3_e2)
+    end
+  | Cfg.Binop (op, e1, e2) ->
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
+    begin match Ast.unmark op with
+      | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1 orig_arg; z3_e2 orig_arg]
+      | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1 orig_arg; z3_e2 orig_arg]
+      | Ast.Mul -> Z3.BitVector.mk_mul ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+      | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+      | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+    end
+  | Cfg.Unop (op, e1) ->
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    begin match op with
+      | Ast.Not -> Z3.Boolean.mk_not ctx (z3_e1 orig_arg)
+      | Ast.Minus -> Z3.BitVector.mk_sub ctx (int_const 0 ctx) (z3_e1 orig_arg)
+    end
+  | Cfg.Index ((var, _), index) ->
+    let (z3_var , _) = Cfg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
+    let z3_index = translate_expression repr_data index ctx s in
+    begin match z3_var with
+      | Z3_repr.Table z3_var ->
+        z3_var (z3_index orig_arg)
+      | _ -> assert false (* should not happen *)
+    end
+  | Cfg.LocalLet (lvar1, (Cfg.Conditional (e1, e2, e3), _), (Cfg.LocalVar lvar2, _))
+    when lvar1 = lvar2 ->
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
+    let z3_e3 = translate_expression repr_data e3 ctx s in
+    let (z3_lvar, _) = Cfg.LocalVariableMap.find lvar1 repr_data.Z3_repr.repr_data_local_var in
+    begin match z3_lvar with
+      | Z3_repr.Regular z3_lvar ->
+        Z3.Solver.add s [
+          Z3.Boolean.mk_implies ctx
+            (z3_e1 orig_arg)
+            (Z3.Boolean.mk_eq ctx z3_lvar (z3_e2 orig_arg));
+          Z3.Boolean.mk_implies ctx
+            (Z3.Boolean.mk_not ctx (z3_e1 orig_arg))
+            (Z3.Boolean.mk_eq ctx z3_lvar (z3_e3 orig_arg))
+        ];
+        z3_lvar
+      | _ -> assert false (* should not happen *)
+    end
+  | Cfg.Conditional _ -> assert false (* should not happen *)
+  | Cfg.FunctionCall (Cfg.ArrFunc , [arg]) ->
+    assert false (* TODO: implement *)
+  | Cfg.FunctionCall (Cfg.InfFunc , [arg]) ->
+    assert false (* TODO: implement *)
+  | Cfg.FunctionCall _ -> assert false (* should not happen *)
+  | Cfg.Literal (Cfg.Int i) ->
+    int_const i ctx
+  | Cfg.Literal (Cfg.Float f) ->
+    int_const (int_of_float (f *. 100.0)) ctx
+  | Cfg.Literal (Cfg.Bool b) ->
+    bool_const b ctx
+  | Cfg.Var var ->
+    let (z3_var , _) = Cfg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
+    begin match z3_var with
+      | Z3_repr.Regular z3_var ->
+        z3_var
+      | _ -> assert false (* should not happen *)
+    end
+  | Cfg.LocalVar lvar ->
+    let (z3_lvar , _) =
+      Cfg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var
+    in
+    begin match z3_lvar with
+      | Z3_repr.Regular z3_lvar ->
+        z3_lvar
+      | _ -> assert false (* should not happen *)
+    end
+  | Cfg.GenericTableIndex -> orig_arg
+  | Cfg.Error -> error_const ctx
+  | Cfg.LocalLet (lvar, e1, e2) ->
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
+    let (z3_lvar, _) = Cfg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var in
+    begin match z3_lvar with
+      | Z3_repr.Regular z3_lvar ->
+        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_lvar (z3_e1 orig_arg)];
+        (z3_e2 orig_arg)
+      | _ -> assert false (* should not happen *)
+    end
 
 
 let translate_program
