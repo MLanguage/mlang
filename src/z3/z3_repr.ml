@@ -35,8 +35,10 @@ type repr_kind =
   | Integer of int
   | Real of int
   | Boolean
+[@@deriving show]
 
 type repr = { repr_kind: repr_kind; is_table: bool }
+[@@deriving show]
 
 type repr_info = {
   repr_info_var : repr Cfg.VariableMap.t;

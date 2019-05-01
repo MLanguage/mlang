@@ -142,6 +142,9 @@ let main () =
     let ctx = (Z3.mk_context cfg) in
     let s = Z3.Solver.mk_solver ctx None in
     let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
+    Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
+      (Cfg.VariableMap.show Z3_repr.show_repr typing_info.repr_info_var)
+      (Cfg.LocalVariableMap.show Z3_repr.show_repr typing_info.repr_info_local_var);
     let z3_program = Cfg_to_z3.translate_program program dep_graph typing_info ctx s in
     let t0 = Sys.time () in
     Cli.debug_print

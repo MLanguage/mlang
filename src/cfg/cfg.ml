@@ -115,8 +115,22 @@ type expression =
   | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
 [@@deriving show]
 
-module VariableMap = Map.Make(Variable)
-module LocalVariableMap = Map.Make(LocalVariable)
+
+module VariableMap =
+struct
+  include Map.Make(Variable)
+
+  let show vprinter map = fold (fun k v acc ->
+      Printf.sprintf "%s\n%s -> %s" acc (Variable.show k) (vprinter v)) map ""
+end
+
+module LocalVariableMap =
+struct
+  include Map.Make(LocalVariable)
+
+  let show vprinter map = fold (fun k v acc ->
+      Printf.sprintf "%s\n%s -> %s" acc (LocalVariable.show k) (vprinter v)) map ""
+end
 
 module IndexMap = Map.Make(struct type t = int let compare = compare end)
 
