@@ -98,7 +98,7 @@ struct
       Real
     else if UF.find t.uf_typ = UF.find boolean.uf_typ then
       Boolean
-    else if UF.find real.uf_typ = UF.find integer.uf_typ then
+    else if UF.find t.uf_typ = UF.find integer.uf_typ then
       Integer
     else if UB.find t.uf_is_bool = UB.find only_non_boolean.uf_is_bool then
       Integer
@@ -131,6 +131,11 @@ type typ_info = {
   typ_info_var : (Cfg.typ * bool) Cfg.VariableMap.t; (* the bool flag is_table *)
   typ_info_local_var : Cfg.typ Cfg.LocalVariableMap.t
 }
+
+let show_typ_info t =
+  Printf.sprintf "typ_info_var: %s\ntyp_info_local_var: %s\n"
+    (Cfg.VariableMap.show (fun (ty, b) -> Printf.sprintf "(%s, %b)" (Cfg.show_typ ty) b) t.typ_info_var)
+    (Cfg.LocalVariableMap.show Cfg.show_typ t.typ_info_local_var)
 
 let rec typecheck_top_down
     (ctx: ctx)

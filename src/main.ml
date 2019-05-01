@@ -95,6 +95,7 @@ let main () =
     let program = Ast_to_cfg.translate !program in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
+    (* Cli.debug_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;

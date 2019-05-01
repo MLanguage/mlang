@@ -80,6 +80,7 @@ type typ =
   | Integer
   | Real
   | Boolean
+[@@deriving show]
 
 type literal =
   | Int of int

@@ -120,6 +120,9 @@ let rec translate_expression
   | Cfg.Binop (op, e1, e2) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
     let z3_e2 = translate_expression repr_data e2 ctx s in
+    Cli.debug_print @@ Printf.sprintf "z3_e1: %s\nz3_e2: %s\n"
+      (Z3.Expr.to_string (z3_e1 orig_arg))
+      (Z3.Expr.to_string (z3_e2 orig_arg));
     begin match Ast.unmark op with
       | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1 orig_arg; z3_e2 orig_arg]
       | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1 orig_arg; z3_e2 orig_arg]
@@ -238,6 +241,8 @@ let translate_program
               repr_data.Z3_repr.repr_data_var
         }
       | Cfg.SimpleVar e ->
+        Printf.printf "var: %s\nexpr: %s\n" (Cfg.Variable.show var)
+          (Format_cfg.format_expression @@ fst e);
         let z3_e = translate_expression repr_data e ctx s in
         let z3_var = declare_var_not_table var typ ctx in
         Printf.printf "z3_var: %s\n" (Z3.Expr.to_string z3_var);
@@ -261,7 +266,8 @@ let translate_program
                   repr_data.Z3_repr.repr_data_var
             }
           | Cfg.IndexTable es ->
-            (repr_data) (* TODO: implement *)
+            Cli.warning_print "TODO: implement";
+            repr_data
         end
     ) repr_data vars_to_evaluate in
   repr_data
