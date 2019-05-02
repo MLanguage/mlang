@@ -71,7 +71,7 @@ let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: D
 let create_dependency_graph (p: Cfg.program) : DepGraph.t =
   Cfg.VariableMap.fold (fun var def acc ->
       match def.Cfg.var_definition with
-      | Cfg.InputVar -> acc
+      | Cfg.InputVar -> DepGraph.add_vertex acc var
       | Cfg.SimpleVar e -> add_usages var e acc
       | Cfg.TableVar (_, def) -> begin match def with
           | Cfg.IndexGeneric e -> add_usages var e acc
