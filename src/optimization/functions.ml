@@ -74,30 +74,50 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
     ) e
   | FunctionCall (GtzFunc, [arg]) ->
     Ast.same_pos_as
-      (Comparison (
-          Ast.same_pos_as Ast.Gt e,
-          expand_functions_expr arg,
+      (Conditional (
+          Ast.same_pos_as
+            (Comparison (
+                Ast.same_pos_as Ast.Gt e,
+                expand_functions_expr arg,
+                Ast.same_pos_as (Literal (Int 0)) e)
+            ) e,
+          Ast.same_pos_as (Literal (Int 1)) e,
           Ast.same_pos_as (Literal (Int 0)) e)
       ) e
   | FunctionCall (GtezFunc, [arg]) ->
     Ast.same_pos_as
-      (Comparison (
-          Ast.same_pos_as Ast.Gte e,
-          expand_functions_expr arg,
+      (Conditional (
+          Ast.same_pos_as
+            (Comparison (
+                Ast.same_pos_as Ast.Gte e,
+                expand_functions_expr arg,
+                Ast.same_pos_as (Literal (Int 0)) e)
+            ) e,
+          Ast.same_pos_as (Literal (Int 1)) e,
           Ast.same_pos_as (Literal (Int 0)) e)
       ) e
   | FunctionCall (NullFunc, [arg]) ->
     Ast.same_pos_as
-      (Comparison (
-          Ast.same_pos_as Ast.Eq e,
-          expand_functions_expr arg,
+      (Conditional (
+          Ast.same_pos_as
+            (Comparison (
+                Ast.same_pos_as Ast.Eq e,
+                expand_functions_expr arg,
+                Ast.same_pos_as (Literal (Int 0)) e)
+            ) e,
+          Ast.same_pos_as (Literal (Int 1)) e,
           Ast.same_pos_as (Literal (Int 0)) e)
       ) e
   | FunctionCall (PresentFunc, [arg]) ->
     Ast.same_pos_as
-      (Comparison (
-          Ast.same_pos_as Ast.Neq e,
-          expand_functions_expr arg,
+      (Conditional (
+          Ast.same_pos_as
+            (Comparison (
+                Ast.same_pos_as Ast.Neq e,
+                expand_functions_expr arg,
+                Ast.same_pos_as (Literal (Int 0)) e)
+            ) e,
+          Ast.same_pos_as (Literal (Int 1)) e,
           Ast.same_pos_as (Literal (Int 0)) e)
       ) e
   | FunctionCall (MinFunc, args) ->

@@ -58,7 +58,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(wildcard $(SOURCE_DIR)/*.m) 
+		./main.native $(wildcard $(SOURCE_DIR)/*.m) --application batch
 
 doc:
 	mkdir -p $(DOC_FOLDER)

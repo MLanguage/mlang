@@ -570,35 +570,45 @@ let add_var_def
         *)
     ) var_data
 
+let rule_belongs_to_app (r: Ast.rule) (application: string option) : bool = match application with
+  | None -> true
+  | Some application ->
+    List.exists (fun app -> Ast.unmark app = application) r.Ast.rule_applications
+
 let get_var_data
     (idmap: idmap)
     (var_decl_data: var_decl_data Cfg.VariableMap.t)
     (p: Ast.program)
+    (application : string option)
   : Cfg.variable_data Cfg.VariableMap.t =
   List.fold_left (fun var_data source_file ->
       Cli.debug_print (Printf.sprintf "Expanding definitions in %s" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
       List.fold_left (fun var_data source_file_item -> match Ast.unmark source_file_item with
-          | Ast.Rule r -> List.fold_left (fun var_data formula ->
-              match Ast.unmark formula with
-              | Ast.SingleFormula f ->
-                let ctx = { idmap; lc = None } in
-                let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
-                let var_expr = translate_expression ctx f.Ast.formula in
-                add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-              | Ast.MultipleFormulaes (lvs, f) ->
-                let ctx = { idmap; lc = None } in
-                let loop_context_provider = translate_loop_variables ctx lvs in
-                let translator = fun lc ->
-                  let new_ctx = { ctx with lc = Some lc } in
-                  let var_expr = translate_expression new_ctx f.Ast.formula in
-                  let (var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
-                  (var_lvalue, var_expr, def_kind)
-                in
-                let data_to_add = loop_context_provider translator in
-                List.fold_left (fun var_data (var_lvalue, var_expr, def_kind) ->
+          | Ast.Rule r ->
+            if rule_belongs_to_app r application then
+              List.fold_left (fun var_data formula ->
+                  match Ast.unmark formula with
+                  | Ast.SingleFormula f ->
+                    let ctx = { idmap; lc = None } in
+                    let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
+                    let var_expr = translate_expression ctx f.Ast.formula in
                     add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-                  ) var_data data_to_add
-            ) var_data r.Ast.rule_formulaes
+                  | Ast.MultipleFormulaes (lvs, f) ->
+                    let ctx = { idmap; lc = None } in
+                    let loop_context_provider = translate_loop_variables ctx lvs in
+                    let translator = fun lc ->
+                      let new_ctx = { ctx with lc = Some lc } in
+                      let var_expr = translate_expression new_ctx f.Ast.formula in
+                      let (var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
+                      (var_lvalue, var_expr, def_kind)
+                    in
+                    let data_to_add = loop_context_provider translator in
+                    List.fold_left (fun var_data (var_lvalue, var_expr, def_kind) ->
+                        add_var_def var_data var_lvalue var_expr def_kind var_decl_data
+                      ) var_data data_to_add
+                ) var_data r.Ast.rule_formulaes
+            else
+              var_data
           | Ast.Variable (Ast.ConstVar (name, lit)) ->
             let var = get_var_from_name idmap name in
             add_var_def var_data var (Ast.same_pos_as (Cfg.Literal (begin match Ast.unmark lit with
@@ -648,8 +658,8 @@ let check_if_all_variables_defined
     ) var_data var_decl_data)
 
 
-let translate (p: Ast.program) : Cfg.program =
+let translate (p: Ast.program) (application : string option): Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
-  let var_data = get_var_data idmap var_decl_data p in
+  let var_data = get_var_data idmap var_decl_data p application in
   check_if_all_variables_defined var_data var_decl_data;
   var_data

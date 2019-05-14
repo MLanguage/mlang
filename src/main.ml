@@ -43,7 +43,9 @@ let parse_cli_args () =
       ("--debug", Arg.Set debug_flag,
        " Affiche des informations de débuggage");
       ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)")
+       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)");
+      ("--application", Arg.Set_string application,
+       "Nom de l'application (jette toutes les règles ne comportant pas cette mention)")
     ]
   in let usage_msg =
        "M parser"
@@ -92,7 +94,7 @@ let main () =
         end
     ) !source_files;
   try
-    let program = Ast_to_cfg.translate !program in
+    let program = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
     (* Cli.debug_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
@@ -144,8 +146,8 @@ let main () =
     let s = Z3.Solver.mk_solver ctx None in
     let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
     Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
-      (Cfg.VariableMap.show Z3_repr.show_repr typing_info.repr_info_var)
-      (Cfg.LocalVariableMap.show Z3_repr.show_repr typing_info.repr_info_local_var);
+      (Cfg.VariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_var)
+      (Cfg.LocalVariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_local_var);
     let z3_program = Cfg_to_z3.translate_program program dep_graph typing_info ctx s in
     let t0 = Sys.time () in
     Cli.debug_print

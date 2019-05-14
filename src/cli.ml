@@ -37,6 +37,7 @@ let source_files : string list ref = ref []
 let dep_graph_file : string ref = ref "dep_graph"
 let verify_flag = ref false
 let debug_flag = ref false
+let application = ref ""
 
 let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
 let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "

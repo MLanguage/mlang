@@ -80,7 +80,7 @@ struct
     | Some Integer ->  Format_cfg.format_typ Integer
     | Some Real -> Format_cfg.format_typ Real
     | Some Boolean -> Format_cfg.format_typ Boolean
-    | None -> "uknwon"
+    | None -> "unknown"
 
   let unify (t1: t) (t2: t) : unit =
     UF.union t1.uf_typ t2.uf_typ;
@@ -360,11 +360,12 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                            )))
       end
   | PresentFunc | NullFunc | GtzFunc | GtezFunc ->
+    (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
     fun ctx args ->
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.boolean) with
+          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.integer) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -377,11 +378,32 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
           end
         | _ -> raise (Errors.TypeError
                         (Errors.Typing
-                           (Printf.sprintf "function abs %s should have only one arguemnt"
+                           (Printf.sprintf "function %s should have only one arguemnt"
                               (Format_ast.format_position pos)
                            )))
       end
-  | _ -> assert false (* unimplemented, do other functions *)
+  | ArrFunc | InfFunc ->
+    fun ctx args ->
+      begin match args with
+        | [arg] ->
+          let (ctx, t_arg) = typecheck_bottom_up ctx arg in
+          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.integer) with
+            | Typ.UnificationError (t_arg_msg,t2_msg) ->
+              raise (Errors.TypeError
+                       (Errors.Typing
+                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_ast.format_position (Ast.get_position arg))
+                             t_arg_msg
+                             t2_msg
+                          )))
+          end
+        | _ -> raise (Errors.TypeError
+                        (Errors.Typing
+                           (Printf.sprintf "function %s should have only one arguemnt"
+                              (Format_ast.format_position pos)
+                           )))
+      end
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with
