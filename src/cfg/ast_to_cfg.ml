@@ -52,10 +52,7 @@ let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Cfg.typ option 
   | Some (Ast.Integer, _) -> Some Cfg.Integer
   | Some (Ast.Boolean, _) -> Some Cfg.Boolean
   | Some (Ast.Real, _) -> Some Cfg.Real
-  | Some (_ , pos) ->
-    raise (Errors.Unimplemented
-             ("date type is not supported",
-              pos))
+  | Some (_ , pos) -> Some Cfg.Integer
   | None -> None
 
 module ParamsMap = Map.Make(Char)
@@ -141,13 +138,31 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
 
-let instantiate_generic_variables_parameters (lc: loop_context) (gen_name:Ast.variable_generic_name) : string =
+let instantiate_generic_variables_parameters
+    (lc: loop_context)
+    (gen_name:Ast.variable_generic_name)
+    (pad_zero: bool)
+  : string =
+  (*
+    The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
+    trailing 0 before the index. So the algorithm first tries to find a definition without the
+    trailing 0, and if it fails it tries with a trailing 0.
+  *)
   ParamsMap.fold (fun param value var_name ->
       match value with
       | VarName value ->
+        (*
+          Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
+          already there... So we need to remove it here.
+        *)
+        let value = if pad_zero then
+            Str.replace_first (Str.regexp "0\([0-9]\)") "\\1" value
+          else value
+        in
         Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
       | RangeInt i ->
-        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) (string_of_int i) var_name
+        Str.replace_first (Str.regexp (Printf.sprintf "%c" param))
+          ((if pad_zero then "0" else "") ^ string_of_int i) var_name
     ) lc gen_name.Ast.base
 
 let get_var_from_name (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.Variable.t =
@@ -236,8 +251,20 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc ->
-        let new_var_name = instantiate_generic_variables_parameters lc gen_name in
-        translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
+        let new_var_name = instantiate_generic_variables_parameters lc gen_name false in
+        begin try
+            translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
+          with
+          | err ->
+            let new_var_name = instantiate_generic_variables_parameters lc gen_name true in
+            begin try
+                translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
+              with
+              | _ -> raise err
+            end
+        end
+
+
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.expression Ast.marked =
   match Ast.unmark i with
@@ -610,12 +637,11 @@ let check_if_all_variables_defined
       | (Some _, Some _) -> None
       | (None, Some decl) -> begin match decl.var_decl_io with
           | Output | Regular | Constant ->
-            raise (Errors.TypeError (
-                Errors.Variable (
-                  Printf.sprintf "variable %s declared %s is never defined"
-                    (Ast.unmark var.Cfg.Variable.name)
-                    (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))
-                )))
+            Cli.debug_print (
+              Printf.sprintf "variable %s declared %s is never defined"
+                (Ast.unmark var.Cfg.Variable.name)
+                (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))
+            ); None
           | Input -> None
         end
       | _ -> assert false (* should not happen *)
