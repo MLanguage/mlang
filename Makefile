@@ -29,7 +29,12 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 
-SOURCE_DIR=calculette-impots-m-source-code/sources-latin1/sourcesm2015m_4_6
+SOURCE_FILES=chap-teff.m chap-82.m coc3.m chap-85.m res-ser2.m chap-majo.m coc2.m \
+ 	chap-tl.m chap-86.m coc7.m chap-plaf.m errB.m chap-cmajo.m chap-6.m chap-inr.m \
+	chap-1.m chap-2.m chap-perp.m chap-83.m errI.m tgvI.m coc5.m chap-cor.m coi1.m \
+	chap-cinr.m chap-aff.m chap-ctl.m coi3.m chap-81.m chap-87.m horizoi.m chap-51.m \
+	chap-isf.m horizoc.m chap-7.m chap-88.m coc4.m coi2.m chap-4.m chap-thr.m chap-84.m \
+	chap-ini.m res-ser1.m chap-3.m coc1.m
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc
 ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
@@ -58,7 +63,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(wildcard $(SOURCE_DIR)/*.m) --application batch
+		./main.native $(addprefix "../ir-calcul/sources2017m_6_10/", $(SOURCE_FILES)) --application batch --debug
 
 doc:
 	mkdir -p $(DOC_FOLDER)

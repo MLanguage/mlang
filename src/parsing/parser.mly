@@ -53,7 +53,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 %token ONE IN APPLICATION CHAINING TYPE BASE GIVEN_BACK TABLE
 %token COMPUTED CONST ALIAS CONTEXT FAMILY PENALITY INCOME INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE
-%token INFORMATIVE OUTPUT
+%token INFORMATIVE OUTPUT FONCTION
 
 %token EOF
 
@@ -81,6 +81,10 @@ source_file_item:
 | ver = verification { (Verification ver, mk_position $sloc) }
 | e = error_ { (Error e, mk_position $sloc) }
 | o = output { (Output o, mk_position $sloc) }
+| f = fonction { (Function, mk_position $sloc) }
+
+fonction:
+| s = SYMBOL COLON FONCTION i = SYMBOL SEMICOLON { () }
 
 application_name:
 | s = SYMBOL { (s, mk_position $sloc) }
@@ -121,14 +125,19 @@ computed_variable_name:
 computed_variable_descr:
 | descr = STRING { (descr, mk_position $sloc) }
 
+computed_attr_or_subtyp:
+| attr = input_variable_attribute { None }
+| subtyp = computed_variable_subtype { Some subtyp }
+
 computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
-  subtyp = computed_variable_subtype*
+  subtyp = computed_attr_or_subtyp*
   COLON descr = computed_variable_descr typ = value_type? SEMICOLON
   { ComputedVar ({
     comp_name = (let (name, nloc) = name in (name, nloc));
     comp_table = size;
-    comp_subtyp = subtyp;
+    comp_subtyp = List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
+        (List.filter (fun x -> x <> None) subtyp);
     comp_description = descr;
     comp_typ = typ;
   }, mk_position $sloc) }
@@ -146,17 +155,39 @@ input_variable_name:
 input_descr:
 descr = STRING { (descr, mk_position $sloc) }
 
+input_attr_or_subtyp_or_given_back:
+| attr = input_variable_attribute { ((None, Some attr), false) }
+| subtyp = input_variable_subtype { ((Some subtyp, None), false) }
+| GIVEN_BACK { ((None, None), true) }
+
+
 input_variable:
 | name = input_variable_name INPUT
-  subtyp = input_variable_subtype
-  attrs = input_variable_attribute*
-  g = GIVEN_BACK? alias = input_variable_alias COLON descr = input_descr
+  subtyp = input_attr_or_subtyp_or_given_back* alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
-  SEMICOLON { InputVar ({
+  SEMICOLON {
+  let (subtyp_attrs, given_back) = List.split subtyp in
+  let (subtyp, attrs) = List.split subtyp_attrs in
+  InputVar ({
     input_name = name;
-    input_subtyp = subtyp;
-    input_attributes = attrs;
-    input_given_back = (match g with Some _ -> true | None -> false);
+    input_subtyp = begin
+      let subtyp  =
+        List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
+          (List.filter (fun x -> x <> None) subtyp)
+      in
+      if List.length subtyp > 1 then
+        Errors.parser_error $sloc "multiple subtypes for an input variable"
+      else
+        List.hd subtyp
+    end;
+    input_attributes = begin
+        let attrs  =
+          List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
+            (List.filter (fun x -> x <> None) attrs)
+        in
+        attrs
+    end;
+    input_given_back = List.exists (fun x -> x) given_back;
     input_alias = alias;
     input_typ = typ;
     input_description = descr;

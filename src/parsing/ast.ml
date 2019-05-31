@@ -180,7 +180,7 @@ type expression =
 [@@deriving show]
 
 and func_args =
-    | ArgList of expression marked list
+  | ArgList of expression marked list
   | LoopList of loop_variables marked * expression marked
 [@@deriving show]
 
@@ -289,6 +289,7 @@ type source_file_item =
   | Verification of verification
   | Error of error_
   | Output of variable_name marked
+  | Function 
 [@@deriving show]
 
 type source_file = source_file_item marked list

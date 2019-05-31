@@ -156,6 +156,8 @@ rule token = parse
   { INFORMATIVE }
 | "sortie"
   { OUTPUT }
+| "fonction"
+  { FONCTION }
 | '"' [^'"']* '"' as s
   { STRING s }
 | ['a'-'z'] as s
