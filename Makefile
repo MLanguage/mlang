@@ -29,12 +29,13 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 
-SOURCE_FILES=chap-teff.m chap-82.m coc3.m chap-85.m res-ser2.m chap-majo.m coc2.m \
- 	chap-tl.m chap-86.m coc7.m chap-plaf.m errB.m chap-cmajo.m chap-6.m chap-inr.m \
-	chap-1.m chap-2.m chap-perp.m chap-83.m errI.m tgvI.m coc5.m chap-cor.m coi1.m \
-	chap-cinr.m chap-aff.m chap-ctl.m coi3.m chap-81.m chap-87.m horizoi.m chap-51.m \
-	chap-isf.m horizoc.m chap-7.m chap-88.m coc4.m coi2.m chap-4.m chap-thr.m chap-84.m \
-	chap-ini.m res-ser1.m chap-3.m coc1.m
+SOURCE_FILES=chap-1.m chap-2.m chap-3.m chap-4.m chap-51.m chap-52.m chap-6.m \
+ 	chap-7.m chap-81.m chap-82.m chap-83.m chap-84.m chap-85.m chap-86.m chap-87.m \
+	chap-88.m chap-aff.m chap-cinr.m chap-cmajo.m chap-cor.m chap-ctl.m chap-ini.m \
+	chap-inr.m chap-isf.m chap-majo.m chap-perp.m chap-plaf.m chap-taux.m chap-teff.m \
+	chap-thr.m chap-tl.m coc1.m coc2.m coc3.m coc4.m coc5.m coc7.m coi1.m coi2.m \
+	coi3.m errB.m errI.m horizoc.m horizoi.m res-ser1.m res-ser2.m tgvB.m tgvI.m
+
 OCAMLDOC_FILES = src/**/*.ml src/*.ml
 DOC_FOLDER = doc
 ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
@@ -63,7 +64,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(addprefix "../ir-calcul/sources2017m_6_10/", $(SOURCE_FILES)) --application batch --debug
+		./main.native $(addprefix "../ir-calcul/sources2017m_6_10/", $(SOURCE_FILES)) --application bareme --debug
 
 doc:
 	mkdir -p $(DOC_FOLDER)

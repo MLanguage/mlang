@@ -353,8 +353,12 @@ loop_variables_range:
  | bounds = interval_loop { bounds  }
  | s = SYMBOL { VarParam (parse_variable_name $sloc s, mk_position $sloc) }
 
- interval_loop:
- | i1 = SYMBOL RANGE i2 = SYMBOL
+range_or_minus:
+| RANGE {}
+| MINUS {}
+
+interval_loop:
+ | i1 = SYMBOL range_or_minus i2 = SYMBOL
   { IntervalLoop ((parse_int $sloc i1, mk_position $sloc),
     (parse_int $sloc i2, mk_position $sloc)) }
 

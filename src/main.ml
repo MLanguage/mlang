@@ -97,7 +97,7 @@ let main () =
     let program = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
-    (* Cli.debug_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
+    (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
@@ -105,21 +105,31 @@ let main () =
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
-    Cli.debug_print (Printf.sprintf "Propagating constants variables...");
-    let program = Constant_propagation.propagate_constants dep_graph program in
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
+    Cfg.VariableMap.iter (fun var _ ->
+        Printf.printf "UNUSED: %s\n" (Ast.unmark var.Cfg.Variable.name)
+      ) unused_variables;
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+    (* Printf.eprintf "Program: %s\n" (Format_cfg.format_program program); *)
+    Cli.debug_print (Printf.sprintf "Propagating constants variables...");
+    let dep_graph = Dependency.create_dependency_graph program in
+    let program = Constant_propagation.propagate_constants dep_graph program in
     let program : Cfg.program ref = ref program in
     let typing_info : Typechecker.typ_info ref = ref typing_info in
     let nb_inlined_vars : int ref = ref max_int in
+
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
       let single_use_vars = Dependency.single_use_vars dep_graph in
-      let to_inline_vars = Cfg.VariableMap.filter (fun var _ -> match (Cfg.VariableMap.find var !program).Cfg.var_io with
-          | Cfg.Input | Cfg.Output -> false
-          | Cfg.Regular -> true
-        ) single_use_vars in
+      let to_inline_vars = Cfg.VariableMap.filter
+          (fun var _ -> try
+              match (Cfg.VariableMap.find var !program).Cfg.var_io with
+              | Cfg.Input | Cfg.Output -> false
+              | Cfg.Regular -> true
+            with
+            | Not_found -> false (* TODO: figure out why it's happening *)
+          ) single_use_vars in
       nb_inlined_vars := Cfg.VariableMap.cardinal to_inline_vars;
       if !nb_inlined_vars > 0 then begin
         Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);

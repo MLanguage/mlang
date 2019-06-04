@@ -46,15 +46,17 @@ let rec is_expr_completely_const (e: expression Ast.marked) : bool = match Ast.u
   | Error | Literal _ | LocalVar _ -> true
 
 let is_var_completely_const (var : Variable.t) (p:program) : bool =
-  match (VariableMap.find var p).var_definition with
-  | InputVar -> false
-  | SimpleVar e -> is_expr_completely_const e
-  | TableVar (size, def) -> begin match def with
-      | IndexGeneric e ->
-        is_expr_completely_const e
-      | IndexTable es ->
-        false
-    end
+  try match (VariableMap.find var p).var_definition with
+    | InputVar -> false
+    | SimpleVar e -> is_expr_completely_const e
+    | TableVar (size, def) -> begin match def with
+        | IndexGeneric e ->
+          is_expr_completely_const e
+        | IndexTable es ->
+          false
+      end
+  with
+  | Not_found -> assert false (* should not happen *)
 
 let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Cfg.Variable.t list =
   let is_completely_const = fun var ->

@@ -187,43 +187,84 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
             begin match var_decl with
               | Ast.ComputedVar cvar ->
                 let cvar = Ast.unmark cvar in
-                let new_var = Cfg.Variable.new_var cvar.Ast.comp_name in
-                let new_var_data = {
-                  var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
-                  var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
-                  var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
-                  var_decl_io = Regular;
-                  var_pos = Ast.get_position source_file_item;
-                }
-                in
-                let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
-                (new_vars, new_idmap, out_list)
+                (* First we check if the variable has not been declared a first time *)
+                begin try
+                    let old_var = VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap in
+                    Cli.debug_print
+                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                         (Ast.unmark old_var.Cfg.Variable.name)
+                         (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
+                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                    (vars, idmap, out_list)
+                  with
+                  | Not_found ->
+                    let new_var = Cfg.Variable.new_var cvar.Ast.comp_name in
+                    let new_var_data = {
+                      var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
+                      var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
+                      var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
+                      var_decl_io = Regular;
+                      var_pos = Ast.get_position source_file_item;
+                    }
+                    in
+                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                    let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
+                    let new_out_list = if List.exists (fun x -> match Ast.unmark x with
+                        | Ast.GivenBack -> true
+                        | Ast.Base -> false
+                      ) cvar.Ast.comp_subtyp then
+                        cvar.Ast.comp_name::out_list
+                      else out_list
+                    in
+                    (new_vars, new_idmap, new_out_list)
+                end
               | Ast.InputVar ivar ->
                 let ivar = Ast.unmark ivar in
-                let new_var = Cfg.Variable.new_var ivar.Ast.input_name in
-                let new_var_data = {
-                  var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
-                  var_decl_is_table = None;
-                  var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
-                  var_decl_io = Input;
-                  var_pos = Ast.get_position source_file_item;
-                } in
-                let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
-                (new_vars, new_idmap, out_list)
+                begin try
+                    let old_var = VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap in
+                    Cli.debug_print
+                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                         (Ast.unmark old_var.Cfg.Variable.name)
+                         (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
+                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                    (vars, idmap, out_list)
+                  with
+                  | Not_found ->
+                    let new_var = Cfg.Variable.new_var ivar.Ast.input_name in
+                    let new_var_data = {
+                      var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
+                      var_decl_is_table = None;
+                      var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
+                      var_decl_io = Input;
+                      var_pos = Ast.get_position source_file_item;
+                    } in
+                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                    let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
+                    (new_vars, new_idmap, out_list)
+                end
               | Ast.ConstVar (marked_name, _) ->
-                let new_var  = Cfg.Variable.new_var marked_name in
-                let new_var_data = {
-                  var_decl_typ = None;
-                  var_decl_is_table = None;
-                  var_decl_descr = None;
-                  var_decl_io = Constant;
-                  var_pos = Ast.get_position source_file_item;
-                } in
-                let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
-                (new_vars, new_idmap, out_list)
+                begin try
+                    let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
+                    Cli.debug_print
+                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                         (Ast.unmark old_var.Cfg.Variable.name)
+                         (Format_ast.format_position (Ast.get_position marked_name))
+                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                    (vars, idmap, out_list)
+                  with
+                  | Not_found ->
+                    let new_var  = Cfg.Variable.new_var marked_name in
+                    let new_var_data = {
+                      var_decl_typ = None;
+                      var_decl_is_table = None;
+                      var_decl_descr = None;
+                      var_decl_io = Constant;
+                      var_pos = Ast.get_position source_file_item;
+                    } in
+                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                    let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
+                    (new_vars, new_idmap, out_list)
+                end
             end
           | Ast.Output out_name -> (vars, idmap, out_name::out_list)
           | _ -> (vars, idmap, out_list)
@@ -476,7 +517,8 @@ let add_var_def
     match (old_var_expr.Cfg.var_definition, def_kind) with
     | (Cfg.SimpleVar old_e, SingleIndex _) | (Cfg.SimpleVar old_e, GenericIndex) ->
       raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable definition %s is indexed but previous definition %s was not"
+          Printf.sprintf "variable definition %s %s is indexed but previous definition %s was not"
+            (Ast.unmark var_lvalue.Cfg.Variable.name)
             (Format_ast.format_position (Ast.get_position var_expr))
             (Format_ast.format_position (Ast.get_position old_e))
         )))
@@ -489,13 +531,15 @@ let add_var_def
         )))
     | (Cfg.TableVar (_, Cfg.IndexGeneric _), NoIndex) | (Cfg.TableVar (_, Cfg.IndexTable _), NoIndex) ->
       raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable definition %s is not indexed but previous definitions were"
+          Printf.sprintf "variable %s definition %s is not indexed but previous definitions were"
+            (Ast.unmark var_lvalue.Cfg.Variable.name)
             (Format_ast.format_position (Ast.get_position var_expr))
         )))
     | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), SingleIndex _) | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), GenericIndex)
     | (Cfg.SimpleVar old_e, NoIndex) ->
       Cli.warning_print
-        (Printf.sprintf "Dropping definition %s because variable was previously defined %s"
+        (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
+           (Ast.unmark var_lvalue.Cfg.Variable.name)
            (Format_ast.format_position (Ast.get_position var_expr))
            (Format_ast.format_position (Ast.get_position old_e)));
       var_data
@@ -511,7 +555,8 @@ let add_var_def
     | (Cfg.TableVar (size, Cfg.IndexTable old_defs), SingleIndex i) -> begin try
           let old_def = Cfg.IndexMap.find i old_defs in
           Cli.warning_print
-            (Printf.sprintf "Dropping definition %s because variable was previously defined %s"
+            (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
+               (Ast.unmark var_lvalue.Cfg.Variable.name)
                (Format_ast.format_position (Ast.get_position var_expr))
                (Format_ast.format_position (Ast.get_position old_def)));
           var_data
@@ -642,24 +687,45 @@ let get_var_data
 let check_if_all_variables_defined
     (var_data: Cfg.program)
     (var_decl_data: var_decl_data Cfg.VariableMap.t)
-  : unit =
-  ignore (Cfg.VariableMap.merge (fun var data decl -> match data, decl with
-      | (Some _, Some _) -> None
-      | (None, Some decl) -> begin match decl.var_decl_io with
-          | Output | Regular | Constant ->
-            Cli.debug_print (
-              Printf.sprintf "variable %s declared %s is never defined"
-                (Ast.unmark var.Cfg.Variable.name)
-                (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))
-            ); None
-          | Input -> None
-        end
-      | _ -> assert false (* should not happen *)
-    ) var_data var_decl_data)
+  : Cfg.program =
+  (Cfg.VariableMap.merge (fun var data decl -> match data, decl with
+       | (Some x, Some _) -> Some x
+       | (None, Some decl) -> begin match decl.var_decl_io with
+           | Output | Regular | Constant ->
+             Cli.debug_print (
+               Printf.sprintf "variable %s declared %s is never defined"
+                 (Ast.unmark var.Cfg.Variable.name)
+                 (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))
+             );
+             (* We insert definitions with errors whenever we have nothing available *)
+             let io = match decl.var_decl_io with
+               | Output -> Cfg.Output
+               | Regular | Constant -> Cfg.Regular
+               | Input -> assert false (* should not happen *)
+             in
+             begin match decl.var_decl_is_table with
+               | Some _ -> Some {
+                   Cfg.var_definition = Cfg.TableVar (
+                       0,
+                       Cfg.IndexGeneric (Ast.same_pos_as Cfg.Error var.Cfg.Variable.name);
+                     );
+                   Cfg.var_typ = None;
+                   Cfg.var_io = io;
+                 }
+               | None -> Some {
+                   Cfg.var_definition = Cfg.SimpleVar (Ast.same_pos_as Cfg.Error var.Cfg.Variable.name);
+                   Cfg.var_typ = None;
+                   Cfg.var_io = io;
+                 }
+             end
+           | Input -> assert false (* should not happen *)
+         end
+       | _ -> assert false (* should not happen *)
+     ) var_data var_decl_data)
 
 
 let translate (p: Ast.program) (application : string option): Cfg.program =
   let (var_decl_data, idmap) = get_variables_decl p in
   let var_data = get_var_data idmap var_decl_data p application in
-  check_if_all_variables_defined var_data var_decl_data;
+  let var_data = check_if_all_variables_defined var_data var_decl_data in
   var_data

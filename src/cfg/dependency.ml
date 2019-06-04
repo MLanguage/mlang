@@ -119,7 +119,10 @@ module Reachability = Graph.Fixpoint.Make(DepGraph)
 
 let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.t =
   let is_output = fun var ->
-    (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+    try
+      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+    with
+    | Not_found -> assert false (* should not happen *)
   in
   let is_necessary_to_output = Reachability.analyze is_output g in
   Cfg.VariableMap.filter (fun var _ ->

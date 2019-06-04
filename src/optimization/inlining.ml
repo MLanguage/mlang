@@ -176,7 +176,10 @@ let inline_vars
   let new_typing =
     { typing with
       Typechecker.typ_info_local_var = LocalVariableMap.mapi (fun new_lvar old_lvar ->
-          LocalVariableMap.find old_lvar typing.Typechecker.typ_info_local_var
+          try LocalVariableMap.find old_lvar typing.Typechecker.typ_info_local_var with
+          | Not_found -> begin
+              assert false (* TODO: fix bug *)
+            end
         ) !lvar_mapping
     }
   in
