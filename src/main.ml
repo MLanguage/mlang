@@ -42,6 +42,8 @@ let parse_cli_args () =
        " Vérifie que les conditions sont valables dans tous les cas");
       ("--debug", Arg.Set debug_flag,
        " Affiche des informations de débuggage");
+      ("--var_info", Arg.Set var_info_flag,
+       " Affiche des informations sur les variables du programmes mal définies");
       ("--dep_graph_file", Arg.Set_string dep_graph_file,
        " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)");
       ("--application", Arg.Set_string application,

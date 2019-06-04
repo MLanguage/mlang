@@ -190,7 +190,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                 (* First we check if the variable has not been declared a first time *)
                 begin try
                     let old_var = VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap in
-                    Cli.debug_print
+                    Cli.var_info_print
                       (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
                          (Ast.unmark old_var.Cfg.Variable.name)
                          (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
@@ -222,7 +222,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                 let ivar = Ast.unmark ivar in
                 begin try
                     let old_var = VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap in
-                    Cli.debug_print
+                    Cli.var_info_print
                       (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
                          (Ast.unmark old_var.Cfg.Variable.name)
                          (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
@@ -245,7 +245,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
               | Ast.ConstVar (marked_name, _) ->
                 begin try
                     let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
-                    Cli.debug_print
+                    Cli.var_info_print
                       (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
                          (Ast.unmark old_var.Cfg.Variable.name)
                          (Format_ast.format_position (Ast.get_position marked_name))
@@ -537,14 +537,14 @@ let add_var_def
         )))
     | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), SingleIndex _) | (Cfg.TableVar (_, Cfg.IndexGeneric old_e), GenericIndex)
     | (Cfg.SimpleVar old_e, NoIndex) ->
-      Cli.warning_print
+      Cli.var_info_print
         (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
            (Ast.unmark var_lvalue.Cfg.Variable.name)
            (Format_ast.format_position (Ast.get_position var_expr))
            (Format_ast.format_position (Ast.get_position old_e)));
       var_data
     | (Cfg.TableVar (size, Cfg.IndexTable _), GenericIndex) ->
-      Cli.warning_print
+      Cli.var_info_print
         (Printf.sprintf "Definition of %s %s will supercede previous partial definitions"
            (Ast.unmark var_lvalue.Cfg.Variable.name)
            (Format_ast.format_position (Ast.get_position var_expr)));
@@ -554,7 +554,7 @@ let add_var_def
         } var_data
     | (Cfg.TableVar (size, Cfg.IndexTable old_defs), SingleIndex i) -> begin try
           let old_def = Cfg.IndexMap.find i old_defs in
-          Cli.warning_print
+          Cli.var_info_print
             (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
                (Ast.unmark var_lvalue.Cfg.Variable.name)
                (Format_ast.format_position (Ast.get_position var_expr))
@@ -692,7 +692,7 @@ let check_if_all_variables_defined
        | (Some x, Some _) -> Some x
        | (None, Some decl) -> begin match decl.var_decl_io with
            | Output | Regular | Constant ->
-             Cli.debug_print (
+             Cli.var_info_print (
                Printf.sprintf "variable %s declared %s is never defined"
                  (Ast.unmark var.Cfg.Variable.name)
                  (Format_ast.format_position (Ast.get_position var.Cfg.Variable.name))

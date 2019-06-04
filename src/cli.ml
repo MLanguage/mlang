@@ -37,8 +37,10 @@ let source_files : string list ref = ref []
 let dep_graph_file : string ref = ref "dep_graph"
 let verify_flag = ref false
 let debug_flag = ref false
+let var_info_flag = ref false
 let application = ref ""
 
+let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.blue] "[VAR INFO] "
 let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
 let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "
 let warning_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.yellow] "[WARNING] "
@@ -47,6 +49,14 @@ let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.gree
 let debug_print (s: string) =
   if !debug_flag then begin
     debug_marker ();
+    Printf.printf "%s\n" s;
+    flush stdout;
+    flush stdout
+  end
+
+let var_info_print (s: string) =
+  if !var_info_flag then begin
+    var_info_marker ();
     Printf.printf "%s\n" s;
     flush stdout;
     flush stdout
