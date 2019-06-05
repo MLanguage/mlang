@@ -131,7 +131,7 @@ type set_value =
 
 type set_value_loop =
   | VarParam of variable_name marked
-  | IntervalLoop of int marked * int marked
+  | IntervalLoop of literal marked * literal marked
 [@@deriving show]
 
 
@@ -289,7 +289,7 @@ type source_file_item =
   | Verification of verification
   | Error of error_
   | Output of variable_name marked
-  | Function 
+  | Function
 [@@deriving show]
 
 type source_file = source_file_item marked list

@@ -92,7 +92,7 @@ let format_set_value (sv: set_value) : string = match sv with
 
 let format_set_value_loop (sv: set_value_loop) : string = match sv with
   | VarParam v -> Printf.sprintf "%s" (unmark v)
-  | IntervalLoop (i1, i2) -> Printf.sprintf "%d..%d" (unmark i1) (unmark i2)
+  | IntervalLoop (i1, i2) -> Printf.sprintf "%s..%s" (format_literal (unmark i1)) (format_literal (unmark i2))
 
 let format_comp_op (op: comp_op) : string = match op with
   | Gt -> ">"
@@ -284,6 +284,7 @@ let format_source_file_item (i:source_file_item) : string = match i with
   | Variable vd -> format_variable_decl vd
   | Rule r -> format_rule r
   | Verification v -> format_verification v
+  | Function  -> ""
   | Error e -> format_error_ e
   | Output o -> Printf.sprintf "sortie(%s);" (format_variable_name (unmark o))
 

@@ -86,7 +86,18 @@ type idmap = Cfg.Variable.t VarNameToID.t
 type translating_context = {
   idmap : idmap;
   lc: loop_context option;
+  int_const_values: int Cfg.VariableMap.t
 }
+
+let get_var_from_name (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.Variable.t =
+  try VarNameToID.find (Ast.unmark name) d with
+  | Not_found ->
+    raise (Errors.TypeError
+             (Errors.Variable
+                (Printf.sprintf "variable %s used %s, has not been declared"
+                   (Ast.unmark name)
+                   (Format_ast.format_position (Ast.get_position name))
+                )))
 
 let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
   try let param, values = ParamsMap.choose ld in
@@ -113,6 +124,23 @@ let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
     let tl = make_range_list (i1 + 1) i2 in
     (RangeInt i1)::tl
 
+let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : int = match Ast.unmark l with
+  | Ast.Int i -> i
+  | Ast.Variable v ->
+    (* We look up the value of the variable, which has to be const *)
+    begin try Cfg.VariableMap.find
+                (get_var_from_name ctx.idmap (Ast.same_pos_as (Ast.get_variable_name v) l))
+                ctx.int_const_values
+      with
+      | Not_found ->
+        raise (Errors.TypeError
+                 (Errors.Variable
+                    (Printf.sprintf "variable %s used %s, is not an integer constant and cannot be used as a loop range bound"
+                       (Ast.get_variable_name v)
+                       (Format_ast.format_position (Ast.get_position l))
+                    )))
+    end
+  | Ast.Float _ -> assert false (* should not happen *)
 
 let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
   ((loop_context -> 'a) -> 'a list) =
@@ -121,7 +149,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.flatten (List.map (fun value -> match value with
               | Ast.VarParam v -> [VarName (Ast.unmark v)]
-              | Ast.IntervalLoop (i1,i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+              | Ast.IntervalLoop (i1,i2) -> make_range_list (var_or_int_value ctx i1) (var_or_int_value ctx i2)
             ) values) in
           ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
@@ -131,7 +159,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.map (fun value -> match value with
               | Ast.VarParam v -> assert false (* should not happen *)
-              | Ast.IntervalLoop (i1, i2) -> make_range_list (Ast.unmark i1) (Ast.unmark i2)
+              | Ast.IntervalLoop (i1, i2) -> make_range_list (var_or_int_value ctx i1) (var_or_int_value ctx i2)
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
         ) ParamsMap.empty lvs in
@@ -156,7 +184,7 @@ let instantiate_generic_variables_parameters
           already there... So we need to remove it here.
         *)
         let value = if pad_zero then
-            Str.replace_first (Str.regexp "0\([0-9]\)") "\\1" value
+            Str.replace_first (Str.regexp "0([0-9])") "\\1" value
           else value
         in
         Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
@@ -165,111 +193,106 @@ let instantiate_generic_variables_parameters
           ((if pad_zero then "0" else "") ^ string_of_int i) var_name
     ) lc gen_name.Ast.base
 
-let get_var_from_name (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.Variable.t =
-  try VarNameToID.find (Ast.unmark name) d with
-  | Not_found ->
-    raise (Errors.TypeError
-             (Errors.Variable
-                (Printf.sprintf "variable %s used %s, has not been declared"
-                   (Ast.unmark name)
-                   (Format_ast.format_position (Ast.get_position name))
-                )))
-
 let get_var_or_x (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.expression =
   if Ast.unmark name = "X" then Cfg.GenericTableIndex else
     Cfg.Var (get_var_from_name d name)
 
-let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idmap) =
-  let (vars, idmap, out_list) = List.fold_left (fun (vars, idmap, out_list) source_file ->
-      List.fold_left (fun (vars, idmap, out_list) source_file_item ->
-          match Ast.unmark source_file_item with
-          | Ast.Variable var_decl ->
-            begin match var_decl with
-              | Ast.ComputedVar cvar ->
-                let cvar = Ast.unmark cvar in
-                (* First we check if the variable has not been declared a first time *)
-                begin try
-                    let old_var = VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap in
-                    Cli.var_info_print
-                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                         (Ast.unmark old_var.Cfg.Variable.name)
-                         (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
-                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                    (vars, idmap, out_list)
-                  with
-                  | Not_found ->
-                    let new_var = Cfg.Variable.new_var cvar.Ast.comp_name in
-                    let new_var_data = {
-                      var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
-                      var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
-                      var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
-                      var_decl_io = Regular;
-                      var_pos = Ast.get_position source_file_item;
-                    }
-                    in
-                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                    let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
-                    let new_out_list = if List.exists (fun x -> match Ast.unmark x with
-                        | Ast.GivenBack -> true
-                        | Ast.Base -> false
-                      ) cvar.Ast.comp_subtyp then
-                        cvar.Ast.comp_name::out_list
-                      else out_list
-                    in
-                    (new_vars, new_idmap, new_out_list)
-                end
-              | Ast.InputVar ivar ->
-                let ivar = Ast.unmark ivar in
-                begin try
-                    let old_var = VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap in
-                    Cli.var_info_print
-                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                         (Ast.unmark old_var.Cfg.Variable.name)
-                         (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
-                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                    (vars, idmap, out_list)
-                  with
-                  | Not_found ->
-                    let new_var = Cfg.Variable.new_var ivar.Ast.input_name in
-                    let new_var_data = {
-                      var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
-                      var_decl_is_table = None;
-                      var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
-                      var_decl_io = Input;
-                      var_pos = Ast.get_position source_file_item;
-                    } in
-                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                    let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
-                    (new_vars, new_idmap, out_list)
-                end
-              | Ast.ConstVar (marked_name, _) ->
-                begin try
-                    let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
-                    Cli.var_info_print
-                      (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                         (Ast.unmark old_var.Cfg.Variable.name)
-                         (Format_ast.format_position (Ast.get_position marked_name))
-                         (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                    (vars, idmap, out_list)
-                  with
-                  | Not_found ->
-                    let new_var  = Cfg.Variable.new_var marked_name in
-                    let new_var_data = {
-                      var_decl_typ = None;
-                      var_decl_is_table = None;
-                      var_decl_descr = None;
-                      var_decl_io = Constant;
-                      var_pos = Ast.get_position source_file_item;
-                    } in
-                    let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                    let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
-                    (new_vars, new_idmap, out_list)
-                end
-            end
-          | Ast.Output out_name -> (vars, idmap, out_name::out_list)
-          | _ -> (vars, idmap, out_list)
-        ) (vars, idmap, out_list) source_file
-    ) (Cfg.VariableMap.empty, VarNameToID.empty, []) p in
+let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idmap * int Cfg.VariableMap.t) =
+  let (vars, idmap, out_list, int_const_list) =
+    List.fold_left (fun (vars, idmap, out_list, int_const_list) source_file ->
+        List.fold_left (fun (vars, idmap, out_list, int_const_list) source_file_item ->
+            match Ast.unmark source_file_item with
+            | Ast.Variable var_decl ->
+              begin match var_decl with
+                | Ast.ComputedVar cvar ->
+                  let cvar = Ast.unmark cvar in
+                  (* First we check if the variable has not been declared a first time *)
+                  begin try
+                      let old_var = VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Cfg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                      (vars, idmap, out_list, int_const_list)
+                    with
+                    | Not_found ->
+                      let new_var = Cfg.Variable.new_var cvar.Ast.comp_name in
+                      let new_var_data = {
+                        var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
+                        var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
+                        var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
+                        var_decl_io = Regular;
+                        var_pos = Ast.get_position source_file_item;
+                      }
+                      in
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
+                      let new_out_list = if List.exists (fun x -> match Ast.unmark x with
+                          | Ast.GivenBack -> true
+                          | Ast.Base -> false
+                        ) cvar.Ast.comp_subtyp then
+                          cvar.Ast.comp_name::out_list
+                        else out_list
+                      in
+                      (new_vars, new_idmap, new_out_list, int_const_list)
+                  end
+                | Ast.InputVar ivar ->
+                  let ivar = Ast.unmark ivar in
+                  begin try
+                      let old_var = VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Cfg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                      (vars, idmap, out_list, int_const_list)
+                    with
+                    | Not_found ->
+                      let new_var = Cfg.Variable.new_var ivar.Ast.input_name in
+                      let new_var_data = {
+                        var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
+                        var_decl_is_table = None;
+                        var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
+                        var_decl_io = Input;
+                        var_pos = Ast.get_position source_file_item;
+                      } in
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
+                      (new_vars, new_idmap, out_list, int_const_list)
+                  end
+                | Ast.ConstVar (marked_name, cval) ->
+                  begin try
+                      let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Cfg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position marked_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                      (vars, idmap, out_list, int_const_list)
+                    with
+                    | Not_found ->
+                      let new_var  = Cfg.Variable.new_var marked_name in
+                      let new_var_data = {
+                        var_decl_typ = None;
+                        var_decl_is_table = None;
+                        var_decl_descr = None;
+                        var_decl_io = Constant;
+                        var_pos = Ast.get_position source_file_item;
+                      } in
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
+                      let new_int_const_list = match Ast.unmark cval with
+                        | Ast.Int i -> (marked_name, i)::int_const_list
+                        | _ -> int_const_list
+                      in
+                      (new_vars, new_idmap, out_list, new_int_const_list)
+                  end
+              end
+            | Ast.Output out_name -> (vars, idmap, out_name::out_list, int_const_list)
+            | _ -> (vars, idmap, out_list, int_const_list)
+          ) (vars, idmap, out_list, int_const_list) source_file
+      ) (Cfg.VariableMap.empty, VarNameToID.empty, [], []) p in
   let vars : var_decl_data Cfg.VariableMap.t = List.fold_left (fun vars out ->
       let out_var = get_var_from_name idmap out in
       try
@@ -278,7 +301,11 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
       with
       | Not_found -> assert false (* should not happen *)
     ) vars out_list in
-  (vars, idmap)
+  let int_const_vals : int Cfg.VariableMap.t = List.fold_left (fun out (vname, i)  ->
+      Cfg.VariableMap.add (get_var_from_name idmap vname) i out
+    ) Cfg.VariableMap.empty int_const_list
+  in
+  (vars, idmap, int_const_vals)
 
 let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Cfg.expression Ast.marked =
   match Ast.unmark var with
@@ -623,6 +650,7 @@ let rule_belongs_to_app (r: Ast.rule) (application: string option) : bool = matc
 let get_var_data
     (idmap: idmap)
     (var_decl_data: var_decl_data Cfg.VariableMap.t)
+    (int_const_vals: int Cfg.VariableMap.t)
     (p: Ast.program)
     (application : string option)
   : Cfg.variable_data Cfg.VariableMap.t =
@@ -634,12 +662,12 @@ let get_var_data
               List.fold_left (fun var_data formula ->
                   match Ast.unmark formula with
                   | Ast.SingleFormula f ->
-                    let ctx = { idmap; lc = None } in
+                    let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
                     let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
                     let var_expr = translate_expression ctx f.Ast.formula in
                     add_var_def var_data var_lvalue var_expr def_kind var_decl_data
                   | Ast.MultipleFormulaes (lvs, f) ->
-                    let ctx = { idmap; lc = None } in
+                    let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
                     let loop_context_provider = translate_loop_variables ctx lvs in
                     let translator = fun lc ->
                       let new_ctx = { ctx with lc = Some lc } in
@@ -725,7 +753,7 @@ let check_if_all_variables_defined
 
 
 let translate (p: Ast.program) (application : string option): Cfg.program =
-  let (var_decl_data, idmap) = get_variables_decl p in
-  let var_data = get_var_data idmap var_decl_data p application in
+  let (var_decl_data, idmap, int_const_vals) = get_variables_decl p in
+  let var_data = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data in
   var_data

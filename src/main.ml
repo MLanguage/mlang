@@ -97,6 +97,8 @@ let main () =
     ) !source_files;
   try
     let program = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
+    Cli.debug_print ("Expanding function definitions...");
+    let program = Functions.expand_functions program in
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
     (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
@@ -105,15 +107,10 @@ let main () =
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
     Dependency.check_for_cycle dep_graph;
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
-    Cli.debug_print ("Expanding function definitions...");
-    let program = Functions.expand_functions program in
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
-    Cfg.VariableMap.iter (fun var _ ->
-        Printf.printf "UNUSED: %s\n" (Ast.unmark var.Cfg.Variable.name)
-      ) unused_variables;
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
-    (* Printf.eprintf "Program: %s\n" (Format_cfg.format_program program); *)
+    (* Printf.printf "Program: %s\n" (Format_cfg.format_program program); *)
     Cli.debug_print (Printf.sprintf "Propagating constants variables...");
     let dep_graph = Dependency.create_dependency_graph program in
     let program = Constant_propagation.propagate_constants dep_graph program in
@@ -144,6 +141,13 @@ let main () =
     done;
     let program = !program in
     let typing_info = !typing_info in
+    Cli.debug_print (Printf.sprintf "Propagating constants variables...");
+    let dep_graph = Dependency.create_dependency_graph program in
+    let program = Constant_propagation.propagate_constants dep_graph program in
+    let dep_graph = Dependency.create_dependency_graph program in
+    let unused_variables = Dependency.get_unused_variables dep_graph program in
+    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
+    let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
     Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
     let program = Constant_propagation.partially_evaluate program in
     Cli.debug_print
@@ -151,6 +155,7 @@ let main () =
          (Cfg.VariableMap.cardinal program));
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph;
+    exit 0;
     Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_cfg.format_program program));
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
     let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in

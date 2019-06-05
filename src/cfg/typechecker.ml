@@ -48,14 +48,14 @@ struct
 
   type t = {
     uf_typ: UF.t;
-    uf_is_bool: UB.t;
+    ub_is_bool: UB.t;
   }
 
-  let integer : t = { uf_typ = UF.create (Some Integer); uf_is_bool = UB.create None }
-  let real : t = { uf_typ = UF.create (Some Real); uf_is_bool = UB.create None }
-  let boolean : t = { uf_typ = UF.create (Some Boolean); uf_is_bool = UB.create None }
-  let only_non_boolean : t = { uf_typ = UF.create None; uf_is_bool = UB.create (Some false) }
-  let only_boolean : t = { uf_typ = UF.create None; uf_is_bool = UB.create (Some true) }
+  let integer : t = { uf_typ = UF.create (Some Integer); ub_is_bool = UB.create (Some false) }
+  let real : t = { uf_typ = UF.create (Some Real); ub_is_bool = UB.create (Some false) }
+  let boolean : t = { uf_typ = UF.create (Some Boolean); ub_is_bool = UB.create (Some true) }
+  let only_non_boolean : t = { uf_typ = UF.create None; ub_is_bool = UB.create (Some false) }
+  let only_boolean : t = { uf_typ = UF.create None; ub_is_bool = UB.create (Some true) }
 
   let create_concrete (t: typ) : t =
     match t with
@@ -63,7 +63,7 @@ struct
     | Real -> real
     | Boolean -> boolean
 
-  let create_variable () : t = { uf_typ = UF.create None; uf_is_bool = UB.create None }
+  let create_variable () : t = { uf_typ = UF.create None; ub_is_bool = UB.create None }
 
   let is_boolean (t: t) : bool =
     UF.find t.uf_typ = UF.find boolean.uf_typ
@@ -82,17 +82,6 @@ struct
     | Some Boolean -> Format_cfg.format_typ Boolean
     | None -> "unknown"
 
-  let unify (t1: t) (t2: t) : unit =
-    UF.union t1.uf_typ t2.uf_typ;
-    UB.union t1.uf_is_bool t2.uf_is_bool;
-    if UF.find integer.uf_typ = UF.find real.uf_typ ||
-       UF.find integer.uf_typ = UF.find boolean.uf_typ ||
-       UF.find real.uf_typ = UF.find boolean.uf_typ ||
-       UB.find only_non_boolean.uf_is_bool = UB.find only_boolean.uf_is_bool then
-      raise (UnificationError (format_unification_error_type t1, format_unification_error_type t2))
-    else
-      ()
-
   let to_concrete (t: t) : typ =
     if UF.find t.uf_typ = UF.find real.uf_typ then
       Real
@@ -100,7 +89,7 @@ struct
       Boolean
     else if UF.find t.uf_typ = UF.find integer.uf_typ then
       Integer
-    else if UB.find t.uf_is_bool = UB.find only_non_boolean.uf_is_bool then
+    else if UB.find t.ub_is_bool = UB.find only_non_boolean.ub_is_bool then
       Integer
     else
       Boolean
@@ -112,10 +101,26 @@ struct
       Format_cfg.format_typ Boolean
     else if UF.find t.uf_typ = UF.find integer.uf_typ then
       Format_cfg.format_typ Integer
-    else if UB.find t.uf_is_bool = UB.find only_non_boolean.uf_is_bool then
+    else if UB.find t.ub_is_bool = UB.find only_boolean.ub_is_bool then
+      Format_cfg.format_typ Boolean
+    else if UB.find t.ub_is_bool = UB.find only_non_boolean.ub_is_bool then
       "integer or real"
     else
-      "unknown ()"
+      "unknown"
+
+  let unify (t1: t) (t2: t) : unit =
+    UB.union t1.ub_is_bool t2.ub_is_bool;
+    if
+      (not (UB.find t1.ub_is_bool = UB.find only_non_boolean.ub_is_bool &&  (UF.find t2.uf_typ = UF.find integer.uf_typ || UF.find t2.uf_typ = UF.find real.uf_typ))) &&
+      (not (UB.find t2.ub_is_bool = UB.find only_non_boolean.ub_is_bool &&  (UF.find t1.uf_typ = UF.find integer.uf_typ || UF.find t1.uf_typ = UF.find real.uf_typ)))
+    then  UF.union t1.uf_typ t2.uf_typ;
+    if UF.find integer.uf_typ = UF.find real.uf_typ ||
+       UF.find integer.uf_typ = UF.find boolean.uf_typ ||
+       UF.find real.uf_typ = UF.find boolean.uf_typ ||
+       UB.find only_non_boolean.ub_is_bool = UB.find only_boolean.ub_is_bool then
+      raise (UnificationError (format_unification_error_type t1, format_unification_error_type t2))
+    else
+      ()
 
 end
 
