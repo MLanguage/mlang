@@ -120,16 +120,19 @@ let rec translate_expression
   | Cfg.Binop (op, e1, e2) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
     let z3_e2 = translate_expression repr_data e2 ctx s in
-    Cli.debug_print @@ Printf.sprintf "z3_e1: %s\nz3_e2: %s\n"
-      (Z3.Expr.to_string (z3_e1 orig_arg))
-      (Z3.Expr.to_string (z3_e2 orig_arg));
+    let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
+    Printf.printf "binop: z3_e1: %s (%d), z3_e2: %s (%d)\n"
+      (Z3.Expr.to_string z3_e1)
+      (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e1)))
+      (Z3.Expr.to_string (z3_e2))
+      (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e2)));
     begin match Ast.unmark op with
-      | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1 orig_arg; z3_e2 orig_arg]
-      | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1 orig_arg; z3_e2 orig_arg]
-      | Ast.Mul -> Z3.BitVector.mk_mul ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-      | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
-      | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1 orig_arg) (z3_e2 orig_arg)
+      | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1; z3_e2]
+      | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1; z3_e2]
+      | Ast.Mul -> Z3.BitVector.mk_mul ctx (z3_e1) (z3_e2)
+      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (z3_e1) (z3_e2)
+      | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1) (z3_e2)
+      | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1) (z3_e2)
     end
   | Cfg.Unop (op, e1) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -205,6 +208,13 @@ let rec translate_expression
       | _ -> assert false (* should not happen *)
     end
 
+let cast ctx size expr =
+  let se = Z3.BitVector.get_size (Z3.Expr.get_sort expr) in
+  if se = size then expr
+  else if se < size then
+    Z3.BitVector.mk_concat ctx
+      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (size - se)) expr
+  else assert false
 
 let translate_program
     (p: Cfg.program)
@@ -245,9 +255,13 @@ let translate_program
           (Format_cfg.format_expression @@ fst e);
         let z3_e = translate_expression repr_data e ctx s in
         let z3_var = declare_var_not_table var typ ctx in
-        Printf.printf "z3_var: %s\n" (Z3.Expr.to_string z3_var);
-        Printf.printf "z3_e: %s\n" (Z3.Expr.to_string (z3_e (dummy_param ctx typ)));
-        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var (z3_e (dummy_param ctx typ))];
+        let cast_expr = cast ctx (Z3.BitVector.get_size (Z3.Expr.get_sort z3_var)) (z3_e (dummy_param ctx typ)) in
+        Printf.printf "\nz3_var: %s\nz3_e: %s (%d)\ncast_expr = %s\n"
+          (Z3.Expr.to_string z3_var)
+          (Z3.Expr.to_string (z3_e (dummy_param ctx typ)))
+          (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e (dummy_param ctx typ))))
+          (Z3.Expr.to_string cast_expr);
+        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
         { repr_data with
           Z3_repr.repr_data_var =
             Cfg.VariableMap.add
