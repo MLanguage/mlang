@@ -607,7 +607,9 @@ let add_var_def
         if def_kind = NoIndex then
           { Cfg.var_definition = Cfg.SimpleVar var_expr;
             Cfg.var_typ = var_typ;
-            Cfg.var_io = io }
+            Cfg.var_io = io;
+            Cfg.var_is_undefined = false
+          }
         else
           match decl_data.var_decl_is_table with
           | Some size -> begin
@@ -617,13 +619,15 @@ let add_var_def
                 {
                   Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable (Cfg.IndexMap.singleton i var_expr));
                   Cfg.var_typ = var_typ;
-                  Cfg.var_io = io
+                  Cfg.var_io = io;
+                  Cfg.var_is_undefined = false
                 }
               | GenericIndex ->
                 {
                   Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexGeneric var_expr);
                   Cfg.var_typ = var_typ;
-                  Cfg.var_io = io
+                  Cfg.var_io = io;
+                  Cfg.var_is_undefined = false
                 }
             end
           | None -> raise (Errors.TypeError (
@@ -706,7 +710,12 @@ let get_var_data
               ) in
             Cfg.VariableMap.add
               var
-              { Cfg.var_definition = Cfg.InputVar; Cfg.var_typ = typ; Cfg.var_io = Cfg.Input }
+              {
+                Cfg.var_definition = Cfg.InputVar;
+                Cfg.var_typ = typ;
+                Cfg.var_io = Cfg.Input;
+                Cfg.var_is_undefined = false
+              }
               var_data
           | _ -> var_data
         ) var_data source_file
@@ -739,11 +748,13 @@ let check_if_all_variables_defined
                      );
                    Cfg.var_typ = None;
                    Cfg.var_io = io;
+                   Cfg.var_is_undefined = true
                  }
                | None -> Some {
                    Cfg.var_definition = Cfg.SimpleVar (Ast.same_pos_as Cfg.Error var.Cfg.Variable.name);
                    Cfg.var_typ = None;
                    Cfg.var_io = io;
+                   Cfg.var_is_undefined = true
                  }
              end
            | Input -> assert false (* should not happen *)
@@ -752,8 +763,8 @@ let check_if_all_variables_defined
      ) var_data var_decl_data)
 
 
-let translate (p: Ast.program) (application : string option): Cfg.program =
+let translate (p: Ast.program) (application : string option): (Cfg.program * Cfg.Variable.t VarNameToID.t) =
   let (var_decl_data, idmap, int_const_vals) = get_variables_decl p in
   let var_data = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data in
-  var_data
+  var_data, idmap

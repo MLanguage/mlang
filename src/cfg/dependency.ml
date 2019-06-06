@@ -129,6 +129,35 @@ let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.
       not (is_necessary_to_output var)
     ) (Cfg.VariableMap.map (fun _ -> ()) p)
 
+let correctly_defined_outputs (g: DepGraph.t) (p: Cfg.program) : unit Cfg.VariableMap.t =
+  let is_output = fun var ->
+    try
+      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+    with
+    | Not_found -> assert false (* should not happen *)
+  in
+  let is_undefined = fun var ->
+    try
+      (Cfg.VariableMap.find var p).Cfg.var_is_undefined
+    with
+    | Not_found -> assert false (* should not happen *)
+  in
+  let contains_undefined = Reachability.analyze is_undefined g in
+  let is_output_and_does_not_contain_undefined = Cfg.VariableMap.filter (fun v _ -> is_output v)
+      (Cfg.VariableMap.filter (fun v _ -> not (contains_undefined v)) p)
+  in
+  Cfg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
+
+let requalify_outputs (p: Cfg.program) (only_output : unit Cfg.VariableMap.t) : Cfg.program =
+  Cfg.VariableMap.mapi (fun v var_data ->
+      { var_data with
+        Cfg.var_io = if var_data.Cfg.var_io = Cfg.Output && not (Cfg.VariableMap.mem v only_output) then
+            Cfg.Regular
+          else
+            var_data.Cfg.var_io
+      }
+    ) p
+
 
 module Constability = Graph.Fixpoint.Make(DepGraph)
     (struct
@@ -144,20 +173,31 @@ module Constability = Graph.Fixpoint.Make(DepGraph)
 
 module TopologicalOrder = Graph.Topological.Make(DepGraph)
 
+let program_when_printing : Cfg.program option ref = ref None
+
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 
     let edge_attributes _ = []
     let default_edge_attributes _ = []
     let get_subgraph _ = None
-    let vertex_attributes _ = []
+    let vertex_attributes v = begin match !program_when_printing with
+      | None -> []
+      | Some p ->
+        let var_data = Cfg.VariableMap.find v p in
+        match var_data.Cfg.var_io with
+        | Cfg.Input -> [`Color 1; `Shape `Box]
+        | Cfg.Regular -> []
+        | Cfg.Output -> [`Color 2; `Shape `Diamond]
+    end
     let vertex_name v = Ast.unmark v.Cfg.Variable.name
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
   end)
 
-let print_dependency_graph (filename: string) (graph: DepGraph.t): unit =
+let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Cfg.program): unit =
   let file = open_out_bin filename in
+  program_when_printing:= Some p;
   Cli.debug_print (Printf.sprintf "Writing variables dependency graph to %s" filename);
   if !Cli.debug_flag then
     Dot.output_graph file graph;

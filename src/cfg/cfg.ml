@@ -153,6 +153,7 @@ type variable_data = {
   var_definition: variable_def;
   var_typ : typ option;
   var_io: io;
+  var_is_undefined: bool;
 }
 
 

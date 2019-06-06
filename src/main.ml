@@ -96,28 +96,49 @@ let main () =
         end
     ) !source_files;
   try
-    let program = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
+    let program, idmap = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
+
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
+
+    (* let queried_variable = "IAD11" in
+       let print_queried program = Cli.result_print @@ Printf.sprintf "Variable %s: %s" queried_variable
+        (Format_cfg.format_variable_def
+           (Cfg.VariableMap.find
+              (Ast_to_cfg.VarNameToID.find queried_variable idmap) program).Cfg.var_definition);
+       in *)
+
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
+
     (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
+
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot")  dep_graph;
+    Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot") dep_graph program;
     Dependency.check_for_cycle dep_graph;
+
+    let correctly_defined_outputs = Dependency.correctly_defined_outputs dep_graph program in
+    Cli.debug_print @@ Printf.sprintf "Correclty defined output variables: %s."
+      (String.concat ", " (
+          List.map (fun (v, _) -> Ast.unmark v.Cfg.Variable.name)
+            (Cfg.VariableMap.bindings correctly_defined_outputs)
+        ));
+    let program = Dependency.requalify_outputs program correctly_defined_outputs in
+
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+
     (* Printf.printf "Program: %s\n" (Format_cfg.format_program program); *)
     Cli.debug_print (Printf.sprintf "Propagating constants variables...");
     let dep_graph = Dependency.create_dependency_graph program in
     let program = Constant_propagation.propagate_constants dep_graph program in
+
     let program : Cfg.program ref = ref program in
     let typing_info : Typechecker.typ_info ref = ref typing_info in
     let nb_inlined_vars : int ref = ref max_int in
-
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
       let single_use_vars = Dependency.single_use_vars dep_graph in
@@ -141,21 +162,39 @@ let main () =
     done;
     let program = !program in
     let typing_info = !typing_info in
+
     Cli.debug_print (Printf.sprintf "Propagating constants variables...");
     let dep_graph = Dependency.create_dependency_graph program in
     let program = Constant_propagation.propagate_constants dep_graph program in
+
     let dep_graph = Dependency.create_dependency_graph program in
     let unused_variables = Dependency.get_unused_variables dep_graph program in
     Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
     let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+
     Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
     let program = Constant_propagation.partially_evaluate program in
     Cli.debug_print
       (Printf.sprintf "Program variables count down to %d!"
          (Cfg.VariableMap.cardinal program));
+
+
     let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph;
+    Dependency.print_dependency_graph (!dep_graph_file ^ "_after_optimization.dot") dep_graph program;
+
+    let minimal_input_variables =
+      List.map
+        (fun (v, _) -> Ast.unmark v.Cfg.Variable.name)
+        (Cfg.VariableMap.bindings
+           (Cfg.VariableMap.filter (fun _ var_data -> var_data.Cfg.var_io = Cfg.Input) program)
+        )
+    in
+    Cli.debug_print @@ Printf.sprintf "Minimal set of input variables needed: %s (%d variables)."
+      (String.concat ", " minimal_input_variables)
+      (List.length minimal_input_variables);
+
     exit 0;
+
     Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_cfg.format_program program));
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
     let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
