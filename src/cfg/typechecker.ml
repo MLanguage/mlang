@@ -36,92 +36,62 @@ open Cfg
 module Typ =
 struct
 
-  module UF = Union_find.Make(struct
-      type t = typ option
-      let equal t1 t2 = t1 = t2
-    end)
+  type t' =
+    | Integer
+    | Real
+    | Boolean
+    | IntegerOrReal
+    | All
 
-  module UB = Union_find.Make(struct
-      type t = bool option
-      let equal t1 t2 = t1 = t2
-    end)
-
-  type t = {
-    uf_typ: UF.t;
-    ub_is_bool: UB.t;
-  }
-
-  let integer : t = { uf_typ = UF.create (Some Integer); ub_is_bool = UB.create (Some false) }
-  let real : t = { uf_typ = UF.create (Some Real); ub_is_bool = UB.create (Some false) }
-  let boolean : t = { uf_typ = UF.create (Some Boolean); ub_is_bool = UB.create (Some true) }
-  let only_non_boolean : t = { uf_typ = UF.create None; ub_is_bool = UB.create (Some false) }
-  let only_boolean : t = { uf_typ = UF.create None; ub_is_bool = UB.create (Some true) }
-
-  let create_concrete (t: typ) : t =
-    match t with
-    | Integer -> integer
-    | Real -> real
-    | Boolean -> boolean
-
-  let create_variable () : t = { uf_typ = UF.create None; ub_is_bool = UB.create None }
-
-  let is_boolean (t: t) : bool =
-    UF.find t.uf_typ = UF.find boolean.uf_typ
-
-  let is_integer (t: t) : bool =
-    UF.find t.uf_typ = UF.find integer.uf_typ
-
-  let is_real (t:t) : bool =
-    UF.find t.uf_typ = UF.find real.uf_typ
+  type t = t' ref
 
   exception UnificationError of string * string
 
-  let format_unification_error_type (t: t) : string = match UF.get_elt t.uf_typ with
-    | Some Integer ->  Format_cfg.format_typ Integer
-    | Some Real -> Format_cfg.format_typ Real
-    | Some Boolean -> Format_cfg.format_typ Boolean
-    | None -> "unknown"
+  let format_typ (t:t) : string =
+    match !t with
+    | Integer -> "integer"
+    | Real -> "real"
+    | Boolean -> "boolean"
+    | IntegerOrReal -> "integer or real"
+    | All -> "unconstrained"
+
+  let create_variable () : t = ref All
 
   let to_concrete (t: t) : typ =
-    if UF.find t.uf_typ = UF.find real.uf_typ then
-      Real
-    else if UF.find t.uf_typ = UF.find boolean.uf_typ then
-      Boolean
-    else if UF.find t.uf_typ = UF.find integer.uf_typ then
-      Integer
-    else if UB.find t.ub_is_bool = UB.find only_non_boolean.ub_is_bool then
-      Integer
-    else
-      Boolean
+    match !t with
+    | Integer -> Cfg.Integer
+    | Real -> Cfg.Real
+    | Boolean -> Cfg.Boolean
+    | IntegerOrReal -> Cfg.Integer
+    | All -> Cfg.Boolean
 
-  let format_typ (t:t) =
-    if UF.find t.uf_typ = UF.find real.uf_typ then
-      Format_cfg.format_typ Real
-    else if UF.find t.uf_typ = UF.find boolean.uf_typ then
-      Format_cfg.format_typ Boolean
-    else if UF.find t.uf_typ = UF.find integer.uf_typ then
-      Format_cfg.format_typ Integer
-    else if UB.find t.ub_is_bool = UB.find only_boolean.ub_is_bool then
-      Format_cfg.format_typ Boolean
-    else if UB.find t.ub_is_bool = UB.find only_non_boolean.ub_is_bool then
-      "integer or real"
-    else
-      "unknown"
+  let boolean () = ref Boolean
+  let integer () = ref Integer
+  let real () = ref Real
+  let integer_or_real () = ref IntegerOrReal
 
-  let unify (t1: t) (t2: t) : unit =
-    UB.union t1.ub_is_bool t2.ub_is_bool;
-    if
-      (not (UB.find t1.ub_is_bool = UB.find only_non_boolean.ub_is_bool &&  (UF.find t2.uf_typ = UF.find integer.uf_typ || UF.find t2.uf_typ = UF.find real.uf_typ))) &&
-      (not (UB.find t2.ub_is_bool = UB.find only_non_boolean.ub_is_bool &&  (UF.find t1.uf_typ = UF.find integer.uf_typ || UF.find t1.uf_typ = UF.find real.uf_typ)))
-    then  UF.union t1.uf_typ t2.uf_typ;
-    if UF.find integer.uf_typ = UF.find real.uf_typ ||
-       UF.find integer.uf_typ = UF.find boolean.uf_typ ||
-       UF.find real.uf_typ = UF.find boolean.uf_typ ||
-       UB.find only_non_boolean.ub_is_bool = UB.find only_boolean.ub_is_bool then
-      raise (UnificationError (format_unification_error_type t1, format_unification_error_type t2))
-    else
-      ()
+  let create_concrete (t: typ) : t = match t with
+    | Cfg.Integer -> integer ()
+    | Cfg.Real -> real ()
+    | Cfg.Boolean -> boolean ()
 
+  let is_lattice_transition (t1: t) (t2:t) : bool =
+    match (!t1, !t2) with
+    | (All, _)
+    | (IntegerOrReal, Integer)
+    | (IntegerOrReal, Real)
+    | (Boolean, (Integer | Real | IntegerOrReal))
+    | (Integer, Real) -> true
+    | (t1, t2) when t1 = t2 -> true
+    | _ -> false
+
+  let unify (t1: t) (t2:t) : unit =
+    if is_lattice_transition t1 t2 then
+      t1 := !t2
+    else if is_lattice_transition t2 t1 then
+      t2 := !t1
+    else
+      raise (UnificationError (format_typ t1, format_typ t2))
 end
 
 type ctx = {
@@ -175,7 +145,7 @@ let rec typecheck_top_down
   | (Conditional (e1, e2, e3), t) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     begin try
-        Typ.unify t1 Typ.boolean;
+        Typ.unify t1 (Typ.boolean ());
         let (ctx, t2) = typecheck_bottom_up ctx e2 in
         let (ctx, t3) = typecheck_bottom_up ctx e3 in
         begin try
@@ -326,28 +296,41 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                   )))
     else
       let (ctx, t1) = typecheck_bottom_up ctx (List.hd args) in
-      let ctx = List.fold_left (fun ctx arg ->
-          let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg t1; Typ.unify t_arg Typ.only_non_boolean; ctx with
-            | Typ.UnificationError (t_arg_msg,t2_msg) ->
-              raise (Errors.TypeError
-                       (Errors.Typing
-                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_cfg.format_expression (Ast.unmark arg))
-                             (Format_ast.format_position (Ast.get_position arg))
-                             t_arg_msg
-                             t2_msg
-                          )))
-          end
-        ) ctx args
-      in
-      (ctx, t1)
+      begin try
+          Typ.unify t1 (Typ.integer_or_real ());
+          let ctx = List.fold_left (fun ctx arg ->
+              let (ctx, t_arg) = typecheck_bottom_up ctx arg in
+              begin try Typ.unify t_arg t1; ctx with
+                | Typ.UnificationError (t_arg_msg,t2_msg) ->
+                  raise (Errors.TypeError
+                           (Errors.Typing
+                              (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                                 (Format_cfg.format_expression (Ast.unmark arg))
+                                 (Format_ast.format_position (Ast.get_position arg))
+                                 t_arg_msg
+                                 t2_msg
+                              )))
+              end
+            ) ctx args
+          in
+          (ctx, t1)
+        with
+        | Typ.UnificationError (t_arg_msg,t2_msg) ->
+          raise (Errors.TypeError
+                   (Errors.Typing
+                      (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
+                         (Format_cfg.format_expression (Ast.unmark (List.hd args)))
+                         (Format_ast.format_position (Ast.get_position (List.hd args)))
+                         t_arg_msg
+                         t2_msg
+                      )))
+      end
   | AbsFunc ->
     fun ctx args ->
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, t_arg) with
+          begin try Typ.unify t_arg (Typ.integer_or_real ()); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -370,7 +353,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.integer) with
+          begin try Typ.unify t_arg (Typ.integer_or_real ()); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -392,7 +375,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg Typ.only_non_boolean; (ctx, Typ.integer) with
+          begin try Typ.unify t_arg (Typ.real ()); (ctx, Typ.integer ()) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -419,17 +402,17 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
         let ctx = { ctx with ctx_var_typ = VariableMap.add var t ctx.ctx_var_typ } in
         (ctx, t)
     end
-  | Literal (Int _) -> (ctx, Typ.integer)
-  | Literal (Float _) -> (ctx, Typ.real)
-  | Literal (Bool _) -> (ctx, Typ.boolean)
+  | Literal (Int _) -> (ctx, Typ.integer ())
+  | Literal (Float _) -> (ctx, Typ.real ())
+  | Literal (Bool _) -> (ctx, Typ.boolean ())
   | Binop ((Ast.And, _ | Ast.Or, _), e1, e2) ->
     let ctx = typecheck_top_down ctx e1 Boolean in
     let ctx = typecheck_top_down ctx e2 Boolean in
-    (ctx, Typ.boolean)
+    (ctx, Typ.boolean ())
   | Binop ((Ast.Add, _ | Ast.Sub, _ | Ast.Mul, _ | Ast.Div, _) as op, e1, e2) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
-    begin try Typ.unify t1 t2; Typ.unify t1 Typ.only_non_boolean; (ctx, t1) with
+    begin try Typ.unify t1 t2; (ctx, t1) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -443,7 +426,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Comparison (op, e1, e2) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
-    begin try Typ.unify t1 t2; (ctx, Typ.boolean) with
+    begin try Typ.unify t1 t2; (ctx, Typ.boolean ()) with
       | Typ.UnificationError _ ->
         raise (Errors.TypeError (
             Errors.Typing
@@ -457,10 +440,10 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
     end
   | Unop (Ast.Not, e) ->
     let ctx = typecheck_top_down ctx e Boolean in
-    (ctx, Typ.boolean)
+    (ctx, Typ.boolean ())
   | Unop (Ast.Minus, e') ->
     let (ctx, t) = typecheck_bottom_up ctx e' in
-    begin try Typ.unify t Typ.only_non_boolean; (ctx, t) with
+    begin try Typ.unify t (Typ.integer_or_real ()); (ctx, t) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -471,7 +454,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
                        t2_msg
                     )))
     end
-  | GenericTableIndex -> (ctx, Typ.integer)
+  | GenericTableIndex -> (ctx, Typ.integer ())
   | Index ((var, var_pos), e') ->
     let ctx = typecheck_top_down ctx e' Integer in
     let var_data = VariableMap.find var ctx.ctx_program in
@@ -495,7 +478,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Conditional (e1, e2, e3) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     begin try
-        Typ.unify t1 Typ.boolean;
+        Typ.unify t1 (Typ.boolean ());
         let (ctx, t2) = typecheck_bottom_up ctx e2 in
         let (ctx, t3) = typecheck_bottom_up ctx e3 in
         begin try

@@ -111,7 +111,7 @@ let main () =
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
 
-    (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
+    Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info);
 
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
