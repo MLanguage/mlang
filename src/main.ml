@@ -111,7 +111,7 @@ let main () =
     Cli.debug_print "Typechecking...";
     let typing_info = Typechecker.typecheck program in
 
-    Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info);
+    (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
 
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
@@ -119,7 +119,7 @@ let main () =
     Dependency.check_for_cycle dep_graph;
 
     let correctly_defined_outputs = Dependency.correctly_defined_outputs dep_graph program in
-    Cli.debug_print @@ Printf.sprintf "Correclty defined output variables: %s."
+    Cli.debug_print @@ Printf.sprintf "Correctly defined output variables: %s."
       (String.concat ", " (
           List.map (fun (v, _) -> Ast.unmark v.Cfg.Variable.name)
             (Cfg.VariableMap.bindings correctly_defined_outputs)
