@@ -119,11 +119,35 @@ let main () =
     Dependency.check_for_cycle dep_graph;
 
     let correctly_defined_outputs = Dependency.correctly_defined_outputs dep_graph program in
-    Cli.debug_print @@ Printf.sprintf "Correctly defined output variables: %s."
-      (String.concat ", " (
-          List.map (fun (v, _) -> Ast.unmark v.Cfg.Variable.name)
-            (Cfg.VariableMap.bindings correctly_defined_outputs)
-        ));
+
+    let correctly_defined_output_variables =
+      List.map
+        (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
+                       (Format_cfg.format_typ
+                          (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
+        (Cfg.VariableMap.bindings correctly_defined_outputs)
+    in
+
+    Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
+      (List.length correctly_defined_output_variables);
+    if Cfg.VariableMap.cardinal correctly_defined_outputs = 0 then begin
+      let undefined_dependencies = Dependency.undefined_dependencies dep_graph program in
+      let undefined_output_variables =
+        List.map
+          (fun (v, _) -> Format_cfg.format_variable v)
+          (Cfg.VariableMap.bindings undefined_dependencies)
+      in
+
+      raise (Errors.TypeError (
+          Errors.Variable
+            (Printf.sprintf
+               ("there are no correctly defined output variables.\n\
+                 Number of undefined variables needed computing the outputs: %d.\n%s")
+               (List.length undefined_output_variables)
+               (String.concat "\n" undefined_output_variables);
+            )))
+    end;
+
     let program = Dependency.requalify_outputs program correctly_defined_outputs in
 
     Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
@@ -191,9 +215,8 @@ let main () =
            (Cfg.VariableMap.filter (fun _ var_data -> var_data.Cfg.var_io = Cfg.Input) program)
         )
     in
-    Cli.debug_print @@ Printf.sprintf "Minimal set of input variables needed (%d variables):\n%s"
-      (List.length minimal_input_variables)
-      (String.concat "\n" minimal_input_variables);
+    Cli.debug_print @@ Printf.sprintf "Number of input variables needed: %d."
+      (List.length minimal_input_variables);
 
     exit 0;
 

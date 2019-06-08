@@ -31,6 +31,8 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+
+(* The edges in the graph go from output to inputs *)
 module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
     type t = Cfg.Variable.t
     let hash v = v.Cfg.Variable.id
@@ -49,7 +51,7 @@ let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: D
   | Cfg.Unop (_, e) ->
     add_usages lvar e acc
   | Cfg.Index ((var,_ ), e) ->
-    let acc = DepGraph.add_edge acc lvar var in
+    let acc = DepGraph.add_edge acc var lvar in
     let acc = add_usages lvar e acc in
     acc
   | Cfg.Conditional (e1, e2, e3) ->
@@ -65,7 +67,7 @@ let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: D
   | Cfg.GenericTableIndex
   | Cfg.Error -> acc
   | Cfg.Var var ->
-    DepGraph.add_edge acc lvar var
+    DepGraph.add_edge acc var lvar
 
 
 let create_dependency_graph (p: Cfg.program) : DepGraph.t =
@@ -105,7 +107,19 @@ let single_use_vars (g: DepGraph.t) : unit Cfg.VariableMap.t =
         acc
     ) g Cfg.VariableMap.empty
 
-module Reachability = Graph.Fixpoint.Make(DepGraph)
+module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
+    (struct
+      type vertex = DepGraph.E.vertex
+      type edge = DepGraph.E.t
+      type g = DepGraph.t
+      type data = bool
+      let direction = Graph.Fixpoint.Backward
+      let equal = (=)
+      let join = (||)
+      let analyze _ = (fun x -> x)
+    end)
+
+module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
     (struct
       type vertex = DepGraph.E.vertex
       type edge = DepGraph.E.t
@@ -114,7 +128,7 @@ module Reachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Forward
       let equal = (=)
       let join = (||)
-      let analyze _ = (fun x -> true)
+      let analyze _ = (fun x -> x)
     end)
 
 let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.t =
@@ -124,7 +138,7 @@ let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.
     with
     | Not_found -> assert false (* should not happen *)
   in
-  let is_necessary_to_output = Reachability.analyze is_output g in
+  let is_necessary_to_output = OutputToInputReachability.analyze is_output g in
   Cfg.VariableMap.filter (fun var _ ->
       not (is_necessary_to_output var)
     ) (Cfg.VariableMap.map (fun _ -> ()) p)
@@ -142,11 +156,37 @@ let correctly_defined_outputs (g: DepGraph.t) (p: Cfg.program) : unit Cfg.Variab
     with
     | Not_found -> assert false (* should not happen *)
   in
-  let contains_undefined = Reachability.analyze is_undefined g in
+  let contains_undefined = InputToOutputReachability.analyze is_undefined g in
   let is_output_and_does_not_contain_undefined = Cfg.VariableMap.filter (fun v _ -> is_output v)
-      (Cfg.VariableMap.filter (fun v _ -> not (contains_undefined v)) p)
+      (Cfg.VariableMap.filter (fun v _ ->
+           not (contains_undefined v)
+         ) p)
   in
   Cfg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
+
+let undefined_dependencies
+    (g: DepGraph.t)
+    (p: Cfg.program)
+  : unit Cfg.VariableMap.t =
+  let is_output = fun var ->
+    try
+      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+    with
+    | Not_found -> assert false (* should not happen *)
+  in
+  let is_undefined = fun var ->
+    try
+      (Cfg.VariableMap.find var p).Cfg.var_is_undefined
+    with
+    | Not_found -> assert false (* should not happen *)
+  in
+  let in_needed_by_output = OutputToInputReachability.analyze is_output g in
+  let is_needed_by_ouptput_and_undefined =
+    Cfg.VariableMap.filter (fun v _ -> is_undefined v)
+      (Cfg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
+  in
+  Cfg.VariableMap.map (fun _ -> ()) is_needed_by_ouptput_and_undefined
+
 
 let requalify_outputs (p: Cfg.program) (only_output : unit Cfg.VariableMap.t) : Cfg.program =
   Cfg.VariableMap.mapi (fun v var_data ->

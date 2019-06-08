@@ -231,7 +231,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                       let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
                       let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
                       let new_out_list = if List.exists (fun x -> match Ast.unmark x with
-                          | Ast.GivenBack -> true
+                          | Ast.GivenBack -> false
                           | Ast.Base -> false
                         ) cvar.Ast.comp_subtyp then
                           cvar.Ast.comp_name::out_list
