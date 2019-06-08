@@ -284,7 +284,7 @@ type error_ = {
 type source_file_item =
   | Application of application marked
   | Chaining of chaining * application marked list
-  | Variable of variable_decl
+  | VariableDecl of variable_decl
   | Rule of rule
   | Verification of verification
   | Error of error_

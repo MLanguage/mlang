@@ -281,7 +281,7 @@ let format_source_file_item (i:source_file_item) : string = match i with
     Printf.sprintf "enchaineur %s %s;"
       (format_chaining c)
       (String.concat " " (List.map (fun app -> format_application (unmark app)) apps))
-  | Variable vd -> format_variable_decl vd
+  | VariableDecl vd -> format_variable_decl vd
   | Rule r -> format_rule r
   | Verification v -> format_verification v
   | Function  -> ""

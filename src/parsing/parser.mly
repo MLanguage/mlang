@@ -76,7 +76,7 @@ source_file:
 source_file_item:
 | a = application { (Application a, mk_position $sloc) }
 | c = chaining { let (s, aps) = c in (Chaining (s, aps), mk_position $sloc) }
-| v = variable_decl { (Variable v, mk_position $sloc) }
+| v = variable_decl { (VariableDecl v, mk_position $sloc) }
 | r = rule { (Rule r, mk_position $sloc) }
 | ver = verification { (Verification ver, mk_position $sloc) }
 | e = error_ { (Error e, mk_position $sloc) }

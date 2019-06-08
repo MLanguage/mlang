@@ -135,7 +135,7 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : i
       | Not_found ->
         raise (Errors.TypeError
                  (Errors.Variable
-                    (Printf.sprintf "variable %s used %s, is not an integer constant and cannot be used as a loop range bound"
+                    (Printf.sprintf "variable %s used %s, is not an integer constant and cannot be used here"
                        (Ast.get_variable_name v)
                        (Format_ast.format_position (Ast.get_position l))
                     )))
@@ -166,43 +166,171 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
 
-let instantiate_generic_variables_parameters
-    (lc: loop_context)
-    (gen_name:Ast.variable_generic_name)
-    (pad_zero: bool)
-  : string =
-  (*
-    The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
-    trailing 0 before the index. So the algorithm first tries to find a definition without the
-    trailing 0, and if it fails it tries with a trailing 0.
-  *)
-  ParamsMap.fold (fun param value var_name ->
-      match value with
-      | VarName value ->
-        (*
-          Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
-          already there... So we need to remove it here.
-        *)
-        let value = if pad_zero then
-            Str.replace_first (Str.regexp "0([0-9])") "\\1" value
-          else value
-        in
-        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
-      | RangeInt i ->
-        Str.replace_first (Str.regexp (Printf.sprintf "%c" param))
-          ((if pad_zero then "0" else "") ^ string_of_int i) var_name
-    ) lc gen_name.Ast.base
+type zero_padding =
+  | ZPNone
+  | ZPAdd
+  | ZPRemove
+
+let format_zero_padding (zp: zero_padding) : string = match zp with
+  | ZPNone -> "no zero padding"
+  | ZPAdd -> "add zero padding"
+  | ZPRemove -> "remove zero padding"
 
 let get_var_or_x (d:Cfg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Cfg.expression =
   if Ast.unmark name = "X" then Cfg.GenericTableIndex else
     Cfg.Var (get_var_from_name d name)
 
-let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idmap * int Cfg.VariableMap.t) =
-  let (vars, idmap, out_list, int_const_list) =
-    List.fold_left (fun (vars, idmap, out_list, int_const_list) source_file ->
-        List.fold_left (fun (vars, idmap, out_list, int_const_list) source_file_item ->
+
+let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Cfg.expression Ast.marked =
+  match Ast.unmark var with
+  | Ast.Normal name ->
+    Ast.same_pos_as (get_var_or_x ctx.idmap (Ast.same_pos_as name var)) var
+  | Ast.Generic gen_name ->
+    if List.length gen_name.Ast.parameters == 0 then
+      translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
+    else match ctx.lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
+
+and instantiate_generic_variables_parameters
+    (ctx: translating_context)
+    (gen_name:Ast.variable_generic_name)
+    (pos: Ast.position)
+  : Cfg.expression Ast.marked =
+  instantiate_generic_variables_parameters_aux ctx gen_name.Ast.base ZPNone pos
+
+and instantiate_generic_variables_parameters_aux
+    (ctx: translating_context)
+    (var_name:string)
+    (pad_zero: zero_padding)
+    (pos: Ast.position)
+  : Cfg.expression Ast.marked
+  =
+  try match ParamsMap.choose_opt (
+      match ctx.lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc -> lc
+    ) with
+  | None ->
+    translate_variable ctx (Ast.Normal var_name, pos)
+  | Some (param, value) ->
+      (*
+        The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
+        trailing 0 before the index. So the algorithm first tries to find a definition without the
+        trailing 0, and if it fails it tries with a trailing 0.
+    *)
+    let new_var_name = match value with
+      | VarName value ->
+          (*
+            Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
+            already there... So we need to remove it here.
+          *)
+        let value = match pad_zero with
+          | ZPNone -> value
+          | ZPRemove ->
+            string_of_int (int_of_string value)
+          | ZPAdd ->
+            "0" ^ value
+        in
+        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
+      | RangeInt i ->
+        let value = match pad_zero with
+          | ZPNone -> string_of_int i
+          | ZPRemove ->
+            string_of_int i
+          | ZPAdd ->
+            "0" ^ string_of_int i
+        in
+        Str.replace_first (Str.regexp (Printf.sprintf "%c" param))
+          value var_name
+    in
+    instantiate_generic_variables_parameters_aux
+      { ctx with
+        lc =
+          Some (ParamsMap.remove param (match ctx.lc with
+              | None ->
+                raise (Errors.TypeError
+                         (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+              | Some lc -> lc))
+      } new_var_name pad_zero pos
+  with
+  | err when (match ctx.lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc ->
+        ParamsMap.cardinal lc > 0
+    )->
+    let new_pad_zero = match pad_zero with
+      | ZPNone -> ZPRemove
+      | ZPRemove -> ZPAdd
+      | _ -> raise err
+    in
+    instantiate_generic_variables_parameters_aux ctx var_name new_pad_zero pos
+
+
+let get_constants (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idmap * int Cfg.VariableMap.t) =
+  let (vars, idmap, int_const_list) =
+    List.fold_left (fun (vars, idmap, int_const_list) source_file ->
+        List.fold_left (fun (vars, idmap, int_const_list) source_file_item ->
             match Ast.unmark source_file_item with
-            | Ast.Variable var_decl ->
+            | Ast.VariableDecl var_decl ->
+              begin match var_decl with
+                | Ast.ConstVar (marked_name, cval) ->
+                  begin try
+                      let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Cfg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position marked_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
+                      (vars, idmap, int_const_list)
+                    with
+                    | Not_found ->
+                      let new_var  =
+                        Cfg.Variable.new_var marked_name (Ast.same_pos_as "constant" marked_name)
+                      in
+                      let new_var_data = {
+                        var_decl_typ = None;
+                        var_decl_is_table = None;
+                        var_decl_descr = None;
+                        var_decl_io = Constant;
+                        var_pos = Ast.get_position source_file_item;
+                      } in
+                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
+                      let new_int_const_list = match Ast.unmark cval with
+                        | Ast.Int i -> (marked_name, i)::int_const_list
+                        | Ast.Float f -> (marked_name, int_of_float f)::int_const_list
+                        | _ -> int_const_list
+                      in
+                      (new_vars, new_idmap, new_int_const_list)
+                  end
+                | _ -> (vars, idmap, int_const_list)
+              end
+            | _ -> (vars, idmap, int_const_list)
+          ) (vars, idmap, int_const_list) source_file
+      ) (Cfg.VariableMap.empty, VarNameToID.empty, []) p in
+  let int_const_vals : int Cfg.VariableMap.t = List.fold_left (fun out (vname, i)  ->
+      Cfg.VariableMap.add (get_var_from_name idmap vname) i out
+    ) Cfg.VariableMap.empty int_const_list
+  in
+  (vars, idmap, int_const_vals)
+
+let get_variables_decl
+    (p: Ast.program)
+    (vars: var_decl_data Cfg.VariableMap.t)
+    (idmap: idmap)
+  : (var_decl_data Cfg.VariableMap.t * idmap) =
+  let (vars, idmap, out_list) =
+    List.fold_left (fun (vars, idmap, out_list) source_file ->
+        List.fold_left (fun (vars, idmap, out_list) source_file_item ->
+            match Ast.unmark source_file_item with
+            | Ast.VariableDecl var_decl ->
               begin match var_decl with
                 | Ast.ComputedVar cvar ->
                   let cvar = Ast.unmark cvar in
@@ -214,7 +342,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                            (Ast.unmark old_var.Cfg.Variable.name)
                            (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
                            (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                      (vars, idmap, out_list, int_const_list)
+                      (vars, idmap, out_list)
                     with
                     | Not_found ->
                       let new_var =
@@ -237,7 +365,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                           cvar.Ast.comp_name::out_list
                         else out_list
                       in
-                      (new_vars, new_idmap, new_out_list, int_const_list)
+                      (new_vars, new_idmap, new_out_list)
                   end
                 | Ast.InputVar ivar ->
                   let ivar = Ast.unmark ivar in
@@ -248,7 +376,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                            (Ast.unmark old_var.Cfg.Variable.name)
                            (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
                            (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                      (vars, idmap, out_list, int_const_list)
+                      (vars, idmap, out_list)
                     with
                     | Not_found ->
                       let new_var =
@@ -269,42 +397,14 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                       } in
                       let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
                       let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
-                      (new_vars, new_idmap, out_list, int_const_list)
+                      (new_vars, new_idmap, out_list)
                   end
-                | Ast.ConstVar (marked_name, cval) ->
-                  begin try
-                      let old_var = VarNameToID.find (Ast.unmark marked_name) idmap in
-                      Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Ast.unmark old_var.Cfg.Variable.name)
-                           (Format_ast.format_position (Ast.get_position marked_name))
-                           (Format_ast.format_position (Ast.get_position old_var.Cfg.Variable.name)));
-                      (vars, idmap, out_list, int_const_list)
-                    with
-                    | Not_found ->
-                      let new_var  =
-                        Cfg.Variable.new_var marked_name (Ast.same_pos_as "constant" marked_name)
-                      in
-                      let new_var_data = {
-                        var_decl_typ = None;
-                        var_decl_is_table = None;
-                        var_decl_descr = None;
-                        var_decl_io = Constant;
-                        var_pos = Ast.get_position source_file_item;
-                      } in
-                      let new_vars = Cfg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = VarNameToID.add (Ast.unmark marked_name) new_var idmap in
-                      let new_int_const_list = match Ast.unmark cval with
-                        | Ast.Int i -> (marked_name, i)::int_const_list
-                        | _ -> int_const_list
-                      in
-                      (new_vars, new_idmap, out_list, new_int_const_list)
-                  end
+                | Ast.ConstVar (marked_name, cval) -> (vars, idmap, out_list) (* already treated before *)
               end
-            | Ast.Output out_name -> (vars, idmap, out_name::out_list, int_const_list)
-            | _ -> (vars, idmap, out_list, int_const_list)
-          ) (vars, idmap, out_list, int_const_list) source_file
-      ) (Cfg.VariableMap.empty, VarNameToID.empty, [], []) p in
+            | Ast.Output out_name -> (vars, idmap, out_name::out_list)
+            | _ -> (vars, idmap, out_list)
+          ) (vars, idmap, out_list) source_file
+      ) (vars, idmap, []) p in
   let vars : var_decl_data Cfg.VariableMap.t = List.fold_left (fun vars out ->
       let out_var = get_var_from_name idmap out in
       try
@@ -313,38 +413,7 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
       with
       | Not_found -> assert false (* should not happen *)
     ) vars out_list in
-  let int_const_vals : int Cfg.VariableMap.t = List.fold_left (fun out (vname, i)  ->
-      Cfg.VariableMap.add (get_var_from_name idmap vname) i out
-    ) Cfg.VariableMap.empty int_const_list
-  in
-  (vars, idmap, int_const_vals)
-
-let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Cfg.expression Ast.marked =
-  match Ast.unmark var with
-  | Ast.Normal name ->
-    Ast.same_pos_as (get_var_or_x ctx.idmap (Ast.same_pos_as name var)) var
-  | Ast.Generic gen_name ->
-    if List.length gen_name.Ast.parameters == 0 then
-      translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
-    else match ctx.lc with
-      | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some lc ->
-        let new_var_name = instantiate_generic_variables_parameters lc gen_name false in
-        begin try
-            translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
-          with
-          | err ->
-            let new_var_name = instantiate_generic_variables_parameters lc gen_name true in
-            begin try
-                translate_variable ctx (Ast.same_pos_as (Ast.Normal new_var_name) var)
-              with
-              | _ -> raise err
-            end
-        end
-
-
+  (vars, idmap)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Cfg.expression Ast.marked =
   match Ast.unmark i with
@@ -528,11 +597,16 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
   | Some ti -> begin match Ast.unmark ti with
       | Ast.GenericIndex -> (var, GenericIndex)
       | Ast.LiteralIndex i -> (var, SingleIndex i)
-      | Ast.SymbolIndex _ ->
-        raise (Errors.TypeError (Errors.Variable (
-            Printf.sprintf "variable definition lvalue %s cannot refer to other variables"
-              (Format_ast.format_position (Ast.get_position lval))
-          )))
+      | Ast.SymbolIndex ((Ast.Normal _ ) as v) ->
+        let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable v) ti) in
+        (var, SingleIndex i)
+      | Ast.SymbolIndex ((Ast.Generic _ ) as v) ->
+        let cfg_v = translate_variable ctx (Ast.same_pos_as v ti) in
+        let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable (match Ast.unmark cfg_v with
+            | Cfg.Var v -> Ast.Normal (Ast.unmark v.Cfg.Variable.name)
+            | _ -> assert false (* should not happen*)
+          )) ti) in
+        (var, SingleIndex i)
     end
   | None -> (var, NoIndex)
 
@@ -698,7 +772,7 @@ let get_var_data
                 ) var_data r.Ast.rule_formulaes
             else
               var_data
-          | Ast.Variable (Ast.ConstVar (name, lit)) ->
+          | Ast.VariableDecl (Ast.ConstVar (name, lit)) ->
             let var = get_var_from_name idmap name in
             add_var_def var_data var (Ast.same_pos_as (Cfg.Literal (begin match Ast.unmark lit with
                 | Ast.Variable var ->
@@ -711,7 +785,7 @@ let get_var_data
                 | Ast.Int i -> Cfg.Int i
                 | Ast.Float f -> Cfg.Float f
               end)) lit) NoIndex var_decl_data
-          | Ast.Variable (Ast.InputVar (var, _)) ->
+          | Ast.VariableDecl (Ast.InputVar (var, _)) ->
             let var = get_var_from_name idmap var.Ast.input_name in
             let var_decl = try Cfg.VariableMap.find var var_decl_data with
               | Not_found -> assert false (* should not happen *)
@@ -776,7 +850,8 @@ let check_if_all_variables_defined
 
 
 let translate (p: Ast.program) (application : string option): (Cfg.program * Cfg.Variable.t VarNameToID.t) =
-  let (var_decl_data, idmap, int_const_vals) = get_variables_decl p in
+  let (var_decl_data, idmap, int_const_vals) = get_constants p in
+  let (var_decl_data, idmap) = get_variables_decl p var_decl_data idmap in
   let var_data = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data in
   var_data, idmap
