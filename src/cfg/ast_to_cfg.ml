@@ -255,7 +255,13 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                         Cfg.Variable.new_var ivar.Ast.input_name ivar.Ast.input_description
                       in
                       let new_var_data = {
-                        var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
+                        var_decl_typ = begin match Ast.unmark_option ivar.Ast.input_typ with
+                          | Some x -> Some x
+                          | None -> begin match Ast.unmark ivar.Ast.input_subtyp with
+                              | Ast.Income -> Some Ast.Real
+                              | _ -> None
+                            end
+                        end;
                         var_decl_is_table = None;
                         var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
                         var_decl_io = Input;

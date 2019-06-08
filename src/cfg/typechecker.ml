@@ -40,7 +40,6 @@ struct
     | Integer
     | Real
     | Boolean
-    | IntegerOrReal
     | All
 
   type direction = Up | Down
@@ -57,7 +56,6 @@ struct
        | Integer -> "integer"
        | Real -> "real"
        | Boolean -> "boolean"
-       | IntegerOrReal -> "integer or real"
        | All -> "unconstrained")
       (match snd (snd !t) with Up -> "inferred" | Down -> "constrained")
       (Format_ast.format_position (fst (snd !t)))
@@ -69,13 +67,12 @@ struct
     | Integer -> Cfg.Integer
     | Real -> Cfg.Real
     | Boolean -> Cfg.Boolean
-    | IntegerOrReal -> Cfg.Integer
     | All -> Cfg.Boolean
 
   let boolean (pos: infer_info) = ref (Boolean, pos)
   let integer (pos: infer_info) = ref (Integer, pos)
   let real (pos: infer_info) = ref (Real, pos)
-  let integer_or_real (pos: infer_info) = ref (IntegerOrReal, pos)
+  let integer_or_real (pos: infer_info) = ref (All, pos)
 
   let create_concrete (t: typ) (pos: infer_info) : t = match t with
     | Cfg.Integer -> integer pos
@@ -84,34 +81,25 @@ struct
 
   let is_lattice_transition (t1: t) (t2:t) : bool =
     match (fst !t1, fst !t2) with
-    | (All, _)
-    | (IntegerOrReal, Integer)
-    | (IntegerOrReal, Real)
-    | (Boolean, (Integer | Real | IntegerOrReal))
-    | (Integer, Real) -> true
+    | (All, (Real | Boolean | Integer))
+    | (Boolean, (Integer | Real))
+    | (Integer, Real)
+      -> true
     | (t1, t2) when t1 = t2 -> true
     | _ -> false
 
-  let is_compatible (t: t) (constrain: t) : bool =
-    match (fst !t, fst !constrain) with
-    | (All, All)
-    | (IntegerOrReal, (All | IntegerOrReal))
-    | (Boolean, (Boolean | Integer | Real | IntegerOrReal | All))
-    | (Real, (Real | IntegerOrReal | All))
-    | (Integer, (Integer | IntegerOrReal | All))
-      -> true
-    | _ -> false
 
   let constrain (t: t) (constrain: t) : unit =
-    if is_lattice_transition t constrain then
-      t := !constrain
-    else if is_compatible t constrain then
+    if fst !constrain = All then
       ()
+    else if is_lattice_transition t constrain then
+      t:= !constrain
     else
       raise (UnificationError (
           format_typ t,
           format_typ constrain
         ))
+
 
   let unify (t1: t) (t2:t) : unit =
     if is_lattice_transition t1 t2 then
