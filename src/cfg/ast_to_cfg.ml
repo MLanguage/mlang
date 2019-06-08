@@ -217,7 +217,9 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                       (vars, idmap, out_list, int_const_list)
                     with
                     | Not_found ->
-                      let new_var = Cfg.Variable.new_var cvar.Ast.comp_name in
+                      let new_var =
+                        Cfg.Variable.new_var cvar.Ast.comp_name cvar.Ast.comp_description
+                      in
                       let new_var_data = {
                         var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
                         var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
@@ -249,7 +251,9 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                       (vars, idmap, out_list, int_const_list)
                     with
                     | Not_found ->
-                      let new_var = Cfg.Variable.new_var ivar.Ast.input_name in
+                      let new_var =
+                        Cfg.Variable.new_var ivar.Ast.input_name ivar.Ast.input_description
+                      in
                       let new_var_data = {
                         var_decl_typ = Ast.unmark_option ivar.Ast.input_typ;
                         var_decl_is_table = None;
@@ -272,7 +276,9 @@ let get_variables_decl (p: Ast.program) : (var_decl_data Cfg.VariableMap.t * idm
                       (vars, idmap, out_list, int_const_list)
                     with
                     | Not_found ->
-                      let new_var  = Cfg.Variable.new_var marked_name in
+                      let new_var  =
+                        Cfg.Variable.new_var marked_name (Ast.same_pos_as "constant" marked_name)
+                      in
                       let new_var_data = {
                         var_decl_typ = None;
                         var_decl_is_table = None;

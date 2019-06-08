@@ -102,6 +102,9 @@ let format_program (p: program) : string = VariableMap.fold (fun var def acc ->
              (format_variable_def def.var_definition))
   ) p ""
 
+let format_variable (v: Variable.t) : string =
+  Printf.sprintf "%s: %s" (Ast.unmark v.Variable.name) (Ast.unmark v.Variable.descr)
+
 let format_io (io: io) : string = match io with
   | Input -> "input"
   | Output -> "output"

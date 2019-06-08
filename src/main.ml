@@ -184,14 +184,16 @@ let main () =
 
     let minimal_input_variables =
       List.map
-        (fun (v, _) -> Ast.unmark v.Cfg.Variable.name)
+        (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
+                       (Format_cfg.format_typ
+                          (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
         (Cfg.VariableMap.bindings
            (Cfg.VariableMap.filter (fun _ var_data -> var_data.Cfg.var_io = Cfg.Input) program)
         )
     in
-    Cli.debug_print @@ Printf.sprintf "Minimal set of input variables needed: %s (%d variables)."
-      (String.concat ", " minimal_input_variables)
-      (List.length minimal_input_variables);
+    Cli.debug_print @@ Printf.sprintf "Minimal set of input variables needed (%d variables):\n%s"
+      (List.length minimal_input_variables)
+      (String.concat "\n" minimal_input_variables);
 
     exit 0;
 

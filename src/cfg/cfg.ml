@@ -37,6 +37,7 @@ module Variable = struct
   type t = {
     name: string Ast.marked;
     id: int;
+    descr: string Ast.marked;
   }
   [@@deriving show]
 
@@ -47,8 +48,8 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string Ast.marked) : t = {
-    name; id = fresh_id ()
+  let new_var (name: string Ast.marked) (descr: string Ast.marked) : t = {
+    name; id = fresh_id (); descr
   }
 
   let compare (var1 :t) (var2 : t) =

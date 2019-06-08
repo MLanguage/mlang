@@ -92,6 +92,27 @@ struct
     | (t1, t2) when t1 = t2 -> true
     | _ -> false
 
+  let is_compatible (t: t) (constrain: t) : bool =
+    match (fst !t, fst !constrain) with
+    | (All, All)
+    | (IntegerOrReal, (All | IntegerOrReal))
+    | (Boolean, (Boolean | Integer | Real | IntegerOrReal | All))
+    | (Real, (Real | IntegerOrReal | All))
+    | (Integer, (Integer | IntegerOrReal | All))
+      -> true
+    | _ -> false
+
+  let constrain (t: t) (constrain: t) : unit =
+    if is_lattice_transition t constrain then
+      t := !constrain
+    else if is_compatible t constrain then
+      ()
+    else
+      raise (UnificationError (
+          format_typ t,
+          format_typ constrain
+        ))
+
   let unify (t1: t) (t2:t) : unit =
     if is_lattice_transition t1 t2 then
       t1 := !t2
@@ -159,7 +180,7 @@ let rec typecheck_top_down
         let (ctx, t2) = typecheck_bottom_up ctx e2 in
         let (ctx, t3) = typecheck_bottom_up ctx e3 in
         begin try
-            Typ.unify t2 t3; Typ.unify t2 (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx
+            Typ.unify t2 t3; Typ.constrain t2 (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx
           with
           | Typ.UnificationError _ ->
             raise (Errors.TypeError (
@@ -186,7 +207,7 @@ let rec typecheck_top_down
   | (FunctionCall (func, args), t) ->
     let typechecker = typecheck_func_args func (Ast.get_position e) in
     let (ctx, t') = typechecker ctx args in
-    begin try Typ.unify t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
+    begin try Typ.constrain t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError _ ->
         raise (Errors.TypeError (
             Errors.Typing
@@ -213,7 +234,7 @@ let rec typecheck_top_down
                 )))
       | None ->
         let (ctx, t') = typecheck_bottom_up ctx e in
-        begin try Typ.unify t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
+        begin try Typ.constrain t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
           | Typ.UnificationError (t_msg, _) ->
             raise (Errors.TypeError (
                 Errors.Typing
@@ -231,7 +252,7 @@ let rec typecheck_top_down
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let ctx = { ctx with ctx_local_var_typ = LocalVariableMap.add local_var t1 ctx.ctx_local_var_typ } in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
-    begin try Typ.unify t2 (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
+    begin try Typ.constrain t2 (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError (t2_msg, _) ->
         raise (Errors.TypeError (
             Errors.Typing
@@ -247,7 +268,7 @@ let rec typecheck_top_down
     let t' = try LocalVariableMap.find local_var ctx.ctx_local_var_typ with
       | Not_found -> assert false (* should not happen *)
     in
-    begin try Typ.unify t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
+    begin try Typ.constrain t' (Typ.create_concrete t (Ast.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError (t_msg, _) ->
         raise (Errors.TypeError (
             Errors.Typing
@@ -272,7 +293,7 @@ let rec typecheck_top_down
                     )))
       | TableVar _ ->
         begin try
-            Typ.unify
+            Typ.constrain
               (VariableMap.find var ctx.ctx_var_typ)
               (Typ.create_concrete t (Ast.get_position e, Typ.Down));
             ctx
@@ -312,7 +333,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
     else
       let (ctx, t1) = typecheck_bottom_up ctx (List.hd args) in
       begin try
-          Typ.unify t1 (Typ.integer_or_real (Ast.get_position (List.hd args), Typ.Down));
+          Typ.constrain t1 (Typ.integer_or_real (Ast.get_position (List.hd args), Typ.Down));
           let ctx = List.fold_left (fun ctx arg ->
               let (ctx, t_arg) = typecheck_bottom_up ctx arg in
               begin try Typ.unify t_arg t1; ctx with
@@ -345,7 +366,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg (Typ.integer_or_real (Ast.get_position arg, Typ.Down)); (ctx, t_arg) with
+          begin try Typ.constrain t_arg (Typ.integer_or_real (Ast.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -368,7 +389,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.unify t_arg (Typ.integer_or_real (Ast.get_position arg, Typ.Down)); (ctx, t_arg) with
+          begin try Typ.constrain t_arg (Typ.integer_or_real (Ast.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
                        (Errors.Typing
@@ -391,7 +412,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
           begin try
-              Typ.unify t_arg (Typ.real (Ast.get_position arg, Typ.Down));
+              Typ.constrain t_arg (Typ.real (Ast.get_position arg, Typ.Down));
               (ctx, Typ.integer (pos, Typ.Down))
             with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
@@ -461,7 +482,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
     (ctx, Typ.boolean (Ast.get_position e, Typ.Up))
   | Unop (Ast.Minus, e') ->
     let (ctx, t) = typecheck_bottom_up ctx e' in
-    begin try Typ.unify t (Typ.integer_or_real (Ast.get_position e', Typ.Down)); (ctx, t) with
+    begin try Typ.constrain t (Typ.integer_or_real (Ast.get_position e', Typ.Down)); (ctx, t) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -496,11 +517,11 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Conditional (e1, e2, e3) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     begin try
-        Typ.unify t1 (Typ.boolean (Ast.get_position e1, Typ.Down));
+        Typ.constrain t1 (Typ.boolean (Ast.get_position e1, Typ.Down));
         let (ctx, t2) = typecheck_bottom_up ctx e2 in
         let (ctx, t3) = typecheck_bottom_up ctx e3 in
         begin try
-            Typ.unify t2 t3; (ctx, t2)
+            Typ.constrain t2 t3; (ctx, t2)
           with
           | Typ.UnificationError _ ->
             raise (Errors.TypeError (
