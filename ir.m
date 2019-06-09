@@ -1,2 +1,1 @@
 sortie(IINET);
-INRRSE4_R99RNBREMOISCS222_A : calculee : "UNKNOWN" ;

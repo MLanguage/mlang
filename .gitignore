@@ -4,3 +4,4 @@ main.native
 dep_graph_before_optimization.dot
 dep_graph_after_optimization.dot
 results.json
+variable_cycles/
