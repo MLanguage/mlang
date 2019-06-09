@@ -109,7 +109,7 @@ let main () =
        in *)
 
     Cli.debug_print "Typechecking...";
-    let typing_info = Typechecker.typecheck program in
+    let typing_info, program = Typechecker.typecheck program in
 
     (* Cli.warning_print @@ Printf.sprintf "Result: %s\n" (Typechecker.show_typ_info typing_info); *)
 
@@ -254,6 +254,7 @@ let main () =
            (Z3.Statistics.to_string (Z3.Solver.get_statistics s))
         )
   with
+  (* | err -> raise err *)
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg,pos) ->

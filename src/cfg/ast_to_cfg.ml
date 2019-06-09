@@ -434,6 +434,7 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
   | "arr" -> Cfg.ArrFunc
   | "inf" -> Cfg.InfFunc
   | "present" -> Cfg.PresentFunc
+  | "multimax" -> Cfg.MaxFunc
   | x -> raise (Errors.TypeError (
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
