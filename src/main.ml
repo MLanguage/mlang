@@ -116,7 +116,7 @@ let main () =
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot") dep_graph program;
-    Dependency.check_for_cycle dep_graph;
+    Dependency.check_for_cycle dep_graph program;
 
     let correctly_defined_outputs = Dependency.correctly_defined_outputs dep_graph program in
 

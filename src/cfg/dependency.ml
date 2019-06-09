@@ -83,21 +83,82 @@ let create_dependency_graph (p: Cfg.program) : DepGraph.t =
         end
     ) p DepGraph.empty
 
+let program_when_printing : Cfg.program option ref = ref None
+
+module Dot = Graph.Graphviz.Dot(struct
+    include DepGraph (* use the graph module from above *)
+
+    let edge_attributes _ = []
+    let default_edge_attributes _ = []
+    let get_subgraph _ = None
+    let vertex_attributes v = begin match !program_when_printing with
+      | None -> []
+      | Some p ->
+        let var_data = Cfg.VariableMap.find v p in
+        match var_data.Cfg.var_io with
+        | Cfg.Input -> [`Color 1; `Shape `Box]
+        | Cfg.Regular -> []
+        | Cfg.Output -> [`Color 2; `Shape `Diamond]
+    end
+    let vertex_name v = Ast.unmark v.Cfg.Variable.name
+    let default_vertex_attributes _ = []
+    let graph_attributes _ = []
+  end)
+
+let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Cfg.program): unit =
+  let file = open_out_bin filename in
+  program_when_printing:= Some p;
+  Cli.debug_print (Printf.sprintf
+                     "Writing variables dependency graph to %s (%d variables)"
+                     filename
+                     (DepGraph.nb_vertex graph));
+  if !Cli.debug_flag then
+    Dot.output_graph file graph;
+  close_out file
+
+
 module CycleDetector = Graph.Components.Make(DepGraph)
 
-let check_for_cycle (g: DepGraph.t) : unit =
+let check_for_cycle (g: DepGraph.t) (p: Cfg.program) : unit =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = CycleDetector.scc_list g in
-  if List.length sccs < DepGraph.nb_vertex g then
+  if List.length sccs < DepGraph.nb_vertex g then begin
+    let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
+    let cycles_strings = ref [] in
+    let dir = "variable_cycles" in
+    begin try Unix.mkdir dir 0o750 with
+      | Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+    end;
+    List.iteri (fun i scc ->
+        let new_g = DepGraph.fold_vertex (fun vertex new_g ->
+            if List.mem vertex scc then
+              new_g
+            else
+              DepGraph.remove_vertex new_g vertex
+          ) g g in
+        let filename = Printf.sprintf "%s/strongly_connected_component_%d.dot" dir i in
+        print_dependency_graph filename new_g p;
+        cycles_strings := (Printf.sprintf "The following variables are defined circularly: %s\n\
+                                           The dependency graph of this circular definition has been written to %s"
+                             (String.concat " <-> "
+                                (List.map
+                                   (fun var -> Ast.unmark var.Cfg.Variable.name)
+                                   scc))
+                             filename
+                          )::!cycles_strings;
+      ) sccs;
+    let oc = open_out (dir ^ "/variable_cycles.txt") in
+    Printf.fprintf oc "%s" (String.concat "\n\n" !cycles_strings);
+    close_out oc;
     raise
       (Errors.TypeError
          (Errors.Variable
-            (Printf.sprintf "the following variables are defined circularly: %s"
-               (String.concat " <-> "
-                  (List.map
-                     (fun var -> Ast.unmark var.Cfg.Variable.name)
-                     (List.find (fun scc -> List.length scc > 1) sccs)))
+            (Printf.sprintf "The program contains circularly defined variables, see folder %s"
+               dir
+
             )))
+  end
+
 
 let single_use_vars (g: DepGraph.t) : unit Cfg.VariableMap.t =
   DepGraph.fold_vertex (fun var acc ->
@@ -212,33 +273,3 @@ module Constability = Graph.Fixpoint.Make(DepGraph)
     end)
 
 module TopologicalOrder = Graph.Topological.Make(DepGraph)
-
-let program_when_printing : Cfg.program option ref = ref None
-
-module Dot = Graph.Graphviz.Dot(struct
-    include DepGraph (* use the graph module from above *)
-
-    let edge_attributes _ = []
-    let default_edge_attributes _ = []
-    let get_subgraph _ = None
-    let vertex_attributes v = begin match !program_when_printing with
-      | None -> []
-      | Some p ->
-        let var_data = Cfg.VariableMap.find v p in
-        match var_data.Cfg.var_io with
-        | Cfg.Input -> [`Color 1; `Shape `Box]
-        | Cfg.Regular -> []
-        | Cfg.Output -> [`Color 2; `Shape `Diamond]
-    end
-    let vertex_name v = Ast.unmark v.Cfg.Variable.name
-    let default_vertex_attributes _ = []
-    let graph_attributes _ = []
-  end)
-
-let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Cfg.program): unit =
-  let file = open_out_bin filename in
-  program_when_printing:= Some p;
-  Cli.debug_print (Printf.sprintf "Writing variables dependency graph to %s" filename);
-  if !Cli.debug_flag then
-    Dot.output_graph file graph;
-  close_out file
