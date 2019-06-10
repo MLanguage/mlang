@@ -101,13 +101,6 @@ let main () =
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
 
-    (* let queried_variable = "IAD11" in
-       let print_queried program = Cli.result_print @@ Printf.sprintf "Variable %s: %s" queried_variable
-        (Format_cfg.format_variable_def
-           (Cfg.VariableMap.find
-              (Ast_to_cfg.VarNameToID.find queried_variable idmap) program).Cfg.var_definition);
-       in *)
-
     Cli.debug_print "Typechecking...";
     let typing_info, program = Typechecker.typecheck program in
 
@@ -134,7 +127,9 @@ let main () =
       let undefined_dependencies = Dependency.undefined_dependencies dep_graph program in
       let undefined_output_variables =
         List.map
-          (fun (v, _) -> Format_cfg.format_variable v)
+          (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
+                         (Format_cfg.format_typ
+                            (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
           (Cfg.VariableMap.bindings undefined_dependencies)
       in
 
@@ -142,7 +137,7 @@ let main () =
           Errors.Variable
             (Printf.sprintf
                ("there are no correctly defined output variables.\n\
-                 Number of undefined variables needed computing the outputs: %d.\n%s")
+                 Number of undefined variables needed to compute the outputs: %d.\n%s")
                (List.length undefined_output_variables)
                (String.concat "\n" undefined_output_variables);
             )))

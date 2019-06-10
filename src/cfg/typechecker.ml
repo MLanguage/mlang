@@ -36,43 +36,48 @@ open Cfg
 module Typ =
 struct
 
-  type t' =
-    | Integer
-    | Real
-    | Boolean
-    | All
-
   type direction = Up | Down
 
   type infer_info = (Ast.position * direction)
 
-  type t = (t' * infer_info)
+  module T = struct
+    type t =
+      | Real
+      | Integer
+      | Boolean
+      | All
+    [@@deriving eq, ord]
+  end
+
+  module UF = Union_find.Make(T)
+
+  type t = (UF.t * infer_info)
 
   exception UnificationError of string * string
 
   let format_typ (t:t) : string =
     Printf.sprintf "%s (%s %s)"
-      (match fst t with
-       | Integer -> "integer"
-       | Real -> "real"
-       | Boolean -> "boolean"
-       | All -> "unconstrained")
+      (match UF.find (fst t) with
+       | T.Integer -> "integer"
+       | T.Real -> "real"
+       | T.Boolean -> "boolean"
+       | T.All -> "unconstrained")
       (match snd (snd t) with Up -> "inferred" | Down -> "constrained")
       (Format_ast.format_position (fst (snd t)))
 
-  let create_variable (pos: infer_info) : t = (All, pos)
+  let create_variable (pos: infer_info) : t = (UF.create T.All, pos)
 
   let to_concrete (t: t) : typ =
-    match fst t with
-    | Integer -> Cfg.Integer
-    | Real -> Cfg.Real
-    | Boolean -> Cfg.Boolean
-    | All -> Cfg.Boolean
+    match UF.find (fst t) with
+    | T.Integer -> Cfg.Integer
+    | T.Real -> Cfg.Real
+    | T.Boolean -> Cfg.Boolean
+    | T.All -> Cfg.Boolean
 
-  let boolean (pos: infer_info) = (Boolean, pos)
-  let integer (pos: infer_info) = (Integer, pos)
-  let real (pos: infer_info) = (Real, pos)
-  let integer_or_real (pos: infer_info) = (All, pos)
+  let boolean (pos: infer_info) = (UF.create T.Boolean, pos)
+  let integer (pos: infer_info) = (UF.create T.Integer, pos)
+  let real (pos: infer_info) = (UF.create T.Real, pos)
+  let integer_or_real (pos: infer_info) = (UF.create T.All, pos)
 
   let create_concrete (t: typ) (pos: infer_info) : t = match t with
     | Cfg.Integer -> integer pos
@@ -80,17 +85,17 @@ struct
     | Cfg.Boolean -> boolean pos
 
   let is_lattice_transition (t1: t) (t2:t) : bool =
-    match (fst t1, fst t2) with
-    | (All, (Real | Boolean | Integer))
-    | (Boolean, (Integer | Real))
-    | (Integer, Real)
+    match (UF.find (fst t1),UF.find (fst t2)) with
+    | (T.All, (T.Real | T.Boolean | T.Integer))
+    | (T.Boolean, (T.Integer | T.Real))
+    | (T.Integer, T.Real)
       -> true
     | (t1, t2) when t1 = t2 -> true
     | _ -> false
 
 
   let coerce (t: t) (coerce: t) : unit =
-    if fst coerce = All || is_lattice_transition t coerce then
+    if UF.find (fst coerce) = T.All || is_lattice_transition t coerce then
       ()
     else
       raise (UnificationError (
@@ -100,11 +105,11 @@ struct
 
 
   let unify (t1: t) (t2:t) : t =
-    if is_lattice_transition t1 t2 then
-      t2
-    else if is_lattice_transition t2 t1 then
-      t1
-    else
+    if is_lattice_transition t1 t2 then begin
+      UF.union (fst t1) (fst t2); t2
+    end else if is_lattice_transition t2 t1 then begin
+      UF.union (fst t1) (fst t2); t1
+    end else
       raise (UnificationError (
           format_typ t1,
           format_typ t2
