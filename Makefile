@@ -64,7 +64,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(addprefix ../ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug 
+		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug 
 
 doc:
 	mkdir -p $(DOC_FOLDER)
