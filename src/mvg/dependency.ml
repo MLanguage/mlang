@@ -34,56 +34,56 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (* The edges in the graph go from output to inputs *)
 module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
-    type t = Cfg.Variable.t
-    let hash v = v.Cfg.Variable.id
-    let compare v1 v2 = compare v1.Cfg.Variable.id v2.Cfg.Variable.id
-    let equal v1 v2 = v1.Cfg.Variable.id = v2.Cfg.Variable.id
+    type t = Mvg.Variable.t
+    let hash v = v.Mvg.Variable.id
+    let compare v1 v2 = compare v1.Mvg.Variable.id v2.Mvg.Variable.id
+    let equal v1 v2 = v1.Mvg.Variable.id = v2.Mvg.Variable.id
   end)
 
-let rec add_usages (lvar: Cfg.Variable.t) (e: Cfg.expression Ast.marked) (acc: DepGraph.t) : DepGraph.t =
+let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: DepGraph.t) : DepGraph.t =
   let acc = DepGraph.add_vertex acc lvar in
   match Ast.unmark e with
-  | Cfg.Comparison (_, e1, e2) | Cfg.Binop (_, e1, e2 )
-  | Cfg.LocalLet (_, e1, e2) ->
+  | Mvg.Comparison (_, e1, e2) | Mvg.Binop (_, e1, e2 )
+  | Mvg.LocalLet (_, e1, e2) ->
     let acc = add_usages lvar e1 acc in
     let acc = add_usages lvar e2 acc in
     acc
-  | Cfg.Unop (_, e) ->
+  | Mvg.Unop (_, e) ->
     add_usages lvar e acc
-  | Cfg.Index ((var,_ ), e) ->
+  | Mvg.Index ((var,_ ), e) ->
     let acc = DepGraph.add_edge acc var lvar in
     let acc = add_usages lvar e acc in
     acc
-  | Cfg.Conditional (e1, e2, e3) ->
+  | Mvg.Conditional (e1, e2, e3) ->
     let acc = add_usages lvar e1 acc in
     let acc = add_usages lvar e2 acc in
     let acc = add_usages lvar e3 acc in
     acc
-  | Cfg.FunctionCall (_, args) ->
+  | Mvg.FunctionCall (_, args) ->
     List.fold_left (fun acc arg ->
         add_usages lvar arg acc) acc args
-  | Cfg.LocalVar _
-  | Cfg.Literal _
-  | Cfg.GenericTableIndex
-  | Cfg.Error -> acc
-  | Cfg.Var var ->
+  | Mvg.LocalVar _
+  | Mvg.Literal _
+  | Mvg.GenericTableIndex
+  | Mvg.Error -> acc
+  | Mvg.Var var ->
     DepGraph.add_edge acc var lvar
 
 
-let create_dependency_graph (p: Cfg.program) : DepGraph.t =
-  Cfg.VariableMap.fold (fun var def acc ->
-      match def.Cfg.var_definition with
-      | Cfg.InputVar -> DepGraph.add_vertex acc var
-      | Cfg.SimpleVar e -> add_usages var e acc
-      | Cfg.TableVar (_, def) -> begin match def with
-          | Cfg.IndexGeneric e -> add_usages var e acc
-          | Cfg.IndexTable es -> Cfg.IndexMap.fold (fun _ e acc ->
+let create_dependency_graph (p: Mvg.program) : DepGraph.t =
+  Mvg.VariableMap.fold (fun var def acc ->
+      match def.Mvg.var_definition with
+      | Mvg.InputVar -> DepGraph.add_vertex acc var
+      | Mvg.SimpleVar e -> add_usages var e acc
+      | Mvg.TableVar (_, def) -> begin match def with
+          | Mvg.IndexGeneric e -> add_usages var e acc
+          | Mvg.IndexTable es -> Mvg.IndexMap.fold (fun _ e acc ->
               add_usages var e acc
             ) es acc
         end
     ) p DepGraph.empty
 
-let program_when_printing : Cfg.program option ref = ref None
+let program_when_printing : Mvg.program option ref = ref None
 
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
@@ -94,18 +94,18 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_attributes v = begin match !program_when_printing with
       | None -> []
       | Some p ->
-        let var_data = Cfg.VariableMap.find v p in
-        match var_data.Cfg.var_io with
-        | Cfg.Input -> [`Color 1; `Shape `Box]
-        | Cfg.Regular -> []
-        | Cfg.Output -> [`Color 2; `Shape `Diamond]
+        let var_data = Mvg.VariableMap.find v p in
+        match var_data.Mvg.var_io with
+        | Mvg.Input -> [`Color 1; `Shape `Box]
+        | Mvg.Regular -> []
+        | Mvg.Output -> [`Color 2; `Shape `Diamond]
     end
-    let vertex_name v = Ast.unmark v.Cfg.Variable.name
+    let vertex_name v = Ast.unmark v.Mvg.Variable.name
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
   end)
 
-let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Cfg.program): unit =
+let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.program): unit =
   let file = open_out_bin filename in
   program_when_printing:= Some p;
   Cli.debug_print (Printf.sprintf
@@ -119,7 +119,7 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Cfg.progra
 
 module CycleDetector = Graph.Components.Make(DepGraph)
 
-let check_for_cycle (g: DepGraph.t) (p: Cfg.program) : unit =
+let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : unit =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = CycleDetector.scc_list g in
   if List.length sccs < DepGraph.nb_vertex g then begin
@@ -142,7 +142,7 @@ let check_for_cycle (g: DepGraph.t) (p: Cfg.program) : unit =
                                            The dependency graph of this circular definition has been written to %s"
                              (String.concat " <-> "
                                 (List.map
-                                   (fun var -> Ast.unmark var.Cfg.Variable.name)
+                                   (fun var -> Ast.unmark var.Mvg.Variable.name)
                                    scc))
                              filename
                           )::!cycles_strings;
@@ -160,13 +160,13 @@ let check_for_cycle (g: DepGraph.t) (p: Cfg.program) : unit =
   end
 
 
-let single_use_vars (g: DepGraph.t) : unit Cfg.VariableMap.t =
+let single_use_vars (g: DepGraph.t) : unit Mvg.VariableMap.t =
   DepGraph.fold_vertex (fun var acc ->
       if DepGraph.in_degree g var <= 1 then
-        Cfg.VariableMap.add var () acc
+        Mvg.VariableMap.add var () acc
       else
         acc
-    ) g Cfg.VariableMap.empty
+    ) g Mvg.VariableMap.empty
 
 module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
     (struct
@@ -192,70 +192,70 @@ module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
       let analyze _ = (fun x -> x)
     end)
 
-let get_unused_variables (g: DepGraph.t) (p:Cfg.program) : unit Cfg.VariableMap.t =
+let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.t =
   let is_output = fun var ->
     try
-      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_necessary_to_output = OutputToInputReachability.analyze is_output g in
-  Cfg.VariableMap.filter (fun var _ ->
+  Mvg.VariableMap.filter (fun var _ ->
       not (is_necessary_to_output var)
-    ) (Cfg.VariableMap.map (fun _ -> ()) p)
+    ) (Mvg.VariableMap.map (fun _ -> ()) p)
 
-let correctly_defined_outputs (g: DepGraph.t) (p: Cfg.program) : unit Cfg.VariableMap.t =
+let correctly_defined_outputs (g: DepGraph.t) (p: Mvg.program) : unit Mvg.VariableMap.t =
   let is_output = fun var ->
     try
-      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_undefined = fun var ->
     try
-      (Cfg.VariableMap.find var p).Cfg.var_is_undefined
+      (Mvg.VariableMap.find var p).Mvg.var_is_undefined
     with
     | Not_found -> assert false (* should not happen *)
   in
   let contains_undefined = InputToOutputReachability.analyze is_undefined g in
-  let is_output_and_does_not_contain_undefined = Cfg.VariableMap.filter (fun v _ -> is_output v)
-      (Cfg.VariableMap.filter (fun v _ ->
+  let is_output_and_does_not_contain_undefined = Mvg.VariableMap.filter (fun v _ -> is_output v)
+      (Mvg.VariableMap.filter (fun v _ ->
            not (contains_undefined v)
          ) p)
   in
-  Cfg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
+  Mvg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
 
 let undefined_dependencies
     (g: DepGraph.t)
-    (p: Cfg.program)
-  : unit Cfg.VariableMap.t =
+    (p: Mvg.program)
+  : unit Mvg.VariableMap.t =
   let is_output = fun var ->
     try
-      (Cfg.VariableMap.find var p).Cfg.var_io = Cfg.Output
+      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_undefined = fun var ->
     try
-      (Cfg.VariableMap.find var p).Cfg.var_is_undefined
+      (Mvg.VariableMap.find var p).Mvg.var_is_undefined
     with
     | Not_found -> assert false (* should not happen *)
   in
   let in_needed_by_output = OutputToInputReachability.analyze is_output g in
   let is_needed_by_ouptput_and_undefined =
-    Cfg.VariableMap.filter (fun v _ -> is_undefined v)
-      (Cfg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
+    Mvg.VariableMap.filter (fun v _ -> is_undefined v)
+      (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
   in
-  Cfg.VariableMap.map (fun _ -> ()) is_needed_by_ouptput_and_undefined
+  Mvg.VariableMap.map (fun _ -> ()) is_needed_by_ouptput_and_undefined
 
 
-let requalify_outputs (p: Cfg.program) (only_output : unit Cfg.VariableMap.t) : Cfg.program =
-  Cfg.VariableMap.mapi (fun v var_data ->
+let requalify_outputs (p: Mvg.program) (only_output : unit Mvg.VariableMap.t) : Mvg.program =
+  Mvg.VariableMap.mapi (fun v var_data ->
       { var_data with
-        Cfg.var_io = if var_data.Cfg.var_io = Cfg.Output && not (Cfg.VariableMap.mem v only_output) then
-            Cfg.Regular
+        Mvg.var_io = if var_data.Mvg.var_io = Mvg.Output && not (Mvg.VariableMap.mem v only_output) then
+            Mvg.Regular
           else
-            var_data.Cfg.var_io
+            var_data.Mvg.var_io
       }
     ) p
 

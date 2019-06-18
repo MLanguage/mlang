@@ -31,7 +31,7 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Cfg
+open Mvg
 
 let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked =
   match Ast.unmark e with

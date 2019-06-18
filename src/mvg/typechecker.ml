@@ -31,7 +31,7 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Cfg
+open Mvg
 
 module Typ =
 struct
@@ -69,10 +69,10 @@ struct
 
   let to_concrete (t: t) : typ =
     match UF.find (fst t) with
-    | T.Integer -> Cfg.Integer
-    | T.Real -> Cfg.Real
-    | T.Boolean -> Cfg.Boolean
-    | T.All -> Cfg.Boolean
+    | T.Integer -> Mvg.Integer
+    | T.Real -> Mvg.Real
+    | T.Boolean -> Mvg.Boolean
+    | T.All -> Mvg.Boolean
 
   let boolean (pos: infer_info) = (UF.create T.Boolean, pos)
   let integer (pos: infer_info) = (UF.create T.Integer, pos)
@@ -80,9 +80,9 @@ struct
   let integer_or_real (pos: infer_info) = (UF.create T.All, pos)
 
   let create_concrete (t: typ) (pos: infer_info) : t = match t with
-    | Cfg.Integer -> integer pos
-    | Cfg.Real -> real pos
-    | Cfg.Boolean -> boolean pos
+    | Mvg.Integer -> integer pos
+    | Mvg.Real -> real pos
+    | Mvg.Boolean -> boolean pos
 
   let is_lattice_transition (t1: t) (t2:t) : bool =
     match (UF.find (fst t1),UF.find (fst t2)) with
@@ -125,19 +125,19 @@ type ctx = {
 
 
 type typ_info = {
-  typ_info_var : (Cfg.typ * bool) Cfg.VariableMap.t; (* the bool flag is_table *)
-  typ_info_local_var : Cfg.typ Cfg.LocalVariableMap.t
+  typ_info_var : (Mvg.typ * bool) Mvg.VariableMap.t; (* the bool flag is_table *)
+  typ_info_local_var : Mvg.typ Mvg.LocalVariableMap.t
 }
 
 let show_typ_info t =
   Printf.sprintf "typ_info_var: %s\ntyp_info_local_var: %s\n"
-    (Cfg.VariableMap.show (fun (ty, b) -> Printf.sprintf "(%s, %b)" (Cfg.show_typ ty) b) t.typ_info_var)
-    (Cfg.LocalVariableMap.show Cfg.show_typ t.typ_info_local_var)
+    (Mvg.VariableMap.show (fun (ty, b) -> Printf.sprintf "(%s, %b)" (Mvg.show_typ ty) b) t.typ_info_var)
+    (Mvg.LocalVariableMap.show Mvg.show_typ t.typ_info_local_var)
 
 let show_ctx ctx =
   Printf.sprintf "typ_info_var: %s\ntyp_info_local_var: %s\n"
-    (Cfg.VariableMap.show (fun (ty) -> Printf.sprintf "%s" (Typ.format_typ ty) ) ctx.ctx_var_typ)
-    (Cfg.LocalVariableMap.show Typ.format_typ ctx.ctx_local_var_typ)
+    (Mvg.VariableMap.show (fun (ty) -> Printf.sprintf "%s" (Typ.format_typ ty) ) ctx.ctx_var_typ)
+    (Mvg.LocalVariableMap.show Typ.format_typ ctx.ctx_local_var_typ)
 
 
 let rec typecheck_top_down
@@ -157,7 +157,7 @@ let rec typecheck_top_down
         raise (Errors.TypeError (
             Errors.Typing
               (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-                 (Format_cfg.format_expression (Ast.unmark e1))
+                 (Format_mvg.format_expression (Ast.unmark e1))
                  (Format_ast.format_position (Ast.get_position e1))
                  (Typ.format_typ t1)
                  (Format_ast.format_position (Ast.get_position e2))
@@ -188,12 +188,12 @@ let rec typecheck_top_down
             raise (Errors.TypeError (
                 Errors.Typing
                   (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s, and both should be of type %s"
-                     (Format_cfg.format_expression (Ast.unmark e1))
+                     (Format_mvg.format_expression (Ast.unmark e1))
                      (Format_ast.format_position (Ast.get_position e1))
                      (Typ.format_typ t1)
                      (Format_ast.format_position (Ast.get_position e2))
                      (Typ.format_typ t2)
-                     (Format_cfg.format_typ t)
+                     (Format_mvg.format_typ t)
                   )))
         end
       with
@@ -201,7 +201,7 @@ let rec typecheck_top_down
         raise (Errors.TypeError (
             Errors.Typing
               (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
-                 (Format_cfg.format_expression (Ast.unmark e1))
+                 (Format_mvg.format_expression (Ast.unmark e1))
                  (Format_ast.format_position (Ast.get_position e1))
                  (Typ.format_typ t1)
               )))
@@ -214,10 +214,10 @@ let rec typecheck_top_down
         raise (Errors.TypeError (
             Errors.Typing
               (Printf.sprintf "function call to %s (%s) return type is %s but should be %s"
-                 (Format_cfg.format_func func)
+                 (Format_mvg.format_func func)
                  (Format_ast.format_position (Ast.get_position e))
                  (Typ.format_typ t')
-                 (Format_cfg.format_typ t)
+                 (Format_mvg.format_typ t)
               )))
     end
   | (Literal (Int _), t) ->
@@ -269,7 +269,7 @@ let rec typecheck_top_down
                      (Ast.unmark var.Variable.name)
                      (Format_ast.format_position (Ast.get_position var.Variable.name))
                      t_msg
-                     (Format_cfg.format_typ t)
+                     (Format_mvg.format_typ t)
                   )))
         end
       with
@@ -286,7 +286,7 @@ let rec typecheck_top_down
               (Printf.sprintf "expression %s has type %s but should be %s"
                  (Format_ast.format_position (Ast.get_position e))
                  t2_msg
-                 (Format_cfg.format_typ t)
+                 (Format_mvg.format_typ t)
               )))
     end
   | (Error, t) ->
@@ -302,14 +302,14 @@ let rec typecheck_top_down
               (Printf.sprintf "expression %s has type %s but should be %s"
                  (Format_ast.format_position (Ast.get_position e))
                  t_msg
-                 (Format_cfg.format_typ t)
+                 (Format_mvg.format_typ t)
               )))
     end
   | (GenericTableIndex, Integer) -> ctx
   | (Index ((var, var_pos), e'), t) ->
     let ctx = typecheck_top_down ctx e' Integer in
     let var_data = VariableMap.find var ctx.ctx_program in
-    begin match var_data.Cfg.var_definition with
+    begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -333,7 +333,7 @@ let rec typecheck_top_down
                       (Printf.sprintf "expression %s has type %s but should be %s"
                          (Format_ast.format_position (Ast.get_position e))
                          t_msg
-                         (Format_cfg.format_typ t)
+                         (Format_mvg.format_typ t)
                       )))
             end
           with
@@ -347,9 +347,9 @@ let rec typecheck_top_down
   | _ -> raise (Errors.TypeError (
       Errors.Typing
         (Printf.sprintf "expression %s (%s) should be of type %s, but is of type %s"
-           (Format_cfg.format_expression (Ast.unmark e))
+           (Format_mvg.format_expression (Ast.unmark e))
            (Format_ast.format_position (Ast.get_position e))
-           (Format_cfg.format_typ t)
+           (Format_mvg.format_typ t)
            (
              let (_, t') =  typecheck_bottom_up ctx e in
              Typ.format_typ t'
@@ -357,7 +357,7 @@ let rec typecheck_top_down
         )))
 
 and typecheck_func_args (f: func) (pos: Ast.position) :
-  (ctx -> Cfg.expression Ast.marked list -> ctx * Typ.t) =
+  (ctx -> Mvg.expression Ast.marked list -> ctx * Typ.t) =
   match f with
   | SumFunc | MinFunc | MaxFunc -> fun ctx args ->
     if List.length args = 0 then
@@ -379,7 +379,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                 raise (Errors.TypeError
                          (Errors.Typing
                             (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                               (Format_cfg.format_expression (Ast.unmark arg))
+                               (Format_mvg.format_expression (Ast.unmark arg))
                                (Format_ast.format_position (Ast.get_position arg))
                                t_arg_msg
                                t2_msg
@@ -393,7 +393,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
           raise (Errors.TypeError
                    (Errors.Typing
                       (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                         (Format_cfg.format_expression (Ast.unmark (List.hd args)))
+                         (Format_mvg.format_expression (Ast.unmark (List.hd args)))
                          (Format_ast.format_position (Ast.get_position (List.hd args)))
                          t_arg_msg
                          t2_msg
@@ -409,7 +409,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
               raise (Errors.TypeError
                        (Errors.Typing
                           (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_mvg.format_expression (Ast.unmark arg))
                              (Format_ast.format_position (Ast.get_position arg))
                              t_arg_msg
                              t2_msg
@@ -432,7 +432,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
               raise (Errors.TypeError
                        (Errors.Typing
                           (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_mvg.format_expression (Ast.unmark arg))
                              (Format_ast.format_position (Ast.get_position arg))
                              t_arg_msg
                              t2_msg
@@ -457,7 +457,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
               raise (Errors.TypeError
                        (Errors.Typing
                           (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_cfg.format_expression (Ast.unmark arg))
+                             (Format_mvg.format_expression (Ast.unmark arg))
                              (Format_ast.format_position (Ast.get_position arg))
                              t_arg_msg
                              t2_msg
@@ -513,7 +513,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
       raise (Errors.TypeError (
           Errors.Typing
             (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-               (Format_cfg.format_expression (Ast.unmark e1))
+               (Format_mvg.format_expression (Ast.unmark e1))
                (Format_ast.format_position (Ast.get_position e1))
                (Typ.format_typ t1)
                (Format_ast.format_position (Ast.get_position e2))
@@ -540,7 +540,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Index ((var, var_pos), e') ->
     let ctx = typecheck_top_down ctx e' Integer in
     let var_data = VariableMap.find var ctx.ctx_program in
-    begin match var_data.Cfg.var_definition with
+    begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
         raise (Errors.TypeError
                  (Errors.Typing
@@ -570,7 +570,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
             raise (Errors.TypeError (
                 Errors.Typing
                   (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-                     (Format_cfg.format_expression (Ast.unmark e1))
+                     (Format_mvg.format_expression (Ast.unmark e1))
                      (Format_ast.format_position (Ast.get_position e1))
                      (Typ.format_typ t1)
                      (Format_ast.format_position (Ast.get_position e2))
@@ -582,7 +582,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
         raise (Errors.TypeError (
             Errors.Typing
               (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
-                 (Format_cfg.format_expression (Ast.unmark e1))
+                 (Format_mvg.format_expression (Ast.unmark e1))
                  (Format_ast.format_position (Ast.get_position e1))
                  (Typ.format_typ t1)
               )))
@@ -603,7 +603,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
     (ctx, t2)
 
 let determine_def_complete_cover
-    (table_var: Cfg.Variable.t)
+    (table_var: Mvg.Variable.t)
     (size: int)
     (defs: (int * Ast.position) list)
   : int list =
@@ -633,7 +633,7 @@ let determine_def_complete_cover
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p: program) : typ_info * program =
-  let (are_tables, ctx, p) = Cfg.VariableMap.fold (fun var def (acc, ctx, p) ->
+  let (are_tables, ctx, p) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
       match def.var_typ with
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
@@ -667,12 +667,12 @@ let typecheck (p: program) : typ_info * program =
                      (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
                   );
                   let new_es = List.fold_left (fun es undef_index ->
-                      Cfg.IndexMap.add undef_index (Ast.same_pos_as (Cfg.Error) var.Cfg.Variable.name) es
+                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Error) var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc,
                    new_ctx,
-                   Cfg.VariableMap.add var
-                     { def with Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable new_es)}
+                   Mvg.VariableMap.add var
+                     { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es)}
                      p
                   )
                 end
@@ -686,26 +686,26 @@ let typecheck (p: program) : typ_info * program =
           | SimpleVar e ->
             let (new_ctx, t) = typecheck_bottom_up ctx e in
             let t = try
-                Typ.unify t (Cfg.VariableMap.find var ctx.ctx_var_typ)
+                Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
               with
               | Not_found -> t
             in
             let new_ctx =
               { new_ctx with
-                ctx_var_typ = Cfg.VariableMap.add var t new_ctx.ctx_var_typ
+                ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
               } in
             (VariableMap.add var false acc, new_ctx, p)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let (new_ctx, t) = typecheck_bottom_up ctx e in
                 let t = try
-                    Typ.unify t (Cfg.VariableMap.find var ctx.ctx_var_typ)
+                    Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
                   with
                   | Not_found -> t
                 in
                 let new_ctx =
                   { new_ctx with
-                    ctx_var_typ = Cfg.VariableMap.add var t new_ctx.ctx_var_typ
+                    ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
                   } in
                 (VariableMap.add var true acc, new_ctx, p)
               | IndexTable es ->
@@ -715,7 +715,7 @@ let typecheck (p: program) : typ_info * program =
                         let t = Typ.unify t old_t in
                         let new_ctx =
                           { new_ctx with
-                            ctx_var_typ = Cfg.VariableMap.add var t new_ctx.ctx_var_typ
+                            ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
                           } in
                         (new_ctx, t)
                       with
@@ -731,13 +731,13 @@ let typecheck (p: program) : typ_info * program =
                     end
                   ) es (ctx, Typ.create_variable (Ast.get_position var.Variable.name, Typ.Up)) in
                 let t = try
-                    Typ.unify t (Cfg.VariableMap.find var ctx.ctx_var_typ)
+                    Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
                   with
                   | Not_found -> t
                 in
                 let new_ctx =
                   { new_ctx with
-                    ctx_var_typ = Cfg.VariableMap.add var t new_ctx.ctx_var_typ
+                    ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
                   } in
                 let undefined_indexes = determine_def_complete_cover var size
                     (List.map (fun (x,e) -> (x, Ast.get_position e)) (IndexMap.bindings es))
@@ -752,11 +752,11 @@ let typecheck (p: program) : typ_info * program =
                      (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
                   );
                   let new_es = List.fold_left (fun es undef_index ->
-                      Cfg.IndexMap.add undef_index (Ast.same_pos_as (Cfg.Error) var.Cfg.Variable.name) es
+                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Error) var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc, new_ctx,
-                   Cfg.VariableMap.add var
-                     { def with Cfg.var_definition = Cfg.TableVar (size, Cfg.IndexTable new_es)}
+                   Mvg.VariableMap.add var
+                     { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es)}
                      p
                   )
                 end
@@ -768,7 +768,7 @@ let typecheck (p: program) : typ_info * program =
               (VariableMap.add var false acc, ctx, p)
             end
         end
-    ) p (Cfg.VariableMap.empty,
+    ) p (Mvg.VariableMap.empty,
          { ctx_program = p;
            ctx_var_typ = VariableMap.merge (fun var _ def ->
                match def with

@@ -31,7 +31,7 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Cfg
+open Mvg
 
 let format_typ (t: typ) : string = match t with
   | Integer -> "integer"

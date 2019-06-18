@@ -96,7 +96,7 @@ let main () =
         end
     ) !source_files;
   try
-    let program, idmap = Ast_to_cfg.translate !program (if !application = "" then None else Some !application) in
+    let program, idmap = Ast_to_mvg.translate !program (if !application = "" then None else Some !application) in
 
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
@@ -115,22 +115,22 @@ let main () =
 
     let correctly_defined_output_variables =
       List.map
-        (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
-                       (Format_cfg.format_typ
-                          (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-        (Cfg.VariableMap.bindings correctly_defined_outputs)
+        (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
+                       (Format_mvg.format_typ
+                          (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
+        (Mvg.VariableMap.bindings correctly_defined_outputs)
     in
 
     Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
       (List.length correctly_defined_output_variables);
-    if Cfg.VariableMap.cardinal correctly_defined_outputs = 0 then begin
+    if Mvg.VariableMap.cardinal correctly_defined_outputs = 0 then begin
       let undefined_dependencies = Dependency.undefined_dependencies dep_graph program in
       let undefined_output_variables =
         List.map
-          (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
-                         (Format_cfg.format_typ
-                            (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-          (Cfg.VariableMap.bindings undefined_dependencies)
+          (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
+                         (Format_mvg.format_typ
+                            (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
+          (Mvg.VariableMap.bindings undefined_dependencies)
       in
 
       raise (Errors.TypeError (
@@ -145,31 +145,31 @@ let main () =
 
     let program = Dependency.requalify_outputs program correctly_defined_outputs in
 
-    Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Cfg.VariableMap.cardinal program));
+    Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program));
     let unused_variables = Dependency.get_unused_variables dep_graph program in
-    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
-    let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
+    let program = Mvg.VariableMap.filter (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) program in
 
-    (* Printf.printf "Program: %s\n" (Format_cfg.format_program program); *)
+    (* Printf.printf "Program: %s\n" (Format_mvg.format_program program); *)
     Cli.debug_print (Printf.sprintf "Propagating constants variables...");
     let dep_graph = Dependency.create_dependency_graph program in
     let program = Constant_propagation.propagate_constants dep_graph program in
 
-    let program : Cfg.program ref = ref program in
+    let program : Mvg.program ref = ref program in
     let typing_info : Typechecker.typ_info ref = ref typing_info in
     let nb_inlined_vars : int ref = ref max_int in
     while (0 < !nb_inlined_vars) do
       let dep_graph = Dependency.create_dependency_graph !program in
       let single_use_vars = Dependency.single_use_vars dep_graph in
-      let to_inline_vars = Cfg.VariableMap.filter
+      let to_inline_vars = Mvg.VariableMap.filter
           (fun var _ -> try
-              match (Cfg.VariableMap.find var !program).Cfg.var_io with
-              | Cfg.Input | Cfg.Output -> false
-              | Cfg.Regular -> true
+              match (Mvg.VariableMap.find var !program).Mvg.var_io with
+              | Mvg.Input | Mvg.Output -> false
+              | Mvg.Regular -> true
             with
             | Not_found -> false (* TODO: figure out why it's happening *)
           ) single_use_vars in
-      nb_inlined_vars := Cfg.VariableMap.cardinal to_inline_vars;
+      nb_inlined_vars := Mvg.VariableMap.cardinal to_inline_vars;
       if !nb_inlined_vars > 0 then begin
         Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
         let (new_program, new_typing_info) =
@@ -188,14 +188,14 @@ let main () =
 
     let dep_graph = Dependency.create_dependency_graph program in
     let unused_variables = Dependency.get_unused_variables dep_graph program in
-    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Cfg.VariableMap.cardinal unused_variables));
-    let program = Cfg.VariableMap.filter (fun var _ -> not (Cfg.VariableMap.mem var unused_variables)) program in
+    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
+    let program = Mvg.VariableMap.filter (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) program in
 
     Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
     let program = Constant_propagation.partially_evaluate program in
     Cli.debug_print
       (Printf.sprintf "Program variables count down to %d!"
-         (Cfg.VariableMap.cardinal program));
+         (Mvg.VariableMap.cardinal program));
 
 
     let dep_graph = Dependency.create_dependency_graph program in
@@ -203,11 +203,11 @@ let main () =
 
     let minimal_input_variables =
       List.map
-        (fun (v, _) -> Format_cfg.format_variable v ^ " | Type: " ^
-                       (Format_cfg.format_typ
-                          (fst (Cfg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-        (Cfg.VariableMap.bindings
-           (Cfg.VariableMap.filter (fun _ var_data -> var_data.Cfg.var_io = Cfg.Input) program)
+        (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
+                       (Format_mvg.format_typ
+                          (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
+        (Mvg.VariableMap.bindings
+           (Mvg.VariableMap.filter (fun _ var_data -> var_data.Mvg.var_io = Mvg.Input) program)
         )
     in
     Cli.debug_print @@ Printf.sprintf "Number of input variables needed: %d."
@@ -215,22 +215,22 @@ let main () =
 
     exit 0;
 
-    Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_cfg.format_program program));
+    Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_mvg.format_program program));
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
-    let cfg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
-    let ctx = (Z3.mk_context cfg) in
+    let mvg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
+    let ctx = (Z3.mk_context mvg) in
     let s = Z3.Solver.mk_solver ctx None in
     let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
     Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
-      (Cfg.VariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_var)
-      (Cfg.LocalVariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_local_var);
-    let z3_program = Cfg_to_z3.translate_program program dep_graph typing_info ctx s in
+      (Mvg.VariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_var)
+      (Mvg.LocalVariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_local_var);
+    let z3_program = Mvg_to_z3.translate_program program dep_graph typing_info ctx s in
     let t0 = Sys.time () in
     Cli.debug_print
       (Printf.sprintf
          "The Z3 query will contain %d different variables"
-         (Cfg.VariableMap.cardinal z3_program.Z3_repr.repr_data_var +
-          Cfg.LocalVariableMap.cardinal z3_program.Z3_repr.repr_data_local_var)
+         (Mvg.VariableMap.cardinal z3_program.Z3_repr.repr_data_var +
+          Mvg.LocalVariableMap.cardinal z3_program.Z3_repr.repr_data_local_var)
       );
     match Z3.Solver.check s [] with
     | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"

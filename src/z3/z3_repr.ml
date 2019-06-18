@@ -41,8 +41,8 @@ type repr = { repr_kind: repr_kind; is_table: bool }
 [@@deriving show]
 
 type repr_info = {
-  repr_info_var : repr Cfg.VariableMap.t;
-  repr_info_local_var : repr Cfg.LocalVariableMap.t
+  repr_info_var : repr Mvg.VariableMap.t;
+  repr_info_local_var : repr Mvg.LocalVariableMap.t
 }
 
 type var_repr =
@@ -51,22 +51,22 @@ type var_repr =
 
 
 type repr_data = {
-  repr_data_var : (var_repr * repr) Cfg.VariableMap.t;
-  repr_data_local_var : (var_repr * repr) Cfg.LocalVariableMap.t
+  repr_data_var : (var_repr * repr) Mvg.VariableMap.t;
+  repr_data_local_var : (var_repr * repr) Mvg.LocalVariableMap.t
 }
 
 
 let rec find_bitvec_order_expr
-    (e: Cfg.expression Ast.marked)
-    (new_typing: repr Cfg.VariableMap.t)
-    (lvar_typing: repr Cfg.LocalVariableMap.t)
+    (e: Mvg.expression Ast.marked)
+    (new_typing: repr Mvg.VariableMap.t)
+    (lvar_typing: repr Mvg.LocalVariableMap.t)
     (old_typing: Typechecker.typ_info)
-  : (int * repr Cfg.LocalVariableMap.t) = match Ast.unmark e with
-  | Cfg.Comparison _ -> (1, lvar_typing)
-  | Cfg.Binop (((Ast.And, _) | (Ast.Or, _)), _, _) ->
+  : (int * repr Mvg.LocalVariableMap.t) = match Ast.unmark e with
+  | Mvg.Comparison _ -> (1, lvar_typing)
+  | Mvg.Binop (((Ast.And, _) | (Ast.Or, _)), _, _) ->
     (1, lvar_typing)
-  | Cfg.Binop (((Ast.Add, _) | (Ast.Sub, _)), e1, e2)
-  | Cfg.Conditional (_, e1, e2)  ->
+  | Mvg.Binop (((Ast.Add, _) | (Ast.Sub, _)), e1, e2)
+  | Mvg.Conditional (_, e1, e2)  ->
     let (o1, lvar_typing) =
       find_bitvec_order_expr e1 new_typing lvar_typing old_typing
     in
@@ -74,7 +74,7 @@ let rec find_bitvec_order_expr
       find_bitvec_order_expr e2 new_typing lvar_typing old_typing
     in
     (max o1 o2, lvar_typing)
-  | Cfg.Binop (((Ast.Mul, _) | (Ast.Div, _)), e1, e2) ->
+  | Mvg.Binop (((Ast.Mul, _) | (Ast.Div, _)), e1, e2) ->
     let (o1, lvar_typing) =
       find_bitvec_order_expr e1 new_typing lvar_typing old_typing
     in
@@ -82,56 +82,56 @@ let rec find_bitvec_order_expr
       find_bitvec_order_expr e2 new_typing lvar_typing old_typing
     in
     (o1 + o2, lvar_typing)
-  | Cfg.Unop (_, e1) ->
+  | Mvg.Unop (_, e1) ->
     find_bitvec_order_expr e1 new_typing lvar_typing old_typing
-  | Cfg.Index ((var, _), _) | Cfg.Var var ->
-    begin try match (Cfg.VariableMap.find var new_typing).repr_kind with
+  | Mvg.Index ((var, _), _) | Mvg.Var var ->
+    begin try match (Mvg.VariableMap.find var new_typing).repr_kind with
       | Boolean -> (1, lvar_typing)
       | Integer o | Real o -> (o, lvar_typing)
       with
       | Not_found -> assert false (* should not happen *)
     end
-  | Cfg.FunctionCall (Cfg.ArrFunc, [arg])
-  | Cfg.FunctionCall (Cfg.InfFunc, [arg]) ->
+  | Mvg.FunctionCall (Mvg.ArrFunc, [arg])
+  | Mvg.FunctionCall (Mvg.InfFunc, [arg]) ->
     find_bitvec_order_expr arg new_typing lvar_typing old_typing
-  | Cfg.Literal _ -> (1, lvar_typing)
-  | Cfg.LocalVar lvar ->
-    begin try match  (Cfg.LocalVariableMap.find lvar lvar_typing).repr_kind with
+  | Mvg.Literal _ -> (1, lvar_typing)
+  | Mvg.LocalVar lvar ->
+    begin try match  (Mvg.LocalVariableMap.find lvar lvar_typing).repr_kind with
       | Boolean -> (1, lvar_typing)
       | Integer o | Real o -> (o, lvar_typing)
       with
       | Not_found -> assert false (* should not happen *)
     end
-  | Cfg.GenericTableIndex -> (1, lvar_typing) (* should be changed... *)
-  | Cfg.Error -> (1, lvar_typing)
-  | Cfg.LocalLet (lvar, e1, e2) ->
+  | Mvg.GenericTableIndex -> (1, lvar_typing) (* should be changed... *)
+  | Mvg.Error -> (1, lvar_typing)
+  | Mvg.LocalLet (lvar, e1, e2) ->
     let (o1, lvar_typing) =
       find_bitvec_order_expr e1 new_typing lvar_typing old_typing
     in
     let lvar_repr =
       { repr_kind =
-          begin match Cfg.LocalVariableMap.find lvar old_typing.Typechecker.typ_info_local_var with
-            | Cfg.Boolean -> Boolean
-            | Cfg.Integer -> Integer o1
-            | Cfg.Real -> Real o1
+          begin match Mvg.LocalVariableMap.find lvar old_typing.Typechecker.typ_info_local_var with
+            | Mvg.Boolean -> Boolean
+            | Mvg.Integer -> Integer o1
+            | Mvg.Real -> Real o1
           end;
         is_table = false
       }
     in
-    let lvar_typing = Cfg.LocalVariableMap.add lvar lvar_repr lvar_typing in
+    let lvar_typing = Mvg.LocalVariableMap.add lvar lvar_repr lvar_typing in
     find_bitvec_order_expr e2 new_typing lvar_typing old_typing
   | _ -> assert false (* should not happen *)
 
 let find_bitvec_order
-    (program:Cfg.program)
-    (var:Cfg.Variable.t)
+    (program:Mvg.program)
+    (var:Mvg.Variable.t)
     (new_typing: repr_info)
     (old_typing: Typechecker.typ_info)
   : (int * repr_info) =
-  let var_def = Cfg.VariableMap.find var program in
-  match var_def.Cfg.var_definition with
-  | Cfg.InputVar -> (1, new_typing)
-  | Cfg.SimpleVar e ->
+  let var_def = Mvg.VariableMap.find var program in
+  match var_def.Mvg.var_definition with
+  | Mvg.InputVar -> (1, new_typing)
+  | Mvg.SimpleVar e ->
     let (o, lvar_new_typing) =
       find_bitvec_order_expr
         e
@@ -140,8 +140,8 @@ let find_bitvec_order
         old_typing
     in
     (o, {new_typing with repr_info_local_var = lvar_new_typing})
-  | Cfg.TableVar (size, def) -> begin match def with
-      | Cfg.IndexGeneric e ->
+  | Mvg.TableVar (size, def) -> begin match def with
+      | Mvg.IndexGeneric e ->
         let (o, lvar_new_typing) =
           find_bitvec_order_expr
             e
@@ -150,9 +150,9 @@ let find_bitvec_order
             old_typing
         in
         (o, {new_typing with repr_info_local_var = lvar_new_typing})
-      | Cfg.IndexTable es ->
+      | Mvg.IndexTable es ->
         let (orders, new_typing) =
-          Cfg.IndexMap.fold (fun i e (acc, new_typing) ->
+          Mvg.IndexMap.fold (fun i e (acc, new_typing) ->
               let (o, lvar_new_typing) =
                 find_bitvec_order_expr
                   e
@@ -161,18 +161,18 @@ let find_bitvec_order
                   old_typing
               in
               (
-                Cfg.IndexMap.add i o acc,
+                Mvg.IndexMap.add i o acc,
                 {new_typing with repr_info_local_var = lvar_new_typing}
               )
-            ) es (Cfg.IndexMap.empty, new_typing)
+            ) es (Mvg.IndexMap.empty, new_typing)
         in
         (List.fold_left (fun acc (_, order) ->
              max order acc
-           ) 1 (Cfg.IndexMap.bindings orders), new_typing)
+           ) 1 (Mvg.IndexMap.bindings orders), new_typing)
     end
 
 let find_bitvec_repr
-    (p: Cfg.program)
+    (p: Mvg.program)
     (dep_graph : Dependency.DepGraph.t)
     (old_typing: Typechecker.typ_info)
   : repr_info =
@@ -184,25 +184,25 @@ let find_bitvec_repr
     a variable B in the definition of A then B should already have been processed.
   *)
   List.fold_left (fun (new_typing : repr_info) var ->
-      match Cfg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-      | (Cfg.Boolean, is_table) ->
+      match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
+      | (Mvg.Boolean, is_table) ->
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var { repr_kind = Boolean; is_table }
+           Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
              new_typing.repr_info_var }
-      | (Cfg.Integer, is_table) ->
+      | (Mvg.Integer, is_table) ->
         let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
+           Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
              new_typing.repr_info_var }
-      | (Cfg.Real, is_table) ->
+      | (Mvg.Real, is_table) ->
         let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
         {new_typing with
          repr_info_var =
-           Cfg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
+           Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
              new_typing.repr_info_var }
     ) {
-    repr_info_var = Cfg.VariableMap.empty ;
-    repr_info_local_var = Cfg.LocalVariableMap.empty;
+    repr_info_var = Mvg.VariableMap.empty ;
+    repr_info_local_var = Mvg.LocalVariableMap.empty;
   } vars

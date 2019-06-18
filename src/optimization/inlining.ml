@@ -31,7 +31,7 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Cfg
+open Mvg
 
 type ctx = {
   ctx_generic_table_index: expression Ast.marked option;
@@ -45,7 +45,7 @@ let empty_ctx (p: program) : ctx = {
   ctx_lvar_mapping = LocalVariableMap.empty
 }
 
-let lvar_mapping : LocalVariable.t Cfg.LocalVariableMap.t ref =
+let lvar_mapping : LocalVariable.t Mvg.LocalVariableMap.t ref =
   ref LocalVariableMap.empty
 
 let rec inline_vars_in_expr

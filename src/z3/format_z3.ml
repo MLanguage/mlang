@@ -33,25 +33,25 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 let format_z3_repr (t: Z3_repr.repr) : string =
   let first = match t.Z3_repr.repr_kind with
-    | Z3_repr.Integer _ -> Format_cfg.format_typ Cfg.Integer
-    | Z3_repr.Real _ -> Format_cfg.format_typ Cfg.Real
-    | Z3_repr.Boolean -> Format_cfg.format_typ Cfg.Boolean
+    | Z3_repr.Integer _ -> Format_mvg.format_typ Mvg.Integer
+    | Z3_repr.Real _ -> Format_mvg.format_typ Mvg.Real
+    | Z3_repr.Boolean -> Format_mvg.format_typ Mvg.Boolean
   in
   let second = if t.Z3_repr.is_table then "[X]" else "" in
   first ^ second
 
 let format_z3_program
-    (p: (Z3_repr.var_repr * Z3_repr.repr) Cfg.VariableMap.t)
+    (p: (Z3_repr.var_repr * Z3_repr.repr) Mvg.VariableMap.t)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : string =
   match Z3.Solver.get_model s with
   | Some model ->
     Cli.warning_print @@ Z3.Model.to_string model;
-    let l = Cfg.VariableMap.fold (fun var (e, typ) acc ->
+    let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
         | Z3_repr.Regular e ->
-          (Ast.unmark var.Cfg.Variable.name, begin match Z3.Model.eval model e true with
+          (Ast.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
                 Cli.warning_print @@ Z3.Expr.to_string new_e;
                 begin match typ.Z3_repr.repr_kind with
@@ -69,9 +69,9 @@ let format_z3_program
            format_z3_repr typ
           )::acc
         | Z3_repr.Table f ->
-          (Ast.unmark var.Cfg.Variable.name,
+          (Ast.unmark var.Mvg.Variable.name,
            Z3.Expr.to_string
-             (f (Z3.BitVector.mk_const_s ctx "X" Cfg_to_z3.bv_repr_ints_base)),
+             (f (Z3.BitVector.mk_const_s ctx "X" Mvg_to_z3.bv_repr_ints_base)),
            format_z3_repr typ)::acc
       ) p []
     in

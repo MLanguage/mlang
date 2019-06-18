@@ -31,7 +31,7 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Cfg
+open Mvg
 open Dependency
 
 let rec is_expr_completely_const (e: expression Ast.marked) : bool = match Ast.unmark e with
@@ -58,7 +58,7 @@ let is_var_completely_const (var : Variable.t) (p:program) : bool =
   with
   | Not_found -> assert false (* should not happen *)
 
-let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Cfg.Variable.t list =
+let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Mvg.Variable.t list =
   let is_completely_const = fun var ->
     is_var_completely_const var p
   in

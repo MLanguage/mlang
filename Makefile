@@ -46,7 +46,7 @@ Z3_FOLDER = $(shell ocamlfind query z3)
 OCAML_INCLUDES = \
 	-I _build/src \
 	-I _build/src/parsing \
-	-I _build/src/cfg \
+	-I _build/src/mvg \
 	-I _build/src/analysis \
 	-I _build/src/optimization \
 	-I _build/src/z3 \
@@ -81,7 +81,7 @@ parse_all: build
 	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
 
 
-doc: src/index.mld $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
+doc: build src/index.mld $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
 	mkdir -p $(DOC_FOLDER)
 	odoc support-files --output-dir $(DOC_FOLDER)
 
