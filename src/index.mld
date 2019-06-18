@@ -1,5 +1,53 @@
 {0 Verifisc}
 
+The Verifisc compiler has a traditionnal architecture consisting of various
+intermediate representations going fro mthe source code to the target backend.
+
 {1 Parsing}
 
+First, the source code is parsed according to the Menhir grammar specified in
+{!module: Parser}. The grammar is not exactly LR(1) so we rely on {!module: Parse_utils}
+to backtrack, especially on symbol parsing. The target intermediate representation
+is {!module: Ast}, which is very close to the concrete syntax and can be
+printed using {!module: Format_ast}.
+
 {!modules: Parser Parse_utils Ast Format_ast }
+
+{1 M Variable Graph}
+
+The M language has a lot of weird syntactic sugars and constructs linked to its
+usage inside multiple DGFiP applications. {!module: Ast_to_mvg } extracts from the
+AST the computational core corresponding to a DGFiP application into the M Variable
+Graph ({!module: Mvg}), which consists basically of a flat map of all the definitions of
+the variables used in the application. The type system of M is very primitive,
+and basically all programs typecheck ; however {!module: Typechecker} provides
+a bidirectional typechecking algorithm with lattice-based unificiation (with {!module: Union_find})
+to infer missing variable types.
+
+At this point, the {!module: Dependency} modules interprets the MVG as a first-class
+graph and computes various reachability and cycle analysis in order to determine
+the computational flow inside the program.
+
+{!modules: Mvg Ast_to_mvg Format_mvg Typechecker Union_find Dependency }
+
+{1 Optimizations }
+
+The MVG is the right place to perform some basic program optimizations. {!module Function}
+expands all the functions used in the program to basic arithmetic operators, while
+{!module: Inlining } and {!module: Constant_propagation } simplify the MVG.
+
+{!modules: Functions Inlining Constant_propagation }
+
+{1 Translation to Z3 }
+
+Work in progress.
+
+{!modules: Z3_repr Format_z3 Mvg_to_z3}
+
+{1 Interface }
+
+{!module Main } defines the general flow of the compiler, including typechecking,
+order of optimizations and backend selection. {!module: Cli } and {!module: Errors}
+are helper modules.
+
+{!modules: Main Cli Errors}

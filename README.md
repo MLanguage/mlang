@@ -1,8 +1,8 @@
 # Verifisc M compiler
 
 The M language has been invented by the French Direction Générale des Finances
-Publiques (equivalent to the IRS) to transcribe the tax code into machine-readable
-instructions. It is a small Domain Specific Language (DSL) based on variable
+Publiques, equivalent to the IRS, to transcribe the tax code into machine-readable
+instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
 of the syntax and the semantics of M.
 
@@ -41,4 +41,6 @@ documentation using
 
         make doc
 
-The output will be in the `doc` folder, rooted at file `index.html`.
+The output will be in the `doc` folder, rooted at file `index.html` which should
+display this very page. To access the modules' documentation, go to
+ [the Verifisc package documentation](verifisc/index.html).

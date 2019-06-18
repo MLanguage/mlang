@@ -54,6 +54,7 @@ OCAML_INCLUDES = \
 	-I $(GRAPH_FOLDER) \
 	-I $(Z3_FOLDER)
 
+
 export LD_LIBRARY_PATH=$(Z3_FOLDER)
 
 deps:
@@ -68,23 +69,34 @@ test: build
 parse_all: build
 		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug
 
-%.mld:
-	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
+doc-depend:
 
-%.cmt:
-	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
-
-%.cmti:
-	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
-
-%.odoc:
+%.odoc: %.cmt
+	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
 	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
 
+%.odoc: %.cmti
+	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
+	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
 
-doc: build src/index.mld $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
-	mkdir -p $(DOC_FOLDER)
+%.odoc: %.mld
+	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
+	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
+
+src/page-index.odoc: src/index.mld
+	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
+	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
+
+doc: build
+	$(MAKE) doc_
+
+doc_: $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
 	odoc support-files --output-dir $(DOC_FOLDER)
-
-
+	md2mld README.md > README.mld
+	odoc compile README.mld --package verifisc $(OCAML_INCLUDES)
+	odoc html page-README.odoc --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
+	mv $(DOC_FOLDER)/verifisc/README.html $(DOC_FOLDER)/index.html
+	sed -i "s|\.\.\/odoc.css|odoc.css|" $(DOC_FOLDER)/index.html
+	sed -i "s|\.\.\/highlight.pack.js|highlight.pack.js|" $(DOC_FOLDER)/index.html
 
 .PHONY: build doc

@@ -31,14 +31,21 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-(** AST to MVG translation of M *)
+(** {!module: Ast } to {!module: Mvg } translation of M programs. *)
 
+(** {1 Translation context } *)
+
+(** {2 Variable declarations }*)
+
+
+(** Program input/output *)
 type io_status =
   | Input
   | Output
   | Constant
-  | Regular
+  | Regular (** Computed from other variables but not output *)
 
+(** Intermediate container for variable declaration info *)
 type var_decl_data = {
   var_decl_typ: Ast.value_typ option;
   var_decl_is_table: int option;
@@ -47,16 +54,18 @@ type var_decl_data = {
   var_pos: Ast.position;
 }
 
-let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Mvg.typ option =
-  match typ with
-  | Some (Ast.Integer, _) -> Some Mvg.Integer
-  | Some (Ast.Boolean, _) -> Some Mvg.Boolean
-  | Some (Ast.Real, _) -> Some Mvg.Real
-  | Some (_ , pos) -> Some Mvg.Integer
-  | None -> None
+(** {2 Loop translation context } *)
 
+(**
+   The M language has a strange way of doing loops. We translate them by unrolling; but for that
+   we need a context to hold the loop parameters, which consists of a mapping from characters to
+   integers or other characters.
+*)
+
+(** Map whose keys are loop parameters *)
 module ParamsMap = Map.Make(Char)
 
+(** The values of the map can be either strings of integers *)
 type loop_param_value =
   | VarName of Ast.variable_name
   | RangeInt of int
@@ -65,8 +74,10 @@ let format_loop_param_value (v: loop_param_value) : string = match v with
   | VarName v -> v
   | RangeInt i -> string_of_int i
 
+(** This is the context for one loop parameters *)
 type loop_context = loop_param_value ParamsMap.t
 
+(** Loops can have multiple loop parameters *)
 type loop_domain = loop_param_value list ParamsMap.t
 
 let format_loop_context (ld: loop_context) : string = ParamsMap.fold (fun param value acc ->
@@ -74,19 +85,25 @@ let format_loop_context (ld: loop_context) : string = ParamsMap.fold (fun param 
     format_loop_param_value value
   ) ld ""
 
-
 let format_loop_domain (ld: loop_domain) : string = ParamsMap.fold (fun param values acc ->
     acc ^ "; " ^ (Printf.sprintf "%c=" param)  ^
     (String.concat "," (List.map (fun value -> format_loop_param_value value) values))
   ) ld ""
 
+(** {2 General translation context } *)
+
+(**
+   We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
+   a mapping between the two.
+*)
 module VarNameToID = Map.Make(String)
 type idmap = Mvg.Variable.t VarNameToID.t
 
+(** This context will be passed along during the translation *)
 type translating_context = {
-  idmap : idmap;
-  lc: loop_context option;
-  int_const_values: int Mvg.VariableMap.t
+  idmap : idmap; (** Current string-to-{!type: Mvg.Variable.t} mapping *)
+  lc: loop_context option; (** Current loop translation context *)
+  int_const_values: int Mvg.VariableMap.t (** Mapping from constant variables to their value *)
 }
 
 let get_var_from_name (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.Variable.t =
@@ -610,6 +627,14 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
         (var, SingleIndex i)
     end
   | None -> (var, NoIndex)
+
+let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Mvg.typ option =
+  match typ with
+  | Some (Ast.Integer, _) -> Some Mvg.Integer
+  | Some (Ast.Boolean, _) -> Some Mvg.Boolean
+  | Some (Ast.Real, _) -> Some Mvg.Real
+  | Some (_ , pos) -> Some Mvg.Integer
+  | None -> None
 
 let add_var_def
     (var_data : Mvg.variable_data Mvg.VariableMap.t)
