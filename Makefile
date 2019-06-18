@@ -36,7 +36,9 @@ SOURCE_FILES=chap-1.m chap-2.m chap-3.m chap-4.m chap-51.m chap-52.m chap-6.m \
 	chap-thr.m chap-tl.m coc1.m coc2.m coc3.m coc4.m coc5.m coc7.m coi1.m coi2.m \
 	coi3.m errB.m errI.m horizoc.m horizoi.m res-ser1.m res-ser2.m tgvB.m tgvI.m
 
-OCAMLDOC_FILES = src/**/*.ml src/*.ml
+CMT_FILES = $(shell find _build -name "*.cmt")
+CMTI_FILES = $(shell find _build -name "*.cmti")
+ODOC_FILES = $(CMT_FILES:.cmt=.odoc) $(CMTI_FILES:.cmti=.odoc)
 DOC_FOLDER = doc
 ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
 GRAPH_FOLDER = $(shell ocamlfind query ocamlgraph)
@@ -64,16 +66,25 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug 
+		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug
 
-doc:
+%.mld:
+	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
+
+%.cmt:
+	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
+
+%.cmti:
+	odoc compile $@ -r --package verifisc $(OCAML_INCLUDES)
+
+%.odoc:
+	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
+
+
+doc: src/index.mld $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
 	mkdir -p $(DOC_FOLDER)
-	opam config env
-	ocamldoc \
-		$(OCAML_INCLUDES) \
-		-html -keep-code -m p -sort \
-		-colorize-code -d $(DOC_FOLDER) \
-		-t "Verifisc M compiler" \
-		$(OCAMLDOC_FILES)
+	odoc support-files --output-dir $(DOC_FOLDER)
+
+
 
 .PHONY: build doc
