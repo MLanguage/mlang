@@ -250,27 +250,48 @@ let try_and_fix_undefined_dependencies
     Mvg.VariableMap.filter (fun v _ -> is_undefined v)
       (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
   in
+  let is_still_undefined x = match x with None -> true | Some _ -> false in
   let is_needed_by_ouptput_and_undefined_fix =
     Mvg.VariableMap.mapi (fun var undef ->
-        Mvg.VariableMap.find_opt var var_defs_not_in_app
+        match Mvg.VariableMap.find_opt var var_defs_not_in_app with
+        | None -> None
+        | Some def ->
+          Cli.warning_print
+            (Printf.sprintf "Variable %s is undefined in the current application. Fetching definition %s from another application."
+               (Ast.unmark var.Mvg.Variable.name)
+               (Format_ast.format_position (match def.Mvg.var_definition with
+                    | Mvg.SimpleVar e
+                    | Mvg.TableVar (_, Mvg.IndexGeneric e)
+                      -> Ast.get_position e
+                    | Mvg.TableVar (_, Mvg.IndexTable es) ->
+                      Ast.get_position (snd (Mvg.IndexMap.choose es))
+                    | Mvg.InputVar -> assert false (* should not happen *)
+                  )
+               )
+            );
+          Some def
       )
       is_needed_by_ouptput_and_undefined
   in
-  let is_still_undefined _ x = match x with None -> true | Some _ -> false in
   begin if Mvg.VariableMap.exists
-      is_still_undefined
+      (fun _ x -> is_still_undefined x)
       is_needed_by_ouptput_and_undefined_fix
     then
       let is_needed_by_ouptput_and_still_undefined =
         List.map
           (fun (v, _) -> Format_mvg.format_variable v)
           (Mvg.VariableMap.bindings
-             (Mvg.VariableMap.map is_still_undefined
-                is_needed_by_ouptput_and_undefined_fix))
+             (Mvg.VariableMap.filter
+                (fun _ b -> b)
+                (Mvg.VariableMap.map is_still_undefined
+                   is_needed_by_ouptput_and_undefined_fix
+                )
+             )
+          )
       in
       Cli.warning_print
         (Printf.sprintf
-           ("There are variables needed to computed that are undefined (%d):\n%s")
+           ("There are variables needed to compute the outputs that are undefined (%d):\n%s")
            (List.length is_needed_by_ouptput_and_still_undefined)
            (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
         )

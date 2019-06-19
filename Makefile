@@ -67,7 +67,7 @@ test: build
 		./main.native --debug test.m
 
 parse_all: build
-		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug --var_info
+		./main.native $(addprefix ir-calcul/sources2017m_6_10/, $(SOURCE_FILES)) ir.m --application bareme --debug
 
 doc-depend:
 

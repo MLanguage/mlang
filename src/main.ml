@@ -129,14 +129,15 @@ let main () =
         (Mvg.VariableMap.bindings correctly_defined_outputs)
     in
 
-    Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
-      (List.length correctly_defined_output_variables);
     if Mvg.VariableMap.cardinal correctly_defined_outputs = 0 then begin
       raise (Errors.TypeError (
           Errors.Variable
             ("there are no correctly defined output variables (see warnings for undefined variables)."
             )))
     end;
+    Cli.debug_print @@ Printf.sprintf "Correctly defined output variables (%d):\n%s."
+      (List.length correctly_defined_output_variables)
+      (String.concat "\n" correctly_defined_output_variables);
 
     let program = Dependency.requalify_outputs program correctly_defined_outputs in
 
