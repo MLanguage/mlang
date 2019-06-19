@@ -204,7 +204,10 @@ let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.
       not (is_necessary_to_output var)
     ) (Mvg.VariableMap.map (fun _ -> ()) p)
 
-let correctly_defined_outputs (g: DepGraph.t) (p: Mvg.program) : unit Mvg.VariableMap.t =
+let correctly_defined_outputs
+    (g: DepGraph.t)
+    (p: Mvg.program)
+  : unit Mvg.VariableMap.t =
   let is_output = fun var ->
     try
       (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
@@ -225,10 +228,11 @@ let correctly_defined_outputs (g: DepGraph.t) (p: Mvg.program) : unit Mvg.Variab
   in
   Mvg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
 
-let undefined_dependencies
+let try_and_fix_undefined_dependencies
     (g: DepGraph.t)
     (p: Mvg.program)
-  : unit Mvg.VariableMap.t =
+    (var_defs_not_in_app: Mvg.program)
+  : Mvg.program  =
   let is_output = fun var ->
     try
       (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
@@ -246,7 +250,38 @@ let undefined_dependencies
     Mvg.VariableMap.filter (fun v _ -> is_undefined v)
       (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
   in
-  Mvg.VariableMap.map (fun _ -> ()) is_needed_by_ouptput_and_undefined
+  let is_needed_by_ouptput_and_undefined_fix =
+    Mvg.VariableMap.mapi (fun var undef ->
+        Mvg.VariableMap.find_opt var var_defs_not_in_app
+      )
+      is_needed_by_ouptput_and_undefined
+  in
+  let is_still_undefined _ x = match x with None -> true | Some _ -> false in
+  begin if Mvg.VariableMap.exists
+      is_still_undefined
+      is_needed_by_ouptput_and_undefined_fix
+    then
+      let is_needed_by_ouptput_and_still_undefined =
+        List.map
+          (fun (v, _) -> Format_mvg.format_variable v)
+          (Mvg.VariableMap.bindings
+             (Mvg.VariableMap.map is_still_undefined
+                is_needed_by_ouptput_and_undefined_fix))
+      in
+      Cli.warning_print
+        (Printf.sprintf
+           ("There are variables needed to computed that are undefined (%d):\n%s")
+           (List.length is_needed_by_ouptput_and_still_undefined)
+           (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
+        )
+  end;
+  Mvg.VariableMap.merge (fun var normal_def fixed_def -> match (normal_def, fixed_def) with
+      | Some normal_def, Some None
+      | Some normal_def, None -> Some normal_def
+      | Some normal_def, Some (Some fixed_def) -> Some fixed_def
+      | None, Some _
+      | None, None -> assert false (* should not happen *)
+    ) p is_needed_by_ouptput_and_undefined_fix
 
 
 let requalify_outputs (p: Mvg.program) (only_output : unit Mvg.VariableMap.t) : Mvg.program =

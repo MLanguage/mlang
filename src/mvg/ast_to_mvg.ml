@@ -769,48 +769,55 @@ let get_var_data
     (int_const_vals: int Mvg.VariableMap.t)
     (p: Ast.program)
     (application : string option)
-  : Mvg.variable_data Mvg.VariableMap.t =
-  List.fold_left (fun var_data source_file ->
+  : Mvg.variable_data Mvg.VariableMap.t * Mvg.variable_data Mvg.VariableMap.t =
+  let var_data, var_defs_not_in_app = List.fold_left (fun (var_data, var_defs_not_in_app) source_file ->
       Cli.debug_print (Printf.sprintf "Expanding definitions in %s" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
-      List.fold_left (fun var_data source_file_item -> match Ast.unmark source_file_item with
+      List.fold_left (fun (var_data, var_defs_not_in_app)  source_file_item -> match Ast.unmark source_file_item with
           | Ast.Rule r ->
+            let correct_var_data = if rule_belongs_to_app r application then
+                var_data
+              else
+                var_defs_not_in_app
+            in
+            let new_correct_var_data = List.fold_left (fun var_data  formula ->
+                match Ast.unmark formula with
+                | Ast.SingleFormula f ->
+                  let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
+                  let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
+                  let var_expr = translate_expression ctx f.Ast.formula in
+                  add_var_def var_data var_lvalue var_expr def_kind var_decl_data
+                | Ast.MultipleFormulaes (lvs, f) ->
+                  let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
+                  let loop_context_provider = translate_loop_variables ctx lvs in
+                  let translator = fun lc ->
+                    let new_ctx = { ctx with lc = Some lc } in
+                    let var_expr = translate_expression new_ctx f.Ast.formula in
+                    let (var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
+                    (var_lvalue, var_expr, def_kind)
+                  in
+                  let data_to_add = loop_context_provider translator in
+                  List.fold_left (fun var_data (var_lvalue, var_expr, def_kind) ->
+                      add_var_def var_data var_lvalue var_expr def_kind var_decl_data
+                    ) var_data data_to_add
+              ) correct_var_data r.Ast.rule_formulaes
+            in
             if rule_belongs_to_app r application then
-              List.fold_left (fun var_data formula ->
-                  match Ast.unmark formula with
-                  | Ast.SingleFormula f ->
-                    let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
-                    let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
-                    let var_expr = translate_expression ctx f.Ast.formula in
-                    add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-                  | Ast.MultipleFormulaes (lvs, f) ->
-                    let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
-                    let loop_context_provider = translate_loop_variables ctx lvs in
-                    let translator = fun lc ->
-                      let new_ctx = { ctx with lc = Some lc } in
-                      let var_expr = translate_expression new_ctx f.Ast.formula in
-                      let (var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
-                      (var_lvalue, var_expr, def_kind)
-                    in
-                    let data_to_add = loop_context_provider translator in
-                    List.fold_left (fun var_data (var_lvalue, var_expr, def_kind) ->
-                        add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-                      ) var_data data_to_add
-                ) var_data r.Ast.rule_formulaes
+              (new_correct_var_data, var_defs_not_in_app)
             else
-              var_data
+              (var_data, new_correct_var_data)
           | Ast.VariableDecl (Ast.ConstVar (name, lit)) ->
             let var = get_var_from_name idmap name in
-            add_var_def var_data var (Ast.same_pos_as (Mvg.Literal (begin match Ast.unmark lit with
-                | Ast.Variable var ->
-                  raise (Errors.TypeError (
-                      Errors.Variable (
-                        Printf.sprintf "const variable %s declared %s cannot be defined as another variable"
-                          (Format_ast.format_variable var)
-                          (Format_ast.format_position (Ast.get_position source_file_item))
-                      )))
-                | Ast.Int i -> Mvg.Int i
-                | Ast.Float f -> Mvg.Float f
-              end)) lit) NoIndex var_decl_data
+            (add_var_def var_data var (Ast.same_pos_as (Mvg.Literal (begin match Ast.unmark lit with
+                 | Ast.Variable var ->
+                   raise (Errors.TypeError (
+                       Errors.Variable (
+                         Printf.sprintf "const variable %s declared %s cannot be defined as another variable"
+                           (Format_ast.format_variable var)
+                           (Format_ast.format_position (Ast.get_position source_file_item))
+                       )))
+                 | Ast.Int i -> Mvg.Int i
+                 | Ast.Float f -> Mvg.Float f
+               end)) lit) NoIndex var_decl_data, var_defs_not_in_app)
           | Ast.VariableDecl (Ast.InputVar (var, _)) ->
             let var = get_var_from_name idmap var.Ast.input_name in
             let var_decl = try Mvg.VariableMap.find var var_decl_data with
@@ -820,18 +827,19 @@ let get_var_data
                 | Some x -> Some (x, Ast.get_position var.Mvg.Variable.name)
                 | None -> None
               ) in
-            Mvg.VariableMap.add
-              var
-              {
-                Mvg.var_definition = Mvg.InputVar;
-                Mvg.var_typ = typ;
-                Mvg.var_io = Mvg.Input;
-                Mvg.var_is_undefined = false
-              }
-              var_data
-          | _ -> var_data
-        ) var_data source_file
-    ) Mvg.VariableMap.empty (List.rev p)
+            (Mvg.VariableMap.add
+               var
+               {
+                 Mvg.var_definition = Mvg.InputVar;
+                 Mvg.var_typ = typ;
+                 Mvg.var_io = Mvg.Input;
+                 Mvg.var_is_undefined = false
+               }
+               var_data, var_defs_not_in_app)
+          | _ -> (var_data, var_defs_not_in_app)
+        ) (var_data, var_defs_not_in_app) source_file
+    ) (Mvg.VariableMap.empty, Mvg.VariableMap.empty) (List.rev p)
+  in var_data, var_defs_not_in_app
 
 let check_if_all_variables_defined
     (var_data: Mvg.program)
@@ -842,7 +850,7 @@ let check_if_all_variables_defined
        | (None, Some decl) -> begin match decl.var_decl_io with
            | Output | Regular | Constant ->
              Cli.var_info_print (
-               Printf.sprintf "variable %s declared %s is never defined"
+               Printf.sprintf "variable %s declared %s is never defined in the application"
                  (Ast.unmark var.Mvg.Variable.name)
                  (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
              );
@@ -875,9 +883,9 @@ let check_if_all_variables_defined
      ) var_data var_decl_data)
 
 
-let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg.Variable.t VarNameToID.t) =
+let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg.Variable.t VarNameToID.t * Mvg.program) =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, idmap) = get_variables_decl p var_decl_data idmap in
-  let var_data = get_var_data idmap var_decl_data int_const_vals p application in
+  let (var_data, var_defs_not_in_app) = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data in
-  var_data, idmap
+  var_data, idmap, var_defs_not_in_app

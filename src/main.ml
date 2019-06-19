@@ -96,7 +96,9 @@ let main () =
         end
     ) !source_files;
   try
-    let program, idmap = Ast_to_mvg.translate !program (if !application = "" then None else Some !application) in
+    let program, idmap, var_defs_not_in_app =
+      Ast_to_mvg.translate !program (if !application = "" then None else Some !application)
+    in
 
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
@@ -111,7 +113,13 @@ let main () =
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot") dep_graph program;
     Dependency.check_for_cycle dep_graph program;
 
-    let correctly_defined_outputs = Dependency.correctly_defined_outputs dep_graph program in
+    let program =
+      Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
+    in
+
+    let correctly_defined_outputs =
+      Dependency.correctly_defined_outputs dep_graph program
+    in
 
     let correctly_defined_output_variables =
       List.map
@@ -124,22 +132,9 @@ let main () =
     Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
       (List.length correctly_defined_output_variables);
     if Mvg.VariableMap.cardinal correctly_defined_outputs = 0 then begin
-      let undefined_dependencies = Dependency.undefined_dependencies dep_graph program in
-      let undefined_output_variables =
-        List.map
-          (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
-                         (Format_mvg.format_typ
-                            (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-          (Mvg.VariableMap.bindings undefined_dependencies)
-      in
-
       raise (Errors.TypeError (
           Errors.Variable
-            (Printf.sprintf
-               ("there are no correctly defined output variables.\n\
-                 Number of undefined variables needed to compute the outputs: %d.\n%s")
-               (List.length undefined_output_variables)
-               (String.concat "\n" undefined_output_variables);
+            ("there are no correctly defined output variables (see warnings for undefined variables)."
             )))
     end;
 
