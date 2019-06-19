@@ -38,7 +38,31 @@ let dep_graph_file : string ref = ref "dep_graph"
 let verify_flag = ref false
 let debug_flag = ref false
 let var_info_flag = ref false
+let no_cycles_check_flag = ref false
 let application = ref ""
+
+let parse_cli_args () =
+  (** Code block to retrieve and parse command-line arguments. *)
+  let speclist = Arg.align [
+      ("--verify", Arg.Set verify_flag,
+       " Vérifie que les conditions sont valables dans tous les cas");
+      ("--debug", Arg.Set debug_flag,
+       " Affiche des informations de débuggage");
+      ("--var_info", Arg.Set var_info_flag,
+       " Affiche des informations sur les variables du programmes mal définies");
+      ("--dep_graph_file", Arg.Set_string dep_graph_file,
+       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)");
+      ("--application", Arg.Set_string application,
+       "Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
+      ("--no_cycles_check", Arg.Set no_cycles_check_flag,
+       "Does not check for circular definitions between variables (may cause program to loop when interpreted)")
+    ]
+  in let usage_msg =
+       "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."
+  in
+  let anon_func (file: string) : unit =
+    source_files := file::!source_files
+  in Arg.parse speclist anon_func usage_msg
 
 let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.blue] "[VAR INFO] "
 let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "

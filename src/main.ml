@@ -35,27 +35,6 @@ open Lexer
 open Lexing
 open Cli
 
-let parse_cli_args () =
-  (** Code block to retrieve and parse command-line arguments. *)
-  let speclist = Arg.align [
-      ("--verify", Arg.Set verify_flag,
-       " Vérifie que les conditions sont valables dans tous les cas");
-      ("--debug", Arg.Set debug_flag,
-       " Affiche des informations de débuggage");
-      ("--var_info", Arg.Set var_info_flag,
-       " Affiche des informations sur les variables du programmes mal définies");
-      ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)");
-      ("--application", Arg.Set_string application,
-       "Nom de l'application (jette toutes les règles ne comportant pas cette mention)")
-    ]
-  in let usage_msg =
-       "M parser"
-  in
-  let anon_func (file: string) : unit =
-    source_files := file::!source_files
-  in Arg.parse speclist anon_func usage_msg
-
 let main () =
   parse_cli_args ();
   Cli.debug_print "Reading files...";
@@ -111,7 +90,8 @@ let main () =
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot") dep_graph program;
-    Dependency.check_for_cycle dep_graph program;
+    if not !no_cycles_check_flag then
+      Dependency.check_for_cycle dep_graph program;
 
     let program =
       Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
