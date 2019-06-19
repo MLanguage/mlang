@@ -33,14 +33,34 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (** Command-line interface helpers *)
 
+(**{1 Command line arguments }*)
+
+(**{2 Flags and parameters}*)
+
+(** M source files to be compiled *)
 let source_files : string list ref = ref []
+
+(** Prefix for dependency graph output files *)
 let dep_graph_file : string ref = ref "dep_graph"
+
+(** Use Z3 to check if verif rules hold all the time *)
 let verify_flag = ref false
+
+(** Prints debug information *)
 let debug_flag = ref false
+
+(** Print infomation about variables declared, defined ou used incorrectly *)
 let var_info_flag = ref false
+
+(** Don't check for cycles in the variables depencency graph *)
 let no_cycles_check_flag = ref false
+
+(** Name of application to consider (drops all the rules not corresponding to it) *)
 let application = ref ""
 
+(**{2 Argument parsing }*)
+
+(** {!module Arg} function that specifies command-line arguments parsing *)
 let parse_cli_args () =
   (** Code block to retrieve and parse command-line arguments. *)
   let speclist = Arg.align [
@@ -51,11 +71,11 @@ let parse_cli_args () =
       ("--var_info", Arg.Set var_info_flag,
        " Affiche des informations sur les variables du programmes mal définies");
       ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Fichier où écrire le graphe de dépendance (par défault dep_graph.dot)");
+       " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
       ("--application", Arg.Set_string application,
-       "Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
+       " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
       ("--no_cycles_check", Arg.Set no_cycles_check_flag,
-       "Does not check for circular definitions between variables (may cause program to loop when interpreted)")
+       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)")
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."
@@ -64,11 +84,28 @@ let parse_cli_args () =
     source_files := file::!source_files
   in Arg.parse speclist anon_func usage_msg
 
+(**{1 Terminal formatting }*)
+
+(**{2 Markers}*)
+
+(** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.blue] "[VAR INFO] "
+
+(** Prints [[DEBUG]] in purple on the terminal standard output *)
 let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
+
+(** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "
+
+(** Prints [[WARNING]] in yellow on the terminal standard output *)
 let warning_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.yellow] "[WARNING] "
+
+(** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.green] "[RESULT] "
+
+(**{2 Printers}*)
+
+(** All the printers below print their argument after the correct marker *)
 
 let debug_print (s: string) =
   if !debug_flag then begin

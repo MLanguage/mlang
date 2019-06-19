@@ -33,6 +33,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (** Error formatting and helper functions *)
 
+(**{1 Parsing }*)
 
 exception ParsingError of string
 
@@ -56,6 +57,7 @@ let parser_error (sloc_start, sloc_end) (msg: string) =
                          (print_lexer_position sloc_end)
                       ))
 
+(**{1 Typechecking }*)
 
 type typ_error =
   | Variable of string

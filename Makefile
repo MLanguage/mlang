@@ -93,8 +93,11 @@ src/page-index.odoc: src/index.mld
 doc: build
 	$(MAKE) doc_
 
+THEME_DIR = $(shell ocamlfind query odig)/../../share/odig/odoc-theme/gruvbox.dark
+
 doc_: $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
 	odoc support-files --output-dir $(DOC_FOLDER)
+	cp -r $(THEME_DIR)/. $(DOC_FOLDER)
 	md2mld README.md > README.mld
 	odoc compile README.mld --package verifisc $(OCAML_INCLUDES)
 	odoc html page-README.odoc --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)

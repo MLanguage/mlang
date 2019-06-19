@@ -35,6 +35,8 @@ knowledge of the CeCILL-C license and that you accept its terms.
  open Ast
  open Lexing
  open Parse_utils
+
+ (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
 %token<string> SYMBOL STRING

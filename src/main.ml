@@ -35,7 +35,8 @@ open Lexer
 open Lexing
 open Cli
 
-let main () =
+(** Entry function for the executable. Returns a negative number in case of error. *)
+let main () : int =
   parse_cli_args ();
   Cli.debug_print "Reading files...";
   let program = ref [] in
@@ -189,7 +190,7 @@ let main () =
     Cli.debug_print @@ Printf.sprintf "Number of input variables needed: %d."
       (List.length minimal_input_variables);
 
-    exit 0;
+    ignore (exit 0);
 
     Cli.debug_print (Printf.sprintf "The program so far:\n%s\n" (Format_mvg.format_program program));
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
@@ -209,8 +210,8 @@ let main () =
           Mvg.LocalVariableMap.cardinal z3_program.Z3_repr.repr_data_local_var)
       );
     match Z3.Solver.check s [] with
-    | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"
-    | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."
+    | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"; -1
+    | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."; -2
     | Z3.Solver.SATISFIABLE ->
       let t1 = Sys.time () in
       Cli.result_print "Z3 found an answer!";
@@ -223,12 +224,11 @@ let main () =
            "The query took %f seconds to execute. Here are some statistics about it:\n%s"
            (t1 -. t0)
            (Z3.Statistics.to_string (Z3.Solver.get_statistics s))
-        )
+        ); 0
   with
-  (* | err -> raise err *)
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg,pos) ->
-    error_print (Printf.sprintf "unimplemented for expression %s (%s)" (Format_ast.format_position pos) msg)
+    error_print (Printf.sprintf "unimplemented for expression %s (%s)" (Format_ast.format_position pos) msg); -3
 
 let _ = main ()

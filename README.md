@@ -11,7 +11,7 @@ of the syntax and the semantics of M.
 
 You will need an OCaml distribution with the following Opam packages:
 
-        ppx_deriving ANSITerminal ocamlgraph z3 odoc
+        ppx_deriving ANSITerminal ocamlgraph z3 odoc odig
 
 To build the project, simply enter:
 

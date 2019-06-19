@@ -40,12 +40,16 @@ let mk_position sloc = {
   Ast.pos_loc = sloc;
 }
 
+(** {1 Parsing variable names }*)
+
+(** Checks whether the string is entirely capitalized *)
 let parse_variable_name sloc (s: string) : Ast.variable_name =
   if not (String.equal (String.uppercase_ascii s) s) then
     Errors.parser_error sloc "invalid variable name"
   else
     s
 
+(** Checks for duplicate generic parameters *)
 let dup_exists l =
   let rec dup_consecutive = function
     | [] | [_] -> false
@@ -54,6 +58,8 @@ let dup_exists l =
   let sort_on_third s1 s2 = Char.compare s1 s2 in
   dup_consecutive (List.sort sort_on_third l)
 
+
+(** Parse variable with parameters, parameters have to be lowercase letters *)
 let parse_variable_generic_name sloc (s: string) : Ast.variable_generic_name =
   let parameters = ref [] in
   for i = String.length s - 1 downto 0 do
@@ -70,6 +76,7 @@ let parse_variable_generic_name sloc (s: string) : Ast.variable_generic_name =
     Errors.parser_error sloc "variable parameters should have distinct names";
   { Ast.parameters = !parameters; Ast.base = s }
 
+(** Checks whether the variable contains parameters *)
 let parse_variable sloc (s:string) =
   try Ast.Normal (parse_variable_name sloc s) with
   | Errors.ParsingError _ ->
@@ -77,6 +84,7 @@ let parse_variable sloc (s:string) =
     | Errors.ParsingError _ ->
       Errors.parser_error sloc "invalid variable name"
 
+(** A parsed variable can be a regular variable or an integer literal *)
 type parse_val =
   | ParseVar of Ast.variable
   | ParseInt of int
@@ -90,6 +98,7 @@ let parse_variable_or_int sloc (s:string) : parse_val  =
       | Errors.ParsingError _ ->
         Errors.parser_error sloc "invalid variable name"
 
+(** Table index can be integer or [X], the generic table index variable *)
 let parse_table_index sloc (s: string) : Ast.table_index =
   if String.equal s "X" then
     Ast.GenericIndex
@@ -101,6 +110,8 @@ let parse_table_index sloc (s: string) : Ast.table_index =
           Printf.printf "s: %s, %b\n" s (String.equal s "X");
           Errors.parser_error sloc "table index should be an integer"
       end
+
+(**{1 Literal parsing }*)
 
 let parse_literal sloc (s: string) : Ast.literal =
   try Ast.Int (int_of_string s) with
