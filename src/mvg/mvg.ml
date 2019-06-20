@@ -33,11 +33,14 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (** Main data structure for M analysis *)
 
+(**{1 Variables} *)
+
+(** Variables are first-class objects *)
 module Variable = struct
   type t = {
-    name: string Ast.marked;
-    id: int;
-    descr: string Ast.marked;
+    name: string Ast.marked (** The position is the variable declaration *);
+    id: int; (** Each variable has an unique ID *)
+    descr: string Ast.marked; (** Description taken from the variable declaration *)
   }
   [@@deriving show]
 
@@ -56,6 +59,10 @@ module Variable = struct
     compare var1.id var2.id
 end
 
+(**
+    Local variables don't appear in the M source program but can be introduced by let bindings when translating to MVG.
+    They should be De Bruijn indices but instead are unique globals identifiers out of laziness.
+*)
 module LocalVariable = struct
   type t = {
     id: int;
@@ -77,6 +84,7 @@ module LocalVariable = struct
     compare var1.id var2.id
 end
 
+(** Type of MVG values *)
 type typ =
   | Integer
   | Real
@@ -89,18 +97,30 @@ type literal =
   | Bool of bool
 [@@deriving show]
 
+(** MVg only supports a restricted set of functions *)
 type func =
-  | SumFunc
-  | AbsFunc
-  | MinFunc
-  | MaxFunc
-  | GtzFunc
-  | GtezFunc
-  | NullFunc
-  | ArrFunc
-  | InfFunc
-  | PresentFunc
+  | SumFunc (** Sums the arguments *)
+  | AbsFunc (** Absolute value *)
+  | MinFunc (** Minimum of a list of values *)
+  | MaxFunc (** Maximum of a list of values *)
+  | GtzFunc (** Greater than zero (strict) ? *)
+  | GtezFunc (** Greater or equal than zero ? *)
+  | NullFunc (** Equal to zero ? *)
+  | ArrFunc (** Round to nearest integer *)
+  | InfFunc (** Truncate to integer *)
+  | PresentFunc (** Different than zero ? *)
 [@@deriving show]
+
+
+(**
+   MVG expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
+   define conditional without an else branch although it is an expression-based language, we include
+   an [Error] constructor to which the missing else branch is translated to.
+
+   Because translating to MVG requires a lot of unrolling and expansion, we introduce a [LocalLet]
+   construct to avoid code duplication.
+*)
+
 
 type expression =
   | Comparison of Ast.comp_op Ast.marked * expression Ast.marked * expression Ast.marked
@@ -117,7 +137,10 @@ type expression =
   | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
 [@@deriving show]
 
-
+(**
+   MVG programs are just mapping from variables to their definitions, and make a massive use
+   of [VariableMap].
+*)
 module VariableMap =
 struct
   include Map.Make(Variable)
@@ -134,12 +157,20 @@ struct
       Printf.sprintf "%s\n%s -> %s" acc (LocalVariable.show k) (vprinter v)) map ""
 end
 
+(**
+   This map is used to store the definitions of all the cells of a table variable that is not
+   not defined generically
+*)
 module IndexMap = Map.Make(struct type t = int let compare = compare end)
 
 type index_def =
   | IndexTable of (expression Ast.marked) IndexMap.t
   | IndexGeneric of expression Ast.marked
 
+(**
+   The definitions here are modeled closely to the source M language. One could also adopt
+   a more lambda-calculus-compatible model with functions used to model tables.
+*)
 type variable_def =
   | SimpleVar of expression Ast.marked
   | TableVar of int * index_def
@@ -152,10 +183,9 @@ type io =
 
 type variable_data = {
   var_definition: variable_def;
-  var_typ : typ option;
+  var_typ : typ option; (** The typing info here comes from the variable declaration in the source program *)
   var_io: io;
   var_is_undefined: bool;
 }
-
 
 type program = variable_data VariableMap.t

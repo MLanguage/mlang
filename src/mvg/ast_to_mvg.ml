@@ -74,8 +74,12 @@ let format_loop_param_value (v: loop_param_value) : string = match v with
   | VarName v -> v
   | RangeInt i -> string_of_int i
 
-(** This is the context for one loop parameters *)
+(**
+   This is the context when iterating a loop : for each loop parameter, we have access to the
+   current value of this loop parameter in this iteration.
+*)
 type loop_context = loop_param_value ParamsMap.t
+
 
 (** Loops can have multiple loop parameters *)
 type loop_domain = loop_param_value list ParamsMap.t
@@ -90,32 +94,11 @@ let format_loop_domain (ld: loop_domain) : string = ParamsMap.fold (fun param va
     (String.concat "," (List.map (fun value -> format_loop_param_value value) values))
   ) ld ""
 
-(** {2 General translation context } *)
-
 (**
-   We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
-   a mapping between the two.
+   From a loop domain of varying loop parameters, builds by cartesian product the list of all
+   iterations that the loop will take, each time assigining a different combination of values to the
+   loop parameters.
 *)
-module VarNameToID = Map.Make(String)
-type idmap = Mvg.Variable.t VarNameToID.t
-
-(** This context will be passed along during the translation *)
-type translating_context = {
-  idmap : idmap; (** Current string-to-{!type: Mvg.Variable.t} mapping *)
-  lc: loop_context option; (** Current loop translation context *)
-  int_const_values: int Mvg.VariableMap.t (** Mapping from constant variables to their value *)
-}
-
-let get_var_from_name (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.Variable.t =
-  try VarNameToID.find (Ast.unmark name) d with
-  | Not_found ->
-    raise (Errors.TypeError
-             (Errors.Variable
-                (Printf.sprintf "variable %s used %s, has not been declared"
-                   (Ast.unmark name)
-                   (Format_ast.format_position (Ast.get_position name))
-                )))
-
 let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
   try let param, values = ParamsMap.choose ld in
     match values with
@@ -136,11 +119,71 @@ let rec iterate_all_combinations (ld: loop_domain) : loop_context list =
   with
   | Not_found -> []
 
+(** Helper to make a list of integers from a range *)
 let rec make_range_list (i1: int) (i2: int) : loop_param_value list =
   if i1 > i2 then [] else
     let tl = make_range_list (i1 + 1) i2 in
     (RangeInt i1)::tl
 
+(** {2 General translation context } *)
+
+(**
+   We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
+   a mapping between the two.
+*)
+module VarNameToID = Map.Make(String)
+type idmap = Mvg.Variable.t VarNameToID.t
+
+(** This context will be passed along during the translation *)
+type translating_context = {
+  idmap : idmap; (** Current string-to-{!type: Mvg.Variable.t} mapping *)
+  lc: loop_context option; (** Current loop translation context *)
+  int_const_values: int Mvg.VariableMap.t (** Mapping from constant variables to their value *)
+}
+
+(**
+   When entering a loop, you are provided with a new loop context that you have to integrate
+   to the general context with this function. The [position] argument is used to print an error message
+   in case of the same loop parameters used in nested loops.
+*)
+let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.position) : translating_context =
+  match ctx.lc with
+  | None -> { ctx with lc = Some new_lc }
+  | Some old_lc ->
+    let merged_lc = ParamsMap.merge (fun param old_val new_val ->
+        match (old_val, new_val) with
+        | (Some _ , Some _) ->
+          raise (Errors.TypeError
+                   (Errors.LoopParam
+                      (Printf.sprintf "Same loop parameter %c used in two nested loop contexts, %s"
+                         param (Format_ast.format_position pos))))
+        | (Some v, None) | (None, Some v) -> Some v
+        | (None, None) -> assert false (* should not happen *)
+      ) old_lc new_lc
+    in
+    { ctx with lc = Some merged_lc }
+
+(** Queries a {type: Mvg.variable.t} from an {type:idmap} mapping and the name of a variable *)
+let get_var_from_name (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.Variable.t =
+  try VarNameToID.find (Ast.unmark name) d with
+  | Not_found ->
+    raise (Errors.TypeError
+             (Errors.Variable
+                (Printf.sprintf "variable %s used %s, has not been declared"
+                   (Ast.unmark name)
+                   (Format_ast.format_position (Ast.get_position name))
+                )))
+
+
+(**{1 Translation }*)
+
+(**{2 Loops }*)
+
+(**
+   The M language added a new feature in its 2017 edition : you can specify loop variable ranges bounds with
+   constant variables. Because we need the actual value of the bounds to unroll everything, this function
+   queries the const value in the context if needed.
+*)
 let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : int = match Ast.unmark l with
   | Ast.Int i -> i
   | Ast.Variable v ->
@@ -159,6 +202,16 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : i
     end
   | Ast.Float _ -> assert false (* should not happen *)
 
+(**
+   This function is the workhorse of loop unrolling : it takes a loop prefix containing the set of
+   variables over which to iterate, and fabricates a combinator. This combinator takes auser-provided
+   way of translating the loop body generically over the values of the iterated variables, and produce
+   a list corresponding of the unrolled loop bodies expressions containing the iterated values.
+
+   In OCaml terms, if you want [translate_loop_variables ctx lvs f], then you should define [f] by
+   [let f = fun lc -> ...]  and use {!val: merge_loop_ctx} inside [...] before translating the loop
+   body.
+*)
 let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
   ((loop_context -> 'a) -> 'a list) =
   match Ast.unmark lvs with
@@ -183,6 +236,37 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
       List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
     )
 
+(**{2 Variables }*)
+
+(**
+   Variables are tricky to translate; indeed, we have unrolled all the loops, and generic variables
+   depend on the loop parameters. We have to interrogate the loop context for the current values of
+   the loop parameter and then replace *inside the string* the loop parameter by its value to produce
+   the new variable.
+*)
+
+(** A variable whose name is [X] should be translated as the generic table index expression *)
+let get_var_or_x (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.expression =
+  if Ast.unmark name = "X" then Mvg.GenericTableIndex else
+    Mvg.Var (get_var_from_name d name)
+
+
+(**
+   The M language has a weird and very annoying "feature", which is that you can define the following
+   loop:
+   {v
+sum(i=05,06,07:Xi)
+   v}
+   In this example, what is [Xi] supposed to become ? [X05] ? [X5] ? The answer in the actual M codebase is:
+   it depends. Indeed, sometimes [X05] is defines, sometimes it is [X5], and sometimes the [i=05,...] will
+   have trailing zeroes, and sometimes not. So we have to try all combinations of trailing zeroes and find
+   one where everything is correctly defined.
+
+   It is unclear why this behavior is accepted by the M language. Maybe it has to do with the way a
+   string to integer function works inside the official interpreter...
+*)
+
+(** To try everything, we have to cover all cases concerning trailing zeroes *)
 type zero_padding =
   | ZPNone
   | ZPAdd
@@ -193,11 +277,7 @@ let format_zero_padding (zp: zero_padding) : string = match zp with
   | ZPAdd -> "add zero padding"
   | ZPRemove -> "remove zero padding"
 
-let get_var_or_x (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.expression =
-  if Ast.unmark name = "X" then Mvg.GenericTableIndex else
-    Mvg.Var (get_var_from_name d name)
-
-
+(** Main function that translates variable giving the context *)
 let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark var with
   | Ast.Normal name ->
@@ -210,6 +290,8 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
+
+(** The following function deal with the "trying all cases" pragma *)
 
 and instantiate_generic_variables_parameters
     (ctx: translating_context)
@@ -289,6 +371,7 @@ and instantiate_generic_variables_parameters_aux
     in
     instantiate_generic_variables_parameters_aux ctx var_name new_pad_zero pos
 
+(**{2 Preliminary translation }*)
 
 let get_constants (p: Ast.program) : (var_decl_data Mvg.VariableMap.t * idmap * int Mvg.VariableMap.t) =
   let (vars, idmap, int_const_list) =
@@ -456,23 +539,6 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
-
-let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.position) : translating_context =
-  match ctx.lc with
-  | None -> { ctx with lc = Some new_lc }
-  | Some old_lc ->
-    let merged_lc = ParamsMap.merge (fun param old_val new_val ->
-        match (old_val, new_val) with
-        | (Some _ , Some _) ->
-          raise (Errors.TypeError
-                   (Errors.LoopParam
-                      (Printf.sprintf "Same loop parameter %c used in two nested loop contexts, %s"
-                         param (Format_ast.format_position pos))))
-        | (Some v, None) | (None, Some v) -> Some v
-        | (None, None) -> assert false (* should not happen *)
-      ) old_lc new_lc
-    in
-    { ctx with lc = Some merged_lc }
 
 let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.expression Ast.marked list =
   match args with
