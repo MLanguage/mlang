@@ -371,8 +371,12 @@ and instantiate_generic_variables_parameters_aux
     in
     instantiate_generic_variables_parameters_aux ctx var_name new_pad_zero pos
 
-(**{2 Preliminary translation }*)
+(**{2 Preliminary passes }*)
 
+(**
+   Gets constant variables declaration data and values. Done in a separate pass because constant
+   variables can be used in loop ranges bounds.
+*)
 let get_constants (p: Ast.program) : (var_decl_data Mvg.VariableMap.t * idmap * int Mvg.VariableMap.t) =
   let (vars, idmap, int_const_list) =
     List.fold_left (fun (vars, idmap, int_const_list) source_file ->
@@ -421,6 +425,10 @@ let get_constants (p: Ast.program) : (var_decl_data Mvg.VariableMap.t * idmap * 
   in
   (vars, idmap, int_const_vals)
 
+(**
+   Retrieves variable declaration data. Done in a separate pass because wen don't want to deal
+   with sorting the dependencies between files or inside files.
+*)
 let get_variables_decl
     (p: Ast.program)
     (vars: var_decl_data Mvg.VariableMap.t)
@@ -515,6 +523,8 @@ let get_variables_decl
     ) vars out_list in
   (vars, idmap)
 
+(** {2 Main translation }*)
+
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark i with
   | Ast.LiteralIndex i' -> Ast.same_pos_as (Mvg.Literal (Mvg.Int i')) i
@@ -523,6 +533,8 @@ let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.mar
     let var = translate_variable ctx (Ast.same_pos_as v i) in
     var
 
+
+(** Only accepts functions in {!type: Mvg.func}*)
 let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_name with
   | "somme" -> Mvg.SumFunc
   | "min" -> Mvg.MinFunc
@@ -540,20 +552,9 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))
       )))
 
-let rec translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.expression Ast.marked list =
-  match args with
-  | Ast.ArgList args -> List.map (fun arg ->
-      translate_expression ctx arg
-    ) args
-  | Ast.LoopList (lvs, e) ->
-    let loop_context_provider = translate_loop_variables ctx lvs in
-    let translator = fun lc ->
-      let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
-      translate_expression new_ctx e
-    in
-    loop_context_provider translator
 
-and translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Mvg.expression Ast.marked =
+(** Main translation function *)
+let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Mvg.expression Ast.marked =
   Ast.same_pos_as
     (match Ast.unmark f with
      | Ast.TestInSet (negative, e, values) ->
@@ -666,11 +667,26 @@ and translate_expression (ctx : translating_context) (f: Ast.expression Ast.mark
          ) (Mvg.Literal (Mvg.Bool false)) loop_exprs
     ) f
 
+(** Mutually recursive with {!val: translate_expression} *)
+and translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.expression Ast.marked list =
+  match args with
+  | Ast.ArgList args -> List.map (fun arg ->
+      translate_expression ctx arg
+    ) args
+  | Ast.LoopList (lvs, e) ->
+    let loop_context_provider = translate_loop_variables ctx lvs in
+    let translator = fun lc ->
+      let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
+      translate_expression new_ctx e
+    in
+    loop_context_provider translator
+
 type index_def =
   | NoIndex
   | SingleIndex of int
   | GenericIndex
 
+(** Translates lvalues into the assigning variable as well as the type of assignment *)
 let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : Mvg.Variable.t * index_def =
   let var = match Ast.unmark (translate_variable ctx  (Ast.unmark lval).Ast.var)
     with
@@ -694,6 +710,8 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
     end
   | None -> (var, NoIndex)
 
+
+(** Date types are not supported *)
 let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Mvg.typ option =
   match typ with
   | Some (Ast.Integer, _) -> Some Mvg.Integer
@@ -702,6 +720,7 @@ let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Mvg.typ option 
   | Some (_ , pos) -> Some Mvg.Integer
   | None -> None
 
+(** Main toplevel declaration translator that adds a variable definition to the MVG program *)
 let add_var_def
     (var_data : Mvg.variable_data Mvg.VariableMap.t)
     (var_lvalue: Mvg.Variable.t)
@@ -829,6 +848,7 @@ let rule_belongs_to_app (r: Ast.rule) (application: string option) : bool = matc
   | Some application ->
     List.exists (fun app -> Ast.unmark app = application) r.Ast.rule_applications
 
+(** Linear pass on the program to add variable definitions *)
 let get_var_data
     (idmap: idmap)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
@@ -907,6 +927,11 @@ let get_var_data
     ) (Mvg.VariableMap.empty, Mvg.VariableMap.empty) (List.rev p)
   in var_data, var_defs_not_in_app
 
+(**
+   After the linear pass, some variables declared might still be undefined in the application. For
+   these, we insert a placholder [Error] definition and add an [undefined] flag.
+
+*)
 let check_if_all_variables_defined
     (var_data: Mvg.program)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
@@ -948,7 +973,14 @@ let check_if_all_variables_defined
        | _ -> assert false (* should not happen *)
      ) var_data var_decl_data)
 
-
+(**
+   The translate function returns three values :
+   {ul
+   {li [var_data] which is the actual MVG program;}
+   {li [idmap] containing the name to variable mapping;}
+   {li [var_defs_not_in_app] containing the variables defined outside of the app but still present in the source program.}
+   }
+*)
 let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg.Variable.t VarNameToID.t * Mvg.program) =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, idmap) = get_variables_decl p var_decl_data idmap in
