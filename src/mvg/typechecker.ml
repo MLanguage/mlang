@@ -469,6 +469,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                               (Format_ast.format_position pos)
                            )))
       end
+  | Mvg.Multimax | Mvg.Supzero -> raise (Errors.Unimplemented ("multimax or supzero", pos)) 
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with

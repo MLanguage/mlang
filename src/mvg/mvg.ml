@@ -109,6 +109,8 @@ type func =
   | ArrFunc (** Round to nearest integer *)
   | InfFunc (** Truncate to integer *)
   | PresentFunc (** Different than zero ? *)
+  | Multimax (** ??? *) 
+  | Supzero (** ??? *)
 [@@deriving show]
 
 

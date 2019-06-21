@@ -54,6 +54,8 @@ let format_func (f: func) : string = match f with
   | ArrFunc -> "arr"
   | InfFunc -> "inf"
   | PresentFunc -> "present"
+  | Multimax -> "multimax"
+  | Supzero -> "supzero"
 
 let format_literal (l: literal) : string = match l with
   | Int i -> string_of_int i

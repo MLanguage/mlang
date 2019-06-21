@@ -221,11 +221,15 @@ let correctly_defined_outputs
     | Not_found -> assert false (* should not happen *)
   in
   let contains_undefined = InputToOutputReachability.analyze is_undefined g in
+  Cli.debug_print @@ Printf.sprintf "Number of output variables: %d."
+    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_output v) p));
   let is_output_and_does_not_contain_undefined = Mvg.VariableMap.filter (fun v _ -> is_output v)
       (Mvg.VariableMap.filter (fun v _ ->
            not (contains_undefined v)
          ) p)
   in
+  Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
+    (Mvg.VariableMap.cardinal is_output_and_does_not_contain_undefined);
   Mvg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
 
 let try_and_fix_undefined_dependencies
@@ -246,18 +250,22 @@ let try_and_fix_undefined_dependencies
     | Not_found -> assert false (* should not happen *)
   in
   let in_needed_by_output = OutputToInputReachability.analyze is_output g in
+  Cli.debug_print @@ Printf.sprintf "Number of variables needed for output: %d"
+    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p));
   let is_needed_by_ouptput_and_undefined =
     Mvg.VariableMap.filter (fun v _ -> is_undefined v)
       (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
   in
+  Cli.debug_print @@ Printf.sprintf "Number of undefined variables needed for output: %d"
+    (Mvg.VariableMap.cardinal is_needed_by_ouptput_and_undefined);
   let is_still_undefined x = match x with None -> true | Some _ -> false in
   let is_needed_by_ouptput_and_undefined_fix =
     Mvg.VariableMap.mapi (fun var undef ->
         match Mvg.VariableMap.find_opt var var_defs_not_in_app with
         | None -> None
         | Some def ->
-          Cli.warning_print
-            (Printf.sprintf "Variable %s is undefined in the current application. Fetching definition %s from another application."
+          Cli.var_info_print
+            (Printf.sprintf "Variable %s is undefined in the current application, but another unused definition exists %s."
                (Ast.unmark var.Mvg.Variable.name)
                (Format_ast.format_position (match def.Mvg.var_definition with
                     | Mvg.SimpleVar e
@@ -269,12 +277,12 @@ let try_and_fix_undefined_dependencies
                   )
                )
             );
-          Some def
+          None
       )
       is_needed_by_ouptput_and_undefined
   in
   begin if Mvg.VariableMap.exists
-      (fun _ x -> is_still_undefined x)
+      (fun v x -> is_still_undefined x)
       is_needed_by_ouptput_and_undefined_fix
     then
       let is_needed_by_ouptput_and_still_undefined =
@@ -289,12 +297,17 @@ let try_and_fix_undefined_dependencies
              )
           )
       in
+      let undef_var_files = "undefined_variables.txt" in
       Cli.warning_print
         (Printf.sprintf
-           ("There are variables needed to compute the outputs that are undefined (%d):\n%s")
+           ("There are variables needed to compute the outputs that are undefined (%d). Writing them to %s.")
            (List.length is_needed_by_ouptput_and_still_undefined)
-           (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
-        )
+           undef_var_files
+        );
+      let oc = open_out undef_var_files in
+      Printf.fprintf oc "%s"
+        (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
+      close_out oc
   end;
   Mvg.VariableMap.merge (fun var normal_def fixed_def -> match (normal_def, fixed_def) with
       | Some normal_def, Some None

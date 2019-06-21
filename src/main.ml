@@ -97,6 +97,7 @@ let main () : int =
     let program =
       Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
     in
+    let dep_graph = Dependency.create_dependency_graph program in
 
     let correctly_defined_outputs =
       Dependency.correctly_defined_outputs dep_graph program
@@ -116,9 +117,16 @@ let main () : int =
             ("there are no correctly defined output variables (see warnings for undefined variables)."
             )))
     end;
-    Cli.debug_print @@ Printf.sprintf "Correctly defined output variables (%d):\n%s."
+    let defined_output_variables = "defined_output_variables.txt" in
+    Cli.debug_print @@ Printf.sprintf "Correctly defined output variables: %d, see %s for list."
       (List.length correctly_defined_output_variables)
-      (String.concat "\n" correctly_defined_output_variables);
+      defined_output_variables;
+    if !Cli.debug_flag then begin
+      let oc = open_out defined_output_variables in
+      Printf.fprintf oc "%s"
+        (String.concat "\n" correctly_defined_output_variables);
+      close_out oc
+    end;
 
     let program = Dependency.requalify_outputs program correctly_defined_outputs in
 

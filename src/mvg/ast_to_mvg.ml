@@ -467,7 +467,7 @@ let get_variables_decl
                       let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
                       let new_idmap = VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
                       let new_out_list = if List.exists (fun x -> match Ast.unmark x with
-                          | Ast.GivenBack -> false
+                          | Ast.GivenBack -> !Cli.flag_output_given_back
                           | Ast.Base -> false
                         ) cvar.Ast.comp_subtyp then
                           cvar.Ast.comp_name::out_list
@@ -546,7 +546,8 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
   | "arr" -> Mvg.ArrFunc
   | "inf" -> Mvg.InfFunc
   | "present" -> Mvg.PresentFunc
-  | "multimax" -> Mvg.MaxFunc
+  | "multimax" -> Mvg.Multimax
+  | "supzero" -> Mvg.Supzero
   | x -> raise (Errors.TypeError (
       Errors.Function (
         Printf.sprintf "unknown function %s %s" x (Format_ast.format_position (Ast.get_position f_name))

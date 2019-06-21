@@ -58,6 +58,9 @@ let no_cycles_check_flag = ref false
 (** Name of application to consider (drops all the rules not corresponding to it) *)
 let application = ref ""
 
+(** Wheter given back variables should be marked as program output *)
+let flag_output_given_back = ref false
+
 (**{2 Argument parsing }*)
 
 (** {!module Arg} function that specifies command-line arguments parsing *)
@@ -75,7 +78,9 @@ let parse_cli_args () =
       ("--application", Arg.Set_string application,
        " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
       ("--no_cycles_check", Arg.Set no_cycles_check_flag,
-       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)")
+       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)");
+      ("--given_back_output", Arg.Set flag_output_given_back,
+       "Marque les variables \"restituées\" comme des \"sortie()\" du programme")
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."
