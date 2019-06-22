@@ -66,13 +66,13 @@ test: build
 		./main.native --debug test.m
 
 batch: build
-		./main.native $(SOURCE_FILES) ir.m --application batch --debug
+		./main.native $(SOURCE_FILES) --application batch --debug --output IINETIR
 
 iliad: build
-		./main.native $(SOURCE_FILES) ir.m --application iliad --debug --no_cycles_check
+		./main.native $(SOURCE_FILES) --application iliad --debug --no_cycles_check --output IINETIR
 
 bareme: build
-		./main.native $(SOURCE_FILES) ir.m --application bareme --debug
+		./main.native $(SOURCE_FILES) --application bareme --debug --output IINET
 
 doc-depend:
 

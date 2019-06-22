@@ -61,6 +61,9 @@ let application = ref ""
 (** Wheter given back variables should be marked as program output *)
 let flag_output_given_back = ref false
 
+(** Output variable *)
+let output_variable = ref ""
+
 (**{2 Argument parsing }*)
 
 (** {!module Arg} function that specifies command-line arguments parsing *)
@@ -80,7 +83,9 @@ let parse_cli_args () =
       ("--no_cycles_check", Arg.Set no_cycles_check_flag,
        " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)");
       ("--given_back_output", Arg.Set flag_output_given_back,
-       "Marque les variables \"restituées\" comme des \"sortie()\" du programme")
+       "Marque les variables \"restituées\" comme des \"sortie()\" du programme");
+      ("--output", Arg.Set_string output_variable,
+       "Marque une variable particulière comme sortie du programme (elle sera alors la seule sortie)")
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."

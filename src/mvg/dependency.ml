@@ -42,6 +42,9 @@ module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
 
 let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: DepGraph.t) : DepGraph.t =
   let acc = DepGraph.add_vertex acc lvar in
+  let add_edge acc var lvar =
+    DepGraph.add_edge acc var lvar
+  in
   match Ast.unmark e with
   | Mvg.Comparison (_, e1, e2) | Mvg.Binop (_, e1, e2 )
   | Mvg.LocalLet (_, e1, e2) ->
@@ -51,7 +54,7 @@ let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: D
   | Mvg.Unop (_, e) ->
     add_usages lvar e acc
   | Mvg.Index ((var,_ ), e) ->
-    let acc = DepGraph.add_edge acc var lvar in
+    let acc = add_edge acc var lvar in
     let acc = add_usages lvar e acc in
     acc
   | Mvg.Conditional (e1, e2, e3) ->
@@ -67,7 +70,7 @@ let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: D
   | Mvg.GenericTableIndex
   | Mvg.Error -> acc
   | Mvg.Var var ->
-    DepGraph.add_edge acc var lvar
+    add_edge acc var lvar
 
 
 let create_dependency_graph (p: Mvg.program) : DepGraph.t =
@@ -177,7 +180,7 @@ module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Backward
       let equal = (=)
       let join = (||)
-      let analyze _ = (fun x -> x)
+      let analyze (v1, v2) = (fun x -> x)
     end)
 
 module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
@@ -189,7 +192,7 @@ module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Forward
       let equal = (=)
       let join = (||)
-      let analyze _ = (fun x -> x)
+      let analyze (v1, v2) = (fun x -> x)
     end)
 
 let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.t =
@@ -249,12 +252,12 @@ let try_and_fix_undefined_dependencies
     with
     | Not_found -> assert false (* should not happen *)
   in
-  let in_needed_by_output = OutputToInputReachability.analyze is_output g in
+  let is_needed_by_output = OutputToInputReachability.analyze is_output g in
   Cli.debug_print @@ Printf.sprintf "Number of variables needed for output: %d"
-    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p));
+    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p));
   let is_needed_by_ouptput_and_undefined =
     Mvg.VariableMap.filter (fun v _ -> is_undefined v)
-      (Mvg.VariableMap.filter (fun v _ -> in_needed_by_output v) p)
+      (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p)
   in
   Cli.debug_print @@ Printf.sprintf "Number of undefined variables needed for output: %d"
     (Mvg.VariableMap.cardinal is_needed_by_ouptput_and_undefined);
