@@ -289,16 +289,18 @@ let try_and_fix_undefined_dependencies
       is_needed_by_ouptput_and_undefined_fix
     then
       let is_needed_by_ouptput_and_still_undefined =
-        List.map
-          (fun (v, _) -> Format_mvg.format_variable v)
-          (Mvg.VariableMap.bindings
-             (Mvg.VariableMap.filter
-                (fun _ b -> b)
-                (Mvg.VariableMap.map is_still_undefined
-                   is_needed_by_ouptput_and_undefined_fix
+        List.sort
+          compare
+          (List.map
+             (fun (v, _) -> Format_mvg.format_variable v)
+             (Mvg.VariableMap.bindings
+                (Mvg.VariableMap.filter
+                   (fun _ b -> b)
+                   (Mvg.VariableMap.map is_still_undefined
+                      is_needed_by_ouptput_and_undefined_fix
+                   )
                 )
-             )
-          )
+             ))
       in
       let undef_var_files = "undefined_variables.txt" in
       Cli.warning_print

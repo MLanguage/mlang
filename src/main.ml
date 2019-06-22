@@ -103,12 +103,12 @@ let main () : int =
       Dependency.correctly_defined_outputs dep_graph program
     in
 
-    let correctly_defined_output_variables =
-      List.map
-        (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
-                       (Format_mvg.format_typ
-                          (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-        (Mvg.VariableMap.bindings correctly_defined_outputs)
+    let correctly_defined_output_variables = List.sort compare (
+        List.map
+          (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
+                         (Format_mvg.format_typ
+                            (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
+          (Mvg.VariableMap.bindings correctly_defined_outputs))
     in
 
     if Mvg.VariableMap.cardinal correctly_defined_outputs = 0 then begin

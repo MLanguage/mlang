@@ -421,7 +421,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                               (Format_ast.format_position pos)
                            )))
       end
-  | PresentFunc | NullFunc | GtzFunc | GtezFunc ->
+  | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero ->
     (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
     fun ctx args ->
       begin match args with
@@ -469,7 +469,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                               (Format_ast.format_position pos)
                            )))
       end
-  | Mvg.Multimax | Mvg.Supzero -> raise (Errors.Unimplemented ("multimax or supzero", pos)) 
+  | Mvg.Multimax  -> raise (Errors.Unimplemented ("multimax or supzero", pos))
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with
