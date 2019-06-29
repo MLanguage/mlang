@@ -69,50 +69,52 @@ let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Mvg.Vari
     ) g g in
   TopologicalOrder.fold (fun var acc -> var::acc) subgraph []
 
-type ctx = expression Ast.marked LocalVariableMap.t
 
-let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
+let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
   match Ast.unmark e with
   | Comparison (op, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     let new_e2 = partial_evaluation ctx p e2 in
-    Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
-      | (Ast.Gt, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 > i2))
-      | (Ast.Gte, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 >= i2))
-      | (Ast.Lt, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 < i2))
-      | (Ast.Lte, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 <= i2))
-      | (Ast.Eq, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 = i2))
-      | (Ast.Neq, Literal (Int i1), Literal (Int i2)) -> Literal (Bool (i1 <> i2))
-      | (Ast.Gt, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 > f2))
-      | (Ast.Gte, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 >= f2))
-      | (Ast.Lt, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 < f2))
-      | (Ast.Lte, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 <= f2))
-      | (Ast.Eq, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 = f2))
-      | (Ast.Neq, Literal (Float f1), Literal (Float f2)) -> Literal (Bool (f1 <> f2))
+    Ast.same_pos_as begin match (Ast.unmark new_e1, Ast.unmark new_e2) with
+      | (Literal _, Literal _) ->
+        Mvg.Literal (Interpreter.evaluate ctx p
+                       (Ast.same_pos_as (Comparison (op,new_e1, new_e2)) e)
+                    )
       | _ -> Comparison (op, new_e1, new_e2)
     end e
   | Binop (op, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
-      | (Ast.Add, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 + i2))
-      | (Ast.Sub, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 - i2))
-      | (Ast.Mul, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 * i2))
-      | (Ast.Div, Literal (Int i1), Literal (Int i2)) -> Literal (Int (i1 / i2))
-      | (Ast.Add, Literal (Float f1), Literal (Float f2)) -> Literal (Float (f1 +. f2))
-      | (Ast.Sub, Literal (Float f1), Literal (Float f2)) -> Literal (Float (f1 -. f2))
-      | (Ast.Mul, Literal (Float f1), Literal (Float f2)) -> Literal (Float (f1 *. f2))
-      | (Ast.Div, Literal (Float f1), Literal (Float f2)) -> Literal (Float (f1 /. f2))
-      | (Ast.Or, Literal (Bool b1), Literal (Bool b2)) -> Literal (Bool (b1 || b2))
-      | (Ast.And, Literal (Bool b1), Literal (Bool b2)) -> Literal (Bool (b1 && b2))
+      | (Ast.And, Literal (Bool true), e')
+      | (Ast.And, e', Literal (Bool true))
+      | (Ast.Or, Literal (Bool false), e')
+      | (Ast.And, e', Literal (Bool false))
+      | (Ast.Add, Literal ((Int 0) | Float 0. | Bool false), e')
+      | (Ast.Add, e', Literal ((Int 0) | Float 0. | Bool false))
+      | (Ast.Mul, Literal ((Int 1) | Float 1. | Bool true), e')
+      | (Ast.Mul, e', Literal ((Int 1) | Float 1. | Bool true))
+      | (Ast.Sub, e', Literal ((Int 0) | Float 0. | Bool false))
+        -> e'
+      | (Ast.Sub, Literal ((Int 0) | Float 0. | Bool false), e')
+        ->
+        Mvg.Unop (Ast.Minus, Ast.same_pos_as e' e)
+      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false), e')
+      | (Ast.Mul, e', Literal ((Int 0) | Float 0. | Bool false))
+        ->
+        Mvg.Literal (Mvg.Bool false)
+      | (_, Literal _, Literal _) ->
+        (Mvg.Literal
+           (Interpreter.evaluate ctx p
+              (Ast.same_pos_as (Binop (op,new_e1, new_e2)) e1)
+           ))
       | _ -> Binop (op, new_e1, new_e2)
     end e
   | Unop (op, e1) ->
     let new_e1 = partial_evaluation ctx p e1 in
-    Ast.same_pos_as begin match (op, Ast.unmark new_e1) with
-      | (Ast.Not, Literal (Bool b1)) -> Literal (Bool (not b1))
-      | (Ast.Minus, Literal (Int i1)) -> Literal (Int (- i1))
-      | (Ast.Minus, Literal (Float f1)) -> Literal (Float (-. f1))
+    Ast.same_pos_as begin match (Ast.unmark new_e1) with
+      | Literal _ ->
+        Unop(op, Ast.same_pos_as (Mvg.Literal (Interpreter.evaluate ctx p new_e1)) e1)
       | _ -> Unop (op, new_e1)
     end e
   | Conditional (e1, e2, e3) ->
@@ -129,22 +131,24 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     Ast.same_pos_as (Index(var, new_e1)) e
   | Literal _ -> e
   | Var var -> begin match (VariableMap.find var p).var_definition with
-      | SimpleVar e | TableVar (_, IndexGeneric e) -> begin match Ast.unmark e with
-          | Literal lit -> Ast.same_pos_as (Literal lit) e
+      | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
+          | Literal lit -> Ast.same_pos_as (Literal lit) e'
           | _ -> e
         end
       | _ -> e
     end
-  | LocalVar lvar -> begin try LocalVariableMap.find lvar ctx with
-      | Not_found -> e
+  | LocalVar lvar -> begin try Ast.same_pos_as (
+      Mvg.Literal (Ast.unmark (LocalVariableMap.find lvar ctx))
+    ) e with
+    | Not_found -> e
     end
   | GenericTableIndex -> e
   | Error -> e
   | LocalLet (lvar, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     begin match Ast.unmark new_e1 with
-      | Literal _ ->
-        let new_ctx = LocalVariableMap.add lvar new_e1 ctx in
+      | Literal (l1: literal) ->
+        let new_ctx = LocalVariableMap.add lvar (Ast.same_pos_as l1 new_e1) ctx in
         let new_e2 = partial_evaluation new_ctx p e2 in
         new_e2
       | _ ->
@@ -164,12 +168,21 @@ let partially_evaluate (p: program) : program =
   VariableMap.map (fun def ->
       let new_def = match def.var_definition with
         | InputVar -> InputVar
-        | SimpleVar e -> SimpleVar (partial_evaluation LocalVariableMap.empty p e)
+        | SimpleVar e ->
+          SimpleVar (partial_evaluation LocalVariableMap.empty p e)
         | TableVar (size, def) -> begin match def with
             | IndexGeneric e ->
-              TableVar(size, IndexGeneric (partial_evaluation LocalVariableMap.empty p e))
+              TableVar(
+                size,
+                IndexGeneric
+                  (partial_evaluation LocalVariableMap.empty p e))
             | IndexTable es ->
-              TableVar(size, IndexTable (IndexMap.map (fun e -> partial_evaluation LocalVariableMap.empty p e) es))
+              TableVar(
+                size,
+                IndexTable
+                  (IndexMap.map
+                     (fun e ->
+                        (partial_evaluation LocalVariableMap.empty p e)) es))
           end
       in
       { def with var_definition = new_def }

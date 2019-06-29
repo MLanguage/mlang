@@ -196,6 +196,12 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
                Ast.same_pos_as (Unop (Ast.Minus, Ast.same_pos_as (LocalVar arg_var) e)) e,
                Ast.same_pos_as (LocalVar arg_var) e
               ))) e)) e
+  | FunctionCall (ArrFunc, [arg]) ->
+    (** we do not expand this function as it requires modulo or modf *)
+    Ast.same_pos_as (FunctionCall (ArrFunc, [expand_functions_expr arg])) e
+  | FunctionCall (InfFunc, [arg]) ->
+    (** we do not expand this function as it requires modulo or modf *)
+    Ast.same_pos_as (FunctionCall (InfFunc, [expand_functions_expr arg])) e
   | _ -> e
 
 let expand_functions (p: program) : program =

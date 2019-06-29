@@ -945,7 +945,7 @@ let get_var_data
 
 (**
    After the linear pass, some variables declared might still be undefined in the application. For
-   these, we insert a placholder [Error] definition and add an [undefined] flag.
+   these, we insert a placholder definition with the value zero and add an [undefined] flag.
 
 *)
 let check_if_all_variables_defined
@@ -961,24 +961,25 @@ let check_if_all_variables_defined
                  (Ast.unmark var.Mvg.Variable.name)
                  (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
              );
-             (* We insert definitions with errors whenever we have nothing available *)
+             (* This is the case where the variable is not defined. *)
              let io = match decl.var_decl_io with
                | Output -> Mvg.Output
                | Regular | Constant -> Mvg.Regular
                | Input -> assert false (* should not happen *)
              in
+             (** We insert the literal false because it is interpreted as 0 in all types *)
              begin match decl.var_decl_is_table with
                | Some _ -> Some {
                    Mvg.var_definition = Mvg.TableVar (
                        0,
-                       Mvg.IndexGeneric (Ast.same_pos_as Mvg.Error var.Mvg.Variable.name);
+                       Mvg.IndexGeneric (Ast.same_pos_as (Mvg.Literal (Mvg.Bool false)) var.Mvg.Variable.name);
                      );
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
                    Mvg.var_is_undefined = true
                  }
                | None -> Some {
-                   Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as Mvg.Error var.Mvg.Variable.name);
+                   Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal (Mvg.Bool false)) var.Mvg.Variable.name);
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
                    Mvg.var_is_undefined = true

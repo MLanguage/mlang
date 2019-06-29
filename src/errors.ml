@@ -78,3 +78,15 @@ let format_typ_error (e: typ_error) : string = match e with
   | Inlining s -> Printf.sprintf "Inlining error: %s" s
 
 exception Unimplemented of string * Ast.position
+
+(**{1 Interpretation }*)
+
+type run_error =
+  | ErrorValue of string
+  | DivByZero of string
+
+exception RuntimeError of run_error
+
+let format_runtime_error (e: run_error) : string = match e with
+  | ErrorValue s -> Printf.sprintf "Error value at runtime: %s" s
+  | DivByZero s -> Printf.sprintf "Division by zero: %s" s

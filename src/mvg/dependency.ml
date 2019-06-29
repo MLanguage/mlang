@@ -98,10 +98,13 @@ module Dot = Graph.Graphviz.Dot(struct
       | None -> []
       | Some p ->
         let var_data = Mvg.VariableMap.find v p in
+        let input_color = 0xDDA0DD in
+        let output_color = 0x7FFF00 in
+        let regular_color = 0x00BFFF in
         match var_data.Mvg.var_io with
-        | Mvg.Input -> [`Color 1; `Shape `Box]
-        | Mvg.Regular -> []
-        | Mvg.Output -> [`Color 2; `Shape `Diamond]
+        | Mvg.Input -> [`Fillcolor input_color; `Shape `Box; `Style `Filled]
+        | Mvg.Regular -> [`Fillcolor regular_color; `Style `Filled]
+        | Mvg.Output -> [`Fillcolor output_color; `Shape `Diamond; `Style `Filled]
     end
     let vertex_name v = Ast.unmark v.Mvg.Variable.name
     let default_vertex_attributes _ = []
@@ -207,34 +210,6 @@ let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.
       not (is_necessary_to_output var)
     ) (Mvg.VariableMap.map (fun _ -> ()) p)
 
-let correctly_defined_outputs
-    (g: DepGraph.t)
-    (p: Mvg.program)
-  : unit Mvg.VariableMap.t =
-  let is_output = fun var ->
-    try
-      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
-    with
-    | Not_found -> assert false (* should not happen *)
-  in
-  let is_undefined = fun var ->
-    try
-      (Mvg.VariableMap.find var p).Mvg.var_is_undefined
-    with
-    | Not_found -> assert false (* should not happen *)
-  in
-  let contains_undefined = InputToOutputReachability.analyze is_undefined g in
-  Cli.debug_print @@ Printf.sprintf "Number of output variables: %d."
-    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_output v) p));
-  let is_output_and_does_not_contain_undefined = Mvg.VariableMap.filter (fun v _ -> is_output v)
-      (Mvg.VariableMap.filter (fun v _ ->
-           not (contains_undefined v)
-         ) p)
-  in
-  Cli.debug_print @@ Printf.sprintf "Number of correctly defined output variables: %d."
-    (Mvg.VariableMap.cardinal is_output_and_does_not_contain_undefined);
-  Mvg.VariableMap.map (fun _ -> ()) is_output_and_does_not_contain_undefined
-
 let try_and_fix_undefined_dependencies
     (g: DepGraph.t)
     (p: Mvg.program)
@@ -305,7 +280,7 @@ let try_and_fix_undefined_dependencies
       let undef_var_files = "undefined_variables.txt" in
       Cli.warning_print
         (Printf.sprintf
-           ("There are variables needed to compute the outputs that are undefined (%d). Writing them to %s.")
+           ("There are variables needed to compute the outputs that are undefined (%d), so they have been set to zero. Writing the list of variables to %s.")
            (List.length is_needed_by_ouptput_and_still_undefined)
            undef_var_files
         );
@@ -321,17 +296,6 @@ let try_and_fix_undefined_dependencies
       | None, Some _
       | None, None -> assert false (* should not happen *)
     ) p is_needed_by_ouptput_and_undefined_fix
-
-
-let requalify_outputs (p: Mvg.program) (only_output : unit Mvg.VariableMap.t) : Mvg.program =
-  Mvg.VariableMap.mapi (fun v var_data ->
-      { var_data with
-        Mvg.var_io = if var_data.Mvg.var_io = Mvg.Output && not (Mvg.VariableMap.mem v only_output) then
-            Mvg.Regular
-          else
-            var_data.Mvg.var_io
-      }
-    ) p
 
 
 module Constability = Graph.Fixpoint.Make(DepGraph)

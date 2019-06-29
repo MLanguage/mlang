@@ -64,28 +64,33 @@ let flag_output_given_back = ref false
 (** Output variable *)
 let output_variable = ref ""
 
+(** Run the optimisations on the M variable graph *)
+let optimize = ref false
+
 (**{2 Argument parsing }*)
 
 (** {!module Arg} function that specifies command-line arguments parsing *)
 let parse_cli_args () =
   (** Code block to retrieve and parse command-line arguments. *)
   let speclist = Arg.align [
-      ("--verify", Arg.Set verify_flag,
-       " Vérifie que les conditions sont valables dans tous les cas");
-      ("--debug", Arg.Set debug_flag,
-       " Affiche des informations de débuggage");
-      ("--var_info", Arg.Set var_info_flag,
-       " Affiche des informations sur les variables du programmes mal définies");
-      ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
       ("--application", Arg.Set_string application,
        " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
-      ("--no_cycles_check", Arg.Set no_cycles_check_flag,
-       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)");
+      ("--debug", Arg.Set debug_flag,
+       " Affiche des informations de débuggage");
+      ("--dep_graph_file", Arg.Set_string dep_graph_file,
+       " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
       ("--given_back_output", Arg.Set flag_output_given_back,
        "Marque les variables \"restituées\" comme des \"sortie()\" du programme");
+      ("--no_cycles_check", Arg.Set no_cycles_check_flag,
+       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)");
+      ("--optimize", Arg.Set optimize,
+       "Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
       ("--output", Arg.Set_string output_variable,
-       "Marque une variable particulière comme sortie du programme (elle sera alors la seule sortie)")
+       "Marque une variable particulière comme sortie du programme (elle sera alors la seule sortie)");
+      ("--var_info", Arg.Set var_info_flag,
+       " Affiche des informations sur les variables du programmes mal définies");
+      ("--verify", Arg.Set verify_flag,
+       " Vérifie que les conditions sont valables dans tous les cas");
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."
