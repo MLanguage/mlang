@@ -64,14 +64,14 @@ let format_literal (l: literal) : string = match l with
 
 let rec format_expression (e: expression) : string = match e with
   | Comparison ((op, _), (e1, _), (e2, _)) ->
-    (format_expression e1) ^ " " ^ (Format_ast.format_comp_op op) ^ " " ^ (format_expression e2)
+    "(" ^ (format_expression e1) ^ " " ^ (Format_ast.format_comp_op op) ^ " " ^ (format_expression e2) ^ ")"
   | Binop ((op, _), (e1, _), (e2, _)) ->
-    (format_expression e1) ^ " " ^ (Format_ast.format_binop op) ^ " " ^ (format_expression e2)
+    "(" ^ (format_expression e1) ^ " " ^ (Format_ast.format_binop op) ^ " " ^ (format_expression e2) ^ ")"
   | Unop (op, (e, _)) ->
     (Format_ast.format_unop op) ^ " " ^ (format_expression e)
   | Conditional ((e1, _), (e2, _), (e3, _)) ->
-    "si (" ^ (format_expression e1) ^ ") alors " ^ (format_expression e2) ^
-    " sinon " ^ (format_expression e3)
+    "(si " ^ (format_expression e1) ^ " alors " ^ (format_expression e2) ^
+    " sinon " ^ (format_expression e3) ^ ")"
   | FunctionCall(f, args) -> Printf.sprintf "%s(%s)"
                                (format_func f )
                                (String.concat "," (List.map (fun e -> format_expression (Ast.unmark e)) args))

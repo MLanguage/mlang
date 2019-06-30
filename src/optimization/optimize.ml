@@ -63,6 +63,17 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
       let (new_program, new_typing_info) =
         Inlining.inline_vars to_inline_vars !typing_info !program
       in
+      Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
+      let new_program = Constant_propagation.partially_evaluate new_program in
+
+      Cli.debug_print (Printf.sprintf "Propagating constants variables...");
+      let dep_graph = Dependency.create_dependency_graph new_program in
+      let new_program = Constant_propagation.propagate_constants dep_graph new_program in
+
+      let unused_variables = Dependency.get_unused_variables dep_graph new_program in
+      Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
+      let new_program = Mvg.VariableMap.filter (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) new_program in
+
       program := new_program;
       typing_info := new_typing_info;
     end
@@ -70,12 +81,9 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
   let program = !program in
   let typing_info = !typing_info in
 
-  Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-  let program = Constant_propagation.partially_evaluate program in
   Cli.debug_print
     (Printf.sprintf "Program variables count down to %d!"
        (Mvg.VariableMap.cardinal program));
-
 
   let dep_graph = Dependency.create_dependency_graph program in
   Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;

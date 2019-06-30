@@ -114,7 +114,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as begin match (Ast.unmark new_e1) with
       | Literal _ ->
-        Unop(op, Ast.same_pos_as (Mvg.Literal (Interpreter.evaluate ctx p new_e1)) e1)
+        Mvg.Literal (Interpreter.evaluate ctx p (Ast.same_pos_as (Unop(op, new_e1)) e1))
       | _ -> Unop (op, new_e1)
     end e
   | Conditional (e1, e2, e3) ->
@@ -154,6 +154,20 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       | _ ->
         let new_e2 = partial_evaluation ctx p e2 in
         Ast.same_pos_as (LocalLet(lvar, new_e1, new_e2)) e
+    end
+  | FunctionCall (ArrFunc, [arg]) ->
+    let new_arg = partial_evaluation ctx p arg in
+    begin match Ast.unmark new_arg with
+      | Literal _ ->
+        Ast.same_pos_as
+          (Mvg.Literal
+             (Interpreter.evaluate
+                ctx
+                p
+                (Ast.same_pos_as (FunctionCall (ArrFunc, [new_arg])) e)
+             )
+          ) e
+      | _ -> Ast.same_pos_as (FunctionCall (ArrFunc, [new_arg])) e
     end
   | FunctionCall (func, args) ->
     Ast.same_pos_as
