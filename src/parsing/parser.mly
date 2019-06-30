@@ -125,7 +125,7 @@ computed_variable_name:
 | name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc)}
 
 computed_variable_descr:
-| descr = STRING { (descr, mk_position $sloc) }
+| descr = STRING { (parse_string descr, mk_position $sloc) }
 
 computed_attr_or_subtyp:
 | attr = input_variable_attribute { None }
@@ -155,7 +155,7 @@ input_variable_name:
 | name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
 
 input_descr:
-descr = STRING { (descr, mk_position $sloc) }
+descr = STRING { (parse_string descr, mk_position $sloc) }
 
 input_attr_or_subtyp_or_given_back:
 | attr = input_variable_attribute { ((None, Some attr), false) }
@@ -293,7 +293,7 @@ error_name:
 n = SYMBOL COLON { (n, mk_position $sloc) }
 
 error_descr:
-s = STRING { (s, mk_position $sloc) }
+s = STRING { (parse_string s, mk_position $sloc) }
 
 error_:
 | n = error_name t = type_error COLON s1 = error_descr COLON

@@ -102,17 +102,38 @@ module Dot = Graph.Graphviz.Dot(struct
         let output_color = 0x7FFF00 in
         let regular_color = 0x00BFFF in
         match var_data.Mvg.var_io with
-        | Mvg.Input -> [`Fillcolor input_color; `Shape `Box; `Style `Filled]
-        | Mvg.Regular -> [`Fillcolor regular_color; `Style `Filled]
-        | Mvg.Output -> [`Fillcolor output_color; `Shape `Diamond; `Style `Filled]
+        | Mvg.Input -> [
+            `Fillcolor input_color; `Shape `Box; `Style `Filled;
+            `Label (Printf.sprintf "%s\n%s"
+                      (match v.Mvg.Variable.alias with Some s -> s | None -> Ast.unmark v.Mvg.Variable.name)
+                      (Ast.unmark v.Mvg.Variable.descr)
+                   )
+          ]
+        | Mvg.Regular -> [
+            `Fillcolor regular_color; `Style `Filled; `Shape `Box;
+            `Label (Printf.sprintf "%s\n%s"
+                      (Ast.unmark v.Mvg.Variable.name)
+                      (Ast.unmark v.Mvg.Variable.descr)
+                   )
+          ]
+        | Mvg.Output -> [
+            `Fillcolor output_color; `Shape `Box; `Style `Filled;
+            `Label (Printf.sprintf "%s\n%s"
+                      (Ast.unmark v.Mvg.Variable.name)
+                      (Ast.unmark v.Mvg.Variable.descr)
+                   )
+          ]
     end
-    let vertex_name v = Ast.unmark v.Mvg.Variable.name
+    let vertex_name v = "\"" ^ Ast.unmark v.Mvg.Variable.name ^ "\""
     let default_vertex_attributes _ = []
-    let graph_attributes _ = []
+    let graph_attributes _ = [`Orientation `Portrait; `OrderingOut]
   end)
+
+module DepgGraphOper = Graph.Oper.P(DepGraph)
 
 let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.program): unit =
   let file = open_out_bin filename in
+  let graph = DepgGraphOper.transitive_reduction graph in
   program_when_printing:= Some p;
   Cli.debug_print (Printf.sprintf
                      "Writing variables dependency graph to %s (%d variables)"

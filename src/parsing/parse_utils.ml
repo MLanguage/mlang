@@ -126,3 +126,8 @@ let parse_int sloc (s: string) : int =
   try int_of_string s with
   | Failure _ ->
     Errors.parser_error sloc "should be an integer"
+
+let parse_string (s: string) : string =
+  (** we remove the quotes *)
+  let s = Str.string_after s 1 in
+  Str.string_before s (String.length s - 1)

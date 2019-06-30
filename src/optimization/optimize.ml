@@ -61,7 +61,10 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
     if !nb_inlined_vars > 0 then begin
       Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
       let (new_program, new_typing_info) =
-        Inlining.inline_vars to_inline_vars !typing_info !program
+        if !Cli.no_cycles_check_flag then
+          !program, !typing_info
+        else
+          Inlining.inline_vars to_inline_vars !typing_info !program
       in
       Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
       let new_program = Constant_propagation.partially_evaluate new_program in

@@ -38,7 +38,8 @@ knowledge of the CeCILL-C license and that you accept its terms.
 (** Variables are first-class objects *)
 module Variable = struct
   type t = {
-    name: string Ast.marked (** The position is the variable declaration *);
+    name: string Ast.marked; (** The position is the variable declaration *)
+    alias: string option; (** Input variable have an alias *)
     id: int; (** Each variable has an unique ID *)
     descr: string Ast.marked; (** Description taken from the variable declaration *)
   }
@@ -51,8 +52,8 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string Ast.marked) (descr: string Ast.marked) : t = {
-    name; id = fresh_id (); descr
+  let new_var (name: string Ast.marked) (alias: string option) (descr: string Ast.marked) : t = {
+    name; id = fresh_id (); descr; alias
   }
 
   let compare (var1 :t) (var2 : t) =
@@ -109,7 +110,7 @@ type func =
   | ArrFunc (** Round to nearest integer *)
   | InfFunc (** Truncate to integer *)
   | PresentFunc (** Different than zero ? *)
-  | Multimax (** ??? *) 
+  | Multimax (** ??? *)
   | Supzero (** ??? *)
 [@@deriving show]
 

@@ -396,7 +396,7 @@ let get_constants (p: Ast.program) : (var_decl_data Mvg.VariableMap.t * idmap * 
                     with
                     | Not_found ->
                       let new_var  =
-                        Mvg.Variable.new_var marked_name (Ast.same_pos_as "constant" marked_name)
+                        Mvg.Variable.new_var marked_name None (Ast.same_pos_as "constant" marked_name)
                       in
                       let new_var_data = {
                         var_decl_typ = None;
@@ -454,7 +454,7 @@ let get_variables_decl
                     with
                     | Not_found ->
                       let new_var =
-                        Mvg.Variable.new_var cvar.Ast.comp_name cvar.Ast.comp_description
+                        Mvg.Variable.new_var cvar.Ast.comp_name None cvar.Ast.comp_description
                       in
                       let new_var_data = {
                         var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
@@ -488,7 +488,7 @@ let get_variables_decl
                     with
                     | Not_found ->
                       let new_var =
-                        Mvg.Variable.new_var ivar.Ast.input_name ivar.Ast.input_description
+                        Mvg.Variable.new_var ivar.Ast.input_name (Some (Ast.unmark ivar.Ast.input_alias)) ivar.Ast.input_description
                       in
                       let new_var_data = {
                         var_decl_typ = begin match Ast.unmark_option ivar.Ast.input_typ with

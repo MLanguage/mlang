@@ -97,8 +97,9 @@ let format_variable_def (def: variable_def) : string = match def  with
     ) defs ""
 
 let format_program (p: program) : string = VariableMap.fold (fun var def acc ->
-    acc ^ (Printf.sprintf "Variable %s of type %s, io %s:\n%s"
+    acc ^ (Printf.sprintf "Variable %s%s of type %s, io %s:\n%s"
              (Ast.unmark var.Variable.name)
+             (match var.Variable.alias with Some x -> " (alias "^ x ^")" | None -> "")
              (match def.var_typ with | None -> "unknown" | Some t -> format_typ t)
              (format_io def.var_io)
              (format_variable_def def.var_definition))
