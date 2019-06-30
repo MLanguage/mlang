@@ -97,6 +97,7 @@ let main () : int =
     in
 
     let program = Optimize.optimize program typing_info in
+    let dep_graph = Dependency.create_dependency_graph program in
 
     let optimized_program_file = "optimized_program.mvg" in
     let oc = open_out optimized_program_file in
@@ -104,6 +105,12 @@ let main () : int =
     if !Cli.debug_flag then
       Printf.fprintf oc "%s" (Format_mvg.format_program program);
     close_out oc;
+
+
+    let input_values = Interface.all_zero_input program typing_info in
+    let results = Interpreter.evaluate_program program dep_graph input_values in
+    Interface.print_output results;
+
     ignore (exit 0);
 
     Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");

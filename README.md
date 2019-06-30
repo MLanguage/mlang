@@ -24,10 +24,10 @@ The command
         make test
 
 will launch the compiler of the test file `test.m`. However, if you want to
-compile all the source code files released by the DGFiP for the year 2015, then
-launch
+compile all the source code files released by the DGFiP for the year 2017,
+and analyse the code that computes the income tax, then launch
 
-        make parse_all
+        make bareme
 
 To learn more about the available options, you can use
 

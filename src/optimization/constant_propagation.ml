@@ -77,7 +77,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark new_e1, Ast.unmark new_e2) with
       | (Literal _, Literal _) ->
-        Mvg.Literal (Interpreter.evaluate ctx p
+        Mvg.Literal (Interpreter.evaluate_expr ctx p
                        (Ast.same_pos_as (Comparison (op,new_e1, new_e2)) e)
                     )
       | _ -> Comparison (op, new_e1, new_e2)
@@ -105,7 +105,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
         Mvg.Literal (Mvg.Bool false)
       | (_, Literal _, Literal _) ->
         (Mvg.Literal
-           (Interpreter.evaluate ctx p
+           (Interpreter.evaluate_expr ctx p
               (Ast.same_pos_as (Binop (op,new_e1, new_e2)) e1)
            ))
       | _ -> Binop (op, new_e1, new_e2)
@@ -114,7 +114,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as begin match (Ast.unmark new_e1) with
       | Literal _ ->
-        Mvg.Literal (Interpreter.evaluate ctx p (Ast.same_pos_as (Unop(op, new_e1)) e1))
+        Mvg.Literal (Interpreter.evaluate_expr ctx p (Ast.same_pos_as (Unop(op, new_e1)) e1))
       | _ -> Unop (op, new_e1)
     end e
   | Conditional (e1, e2, e3) ->
@@ -138,7 +138,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       | _ -> e
     end
   | LocalVar lvar -> begin try Ast.same_pos_as (
-      Mvg.Literal (Ast.unmark (LocalVariableMap.find lvar ctx))
+      Mvg.Literal (Ast.unmark (LocalVariableMap.find lvar ctx.Interpreter.ctx_local_vars))
     ) e with
     | Not_found -> e
     end
@@ -148,7 +148,13 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     begin match Ast.unmark new_e1 with
       | Literal (l1: literal) ->
-        let new_ctx = LocalVariableMap.add lvar (Ast.same_pos_as l1 new_e1) ctx in
+        let new_ctx =
+          { ctx with
+            Interpreter.ctx_local_vars =
+              LocalVariableMap.add lvar (Ast.same_pos_as l1 new_e1)
+                ctx.Interpreter.ctx_local_vars
+          }
+        in
         let new_e2 = partial_evaluation new_ctx p e2 in
         new_e2
       | _ ->
@@ -161,7 +167,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       | Literal _ ->
         Ast.same_pos_as
           (Mvg.Literal
-             (Interpreter.evaluate
+             (Interpreter.evaluate_expr
                 ctx
                 p
                 (Ast.same_pos_as (FunctionCall (ArrFunc, [new_arg])) e)
@@ -183,20 +189,20 @@ let partially_evaluate (p: program) : program =
       let new_def = match def.var_definition with
         | InputVar -> InputVar
         | SimpleVar e ->
-          SimpleVar (partial_evaluation LocalVariableMap.empty p e)
+          SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
         | TableVar (size, def) -> begin match def with
             | IndexGeneric e ->
               TableVar(
                 size,
                 IndexGeneric
-                  (partial_evaluation LocalVariableMap.empty p e))
+                  (partial_evaluation Interpreter.empty_ctx p e))
             | IndexTable es ->
               TableVar(
                 size,
                 IndexTable
                   (IndexMap.map
                      (fun e ->
-                        (partial_evaluation LocalVariableMap.empty p e)) es))
+                        (partial_evaluation Interpreter.empty_ctx p e)) es))
           end
       in
       { def with var_definition = new_def }
@@ -209,10 +215,10 @@ let propagate_constants (g: DepGraph.t) (p: program) : program =
       let const_var_data = VariableMap.find const_var p in
       let new_const_var_def = match const_var_data.var_definition with
         | InputVar -> assert false (* should not happen *)
-        | SimpleVar e -> SimpleVar (partial_evaluation LocalVariableMap.empty p e)
+        | SimpleVar e -> SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
         | TableVar (size, def) -> begin match def with
             | IndexGeneric e ->
-              TableVar(size, IndexGeneric (partial_evaluation LocalVariableMap.empty p e))
+              TableVar(size, IndexGeneric (partial_evaluation Interpreter.empty_ctx p e))
             | IndexTable es ->
               assert false (* should not happen *)
           end

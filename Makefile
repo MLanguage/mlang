@@ -49,6 +49,7 @@ OCAML_INCLUDES = \
 	-I _build/src/analysis \
 	-I _build/src/optimization \
 	-I _build/src/z3 \
+	-I _build/src/interpreter \
 	-I $(ANSI_FOLDER) \
 	-I $(GRAPH_FOLDER) \
 	-I $(Z3_FOLDER)

@@ -38,6 +38,10 @@ expands all the functions used in the program to basic arithmetic operators, whi
 
 {!modules: Functions Inlining Constant_propagation }
 
+{1 Interpreter}
+
+{!module: Interpreter Input }
+
 {1 Translation to Z3 }
 
 Work in progress.

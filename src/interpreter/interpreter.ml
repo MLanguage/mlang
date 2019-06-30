@@ -36,7 +36,21 @@ open Mvg
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
 
-type ctx = literal Ast.marked LocalVariableMap.t
+type var_literal =
+  | SimpleVar of literal
+  | TableVar of int * literal array
+
+type ctx = {
+  ctx_local_vars: literal Ast.marked LocalVariableMap.t;
+  ctx_vars: var_literal VariableMap.t;
+  ctx_generic_index: int option;
+}
+
+let empty_ctx : ctx = {
+  ctx_local_vars = LocalVariableMap.empty;
+  ctx_vars = VariableMap.empty;
+  ctx_generic_index = None
+}
 
 let int_of_bool (b: bool) = if b then 1 else 0
 let float_of_bool (b: bool) = if b then 1. else 0.
@@ -45,11 +59,11 @@ let is_zero (l: literal) : bool = match l with
   | Bool false | Int 0 | Float 0. -> true
   | _ -> false
 
-let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
+let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
   match Ast.unmark e with
   | Comparison (op, e1, e2) ->
-    let new_e1 = evaluate ctx p e1 in
-    let new_e2 = evaluate ctx p e2 in
+    let new_e1 = evaluate_expr ctx p e1 in
+    let new_e2 = evaluate_expr ctx p e2 in
     begin match (Ast.unmark op, new_e1, new_e2) with
       | (Ast.Gt, Bool i1, Bool i2) -> Bool(i1 > i2)
       | (Ast.Gt, Bool i1, Int i2) -> Bool(int_of_bool i1 > i2)
@@ -112,8 +126,8 @@ let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
       | (Ast.Neq, Float i1, Float i2) -> Bool(i1 <> i2)
     end
   | Binop (op, e1, e2) ->
-    let new_e1 = evaluate ctx p e1 in
-    let new_e2 = evaluate ctx p e2 in
+    let new_e1 = evaluate_expr ctx p e1 in
+    let new_e2 = evaluate_expr ctx p e2 in
     begin match (Ast.unmark op, new_e1, new_e2) with
       | (Ast.Add, Bool i1, Bool i2)   -> Int   (int_of_bool i1   +  int_of_bool i2)
       | (Ast.Add, Bool i1, Int i2)    -> Int   (int_of_bool i1   +  i2)
@@ -170,7 +184,7 @@ let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
       | _ -> assert false (* should not happen by virtue of typechecking *)
     end
   | Unop (op, e1) ->
-    let new_e1 = evaluate ctx p e1 in
+    let new_e1 = evaluate_expr ctx p e1 in
     begin match (op, new_e1) with
       | (Ast.Not, Bool b1) -> (Bool (not b1))
       | (Ast.Minus, Int i1) -> (Int (- i1))
@@ -181,28 +195,72 @@ let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
       | _ -> assert false (* should not happen by virtue of typechecking *)
     end
   | Conditional (e1, e2, e3) ->
-    let new_e1 = evaluate ctx p e1 in
+    let new_e1 = evaluate_expr ctx p e1 in
     begin match new_e1 with
-      | Bool true -> evaluate ctx p e2
-      | Bool false -> evaluate ctx p e3
+      | Bool true -> evaluate_expr ctx p e2
+      | Bool false -> evaluate_expr ctx p e3
       | _ -> assert false (* should not happen by virtue of typechecking *)
     end
   | Literal l -> l
   | Index (var, e1) ->
-    let new_e1 = evaluate ctx p e1 in
-    raise (Errors.Unimplemented ("", Ast.get_position e))
-  | LocalVar lvar -> begin try Ast.unmark (LocalVariableMap.find lvar ctx) with
+    let new_e1 = evaluate_expr ctx p e1 in
+    begin try match VariableMap.find (Ast.unmark var) ctx.ctx_vars with
+      | SimpleVar _ -> assert false (* should not happen *)
+      | TableVar (size, values) ->
+        let idx = match new_e1 with
+          | Bool b -> int_of_bool b
+          | Int i -> i
+          | Float _ ->
+            raise (Errors.RuntimeError (
+                Errors.FloatIndex (
+                  Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                )
+              ))
+        in
+        if idx >= size || idx < 0 then
+          raise (Errors.RuntimeError (
+              Errors.IndexOutOfBounds (
+                Printf.sprintf "%s, index value of %d for table %s of size %d"
+                  (Format_ast.format_position (Ast.get_position e1))
+                  idx
+                  (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
+                  size
+              )
+            ))
+        else
+          Array.get values idx
+      with
+      | Not_found -> assert false (* should not happen *)
+    end
+  | LocalVar lvar -> begin try Ast.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars) with
       | Not_found -> assert false (* should not happen*)
     end
-  | Var _ -> raise (Errors.Unimplemented ("", Ast.get_position e))
-  | GenericTableIndex -> raise (Errors.Unimplemented ("", Ast.get_position e))
-  | Error -> raise (Errors.Unimplemented ("", Ast.get_position e))
+  | Var var -> begin try match VariableMap.find var ctx.ctx_vars with
+      | SimpleVar l -> l (* should not happen *)
+      | TableVar _ -> assert false
+      with
+      | Not_found -> assert false (* should not happen *)
+    end
+  | GenericTableIndex -> begin match ctx.ctx_generic_index with
+      | None -> assert false (* should not happen *)
+      | Some i -> Int i
+    end
+  | Error -> raise (Errors.RuntimeError (
+      Errors.ErrorValue (Format_ast.format_position (Ast.get_position e))
+    ))
   | LocalLet (lvar, e1, e2) ->
-    let new_e1 = evaluate ctx p e1 in
-    let new_e2 = evaluate (LocalVariableMap.add lvar (Ast.same_pos_as new_e1 e1) ctx) p e2 in
+    let new_e1 = evaluate_expr ctx p e1 in
+    let new_e2 =
+      evaluate_expr
+        { ctx with
+          ctx_local_vars =
+            LocalVariableMap.add lvar (Ast.same_pos_as new_e1 e1) ctx.ctx_local_vars
+        }
+        p e2
+    in
     new_e2
   | FunctionCall (ArrFunc, [arg]) ->
-    let new_arg = evaluate ctx p arg in
+    let new_arg = evaluate_expr ctx p arg in
     begin match new_arg with
       | Int x -> Int x
       | Float x ->
@@ -210,7 +268,7 @@ let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
       | Bool x -> Int (int_of_bool x)
     end
   | FunctionCall (InfFunc, [arg]) ->
-    let new_arg = evaluate ctx p arg in
+    let new_arg = evaluate_expr ctx p arg in
     begin match new_arg with
       | Int x -> Int x
       | Float x ->
@@ -219,3 +277,48 @@ let rec evaluate (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
     end
   | FunctionCall (func, args) ->
     raise (Errors.RuntimeError (Errors.ErrorValue (Printf.sprintf "the function %s has not been expanded" (Format_ast.format_position (Ast.get_position e)))))
+
+let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_values: literal VariableMap.t) : var_literal VariableMap.t =
+  let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
+      match (VariableMap.find var p).var_definition with
+      | Mvg.SimpleVar e ->
+        let l_e = evaluate_expr ctx p e in
+        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+      | Mvg.TableVar (size, es) ->
+        (*
+          Right now we suppose that the different indexes of table arrays don't depend on each other
+          for computing. Otherwise, it would trigger a runtime Not_found error at interpretation.
+          TODO: add a check for that at typechecking.
+        *)
+        { ctx with
+          ctx_vars =
+            VariableMap.add
+              var
+              (TableVar (
+                  size,
+                  Array.init size
+                    (fun idx -> match es with
+                       | IndexGeneric e ->
+                         evaluate_expr { ctx with ctx_generic_index = Some idx } p e
+                       | IndexTable es ->
+                         evaluate_expr ctx p (IndexMap.find idx es)
+                    )
+                )
+              )
+              ctx.ctx_vars
+        }
+      | Mvg.InputVar -> begin try
+            { ctx with ctx_vars = VariableMap.add var (SimpleVar (VariableMap.find var input_values)) ctx.ctx_vars }
+          with
+          | Not_found -> raise (
+              Errors.RuntimeError (
+                Errors.MissingInputValue (
+                  Printf.sprintf "%s (%s)"
+                    (Ast.unmark var.Mvg.Variable.name)
+                    (Ast.unmark var.Mvg.Variable.descr)
+                )
+              )
+            )
+        end
+    ) dep_graph empty_ctx
+  in ctx.ctx_vars

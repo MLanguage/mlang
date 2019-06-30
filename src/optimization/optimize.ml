@@ -100,6 +100,11 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
          (Mvg.VariableMap.filter (fun _ var_data -> var_data.Mvg.var_io = Mvg.Input) program)
       )
   in
-  Cli.debug_print @@ Printf.sprintf "Number of input variables needed: %d."
-    (List.length minimal_input_variables);
+  let input_needed = "input_needed.txt" in
+  Cli.debug_print @@ Printf.sprintf "Input variables needed (%d) written to %s"
+    (List.length minimal_input_variables)
+    input_needed;
+  let oc = open_out input_needed in
+  Printf.fprintf oc "%s" (String.concat "\n" minimal_input_variables);
+  close_out oc;
   program
