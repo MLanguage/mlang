@@ -2,7 +2,7 @@
 Copyright Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr> (2019)
 
 This software is a computer program whose purpose is to compile and analyze
-programs written in the M langage, created by thge DGFiP.
+programs written in the M langage, created by the DGFiP.
 
 This software is governed by the CeCILL-C license under French law and
 abiding by the rules of distribution of free software.  You can  use,
@@ -34,6 +34,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 open Lexer
 open Lexing
 open Cli
+open Z3_driver
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let main () : int =
@@ -111,40 +112,8 @@ let main () : int =
     let results = Interpreter.evaluate_program program dep_graph input_values in
     Interface.print_output results;
 
-    ignore (exit 0);
+    exit 0
 
-    Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
-    let mvg = [("model", "true"); ("timeout", (string_of_int (1000 * 30)))] in
-    let ctx = (Z3.mk_context mvg) in
-    let s = Z3.Solver.mk_solver ctx None in
-    let typing_info = Z3_repr.find_bitvec_repr program dep_graph typing_info in
-    Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
-      (Mvg.VariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_var)
-      (Mvg.LocalVariableMap.show Z3_repr.show_repr typing_info.Z3_repr.repr_info_local_var);
-    let z3_program = Mvg_to_z3.translate_program program dep_graph typing_info ctx s in
-    let t0 = Sys.time () in
-    Cli.debug_print
-      (Printf.sprintf
-         "The Z3 query will contain %d different variables"
-         (Mvg.VariableMap.cardinal z3_program.Z3_repr.repr_data_var +
-          Mvg.LocalVariableMap.cardinal z3_program.Z3_repr.repr_data_local_var)
-      );
-    match Z3.Solver.check s [] with
-    | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!"; -1
-    | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."; -2
-    | Z3.Solver.SATISFIABLE ->
-      let t1 = Sys.time () in
-      Cli.result_print "Z3 found an answer!";
-      let filename = "results.json" in
-      Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
-      let file = open_out filename in
-      Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_repr.repr_data_var ctx s);
-      Cli.result_print
-        (Printf.sprintf
-           "The query took %f seconds to execute. Here are some statistics about it:\n%s"
-           (t1 -. t0)
-           (Z3.Statistics.to_string (Z3.Solver.get_statistics s))
-        ); 0
   with
   | Errors.TypeError e ->
     error_print (Errors.format_typ_error e); exit 1

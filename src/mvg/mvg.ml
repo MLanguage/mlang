@@ -2,7 +2,7 @@
 Copyright Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr> (2019)
 
 This software is a computer program whose purpose is to compile and analyze
-programs written in the M langage, created by thge DGFiP.
+programs written in the M langage, created by the DGFiP.
 
 This software is governed by the CeCILL-C license under French law and
 abiding by the rules of distribution of free software.  You can  use,

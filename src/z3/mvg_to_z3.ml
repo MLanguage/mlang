@@ -2,7 +2,7 @@
 Copyright Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr> (2019)
 
 This software is a computer program whose purpose is to compile and analyze
-programs written in the M langage, created by thge DGFiP.
+programs written in the M langage, created by the DGFiP.
 
 This software is governed by the CeCILL-C license under French law and
 abiding by the rules of distribution of free software.  You can  use,
@@ -33,26 +33,26 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 let bv_repr_ints_base = 20
 
-let declare_var_not_table (var: Mvg.Variable.t) (typ: Z3_repr.repr) (ctx: Z3.context) : Z3.Expr.expr =
-  match typ.Z3_repr.repr_kind with
-  | Z3_repr.Boolean ->
+let declare_var_not_table (var: Mvg.Variable.t) (typ: Z3_encoding.repr) (ctx: Z3.context) : Z3.Expr.expr =
+  match typ.Z3_encoding.repr_kind with
+  | Z3_encoding.Boolean ->
     Z3.Boolean.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name)
-  | Z3_repr.Integer o ->
+  | Z3_encoding.Integer o ->
     Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) (bv_repr_ints_base * o)
-  | Z3_repr.Real o ->
+  | Z3_encoding.Real o ->
     Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) (bv_repr_ints_base * o)
 
-let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_repr.repr) (ctx: Z3.context) : Z3_repr.var_repr =
-  match typ.Z3_repr.repr_kind with
-  | Z3_repr.Boolean ->
-    Z3_repr.Regular (Z3.Boolean.mk_const_s ctx
+let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z3.context) : Z3_encoding.var_repr =
+  match typ.Z3_encoding.repr_kind with
+  | Z3_encoding.Boolean ->
+    Z3_encoding.Regular (Z3.Boolean.mk_const_s ctx
                        ("t" ^ (string_of_int var.Mvg.LocalVariable.id)))
-  | Z3_repr.Integer o ->
-    Z3_repr.Regular (Z3.BitVector.mk_const_s ctx
+  | Z3_encoding.Integer o ->
+    Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
                        ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
                        (bv_repr_ints_base * o))
-  | Z3_repr.Real o ->
-    Z3_repr.Regular (Z3.BitVector.mk_const_s ctx
+  | Z3_encoding.Real o ->
+    Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
                        ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
                        (bv_repr_ints_base * o))
 
@@ -60,12 +60,12 @@ let int_const i ctx : Z3.Expr.expr =
   Z3.BitVector.mk_numeral ctx (string_of_int i) bv_repr_ints_base
 
 let dummy_param ctx typ =
-  match typ.Z3_repr.repr_kind with
-  | Z3_repr.Boolean ->
+  match typ.Z3_encoding.repr_kind with
+  | Z3_encoding.Boolean ->
     Z3.Boolean.mk_true ctx
-  | Z3_repr.Integer o ->
+  | Z3_encoding.Integer o ->
     Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
-  | Z3_repr.Real o ->
+  | Z3_encoding.Real o ->
     Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
 
 let bool_const b ctx : Z3.Expr.expr =
@@ -97,7 +97,7 @@ let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3
 
 
 let rec translate_expression
-    (repr_data: Z3_repr.repr_data)
+    (repr_data: Z3_encoding.repr_data)
     (e: Mvg.expression Ast.marked)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
@@ -141,10 +141,10 @@ let rec translate_expression
       | Ast.Minus -> Z3.BitVector.mk_sub ctx (int_const 0 ctx) (z3_e1 orig_arg)
     end
   | Mvg.Index ((var, _), index) ->
-    let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
+    let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_encoding.repr_data_var in
     let z3_index = translate_expression repr_data index ctx s in
     begin match z3_var with
-      | Z3_repr.Table z3_var ->
+      | Z3_encoding.Table z3_var ->
         z3_var (z3_index orig_arg)
       | _ -> assert false (* should not happen *)
     end
@@ -153,9 +153,9 @@ let rec translate_expression
     let z3_e1 = translate_expression repr_data e1 ctx s in
     let z3_e2 = translate_expression repr_data e2 ctx s in
     let z3_e3 = translate_expression repr_data e3 ctx s in
-    let (z3_lvar, _) = Mvg.LocalVariableMap.find lvar1 repr_data.Z3_repr.repr_data_local_var in
+    let (z3_lvar, _) = Mvg.LocalVariableMap.find lvar1 repr_data.Z3_encoding.repr_data_local_var in
     begin match z3_lvar with
-      | Z3_repr.Regular z3_lvar ->
+      | Z3_encoding.Regular z3_lvar ->
         Z3.Solver.add s [
           Z3.Boolean.mk_implies ctx
             (z3_e1 orig_arg)
@@ -180,18 +180,18 @@ let rec translate_expression
   | Mvg.Literal (Mvg.Bool b) ->
     bool_const b ctx
   | Mvg.Var var ->
-    let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_repr.repr_data_var in
+    let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_encoding.repr_data_var in
     begin match z3_var with
-      | Z3_repr.Regular z3_var ->
+      | Z3_encoding.Regular z3_var ->
         z3_var
       | _ -> assert false (* should not happen *)
     end
   | Mvg.LocalVar lvar ->
     let (z3_lvar , _) =
-      Mvg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var
+      Mvg.LocalVariableMap.find lvar repr_data.Z3_encoding.repr_data_local_var
     in
     begin match z3_lvar with
-      | Z3_repr.Regular z3_lvar ->
+      | Z3_encoding.Regular z3_lvar ->
         z3_lvar
       | _ -> assert false (* should not happen *)
     end
@@ -200,9 +200,9 @@ let rec translate_expression
   | Mvg.LocalLet (lvar, e1, e2) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
     let z3_e2 = translate_expression repr_data e2 ctx s in
-    let (z3_lvar, _) = Mvg.LocalVariableMap.find lvar repr_data.Z3_repr.repr_data_local_var in
+    let (z3_lvar, _) = Mvg.LocalVariableMap.find lvar repr_data.Z3_encoding.repr_data_local_var in
     begin match z3_lvar with
-      | Z3_repr.Regular z3_lvar ->
+      | Z3_encoding.Regular z3_lvar ->
         Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_lvar (z3_e1 orig_arg)];
         (z3_e2 orig_arg)
       | _ -> assert false (* should not happen *)
@@ -219,36 +219,36 @@ let cast ctx size expr =
 let translate_program
     (p: Mvg.program)
     (dep_graph: Dependency.DepGraph.t)
-    (typing: Z3_repr.repr_info)
+    (typing: Z3_encoding.repr_info)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
-  : Z3_repr.repr_data =
+  : Z3_encoding.repr_data =
   (* first we declare to Z3 all the local variables *)
   let z3_local_vars =  Mvg.LocalVariableMap.mapi (fun lvar typ ->
       try
         (declare_local_var lvar typ ctx, typ)
       with
       | Not_found -> assert false (* should not happen *)
-    ) typing.Z3_repr.repr_info_local_var in
+    ) typing.Z3_encoding.repr_info_local_var in
   let repr_data =
-    { Z3_repr.repr_data_var = Mvg.VariableMap.empty;
-      Z3_repr.repr_data_local_var = z3_local_vars }
+    { Z3_encoding.repr_data_var = Mvg.VariableMap.empty;
+      Z3_encoding.repr_data_local_var = z3_local_vars }
   in
   let vars_to_evaluate =
     Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
   in
   let repr_data = List.fold_left (fun repr_data var ->
       let def = Mvg.VariableMap.find var p in
-      let typ = Mvg.VariableMap.find var typing.Z3_repr.repr_info_var in
+      let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
       Printf.printf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name);
       match def.Mvg.var_definition with
       | Mvg.InputVar ->
         { repr_data with
-          Z3_repr.repr_data_var =
+          Z3_encoding.repr_data_var =
             Mvg.VariableMap.add
               var
-              (Z3_repr.Regular (declare_var_not_table var typ ctx), typ)
-              repr_data.Z3_repr.repr_data_var
+              (Z3_encoding.Regular (declare_var_not_table var typ ctx), typ)
+              repr_data.Z3_encoding.repr_data_var
         }
       | Mvg.SimpleVar e ->
         Printf.printf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
@@ -263,21 +263,21 @@ let translate_program
           (Z3.Expr.to_string cast_expr);
         Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
         { repr_data with
-          Z3_repr.repr_data_var =
+          Z3_encoding.repr_data_var =
             Mvg.VariableMap.add
               var
-              (Z3_repr.Regular z3_var, typ)
-              repr_data.Z3_repr.repr_data_var
+              (Z3_encoding.Regular z3_var, typ)
+              repr_data.Z3_encoding.repr_data_var
         }
       | Mvg.TableVar (size, def) -> begin match def with
           | Mvg.IndexGeneric e ->
             let z3_e = translate_expression repr_data e ctx s in
             { repr_data with
-              Z3_repr.repr_data_var =
+              Z3_encoding.repr_data_var =
                 Mvg.VariableMap.add
                   var
-                  (Z3_repr.Table z3_e, typ)
-                  repr_data.Z3_repr.repr_data_var
+                  (Z3_encoding.Table z3_e, typ)
+                  repr_data.Z3_encoding.repr_data_var
             }
           | Mvg.IndexTable es ->
             Cli.warning_print "TODO: implement";

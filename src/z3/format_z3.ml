@@ -2,7 +2,7 @@
 Copyright Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr> (2019)
 
 This software is a computer program whose purpose is to compile and analyze
-programs written in the M langage, created by thge DGFiP.
+programs written in the M langage, created by the DGFiP.
 
 This software is governed by the CeCILL-C license under French law and
 abiding by the rules of distribution of free software.  You can  use,
@@ -31,17 +31,17 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-let format_z3_repr (t: Z3_repr.repr) : string =
-  let first = match t.Z3_repr.repr_kind with
-    | Z3_repr.Integer _ -> Format_mvg.format_typ Mvg.Integer
-    | Z3_repr.Real _ -> Format_mvg.format_typ Mvg.Real
-    | Z3_repr.Boolean -> Format_mvg.format_typ Mvg.Boolean
+let format_Z3_encoding (t: Z3_encoding.repr) : string =
+  let first = match t.Z3_encoding.repr_kind with
+    | Z3_encoding.Integer _ -> Format_mvg.format_typ Mvg.Integer
+    | Z3_encoding.Real _ -> Format_mvg.format_typ Mvg.Real
+    | Z3_encoding.Boolean -> Format_mvg.format_typ Mvg.Boolean
   in
-  let second = if t.Z3_repr.is_table then "[X]" else "" in
+  let second = if t.Z3_encoding.is_table then "[X]" else "" in
   first ^ second
 
 let format_z3_program
-    (p: (Z3_repr.var_repr * Z3_repr.repr) Mvg.VariableMap.t)
+    (p: (Z3_encoding.var_repr * Z3_encoding.repr) Mvg.VariableMap.t)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : string =
@@ -50,29 +50,29 @@ let format_z3_program
     Cli.warning_print @@ Z3.Model.to_string model;
     let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
-        | Z3_repr.Regular e ->
+        | Z3_encoding.Regular e ->
           (Ast.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
                 Cli.warning_print @@ Z3.Expr.to_string new_e;
-                begin match typ.Z3_repr.repr_kind with
-                  | Z3_repr.Integer _ ->
+                begin match typ.Z3_encoding.repr_kind with
+                  | Z3_encoding.Integer _ ->
                     Z3.BitVector.numeral_to_string new_e
-                  | Z3_repr.Real _ ->
+                  | Z3_encoding.Real _ ->
                     string_of_float ((Big_int.float_of_big_int (Z3.Arithmetic.Integer.get_big_int new_e)) /. 100.0)
-                  | Z3_repr.Boolean -> (match Z3.Boolean.get_bool_value new_e with
+                  | Z3_encoding.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                       | Z3enums.L_FALSE -> "false"
                       | Z3enums.L_TRUE -> "true"
                       | Z3enums.L_UNDEF -> "undefined boolean"
                     )
                 end
               | None -> "could not evaluate variable" end,
-           format_z3_repr typ
+           format_Z3_encoding typ
           )::acc
-        | Z3_repr.Table f ->
+        | Z3_encoding.Table f ->
           (Ast.unmark var.Mvg.Variable.name,
            Z3.Expr.to_string
              (f (Z3.BitVector.mk_const_s ctx "X" Mvg_to_z3.bv_repr_ints_base)),
-           format_z3_repr typ)::acc
+           format_Z3_encoding typ)::acc
       ) p []
     in
     "{\n"^
