@@ -91,33 +91,34 @@ let program_when_printing : Mvg.program option ref = ref None
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 
-    let edge_attributes _ = []
+    let edge_attributes _ = [`Color 0xffa366]
     let default_edge_attributes _ = []
     let get_subgraph _ = None
     let vertex_attributes v = begin match !program_when_printing with
       | None -> []
       | Some p ->
         let var_data = Mvg.VariableMap.find v p in
-        let input_color = 0xDDA0DD in
-        let output_color = 0x7FFF00 in
-        let regular_color = 0x00BFFF in
+        let input_color = 0x66b5ff in
+        let output_color = 0xE6E600 in
+        let regular_color = 0x8585ad in
+        let text_color = 0xf2f2f2 in
         match var_data.Mvg.var_io with
         | Mvg.Input -> [
-            `Fillcolor input_color; `Shape `Box; `Style `Filled;
+            `Fillcolor input_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
             `Label (Printf.sprintf "%s\n%s"
                       (match v.Mvg.Variable.alias with Some s -> s | None -> Ast.unmark v.Mvg.Variable.name)
                       (Ast.unmark v.Mvg.Variable.descr)
                    )
           ]
         | Mvg.Regular -> [
-            `Fillcolor regular_color; `Style `Filled; `Shape `Box;
+            `Fillcolor regular_color; `Style `Filled; `Shape `Box; `Fontcolor text_color;
             `Label (Printf.sprintf "%s\n%s"
                       (Ast.unmark v.Mvg.Variable.name)
                       (Ast.unmark v.Mvg.Variable.descr)
                    )
           ]
         | Mvg.Output -> [
-            `Fillcolor output_color; `Shape `Box; `Style `Filled;
+            `Fillcolor output_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
             `Label (Printf.sprintf "%s\n%s"
                       (Ast.unmark v.Mvg.Variable.name)
                       (Ast.unmark v.Mvg.Variable.descr)
@@ -126,14 +127,14 @@ module Dot = Graph.Graphviz.Dot(struct
     end
     let vertex_name v = "\"" ^ Ast.unmark v.Mvg.Variable.name ^ "\""
     let default_vertex_attributes _ = []
-    let graph_attributes _ = [`Orientation `Portrait; `OrderingOut]
+    let graph_attributes _ = [`Bgcolor 0x00001a]
   end)
 
 module DepgGraphOper = Graph.Oper.P(DepGraph)
 
 let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.program): unit =
   let file = open_out_bin filename in
-  let graph = DepgGraphOper.transitive_reduction graph in
+  (* let graph = DepgGraphOper.transitive_reduction graph in *)
   program_when_printing:= Some p;
   Cli.debug_print (Printf.sprintf
                      "Writing variables dependency graph to %s (%d variables)"

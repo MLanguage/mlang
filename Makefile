@@ -33,7 +33,7 @@ SOURCE_DIR_2015=ir-calcul/sources2015m_4_6/
 SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 
-SOURCE_FILES=$(shell find $(SOURCE_DIR_2017) -name "*.m")
+SOURCE_FILES=$(shell find $(SOURCE_DIR_2015) -name "*.m")
 
 CMT_FILES = $(shell find _build -name "*.cmt")
 CMTI_FILES = $(shell find _build -name "*.cmti")
@@ -50,6 +50,7 @@ OCAML_INCLUDES = \
 	-I _build/src/optimization \
 	-I _build/src/z3 \
 	-I _build/src/interpreter \
+	-I _build/src/household \
 	-I $(ANSI_FOLDER) \
 	-I $(GRAPH_FOLDER) \
 	-I $(Z3_FOLDER)
@@ -107,5 +108,10 @@ doc_: $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
 	mv $(DOC_FOLDER)/verifisc/README.html $(DOC_FOLDER)/index.html
 	sed -i "s|\.\.\/odoc.css|odoc.css|" $(DOC_FOLDER)/index.html
 	sed -i "s|\.\.\/highlight.pack.js|highlight.pack.js|" $(DOC_FOLDER)/index.html
+
+graph: batch
+	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -o Graphe_IR_2015.svg dep_graph_after_optimization.dot
+	inkscape -z -e Graphe_IR_2015.png -d 96 Graphe_IR_2015.svg
+	convert -resize 1980x1024 Graphe_IR_2015.png Graphe_IR_2015_Miniature.png
 
 .PHONY: build doc
