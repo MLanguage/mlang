@@ -414,12 +414,19 @@ sum_operator:
 | MINUS { (Sub, mk_position $sloc) }
 
 product_expression:
-| e = factor { e }
-| e1 = factor op = product_operator e2 = product_expression
+| e = div_expression { e }
+| e1 = div_expression op = product_operator e2 = product_expression
 { (Binop (op, e1, e2), mk_position $sloc) }
 
 product_operator:
 | TIMES { (Mul, mk_position $sloc) }
+
+div_expression:
+| e = factor { e }
+| e1 = factor op = div_operator e2 = div_expression
+{ (Binop (op, e1, e2), mk_position $sloc) }
+
+div_operator:
 | DIV { (Div, mk_position $sloc) }
 
 table_index_name:
