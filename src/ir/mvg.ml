@@ -191,4 +191,38 @@ type variable_data = {
   var_is_undefined: bool;
 }
 
-type program = variable_data VariableMap.t
+(**{1 Verification conditions}*)
+
+(** Errors are first-class objects *)
+module Error = struct
+  type t = {
+    name: string Ast.marked; (** The position is the variable declaration *)
+    id: int; (** Each variable has an unique ID *)
+    descr: string Ast.marked; (** Description taken from the variable declaration *)
+  }
+  [@@deriving show]
+
+  let counter : int ref = ref 0
+
+  let fresh_id () : int=
+    let v = !counter in
+    counter := !counter + 1;
+    v
+
+  let new_error (name: string Ast.marked) (descr: string Ast.marked) : t = {
+    name; id = fresh_id (); descr;
+  }
+
+  let compare (var1 :t) (var2 : t) =
+    compare var1.id var2.id
+end
+
+type precondition = {
+  precond_expr: expression Ast.marked;
+  precond_errors: Error.t list;
+}
+
+type program = {
+  program_vars: variable_data VariableMap.t;
+  program_preconds: precondition list;
+}

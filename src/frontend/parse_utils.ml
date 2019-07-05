@@ -81,9 +81,9 @@ let parse_variable_generic_name sloc (s: string) : Ast.variable_generic_name =
 (** Checks whether the variable contains parameters *)
 let parse_variable sloc (s:string) =
   try Ast.Normal (parse_variable_name sloc s) with
-  | E.FrontendError _ ->
+  | E.ParsingError _ ->
     try Ast.Generic (parse_variable_generic_name sloc s) with
-    | E.FrontendError _ ->
+    | E.ParsingError _ ->
       E.parser_error sloc "invalid variable name"
 
 (** A parsed variable can be a regular variable or an integer literal *)
@@ -95,9 +95,9 @@ let parse_variable_or_int sloc (s:string) : parse_val  =
   try ParseInt (int_of_string s) with
   | Failure _ ->
     try ParseVar (Ast.Normal (parse_variable_name sloc s)) with
-    | E.FrontendError _ ->
+    | E.ParsingError _ ->
       try ParseVar (Ast.Generic (parse_variable_generic_name sloc s)) with
-      | E.FrontendError _ ->
+      | E.ParsingError _ ->
         E.parser_error sloc "invalid variable name"
 
 (** Table index can be integer or [X], the generic table index variable *)
@@ -108,7 +108,7 @@ let parse_table_index sloc (s: string) : Ast.table_index =
     try Ast.LiteralIndex(int_of_string s) with
     | Failure _ ->
       begin try Ast.SymbolIndex (parse_variable sloc s) with
-        | E.FrontendError _ ->
+        | E.ParsingError _ ->
           Printf.printf "s: %s, %b\n" s (String.equal s "X");
           E.parser_error sloc "table index should be an integer"
       end

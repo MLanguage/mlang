@@ -34,10 +34,16 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.program =
   let dep_graph = Dependency.create_dependency_graph program in
-  Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program));
+  Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
   let unused_variables = Dependency.get_unused_variables dep_graph program in
   Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
-  let program = Mvg.VariableMap.filter (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) program in
+  let program = {
+    program with
+    Mvg.program_vars =
+      Mvg.VariableMap.filter
+        (fun var _ -> not (Mvg.VariableMap.mem var unused_variables))
+        program.program_vars
+  } in
 
   Cli.debug_print (Printf.sprintf "Propagating constants variables...");
   let dep_graph = Dependency.create_dependency_graph program in
@@ -51,7 +57,7 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
     let single_use_vars = Dependency.single_use_vars dep_graph in
     let to_inline_vars = Mvg.VariableMap.filter
         (fun var _ -> try
-            match (Mvg.VariableMap.find var !program).Mvg.var_io with
+            match (Mvg.VariableMap.find var !program.program_vars).Mvg.var_io with
             | Mvg.Input | Mvg.Output -> false
             | Mvg.Regular -> true
           with
@@ -75,7 +81,13 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
 
       let unused_variables = Dependency.get_unused_variables dep_graph new_program in
       Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
-      let new_program = Mvg.VariableMap.filter (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) new_program in
+      let new_program =
+        { new_program with
+          program_vars =
+            Mvg.VariableMap.filter
+              (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) new_program.program_vars
+        }
+      in
 
       program := new_program;
       typing_info := new_typing_info;
@@ -86,7 +98,7 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
 
   Cli.debug_print
     (Printf.sprintf "Program variables count down to %d!"
-       (Mvg.VariableMap.cardinal program));
+       (Mvg.VariableMap.cardinal program.program_vars));
 
   let dep_graph = Dependency.create_dependency_graph program in
   Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
@@ -97,7 +109,7 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
                      (Format_mvg.format_typ
                         (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
       (Mvg.VariableMap.bindings
-         (Mvg.VariableMap.filter (fun _ var_data -> var_data.Mvg.var_io = Mvg.Input) program)
+         (Mvg.VariableMap.filter (fun _ var_data -> var_data.Mvg.var_io = Mvg.Input) program.program_vars)
       )
   in
   let input_needed = "input_needed.txt" in

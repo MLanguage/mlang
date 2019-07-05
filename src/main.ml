@@ -50,7 +50,7 @@ let main () : int =
         else
           failwith "You have to specify at least one file!"
       in
-      Cli.debug_print (Printf.sprintf "Frontend %s" source_file);
+      Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
       let filebuf = {filebuf with
                      lex_curr_p = { filebuf.lex_curr_p with
                                     pos_fname = Filename.basename source_file
@@ -62,7 +62,7 @@ let main () : int =
         let commands = Parser.source_file token filebuf in
         program := commands::!program
       with
-      | Errors.LexingError msg | Errors.FrontendError msg ->
+      | Errors.LexingError msg | Errors.ParsingError msg ->
         Cli.error_print msg
       | Parser.Error -> begin
           Cli.error_print

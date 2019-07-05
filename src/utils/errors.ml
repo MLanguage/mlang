@@ -35,7 +35,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (**{1 Frontend }*)
 
-exception FrontendError of string
+exception ParsingError of string
 
 exception LexingError of string
 
@@ -50,7 +50,7 @@ let lexer_error lexbuf  =
     (lexbuf.Lexing.lex_curr_p.Lexing.pos_fname)
 
 let parser_error (sloc_start, sloc_end) (msg: string) =
-  raise (FrontendError (Printf.sprintf "Frontend error: %s (file %s, %s to %s)"
+  raise (ParsingError (Printf.sprintf "Frontend error: %s (file %s, %s to %s)"
                          msg
                          (sloc_start.Lexing.pos_fname)
                          (print_lexer_position sloc_start)

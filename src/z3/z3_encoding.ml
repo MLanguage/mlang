@@ -128,7 +128,7 @@ let find_bitvec_order
     (new_typing: repr_info)
     (old_typing: Typechecker.typ_info)
   : (int * repr_info) =
-  let var_def = Mvg.VariableMap.find var program in
+  let var_def = Mvg.VariableMap.find var program.program_vars in
   match var_def.Mvg.var_definition with
   | Mvg.InputVar -> (1, new_typing)
   | Mvg.SimpleVar e ->

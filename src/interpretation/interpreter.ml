@@ -280,7 +280,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
 
 let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_values: literal VariableMap.t) : var_literal VariableMap.t =
   let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
-      match (VariableMap.find var p).var_definition with
+      match (VariableMap.find var p.program_vars).var_definition with
       | Mvg.SimpleVar e ->
         let l_e = evaluate_expr ctx p e in
         { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }

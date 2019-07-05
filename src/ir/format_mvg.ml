@@ -96,7 +96,7 @@ let format_variable_def (def: variable_def) : string = match def  with
       acc ^ (Printf.sprintf "%d -> %s\n" i (format_expression (Ast.unmark e)))
     ) defs ""
 
-let format_program (p: program) : string = VariableMap.fold (fun var def acc ->
+let format_program_vars (p: variable_data VariableMap.t) : string = VariableMap.fold (fun var def acc ->
     acc ^ (Printf.sprintf "Variable %s%s of type %s, io %s:\n%s"
              (Ast.unmark var.Variable.name)
              (match var.Variable.alias with Some x -> " (alias "^ x ^")" | None -> "")
@@ -104,6 +104,25 @@ let format_program (p: program) : string = VariableMap.fold (fun var def acc ->
              (format_io def.var_io)
              (format_variable_def def.var_definition))
   ) p ""
+
+let format_error (e: Error.t) : string =
+  Printf.sprintf "erreur %s (%s)"
+    (Ast.unmark e.Error.name)
+    (Ast.unmark e.Error.descr)
+
+let format_precondition (precond: precondition) : string =
+  Printf.sprintf "Précondition : %s\nSinon %s"
+    (format_expression (Ast.unmark precond.precond_expr))
+    (String.concat "," (List.map (fun err -> format_error err) precond.precond_errors))
+
+let format_program_preconds (preconds: precondition list) : string =
+  String.concat
+    "\n"
+    (List.map
+       (fun precond -> format_precondition precond) preconds
+    )
+let format_program (p: program) : string =
+  Printf.sprintf "%s\n\n%s" (format_program_vars p.program_vars) (format_program_preconds p.program_preconds)
 
 let format_variable (v: Variable.t) : string =
   Printf.sprintf "%s: %s" (Ast.unmark v.Variable.name) (Ast.unmark v.Variable.descr)

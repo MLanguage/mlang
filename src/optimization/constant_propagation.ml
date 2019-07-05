@@ -46,7 +46,7 @@ let rec is_expr_completely_const (e: expression Ast.marked) : bool = match Ast.u
   | Error | Literal _ | LocalVar _ -> true
 
 let is_var_completely_const (var : Variable.t) (p:program) : bool =
-  try match (VariableMap.find var p).var_definition with
+  try match (VariableMap.find var p.program_vars).var_definition with
     | InputVar -> false
     | SimpleVar e -> is_expr_completely_const e
     | TableVar (_, def) -> begin match def with
@@ -130,7 +130,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as (Index(var, new_e1)) e
   | Literal _ -> e
-  | Var var -> begin match (VariableMap.find var p).var_definition with
+  | Var var -> begin match (VariableMap.find var p.program_vars).var_definition with
       | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
           | Literal lit -> Ast.same_pos_as (Literal lit) e'
           | _ -> e
@@ -185,34 +185,37 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       e
 
 let partially_evaluate (p: program) : program =
-  VariableMap.map (fun def ->
-      let new_def = match def.var_definition with
-        | InputVar -> InputVar
-        | SimpleVar e ->
-          SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
-        | TableVar (size, def) -> begin match def with
-            | IndexGeneric e ->
-              TableVar(
-                size,
-                IndexGeneric
-                  (partial_evaluation Interpreter.empty_ctx p e))
-            | IndexTable es ->
-              TableVar(
-                size,
-                IndexTable
-                  (IndexMap.map
-                     (fun e ->
-                        (partial_evaluation Interpreter.empty_ctx p e)) es))
-          end
-      in
-      { def with var_definition = new_def }
-    ) p
+  { p with
+    program_vars =
+      VariableMap.map (fun def ->
+          let new_def = match def.var_definition with
+            | InputVar -> InputVar
+            | SimpleVar e ->
+              SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
+            | TableVar (size, def) -> begin match def with
+                | IndexGeneric e ->
+                  TableVar(
+                    size,
+                    IndexGeneric
+                      (partial_evaluation Interpreter.empty_ctx p e))
+                | IndexTable es ->
+                  TableVar(
+                    size,
+                    IndexTable
+                      (IndexMap.map
+                         (fun e ->
+                            (partial_evaluation Interpreter.empty_ctx p e)) es))
+              end
+          in
+          { def with var_definition = new_def }
+        ) p.program_vars
+  }
 
 
 let propagate_constants (g: DepGraph.t) (p: program) : program =
   let const_vars = get_const_variables_evaluation_order g p in
   List.fold_left (fun p const_var ->
-      let const_var_data = VariableMap.find const_var p in
+      let const_var_data = VariableMap.find const_var p.program_vars in
       let new_const_var_def = match const_var_data.var_definition with
         | InputVar -> assert false (* should not happen *)
         | SimpleVar e -> SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
@@ -223,8 +226,10 @@ let propagate_constants (g: DepGraph.t) (p: program) : program =
               assert false (* should not happen *)
           end
       in
-      VariableMap.add
-        const_var
-        {const_var_data with var_definition = new_const_var_def }
-        p
+      { p with
+        program_vars = VariableMap.add
+            const_var
+            {const_var_data with var_definition = new_const_var_def }
+            p.program_vars
+      }
     ) p const_vars

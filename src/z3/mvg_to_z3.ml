@@ -238,7 +238,7 @@ let translate_program
     Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
   in
   let repr_data = List.fold_left (fun repr_data var ->
-      let def = Mvg.VariableMap.find var p in
+      let def = Mvg.VariableMap.find var p.program_vars in
       let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
       Printf.printf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name);
       match def.Mvg.var_definition with

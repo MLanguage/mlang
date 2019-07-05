@@ -106,7 +106,7 @@ let rec inline_vars_in_expr
           inline_vars_in_expr new_ctx inlined_vars e2
          )) e
   | Var var -> if VariableMap.mem var inlined_vars then
-      begin match (VariableMap.find var ctx.ctx_program).var_definition with
+      begin match (VariableMap.find var ctx.ctx_program.program_vars).var_definition with
         | SimpleVar new_e -> inline_vars_in_expr ctx inlined_vars new_e
         | InputVar -> e
         | TableVar _ -> assert false (* should not happen *)
@@ -117,7 +117,7 @@ let rec inline_vars_in_expr
   | Index (var, index) ->
     let new_index = inline_vars_in_expr ctx inlined_vars index in
     if VariableMap.mem (Ast.unmark var) inlined_vars then
-      begin match (VariableMap.find (Ast.unmark var) ctx.ctx_program).var_definition with
+      begin match (VariableMap.find (Ast.unmark var) ctx.ctx_program.program_vars).var_definition with
         | SimpleVar _  | InputVar -> assert false (* should not happen *)
         | TableVar (size, table_def) ->
           begin match table_def with
@@ -154,25 +154,28 @@ let inline_vars
     (p: program)
   : program * Typechecker.typ_info =
   lvar_mapping := LocalVariableMap.empty;
-  let new_program = VariableMap.fold (fun var def acc ->
-      if VariableMap.mem var inlined_vars then
-        acc
-      else begin
-        let new_def = match def.var_definition with
-          | InputVar -> InputVar
-          | SimpleVar e -> SimpleVar (inline_vars_in_expr (empty_ctx p) inlined_vars e)
-          | TableVar (size, def) -> begin match def with
-              | IndexGeneric e ->
-                TableVar (size, IndexGeneric (inline_vars_in_expr (empty_ctx p) inlined_vars e))
-              | IndexTable es ->
-                TableVar (size, IndexTable (IndexMap.map (fun e ->
-                    inline_vars_in_expr (empty_ctx p) inlined_vars e
-                  ) es))
-            end
-        in
-        VariableMap.add var { def with var_definition = new_def } acc
-      end
-    ) p VariableMap.empty in
+  let new_program = {
+    p with
+    program_vars = VariableMap.fold (fun var def acc ->
+        if VariableMap.mem var inlined_vars then
+          acc
+        else begin
+          let new_def = match def.var_definition with
+            | InputVar -> InputVar
+            | SimpleVar e -> SimpleVar (inline_vars_in_expr (empty_ctx p) inlined_vars e)
+            | TableVar (size, def) -> begin match def with
+                | IndexGeneric e ->
+                  TableVar (size, IndexGeneric (inline_vars_in_expr (empty_ctx p) inlined_vars e))
+                | IndexTable es ->
+                  TableVar (size, IndexTable (IndexMap.map (fun e ->
+                      inline_vars_in_expr (empty_ctx p) inlined_vars e
+                    ) es))
+              end
+          in
+          VariableMap.add var { def with var_definition = new_def } acc
+        end
+      ) p.program_vars VariableMap.empty }
+  in
   let new_typing =
     { typing with
       Typechecker.typ_info_local_var = LocalVariableMap.mapi (fun _ old_lvar ->

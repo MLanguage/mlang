@@ -236,7 +236,7 @@ let rec typecheck_top_down
       ((Typ.create_concrete t (Ast.get_position e, Typ.Down)));
     ctx
   | (Var var, t) ->
-    begin try match (VariableMap.find var ctx.ctx_program).var_typ with
+    begin try match (VariableMap.find var ctx.ctx_program.program_vars).var_typ with
       | Some t' ->
         let t = Typ.create_concrete t (Ast.get_position e, Typ.Down) in
         let t' = Typ.create_concrete t' (Ast.get_position e, Typ.Up) in
@@ -308,7 +308,7 @@ let rec typecheck_top_down
   | (GenericTableIndex, Integer) -> ctx
   | (Index ((var, var_pos), e'), t) ->
     let ctx = typecheck_top_down ctx e' Integer in
-    let var_data = VariableMap.find var ctx.ctx_program in
+    let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
         raise (Errors.TypeError
@@ -540,7 +540,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | GenericTableIndex -> (ctx, Typ.integer (Ast.get_position e, Typ.Up))
   | Index ((var, var_pos), e') ->
     let ctx = typecheck_top_down ctx e' Integer in
-    let var_data = VariableMap.find var ctx.ctx_program in
+    let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
         raise (Errors.TypeError
@@ -634,7 +634,7 @@ let determine_def_complete_cover
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p: program) : typ_info * program =
-  let (are_tables, ctx, p) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
+  let (are_tables, ctx, p_vars) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
       match def.var_typ with
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
@@ -769,18 +769,18 @@ let typecheck (p: program) : typ_info * program =
               (VariableMap.add var false acc, ctx, p)
             end
         end
-    ) p (Mvg.VariableMap.empty,
-         { ctx_program = p;
-           ctx_var_typ = VariableMap.merge (fun var _ def ->
-               match def with
-               | None -> assert false (* should not happen *)
-               | Some def -> begin match def.var_typ with
-                   | Some t -> Some (Typ.create_concrete t (Ast.get_position var.Variable.name, Typ.Down))
-                   | None -> None
-                 end
-             ) VariableMap.empty p;
-           ctx_local_var_typ = LocalVariableMap.empty;
-         }, p)
+    ) p.program_vars (Mvg.VariableMap.empty,
+                      { ctx_program = p;
+                        ctx_var_typ = VariableMap.merge (fun var _ def ->
+                            match def with
+                            | None -> assert false (* should not happen *)
+                            | Some def -> begin match def.var_typ with
+                                | Some t -> Some (Typ.create_concrete t (Ast.get_position var.Variable.name, Typ.Down))
+                                | None -> None
+                              end
+                          ) VariableMap.empty p.program_vars;
+                        ctx_local_var_typ = LocalVariableMap.empty;
+                      }, p.program_vars)
   in
   ({
     typ_info_var = VariableMap.merge (fun _ t is_table -> match (t, is_table) with
@@ -795,4 +795,4 @@ let typecheck (p: program) : typ_info * program =
       ) ctx.ctx_var_typ are_tables;
     typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
   },
-    p)
+    { p with program_vars = p_vars } )

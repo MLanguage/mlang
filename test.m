@@ -9,7 +9,7 @@ X7 : calculee : "UNKNOWN" type ENTIER;
 X8 : calculee : "UNKNOWN" type ENTIER;
 X9 : calculee : "UNKNOWN" type ENTIER;
 X10 : calculee : "UNKNOWN" type ENTIER;
-Y : tableau[9] calculee base : " UNKOWN" type ENTIER;
+Y : tableau[9] calculee base : "UNKOWN" type ENTIER;
 sortie (X9);
 sortie (Y);
 sortie (X10);

@@ -42,7 +42,7 @@ let all_zero_input (p: program) (typing_info: Typechecker.typ_info): literal Var
        | Integer -> Int 0
        | Real -> Float 0.
     )
-    (VariableMap.filter (fun _ def -> def.var_io = Input) p)
+    (VariableMap.filter (fun _ def -> def.var_io = Input) p.program_vars)
 
 let print_output (results: Interpreter.var_literal VariableMap.t) : unit =
   VariableMap.iter (fun var value ->
@@ -53,14 +53,15 @@ let print_output (results: Interpreter.var_literal VariableMap.t) : unit =
              (Ast.unmark var.Variable.name)
              (Ast.unmark var.Variable.descr)
              (Format_mvg.format_literal value)
-         | Interpreter.TableVar (_, values) ->
-           Printf.sprintf "%s (%s):\n%s"
+         | Interpreter.TableVar (size, values) ->
+           Printf.sprintf "%s (%s): Table (%d values)\n%s"
              (Ast.unmark var.Variable.name)
              (Ast.unmark var.Variable.descr)
+             size
              (String.concat "\n"
                 (List.mapi
                    (fun idx value ->
-                      Printf.sprintf "[%d]: %s"
+                      Printf.sprintf "| %d -> %s"
                         idx
                         (Format_mvg.format_literal value)
                    ) (Array.to_list values)))

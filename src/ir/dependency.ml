@@ -84,7 +84,7 @@ let create_dependency_graph (p: Mvg.program) : DepGraph.t =
               add_usages var e acc
             ) es acc
         end
-    ) p DepGraph.empty
+    ) p.program_vars DepGraph.empty
 
 let program_when_printing : Mvg.program option ref = ref None
 
@@ -97,7 +97,7 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_attributes v = begin match !program_when_printing with
       | None -> []
       | Some p ->
-        let var_data = Mvg.VariableMap.find v p in
+        let var_data = Mvg.VariableMap.find v p.program_vars in
         let input_color = 0x66b5ff in
         let output_color = 0xE6E600 in
         let regular_color = 0x8585ad in
@@ -223,38 +223,38 @@ module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
 let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.t =
   let is_output = fun var ->
     try
-      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
+      (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_necessary_to_output = OutputToInputReachability.analyze is_output g in
   Mvg.VariableMap.filter (fun var _ ->
       not (is_necessary_to_output var)
-    ) (Mvg.VariableMap.map (fun _ -> ()) p)
+    ) (Mvg.VariableMap.map (fun _ -> ()) p.program_vars)
 
 let try_and_fix_undefined_dependencies
     (g: DepGraph.t)
     (p: Mvg.program)
-    (var_defs_not_in_app: Mvg.program)
+    (var_defs_not_in_app: Mvg.variable_data Mvg.VariableMap.t)
   : Mvg.program  =
   let is_output = fun var ->
     try
-      (Mvg.VariableMap.find var p).Mvg.var_io = Mvg.Output
+      (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_undefined = fun var ->
     try
-      (Mvg.VariableMap.find var p).Mvg.var_is_undefined
+      (Mvg.VariableMap.find var p.program_vars).Mvg.var_is_undefined
     with
     | Not_found -> assert false (* should not happen *)
   in
   let is_needed_by_output = OutputToInputReachability.analyze is_output g in
   Cli.debug_print @@ Printf.sprintf "Number of variables needed for output: %d"
-    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p));
+    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p.program_vars));
   let is_needed_by_ouptput_and_undefined =
     Mvg.VariableMap.filter (fun v _ -> is_undefined v)
-      (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p)
+      (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p.program_vars)
   in
   Cli.debug_print @@ Printf.sprintf "Number of undefined variables needed for output: %d"
     (Mvg.VariableMap.cardinal is_needed_by_ouptput_and_undefined);
@@ -311,13 +311,16 @@ let try_and_fix_undefined_dependencies
         (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
       close_out oc
   end;
-  Mvg.VariableMap.merge (fun _ normal_def fixed_def -> match (normal_def, fixed_def) with
-      | Some normal_def, Some None
-      | Some normal_def, None -> Some normal_def
-      | Some _, Some (Some fixed_def) -> Some fixed_def
-      | None, Some _
-      | None, None -> assert false (* should not happen *)
-    ) p is_needed_by_ouptput_and_undefined_fix
+  { p with
+    program_vars =
+      Mvg.VariableMap.merge (fun _ normal_def fixed_def -> match (normal_def, fixed_def) with
+          | Some normal_def, Some None
+          | Some normal_def, None -> Some normal_def
+          | Some _, Some (Some fixed_def) -> Some fixed_def
+          | None, Some _
+          | None, None -> assert false (* should not happen *)
+        ) p.program_vars is_needed_by_ouptput_and_undefined_fix
+  }
 
 
 module Constability = Graph.Fixpoint.Make(DepGraph)
