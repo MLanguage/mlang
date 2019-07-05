@@ -197,10 +197,10 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
                Ast.same_pos_as (LocalVar arg_var) e
               ))) e)) e
   | FunctionCall (ArrFunc, [arg]) ->
-    (** we do not expand this function as it requires modulo or modf *)
+    (* we do not expand this function as it requires modulo or modf *)
     Ast.same_pos_as (FunctionCall (ArrFunc, [expand_functions_expr arg])) e
   | FunctionCall (InfFunc, [arg]) ->
-    (** we do not expand this function as it requires modulo or modf *)
+    (* we do not expand this function as it requires modulo or modf *)
     Ast.same_pos_as (FunctionCall (InfFunc, [expand_functions_expr arg])) e
   | _ -> e
 

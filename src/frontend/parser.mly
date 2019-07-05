@@ -33,7 +33,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 %{
  open Ast
- open Lexing
  open Parse_utils
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
@@ -83,10 +82,10 @@ source_file_item:
 | ver = verification { (Verification ver, mk_position $sloc) }
 | e = error_ { (Error e, mk_position $sloc) }
 | o = output { (Output o, mk_position $sloc) }
-| f = fonction { (Function, mk_position $sloc) }
+| fonction { (Function, mk_position $sloc) }
 
 fonction:
-| s = SYMBOL COLON FONCTION i = SYMBOL SEMICOLON { () }
+| SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
 
 application_name:
 | s = SYMBOL { (s, mk_position $sloc) }
@@ -128,7 +127,7 @@ computed_variable_descr:
 | descr = STRING { (parse_string descr, mk_position $sloc) }
 
 computed_attr_or_subtyp:
-| attr = input_variable_attribute { None }
+| input_variable_attribute { None }
 | subtyp = computed_variable_subtype { Some subtyp }
 
 computed_variable:

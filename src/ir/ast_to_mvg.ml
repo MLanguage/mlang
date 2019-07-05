@@ -37,7 +37,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (** {2 Variable declarations }*)
 
-
 (** Program input/output *)
 type io_status =
   | Input
@@ -163,7 +162,7 @@ let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.p
     in
     { ctx with lc = Some merged_lc }
 
-(** Queries a {type: Mvg.variable.t} from an {type:idmap} mapping and the name of a variable *)
+(** Queries a [type: Mvg.variable.t] from an [type:idmap] mapping and the name of a variable *)
 let get_var_from_name (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.Variable.t =
   try VarNameToID.find (Ast.unmark name) d with
   | Not_found ->
@@ -228,7 +227,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
   | Ast.Ranges lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.map (fun value -> match value with
-              | Ast.VarParam v -> assert false (* should not happen *)
+              | Ast.VarParam _ -> assert false (* should not happen *)
               | Ast.IntervalLoop (i1, i2) -> make_range_list (var_or_int_value ctx i1) (var_or_int_value ctx i2)
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
@@ -289,7 +288,7 @@ let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.mar
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some lc -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
+      | Some _ -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
 
 (** The following function deal with the "trying all cases" pragma *)
 
@@ -335,7 +334,7 @@ and instantiate_generic_variables_parameters_aux
           | ZPAdd ->
             "0" ^ value
         in
-        Str.replace_first (Str.regexp (Printf.sprintf "%c" param)) value var_name
+        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param)) value var_name
       | RangeInt i ->
         let value = match pad_zero with
           | ZPNone -> string_of_int i
@@ -344,7 +343,7 @@ and instantiate_generic_variables_parameters_aux
           | ZPAdd ->
             "0" ^ string_of_int i
         in
-        Str.replace_first (Str.regexp (Printf.sprintf "%c" param))
+        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param))
           value var_name
     in
     instantiate_generic_variables_parameters_aux
@@ -507,7 +506,7 @@ let get_variables_decl
                       let new_idmap = VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
                       (new_vars, new_idmap, out_list)
                   end
-                | Ast.ConstVar (marked_name, cval) -> (vars, idmap, out_list) (* already treated before *)
+                | Ast.ConstVar (_, _) -> (vars, idmap, out_list) (* already treated before *)
               end
             | Ast.Output out_name -> (vars, idmap, out_name::out_list)
             | _ -> (vars, idmap, out_list)
@@ -733,7 +732,7 @@ let translate_value_typ (typ: Ast.value_typ Ast.marked option) : Mvg.typ option 
   | Some (Ast.Integer, _) -> Some Mvg.Integer
   | Some (Ast.Boolean, _) -> Some Mvg.Boolean
   | Some (Ast.Real, _) -> Some Mvg.Real
-  | Some (_ , pos) -> Some Mvg.Integer
+  | Some (_ , _) -> Some Mvg.Integer
   | None -> None
 
 (** Main toplevel declaration translator that adds a variable definition to the MVG program *)

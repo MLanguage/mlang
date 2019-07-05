@@ -159,10 +159,10 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
       | (Ast.Mul, Float i1, Int i2)   -> Float (i1               *. float_of_int i2)
       | (Ast.Mul, Float i1, Float i2) -> Float (i1               *. i2)
 
-      | (Ast.Div, Bool false, l2) -> Bool false
-      | (Ast.Div, Int 0, l2) -> Int 0
-      | (Ast.Div, Float 0., l2) -> Float 0.
-      | (Ast.Div, l1, l2) when is_zero l2 ->
+      | (Ast.Div, Bool false, _) -> Bool false
+      | (Ast.Div, Int 0, _) -> Int 0
+      | (Ast.Div, Float 0., _) -> Float 0.
+      | (Ast.Div, _, l2) when is_zero l2 ->
         raise
           (Errors.RuntimeError (
               Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
@@ -275,7 +275,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
         Int (int_of_float (truncatef x))
       | Bool x -> Int (int_of_bool x)
     end
-  | FunctionCall (func, args) ->
+  | FunctionCall (_, _) ->
     raise (Errors.RuntimeError (Errors.ErrorValue (Printf.sprintf "the function %s has not been expanded" (Format_ast.format_position (Ast.get_position e)))))
 
 let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_values: literal VariableMap.t) : var_literal VariableMap.t =

@@ -42,7 +42,7 @@ let all_zero_input (p: program) (typing_info: Typechecker.typ_info): literal Var
        | Integer -> Int 0
        | Real -> Float 0.
     )
-    (VariableMap.filter (fun var def -> def.var_io = Input) p)
+    (VariableMap.filter (fun _ def -> def.var_io = Input) p)
 
 let print_output (results: Interpreter.var_literal VariableMap.t) : unit =
   VariableMap.iter (fun var value ->

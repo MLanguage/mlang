@@ -35,83 +35,31 @@ SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 
 SOURCE_FILES=$(shell find $(SOURCE_DIR_2015) -name "*.m")
 
-CMT_FILES = $(shell find _build -name "*.cmt")
-CMTI_FILES = $(shell find _build -name "*.cmti")
-ODOC_FILES = $(CMT_FILES:.cmt=.odoc) $(CMTI_FILES:.cmti=.odoc)
-DOC_FOLDER = doc
-ANSI_FOLDER = $(shell ocamlfind query ANSITerminal)
-GRAPH_FOLDER = $(shell ocamlfind query ocamlgraph)
-Z3_FOLDER = $(shell ocamlfind query z3)
-OCAML_INCLUDES = \
-	-I _build/src \
-	-I _build/src/parsing \
-	-I _build/src/mvg \
-	-I _build/src/analysis \
-	-I _build/src/optimization \
-	-I _build/src/z3 \
-	-I _build/src/interpreter \
-	-I _build/src/household \
-	-I $(ANSI_FOLDER) \
-	-I $(GRAPH_FOLDER) \
-	-I $(Z3_FOLDER)
-
-
 export LD_LIBRARY_PATH=$(Z3_FOLDER)
 
 deps:
-	opam install ppx_deriving ANSITerminal str ocamlgraph z3
+	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune
 
 build:
-	ocamlbuild -cflag -g -use-ocamlfind src/main.native
+	dune build src/main.exe
 
 test: build
-		./main.native --debug test.m
+		dune exec src/main.exe -- --debug test.m
 
 batch: build
-		./main.native $(SOURCE_FILES) --optimize --application batch --debug --output IINETIR
+		dune exec src/main.exe -- $(SOURCE_FILES) --optimize --application batch --debug --output IINETIR
 
 iliad: build
-		./main.native $(SOURCE_FILES) --optimize --application iliad --debug --no_cycles_check --output IINETIR
+		dune exec src/main.exe --  $(SOURCE_FILES) --optimize --application iliad --debug --no_cycles_check --output IINETIR
 
 bareme: build
-		./main.native $(SOURCE_FILES) --optimize --application bareme --debug --output IINET
+		dune exec src/main.exe --  $(SOURCE_FILES) --optimize --application bareme --debug --output IINET
 
-doc-depend:
 
-%.odoc: %.cmt
-	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
-	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
-
-%.odoc: %.cmti
-	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
-	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
-
-%.odoc: %.mld
-	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
-	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
-
-src/page-index.odoc: src/index.mld
-	odoc compile $< -r --package verifisc $(OCAML_INCLUDES)
-	odoc html $@ --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
-
-doc: build
-	$(MAKE) doc_
-
-THEME_DIR = $(shell ocamlfind query odig)/../../share/odig/odoc-theme/gruvbox.dark
-
-doc_: $(CMT_FILES) $(CMTI_FILES) $(ODOC_FILES) src/page-index.odoc
-	odoc support-files --output-dir $(DOC_FOLDER)
-	cp -r $(THEME_DIR)/. $(DOC_FOLDER)
-	md2mld README.md > README.mld
-	odoc compile README.mld --package verifisc $(OCAML_INCLUDES)
-	odoc html page-README.odoc --output-dir $(DOC_FOLDER) $(OCAML_INCLUDES)
-	mv $(DOC_FOLDER)/verifisc/README.html $(DOC_FOLDER)/index.html
-	sed -i "s|\.\.\/odoc.css|odoc.css|" $(DOC_FOLDER)/index.html
-	sed -i "s|\.\.\/highlight.pack.js|highlight.pack.js|" $(DOC_FOLDER)/index.html
+doc:
+	dune build @doc
 
 graph: batch
 	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -o Graphe_IR_2015.svg dep_graph_after_optimization.dot
 	inkscape -z -e Graphe_IR_2015.png -d 96 Graphe_IR_2015.svg
 	convert -resize 1980x1024 Graphe_IR_2015.png Graphe_IR_2015_Miniature.png
-
-.PHONY: build doc

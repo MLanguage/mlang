@@ -34,7 +34,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 {
   open Lexing
   open Parser
-  open Parse_utils
   open Errors
 }
 rule token = parse

@@ -146,7 +146,7 @@ let rec typecheck_top_down
     (t: typ)
   : ctx =
   match (Ast.unmark e, t) with
-  | (Comparison (op, e1, e2), Boolean) ->
+  | (Comparison (_, e1, e2), Boolean) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
     begin try
@@ -289,7 +289,7 @@ let rec typecheck_top_down
                  (Format_mvg.format_typ t)
               )))
     end
-  | (Error, t) ->
+  | (Error, _) ->
     ctx
   | (LocalVar local_var, t) ->
     let t' = try LocalVariableMap.find local_var ctx.ctx_local_var_typ with
@@ -469,7 +469,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
                               (Format_ast.format_position pos)
                            )))
       end
-  | Mvg.Multimax  -> raise (Errors.Unimplemented ("multimax or supzero", pos))
+  | Mvg.Multimax  -> raise (Errors.Unimplemented ("multimax or supzero"))
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with
@@ -504,7 +504,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
                        t2_msg
                     )))
     end
-  | Comparison (op, e1, e2) ->
+  | Comparison (_, e1, e2) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
     begin try
@@ -783,7 +783,7 @@ let typecheck (p: program) : typ_info * program =
          }, p)
   in
   ({
-    typ_info_var = VariableMap.merge (fun v t is_table -> match (t, is_table) with
+    typ_info_var = VariableMap.merge (fun _ t is_table -> match (t, is_table) with
         | (Some t, Some is_table) ->
           Some (Typ.to_concrete t, is_table)
         | (None, Some _) ->

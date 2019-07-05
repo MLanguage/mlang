@@ -140,7 +140,7 @@ let find_bitvec_order
         old_typing
     in
     (o, {new_typing with repr_info_local_var = lvar_new_typing})
-  | Mvg.TableVar (size, def) -> begin match def with
+  | Mvg.TableVar (_, def) -> begin match def with
       | Mvg.IndexGeneric e ->
         let (o, lvar_new_typing) =
           find_bitvec_order_expr

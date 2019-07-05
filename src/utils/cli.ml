@@ -71,7 +71,7 @@ let optimize = ref false
 
 (** {!module Arg} function that specifies command-line arguments parsing *)
 let parse_cli_args () =
-  (** Code block to retrieve and parse command-line arguments. *)
+  (* Code block to retrieve and parse command-line arguments. *)
   let speclist = Arg.align [
       ("--application", Arg.Set_string application,
        " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");

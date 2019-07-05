@@ -49,10 +49,10 @@ let is_var_completely_const (var : Variable.t) (p:program) : bool =
   try match (VariableMap.find var p).var_definition with
     | InputVar -> false
     | SimpleVar e -> is_expr_completely_const e
-    | TableVar (size, def) -> begin match def with
+    | TableVar (_, def) -> begin match def with
         | IndexGeneric e ->
           is_expr_completely_const e
-        | IndexTable es ->
+        | IndexTable _ ->
           false
       end
   with
@@ -99,8 +99,8 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       | (Ast.Sub, Literal ((Int 0) | Float 0. | Bool false), e')
         ->
         Mvg.Unop (Ast.Minus, Ast.same_pos_as e' e)
-      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false), e')
-      | (Ast.Mul, e', Literal ((Int 0) | Float 0. | Bool false))
+      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false), _)
+      | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false))
         ->
         Mvg.Literal (Mvg.Bool false)
       | (_, Literal _, Literal _) ->
@@ -219,7 +219,7 @@ let propagate_constants (g: DepGraph.t) (p: program) : program =
         | TableVar (size, def) -> begin match def with
             | IndexGeneric e ->
               TableVar(size, IndexGeneric (partial_evaluation Interpreter.empty_ctx p e))
-            | IndexTable es ->
+            | IndexTable _ ->
               assert false (* should not happen *)
           end
       in

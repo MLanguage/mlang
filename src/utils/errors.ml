@@ -33,9 +33,9 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (** Error formatting and helper functions *)
 
-(**{1 Parsing }*)
+(**{1 Frontend }*)
 
-exception ParsingError of string
+exception FrontendError of string
 
 exception LexingError of string
 
@@ -50,7 +50,7 @@ let lexer_error lexbuf  =
     (lexbuf.Lexing.lex_curr_p.Lexing.pos_fname)
 
 let parser_error (sloc_start, sloc_end) (msg: string) =
-  raise (ParsingError (Printf.sprintf "Parsing error: %s (file %s, %s to %s)"
+  raise (FrontendError (Printf.sprintf "Frontend error: %s (file %s, %s to %s)"
                          msg
                          (sloc_start.Lexing.pos_fname)
                          (print_lexer_position sloc_start)
@@ -77,7 +77,7 @@ let format_typ_error (e: typ_error) : string = match e with
   | Typing s -> Printf.sprintf "Typing error: %s" s
   | Inlining s -> Printf.sprintf "Inlining error: %s" s
 
-exception Unimplemented of string * Ast.position
+exception Unimplemented of string
 
 (**{1 Interpretation }*)
 

@@ -11,3 +11,4 @@ undefined_variables.txt
 defined_output_variables.txt
 optimized_program.mvg
 input_needed.txt
+src/**/.merlin

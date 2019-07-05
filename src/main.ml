@@ -31,14 +31,14 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-open Lexer
+open Verifisc
 open Lexing
-open Cli
-open Z3_driver
+open Lexer
+
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let main () : int =
-  parse_cli_args ();
+  Cli.parse_cli_args ();
   Cli.debug_print "Reading files...";
   let program = ref [] in
   List.iter (fun source_file ->
@@ -50,7 +50,7 @@ let main () : int =
         else
           failwith "You have to specify at least one file!"
       in
-      Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
+      Cli.debug_print (Printf.sprintf "Frontend %s" source_file);
       let filebuf = {filebuf with
                      lex_curr_p = { filebuf.lex_curr_p with
                                     pos_fname = Filename.basename source_file
@@ -62,10 +62,10 @@ let main () : int =
         let commands = Parser.source_file token filebuf in
         program := commands::!program
       with
-      | Errors.LexingError msg | Errors.ParsingError msg ->
-        error_print msg
+      | Errors.LexingError msg | Errors.FrontendError msg ->
+        Cli.error_print msg
       | Parser.Error -> begin
-          error_print
+          Cli.error_print
             (Printf.sprintf "Lexer error in file %s at position %s"
                (!Parse_utils.current_file)
                (Errors.print_lexer_position filebuf.lex_curr_p));
@@ -75,10 +75,10 @@ let main () : int =
           end;
           exit (-1)
         end
-    ) !source_files;
+    ) !Cli.source_files;
   try
-    let program, idmap, var_defs_not_in_app =
-      Ast_to_mvg.translate !program (if !application = "" then None else Some !application)
+    let program, _, var_defs_not_in_app =
+      Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
     in
 
     Cli.debug_print ("Expanding function definitions...");
@@ -89,8 +89,8 @@ let main () : int =
 
     Cli.debug_print "Analysing dependencies...";
     let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph (!dep_graph_file ^ "_before_optimization.dot") dep_graph program;
-    if not !no_cycles_check_flag then
+    Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
+    if not !Cli.no_cycles_check_flag then
       Dependency.check_for_cycle dep_graph program;
 
     let program =
@@ -116,10 +116,10 @@ let main () : int =
 
   with
   | Errors.TypeError e ->
-    error_print (Errors.format_typ_error e); exit 1
+    Cli.error_print (Errors.format_typ_error e); exit 1
   | Errors.RuntimeError e ->
-    error_print (Errors.format_runtime_error e); exit 1
-  | Errors.Unimplemented (msg,pos) ->
-    error_print (Printf.sprintf "unimplemented for expression %s (%s)" (Format_ast.format_position pos) msg); -3
+    Cli.error_print (Errors.format_runtime_error e); exit 1
+  | Errors.Unimplemented (msg) ->
+    Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); -3
 
 let _ = main ()

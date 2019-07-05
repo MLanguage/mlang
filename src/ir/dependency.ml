@@ -205,7 +205,7 @@ module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Backward
       let equal = (=)
       let join = (||)
-      let analyze (v1, v2) = (fun x -> x)
+      let analyze _ = (fun x -> x)
     end)
 
 module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
@@ -217,7 +217,7 @@ module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Forward
       let equal = (=)
       let join = (||)
-      let analyze (v1, v2) = (fun x -> x)
+      let analyze _ = (fun x -> x)
     end)
 
 let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.t =
@@ -260,7 +260,7 @@ let try_and_fix_undefined_dependencies
     (Mvg.VariableMap.cardinal is_needed_by_ouptput_and_undefined);
   let is_still_undefined x = match x with None -> true | Some _ -> false in
   let is_needed_by_ouptput_and_undefined_fix =
-    Mvg.VariableMap.mapi (fun var undef ->
+    Mvg.VariableMap.mapi (fun var _ ->
         match Mvg.VariableMap.find_opt var var_defs_not_in_app with
         | None -> None
         | Some def ->
@@ -282,7 +282,7 @@ let try_and_fix_undefined_dependencies
       is_needed_by_ouptput_and_undefined
   in
   begin if Mvg.VariableMap.exists
-      (fun v x -> is_still_undefined x)
+      (fun _ x -> is_still_undefined x)
       is_needed_by_ouptput_and_undefined_fix
     then
       let is_needed_by_ouptput_and_still_undefined =
@@ -311,10 +311,10 @@ let try_and_fix_undefined_dependencies
         (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
       close_out oc
   end;
-  Mvg.VariableMap.merge (fun var normal_def fixed_def -> match (normal_def, fixed_def) with
+  Mvg.VariableMap.merge (fun _ normal_def fixed_def -> match (normal_def, fixed_def) with
       | Some normal_def, Some None
       | Some normal_def, None -> Some normal_def
-      | Some normal_def, Some (Some fixed_def) -> Some fixed_def
+      | Some _, Some (Some fixed_def) -> Some fixed_def
       | None, Some _
       | None, None -> assert false (* should not happen *)
     ) p is_needed_by_ouptput_and_undefined_fix

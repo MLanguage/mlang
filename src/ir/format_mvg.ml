@@ -91,8 +91,8 @@ let rec format_expression (e: expression) : string = match e with
 let format_variable_def (def: variable_def) : string = match def  with
   | SimpleVar e -> format_expression (Ast.unmark e) ^ "\n"
   | InputVar -> "[User input]\n"
-  | TableVar (size, IndexGeneric e) -> "X -> " ^ (format_expression (Ast.unmark e)) ^ "\n"
-  | TableVar (size, IndexTable defs) -> IndexMap.fold (fun i e acc ->
+  | TableVar (_, IndexGeneric e) -> "X -> " ^ (format_expression (Ast.unmark e)) ^ "\n"
+  | TableVar (_, IndexTable defs) -> IndexMap.fold (fun i e acc ->
       acc ^ (Printf.sprintf "%d -> %s\n" i (format_expression (Ast.unmark e)))
     ) defs ""
 

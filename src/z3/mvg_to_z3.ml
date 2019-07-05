@@ -46,15 +46,15 @@ let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z
   match typ.Z3_encoding.repr_kind with
   | Z3_encoding.Boolean ->
     Z3_encoding.Regular (Z3.Boolean.mk_const_s ctx
-                       ("t" ^ (string_of_int var.Mvg.LocalVariable.id)))
+                           ("t" ^ (string_of_int var.Mvg.LocalVariable.id)))
   | Z3_encoding.Integer o ->
     Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
-                       ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
-                       (bv_repr_ints_base * o))
+                           ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
+                           (bv_repr_ints_base * o))
   | Z3_encoding.Real o ->
     Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
-                       ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
-                       (bv_repr_ints_base * o))
+                           ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
+                           (bv_repr_ints_base * o))
 
 let int_const i ctx : Z3.Expr.expr =
   Z3.BitVector.mk_numeral ctx (string_of_int i) bv_repr_ints_base
@@ -168,9 +168,9 @@ let rec translate_expression
       | _ -> assert false (* should not happen *)
     end
   | Mvg.Conditional _ -> assert false (* should not happen *)
-  | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
+  | Mvg.FunctionCall (Mvg.ArrFunc , [_]) ->
     assert false (* TODO: implement *)
-  | Mvg.FunctionCall (Mvg.InfFunc , [arg]) ->
+  | Mvg.FunctionCall (Mvg.InfFunc , [_]) ->
     assert false (* TODO: implement *)
   | Mvg.FunctionCall _ -> assert false (* should not happen *)
   | Mvg.Literal (Mvg.Int i) ->
@@ -269,7 +269,7 @@ let translate_program
               (Z3_encoding.Regular z3_var, typ)
               repr_data.Z3_encoding.repr_data_var
         }
-      | Mvg.TableVar (size, def) -> begin match def with
+      | Mvg.TableVar (_, def) -> begin match def with
           | Mvg.IndexGeneric e ->
             let z3_e = translate_expression repr_data e ctx s in
             { repr_data with
@@ -279,7 +279,7 @@ let translate_program
                   (Z3_encoding.Table z3_e, typ)
                   repr_data.Z3_encoding.repr_data_var
             }
-          | Mvg.IndexTable es ->
+          | Mvg.IndexTable _ ->
             Cli.warning_print "TODO: implement";
             repr_data
         end
