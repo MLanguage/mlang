@@ -110,19 +110,19 @@ let format_error (e: Error.t) : string =
     (Ast.unmark e.Error.name)
     (Ast.unmark e.Error.descr)
 
-let format_precondition (precond: precondition) : string =
+let format_precondition (precond: condition_data) : string =
   Printf.sprintf "Précondition : %s\nSinon %s"
-    (format_expression (Ast.unmark precond.precond_expr))
-    (String.concat "," (List.map (fun err -> format_error err) precond.precond_errors))
+    (format_expression (Ast.unmark precond.cond_expr))
+    (String.concat "," (List.map (fun err -> format_error err) precond.cond_errors))
 
-let format_program_preconds (preconds: precondition list) : string =
+let format_program_conds (conds: condition_data VariableMap.t) : string =
   String.concat
     "\n"
     (List.map
-       (fun precond -> format_precondition precond) preconds
+       (fun (_, cond) -> format_precondition cond) (VariableMap.bindings conds)
     )
 let format_program (p: program) : string =
-  Printf.sprintf "%s\n\n%s" (format_program_vars p.program_vars) (format_program_preconds p.program_preconds)
+  Printf.sprintf "%s\n\n%s" (format_program_vars p.program_vars) (format_program_conds p.program_conds)
 
 let format_variable (v: Variable.t) : string =
   Printf.sprintf "%s: %s" (Ast.unmark v.Variable.name) (Ast.unmark v.Variable.descr)

@@ -40,6 +40,25 @@ type var_literal =
   | SimpleVar of literal
   | TableVar of int * literal array
 
+let format_var_literal_with_var (var: Variable.t) (vl: var_literal) : string = match vl with
+  | SimpleVar value ->
+    Printf.sprintf "%s (%s): %s"
+      (Ast.unmark var.Variable.name)
+      (Ast.unmark var.Variable.descr)
+      (Format_mvg.format_literal value)
+  | TableVar (size, values) ->
+    Printf.sprintf "%s (%s): Table (%d values)\n%s"
+      (Ast.unmark var.Variable.name)
+      (Ast.unmark var.Variable.descr)
+      size
+      (String.concat "\n"
+         (List.mapi
+            (fun idx value ->
+               Printf.sprintf "| %d -> %s"
+                 idx
+                 (Format_mvg.format_literal value)
+            ) (Array.to_list values)))
+
 type ctx = {
   ctx_local_vars: literal Ast.marked LocalVariableMap.t;
   ctx_vars: var_literal VariableMap.t;
@@ -280,45 +299,70 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
 
 let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_values: literal VariableMap.t) : var_literal VariableMap.t =
   let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
-      match (VariableMap.find var p.program_vars).var_definition with
-      | Mvg.SimpleVar e ->
-        let l_e = evaluate_expr ctx p e in
-        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
-      | Mvg.TableVar (size, es) ->
+      try
+        match (VariableMap.find var p.program_vars).var_definition with
+        | Mvg.SimpleVar e ->
+          let l_e = evaluate_expr ctx p e in
+          { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+        | Mvg.TableVar (size, es) ->
         (*
           Right now we suppose that the different indexes of table arrays don't depend on each other
           for computing. Otherwise, it would trigger a runtime Not_found error at interpretation.
           TODO: add a check for that at typechecking.
         *)
-        { ctx with
-          ctx_vars =
-            VariableMap.add
-              var
-              (TableVar (
-                  size,
-                  Array.init size
-                    (fun idx -> match es with
-                       | IndexGeneric e ->
-                         evaluate_expr { ctx with ctx_generic_index = Some idx } p e
-                       | IndexTable es ->
-                         evaluate_expr ctx p (IndexMap.find idx es)
-                    )
+          { ctx with
+            ctx_vars =
+              VariableMap.add
+                var
+                (TableVar (
+                    size,
+                    Array.init size
+                      (fun idx -> match es with
+                         | IndexGeneric e ->
+                           evaluate_expr { ctx with ctx_generic_index = Some idx } p e
+                         | IndexTable es ->
+                           evaluate_expr ctx p (IndexMap.find idx es)
+                      )
+                  )
+                )
+                ctx.ctx_vars
+          }
+        | Mvg.InputVar -> begin try
+              { ctx with ctx_vars = VariableMap.add var (SimpleVar (VariableMap.find var input_values)) ctx.ctx_vars }
+            with
+            | Not_found -> raise (
+                Errors.RuntimeError (
+                  Errors.MissingInputValue (
+                    Printf.sprintf "%s (%s)"
+                      (Ast.unmark var.Mvg.Variable.name)
+                      (Ast.unmark var.Mvg.Variable.descr)
+                  )
                 )
               )
-              ctx.ctx_vars
-        }
-      | Mvg.InputVar -> begin try
-            { ctx with ctx_vars = VariableMap.add var (SimpleVar (VariableMap.find var input_values)) ctx.ctx_vars }
-          with
-          | Not_found -> raise (
-              Errors.RuntimeError (
-                Errors.MissingInputValue (
-                  Printf.sprintf "%s (%s)"
-                    (Ast.unmark var.Mvg.Variable.name)
-                    (Ast.unmark var.Mvg.Variable.descr)
-                )
+          end
+      with
+      | Not_found ->
+        let cond = VariableMap.find var p.program_conds in
+        let l_cond = evaluate_expr ctx p cond.cond_expr in
+        match l_cond with
+        | Bool false -> ctx (* error condition is not trigerred, we continue *)
+        | Bool true -> (* the condition is triggered, we throw errors *)
+          raise (Errors.RuntimeError (
+              Errors.ConditionViolated (
+                Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
+                  (Format_ast.format_position (Ast.get_position cond.cond_expr))
+                  (String.concat "\n" (List.map (fun err ->
+                       Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
+                     ) cond.cond_errors))
+                  (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
+                  (String.concat "\n" (List.map (fun (var) ->
+                       let l = VariableMap.find var ctx.ctx_vars in
+                       format_var_literal_with_var var l
+                     ) (
+                       Dependency.DepGraph.pred dep_graph var
+                     )))
               )
-            )
-        end
+            ))
+        | _ -> assert false (* should not happen *)
     ) dep_graph empty_ctx
   in ctx.ctx_vars

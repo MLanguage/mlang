@@ -74,7 +74,7 @@ let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: D
 
 
 let create_dependency_graph (p: Mvg.program) : DepGraph.t =
-  Mvg.VariableMap.fold (fun var def acc ->
+  let g = Mvg.VariableMap.fold (fun var def acc ->
       match def.Mvg.var_definition with
       | Mvg.InputVar -> DepGraph.add_vertex acc var
       | Mvg.SimpleVar e -> add_usages var e acc
@@ -84,7 +84,10 @@ let create_dependency_graph (p: Mvg.program) : DepGraph.t =
               add_usages var e acc
             ) es acc
         end
-    ) p.program_vars DepGraph.empty
+    ) p.program_vars DepGraph.empty in
+  Mvg.VariableMap.fold (fun cond_var cond acc ->
+      add_usages cond_var cond.Mvg.cond_expr acc
+    ) p.program_conds g
 
 let program_when_printing : Mvg.program option ref = ref None
 
@@ -97,28 +100,43 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_attributes v = begin match !program_when_printing with
       | None -> []
       | Some p ->
-        let var_data = Mvg.VariableMap.find v p.program_vars in
         let input_color = 0x66b5ff in
         let output_color = 0xE6E600 in
+        let cond_color = 0x666633 in
         let regular_color = 0x8585ad in
         let text_color = 0xf2f2f2 in
-        match var_data.Mvg.var_io with
-        | Mvg.Input -> [
-            `Fillcolor input_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
-            `Label (Printf.sprintf "%s\n%s"
-                      (match v.Mvg.Variable.alias with Some s -> s | None -> Ast.unmark v.Mvg.Variable.name)
-                      (Ast.unmark v.Mvg.Variable.descr)
-                   )
-          ]
-        | Mvg.Regular -> [
-            `Fillcolor regular_color; `Style `Filled; `Shape `Box; `Fontcolor text_color;
-            `Label (Printf.sprintf "%s\n%s"
-                      (Ast.unmark v.Mvg.Variable.name)
-                      (Ast.unmark v.Mvg.Variable.descr)
-                   )
-          ]
-        | Mvg.Output -> [
-            `Fillcolor output_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
+        try
+          let var_data =
+            Mvg.VariableMap.find v p.program_vars
+
+          in
+          match var_data.Mvg.var_io with
+          | Mvg.Input -> [
+              `Fillcolor input_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
+              `Label (Printf.sprintf "%s\n%s"
+                        (match v.Mvg.Variable.alias with Some s -> s | None -> Ast.unmark v.Mvg.Variable.name)
+                        (Ast.unmark v.Mvg.Variable.descr)
+                     )
+            ]
+          | Mvg.Regular -> [
+              `Fillcolor regular_color; `Style `Filled; `Shape `Box; `Fontcolor text_color;
+              `Label (Printf.sprintf "%s\n%s"
+                        (Ast.unmark v.Mvg.Variable.name)
+                        (Ast.unmark v.Mvg.Variable.descr)
+                     )
+            ]
+          | Mvg.Output -> [
+              `Fillcolor output_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
+              `Label (Printf.sprintf "%s\n%s"
+                        (Ast.unmark v.Mvg.Variable.name)
+                        (Ast.unmark v.Mvg.Variable.descr)
+                     )
+            ]
+        with
+        | Not_found ->
+          let _ = Mvg.VariableMap.find v p.program_conds in
+          [
+            `Fillcolor cond_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
             `Label (Printf.sprintf "%s\n%s"
                       (Ast.unmark v.Mvg.Variable.name)
                       (Ast.unmark v.Mvg.Variable.descr)
@@ -225,7 +243,9 @@ let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.
     try
       (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
     with
-    | Not_found -> assert false (* should not happen *)
+    | Not_found ->
+      let _ = Mvg.VariableMap.find var p.program_conds in
+      true
   in
   let is_necessary_to_output = OutputToInputReachability.analyze is_output g in
   Mvg.VariableMap.filter (fun var _ ->
@@ -241,7 +261,9 @@ let try_and_fix_undefined_dependencies
     try
       (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
     with
-    | Not_found -> assert false (* should not happen *)
+    | Not_found ->
+      let _ = Mvg.VariableMap.find var p.program_conds in
+      true
   in
   let is_undefined = fun var ->
     try

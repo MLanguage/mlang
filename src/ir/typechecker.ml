@@ -632,6 +632,11 @@ let determine_def_complete_cover
     ) defs_array;
   List.sort compare !undefined
 
+let typecheck_program_conds (ctx: ctx) (conds: condition_data VariableMap.t) : ctx =
+  VariableMap.fold (fun _ cond ctx ->
+      typecheck_top_down ctx cond.cond_expr Mvg.Boolean
+    ) conds ctx
+
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p: program) : typ_info * program =
   let (are_tables, ctx, p_vars) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
@@ -782,6 +787,7 @@ let typecheck (p: program) : typ_info * program =
                         ctx_local_var_typ = LocalVariableMap.empty;
                       }, p.program_vars)
   in
+  let ctx = typecheck_program_conds ctx p.program_conds in
   ({
     typ_info_var = VariableMap.merge (fun _ t is_table -> match (t, is_table) with
         | (Some t, Some is_table) ->

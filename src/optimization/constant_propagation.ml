@@ -56,7 +56,9 @@ let is_var_completely_const (var : Variable.t) (p:program) : bool =
           false
       end
   with
-  | Not_found -> assert false (* should not happen *)
+  | Not_found ->
+    let _ = Mvg.VariableMap.find var p.program_conds in
+    false
 
 let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Mvg.Variable.t list =
   let is_completely_const = fun var ->

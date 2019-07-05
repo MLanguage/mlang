@@ -217,12 +217,12 @@ module Error = struct
     compare var1.id var2.id
 end
 
-type precondition = {
-  precond_expr: expression Ast.marked;
-  precond_errors: Error.t list;
+type condition_data = {
+  cond_expr: expression Ast.marked;
+  cond_errors: Error.t list;
 }
 
 type program = {
   program_vars: variable_data VariableMap.t;
-  program_preconds: precondition list;
+  program_conds: condition_data VariableMap.t; (** Conditions are affected to dummy variables *)
 }

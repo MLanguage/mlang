@@ -155,7 +155,9 @@ let inline_vars
   : program * Typechecker.typ_info =
   lvar_mapping := LocalVariableMap.empty;
   let new_program = {
-    p with
+    program_conds = VariableMap.map (fun cond ->
+        { cond with cond_expr = inline_vars_in_expr (empty_ctx p) inlined_vars cond.cond_expr}
+      ) p.program_conds;
     program_vars = VariableMap.fold (fun var def acc ->
         if VariableMap.mem var inlined_vars then
           acc

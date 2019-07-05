@@ -226,7 +226,7 @@ let expand_functions (p: program) : program =
                 }
             end
         ) p.program_vars;
-    program_preconds = List.map (fun precond ->
-        { precond with precond_expr = expand_functions_expr precond.precond_expr }
-      ) p.program_preconds
+    program_conds = VariableMap.map (fun cond ->
+        { cond with cond_expr = expand_functions_expr cond.cond_expr }
+      ) p.program_conds
   }

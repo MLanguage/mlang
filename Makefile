@@ -59,7 +59,7 @@ bareme: build
 doc:
 	dune build @doc
 
-graph: batch
-	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -o Graphe_IR_2015.svg dep_graph_after_optimization.dot
+graph:
+	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -Gratio=0.707106781 -o Graphe_IR_2015.svg dep_graph_after_optimization.dot
 	inkscape -z -e Graphe_IR_2015.png -d 96 Graphe_IR_2015.svg
 	convert -resize 1980x1024 Graphe_IR_2015.png Graphe_IR_2015_Miniature.png

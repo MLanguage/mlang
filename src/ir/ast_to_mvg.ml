@@ -227,7 +227,7 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
   | Ast.Ranges lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.map (fun value -> match value with
-              | Ast.VarParam _ -> assert false (* should not happen *)
+              | Ast.VarParam v -> [VarName (Ast.unmark v)]
               | Ast.IntervalLoop (i1, i2) -> make_range_list (var_or_int_value ctx i1) (var_or_int_value ctx i2)
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
@@ -995,12 +995,17 @@ let check_if_all_variables_defined
      ) var_data var_decl_data)
 
 
-let get_preconds (error_decls: Mvg.Error.t list) (idmap: idmap) (p: Ast.program) (application: Ast.application option) : Mvg.precondition list =
-  List.fold_left (fun preconds source_file ->
-      List.fold_left (fun preconds source_file_item ->
+let get_conds
+    (error_decls: Mvg.Error.t list)
+    (idmap: idmap)
+    (p: Ast.program)
+    (application: Ast.application option)
+  : Mvg.condition_data Mvg.VariableMap.t =
+  List.fold_left (fun conds source_file ->
+      List.fold_left (fun conds source_file_item ->
           match Ast.unmark source_file_item with
           | Ast.Verification verif when belongs_to_app verif.Ast.verif_applications application ->
-            List.fold_left (fun preconds verif_cond ->
+            List.fold_left (fun conds verif_cond ->
                 let e = translate_expression
                     { idmap; lc = None; int_const_values = Mvg.VariableMap.empty }
                     (Ast.unmark verif_cond).Ast.verif_cond_expr
@@ -1012,11 +1017,17 @@ let get_preconds (error_decls: Mvg.Error.t list) (idmap: idmap) (p: Ast.program)
                          error_decls)
                     (Ast.unmark verif_cond).Ast.verif_cond_errors
                 in
-                { Mvg.precond_expr = e; Mvg.precond_errors = errs}::preconds
-              ) preconds verif.Ast.verif_conditions
-          | _ -> preconds
-        ) preconds source_file
-    ) [] p
+                let dummy_var =
+                  Mvg.Variable.new_var
+                    (Ast.same_pos_as (Printf.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
+                    None
+                    (Ast.same_pos_as (Format_ast.format_position (Ast.get_position e)) e)
+                in
+                Mvg.VariableMap.add dummy_var { Mvg.cond_expr = e; Mvg.cond_errors = errs} conds
+              ) conds verif.Ast.verif_conditions
+          | _ -> conds
+        ) conds source_file
+    ) Mvg.VariableMap.empty p
 
 (**
    The translate function returns three values :
@@ -1031,5 +1042,5 @@ let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg
   let (var_decl_data, error_decls, idmap) = get_variables_decl p var_decl_data idmap in
   let (var_data, var_defs_not_in_app) = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data in
-  let preconds = get_preconds error_decls idmap p application in
-  { Mvg.program_vars = var_data; Mvg.program_preconds = preconds}, idmap, var_defs_not_in_app
+  let conds = get_conds error_decls idmap p application in
+  { Mvg.program_vars = var_data; Mvg.program_conds = conds}, idmap, var_defs_not_in_app
