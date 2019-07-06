@@ -103,18 +103,9 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
             Ast.unmark (expand_functions_expr arg)
           else
             let new_arg = expand_functions_expr arg in
-            (* let new_arg_var = LocalVariable.new_var () in
-               let acc_var = LocalVariable.new_var () in *)
-            Conditional (
-              Ast.same_pos_as (Comparison (
-                  Ast.same_pos_as Ast.Lt e,
-                  new_arg,
-                  Ast.same_pos_as acc e
-                )) e,
-              new_arg,
-              Ast.same_pos_as acc e
-            )
-            (*LocalLet (
+            let new_arg_var = LocalVariable.new_var () in
+            let acc_var = LocalVariable.new_var () in
+            LocalLet (
               acc_var,
               Ast.same_pos_as acc e,
               Ast.same_pos_as (LocalLet (
@@ -133,7 +124,7 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
                   ) e
                 ))
                 e
-              ) *)
+            )
         ) Error args
     ) e
   | FunctionCall (MaxFunc, args) ->
@@ -143,21 +134,12 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
             Ast.unmark (expand_functions_expr arg)
           else
             let new_arg = expand_functions_expr arg in
-            (* let new_arg_var = LocalVariable.new_var () in
-               let acc_var = LocalVariable.new_var () in *)
-            Conditional (
-              Ast.same_pos_as (Comparison (
-                  Ast.same_pos_as Ast.Gt e,
-                  new_arg,
-                  Ast.same_pos_as acc e
-                )) e,
-              new_arg,
-              Ast.same_pos_as acc e
-            )
-            (* LocalLet (
-               acc_var,
-               Ast.same_pos_as acc e,
-               Ast.same_pos_as (LocalLet (
+            let new_arg_var = LocalVariable.new_var () in
+            let acc_var = LocalVariable.new_var () in
+            LocalLet (
+              acc_var,
+              Ast.same_pos_as acc e,
+              Ast.same_pos_as (LocalLet (
                   new_arg_var,
                   new_arg,
                   Ast.same_pos_as (
@@ -173,7 +155,7 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
                   ) e
                 ))
                 e
-               ) *)
+            )
         ) Error args
     ) e
   | FunctionCall (AbsFunc, [arg]) ->

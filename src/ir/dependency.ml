@@ -324,7 +324,7 @@ let try_and_fix_undefined_dependencies
       let undef_var_files = "undefined_variables.txt" in
       Cli.warning_print
         (Printf.sprintf
-           ("There are variables needed to compute the outputs that are undefined (%d), so they have been set to zero. Writing the list of variables to %s.")
+           ("There are variables needed to compute the outputs that are undefined (%d). Writing the list of variables to %s.")
            (List.length is_needed_by_ouptput_and_still_undefined)
            undef_var_files
         );
