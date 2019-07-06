@@ -63,12 +63,14 @@ type ctx = {
   ctx_local_vars: literal Ast.marked LocalVariableMap.t;
   ctx_vars: var_literal VariableMap.t;
   ctx_generic_index: int option;
+  ctx_idmap: Mvg.Variable.t Ast_to_mvg.VarNameToID.t
 }
 
-let empty_ctx : ctx = {
+let empty_ctx  (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t) : ctx = {
   ctx_local_vars = LocalVariableMap.empty;
   ctx_vars = VariableMap.empty;
-  ctx_generic_index = None
+  ctx_generic_index = None;
+  ctx_idmap = idmap;
 }
 
 let int_of_bool (b: bool) = if b then 1 else 0
@@ -78,305 +80,336 @@ let is_zero (l: literal) : bool = match l with
   | Bool false | Int 0 | Float 0. -> true
   | _ -> false
 
+let repl_debugguer
+    (ctx: ctx )
+    (p: Mvg.program)
+    (idmap : Ast_to_mvg.idmap) : unit
+  =
+  Cli.warning_print ("Starting interactive debugger. Please query the interpreter state for the values of variables." ^
+                     " Exit with \"quit\".");
+  let exit = ref false in
+  while not !exit do
+    Printf.printf "> ";
+    let query = read_line () in
+    if query = "quit" then exit := true else
+    if query = "explain" then begin
+      Printf.printf ">> ";
+      let query = read_line () in
+      try let var = Ast_to_mvg.VarNameToID.find query idmap in
+        Printf.printf "%s\n"
+          (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+      with
+      | Not_found -> Printf.printf "Inexisting variable\n"
+    end else try
+        let var = Ast_to_mvg.VarNameToID.find query idmap in
+        try begin
+          let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
+          Printf.printf "%s\n" (format_var_literal_with_var var var_l)
+        end with
+        | Not_found -> Printf.printf "Variable not computed yet\n"
+      with
+      | Not_found -> Printf.printf "Inexisting variable\n"
+  done
+
 let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
-  match Ast.unmark e with
-  | Comparison (op, e1, e2) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    let new_e2 = evaluate_expr ctx p e2 in
-    begin match (Ast.unmark op, new_e1, new_e2) with
-      | (Ast.Gt, Bool i1, Bool i2) -> Bool(i1 > i2)
-      | (Ast.Gt, Bool i1, Int i2) -> Bool(int_of_bool i1 > i2)
-      | (Ast.Gt, Bool i1, Float i2) -> Bool(float_of_bool i1 > i2)
-      | (Ast.Gt, Bool i1, Undefined) -> Bool(int_of_bool i1 > 0)
-      | (Ast.Gt, Int i1, Bool i2) -> Bool(i1 > int_of_bool i2)
-      | (Ast.Gt, Int i1, Int i2) -> Bool(i1 > i2)
-      | (Ast.Gt, Int i1, Float i2) -> Bool(float_of_int i1 > i2)
-      | (Ast.Gt, Int i1, Undefined) -> Bool(i1 > 0)
-      | (Ast.Gt, Float i1, Bool i2) -> Bool(i1 > float_of_bool i2)
-      | (Ast.Gt, Float i1, Int i2) -> Bool(i1 > float_of_int i2)
-      | (Ast.Gt, Float i1, Float i2) -> Bool(i1 > i2)
-      | (Ast.Gt, Float i1, Undefined) -> Bool(i1 > 0.)
-      | (Ast.Gt, Undefined, Bool i2) -> Bool(0. > float_of_bool i2)
-      | (Ast.Gt, Undefined, Int i2) -> Bool(0. > float_of_int i2)
-      | (Ast.Gt, Undefined, Float i2) -> Bool(0. > i2)
-      | (Ast.Gt, Undefined, Undefined) -> Bool(false)
+  try begin match Ast.unmark e with
+    | Comparison (op, e1, e2) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      let new_e2 = evaluate_expr ctx p e2 in
+      begin match (Ast.unmark op, new_e1, new_e2) with
+        | (Ast.Gt, Bool i1, Bool i2) -> Bool(i1 > i2)
+        | (Ast.Gt, Bool i1, Int i2) -> Bool(int_of_bool i1 > i2)
+        | (Ast.Gt, Bool i1, Float i2) -> Bool(float_of_bool i1 > i2)
+        | (Ast.Gt, Int i1, Bool i2) -> Bool(i1 > int_of_bool i2)
+        | (Ast.Gt, Int i1, Int i2) -> Bool(i1 > i2)
+        | (Ast.Gt, Int i1, Float i2) -> Bool(float_of_int i1 > i2)
+        | (Ast.Gt, Float i1, Bool i2) -> Bool(i1 > float_of_bool i2)
+        | (Ast.Gt, Float i1, Int i2) -> Bool(i1 > float_of_int i2)
+        | (Ast.Gt, Float i1, Float i2) -> Bool(i1 > i2)
+        | (Ast.Gt, _, Undefined)
+        | (Ast.Gt, Undefined, _) -> Undefined
 
 
-      | (Ast.Gte, Bool i1, Bool i2) -> Bool(i1 >= i2)
-      | (Ast.Gte, Bool i1, Int i2) -> Bool(int_of_bool i1 >= i2)
-      | (Ast.Gte, Bool i1, Float i2) -> Bool(float_of_bool i1 >= i2)
-      | (Ast.Gte, Bool i1, Undefined) -> Bool(int_of_bool i1 >= 0)
-      | (Ast.Gte, Int i1, Bool i2) -> Bool(i1 >= int_of_bool i2)
-      | (Ast.Gte, Int i1, Int i2) -> Bool(i1 >= i2)
-      | (Ast.Gte, Int i1, Float i2) -> Bool(float_of_int i1 >= i2)
-      | (Ast.Gte, Int i1, Undefined) -> Bool(i1 >= 0)
-      | (Ast.Gte, Float i1, Bool i2) -> Bool(i1 >= float_of_bool i2)
-      | (Ast.Gte, Float i1, Int i2) -> Bool(i1 >= float_of_int i2)
-      | (Ast.Gte, Float i1, Float i2) -> Bool(i1 >= i2)
-      | (Ast.Gte, Float i1, Undefined) -> Bool(i1 >= 0.)
-      | (Ast.Gte, Undefined, Bool i2) -> Bool(0. >= float_of_bool i2)
-      | (Ast.Gte, Undefined, Int i2) -> Bool(0. >= float_of_int i2)
-      | (Ast.Gte, Undefined, Float i2) -> Bool(0. >= i2)
-      | (Ast.Gte, Undefined, Undefined) -> Bool(true)
+        | (Ast.Gte, Bool i1, Bool i2) -> Bool(i1 >= i2)
+        | (Ast.Gte, Bool i1, Int i2) -> Bool(int_of_bool i1 >= i2)
+        | (Ast.Gte, Bool i1, Float i2) -> Bool(float_of_bool i1 >= i2)
+        | (Ast.Gte, Int i1, Bool i2) -> Bool(i1 >= int_of_bool i2)
+        | (Ast.Gte, Int i1, Int i2) -> Bool(i1 >= i2)
+        | (Ast.Gte, Int i1, Float i2) -> Bool(float_of_int i1 >= i2)
+        | (Ast.Gte, Float i1, Bool i2) -> Bool(i1 >= float_of_bool i2)
+        | (Ast.Gte, Float i1, Int i2) -> Bool(i1 >= float_of_int i2)
+        | (Ast.Gte, Float i1, Float i2) -> Bool(i1 >= i2)
+        | (Ast.Gte, _, Undefined)
+        | (Ast.Gte, Undefined, _) -> Undefined
 
-      | (Ast.Lt, Bool i1, Bool i2) -> Bool(i1 < i2)
-      | (Ast.Lt, Bool i1, Int i2) -> Bool(int_of_bool i1 < i2)
-      | (Ast.Lt, Bool i1, Float i2) -> Bool(float_of_bool i1 < i2)
-      | (Ast.Lt, Bool i1, Undefined) -> Bool(int_of_bool i1 < 0)
-      | (Ast.Lt, Int i1, Bool i2) -> Bool(i1 < int_of_bool i2)
-      | (Ast.Lt, Int i1, Int i2) -> Bool(i1 < i2)
-      | (Ast.Lt, Int i1, Float i2) -> Bool(float_of_int i1 < i2)
-      | (Ast.Lt, Int i1, Undefined) -> Bool(i1 < 0)
-      | (Ast.Lt, Float i1, Bool i2) -> Bool(i1 < float_of_bool i2)
-      | (Ast.Lt, Float i1, Int i2) -> Bool(i1 < float_of_int i2)
-      | (Ast.Lt, Float i1, Float i2) -> Bool(i1 < i2)
-      | (Ast.Lt, Float i1, Undefined) -> Bool(i1 < 0.)
-      | (Ast.Lt, Undefined, Bool i2) -> Bool(0. < float_of_bool i2)
-      | (Ast.Lt, Undefined, Int i2) -> Bool(0. < float_of_int i2)
-      | (Ast.Lt, Undefined, Float i2) -> Bool(0. < i2)
-      | (Ast.Lt, Undefined, Undefined) -> Bool(false)
+        | (Ast.Lt, Bool i1, Bool i2) -> Bool(i1 < i2)
+        | (Ast.Lt, Bool i1, Int i2) -> Bool(int_of_bool i1 < i2)
+        | (Ast.Lt, Bool i1, Float i2) -> Bool(float_of_bool i1 < i2)
+        | (Ast.Lt, Int i1, Bool i2) -> Bool(i1 < int_of_bool i2)
+        | (Ast.Lt, Int i1, Int i2) -> Bool(i1 < i2)
+        | (Ast.Lt, Int i1, Float i2) -> Bool(float_of_int i1 < i2)
+        | (Ast.Lt, Float i1, Bool i2) -> Bool(i1 < float_of_bool i2)
+        | (Ast.Lt, Float i1, Int i2) -> Bool(i1 < float_of_int i2)
+        | (Ast.Lt, Float i1, Float i2) -> Bool(i1 < i2)
+        | (Ast.Lt, _, Undefined)
+        | (Ast.Lt, Undefined, _) -> Undefined
 
-      | (Ast.Lte, Bool i1, Bool i2) -> Bool(i1 <= i2)
-      | (Ast.Lte, Bool i1, Int i2) -> Bool(int_of_bool i1 <= i2)
-      | (Ast.Lte, Bool i1, Float i2) -> Bool(float_of_bool i1 <= i2)
-      | (Ast.Lte, Bool i1, Undefined) -> Bool(int_of_bool i1 <= 0)
-      | (Ast.Lte, Int i1, Bool i2) -> Bool(i1 <= int_of_bool i2)
-      | (Ast.Lte, Int i1, Int i2) -> Bool(i1 <= i2)
-      | (Ast.Lte, Int i1, Float i2) -> Bool(float_of_int i1 <= i2)
-      | (Ast.Lte, Int i1, Undefined) -> Bool(i1 <= 0)
-      | (Ast.Lte, Float i1, Bool i2) -> Bool(i1 <= float_of_bool i2)
-      | (Ast.Lte, Float i1, Int i2) -> Bool(i1 <= float_of_int i2)
-      | (Ast.Lte, Float i1, Float i2) -> Bool(i1 <= i2)
-      | (Ast.Lte, Float i1, Undefined) -> Bool(i1 <= 0.)
-      | (Ast.Lte, Undefined, Bool i2) -> Bool(0. <= float_of_bool i2)
-      | (Ast.Lte, Undefined, Int i2) -> Bool(0. <= float_of_int i2)
-      | (Ast.Lte, Undefined, Float i2) -> Bool(0. <= i2)
-      | (Ast.Lte, Undefined, Undefined) -> Bool(true)
+        | (Ast.Lte, Bool i1, Bool i2) -> Bool(i1 <= i2)
+        | (Ast.Lte, Bool i1, Int i2) -> Bool(int_of_bool i1 <= i2)
+        | (Ast.Lte, Bool i1, Float i2) -> Bool(float_of_bool i1 <= i2)
+        | (Ast.Lte, Int i1, Bool i2) -> Bool(i1 <= int_of_bool i2)
+        | (Ast.Lte, Int i1, Int i2) -> Bool(i1 <= i2)
+        | (Ast.Lte, Int i1, Float i2) -> Bool(float_of_int i1 <= i2)
+        | (Ast.Lte, Float i1, Bool i2) -> Bool(i1 <= float_of_bool i2)
+        | (Ast.Lte, Float i1, Int i2) -> Bool(i1 <= float_of_int i2)
+        | (Ast.Lte, Float i1, Float i2) -> Bool(i1 <= i2)
+        | (Ast.Lte, _, Undefined)
+        | (Ast.Lte, Undefined, _) -> Undefined
 
-      | (Ast.Eq, Bool i1, Bool i2) -> Bool(i1 = i2)
-      | (Ast.Eq, Bool i1, Int i2) -> Bool(int_of_bool i1 = i2)
-      | (Ast.Eq, Bool i1, Float i2) -> Bool(float_of_bool i1 = i2)
-      | (Ast.Eq, Bool i1, Undefined) -> Bool(int_of_bool i1 = 0)
-      | (Ast.Eq, Int i1, Bool i2) -> Bool(i1 = int_of_bool i2)
-      | (Ast.Eq, Int i1, Int i2) -> Bool(i1 = i2)
-      | (Ast.Eq, Int i1, Float i2) -> Bool(float_of_int i1 = i2)
-      | (Ast.Eq, Int i1, Undefined) -> Bool(i1 = 0)
-      | (Ast.Eq, Float i1, Bool i2) -> Bool(i1 = float_of_bool i2)
-      | (Ast.Eq, Float i1, Int i2) -> Bool(i1 = float_of_int i2)
-      | (Ast.Eq, Float i1, Float i2) -> Bool(i1 = i2)
-      | (Ast.Eq, Float i1, Undefined) -> Bool(i1 = 0.)
-      | (Ast.Eq, Undefined, Bool i2) -> Bool(0. = float_of_bool i2)
-      | (Ast.Eq, Undefined, Int i2) -> Bool(0. = float_of_int i2)
-      | (Ast.Eq, Undefined, Float i2) -> Bool(0. = i2)
-      | (Ast.Eq, Undefined, Undefined) -> Bool(true)
+        | (Ast.Eq, Bool i1, Bool i2) -> Bool(i1 = i2)
+        | (Ast.Eq, Bool i1, Int i2) -> Bool(int_of_bool i1 = i2)
+        | (Ast.Eq, Bool i1, Float i2) -> Bool(float_of_bool i1 = i2)
+        | (Ast.Eq, Int i1, Bool i2) -> Bool(i1 = int_of_bool i2)
+        | (Ast.Eq, Int i1, Int i2) -> Bool(i1 = i2)
+        | (Ast.Eq, Int i1, Float i2) -> Bool(float_of_int i1 = i2)
+        | (Ast.Eq, Float i1, Bool i2) -> Bool(i1 = float_of_bool i2)
+        | (Ast.Eq, Float i1, Int i2) -> Bool(i1 = float_of_int i2)
+        | (Ast.Eq, Float i1, Float i2) -> Bool(i1 = i2)
+        | (Ast.Eq, _, Undefined)
+        | (Ast.Eq, Undefined, _) -> Undefined
 
-      | (Ast.Neq, Bool i1, Bool i2) -> Bool(i1 <> i2)
-      | (Ast.Neq, Bool i1, Int i2) -> Bool(int_of_bool i1 <> i2)
-      | (Ast.Neq, Bool i1, Float i2) -> Bool(float_of_bool i1 <> i2)
-      | (Ast.Neq, Bool i1, Undefined) -> Bool(int_of_bool i1 <> 0)
-      | (Ast.Neq, Int i1, Bool i2) -> Bool(i1 <> int_of_bool i2)
-      | (Ast.Neq, Int i1, Int i2) -> Bool(i1 <> i2)
-      | (Ast.Neq, Int i1, Float i2) -> Bool(float_of_int i1 <> i2)
-      | (Ast.Neq, Int i1, Undefined) -> Bool(i1 <> 0)
-      | (Ast.Neq, Float i1, Bool i2) -> Bool(i1 <> float_of_bool i2)
-      | (Ast.Neq, Float i1, Int i2) -> Bool(i1 <> float_of_int i2)
-      | (Ast.Neq, Float i1, Float i2) -> Bool(i1 <> i2)
-      | (Ast.Neq, Float i1, Undefined) -> Bool(i1 <> 0.)
-      | (Ast.Neq, Undefined, Bool i2) -> Bool(0. <> float_of_bool i2)
-      | (Ast.Neq, Undefined, Int i2) -> Bool(0. <> float_of_int i2)
-      | (Ast.Neq, Undefined, Float i2) -> Bool(0. <> i2)
-      | (Ast.Neq, Undefined, Undefined) -> Bool(true)
-    end
-  | Binop (op, e1, e2) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    let new_e2 = evaluate_expr ctx p e2 in
-    begin match (Ast.unmark op, new_e1, new_e2) with
-      | (Ast.Add, Bool i1, Bool i2)     -> Int   (int_of_bool i1   +  int_of_bool i2)
-      | (Ast.Add, Bool i1, Int i2)      -> Int   (int_of_bool i1   +  i2)
-      | (Ast.Add, Bool i1, Float i2)    -> Float (float_of_bool i1 +. i2)
-      | (Ast.Add, Bool i1, Undefined)   -> Int   (int_of_bool i1   +  0)
-      | (Ast.Add, Int i1, Bool i2)      -> Int   (i1               +  int_of_bool i2)
-      | (Ast.Add, Int i1, Int i2)       -> Int   (i1               +  i2)
-      | (Ast.Add, Int i1, Float i2)     -> Float (float_of_int i1  +. i2)
-      | (Ast.Add, Int i1, Undefined)    -> Int   (i1               +  0)
-      | (Ast.Add, Float i1, Bool i2)    -> Float (i1               +. float_of_bool i2)
-      | (Ast.Add, Float i1, Int i2)     -> Float (i1               +. float_of_int i2)
-      | (Ast.Add, Float i1, Float i2)   -> Float (i1               +. i2)
-      | (Ast.Add, Float i1, Undefined)  -> Float (i1               +. 0.)
-      | (Ast.Add, Undefined, Bool i2)   -> Int   (0                +  int_of_bool i2)
-      | (Ast.Add, Undefined, Int i2)    -> Int   (0                +  i2)
-      | (Ast.Add, Undefined, Float i2)  -> Float (0.               +. i2)
-      | (Ast.Add, Undefined, Undefined) -> Int   (0                +  0)
+        | (Ast.Neq, Bool i1, Bool i2) -> Bool(i1 <> i2)
+        | (Ast.Neq, Bool i1, Int i2) -> Bool(int_of_bool i1 <> i2)
+        | (Ast.Neq, Bool i1, Float i2) -> Bool(float_of_bool i1 <> i2)
+        | (Ast.Neq, Int i1, Bool i2) -> Bool(i1 <> int_of_bool i2)
+        | (Ast.Neq, Int i1, Int i2) -> Bool(i1 <> i2)
+        | (Ast.Neq, Int i1, Float i2) -> Bool(float_of_int i1 <> i2)
+        | (Ast.Neq, Float i1, Bool i2) -> Bool(i1 <> float_of_bool i2)
+        | (Ast.Neq, Float i1, Int i2) -> Bool(i1 <> float_of_int i2)
+        | (Ast.Neq, Float i1, Float i2) -> Bool(i1 <> i2)
+        | (Ast.Neq, _, Undefined)
+        | (Ast.Neq, Undefined, _) -> Undefined
+      end
+    | Binop (op, e1, e2) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      let new_e2 = evaluate_expr ctx p e2 in
+      begin match (Ast.unmark op, new_e1, new_e2) with
+        | (Ast.Add, Bool i1, Bool i2)     -> Int   (int_of_bool i1   +  int_of_bool i2)
+        | (Ast.Add, Bool i1, Int i2)      -> Int   (int_of_bool i1   +  i2)
+        | (Ast.Add, Bool i1, Float i2)    -> Float (float_of_bool i1 +. i2)
+        | (Ast.Add, Bool i1, Undefined)   -> Int   (int_of_bool i1   +  0)
+        | (Ast.Add, Int i1, Bool i2)      -> Int   (i1               +  int_of_bool i2)
+        | (Ast.Add, Int i1, Int i2)       -> Int   (i1               +  i2)
+        | (Ast.Add, Int i1, Float i2)     -> Float (float_of_int i1  +. i2)
+        | (Ast.Add, Int i1, Undefined)    -> Int   (i1               +  0)
+        | (Ast.Add, Float i1, Bool i2)    -> Float (i1               +. float_of_bool i2)
+        | (Ast.Add, Float i1, Int i2)     -> Float (i1               +. float_of_int i2)
+        | (Ast.Add, Float i1, Float i2)   -> Float (i1               +. i2)
+        | (Ast.Add, Float i1, Undefined)  -> Float (i1               +. 0.)
+        | (Ast.Add, Undefined, Bool i2)   -> Int   (0                +  int_of_bool i2)
+        | (Ast.Add, Undefined, Int i2)    -> Int   (0                +  i2)
+        | (Ast.Add, Undefined, Float i2)  -> Float (0.               +. i2)
+        | (Ast.Add, Undefined, Undefined) -> Undefined
 
-      | (Ast.Sub, Bool i1, Bool i2)     -> Int   (int_of_bool i1   -  int_of_bool i2)
-      | (Ast.Sub, Bool i1, Int i2)      -> Int   (int_of_bool i1   -  i2)
-      | (Ast.Sub, Bool i1, Float i2)    -> Float (float_of_bool i1 -. i2)
-      | (Ast.Sub, Bool i1, Undefined)   -> Int   (int_of_bool i1   -  0)
-      | (Ast.Sub, Int i1, Bool i2)      -> Int   (i1               -  int_of_bool i2)
-      | (Ast.Sub, Int i1, Int i2)       -> Int   (i1               -  i2)
-      | (Ast.Sub, Int i1, Float i2)     -> Float (float_of_int i1  -. i2)
-      | (Ast.Sub, Int i1, Undefined)    -> Int   (i1               -  0)
-      | (Ast.Sub, Float i1, Bool i2)    -> Float (i1               -. float_of_bool i2)
-      | (Ast.Sub, Float i1, Int i2)     -> Float (i1               -. float_of_int i2)
-      | (Ast.Sub, Float i1, Float i2)   -> Float (i1               -. i2)
-      | (Ast.Sub, Float i1, Undefined)  -> Float (i1               -. 0.)
-      | (Ast.Sub, Undefined, Bool i2)   -> Int   (0                -  int_of_bool i2)
-      | (Ast.Sub, Undefined, Int i2)    -> Int   (0                -  i2)
-      | (Ast.Sub, Undefined, Float i2)  -> Float (0.               -. i2)
-      | (Ast.Sub, Undefined, Undefined) -> Int   (0                -  0)
+        | (Ast.Sub, Bool i1, Bool i2)     -> Int   (int_of_bool i1   -  int_of_bool i2)
+        | (Ast.Sub, Bool i1, Int i2)      -> Int   (int_of_bool i1   -  i2)
+        | (Ast.Sub, Bool i1, Float i2)    -> Float (float_of_bool i1 -. i2)
+        | (Ast.Sub, Bool i1, Undefined)   -> Int   (int_of_bool i1   -  0)
+        | (Ast.Sub, Int i1, Bool i2)      -> Int   (i1               -  int_of_bool i2)
+        | (Ast.Sub, Int i1, Int i2)       -> Int   (i1               -  i2)
+        | (Ast.Sub, Int i1, Float i2)     -> Float (float_of_int i1  -. i2)
+        | (Ast.Sub, Int i1, Undefined)    -> Int   (i1               -  0)
+        | (Ast.Sub, Float i1, Bool i2)    -> Float (i1               -. float_of_bool i2)
+        | (Ast.Sub, Float i1, Int i2)     -> Float (i1               -. float_of_int i2)
+        | (Ast.Sub, Float i1, Float i2)   -> Float (i1               -. i2)
+        | (Ast.Sub, Float i1, Undefined)  -> Float (i1               -. 0.)
+        | (Ast.Sub, Undefined, Bool i2)   -> Int   (0                -  int_of_bool i2)
+        | (Ast.Sub, Undefined, Int i2)    -> Int   (0                -  i2)
+        | (Ast.Sub, Undefined, Float i2)  -> Float (0.               -. i2)
+        | (Ast.Sub, Undefined, Undefined) -> Undefined
 
-      | (Ast.Mul, Bool i1, Bool i2)     -> Int   (int_of_bool i1   *  int_of_bool i2)
-      | (Ast.Mul, Bool i1, Int i2)      -> Int   (int_of_bool i1   *  i2)
-      | (Ast.Mul, Bool i1, Float i2)    -> Float (float_of_bool i1 *. i2)
-      | (Ast.Mul, Bool i1, Undefined)   -> Int   (int_of_bool i1   *  0)
-      | (Ast.Mul, Int i1, Bool i2)      -> Int   (i1               *  int_of_bool i2)
-      | (Ast.Mul, Int i1, Int i2)       -> Int   (i1               *  i2)
-      | (Ast.Mul, Int i1, Float i2)     -> Float (float_of_int i1  *. i2)
-      | (Ast.Mul, Int i1, Undefined)    -> Int   (i1               *  0)
-      | (Ast.Mul, Float i1, Bool i2)    -> Float (i1               *. float_of_bool i2)
-      | (Ast.Mul, Float i1, Int i2)     -> Float (i1               *. float_of_int i2)
-      | (Ast.Mul, Float i1, Float i2)   -> Float (i1               *. i2)
-      | (Ast.Mul, Float i1, Undefined)  -> Float (i1               *. 0.)
-      | (Ast.Mul, Undefined, Bool i2)   -> Int   (0                *  int_of_bool i2)
-      | (Ast.Mul, Undefined, Int i2)    -> Int   (0                *  i2)
-      | (Ast.Mul, Undefined, Float i2)  -> Float (0.               *. i2)
-      | (Ast.Mul, Undefined, Undefined) -> Int   (0                *  0)
+        | (Ast.Mul, Bool i1, Bool i2)     -> Int   (int_of_bool i1   *  int_of_bool i2)
+        | (Ast.Mul, Bool i1, Int i2)      -> Int   (int_of_bool i1   *  i2)
+        | (Ast.Mul, Bool i1, Float i2)    -> Float (float_of_bool i1 *. i2)
+        | (Ast.Mul, Bool i1, Undefined)   -> Int   (int_of_bool i1   *  0)
+        | (Ast.Mul, Int i1, Bool i2)      -> Int   (i1               *  int_of_bool i2)
+        | (Ast.Mul, Int i1, Int i2)       -> Int   (i1               *  i2)
+        | (Ast.Mul, Int i1, Float i2)     -> Float (float_of_int i1  *. i2)
+        | (Ast.Mul, Int i1, Undefined)    -> Int   (i1               *  0)
+        | (Ast.Mul, Float i1, Bool i2)    -> Float (i1               *. float_of_bool i2)
+        | (Ast.Mul, Float i1, Int i2)     -> Float (i1               *. float_of_int i2)
+        | (Ast.Mul, Float i1, Float i2)   -> Float (i1               *. i2)
+        | (Ast.Mul, Float i1, Undefined)  -> Float (i1               *. 0.)
+        | (Ast.Mul, Undefined, Bool i2)   -> Int   (0                *  int_of_bool i2)
+        | (Ast.Mul, Undefined, Int i2)    -> Int   (0                *  i2)
+        | (Ast.Mul, Undefined, Float i2)  -> Float (0.               *. i2)
+        | (Ast.Mul, Undefined, Undefined) -> Undefined
 
-      | (Ast.Div, Bool false, _) -> Bool false
-      | (Ast.Div, Int 0, _) -> Int 0
-      | (Ast.Div, Float 0., _) -> Float 0.
-      | (Ast.Div, Undefined, _) -> Int 0
+        | (Ast.Div, Bool false, _) -> Bool false
+        | (Ast.Div, Int 0, _) -> Int 0
+        | (Ast.Div, Float 0., _) -> Float 0.
+        | (Ast.Div, _, Undefined) -> Undefined (* yes... *)
+        | (Ast.Div, Undefined, _) -> Int 0
 
-      | (Ast.Div, _, Undefined) ->
-        raise
-          (Errors.RuntimeError (
-              Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
-            ))
-      | (Ast.Div, _, l2) when is_zero l2  ->
-        raise
-          (Errors.RuntimeError (
-              Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
-            ))
-      | (Ast.Div, Bool i1, Bool i2)     -> Int   (int_of_bool i1   /  int_of_bool i2)
-      | (Ast.Div, Bool i1, Int i2)      -> Int   (int_of_bool i1   /  i2)
-      | (Ast.Div, Bool i1, Float i2)    -> Float (float_of_bool i1 /. i2)
-      | (Ast.Div, Int i1, Bool i2)      -> Int   (i1               /  int_of_bool i2)
-      | (Ast.Div, Int i1, Int i2)       -> Int   (i1               /  i2)
-      | (Ast.Div, Int i1, Float i2)     -> Float (float_of_int i1  /. i2)
-      | (Ast.Div, Float i1, Bool i2)    -> Float (i1               /. float_of_bool i2)
-      | (Ast.Div, Float i1, Int i2)     -> Float (i1               /. float_of_int i2)
-      | (Ast.Div, Float i1, Float i2)   -> Float (i1               /. i2)
+        | (Ast.Div, l1, l2) when is_zero l2  ->
+          Printf.printf "Interpreting %s\n" (Format_mvg.format_expression (Ast.unmark e));
+          Printf.printf "l1: %s\n" (Format_mvg.format_literal l1);
+          raise
+            (Errors.RuntimeError (
+                Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
+              ))
+        | (Ast.Div, Bool i1, Bool i2)     -> Int   (int_of_bool i1   /  int_of_bool i2)
+        | (Ast.Div, Bool i1, Int i2)      -> Int   (int_of_bool i1   /  i2)
+        | (Ast.Div, Bool i1, Float i2)    -> Float (float_of_bool i1 /. i2)
+        | (Ast.Div, Int i1, Bool i2)      -> Int   (i1               /  int_of_bool i2)
+        | (Ast.Div, Int i1, Int i2)       -> Int   (i1               /  i2)
+        | (Ast.Div, Int i1, Float i2)     -> Float (float_of_int i1  /. i2)
+        | (Ast.Div, Float i1, Bool i2)    -> Float (i1               /. float_of_bool i2)
+        | (Ast.Div, Float i1, Int i2)     -> Float (i1               /. float_of_int i2)
+        | (Ast.Div, Float i1, Float i2)   -> Float (i1               /. i2)
 
-      | (Ast.And, Bool i1, Bool i2)   -> Bool  (i1 && i2)
-      | (Ast.Or, Bool i1, Bool i2)    -> Bool  (i1 || i2)
+        | (Ast.And, Undefined, _)
+        | (Ast.And, _, Undefined)
+        | (Ast.Or, Undefined, _)
+        | (Ast.Or, _, Undefined) -> Undefined
+        | (Ast.And, Bool i1, Bool i2)   -> Bool  (i1 && i2)
+        | (Ast.Or, Bool i1, Bool i2)    -> Bool  (i1 || i2)
 
-      | _ -> assert false (* should not happen by virtue of typechecking *)
-    end
-  | Unop (op, e1) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    begin match (op, new_e1) with
-      | (Ast.Not, Bool b1) -> (Bool (not b1))
-      | (Ast.Minus, Int i1) -> (Int (- i1))
-      | (Ast.Minus, Float f1) -> (Float (-. f1))
-      | (Ast.Minus, Bool false) -> Bool false
-      | (Ast.Minus, Bool true) -> Int (-1)
+        | _ -> assert false (* should not happen by virtue of typechecking *)
+      end
+    | Unop (op, e1) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      begin match (op, new_e1) with
+        | (Ast.Not, Bool b1) -> (Bool (not b1))
+        | (Ast.Minus, Int i1) -> (Int (- i1))
+        | (Ast.Minus, Float f1) -> (Float (-. f1))
+        | (Ast.Minus, Bool false) -> Bool false
+        | (Ast.Minus, Bool true) -> Int (-1)
 
-      | _ -> assert false (* should not happen by virtue of typechecking *)
-    end
-  | Conditional (e1, e2, e3) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    begin match new_e1 with
-      | Bool true -> evaluate_expr ctx p e2
-      | Bool false -> evaluate_expr ctx p e3
-      | _ -> assert false (* should not happen by virtue of typechecking *)
-    end
-  | Literal l -> l
-  | Index (var, e1) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    begin try match VariableMap.find (Ast.unmark var) ctx.ctx_vars with
-      | SimpleVar _ -> assert false (* should not happen *)
-      | TableVar (size, values) ->
-        let idx = match new_e1 with
-          | Bool b -> int_of_bool b
-          | Int i -> i
-          | Float _ | Undefined ->
+        | (Ast.Not, Undefined) -> Undefined
+        | (Ast.Minus, Undefined) -> Int 0
+
+        | _ -> assert false (* should not happen by virtue of typechecking *)
+      end
+    | Conditional (e1, e2, e3) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      begin match new_e1 with
+        | Bool true -> evaluate_expr ctx p e2
+        | Bool false -> evaluate_expr ctx p e3
+        | Undefined -> Undefined
+        | _ -> assert false (* should not happen by virtue of typechecking *)
+      end
+    | Literal l -> l
+    | Index (var, e1) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      begin try match VariableMap.find (Ast.unmark var) ctx.ctx_vars with
+        | SimpleVar _ -> assert false (* should not happen *)
+        | TableVar (size, values) ->
+          let idx = match new_e1 with
+            | Bool b -> int_of_bool b
+            | Int i -> i
+            | Float _ | Undefined ->
+              raise (Errors.RuntimeError (
+                  Errors.FloatIndex (
+                    Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                  )
+                ))
+          in
+          if idx >= size || idx < 0 then
             raise (Errors.RuntimeError (
-                Errors.FloatIndex (
-                  Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                Errors.IndexOutOfBounds (
+                  Printf.sprintf "%s, index value of %d for table %s of size %d"
+                    (Format_ast.format_position (Ast.get_position e1))
+                    idx
+                    (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
+                    size
                 )
               ))
-        in
-        if idx >= size || idx < 0 then
-          raise (Errors.RuntimeError (
-              Errors.IndexOutOfBounds (
-                Printf.sprintf "%s, index value of %d for table %s of size %d"
-                  (Format_ast.format_position (Ast.get_position e1))
-                  idx
-                  (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
-                  size
-              )
-            ))
-        else
-          Array.get values idx
-      with
-      | Not_found -> assert false (* should not happen *)
-    end
-  | LocalVar lvar -> begin try Ast.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars) with
-      | Not_found -> assert false (* should not happen*)
-    end
-  | Var var -> begin try match VariableMap.find var ctx.ctx_vars with
-      | SimpleVar l -> l (* should not happen *)
-      | TableVar _ -> assert false
-      with
-      | Not_found -> assert false (* should not happen *)
-    end
-  | GenericTableIndex -> begin match ctx.ctx_generic_index with
-      | None -> assert false (* should not happen *)
-      | Some i -> Int i
-    end
-  | Error -> raise (Errors.RuntimeError (
-      Errors.ErrorValue (Format_ast.format_position (Ast.get_position e))
-    ))
-  | LocalLet (lvar, e1, e2) ->
-    let new_e1 = evaluate_expr ctx p e1 in
-    let new_e2 =
-      evaluate_expr
-        { ctx with
-          ctx_local_vars =
-            LocalVariableMap.add lvar (Ast.same_pos_as new_e1 e1) ctx.ctx_local_vars
-        }
-        p e2
-    in
-    new_e2
-  | FunctionCall (ArrFunc, [arg]) ->
-    let new_arg = evaluate_expr ctx p arg in
-    begin match new_arg with
-      | Int x -> Int x
-      | Float x ->
-        Int (int_of_float (roundf x))
-      | Bool x -> Int (int_of_bool x)
-      | Undefined -> Int 0
+          else
+            Array.get values idx
+        with
+        | Not_found -> assert false (* should not happen *)
+      end
+    | LocalVar lvar -> begin try Ast.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars) with
+        | Not_found -> assert false (* should not happen*)
+      end
+    | Var var -> begin try match VariableMap.find var ctx.ctx_vars with
+        | SimpleVar l -> l (* should not happen *)
+        | TableVar _ -> assert false
+        with
+        | Not_found -> assert false (* should not happen *)
+      end
+    | GenericTableIndex -> begin match ctx.ctx_generic_index with
+        | None -> assert false (* should not happen *)
+        | Some i -> Int i
+      end
+    | Error -> raise (Errors.RuntimeError (
+        Errors.ErrorValue (Format_ast.format_position (Ast.get_position e))
+      ))
+    | LocalLet (lvar, e1, e2) ->
+      let new_e1 = evaluate_expr ctx p e1 in
+      let new_e2 =
+        evaluate_expr
+          { ctx with
+            ctx_local_vars =
+              LocalVariableMap.add lvar (Ast.same_pos_as new_e1 e1) ctx.ctx_local_vars
+          }
+          p e2
+      in
+      new_e2
+    | FunctionCall (ArrFunc, [arg]) ->
+      let new_arg = evaluate_expr ctx p arg in
+      begin match new_arg with
+        | Int x -> Int x
+        | Float x ->
+          Int (int_of_float (roundf x))
+        | Bool x -> Int (int_of_bool x)
+        | Undefined -> Int 0
+      end
+
+    | FunctionCall (InfFunc, [arg]) ->
+      let new_arg = evaluate_expr ctx p arg in
+      begin match new_arg with
+        | Int x -> Int x
+        | Float x ->
+          Int (int_of_float (truncatef x))
+        | Bool x -> Int (int_of_bool x)
+        | Undefined -> Int 0
+      end
+
+    | FunctionCall (PresentFunc, [arg]) ->
+      begin match evaluate_expr ctx p arg with
+        | Undefined -> Bool false
+        | _ -> Bool true
+      end
+    | FunctionCall (NullFunc, [arg]) ->
+      begin match evaluate_expr ctx p arg with
+        | Undefined -> Bool true
+        | _ -> Bool false
+      end
+
+    | FunctionCall (func, _) ->
+      raise
+        (Errors.RuntimeError
+           (Errors.ErrorValue
+              (Printf.sprintf
+                 "the function %s %s has not been expanded"
+                 (Format_mvg.format_func func)
+                 (Format_ast.format_position (Ast.get_position e)))))
+  end with
+  | Errors.RuntimeError e -> begin
+      Cli.error_print (Errors.format_runtime_error e);
+      flush_all ();
+      flush_all ();
+      repl_debugguer ctx p ctx.ctx_idmap;
+      exit 1
     end
 
-  | FunctionCall (InfFunc, [arg]) ->
-    let new_arg = evaluate_expr ctx p arg in
-    begin match new_arg with
-      | Int x -> Int x
-      | Float x ->
-        Int (int_of_float (truncatef x))
-      | Bool x -> Int (int_of_bool x)
-      | Undefined -> Int 0
-    end
-
-  | FunctionCall (PresentFunc, [(Literal Undefined, _)]) -> Bool false
-  | FunctionCall (PresentFunc, [_]) -> Bool true
-  | FunctionCall (NullFunc, [(Literal Undefined, _)]) -> Bool true
-  | FunctionCall (NullFunc, [_]) -> Bool false
-
-  | FunctionCall (_, _) ->
-    raise (Errors.RuntimeError (Errors.ErrorValue (Printf.sprintf "the function %s has not been expanded" (Format_ast.format_position (Ast.get_position e)))))
-
-let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_values: expression VariableMap.t) : var_literal VariableMap.t =
+let evaluate_program
+    (p: program)
+    (dep_graph: Dependency.DepGraph.t)
+    (idmap: Mvg.Variable.t Ast_to_mvg.VarNameToID.t)
+    (input_values: expression VariableMap.t) : ctx =
   let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
       try
         match (VariableMap.find var p.program_vars).var_definition with
@@ -425,7 +458,7 @@ let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_valu
         let cond = VariableMap.find var p.program_conds in
         let l_cond = evaluate_expr ctx p cond.cond_expr in
         match l_cond with
-        | Bool false -> ctx (* error condition is not trigerred, we continue *)
+        | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
         | Bool true -> (* the condition is triggered, we throw errors *)
           raise (Errors.RuntimeError (
               Errors.ConditionViolated (
@@ -444,5 +477,5 @@ let evaluate_program (p: program) (dep_graph: Dependency.DepGraph.t) (input_valu
               )
             ))
         | _ -> assert false (* should not happen *)
-    ) dep_graph empty_ctx
-  in ctx.ctx_vars
+    ) dep_graph (empty_ctx idmap)
+  in ctx

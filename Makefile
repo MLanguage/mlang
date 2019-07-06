@@ -47,13 +47,13 @@ test: build
 		dune exec src/main.exe -- --debug test.m
 
 batch: build
-		dune exec src/main.exe -- $(SOURCE_FILES) --optimize --application batch --debug --output IINETIR
+		dune exec src/main.exe -- $(SOURCE_FILES) --application batch --debug --output IRNET --display_time
 
 iliad: build
-		dune exec src/main.exe --  $(SOURCE_FILES) --optimize --application iliad --debug --no_cycles_check --output IINETIR
+		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad --debug --no_cycles_check --output IINETIR
 
 bareme: build
-		dune exec src/main.exe --  $(SOURCE_FILES) --optimize --application bareme --debug --output IINET
+		dune exec src/main.exe --  $(SOURCE_FILES)  --application bareme --debug --output IINET
 
 
 doc:

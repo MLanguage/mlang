@@ -77,7 +77,7 @@ let main () : int =
         end
     ) !Cli.source_files;
   try
-    let program, _, var_defs_not_in_app =
+    let program, idmap, var_defs_not_in_app =
       Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
     in
 
@@ -87,7 +87,7 @@ let main () : int =
     Cli.debug_print "Typechecking...";
     let typing_info, program = Typechecker.typecheck program in
 
-    Cli.debug_print "Analysing dependencies...";
+    Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
     if not !Cli.no_cycles_check_flag then
@@ -97,28 +97,32 @@ let main () : int =
       Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
     in
 
-    let program = Optimize.optimize program typing_info in
+    let dep_graph = Dependency.create_dependency_graph program in
+    Cli.debug_print "Analysing the dependencies of the program...";
+    let unused_variables = Dependency.get_unused_variables dep_graph program in
+    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
+    let program = {
+      program with
+      Mvg.program_vars =
+        Mvg.VariableMap.filter
+          (fun var _ -> not (Mvg.VariableMap.mem var unused_variables))
+          program.program_vars
+    } in
+
+    let program = if !Cli.optimize then Optimize.optimize program typing_info idmap else program in
     let dep_graph = Dependency.create_dependency_graph program in
 
-    let optimized_program_file = "optimized_program.mvg" in
-    let oc = open_out optimized_program_file in
-    Cli.debug_print (Printf.sprintf "Writing the program so far to %s" optimized_program_file);
-    if !Cli.debug_flag then
-      Printf.fprintf oc "%s" (Format_mvg.format_program program);
-    close_out oc;
-
+    Cli.debug_print "Interpreting the program...";
 
     let input_values = Interface.all_undefined_input program typing_info in
-    let results = Interpreter.evaluate_program program dep_graph input_values in
-    Interface.print_output results;
+    let results = Interpreter.evaluate_program program dep_graph idmap input_values in
+    Interface.print_output program idmap results;
 
     exit 0
 
   with
   | Errors.TypeError e ->
     Cli.error_print (Errors.format_typ_error e); exit 1
-  | Errors.RuntimeError e ->
-    Cli.error_print (Errors.format_runtime_error e); exit 1
   | Errors.Unimplemented (msg) ->
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); -3
 

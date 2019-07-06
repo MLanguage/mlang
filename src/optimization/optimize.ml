@@ -32,23 +32,13 @@ knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
 
-let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.program =
-  let dep_graph = Dependency.create_dependency_graph program in
+let optimize
+    (program: Mvg.program)
+    (typing_info: Typechecker.typ_info)
+    (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t)
+  : Mvg.program =
+
   Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
-  let unused_variables = Dependency.get_unused_variables dep_graph program in
-  Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
-  let program = {
-    program with
-    Mvg.program_vars =
-      Mvg.VariableMap.filter
-        (fun var _ -> not (Mvg.VariableMap.mem var unused_variables))
-        program.program_vars
-  } in
-
-  Cli.debug_print (Printf.sprintf "Propagating constants variables...");
-  let dep_graph = Dependency.create_dependency_graph program in
-  let program = Constant_propagation.propagate_constants dep_graph program in
-
   let program : Mvg.program ref = ref program in
   let typing_info : Typechecker.typ_info ref = ref typing_info in
   let nb_inlined_vars : int ref = ref max_int in
@@ -74,11 +64,8 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
           Inlining.inline_vars to_inline_vars !typing_info !program
       in
       Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-      let new_program = Constant_propagation.partially_evaluate new_program in
-
-      Cli.debug_print (Printf.sprintf "Propagating constants variables...");
+      let new_program = Constant_propagation.partially_evaluate new_program idmap in
       let dep_graph = Dependency.create_dependency_graph new_program in
-      let new_program = Constant_propagation.propagate_constants dep_graph new_program in
 
       let unused_variables = Dependency.get_unused_variables dep_graph new_program in
       Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
@@ -119,5 +106,11 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
     input_needed;
   let oc = open_out input_needed in
   Printf.fprintf oc "%s" (String.concat "\n" minimal_input_variables);
+  close_out oc;
+  let optimized_program_file = "optimized_program.mvg" in
+  let oc = open_out optimized_program_file in
+  Cli.debug_print (Printf.sprintf "Writing the program so far to %s" optimized_program_file);
+  if !Cli.debug_flag then
+    Printf.fprintf oc "%s" (Format_mvg.format_program program);
   close_out oc;
   program

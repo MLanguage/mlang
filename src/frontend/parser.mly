@@ -405,11 +405,17 @@ logical_binop:
 
 
 sum_expression:
+| e = diff_expression { e }
+| e1 = diff_expression op = sum_operator e2 = sum_expression { (Binop (op, e1, e2), mk_position $sloc) }
+
+diff_expression:
 | e = product_expression { e }
-| e1 = product_expression op = sum_operator e2 = sum_expression { (Binop (op, e1, e2), mk_position $sloc) }
+| e1 = diff_expression op = diff_operator e2 = product_expression { (Binop (op, e1, e2), mk_position $sloc) }
 
 sum_operator:
 | PLUS { (Add, mk_position $sloc) }
+
+diff_operator:
 | MINUS { (Sub, mk_position $sloc) }
 
 product_expression:

@@ -64,6 +64,9 @@ let flag_output_given_back = ref false
 (** Output variable *)
 let output_variable = ref ""
 
+(** Displays timing information *)
+let display_time = ref false
+
 (** Run the optimisations on the M variable graph *)
 let optimize = ref false
 
@@ -77,6 +80,8 @@ let parse_cli_args () =
        " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
       ("--debug", Arg.Set debug_flag,
        " Affiche des informations de débuggage");
+      ("--display_time", Arg.Set display_time,
+       " Affiche le temps passé entre chaque information donnée par --debug");
       ("--dep_graph_file", Arg.Set_string dep_graph_file,
        " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
       ("--given_back_output", Arg.Set flag_output_given_back,
@@ -106,8 +111,23 @@ let parse_cli_args () =
 (** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.blue] "[VAR INFO] "
 
-(** Prints [[DEBUG]] in purple on the terminal standard output *)
-let debug_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
+let time : float ref = ref (Unix.gettimeofday ())
+
+(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing since last debug *)
+let debug_marker () =
+  if !display_time then begin
+    let new_time = Unix.gettimeofday () in
+    let old_time = !time in
+    time := new_time;
+    let delta = (new_time -. old_time) *. 1000. in
+    if delta > 100. then begin
+      ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.black]
+        "[TIME] ";
+      Printf.printf "%.0f ms\n"
+        delta
+    end
+  end;
+  ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
 
 (** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () = ANSITerminal.eprintf [ANSITerminal.Bold; ANSITerminal.red] "[ERROR] "

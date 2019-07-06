@@ -646,8 +646,8 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
        let new_e2 = translate_expression ctx e2 in
        let new_e3 = match e3 with
          | Some e3 -> translate_expression ctx e3
-         | None -> Ast.same_pos_as Mvg.Error e2
-         (* the absence of a else branch for a ternary operators can yield a runtime error *)
+         | None -> Ast.same_pos_as (Mvg.Literal Mvg.Undefined) e2
+         (* the absence of a else branch for a ternary operators can yield an undefined term *)
        in
        let cond_var = Mvg.LocalVariable.new_var () in
        (*
@@ -1037,7 +1037,7 @@ let get_conds
    {li [var_defs_not_in_app] containing the variables defined outside of the app but still present in the source program.}
    }
 *)
-let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg.Variable.t VarNameToID.t * Mvg.variable_data Mvg.VariableMap.t) =
+let translate (p: Ast.program) (application : string option): (Mvg.program * idmap * Mvg.variable_data Mvg.VariableMap.t) =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, error_decls, idmap) = get_variables_decl p var_decl_data idmap in
   let (var_data, var_defs_not_in_app) = get_var_data idmap var_decl_data int_const_vals p application in

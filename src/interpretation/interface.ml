@@ -40,9 +40,11 @@ let all_undefined_input (p: program) (_: Typechecker.typ_info): expression Varia
     )
     (VariableMap.filter (fun _ def -> def.var_io = Input) p.program_vars)
 
-let print_output (results: Interpreter.var_literal VariableMap.t) : unit =
+let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
-      Cli.result_print
-        (Interpreter.format_var_literal_with_var var value)
+      if (VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output then
+        Cli.result_print
+          (Interpreter.format_var_literal_with_var var value)
     )
-    results
+    results.ctx_vars;
+  Interpreter.repl_debugguer results p idmap

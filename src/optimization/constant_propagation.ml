@@ -32,45 +32,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
 open Mvg
-open Dependency
-
-let rec is_expr_completely_const (e: expression Ast.marked) : bool = match Ast.unmark e with
-  | Conditional (e1, e2, e3) ->
-    (is_expr_completely_const e1) && (is_expr_completely_const e2) && (is_expr_completely_const e3)
-  | Comparison (_, e1, e2) | Binop (_, e1, e2) | LocalLet (_, e1, e2) ->
-    (is_expr_completely_const e1) && (is_expr_completely_const e2)
-  | Unop(_, e1) -> is_expr_completely_const e1
-  | FunctionCall (_, args) ->
-    List.fold_left (fun acc arg -> acc && (is_expr_completely_const arg)) true args
-  | Index _ | Var _ | GenericTableIndex -> false
-  | Error | Literal _ | LocalVar _ -> true
-
-let is_var_completely_const (var : Variable.t) (p:program) : bool =
-  try match (VariableMap.find var p.program_vars).var_definition with
-    | InputVar -> false
-    | SimpleVar e -> is_expr_completely_const e
-    | TableVar (_, def) -> begin match def with
-        | IndexGeneric e ->
-          is_expr_completely_const e
-        | IndexTable _ ->
-          false
-      end
-  with
-  | Not_found ->
-    let _ = Mvg.VariableMap.find var p.program_conds in
-    false
-
-let get_const_variables_evaluation_order (g: DepGraph.t) (p: program) : Mvg.Variable.t list =
-  let is_completely_const = fun var ->
-    is_var_completely_const var p
-  in
-  let is_const = Constability.analyze is_completely_const g in
-  let subgraph = DepGraph.fold_vertex (fun var subgraph ->
-      if is_const var then subgraph else
-        DepGraph.remove_vertex subgraph var
-    ) g g in
-  TopologicalOrder.fold (fun var acc -> var::acc) subgraph []
-
 
 let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
   match Ast.unmark e with
@@ -98,9 +59,6 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
       | (Ast.Mul, e', Literal ((Int 1) | Float 1. | Bool true))
       | (Ast.Sub, e', Literal ((Int 0) | Float 0. | Bool false))
         -> e'
-      | (Ast.Sub, Literal ((Int 0) | Float 0. | Bool false), e')
-        ->
-        Mvg.Unop (Ast.Minus, Ast.same_pos_as e' e)
       | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false), _)
       | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false))
         ->
@@ -186,52 +144,29 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
             args))
       e
 
-let partially_evaluate (p: program) : program =
+let partially_evaluate (p: program) (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t): program =
   { p with
     program_vars =
       VariableMap.map (fun def ->
           let new_def = match def.var_definition with
             | InputVar -> InputVar
             | SimpleVar e ->
-              SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
+              SimpleVar (partial_evaluation (Interpreter.empty_ctx idmap) p e)
             | TableVar (size, def) -> begin match def with
                 | IndexGeneric e ->
                   TableVar(
                     size,
                     IndexGeneric
-                      (partial_evaluation Interpreter.empty_ctx p e))
+                      (partial_evaluation (Interpreter.empty_ctx idmap) p e))
                 | IndexTable es ->
                   TableVar(
                     size,
                     IndexTable
                       (IndexMap.map
                          (fun e ->
-                            (partial_evaluation Interpreter.empty_ctx p e)) es))
+                            (partial_evaluation (Interpreter.empty_ctx idmap) p e)) es))
               end
           in
           { def with var_definition = new_def }
         ) p.program_vars
   }
-
-
-let propagate_constants (g: DepGraph.t) (p: program) : program =
-  let const_vars = get_const_variables_evaluation_order g p in
-  List.fold_left (fun p const_var ->
-      let const_var_data = VariableMap.find const_var p.program_vars in
-      let new_const_var_def = match const_var_data.var_definition with
-        | InputVar -> assert false (* should not happen *)
-        | SimpleVar e -> SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
-        | TableVar (size, def) -> begin match def with
-            | IndexGeneric e ->
-              TableVar(size, IndexGeneric (partial_evaluation Interpreter.empty_ctx p e))
-            | IndexTable _ ->
-              assert false (* should not happen *)
-          end
-      in
-      { p with
-        program_vars = VariableMap.add
-            const_var
-            {const_var_data with var_definition = new_const_var_def }
-            p.program_vars
-      }
-    ) p const_vars
