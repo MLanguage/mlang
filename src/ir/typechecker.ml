@@ -483,6 +483,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   | Literal (Int _) -> (ctx, Typ.integer (Ast.get_position e, Typ.Up))
   | Literal (Float _) -> (ctx, Typ.real (Ast.get_position e, Typ.Up))
   | Literal (Bool _) -> (ctx, Typ.boolean (Ast.get_position e, Typ.Up))
+  | Literal (Undefined) -> (ctx, Typ.create_variable (Ast.get_position e, Typ.Up))
   | Binop ((Ast.And, _ | Ast.Or, _), e1, e2) ->
     let ctx = typecheck_top_down ctx e1 Boolean in
     let ctx = typecheck_top_down ctx e2 Boolean in
@@ -592,7 +593,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
     let typechecker = typecheck_func_args func (Ast.get_position e) in
     let (ctx, t') = typechecker ctx args in
     (ctx, t')
-  | Error -> (ctx, Typ.create_variable (Ast.get_position e, Typ.Up))
+  | Error  -> (ctx, Typ.create_variable (Ast.get_position e, Typ.Up))
   | LocalVar local_var ->
     begin try (ctx, LocalVariableMap.find local_var ctx.ctx_local_var_typ) with
       | Not_found -> assert false (* should not happen *)

@@ -108,7 +108,7 @@ let main () : int =
     close_out oc;
 
 
-    let input_values = Interface.all_zero_input program typing_info in
+    let input_values = Interface.all_undefined_input program typing_info in
     let results = Interpreter.evaluate_program program dep_graph input_values in
     Interface.print_output results;
 

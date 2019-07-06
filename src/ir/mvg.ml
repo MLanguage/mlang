@@ -96,6 +96,7 @@ type literal =
   | Int of int
   | Float of float
   | Bool of bool
+  | Undefined
 [@@deriving show]
 
 (** MVg only supports a restricted set of functions *)

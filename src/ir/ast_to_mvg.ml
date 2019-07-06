@@ -971,19 +971,19 @@ let check_if_all_variables_defined
                | Regular | Constant -> Mvg.Regular
                | Input -> assert false (* should not happen *)
              in
-             (** We insert the literal false because it is interpreted as 0 in all types *)
+             (** We insert the Undef expr *)
              begin match decl.var_decl_is_table with
                | Some _ -> Some {
                    Mvg.var_definition = Mvg.TableVar (
                        0,
-                       Mvg.IndexGeneric (Ast.same_pos_as (Mvg.Literal (Mvg.Bool false)) var.Mvg.Variable.name);
+                       Mvg.IndexGeneric (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
                      );
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
                    Mvg.var_is_undefined = true
                  }
                | None -> Some {
-                   Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal (Mvg.Bool false)) var.Mvg.Variable.name);
+                   Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
                    Mvg.var_is_undefined = true

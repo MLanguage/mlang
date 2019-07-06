@@ -57,7 +57,8 @@ let optimize (program: Mvg.program) (typing_info: Typechecker.typ_info) : Mvg.pr
     let single_use_vars = Dependency.single_use_vars dep_graph in
     let to_inline_vars = Mvg.VariableMap.filter
         (fun var _ -> try
-            match (Mvg.VariableMap.find var !program.program_vars).Mvg.var_io with
+            let data = Mvg.VariableMap.find var !program.program_vars in
+            match data.Mvg.var_io with
             | Mvg.Input | Mvg.Output -> false
             | Mvg.Regular -> true
           with

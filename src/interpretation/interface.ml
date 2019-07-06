@@ -33,14 +33,10 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
-let all_zero_input (p: program) (typing_info: Typechecker.typ_info): literal VariableMap.t =
+let all_undefined_input (p: program) (_: Typechecker.typ_info): expression VariableMap.t =
   VariableMap.mapi
-    (fun var _ ->
-       let typ, _ = VariableMap.find var typing_info.Typechecker.typ_info_var in
-       match typ with
-       | Boolean -> Bool false
-       | Integer -> Int 0
-       | Real -> Float 0.
+    (fun _ _ ->
+       Literal Undefined
     )
     (VariableMap.filter (fun _ def -> def.var_io = Input) p.program_vars)
 

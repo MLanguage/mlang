@@ -179,6 +179,7 @@ let rec translate_expression
     int_const (int_of_float (f *. 100.0)) ctx
   | Mvg.Literal (Mvg.Bool b) ->
     bool_const b ctx
+  | Mvg.Literal Mvg.Undefined -> assert false (* TODO: implement *)
   | Mvg.Var var ->
     let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_encoding.repr_data_var in
     begin match z3_var with

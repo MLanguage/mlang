@@ -61,6 +61,7 @@ let format_literal (l: literal) : string = match l with
   | Int i -> string_of_int i
   | Float f -> string_of_float f
   | Bool b -> string_of_bool b
+  | Undefined -> "indéfini"
 
 let rec format_expression (e: expression) : string = match e with
   | Comparison ((op, _), (e1, _), (e2, _)) ->
@@ -79,7 +80,7 @@ let rec format_expression (e: expression) : string = match e with
   | Var var -> Ast.unmark var.Variable.name
   | LocalVar lvar -> "t" ^ (string_of_int lvar.LocalVariable.id)
   | GenericTableIndex -> "X"
-  | Error -> "indéfini"
+  | Error -> "erreur"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
     "soit t" ^ (string_of_int lvar.LocalVariable.id) ^ " = ("^
     (format_expression e1) ^ ") dans " ^ (format_expression e2)
