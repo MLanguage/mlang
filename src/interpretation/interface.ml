@@ -57,7 +57,14 @@ let sample_test_case (p: program) (ti: Typechecker.typ_info): expression Variabl
 
 let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
-      if (VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output then
+      if (VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output &&
+         begin match VariableMap.find var results.ctx_vars with
+           | Interpreter.SimpleVar (Bool false)
+           | Interpreter.SimpleVar (Int 0)
+           | Interpreter.SimpleVar (Float 0.)
+           | Interpreter.SimpleVar Undefined -> false
+           | _ -> true
+         end then
         Cli.result_print
           (Interpreter.format_var_literal_with_var var value)
     )

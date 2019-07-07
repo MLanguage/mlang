@@ -84,7 +84,6 @@ exception Unimplemented of string
 type run_error =
   | ErrorValue of string
   | UndefinedValue of string
-  | DivByZero of string
   | FloatIndex of string
   | IndexOutOfBounds of string
   | MissingInputValue of string
@@ -95,7 +94,6 @@ exception RuntimeError of run_error
 let format_runtime_error (e: run_error) : string = match e with
   | UndefinedValue s -> Printf.sprintf "Undefined value at runtime: %s" s
   | ErrorValue s -> Printf.sprintf "Error value at runtime: %s" s
-  | DivByZero s -> Printf.sprintf "Division by zero: %s" s
   | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
   | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
   | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s

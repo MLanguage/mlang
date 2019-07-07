@@ -252,10 +252,10 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
         | (Ast.Div, Undefined, _) -> Int 0
 
         | (Ast.Div, _, l2) when is_zero l2  ->
-          raise
-            (Errors.RuntimeError (
-                Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
-              ))
+          Cli.warning_print (Printf.sprintf "Division by 0: %s"
+                               (Format_ast.format_position (Ast.get_position e))
+                            );
+          Undefined
         | (Ast.Div, Bool i1, Bool i2)     -> Int   (int_of_bool i1   /  int_of_bool i2)
         | (Ast.Div, Bool i1, Int i2)      -> Float (float_of_bool i1 /. float_of_int i2)
         | (Ast.Div, Bool i1, Float i2)    -> Float (float_of_bool i1 /. i2)
@@ -300,34 +300,41 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
     | Literal l -> l
     | Index (var, e1) ->
       let new_e1 = evaluate_expr ctx p e1 in
-      begin try match VariableMap.find (Ast.unmark var) ctx.ctx_vars with
-        | SimpleVar _ -> assert false (* should not happen *)
-        | TableVar (size, values) ->
-          let idx = match new_e1 with
-            | Bool b -> int_of_bool b
-            | Int i -> i
-            | Float _ | Undefined ->
+      if new_e1 = Undefined then Undefined else
+        begin try match VariableMap.find (Ast.unmark var) ctx.ctx_vars with
+          | SimpleVar _ -> assert false (* should not happen *)
+          | TableVar (size, values) ->
+            let idx = match new_e1 with
+              | Bool b -> int_of_bool b
+              | Int i -> i
+              | Undefined  -> assert false (* should not happen *)
+              | Float _ ->
+                raise (Errors.RuntimeError (
+                    Errors.FloatIndex (
+                      Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                    )
+                  ))
+            in
+            if idx >= size || idx < 0 then
               raise (Errors.RuntimeError (
-                  Errors.FloatIndex (
-                    Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                  Errors.IndexOutOfBounds (
+                    Printf.sprintf "%s, index value of %d for table %s of size %d"
+                      (Format_ast.format_position (Ast.get_position e1))
+                      idx
+                      (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
+                      size
                   )
                 ))
-          in
-          if idx >= size || idx < 0 then
-            raise (Errors.RuntimeError (
-                Errors.IndexOutOfBounds (
-                  Printf.sprintf "%s, index value of %d for table %s of size %d"
-                    (Format_ast.format_position (Ast.get_position e1))
-                    idx
-                    (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
-                    size
-                )
-              ))
-          else
-            Array.get values idx
-        with
-        | Not_found -> assert false (* should not happen *)
-      end
+            else
+              Array.get values idx
+          with
+          | Not_found ->
+        (*
+          We are in the case of circular dependencies between variables. Multiple runs of the
+          program are necessary to get the correct value, but in this case we just return undefined.
+        *)
+            Undefined
+        end
     | LocalVar lvar -> begin try Ast.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars) with
         | Not_found -> assert false (* should not happen*)
       end
@@ -335,10 +342,17 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
         | SimpleVar l -> l (* should not happen *)
         | TableVar _ -> assert false
         with
-        | Not_found -> assert false (* should not happen *)
+        | Not_found ->
+          (*
+            We are in the case of circular dependencies between variables. Multiple runs of the
+            program are necessary to get the correct value, but in this case we just return undefined.
+          *)
+          Undefined
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
-        | None -> assert false (* should not happen *)
+        | None ->
+          Printf.printf "Location %s\n" (Format_ast.format_position (Ast.get_position e));
+          assert false (* should not happen *)
         | Some i -> Int i
       end
     | Error -> raise (Errors.RuntimeError (

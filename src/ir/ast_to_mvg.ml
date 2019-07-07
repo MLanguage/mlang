@@ -135,6 +135,7 @@ type idmap = Mvg.Variable.t VarNameToID.t
 
 (** This context will be passed along during the translation *)
 type translating_context = {
+  table_definition: bool; (** [true] if translating an expression susceptible to contain a generic table index *)
   idmap : idmap; (** Current string-to-{!type: Mvg.Variable.t} mapping *)
   lc: loop_context option; (** Current loop translation context *)
   int_const_values: int Mvg.VariableMap.t (** Mapping from constant variables to their value *)
@@ -245,8 +246,10 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
 *)
 
 (** A variable whose name is [X] should be translated as the generic table index expression *)
-let get_var_or_x (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.expression =
-  if Ast.unmark name = "X" then Mvg.GenericTableIndex else
+let get_var_or_x (d:Mvg.Variable.t VarNameToID.t) (name:Ast.variable_name Ast.marked) (in_table: bool) : Mvg.expression =
+  if Ast.unmark name = "X" && in_table then
+    Mvg.GenericTableIndex
+  else
     Mvg.Var (get_var_from_name d name)
 
 
@@ -280,7 +283,7 @@ let format_zero_padding (zp: zero_padding) : string = match zp with
 let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark var with
   | Ast.Normal name ->
-    Ast.same_pos_as (get_var_or_x ctx.idmap (Ast.same_pos_as name var)) var
+    Ast.same_pos_as (get_var_or_x ctx.idmap (Ast.same_pos_as name var) ctx.table_definition) var
   | Ast.Generic gen_name ->
     if List.length gen_name.Ast.parameters == 0 then
       translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
@@ -706,7 +709,10 @@ type index_def =
   | GenericIndex
 
 (** Translates lvalues into the assigning variable as well as the type of assignment *)
-let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : Mvg.Variable.t * index_def =
+let translate_lvalue
+    (ctx: translating_context)
+    (lval: Ast.lvalue Ast.marked)
+  : translating_context * Mvg.Variable.t * index_def =
   let var = match Ast.unmark (translate_variable ctx  (Ast.unmark lval).Ast.var)
     with
     | Mvg.Var var -> var
@@ -714,20 +720,20 @@ let translate_lvalue (ctx: translating_context) (lval: Ast.lvalue Ast.marked) : 
   in
   match (Ast.unmark lval).Ast.index with
   | Some ti -> begin match Ast.unmark ti with
-      | Ast.GenericIndex -> (var, GenericIndex)
-      | Ast.LiteralIndex i -> (var, SingleIndex i)
+      | Ast.GenericIndex -> ({ ctx with table_definition = true }, var, GenericIndex)
+      | Ast.LiteralIndex i -> (ctx, var, SingleIndex i)
       | Ast.SymbolIndex ((Ast.Normal _ ) as v) ->
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable v) ti) in
-        (var, SingleIndex i)
+        (ctx, var, SingleIndex i)
       | Ast.SymbolIndex ((Ast.Generic _ ) as v) ->
         let mvg_v = translate_variable ctx (Ast.same_pos_as v ti) in
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable (match Ast.unmark mvg_v with
             | Mvg.Var v -> Ast.Normal (Ast.unmark v.Mvg.Variable.name)
             | _ -> assert false (* should not happen*)
           )) ti) in
-        (var, SingleIndex i)
+        (ctx, var, SingleIndex i)
     end
-  | None -> (var, NoIndex)
+  | None -> (ctx, var, NoIndex)
 
 
 (** Date types are not supported *)
@@ -888,17 +894,17 @@ let get_var_data
             let new_correct_var_data = List.fold_left (fun var_data  formula ->
                 match Ast.unmark formula with
                 | Ast.SingleFormula f ->
-                  let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
-                  let (var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
+                  let ctx = { idmap; lc = None; int_const_values = int_const_vals; table_definition = false } in
+                  let (ctx, var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
                   let var_expr = translate_expression ctx f.Ast.formula in
                   add_var_def var_data var_lvalue var_expr def_kind var_decl_data
                 | Ast.MultipleFormulaes (lvs, f) ->
-                  let ctx = { idmap; lc = None; int_const_values = int_const_vals } in
+                  let ctx = { idmap; lc = None; int_const_values = int_const_vals; table_definition = false } in
                   let loop_context_provider = translate_loop_variables ctx lvs in
                   let translator = fun lc ->
                     let new_ctx = { ctx with lc = Some lc } in
+                    let (new_ctx, var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
                     let var_expr = translate_expression new_ctx f.Ast.formula in
-                    let (var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
                     (var_lvalue, var_expr, def_kind)
                   in
                   let data_to_add = loop_context_provider translator in
@@ -1007,14 +1013,26 @@ let get_conds
           | Ast.Verification verif when belongs_to_app verif.Ast.verif_applications application ->
             List.fold_left (fun conds verif_cond ->
                 let e = translate_expression
-                    { idmap; lc = None; int_const_values = Mvg.VariableMap.empty }
+                    { idmap; lc = None; int_const_values = Mvg.VariableMap.empty ; table_definition = false }
                     (Ast.unmark verif_cond).Ast.verif_cond_expr
                 in
                 let errs = List.map
                     (fun err_name ->
-                       List.find
-                         (fun e -> Ast.unmark e.Mvg.Error.name = Ast.unmark err_name)
-                         error_decls)
+                       try
+                         Some
+                           (List.find
+                              (fun e -> Ast.unmark e.Mvg.Error.name = Ast.unmark err_name)
+                              error_decls)
+                       with
+                       | Not_found -> begin
+                           Cli.var_info_print
+                             (Printf.sprintf "undeclared error %s %s"
+                                (Ast.unmark err_name)
+                                (Format_ast.format_position (Ast.get_position err_name))
+                             );
+                           None
+                         end
+                    )
                     (Ast.unmark verif_cond).Ast.verif_cond_errors
                 in
                 let dummy_var =
@@ -1023,7 +1041,13 @@ let get_conds
                     None
                     (Ast.same_pos_as (Format_ast.format_position (Ast.get_position e)) e)
                 in
-                Mvg.VariableMap.add dummy_var { Mvg.cond_expr = e; Mvg.cond_errors = errs} conds
+                Mvg.VariableMap.add dummy_var {
+                  Mvg.cond_expr = e;
+                  Mvg.cond_errors =
+                    List.map
+                      (fun x -> match x with | Some x -> x | None -> assert false (* should not happen *))
+                      (List.filter (fun x -> match x with Some _ -> true | None -> false) errs)
+                } conds
               ) conds verif.Ast.verif_conditions
           | _ -> conds
         ) conds source_file
