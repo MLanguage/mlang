@@ -308,12 +308,15 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
               | Bool b -> int_of_bool b
               | Int i -> i
               | Undefined  -> assert false (* should not happen *)
-              | Float _ ->
-                raise (Errors.RuntimeError (
-                    Errors.FloatIndex (
-                      Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
-                    )
-                  ))
+              | Float f ->
+                if let (fraction, _) = modf f in fraction = 0. then
+                  int_of_float f
+                else
+                  raise (Errors.RuntimeError (
+                      Errors.FloatIndex (
+                        Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                      )
+                    ))
             in
             if idx >= size || idx < 0 then
               raise (Errors.RuntimeError (

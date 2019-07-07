@@ -674,7 +674,7 @@ let typecheck (p: program) : typ_info * program =
                      (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
                   );
                   let new_es = List.fold_left (fun es undef_index ->
-                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Error) var.Mvg.Variable.name) es
+                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Literal (Mvg.Undefined)) var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc,
                    new_ctx,
@@ -759,7 +759,7 @@ let typecheck (p: program) : typ_info * program =
                      (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
                   );
                   let new_es = List.fold_left (fun es undef_index ->
-                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Error) var.Mvg.Variable.name) es
+                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Literal (Mvg.Undefined)) var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc, new_ctx,
                    Mvg.VariableMap.add var
