@@ -251,18 +251,16 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
         | (Ast.Div, _, Undefined) -> Undefined (* yes... *)
         | (Ast.Div, Undefined, _) -> Int 0
 
-        | (Ast.Div, l1, l2) when is_zero l2  ->
-          Printf.printf "Interpreting %s\n" (Format_mvg.format_expression (Ast.unmark e));
-          Printf.printf "l1: %s\n" (Format_mvg.format_literal l1);
+        | (Ast.Div, _, l2) when is_zero l2  ->
           raise
             (Errors.RuntimeError (
                 Errors.DivByZero (Format_ast.format_position (Ast.get_position e))
               ))
         | (Ast.Div, Bool i1, Bool i2)     -> Int   (int_of_bool i1   /  int_of_bool i2)
-        | (Ast.Div, Bool i1, Int i2)      -> Int   (int_of_bool i1   /  i2)
+        | (Ast.Div, Bool i1, Int i2)      -> Float (float_of_bool i1 /. float_of_int i2)
         | (Ast.Div, Bool i1, Float i2)    -> Float (float_of_bool i1 /. i2)
         | (Ast.Div, Int i1, Bool i2)      -> Int   (i1               /  int_of_bool i2)
-        | (Ast.Div, Int i1, Int i2)       -> Int   (i1               /  i2)
+        | (Ast.Div, Int i1, Int i2)       -> Float (float_of_int i1  /. float_of_int i2)
         | (Ast.Div, Int i1, Float i2)     -> Float (float_of_int i1  /. i2)
         | (Ast.Div, Float i1, Bool i2)    -> Float (i1               /. float_of_bool i2)
         | (Ast.Div, Float i1, Int i2)     -> Float (i1               /. float_of_int i2)

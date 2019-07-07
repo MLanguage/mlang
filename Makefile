@@ -47,7 +47,7 @@ test: build
 		dune exec src/main.exe -- --debug test.m
 
 batch: build
-		dune exec src/main.exe -- $(SOURCE_FILES) --application batch --debug --output IRNET --display_time
+		dune exec src/main.exe -- $(SOURCE_FILES) --application batch  --debug --output IRNET --display_time
 
 iliad: build
 		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad --debug --no_cycles_check --output IINETIR

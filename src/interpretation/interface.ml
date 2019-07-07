@@ -33,12 +33,27 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
+let define_input_by_alias
+    (p: program)
+    (alias: string)
+    (init: expression)
+    (acc : expression VariableMap.t) =
+  let v = find_var_by_alias p alias in
+  VariableMap.add v init acc
+
 let all_undefined_input (p: program) (_: Typechecker.typ_info): expression VariableMap.t =
   VariableMap.mapi
     (fun _ _ ->
        Literal Undefined
     )
     (VariableMap.filter (fun _ def -> def.var_io = Input) p.program_vars)
+
+let sample_test_case (p: program) (ti: Typechecker.typ_info): expression VariableMap.t =
+  let input = all_undefined_input p ti in
+  let input = define_input_by_alias p "0AC" (Literal (Bool true)) input in
+  let input = define_input_by_alias p "0CF" (Literal (Int 0)) input in
+  let input = define_input_by_alias p "1AJ" (Literal (Int 30000)) input in
+  input
 
 let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->

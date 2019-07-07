@@ -114,7 +114,7 @@ let main () : int =
 
     Cli.debug_print "Interpreting the program...";
 
-    let input_values = Interface.all_undefined_input program typing_info in
+    let input_values = Interface.sample_test_case program typing_info in
     let results = Interpreter.evaluate_program program dep_graph idmap input_values in
     Interface.print_output program idmap results;
 

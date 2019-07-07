@@ -576,7 +576,7 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
 let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Mvg.expression Ast.marked =
   Ast.same_pos_as
     (match Ast.unmark f with
-     | Ast.TestInSet (negative, e, values) ->
+     | Ast.TestInSet (positive, e, values) ->
        let new_e = translate_expression ctx e in
        let local_var = Mvg.LocalVariable.new_var () in
        let local_var_expr =  Mvg.LocalVar local_var in
@@ -619,7 +619,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
                or_chain
              )) f
          ) (Ast.same_pos_as (Mvg.Literal (Mvg.Bool false)) f) values in
-       let or_chain = if negative then
+       let or_chain = if not positive then
            Ast.same_pos_as (Mvg.Unop (Ast.Not, or_chain)) or_chain
          else or_chain
        in

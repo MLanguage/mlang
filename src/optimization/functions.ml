@@ -173,11 +173,20 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
                Ast.same_pos_as (LocalVar arg_var) e
               ))) e)) e
   | FunctionCall (NullFunc, [arg]) ->
-    (* we do not expand this function as it deals specifically with undefined variables *)
-    Ast.same_pos_as (FunctionCall (ArrFunc, [expand_functions_expr arg])) e
+    Ast.same_pos_as
+      (Conditional (
+          Ast.same_pos_as
+            (Comparison (
+                Ast.same_pos_as Ast.Eq e,
+                expand_functions_expr arg,
+                Ast.same_pos_as (Literal (Int 0)) e)
+            ) e,
+          Ast.same_pos_as (Literal (Int 1)) e,
+          Ast.same_pos_as (Literal (Int 0)) e)
+      ) e
   | FunctionCall (PresentFunc, [arg]) ->
     (* we do not expand this function as it deals specifically with undefined variables  *)
-    Ast.same_pos_as (FunctionCall (InfFunc, [expand_functions_expr arg])) e
+    Ast.same_pos_as (FunctionCall (PresentFunc, [expand_functions_expr arg])) e
   | FunctionCall (ArrFunc, [arg]) ->
     (* we do not expand this function as it requires modulo or modf *)
     Ast.same_pos_as (FunctionCall (ArrFunc, [expand_functions_expr arg])) e

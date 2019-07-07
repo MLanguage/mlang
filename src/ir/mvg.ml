@@ -227,3 +227,20 @@ type program = {
   program_vars: variable_data VariableMap.t;
   program_conds: condition_data VariableMap.t; (** Conditions are affected to dummy variables *)
 }
+
+(** {1 Helpers }*)
+
+
+(** Throws an error in case of alias not found *)
+let find_var_by_alias (p: program) (alias: string) : Variable.t =
+  let v = VariableMap.fold (fun v _ acc ->
+      match acc, v.Variable.alias with
+      | (Some _, _) | (None, None ) -> acc
+      | (None, Some v_alias) -> if v_alias = alias then Some v else None
+    ) p.program_vars None in
+  match v with
+  | Some v -> v
+  | None ->
+    raise (Errors.TypeError (
+        Errors.Variable (Printf.sprintf "alias not found (%s)" alias)
+      ))
