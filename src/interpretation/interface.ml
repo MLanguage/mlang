@@ -33,27 +33,103 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
-let define_input_by_alias
-    (p: program)
-    (alias: string)
-    (init: expression)
-    (acc : expression VariableMap.t) =
-  let v = find_var_by_alias p alias in
-  VariableMap.add v init acc
+type mvg_function = {
+  func_variable_inputs: unit VariableMap.t;
+  func_constant_inputs: expression VariableMap.t;
+  func_outputs: unit VariableMap.t;
+}
 
-let all_undefined_input (p: program) (_: Typechecker.typ_info): expression VariableMap.t =
-  VariableMap.mapi
-    (fun _ _ ->
-       Literal Undefined
-    )
-    (VariableMap.filter (fun _ def -> def.var_io = Input) p.program_vars)
+let fit_function (p: program) (f: mvg_function) : program =
+  { p with
+    program_vars =
+      VariableMap.mapi
+        (fun var var_data ->
+           if VariableMap.mem var f.func_variable_inputs then
+             { var_data with
+               var_io = Input;
+               var_definition = match var_data.var_definition with
+                 | InputVar | SimpleVar _ -> InputVar
+                 | TableVar _ ->
+                   raise (Errors.TypeError (
+                       Errors.Variable (
+                         Printf.sprintf "Defining a variable input for a table variable (%s, %s) is not supported"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                       )
+                     ))
+             }
+           else if VariableMap.mem var f.func_constant_inputs then
+             {
+               var_data with
+               var_io = Regular ;
+               var_definition = match var_data.var_definition with
+                 | SimpleVar old_e -> SimpleVar (Ast.same_pos_as (VariableMap.find var f.func_constant_inputs) old_e)
+                 | InputVar -> SimpleVar (Ast.same_pos_as (VariableMap.find var f.func_constant_inputs) var.Variable.name)
+                 | TableVar _ ->
+                   raise (Errors.TypeError (
+                       Errors.Variable (
+                         Printf.sprintf "Defining a constant input for a table variable (%s, %s) is not supported"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                       )
+                     ))
+             }
+           else if VariableMap.mem var f.func_outputs then
+             {
+               var_data with
+               var_io = Output ;
+               var_definition = match var_data.var_definition with
+                 | SimpleVar old_e -> SimpleVar old_e
+                 | InputVar ->
+                   raise (Errors.TypeError (
+                       Errors.Variable (
+                         Printf.sprintf "Defining an output for a input variable (%s, %s) who is not defined is not supported"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                       )
+                     ))
+                 | TableVar _ ->
+                   raise (Errors.TypeError (
+                       Errors.Variable (
+                         Printf.sprintf "Defining an output for a table variable (%s, %s) is not supported"
+                           (Ast.unmark var.Variable.name)
+                           (Format_ast.format_position (Ast.get_position var.Variable.name))
+                       )
+                     ))
+             }
+           else
+             { var_data with
+               var_io = Regular;
+               var_definition = match var_data.var_definition with
+                 | InputVar -> SimpleVar (Ast.same_pos_as (Literal Undefined) var.Variable.name)
+                 | SimpleVar old -> SimpleVar old
+                 | TableVar (size, old) -> TableVar (size, old)
+             }
+        )
+        p.program_vars
+  }
 
-let sample_test_case (p: program) (ti: Typechecker.typ_info): expression VariableMap.t =
-  let input = all_undefined_input p ti in
-  let input = define_input_by_alias p "0AC" (Literal (Bool true)) input in
-  let input = define_input_by_alias p "0CF" (Literal (Int 0)) input in
-  let input = define_input_by_alias p "1AJ" (Literal (Int 30000)) input in
-  input
+let sample_test_case (p: program) (idmap : Ast_to_mvg.idmap) : mvg_function =
+  let v_0ac = find_var_by_alias p "0AC" in
+  let v_0cf = find_var_by_alias p "0CF" in
+  let v_1aj = find_var_by_alias p "1AJ" in
+  let v_irnet = Ast_to_mvg.VarNameToID.find "IRNET" idmap in
+  {
+    func_constant_inputs = VariableMap.add
+        v_0cf
+        (Literal (Int 0))
+        (VariableMap.singleton v_0ac (Literal (Bool true)));
+    func_variable_inputs = VariableMap.singleton v_1aj ();
+    func_outputs = VariableMap.singleton v_irnet ();
+  }
+
+let make_function_from_program
+    (program: program)
+    (dep_graph: Dependency.DepGraph.t)
+    (idmap: Ast_to_mvg.idmap)
+  : expression VariableMap.t -> Interpreter.ctx =
+  fun input_values ->
+  Interpreter.evaluate_program program dep_graph idmap input_values
 
 let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->

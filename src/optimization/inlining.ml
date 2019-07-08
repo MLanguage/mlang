@@ -123,13 +123,12 @@ let rec inline_vars_in_expr
         | TableVar (size, table_def) ->
           begin match table_def with
             | IndexGeneric new_e ->
-              let new_index_var = LocalVariable.new_var () in
-              Ast.same_pos_as
-                (LocalLet(new_index_var, new_index, inline_vars_in_expr
-                            { ctx with ctx_generic_table_index =
-                                         Some (Ast.same_pos_as (LocalVar new_index_var) index) }
-                            inlined_vars
-                            new_e)) index
+              (inline_vars_in_expr
+                 { ctx with ctx_generic_table_index =
+                              Some (new_index)
+                 }
+                 inlined_vars
+                 new_e)
             | IndexTable indexes_def -> match Ast.unmark new_index with
               | Literal (Int i) when i < size ->
                 let correct_def = IndexMap.find i indexes_def in
@@ -141,6 +140,7 @@ let rec inline_vars_in_expr
                 let i = int_of_float i in
                 let correct_def = IndexMap.find i indexes_def in
                 inline_vars_in_expr ctx inlined_vars correct_def
+              | Literal Undefined -> (Ast.same_pos_as (Literal Undefined) e)
               | _ ->
                 raise (Errors.TypeError
                          (Errors.Inlining
@@ -153,7 +153,7 @@ let rec inline_vars_in_expr
                             )))
           end
       end else
-      e
+      Ast.same_pos_as (Index (var, new_index)) e
 
 
 let inline_vars
@@ -191,6 +191,7 @@ let inline_vars
       Typechecker.typ_info_local_var = LocalVariableMap.mapi (fun _ old_lvar ->
           try LocalVariableMap.find old_lvar typing.Typechecker.typ_info_local_var with
           | Not_found -> begin
+              Printf.printf "old_lvar: %d\n" (old_lvar.id);
               assert false (* TODO: fix bug *)
             end
         ) !lvar_mapping

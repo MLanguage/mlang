@@ -226,8 +226,9 @@ let inlineable_vars (g: DepGraph.t) (p: Mvg.program) : unit Mvg.VariableMap.t =
          | Not_found ->
            let _ = Mvg.VariableMap.find var p.program_conds in
            false
-      then
+      then begin
         Mvg.VariableMap.add var () acc
+      end
       else
         acc
     ) g Mvg.VariableMap.empty
@@ -269,98 +270,6 @@ let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.
   Mvg.VariableMap.filter (fun var _ ->
       not (is_necessary_to_output var)
     ) (Mvg.VariableMap.map (fun _ -> ()) p.program_vars)
-
-let try_and_fix_undefined_dependencies
-    (g: DepGraph.t)
-    (p: Mvg.program)
-    (var_defs_not_in_app: Mvg.variable_data Mvg.VariableMap.t)
-  : Mvg.program  =
-  let is_output = fun var ->
-    try
-      (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
-    with
-    | Not_found ->
-      let _ = Mvg.VariableMap.find var p.program_conds in
-      true
-  in
-  let is_undefined = fun var ->
-    try
-      (Mvg.VariableMap.find var p.program_vars).Mvg.var_is_undefined
-    with
-    | Not_found -> assert false (* should not happen *)
-  in
-  let is_needed_by_output = OutputToInputReachability.analyze is_output g in
-  Cli.debug_print @@ Printf.sprintf "Number of variables needed for output: %d"
-    (Mvg.VariableMap.cardinal (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p.program_vars));
-  let is_needed_by_ouptput_and_undefined =
-    Mvg.VariableMap.filter (fun v _ -> is_undefined v)
-      (Mvg.VariableMap.filter (fun v _ -> is_needed_by_output v) p.program_vars)
-  in
-  Cli.debug_print @@ Printf.sprintf "Number of undefined variables needed for output: %d"
-    (Mvg.VariableMap.cardinal is_needed_by_ouptput_and_undefined);
-  let is_still_undefined x = match x with None -> true | Some _ -> false in
-  let is_needed_by_ouptput_and_undefined_fix =
-    Mvg.VariableMap.mapi (fun var _ ->
-        match Mvg.VariableMap.find_opt var var_defs_not_in_app with
-        | None -> None
-        | Some def ->
-          Cli.var_info_print
-            (Printf.sprintf "Variable %s is undefined in the current application, but another unused definition exists %s."
-               (Ast.unmark var.Mvg.Variable.name)
-               (Format_ast.format_position (match def.Mvg.var_definition with
-                    | Mvg.SimpleVar e
-                    | Mvg.TableVar (_, Mvg.IndexGeneric e)
-                      -> Ast.get_position e
-                    | Mvg.TableVar (_, Mvg.IndexTable es) ->
-                      Ast.get_position (snd (Mvg.IndexMap.choose es))
-                    | Mvg.InputVar -> assert false (* should not happen *)
-                  )
-               )
-            );
-          None
-      )
-      is_needed_by_ouptput_and_undefined
-  in
-  begin if Mvg.VariableMap.exists
-      (fun _ x -> is_still_undefined x)
-      is_needed_by_ouptput_and_undefined_fix
-    then
-      let is_needed_by_ouptput_and_still_undefined =
-        List.sort
-          compare
-          (List.map
-             (fun (v, _) -> Format_mvg.format_variable v)
-             (Mvg.VariableMap.bindings
-                (Mvg.VariableMap.filter
-                   (fun _ b -> b)
-                   (Mvg.VariableMap.map is_still_undefined
-                      is_needed_by_ouptput_and_undefined_fix
-                   )
-                )
-             ))
-      in
-      let undef_var_files = "undefined_variables.txt" in
-      Cli.warning_print
-        (Printf.sprintf
-           ("There are variables needed to compute the outputs that are undefined (%d). Writing the list of variables to %s.")
-           (List.length is_needed_by_ouptput_and_still_undefined)
-           undef_var_files
-        );
-      let oc = open_out undef_var_files in
-      Printf.fprintf oc "%s"
-        (String.concat "\n" is_needed_by_ouptput_and_still_undefined);
-      close_out oc
-  end;
-  { p with
-    program_vars =
-      Mvg.VariableMap.merge (fun _ normal_def fixed_def -> match (normal_def, fixed_def) with
-          | Some normal_def, Some None
-          | Some normal_def, None -> Some normal_def
-          | Some _, Some (Some fixed_def) -> Some fixed_def
-          | None, Some _
-          | None, None -> assert false (* should not happen *)
-        ) p.program_vars is_needed_by_ouptput_and_undefined_fix
-  }
 
 
 module Constability = Graph.Fixpoint.Make(DepGraph)

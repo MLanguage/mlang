@@ -91,7 +91,9 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     Ast.same_pos_as (Index(var, new_e1)) e
   | Literal _ -> e
   | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
-      | Not_found -> assert false (* should not happen *)
+      | Not_found ->
+        Printf.printf "Not found %s %s\n" (Ast.unmark var.Variable.name) (Format_ast.format_position (Ast.get_position e));
+        assert false (* should not happen *)
     end with
     | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
         | Literal lit -> Ast.same_pos_as (Literal lit) e'

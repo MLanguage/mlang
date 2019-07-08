@@ -77,7 +77,7 @@ let main () : int =
         end
     ) !Cli.source_files;
   try
-    let program, idmap, var_defs_not_in_app =
+    let program, idmap, _ =
       Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
     in
 
@@ -92,9 +92,9 @@ let main () : int =
     Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
     let program = Dependency.check_for_cycle dep_graph program in
 
-    let program =
-      Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
-    in
+
+    Cli.debug_print "Extracting the desired function from the whole program...";
+    let program = Interface.fit_function program (Interface.sample_test_case program idmap) in
 
     let dep_graph = Dependency.create_dependency_graph program in
     Cli.debug_print "Analysing the dependencies of the program...";
@@ -114,9 +114,9 @@ let main () : int =
 
     Cli.debug_print "Interpreting the program...";
 
-    let input_values = Interface.sample_test_case program typing_info in
-    let results = Interpreter.evaluate_program program dep_graph idmap input_values in
-    Interface.print_output program idmap results;
+    let f = Interface.make_function_from_program program dep_graph idmap in
+    Interface.print_output program idmap
+      (f (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000))));
 
     exit 0
 
