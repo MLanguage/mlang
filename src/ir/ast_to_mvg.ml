@@ -830,7 +830,8 @@ let add_var_def
           { Mvg.var_definition = Mvg.SimpleVar var_expr;
             Mvg.var_typ = var_typ;
             Mvg.var_io = io;
-            Mvg.var_is_undefined = false
+            Mvg.var_is_undefined = false;
+            Mvg.var_is_defined_circularly = false;
           }
         else
           match decl_data.var_decl_is_table with
@@ -842,14 +843,16 @@ let add_var_def
                   Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable (Mvg.IndexMap.singleton i var_expr));
                   Mvg.var_typ = var_typ;
                   Mvg.var_io = io;
-                  Mvg.var_is_undefined = false
+                  Mvg.var_is_undefined = false;
+                  Mvg.var_is_defined_circularly = false;
                 }
               | GenericIndex ->
                 {
                   Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
                   Mvg.var_typ = var_typ;
                   Mvg.var_io = io;
-                  Mvg.var_is_undefined = false
+                  Mvg.var_is_undefined = false;
+                  Mvg.var_is_defined_circularly = false;
                 }
             end
           | None -> raise (Errors.TypeError (
@@ -945,7 +948,8 @@ let get_var_data
                  Mvg.var_definition = Mvg.InputVar;
                  Mvg.var_typ = typ;
                  Mvg.var_io = Mvg.Input;
-                 Mvg.var_is_undefined = false
+                 Mvg.var_is_undefined = false;
+                 Mvg.var_is_defined_circularly = false;
                }
                var_data, var_defs_not_in_app)
           | _ -> (var_data, var_defs_not_in_app)
@@ -986,13 +990,15 @@ let check_if_all_variables_defined
                      );
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
-                   Mvg.var_is_undefined = true
+                   Mvg.var_is_undefined = true;
+                   Mvg.var_is_defined_circularly = false;
                  }
                | None -> Some {
                    Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
                    Mvg.var_typ = None;
                    Mvg.var_io = io;
-                   Mvg.var_is_undefined = true
+                   Mvg.var_is_undefined = true;
+                   Mvg.var_is_defined_circularly = false;
                  }
              end
            | Input -> assert false (* should not happen *)

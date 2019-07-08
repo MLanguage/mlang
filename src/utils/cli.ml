@@ -52,8 +52,8 @@ let debug_flag = ref false
 (** Print infomation about variables declared, defined ou used incorrectly *)
 let var_info_flag = ref false
 
-(** Don't check for cycles in the variables depencency graph *)
-let no_cycles_check_flag = ref false
+(** Dump circular definitions of variables *)
+let print_cycles_flag = ref false
 
 (** Name of application to consider (drops all the rules not corresponding to it) *)
 let application = ref ""
@@ -86,8 +86,8 @@ let parse_cli_args () =
        " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
       ("--given_back_output", Arg.Set flag_output_given_back,
        "Marque les variables \"restituées\" comme des \"sortie()\" du programme");
-      ("--no_cycles_check", Arg.Set no_cycles_check_flag,
-       " Ne vérifie pas l'absence de définitions circulaires (peut causer une boucle infinie à l'interprétation)");
+      ("--print_cycles", Arg.Set print_cycles_flag,
+       " Affiche les cycles de définition dans les variables");
       ("--optimize", Arg.Set optimize,
        "Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
       ("--output", Arg.Set_string output_variable,

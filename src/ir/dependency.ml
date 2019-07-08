@@ -165,7 +165,7 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.progra
 
 module CycleDetector = Graph.Components.Make(DepGraph)
 
-let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : unit =
+let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = CycleDetector.scc_list g in
   if List.length sccs < DepGraph.nb_vertex g then begin
@@ -175,40 +175,58 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : unit =
     begin try Unix.mkdir dir 0o750 with
       | Unix.Unix_error (Unix.EEXIST, _, _) -> ()
     end;
-    List.iteri (fun i scc ->
-        let new_g = DepGraph.fold_vertex (fun vertex new_g ->
-            if List.mem vertex scc then
-              new_g
-            else
-              DepGraph.remove_vertex new_g vertex
-          ) g g in
-        let filename = Printf.sprintf "%s/strongly_connected_component_%d.dot" dir i in
-        print_dependency_graph filename new_g p;
-        cycles_strings := (Printf.sprintf "The following variables are defined circularly: %s\n\
-                                           The dependency graph of this circular definition has been written to %s"
-                             (String.concat " <-> "
-                                (List.map
-                                   (fun var -> Ast.unmark var.Mvg.Variable.name)
-                                   scc))
-                             filename
-                          )::!cycles_strings;
-      ) sccs;
-    let oc = open_out (dir ^ "/variable_cycles.txt") in
-    Printf.fprintf oc "%s" (String.concat "\n\n" !cycles_strings);
-    close_out oc;
-    raise
-      (Errors.TypeError
-         (Errors.Variable
-            (Printf.sprintf "The program contains circularly defined variables, see folder %s"
-               dir
+    if !Cli.print_cycles_flag then begin
+      List.iteri (fun i scc ->
+          let new_g = DepGraph.fold_vertex (fun vertex new_g ->
+              if List.mem vertex scc then
+                new_g
+              else
+                DepGraph.remove_vertex new_g vertex
+            ) g g in
+          let filename = Printf.sprintf "%s/strongly_connected_component_%d.dot" dir i in
+          print_dependency_graph filename new_g p;
+          cycles_strings := (Printf.sprintf "The following variables are defined circularly: %s\n\
+                                             The dependency graph of this circular definition has been written to %s"
+                               (String.concat " <-> "
+                                  (List.map
+                                     (fun var -> Ast.unmark var.Mvg.Variable.name)
+                                     scc))
+                               filename
+                            )::!cycles_strings;
+        ) sccs;
+      let oc = open_out (dir ^ "/variable_cycles.txt") in
+      Printf.fprintf oc "%s" (String.concat "\n\n" !cycles_strings);
+      close_out oc
+    end
+  end;
+  List.fold_left (fun (p: Mvg.program) scc ->
+      if List.length scc = 1 then p else begin
+        List.fold_left
+          (fun (p: Mvg.program) var ->
+             { p with
+               Mvg.program_vars =
+                 Mvg.VariableMap.add var (
+                   { (Mvg.VariableMap.find var p.program_vars) with
+                     Mvg.var_is_defined_circularly = true
+                   }
+                 ) p.program_vars;
+             }
+          )
+          p scc
+      end
+    ) p sccs
 
-            )))
-  end
 
-
-let single_use_vars (g: DepGraph.t) : unit Mvg.VariableMap.t =
+let inlineable_vars (g: DepGraph.t) (p: Mvg.program) : unit Mvg.VariableMap.t =
   DepGraph.fold_vertex (fun var acc ->
-      if DepGraph.in_degree g var <= 1 then
+      if DepGraph.in_degree g var <= 1 &&
+         try (let var_data = Mvg.VariableMap.find var p.program_vars in
+              not var_data.Mvg.var_is_defined_circularly
+             ) with
+         | Not_found ->
+           let _ = Mvg.VariableMap.find var p.program_conds in
+           false
+      then
         Mvg.VariableMap.add var () acc
       else
         acc

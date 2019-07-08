@@ -44,24 +44,19 @@ let optimize
   let nb_inlined_vars : int ref = ref max_int in
   while (0 < !nb_inlined_vars) do
     let dep_graph = Dependency.create_dependency_graph !program in
-    let single_use_vars = Dependency.single_use_vars dep_graph in
+    let inlineable_vars = Dependency.inlineable_vars dep_graph !program in
     let to_inline_vars = Mvg.VariableMap.filter
-        (fun var _ -> try
-            let data = Mvg.VariableMap.find var !program.program_vars in
-            match data.Mvg.var_io with
-            | Mvg.Input | Mvg.Output -> false
-            | Mvg.Regular -> true
-          with
-          | Not_found -> false (* TODO: figure out why it's happening *)
-        ) single_use_vars in
+        (fun var _ ->
+           let data = Mvg.VariableMap.find var !program.program_vars in
+           match data.Mvg.var_io with
+           | Mvg.Input | Mvg.Output -> false
+           | Mvg.Regular -> true
+        ) inlineable_vars in
     nb_inlined_vars := Mvg.VariableMap.cardinal to_inline_vars;
     if !nb_inlined_vars > 0 then begin
       Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
       let (new_program, new_typing_info) =
-        if !Cli.no_cycles_check_flag then
-          !program, !typing_info
-        else
-          Inlining.inline_vars to_inline_vars !typing_info !program
+        Inlining.inline_vars to_inline_vars !typing_info !program
       in
       Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
       let new_program = Constant_propagation.partially_evaluate new_program idmap in
@@ -88,9 +83,6 @@ let optimize
     (Printf.sprintf "Program variables count down to %d!"
        (Mvg.VariableMap.cardinal program.program_vars));
 
-  let dep_graph = Dependency.create_dependency_graph program in
-  Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
-
   let minimal_input_variables =
     List.map
       (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
@@ -106,11 +98,5 @@ let optimize
     input_needed;
   let oc = open_out input_needed in
   Printf.fprintf oc "%s" (String.concat "\n" minimal_input_variables);
-  close_out oc;
-  let optimized_program_file = "optimized_program.mvg" in
-  let oc = open_out optimized_program_file in
-  Cli.debug_print (Printf.sprintf "Writing the program so far to %s" optimized_program_file);
-  if !Cli.debug_flag then
-    Printf.fprintf oc "%s" (Format_mvg.format_program program);
   close_out oc;
   program

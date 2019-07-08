@@ -90,12 +90,14 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as (Index(var, new_e1)) e
   | Literal _ -> e
-  | Var var -> begin match (VariableMap.find var p.program_vars).var_definition with
-      | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
-          | Literal lit -> Ast.same_pos_as (Literal lit) e'
-          | _ -> e
-        end
-      | _ -> e
+  | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
+      | Not_found -> assert false (* should not happen *)
+    end with
+    | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
+        | Literal lit -> Ast.same_pos_as (Literal lit) e'
+        | _ -> e
+      end
+    | _ -> e
     end
   | LocalVar lvar -> begin try Ast.same_pos_as (
       Mvg.Literal (Ast.unmark (LocalVariableMap.find lvar ctx.Interpreter.ctx_local_vars))

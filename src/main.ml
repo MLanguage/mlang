@@ -90,8 +90,7 @@ let main () : int =
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
-    if not !Cli.no_cycles_check_flag then
-      Dependency.check_for_cycle dep_graph program;
+    let program = Dependency.check_for_cycle dep_graph program in
 
     let program =
       Dependency.try_and_fix_undefined_dependencies dep_graph program var_defs_not_in_app
@@ -111,6 +110,7 @@ let main () : int =
 
     let program = if !Cli.optimize then Optimize.optimize program typing_info idmap else program in
     let dep_graph = Dependency.create_dependency_graph program in
+    Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
 
     Cli.debug_print "Interpreting the program...";
 

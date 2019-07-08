@@ -107,7 +107,8 @@ let rec inline_vars_in_expr
          )) e
   | Var var -> if VariableMap.mem var inlined_vars then
       begin match (VariableMap.find var ctx.ctx_program.program_vars).var_definition with
-        | SimpleVar new_e -> inline_vars_in_expr ctx inlined_vars new_e
+        | SimpleVar new_e ->
+          inline_vars_in_expr ctx inlined_vars new_e
         | InputVar -> e
         | TableVar _ -> assert false (* should not happen *)
       end else
@@ -131,6 +132,13 @@ let rec inline_vars_in_expr
                             new_e)) index
             | IndexTable indexes_def -> match Ast.unmark new_index with
               | Literal (Int i) when i < size ->
+                let correct_def = IndexMap.find i indexes_def in
+                inline_vars_in_expr ctx inlined_vars correct_def
+              | Literal (Float f) when
+                  (let (rest, i) = modf f in rest = 0. && int_of_float i < size)
+                ->
+                let (_, i) = modf f in
+                let i = int_of_float i in
                 let correct_def = IndexMap.find i indexes_def in
                 inline_vars_in_expr ctx inlined_vars correct_def
               | _ ->
