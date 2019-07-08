@@ -88,7 +88,11 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     end
   | Index (var, e1) ->
     let new_e1 = partial_evaluation ctx p e1 in
-    Ast.same_pos_as (Index(var, new_e1)) e
+    begin match Ast.unmark new_e1 with
+      | Literal Undefined -> Ast.same_pos_as (Literal Undefined) e
+      (* TODO: partially evaluate into tables *)
+      | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
+    end
   | Literal _ -> e
   | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
       | Not_found ->

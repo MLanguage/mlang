@@ -41,25 +41,11 @@ let optimize
   Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
   let program : Mvg.program ref = ref program in
   let typing_info : Typechecker.typ_info ref = ref typing_info in
-  let nb_inlined_vars : int ref = ref max_int in
-  while (0 < !nb_inlined_vars) do
-    let dep_graph = Dependency.create_dependency_graph !program in
-    let inlineable_vars = Dependency.inlineable_vars dep_graph !program in
-    let to_inline_vars = Mvg.VariableMap.filter
-        (fun var _ ->
-           let data = Mvg.VariableMap.find var !program.program_vars in
-           match data.Mvg.var_io with
-           | Mvg.Input | Mvg.Output -> false
-           | Mvg.Regular -> true
-        ) inlineable_vars in
-    nb_inlined_vars := Mvg.VariableMap.cardinal to_inline_vars;
-    if !nb_inlined_vars > 0 then begin
-      Cli.debug_print (Printf.sprintf "Inlining %d variables..." !nb_inlined_vars);
-      let (new_program, new_typing_info) =
-        Inlining.inline_vars to_inline_vars !typing_info !program
-      in
+  let nb_unused_vars : int ref = ref max_int in
+  while (0 < !nb_unused_vars) do
+    if !nb_unused_vars > 0 then begin
       Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-      let new_program = Constant_propagation.partially_evaluate new_program idmap in
+      let new_program = Partial_evaluation.partially_evaluate !program idmap in
       let dep_graph = Dependency.create_dependency_graph new_program in
 
       let unused_variables = Dependency.get_unused_variables dep_graph new_program in
@@ -71,9 +57,8 @@ let optimize
               (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) new_program.program_vars
         }
       in
-
+      nb_unused_vars := (Mvg.VariableMap.cardinal unused_variables);
       program := new_program;
-      typing_info := new_typing_info;
     end
   done;
   let program = !program in
