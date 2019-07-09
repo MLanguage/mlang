@@ -223,9 +223,17 @@ type condition_data = {
   cond_errors: Error.t list;
 }
 
+(**
+   We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
+   a mapping between the two.
+*)
+module VarNameToID = Map.Make(String)
+type idmap = Variable.t VarNameToID.t
+
 type program = {
   program_vars: variable_data VariableMap.t;
   program_conds: condition_data VariableMap.t; (** Conditions are affected to dummy variables *)
+  program_idmap: idmap;
 }
 
 (** {1 Helpers }*)

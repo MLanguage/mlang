@@ -152,27 +152,27 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
             args))
       e
 
-let partially_evaluate (p: program) (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t): program =
+let partially_evaluate (p: program): program =
   { p with
     program_vars =
       VariableMap.map (fun def ->
           let new_def = match def.var_definition with
             | InputVar -> InputVar
             | SimpleVar e ->
-              SimpleVar (partial_evaluation (Interpreter.empty_ctx idmap) p e)
+              SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
             | TableVar (size, def) -> begin match def with
                 | IndexGeneric e ->
                   TableVar(
                     size,
                     IndexGeneric
-                      (partial_evaluation (Interpreter.empty_ctx idmap) p e))
+                      (partial_evaluation Interpreter.empty_ctx p e))
                 | IndexTable es ->
                   TableVar(
                     size,
                     IndexTable
                       (IndexMap.map
                          (fun e ->
-                            (partial_evaluation (Interpreter.empty_ctx idmap) p e)) es))
+                            (partial_evaluation Interpreter.empty_ctx p e)) es))
               end
           in
           { def with var_definition = new_def }

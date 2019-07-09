@@ -196,28 +196,28 @@ let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked
   | _ -> e
 
 let expand_functions (p: program) : program =
-  { program_vars =
-      VariableMap.map (fun def ->
-          match def.var_definition with
-          | InputVar -> def
-          | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
-          | TableVar (size, defg) -> begin match defg with
-              | IndexGeneric e ->
-                { def with
-                  var_definition =
-                    TableVar(size, IndexGeneric (expand_functions_expr e))
-                }
-              | IndexTable es ->
-                { def with
-                  var_definition =
-                    TableVar(size,
-                             IndexTable (IndexMap.map
-                                           (fun e -> expand_functions_expr e)
-                                           es))
-                }
-            end
-        ) p.program_vars;
-    program_conds = VariableMap.map (fun cond ->
-        { cond with cond_expr = expand_functions_expr cond.cond_expr }
-      ) p.program_conds
+  { p with program_vars =
+             VariableMap.map (fun def ->
+                 match def.var_definition with
+                 | InputVar -> def
+                 | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
+                 | TableVar (size, defg) -> begin match defg with
+                     | IndexGeneric e ->
+                       { def with
+                         var_definition =
+                           TableVar(size, IndexGeneric (expand_functions_expr e))
+                       }
+                     | IndexTable es ->
+                       { def with
+                         var_definition =
+                           TableVar(size,
+                                    IndexTable (IndexMap.map
+                                                  (fun e -> expand_functions_expr e)
+                                                  es))
+                       }
+                   end
+               ) p.program_vars;
+           program_conds = VariableMap.map (fun cond ->
+               { cond with cond_expr = expand_functions_expr cond.cond_expr }
+             ) p.program_conds
   }

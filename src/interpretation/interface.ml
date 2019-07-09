@@ -109,11 +109,11 @@ let fit_function (p: program) (f: mvg_function) : program =
         p.program_vars
   }
 
-let sample_test_case (p: program) (idmap : Ast_to_mvg.idmap) : mvg_function =
+let sample_test_case (p: program) : mvg_function =
   let v_0ac = find_var_by_alias p "0AC" in
   let v_0cf = find_var_by_alias p "0CF" in
   let v_1aj = find_var_by_alias p "1AJ" in
-  let v_irnet = Ast_to_mvg.VarNameToID.find "IRNET" idmap in
+  let v_irnet = Mvg.VarNameToID.find "IRNET" p.Mvg.program_idmap in
   {
     func_constant_inputs = VariableMap.add
         v_0cf
@@ -126,12 +126,11 @@ let sample_test_case (p: program) (idmap : Ast_to_mvg.idmap) : mvg_function =
 let make_function_from_program
     (program: program)
     (dep_graph: Dependency.DepGraph.t)
-    (idmap: Ast_to_mvg.idmap)
   : expression VariableMap.t -> Interpreter.ctx =
   fun input_values ->
-  Interpreter.evaluate_program program dep_graph idmap input_values
+  Interpreter.evaluate_program program dep_graph input_values
 
-let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ctx) : unit =
+let print_output (p: program) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
       if (VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output &&
          begin match VariableMap.find var results.ctx_vars with
@@ -145,4 +144,4 @@ let print_output (p: program) (idmap: Ast_to_mvg.idmap) (results: Interpreter.ct
           (Interpreter.format_var_literal_with_var var value)
     )
     results.ctx_vars;
-  Interpreter.repl_debugguer results p idmap
+  Interpreter.repl_debugguer results p

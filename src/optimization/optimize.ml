@@ -35,7 +35,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 let optimize
     (program: Mvg.program)
     (typing_info: Typechecker.typ_info)
-    (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t)
   : Mvg.program =
 
   Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
@@ -45,7 +44,7 @@ let optimize
   while (0 < !nb_unused_vars) do
     if !nb_unused_vars > 0 then begin
       Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-      let new_program = Partial_evaluation.partially_evaluate !program idmap in
+      let new_program = Partial_evaluation.partially_evaluate !program in
       let dep_graph = Dependency.create_dependency_graph new_program in
 
       let unused_variables = Dependency.get_unused_variables dep_graph new_program in

@@ -63,14 +63,12 @@ type ctx = {
   ctx_local_vars: literal Ast.marked LocalVariableMap.t;
   ctx_vars: var_literal VariableMap.t;
   ctx_generic_index: int option;
-  ctx_idmap: Mvg.Variable.t Ast_to_mvg.VarNameToID.t
 }
 
-let empty_ctx  (idmap : Mvg.Variable.t Ast_to_mvg.VarNameToID.t) : ctx = {
+let empty_ctx  : ctx = {
   ctx_local_vars = LocalVariableMap.empty;
   ctx_vars = VariableMap.empty;
   ctx_generic_index = None;
-  ctx_idmap = idmap;
 }
 
 let int_of_bool (b: bool) = if b then 1 else 0
@@ -82,8 +80,7 @@ let is_zero (l: literal) : bool = match l with
 
 let repl_debugguer
     (ctx: ctx )
-    (p: Mvg.program)
-    (idmap : Ast_to_mvg.idmap) : unit
+    (p: Mvg.program) : unit
   =
   Cli.warning_print ("Starting interactive debugger. Please query the interpreter state for the values of variables." ^
                      " Exit with \"quit\".");
@@ -95,13 +92,13 @@ let repl_debugguer
     if query = "explain" then begin
       Printf.printf ">> ";
       let query = read_line () in
-      try let var = Ast_to_mvg.VarNameToID.find query idmap in
+      try let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         Printf.printf "%s\n"
           (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
     end else try
-        let var = Ast_to_mvg.VarNameToID.find query idmap in
+        let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         try begin
           let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
           Printf.printf "%s\n" (format_var_literal_with_var var var_l)
@@ -416,14 +413,13 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
       Cli.error_print (Errors.format_runtime_error e);
       flush_all ();
       flush_all ();
-      repl_debugguer ctx p ctx.ctx_idmap;
+      repl_debugguer ctx p ;
       exit 1
     end
 
 let evaluate_program
     (p: program)
     (dep_graph: Dependency.DepGraph.t)
-    (idmap: Mvg.Variable.t Ast_to_mvg.VarNameToID.t)
     (input_values: expression VariableMap.t) : ctx =
   let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
       try
@@ -492,5 +488,5 @@ let evaluate_program
               )
             ))
         | _ -> assert false (* should not happen *)
-    ) dep_graph (empty_ctx idmap)
+    ) dep_graph empty_ctx
   in ctx
