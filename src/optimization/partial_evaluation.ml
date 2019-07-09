@@ -52,10 +52,12 @@ type var_literal =
 
 type ctx = {
   ctx_local_vars: partial_expr LocalVariableMap.t;
+  ctx_inside_var: Variable.t;
 }
 
-let empty_ctx = {
+let empty_ctx (var: Variable.t) = {
   ctx_local_vars = LocalVariableMap.empty;
+  ctx_inside_var = var;
 }
 
 let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
@@ -78,6 +80,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
       | (Ast.And, Literal Undefined, _) | (Ast.And, _, Literal Undefined)
       | (Ast.Or, Literal Undefined, _) | (Ast.Or, _, Literal Undefined)
+      | (Ast.Div, _, Literal Undefined)
         -> Literal Undefined
       | (Ast.And, Literal (Bool true), e')
       | (Ast.And, e', Literal (Bool true))
@@ -94,6 +97,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
         Unop (Minus, Ast.same_pos_as e' e)
       | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
       | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false | Undefined))
+      | (Ast.Div, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
         ->
         Mvg.Literal (Mvg.Bool false)
       | (_, Literal _, Literal _) ->
@@ -132,6 +136,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
       | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
     end
   | Literal _ -> e
+  | Var var when var = ctx.ctx_inside_var -> Ast.same_pos_as (Literal Undefined) e
   | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
       | Not_found -> assert false (* should not happen *)
     end with
@@ -153,7 +158,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     begin match Ast.unmark new_e1 with
       | Literal _ | Var _ ->
         let new_ctx =
-          {
+          { ctx with
             ctx_local_vars =
               LocalVariableMap.add lvar (expr_to_partial (Ast.unmark new_e1))
                 ctx.ctx_local_vars
@@ -197,20 +202,20 @@ let partially_evaluate (p: program) : program =
         let new_def = match def.var_definition with
           | InputVar -> InputVar
           | SimpleVar e ->
-            SimpleVar (partial_evaluation empty_ctx p e)
+            SimpleVar (partial_evaluation (empty_ctx var) p e)
           | TableVar (size, def) -> begin match def with
               | IndexGeneric e ->
                 TableVar(
                   size,
                   IndexGeneric
-                    (partial_evaluation empty_ctx p e))
+                    (partial_evaluation (empty_ctx var) p e))
               | IndexTable es ->
                 TableVar(
                   size,
                   IndexTable
                     (IndexMap.map
                        (fun e ->
-                          (partial_evaluation empty_ctx p e)) es))
+                          (partial_evaluation (empty_ctx var) p e)) es))
             end
         in
         { p with program_vars =
@@ -219,8 +224,14 @@ let partially_evaluate (p: program) : program =
       with
       | Not_found ->
         let cond = VariableMap.find var p.program_conds in
-        match (partial_evaluation empty_ctx p cond.cond_expr) with
-        | (Literal (Bool false), _) | (Literal Undefined, _) -> p
+        match (partial_evaluation (empty_ctx var) p cond.cond_expr) with
+        | (Literal (Bool false), _) | (Literal Undefined, _) ->
+          { p with
+            program_conds =
+              VariableMap.remove
+                var
+                p.program_conds
+          }
         | (Literal (Bool true) , _) ->   raise (Errors.RuntimeError (
             Errors.ConditionViolated (
               Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
@@ -231,12 +242,12 @@ let partially_evaluate (p: program) : program =
                 (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
             )
           ))
-        | cond_expr ->
+        | new_cond_expr ->
           { p with
             program_conds =
               VariableMap.add
                 var
-                { cond with cond_expr }
+                { cond with cond_expr = new_cond_expr }
                 p.program_conds
           }
     ) dep_graph p
