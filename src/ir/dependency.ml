@@ -242,35 +242,8 @@ module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Backward
       let equal = (=)
       let join = (||)
-      let analyze _ = (fun x -> x)
+      let analyze _ = (fun _ -> true) (* TODO: figure out why x -> x is not working ??? *)
     end)
-
-module InputToOutputReachability = Graph.Fixpoint.Make(DepGraph)
-    (struct
-      type vertex = DepGraph.E.vertex
-      type edge = DepGraph.E.t
-      type g = DepGraph.t
-      type data = bool
-      let direction = Graph.Fixpoint.Forward
-      let equal = (=)
-      let join = (||)
-      let analyze _ = (fun x -> x)
-    end)
-
-let get_unused_variables (g: DepGraph.t) (p:Mvg.program) : unit Mvg.VariableMap.t =
-  let is_output = fun var ->
-    try
-      (Mvg.VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output
-    with
-    | Not_found ->
-      let _ = Mvg.VariableMap.find var p.program_conds in
-      true
-  in
-  let is_necessary_to_output = OutputToInputReachability.analyze is_output g in
-  Mvg.VariableMap.filter (fun var _ ->
-      not (is_necessary_to_output var)
-    ) (Mvg.VariableMap.map (fun _ -> ()) p.program_vars)
-
 
 module Constability = Graph.Fixpoint.Make(DepGraph)
     (struct

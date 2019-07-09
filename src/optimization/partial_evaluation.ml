@@ -33,14 +33,41 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
-let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
+type partial_expr =
+  | PartialLiteral of literal
+  | PartialVar of Variable.t
+
+let partial_to_expr (e: partial_expr) : expression = match e with
+  | PartialLiteral l -> Literal l
+  | PartialVar v -> Var v
+
+let expr_to_partial (e: expression) : partial_expr = match e with
+  | Literal l  -> PartialLiteral l
+  | Var v -> PartialVar v
+  | _ -> assert false (* should not happen *)
+
+type var_literal =
+  | SimpleVar of partial_expr
+  | TableVar of int * partial_expr array
+
+type ctx = {
+  ctx_local_vars: partial_expr LocalVariableMap.t;
+}
+
+let empty_ctx = {
+  ctx_local_vars = LocalVariableMap.empty;
+}
+
+let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
   match Ast.unmark e with
   | Comparison (op, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark new_e1, Ast.unmark new_e2) with
+      | (Literal Undefined, _) | (_, Literal Undefined) ->
+        Literal Undefined
       | (Literal _, Literal _) ->
-        Mvg.Literal (Interpreter.evaluate_expr ctx p
+        Mvg.Literal (Interpreter.evaluate_expr Interpreter.empty_ctx p
                        (Ast.same_pos_as (Comparison (op,new_e1, new_e2)) e)
                     )
       | _ -> Comparison (op, new_e1, new_e2)
@@ -49,23 +76,29 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     let new_e2 = partial_evaluation ctx p e2 in
     Ast.same_pos_as begin match (Ast.unmark op, Ast.unmark new_e1, Ast.unmark new_e2) with
+      | (Ast.And, Literal Undefined, _) | (Ast.And, _, Literal Undefined)
+      | (Ast.Or, Literal Undefined, _) | (Ast.Or, _, Literal Undefined)
+        -> Literal Undefined
       | (Ast.And, Literal (Bool true), e')
       | (Ast.And, e', Literal (Bool true))
       | (Ast.Or, Literal (Bool false), e')
       | (Ast.And, e', Literal (Bool false))
-      | (Ast.Add, Literal ((Int 0) | Float 0. | Bool false), e')
-      | (Ast.Add, e', Literal ((Int 0) | Float 0. | Bool false))
+      | (Ast.Add, Literal ((Int 0) | Float 0. | Bool false | Undefined), e')
+      | (Ast.Add, e', Literal ((Int 0) | Float 0. | Bool false | Undefined))
       | (Ast.Mul, Literal ((Int 1) | Float 1. | Bool true), e')
-      | (Ast.Mul, e', Literal ((Int 1) | Float 1. | Bool true))
-      | (Ast.Sub, e', Literal ((Int 0) | Float 0. | Bool false))
+      | (Ast.Mul, e', Literal ((Int 1) | Float 1. | Bool true ))
+      | (Ast.Div, e', Literal ((Int 1) | Float 1. | Bool true ))
+      | (Ast.Sub, e', Literal ((Int 0) | Float 0. | Bool false | Undefined))
         -> e'
-      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false), _)
-      | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false))
+      | (Ast.Sub, Literal ((Int 0) | Float 0. | Bool false | Undefined), e') ->
+        Unop (Minus, Ast.same_pos_as e' e)
+      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
+      | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false | Undefined))
         ->
         Mvg.Literal (Mvg.Bool false)
       | (_, Literal _, Literal _) ->
         (Mvg.Literal
-           (Interpreter.evaluate_expr ctx p
+           (Interpreter.evaluate_expr Interpreter.empty_ctx p
               (Ast.same_pos_as (Binop (op,new_e1, new_e2)) e1)
            ))
       | _ -> Binop (op, new_e1, new_e2)
@@ -74,7 +107,11 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     let new_e1 = partial_evaluation ctx p e1 in
     Ast.same_pos_as begin match (Ast.unmark new_e1) with
       | Literal _ ->
-        Mvg.Literal (Interpreter.evaluate_expr ctx p (Ast.same_pos_as (Unop(op, new_e1)) e1))
+        Mvg.Literal (Interpreter.evaluate_expr
+                       Interpreter.empty_ctx
+                       p
+                       (Ast.same_pos_as (Unop(op, new_e1)) e1)
+                    )
       | _ -> Unop (op, new_e1)
     end e
   | Conditional (e1, e2, e3) ->
@@ -84,6 +121,7 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     begin match Ast.unmark new_e1 with
       | Literal (Bool true) -> new_e2
       | Literal (Bool false) -> new_e3
+      | Literal Undefined ->Ast.same_pos_as (Literal Undefined) e
       | _ -> Ast.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
     end
   | Index (var, e1) ->
@@ -95,18 +133,16 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
     end
   | Literal _ -> e
   | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
-      | Not_found ->
-        Printf.printf "Not found %s %s\n" (Ast.unmark var.Variable.name) (Format_ast.format_position (Ast.get_position e));
-        assert false (* should not happen *)
+      | Not_found -> assert false (* should not happen *)
     end with
-    | SimpleVar e' | TableVar (_, IndexGeneric e') -> begin match Ast.unmark e' with
-        | Literal lit -> Ast.same_pos_as (Literal lit) e'
+    | SimpleVar e'  -> begin match Ast.unmark e' with
+        | Literal _ | Var _ ->  e'
         | _ -> e
       end
-    | _ -> e
+    | TableVar _ | InputVar -> e
     end
   | LocalVar lvar -> begin try Ast.same_pos_as (
-      Mvg.Literal (Ast.unmark (LocalVariableMap.find lvar ctx.Interpreter.ctx_local_vars))
+      (partial_to_expr (LocalVariableMap.find lvar ctx.ctx_local_vars))
     ) e with
     | Not_found -> e
     end
@@ -115,33 +151,34 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
   | LocalLet (lvar, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     begin match Ast.unmark new_e1 with
-      | Literal (l1: literal) ->
+      | Literal _ | Var _ ->
         let new_ctx =
-          { ctx with
-            Interpreter.ctx_local_vars =
-              LocalVariableMap.add lvar (Ast.same_pos_as l1 new_e1)
-                ctx.Interpreter.ctx_local_vars
+          {
+            ctx_local_vars =
+              LocalVariableMap.add lvar (expr_to_partial (Ast.unmark new_e1))
+                ctx.ctx_local_vars
           }
         in
         let new_e2 = partial_evaluation new_ctx p e2 in
         new_e2
+
       | _ ->
         let new_e2 = partial_evaluation ctx p e2 in
         Ast.same_pos_as (LocalLet(lvar, new_e1, new_e2)) e
     end
-  | FunctionCall (ArrFunc, [arg]) ->
+  | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [arg]) ->
     let new_arg = partial_evaluation ctx p arg in
     begin match Ast.unmark new_arg with
       | Literal _ ->
         Ast.same_pos_as
           (Mvg.Literal
              (Interpreter.evaluate_expr
-                ctx
+                Interpreter.empty_ctx
                 p
-                (Ast.same_pos_as (FunctionCall (ArrFunc, [new_arg])) e)
+                (Ast.same_pos_as (FunctionCall (f, [new_arg])) e)
              )
           ) e
-      | _ -> Ast.same_pos_as (FunctionCall (ArrFunc, [new_arg])) e
+      | _ -> Ast.same_pos_as (FunctionCall (f, [new_arg])) e
     end
   | FunctionCall (func, args) ->
     Ast.same_pos_as
@@ -152,29 +189,54 @@ let rec partial_evaluation (ctx: Interpreter.ctx) (p: program) (e: expression As
             args))
       e
 
-let partially_evaluate (p: program): program =
-  { p with
-    program_vars =
-      VariableMap.map (fun def ->
-          let new_def = match def.var_definition with
-            | InputVar -> InputVar
-            | SimpleVar e ->
-              SimpleVar (partial_evaluation Interpreter.empty_ctx p e)
-            | TableVar (size, def) -> begin match def with
-                | IndexGeneric e ->
-                  TableVar(
-                    size,
-                    IndexGeneric
-                      (partial_evaluation Interpreter.empty_ctx p e))
-                | IndexTable es ->
-                  TableVar(
-                    size,
-                    IndexTable
-                      (IndexMap.map
-                         (fun e ->
-                            (partial_evaluation Interpreter.empty_ctx p e)) es))
-              end
-          in
-          { def with var_definition = new_def }
-        ) p.program_vars
-  }
+let partially_evaluate (p: program) : program =
+  let dep_graph = Dependency.create_dependency_graph p in
+  Dependency.TopologicalOrder.fold (fun var p ->
+      try
+        let def = VariableMap.find var p.program_vars in
+        let new_def = match def.var_definition with
+          | InputVar -> InputVar
+          | SimpleVar e ->
+            SimpleVar (partial_evaluation empty_ctx p e)
+          | TableVar (size, def) -> begin match def with
+              | IndexGeneric e ->
+                TableVar(
+                  size,
+                  IndexGeneric
+                    (partial_evaluation empty_ctx p e))
+              | IndexTable es ->
+                TableVar(
+                  size,
+                  IndexTable
+                    (IndexMap.map
+                       (fun e ->
+                          (partial_evaluation empty_ctx p e)) es))
+            end
+        in
+        { p with program_vars =
+                   VariableMap.add var { def with var_definition = new_def } p.program_vars
+        }
+      with
+      | Not_found ->
+        let cond = VariableMap.find var p.program_conds in
+        match (partial_evaluation empty_ctx p cond.cond_expr) with
+        | (Literal (Bool false), _) | (Literal Undefined, _) -> p
+        | (Literal (Bool true) , _) ->   raise (Errors.RuntimeError (
+            Errors.ConditionViolated (
+              Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
+                (Format_ast.format_position (Ast.get_position cond.cond_expr))
+                (String.concat "\n" (List.map (fun err ->
+                     Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
+                   ) cond.cond_errors))
+                (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
+            )
+          ))
+        | cond_expr ->
+          { p with
+            program_conds =
+              VariableMap.add
+                var
+                { cond with cond_expr }
+                p.program_conds
+          }
+    ) dep_graph p

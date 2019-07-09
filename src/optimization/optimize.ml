@@ -31,56 +31,59 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+let remove_unused_variables (program:Mvg.program) : Mvg.program =
+  let g = Dependency.create_dependency_graph program in
+  let is_output = fun var ->
+    try
+      (Mvg.VariableMap.find var program.program_vars).Mvg.var_io = Mvg.Output
+    with
+    | Not_found ->
+      let _ = Mvg.VariableMap.find var program.program_conds in
+      true
+  in
+  let is_necessary_to_output = Dependency.OutputToInputReachability.analyze is_output g in
+  let program = {
+    program with
+    Mvg.program_vars =
+      Mvg.VariableMap.filter
+        (fun var _ -> is_necessary_to_output var)
+        program.program_vars;
+    Mvg.program_conds = Mvg.VariableMap.filter
+        (fun var _ ->
+           List.for_all (fun used -> is_necessary_to_output used) (Dependency.DepGraph.pred g var)
+        ) program.program_conds;
+  } in
+  program
+
+
 
 let optimize
     (program: Mvg.program)
-    (typing_info: Typechecker.typ_info)
   : Mvg.program =
 
   Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
-  let program : Mvg.program ref = ref program in
-  let typing_info : Typechecker.typ_info ref = ref typing_info in
-  let nb_unused_vars : int ref = ref max_int in
-  while (0 < !nb_unused_vars) do
-    if !nb_unused_vars > 0 then begin
-      Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-      let new_program = Partial_evaluation.partially_evaluate !program in
-      let dep_graph = Dependency.create_dependency_graph new_program in
 
-      let unused_variables = Dependency.get_unused_variables dep_graph new_program in
-      Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
-      let new_program =
-        { new_program with
-          program_vars =
-            Mvg.VariableMap.filter
-              (fun var _ -> not (Mvg.VariableMap.mem var unused_variables)) new_program.program_vars
-        }
-      in
-      nb_unused_vars := (Mvg.VariableMap.cardinal unused_variables);
-      program := new_program;
-    end
+  let program = ref program in
+  let nb_removed = ref max_int in
+  while !nb_removed > 0 do
+    Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
+    let new_program = Partial_evaluation.partially_evaluate !program  in
+    let new_program = remove_unused_variables new_program in
+    let new_nb_removed =
+      Mvg.VariableMap.cardinal !program.program_vars -
+      Mvg.VariableMap.cardinal new_program.program_vars
+    in
+    Cli.debug_print
+      (Printf.sprintf
+         "Removing %d unused variables..."
+         new_nb_removed);
+    program := new_program;
+    nb_removed := new_nb_removed;
   done;
   let program = !program in
-  let typing_info = !typing_info in
-
   Cli.debug_print
     (Printf.sprintf "Program variables count down to %d!"
        (Mvg.VariableMap.cardinal program.program_vars));
-
-  let minimal_input_variables =
-    List.map
-      (fun (v, _) -> Format_mvg.format_variable v ^ " | Type: " ^
-                     (Format_mvg.format_typ
-                        (fst (Mvg.VariableMap.find v typing_info.Typechecker.typ_info_var))))
-      (Mvg.VariableMap.bindings
-         (Mvg.VariableMap.filter (fun _ var_data -> var_data.Mvg.var_io = Mvg.Input) program.program_vars)
-      )
-  in
-  let input_needed = "input_needed.txt" in
-  Cli.debug_print @@ Printf.sprintf "Input variables needed (%d) written to %s"
-    (List.length minimal_input_variables)
-    input_needed;
-  let oc = open_out input_needed in
-  Printf.fprintf oc "%s" (String.concat "\n" minimal_input_variables);
-  close_out oc;
+  let dep_graph = Dependency.create_dependency_graph program in
+  Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
   program

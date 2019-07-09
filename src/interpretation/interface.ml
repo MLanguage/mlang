@@ -125,10 +125,9 @@ let sample_test_case (p: program) : mvg_function =
 
 let make_function_from_program
     (program: program)
-    (dep_graph: Dependency.DepGraph.t)
   : expression VariableMap.t -> Interpreter.ctx =
   fun input_values ->
-  Interpreter.evaluate_program program dep_graph input_values
+  Interpreter.evaluate_program program input_values
 
 let print_output (p: program) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->

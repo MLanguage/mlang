@@ -85,7 +85,7 @@ let main () : int =
     let program = Functions.expand_functions program in
 
     Cli.debug_print "Typechecking...";
-    let typing_info, program = Typechecker.typecheck program in
+    let _, program = Typechecker.typecheck program in
 
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
@@ -96,25 +96,11 @@ let main () : int =
     Cli.debug_print "Extracting the desired function from the whole program...";
     let program = Interface.fit_function program (Interface.sample_test_case program) in
 
-    let dep_graph = Dependency.create_dependency_graph program in
-    Cli.debug_print "Analysing the dependencies of the program...";
-    let unused_variables = Dependency.get_unused_variables dep_graph program in
-    Cli.debug_print (Printf.sprintf "Removing %d unused variables..." (Mvg.VariableMap.cardinal unused_variables));
-    let program = {
-      program with
-      Mvg.program_vars =
-        Mvg.VariableMap.filter
-          (fun var _ -> not (Mvg.VariableMap.mem var unused_variables))
-          program.program_vars
-    } in
-
-    let program = if !Cli.optimize then Optimize.optimize program typing_info else program in
-    let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
+    let program = if !Cli.optimize then Optimize.optimize program else program in
 
     Cli.debug_print "Interpreting the program...";
 
-    let f = Interface.make_function_from_program program dep_graph in
+    let f = Interface.make_function_from_program program in
     Interface.print_output program
       (f (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000))));
 

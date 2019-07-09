@@ -316,15 +316,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
                     ))
             in
             if idx >= size || idx < 0 then
-              raise (Errors.RuntimeError (
-                  Errors.IndexOutOfBounds (
-                    Printf.sprintf "%s, index value of %d for table %s of size %d"
-                      (Format_ast.format_position (Ast.get_position e1))
-                      idx
-                      (Ast.unmark (Ast.unmark var).Mvg.Variable.name)
-                      size
-                  )
-                ))
+              Undefined
             else
               Array.get values idx
           with
@@ -350,9 +342,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
           Undefined
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
-        | None ->
-          Printf.printf "Location %s\n" (Format_ast.format_position (Ast.get_position e));
-          assert false (* should not happen *)
+        | None -> Undefined
         | Some i -> Int i
       end
     | Error -> raise (Errors.RuntimeError (
@@ -419,8 +409,8 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
 
 let evaluate_program
     (p: program)
-    (dep_graph: Dependency.DepGraph.t)
     (input_values: expression VariableMap.t) : ctx =
+  let dep_graph = Dependency.create_dependency_graph p in
   let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
       try
         match (VariableMap.find var p.program_vars).var_definition with
