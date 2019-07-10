@@ -111,13 +111,20 @@ let fit_function (p: program) (f: mvg_function) : program =
 
 let sample_test_case (p: program) : mvg_function =
   let v_0ac = find_var_by_alias p "0AC" in
+  let v_0am = find_var_by_alias p "0AM" in
   let v_0cf = find_var_by_alias p "0CF" in
   let v_1aj = find_var_by_alias p "1AJ" in
+  let v_1bj = find_var_by_alias p "1BJ" in
   let v_irnet = Mvg.VarNameToID.find "IRNET" p.Mvg.program_idmap in
   {
-    func_constant_inputs =
-      (VariableMap.singleton v_0ac (Literal (Bool true)));
-    func_variable_inputs = VariableMap.add v_0cf () (VariableMap.singleton v_1aj ());
+    func_constant_inputs = VariableMap.empty;
+    func_variable_inputs =
+      VariableMap.add v_0cf ()
+        (VariableMap.add v_1aj ()
+           (VariableMap.add v_0ac ()
+              (VariableMap.add v_0am ()
+                 (VariableMap.singleton v_1bj ()
+                 ))));
     func_outputs = VariableMap.singleton v_irnet ();
   }
 

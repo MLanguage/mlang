@@ -211,9 +211,19 @@ let generate_python_program (program: program) (filename : string) : unit =
       | Not_found ->
         let cond = VariableMap.find var program.program_conds in
         Printf.fprintf oc
-          "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Condition violated !\")\n\n"
+          "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Error triggered\\n%s\")\n\n"
           (Format_ast.format_position (Ast.get_position cond.cond_expr))
           (generate_python_expr (Ast.unmark cond.cond_expr))
+          (String.concat "\\n"
+             (List.map
+                (fun err ->
+                   Printf.sprintf "%s: %s"
+                     (Ast.unmark err.Error.name)
+                     (Ast.unmark err.Error.descr)
+                )
+                cond.cond_errors
+             )
+          )
     ) dep_graph;
 
   close_out oc;
