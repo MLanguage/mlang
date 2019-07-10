@@ -100,9 +100,9 @@ let main () : int =
 
     Cli.debug_print "Interpreting the program...";
 
-    let f = Interface.make_function_from_program program in
-    Interface.print_output program
-      (f (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000))));
+    (* let f = Interface.make_function_from_program program in
+       Interface.print_output program
+       (f (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))); *)
 
     Mvg_to_python.generate_python_program program "main.py";
 

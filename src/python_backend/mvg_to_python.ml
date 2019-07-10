@@ -33,6 +33,8 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
+let none_value = "0.0"
+
 let generate_comp_op (op: Ast.comp_op) : string = match op with
   | Ast.Gt -> ">"
   | Ast.Gte -> ">="
@@ -61,6 +63,10 @@ let rec generate_python_expr (e: expression) : string = match e with
     let s1 = generate_python_expr (Ast.unmark e1) in
     let s2 = generate_python_expr (Ast.unmark e2) in
     Printf.sprintf "(%s %s %s)" s1 (generate_comp_op (Ast.unmark op)) s2
+  | Binop ((Ast.Div, _), e1, e2) ->
+    let s1 = generate_python_expr (Ast.unmark e1) in
+    let s2 = generate_python_expr (Ast.unmark e2) in
+    Printf.sprintf "((%s / %s) if %s != 0 else %s)" s1 s2 s2 none_value
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) in
     let s2 = generate_python_expr (Ast.unmark e2) in
@@ -78,10 +84,10 @@ let rec generate_python_expr (e: expression) : string = match e with
     Printf.sprintf "(%s if %s else %s)" s2 s1 s3
   | FunctionCall (PresentFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) in
-    Printf.sprintf "(%s is not None)" sarg
+    Printf.sprintf "(%s != %s)" sarg none_value
   | FunctionCall (NullFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) in
-    Printf.sprintf "(%s is None)" sarg
+    Printf.sprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) in
     Printf.sprintf "round(%s)" sarg
@@ -89,14 +95,16 @@ let rec generate_python_expr (e: expression) : string = match e with
     let sarg = generate_python_expr (Ast.unmark arg) in
     Printf.sprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Bool b) ->
-    Printf.sprintf "%b" b
+  | Literal (Bool true) ->
+    "True"
+  | Literal (Bool false) ->
+    "False"
   | Literal (Int i) ->
     Printf.sprintf "%d" i
   | Literal (Float f) ->
     Printf.sprintf "%f" f
   | Literal Undefined ->
-    Printf.sprintf "None"
+    none_value
   | Var var -> generate_variable var
   | LocalVar lvar -> Printf.sprintf "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> "generic_index"
@@ -117,11 +125,27 @@ let generate_python_program (program: program) (filename : string) : unit =
          (VariableMap.bindings program.program_vars)
       )
   in
+  Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "def main(%s):\n" (String.concat "," (List.map (fun var -> generate_variable var) input_vars));
+  (** First initialize all variables *)
+  VariableMap.iter (fun var data ->
+      if data.var_io = Regular then
+        match data.var_definition with
+        | SimpleVar _ ->
+          Printf.fprintf oc "\t%s = %s\n" (generate_variable var) none_value
+        | TableVar (size, IndexTable _) ->
+          Printf.fprintf oc "\t%s = [%s]*%d\n" (generate_variable var) none_value size
+        | TableVar (_, IndexGeneric _) ->
+          Printf.fprintf oc "\t%s = lambda generic_index: %s\n" (generate_variable var) none_value
+        | InputVar -> assert false (* should not happen *)
+      else ()
+    ) program.program_vars;
+  Printf.fprintf oc "\n";
+  (** Then print the actual program *)
   Dependency.TopologicalOrder.iter (fun var ->
       try
         let data = VariableMap.find var program.program_vars in
-        if data.var_io = Regular then
+        if data.var_io = Regular || data.var_io = Output then begin
           match data.var_definition with
           | SimpleVar e ->
             Printf.fprintf oc "\t%s = %s\n\n" (generate_variable var) (generate_python_expr (Ast.unmark e))
@@ -134,9 +158,9 @@ let generate_python_program (program: program) (filename : string) : unit =
           | TableVar (_, IndexGeneric e) ->
             Printf.fprintf oc "\t%s = lambda generic_index: %s\n\n" (generate_variable var) (generate_python_expr (Ast.unmark e))
           | InputVar -> assert false (* should not happen *)
-        else if data.var_io = Output then
+        end;
+        if data.var_io = Output then
           Printf.fprintf oc "\treturn %s\n\n" (generate_variable var)
-        else ()
       with
       | Not_found ->
         let cond = VariableMap.find var program.program_conds in
