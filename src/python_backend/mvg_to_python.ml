@@ -52,11 +52,20 @@ let generate_binop (op: Ast.binop) : string = match op with
   | Ast.Div -> "/"
 
 let generate_variable (v:Variable.t) : string =
-  let v = String.lowercase_ascii (Ast.unmark v.Variable.name) in
+  let v = match v.alias with Some v -> v | None -> Ast.unmark v.Variable.name in
+  let v = String.lowercase_ascii v in
   if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then
     "var_" ^ v
   else
     v
+
+let generate_name (v:Variable.t) : string =
+  match v.alias with Some v -> v | None -> Ast.unmark v.Variable.name
+
+let generate_typ (typ: typ) : string = match typ with
+  | Integer -> "int"
+  | Real -> "float"
+  | Boolean -> "bool"
 
 let rec generate_python_expr (e: expression) : string = match e with
   | Comparison (op, e1, e2) ->
@@ -126,9 +135,33 @@ let generate_python_program (program: program) (filename : string) : unit =
       )
   in
   Printf.fprintf oc "from math import floor\n\n";
-  Printf.fprintf oc "def main(%s):\n" (String.concat "," (List.map (fun var -> generate_variable var) input_vars));
+  Printf.fprintf oc "%s\n"
+    (String.concat
+       "\n"
+       (List.map
+          (fun var ->
+             Printf.sprintf "# %s: %s"
+               (generate_name var)
+               (Ast.unmark var.Variable.descr)
+          )
+          input_vars
+       )
+    );
+  Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
+  List.iter (fun var ->
+      match (VariableMap.find var program.program_vars).var_typ with
+      | Some typ ->
+        Printf.fprintf oc
+          "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
+          (generate_name var)
+          (generate_variable var)
+          (generate_typ typ)
+          (generate_name var)
+      | None -> ()
+    ) input_vars;
+  Printf.fprintf oc "\n";
   (** First initialize all variables *)
-  VariableMap.iter (fun var data ->
+  (* VariableMap.iter (fun var data ->
       if data.var_io = Regular then
         match data.var_definition with
         | SimpleVar _ ->
@@ -139,24 +172,37 @@ let generate_python_program (program: program) (filename : string) : unit =
           Printf.fprintf oc "\t%s = lambda generic_index: %s\n" (generate_variable var) none_value
         | InputVar -> assert false (* should not happen *)
       else ()
-    ) program.program_vars;
-  Printf.fprintf oc "\n";
+     ) program.program_vars;
+     Printf.fprintf oc "\n"; *)
   (** Then print the actual program *)
   Dependency.TopologicalOrder.iter (fun var ->
       try
         let data = VariableMap.find var program.program_vars in
         if data.var_io = Regular || data.var_io = Output then begin
+          Printf.fprintf oc "\t# %s: %s\n"
+            (generate_name var)
+            (Ast.unmark var.Variable.descr);
           match data.var_definition with
           | SimpleVar e ->
-            Printf.fprintf oc "\t%s = %s\n\n" (generate_variable var) (generate_python_expr (Ast.unmark e))
+            Printf.fprintf oc "\t# Defined %s\n\t%s = %s\n\n"
+              (Format_ast.format_position (Ast.get_position e))
+              (generate_variable var)
+              (generate_python_expr (Ast.unmark e))
           | TableVar (_, IndexTable es) -> begin
               IndexMap.iter (fun i e ->
-                  Printf.fprintf oc "\t%s[%d] = %s\n" (generate_variable var) i (generate_python_expr (Ast.unmark e))
+                  Printf.fprintf oc "\t# Defined %s\n\t%s[%d] = %s\n"
+                    (Format_ast.format_position (Ast.get_position e))
+                    (generate_variable var)
+                    i
+                    (generate_python_expr (Ast.unmark e))
                 ) es;
               Printf.fprintf oc "\n"
             end
           | TableVar (_, IndexGeneric e) ->
-            Printf.fprintf oc "\t%s = lambda generic_index: %s\n\n" (generate_variable var) (generate_python_expr (Ast.unmark e))
+            Printf.fprintf oc "\t# Defined %s\n\t%s = lambda generic_index: %s\n\n"
+              (Format_ast.format_position (Ast.get_position e))
+              (generate_variable var)
+              (generate_python_expr (Ast.unmark e))
           | InputVar -> assert false (* should not happen *)
         end;
         if data.var_io = Output then
@@ -164,7 +210,9 @@ let generate_python_program (program: program) (filename : string) : unit =
       with
       | Not_found ->
         let cond = VariableMap.find var program.program_conds in
-        Printf.fprintf oc "\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Condition violated !\")\n\n"
+        Printf.fprintf oc
+          "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Condition violated !\")\n\n"
+          (Format_ast.format_position (Ast.get_position cond.cond_expr))
           (generate_python_expr (Ast.unmark cond.cond_expr))
     ) dep_graph;
 

@@ -100,9 +100,12 @@ let main () : int =
 
     Cli.debug_print "Interpreting the program...";
 
-    (* let f = Interface.make_function_from_program program in
-       Interface.print_output program
-       (f (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))); *)
+    (* let f = Interface.make_function_from_program program in *)
+    (* Interface.print_output program
+       (f (Mvg.VariableMap.add (Mvg.find_var_by_alias program "0CF") (Mvg.Literal (Mvg.Int 0))
+            (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
+         )
+       ); *)
 
     Mvg_to_python.generate_python_program program "main.py";
 
@@ -112,6 +115,6 @@ let main () : int =
   | Errors.TypeError e ->
     Cli.error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg) ->
-    Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); -3
+    Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); exit 1
 
 let _ = main ()

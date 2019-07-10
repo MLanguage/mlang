@@ -78,23 +78,3 @@ let format_typ_error (e: typ_error) : string = match e with
   | Inlining s -> Printf.sprintf "Inlining error: %s" s
 
 exception Unimplemented of string
-
-(**{1 Interpretation }*)
-
-type run_error =
-  | ErrorValue of string
-  | UndefinedValue of string
-  | FloatIndex of string
-  | IndexOutOfBounds of string
-  | MissingInputValue of string
-  | ConditionViolated of string
-
-exception RuntimeError of run_error
-
-let format_runtime_error (e: run_error) : string = match e with
-  | UndefinedValue s -> Printf.sprintf "Undefined value at runtime: %s" s
-  | ErrorValue s -> Printf.sprintf "Error value at runtime: %s" s
-  | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
-  | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
-  | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s
-  | ConditionViolated s -> Printf.sprintf "Verification condition failed: %s" s

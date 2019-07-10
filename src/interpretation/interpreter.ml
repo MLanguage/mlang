@@ -108,6 +108,24 @@ let repl_debugguer
       | Not_found -> Printf.printf "Inexisting variable\n"
   done
 
+type run_error =
+  | ErrorValue of string
+  | UndefinedValue of string
+  | FloatIndex of string
+  | IndexOutOfBounds of string
+  | MissingInputValue of string
+  | ConditionViolated of string
+
+exception RuntimeError of run_error * ctx
+
+let format_runtime_error (e: run_error) : string = match e with
+  | UndefinedValue s -> Printf.sprintf "Undefined value at runtime: %s" s
+  | ErrorValue s -> Printf.sprintf "Error value at runtime: %s" s
+  | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
+  | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
+  | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s
+  | ConditionViolated s -> Printf.sprintf "Verification condition failed: %s" s
+
 let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : literal =
   try begin match Ast.unmark e with
     | Comparison (op, e1, e2) ->
@@ -309,10 +327,10 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
                 if let (fraction, _) = modf f in fraction = 0. then
                   int_of_float f
                 else
-                  raise (Errors.RuntimeError (
-                      Errors.FloatIndex (
+                  raise (RuntimeError (
+                      FloatIndex (
                         Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
-                      )
+                      ), ctx
                     ))
             in
             if idx >= size || idx < 0 then
@@ -345,8 +363,8 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
         | None -> Undefined
         | Some i -> Int i
       end
-    | Error -> raise (Errors.RuntimeError (
-        Errors.ErrorValue (Format_ast.format_position (Ast.get_position e))
+    | Error -> raise (RuntimeError (
+        ErrorValue (Format_ast.format_position (Ast.get_position e)), ctx
       ))
     | LocalLet (lvar, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
@@ -392,15 +410,17 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
 
     | FunctionCall (func, _) ->
       raise
-        (Errors.RuntimeError
-           (Errors.ErrorValue
+        (RuntimeError
+           (ErrorValue
               (Printf.sprintf
                  "the function %s %s has not been expanded"
                  (Format_mvg.format_func func)
-                 (Format_ast.format_position (Ast.get_position e)))))
+                 (Format_ast.format_position (Ast.get_position e))),
+            ctx
+           ))
   end with
-  | Errors.RuntimeError e -> begin
-      Cli.error_print (Errors.format_runtime_error e);
+  | RuntimeError (e,ctx) -> begin
+      Cli.error_print (format_runtime_error e);
       flush_all ();
       flush_all ();
       repl_debugguer ctx p ;
@@ -410,73 +430,82 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
 let evaluate_program
     (p: program)
     (input_values: expression VariableMap.t) : ctx =
-  let dep_graph = Dependency.create_dependency_graph p in
-  let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
-      try
-        match (VariableMap.find var p.program_vars).var_definition with
-        | Mvg.SimpleVar e ->
-          let l_e = evaluate_expr ctx p e in
-          { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
-        | Mvg.TableVar (size, es) ->
+  try
+    let dep_graph = Dependency.create_dependency_graph p in
+    let ctx = Dependency.TopologicalOrder.fold (fun var ctx ->
+        try
+          match (VariableMap.find var p.program_vars).var_definition with
+          | Mvg.SimpleVar e ->
+            let l_e = evaluate_expr ctx p e in
+            { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+          | Mvg.TableVar (size, es) ->
         (*
           Right now we suppose that the different indexes of table arrays don't depend on each other
           for computing. Otherwise, it would trigger a runtime Not_found error at interpretation.
           TODO: add a check for that at typechecking.
         *)
-          { ctx with
-            ctx_vars =
-              VariableMap.add
-                var
-                (TableVar (
-                    size,
-                    Array.init size
-                      (fun idx -> match es with
-                         | IndexGeneric e ->
-                           evaluate_expr { ctx with ctx_generic_index = Some idx } p e
-                         | IndexTable es ->
-                           evaluate_expr ctx p (IndexMap.find idx es)
-                      )
+            { ctx with
+              ctx_vars =
+                VariableMap.add
+                  var
+                  (TableVar (
+                      size,
+                      Array.init size
+                        (fun idx -> match es with
+                           | IndexGeneric e ->
+                             evaluate_expr { ctx with ctx_generic_index = Some idx } p e
+                           | IndexTable es ->
+                             evaluate_expr ctx p (IndexMap.find idx es)
+                        )
+                    )
+                  )
+                  ctx.ctx_vars
+            }
+          | Mvg.InputVar -> begin try
+                let l = evaluate_expr ctx p  (Ast.same_pos_as (VariableMap.find var input_values) var.Variable.name) in
+                { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
+              with
+              | Not_found -> raise (
+                  RuntimeError (
+                    MissingInputValue (
+                      Printf.sprintf "%s (%s)"
+                        (Ast.unmark var.Mvg.Variable.name)
+                        (Ast.unmark var.Mvg.Variable.descr)
+                    ), ctx
                   )
                 )
-                ctx.ctx_vars
-          }
-        | Mvg.InputVar -> begin try
-              let l = evaluate_expr ctx p  (Ast.same_pos_as (VariableMap.find var input_values) var.Variable.name) in
-              { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
-            with
-            | Not_found -> raise (
-                Errors.RuntimeError (
-                  Errors.MissingInputValue (
-                    Printf.sprintf "%s (%s)"
-                      (Ast.unmark var.Mvg.Variable.name)
-                      (Ast.unmark var.Mvg.Variable.descr)
-                  )
-                )
-              )
-          end
-      with
-      | Not_found ->
-        let cond = VariableMap.find var p.program_conds in
-        let l_cond = evaluate_expr ctx p cond.cond_expr in
-        match l_cond with
-        | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
-        | Bool true -> (* the condition is triggered, we throw errors *)
-          raise (Errors.RuntimeError (
-              Errors.ConditionViolated (
-                Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
-                  (Format_ast.format_position (Ast.get_position cond.cond_expr))
-                  (String.concat "\n" (List.map (fun err ->
-                       Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
-                     ) cond.cond_errors))
-                  (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
-                  (String.concat "\n" (List.map (fun (var) ->
-                       let l = VariableMap.find var ctx.ctx_vars in
-                       format_var_literal_with_var var l
-                     ) (
-                       Dependency.DepGraph.pred dep_graph var
-                     )))
-              )
-            ))
-        | _ -> assert false (* should not happen *)
-    ) dep_graph empty_ctx
-  in ctx
+            end
+        with
+        | Not_found ->
+          let cond = VariableMap.find var p.program_conds in
+          let l_cond = evaluate_expr ctx p cond.cond_expr in
+          match l_cond with
+          | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
+          | Bool true -> (* the condition is triggered, we throw errors *)
+            raise (RuntimeError (
+                ConditionViolated (
+                  Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
+                    (Format_ast.format_position (Ast.get_position cond.cond_expr))
+                    (String.concat "\n" (List.map (fun err ->
+                         Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
+                       ) cond.cond_errors))
+                    (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
+                    (String.concat "\n" (List.map (fun (var) ->
+                         let l = VariableMap.find var ctx.ctx_vars in
+                         format_var_literal_with_var var l
+                       ) (
+                         Dependency.DepGraph.pred dep_graph var
+                       )))
+                ), ctx
+              ))
+          | _ -> assert false (* should not happen *)
+      ) dep_graph empty_ctx
+    in ctx
+  with
+  | RuntimeError (e,ctx) -> begin
+      Cli.error_print (format_runtime_error e);
+      flush_all ();
+      flush_all ();
+      repl_debugguer ctx p ;
+      exit 1
+    end

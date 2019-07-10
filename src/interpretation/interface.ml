@@ -115,11 +115,9 @@ let sample_test_case (p: program) : mvg_function =
   let v_1aj = find_var_by_alias p "1AJ" in
   let v_irnet = Mvg.VarNameToID.find "IRNET" p.Mvg.program_idmap in
   {
-    func_constant_inputs = VariableMap.add
-        v_0cf
-        (Literal (Int 0))
-        (VariableMap.singleton v_0ac (Literal (Bool true)));
-    func_variable_inputs = VariableMap.singleton v_1aj ();
+    func_constant_inputs =
+      (VariableMap.singleton v_0ac (Literal (Bool true)));
+    func_variable_inputs = VariableMap.add v_0cf () (VariableMap.singleton v_1aj ());
     func_outputs = VariableMap.singleton v_irnet ();
   }
 
