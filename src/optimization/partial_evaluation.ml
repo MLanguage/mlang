@@ -113,6 +113,12 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
            (Interpreter.evaluate_expr Interpreter.empty_ctx p
               (Ast.same_pos_as (Binop (op,new_e1, new_e2)) e1)
            ))
+      | (Ast.Add, _, Literal (Float f)) when f < 0. ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, Ast.same_pos_as (Literal (Float (-. f))) e2)
+      | (Ast.Add, _, Literal (Int i)) when i < 0 ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, Ast.same_pos_as (Literal (Int (- i))) e2)
+      | (Ast.Add, _, Unop (Minus, e2')) ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, e2')
       | _ -> Binop (op, new_e1, new_e2)
     end e
   | Unop (op, e1) ->

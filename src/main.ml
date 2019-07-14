@@ -94,7 +94,7 @@ let main () : int =
 
 
     Cli.debug_print "Extracting the desired function from the whole program...";
-    let program = Interface.fit_function program (Interface.sample_test_case program) in
+    let program = Interface.fit_function program (Interface.simulateur_simplifie_ir_2017 program) in
 
     let program = if !Cli.optimize then Optimize.optimize program else program in
 
