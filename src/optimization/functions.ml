@@ -31,6 +31,11 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+(**
+   Most functions are just syntactic sugar for operations expressible with the rest of
+   the language, so we expand these.
+*)
+
 open Mvg
 
 let rec expand_functions_expr (e: expression Ast.marked) : expression Ast.marked =

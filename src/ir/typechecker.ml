@@ -31,15 +31,26 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+(**
+   This modules defines M's static semantic. The typechecking is done with a standard bidirectionnal
+   algorithm featuring unification. There are only four types : undefined, boolean , integer and real.
+   The unification is done according to strict order between those types, as almost all operators
+   are polymorphic.
+*)
+
 open Mvg
 
+(** This module defines the internal representation of type variables during the typechecking. *)
 module Typ =
 struct
 
+  (** [Up] corresponds to type inference, [Down] to type checking *)
   type direction = Up | Down
 
+  (** Used to display nice error messages for type errors *)
   type infer_info = (Ast.position * direction)
 
+  (** Only 4 different types in [T]. There is a strict order on those types. *)
   module T = struct
     type t =
       | Real

@@ -31,6 +31,12 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+(**
+   Program optimization mostly means removing dead code. The tax source code takes more than 1500
+   variables as input, most of them are undefined all the time.
+*)
+
+(** Unused variables are determined by areachability analysis from the outputs *)
 let remove_unused_variables (program:Mvg.program) : Mvg.program =
   let g = Dependency.create_dependency_graph program in
   let is_output = fun var ->
@@ -57,12 +63,16 @@ let remove_unused_variables (program:Mvg.program) : Mvg.program =
 
 
 
+(**
+   Right now, the interpretation model for variables defined circularly is not properly defined.
+   We have to repeat partial evaluation until all the undefined loops have been reduced.
+*)
 let optimize
     (program: Mvg.program)
   : Mvg.program =
 
   Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
-
+  (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
   while !nb_removed > 0 do
