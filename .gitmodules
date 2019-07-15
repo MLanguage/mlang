@@ -1,3 +1,3 @@
 [submodule "ir-calcul"]
 	path = ir-calcul
-	url = git@framagit.org:denismerigoux/ir-calcul.git
+	url = https://framagit.org/denismerigoux/ir-calcul.git
