@@ -70,6 +70,8 @@ let display_time = ref false
 (** Run the optimisations on the M variable graph *)
 let optimize = ref false
 
+let backend = ref "python"
+
 (**{2 Argument parsing }*)
 
 (** {!module Arg} function that specifies command-line arguments parsing *)
@@ -96,6 +98,8 @@ let parse_cli_args () =
        " Affiche des informations sur les variables du programmes mal définies");
       ("--verify", Arg.Set verify_flag,
        " Vérifie que les conditions sont valables dans tous les cas");
+      ("--backend", Arg.Set_string backend,
+       " Défini le backend (Python, Z3, Interpreteur)");
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."

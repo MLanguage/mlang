@@ -85,7 +85,7 @@ let main () : int =
     let program = Functions.expand_functions program in
 
     Cli.debug_print "Typechecking...";
-    let _, program = Typechecker.typecheck program in
+    let typing, program = Typechecker.typecheck program in
 
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
@@ -100,14 +100,19 @@ let main () : int =
 
     Cli.debug_print "Interpreting the program...";
 
-    (* let f = Interface.make_function_from_program program in *)
-    (* Interface.print_output program
-       (f (Mvg.VariableMap.add (Mvg.find_var_by_alias program "0CF") (Mvg.Literal (Mvg.Int 0))
-            (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
-         )
-       ); *)
-
-    Mvg_to_python.generate_python_program program "main.py";
+    let () =
+      if String.lowercase_ascii !Cli.backend = "z3" then
+        Z3_driver.translate_and_launch_query program dep_graph typing
+      else if String.lowercase_ascii !Cli.backend = "interpreteur" then
+        let f = Interface.make_function_from_program program in
+        Interface.print_output program
+          (f (Mvg.VariableMap.add (Mvg.find_var_by_alias program "0CF") (Mvg.Literal (Mvg.Int 0))
+                (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
+             )
+          )
+      else
+        Mvg_to_python.generate_python_program program "main.py"
+    in
 
     exit 0
 
