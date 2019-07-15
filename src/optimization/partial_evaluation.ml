@@ -31,6 +31,11 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+(**
+   Partial evaluation mostly relies on the {!module: Verifisc.Interpreter} module ; however it also
+   include peehole optimizations that must be checked for compatibility with M's semantics.
+*)
+
 open Mvg
 
 type partial_expr =
@@ -113,6 +118,12 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
            (Interpreter.evaluate_expr Interpreter.empty_ctx p
               (Ast.same_pos_as (Binop (op,new_e1, new_e2)) e1)
            ))
+      | (Ast.Add, _, Literal (Float f)) when f < 0. ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, Ast.same_pos_as (Literal (Float (-. f))) e2)
+      | (Ast.Add, _, Literal (Int i)) when i < 0 ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, Ast.same_pos_as (Literal (Int (- i))) e2)
+      | (Ast.Add, _, Unop (Minus, e2')) ->
+        Binop (Ast.same_pos_as Ast.Sub op, e1, e2')
       | _ -> Binop (op, new_e1, new_e2)
     end e
   | Unop (op, e1) ->
@@ -140,7 +151,6 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     let new_e1 = partial_evaluation ctx p e1 in
     begin match Ast.unmark new_e1 with
       | Literal Undefined -> Ast.same_pos_as (Literal Undefined) e
-      (* TODO: partially evaluate into tables *)
       | Literal l ->
         let idx =  match l with
           | Bool b -> Interpreter.int_of_bool b
@@ -173,6 +183,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
               | Index (inner_var, (Literal (Int inner_idx), _))
                 when Ast.unmark inner_var = ctx.ctx_inside_var && ctx.ctx_inside_table_index = Some inner_idx
                 ->
+                (** TODO: fix this hack for circularly defined variables *)
                 Ast.same_pos_as (Literal Undefined) (IndexMap.find idx es')
               | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
         end
@@ -247,6 +258,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
 
 let partially_evaluate (p: program) : program =
   let dep_graph = Dependency.create_dependency_graph p in
+  (* TODO: Topological traversal should take into account circularly defined variables *)
   Dependency.TopologicalOrder.fold (fun var p ->
       try
         let def = VariableMap.find var p.program_vars in

@@ -50,7 +50,7 @@ batch: build
 		dune exec src/main.exe -- $(SOURCE_FILES) --application batch  --debug --given_back_output --display_time
 
 iliad: build
-		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad --display_time --debug --optimize  
+		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad --display_time --debug --optimize
 bareme: build
 		dune exec src/main.exe --  $(SOURCE_FILES)  --application bareme --debug --output IINET
 

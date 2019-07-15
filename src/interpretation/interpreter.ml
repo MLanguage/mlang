@@ -360,7 +360,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Ast.marked) : liter
           Undefined
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
-        | None -> Undefined
+        | None -> assert false (* should not happen *)
         | Some i -> Int i
       end
     | Error -> raise (RuntimeError (
