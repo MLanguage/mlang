@@ -31,8 +31,10 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+(** Defines the dependency graph of an M program *)
 
-(* The edges in the graph go from output to inputs *)
+(** Each node corresponds to a variable, each edge to a variable use.
+    The edges in the graph go from output to inputs. *)
 module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
     type t = Mvg.Variable.t
     let hash v = v.Mvg.Variable.id
@@ -40,6 +42,7 @@ module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional(struct
     let equal v1 v2 = v1.Mvg.Variable.id = v2.Mvg.Variable.id
   end)
 
+(** Add all the sucessors of [lvar] in the graph that are used by [e] *)
 let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: DepGraph.t) : DepGraph.t =
   let acc = DepGraph.add_vertex acc lvar in
   let add_edge acc var lvar =
@@ -72,7 +75,7 @@ let rec add_usages (lvar: Mvg.Variable.t) (e: Mvg.expression Ast.marked) (acc: D
   | Mvg.Var var ->
     add_edge acc var lvar
 
-
+(** The dependency graph also includes nodes for the conditions to be checked at execution *)
 let create_dependency_graph (p: Mvg.program) : DepGraph.t =
   let g = Mvg.VariableMap.fold (fun var def acc ->
       match def.Mvg.var_definition with
@@ -91,6 +94,7 @@ let create_dependency_graph (p: Mvg.program) : DepGraph.t =
 
 let program_when_printing : Mvg.program option ref = ref None
 
+(** The graph is output in the Dot format *)
 module Dot = Graph.Graphviz.Dot(struct
     include DepGraph (* use the graph module from above *)
 
@@ -162,12 +166,16 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.progra
     Dot.output_graph file graph;
   close_out file
 
+(** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
+module SCC = Graph.Components.Make(DepGraph)
 
-module CycleDetector = Graph.Components.Make(DepGraph)
-
+(**
+   Outputs a warning in case of cycles. Also sets a boolean flag to true to the circularly defined variables,
+   hence returning a new program.
+*)
 let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
-  let sccs = CycleDetector.scc_list g in
+  let sccs = SCC.scc_list g in
   if List.length sccs < DepGraph.nb_vertex g then begin
     let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
     let cycles_strings = ref [] in
@@ -215,23 +223,6 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
           p scc
       end
     ) p sccs
-
-
-let inlineable_vars (g: DepGraph.t) (p: Mvg.program) : unit Mvg.VariableMap.t =
-  DepGraph.fold_vertex (fun var acc ->
-      if DepGraph.in_degree g var <= 1 &&
-         try (let var_data = Mvg.VariableMap.find var p.program_vars in
-              not var_data.Mvg.var_is_defined_circularly
-             ) with
-         | Not_found ->
-           let _ = Mvg.VariableMap.find var p.program_conds in
-           false
-      then begin
-        Mvg.VariableMap.add var () acc
-      end
-      else
-        acc
-    ) g Mvg.VariableMap.empty
 
 module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
     (struct

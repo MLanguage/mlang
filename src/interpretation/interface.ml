@@ -193,9 +193,10 @@ let simulateur_simplifie_ir_2017 (p: program) : mvg_function =
 
 let make_function_from_program
     (program: program)
+    (number_of_passes: int)
   : expression VariableMap.t -> Interpreter.ctx =
   fun input_values ->
-  Interpreter.evaluate_program program input_values
+  Interpreter.evaluate_program program input_values number_of_passes
 
 let print_output (p: program) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
