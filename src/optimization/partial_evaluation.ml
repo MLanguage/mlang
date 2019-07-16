@@ -57,14 +57,16 @@ type var_literal =
 
 type ctx = {
   ctx_local_vars: partial_expr LocalVariableMap.t;
-  ctx_inside_var: Variable.t;
   ctx_inside_table_index: int option;
+  ctx_inside_var : Variable.t;
+  ctx_current_scc: unit VariableMap.t;
 }
 
-let empty_ctx (var: Variable.t) (idx: int option) = {
+let empty_ctx (var: Variable.t) (idx: int option) (scc: unit VariableMap.t) = {
   ctx_local_vars = LocalVariableMap.empty;
-  ctx_inside_var = var;
   ctx_inside_table_index = idx;
+  ctx_inside_var = var;
+  ctx_current_scc = scc;
 }
 
 let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : expression Ast.marked =
@@ -149,54 +151,59 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     end
   | Index (var, e1) ->
     let new_e1 = partial_evaluation ctx p e1 in
-    begin match Ast.unmark new_e1 with
-      | Literal Undefined -> Ast.same_pos_as (Literal Undefined) e
-      | Literal l ->
-        let idx =  match l with
-          | Bool b -> Interpreter.int_of_bool b
-          | Int i -> i
-          | Undefined  -> assert false (* should not happen *)
-          | Float f ->
-            if let (fraction, _) = modf f in fraction = 0. then
-              int_of_float f
-            else
-              raise (Interpreter.RuntimeError (
-                  Interpreter.FloatIndex (
-                    Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
-                  ), Interpreter.empty_ctx
-                ))
-        in
-        begin match (VariableMap.find (Ast.unmark var) p.program_vars).var_definition with
-          | SimpleVar _ | InputVar -> assert false (* should not happen *)
-          | TableVar (size, IndexGeneric e') ->
-            if idx >= size || idx < 0 then
-              Ast.same_pos_as (Literal Undefined) e
-            else begin match Ast.unmark e' with
-              | Literal _ | Var _ -> e'
-              | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
-            end
-          | TableVar (size, IndexTable es') ->
-            if idx >= size || idx < 0 then
-              Ast.same_pos_as (Literal Undefined) e
-            else match Ast.unmark (IndexMap.find idx es') with
-              | Literal _  | Var _ -> IndexMap.find idx es'
-              | Index (inner_var, (Literal (Int inner_idx), _))
-                when Ast.unmark inner_var = ctx.ctx_inside_var && ctx.ctx_inside_table_index = Some inner_idx
-                ->
-                (** TODO: fix this hack for circularly defined variables *)
-                Ast.same_pos_as (Literal Undefined) (IndexMap.find idx es')
-              | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
-        end
-      | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
-    end
+    if VariableMap.mem (Ast.unmark var) ctx.ctx_current_scc then Ast.same_pos_as (Literal Undefined) e
+    else
+      begin match Ast.unmark new_e1 with
+        | Literal Undefined -> Ast.same_pos_as (Literal Undefined) e
+        | Literal l ->
+          let idx =  match l with
+            | Bool b -> Interpreter.int_of_bool b
+            | Int i -> i
+            | Undefined  -> assert false (* should not happen *)
+            | Float f ->
+              if let (fraction, _) = modf f in fraction = 0. then
+                int_of_float f
+              else
+                raise (Interpreter.RuntimeError (
+                    Interpreter.FloatIndex (
+                      Printf.sprintf "%s" (Format_ast.format_position (Ast.get_position e1))
+                    ), Interpreter.empty_ctx
+                  ))
+          in
+          begin match (VariableMap.find (Ast.unmark var) p.program_vars).var_definition with
+            | SimpleVar _ | InputVar -> assert false (* should not happen *)
+            | TableVar (size, IndexGeneric e') ->
+              if idx >= size || idx < 0 then
+                Ast.same_pos_as (Literal Undefined) e
+              else begin match Ast.unmark e' with
+                | Literal _ | Var _ -> e'
+                | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
+              end
+            | TableVar (size, IndexTable es') ->
+              if idx >= size || idx < 0 then
+                Ast.same_pos_as (Literal Undefined) e
+              else match Ast.unmark (IndexMap.find idx es') with
+                | Literal _  | Var _ -> IndexMap.find idx es'
+                | Index (inner_var, (Literal (Int inner_idx), _))
+                  (* If the current index depends on the value of a greater index of the same table we return undefined *)
+                  when (Ast.unmark inner_var = ctx.ctx_inside_var && begin match ctx.ctx_inside_table_index with
+                      | Some i when i >= inner_idx -> true
+                      | _-> false
+                    end)
+                  ->
+                  Ast.same_pos_as (Literal Undefined) (IndexMap.find idx es')
+                | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
+          end
+        | _ ->  Ast.same_pos_as (Index(var, new_e1)) e
+      end
   | Literal _ -> e
-  | Var var when var = ctx.ctx_inside_var ->
+  | Var var when VariableMap.mem var ctx.ctx_current_scc ->
+    (**
+       When doing partial evaluation, we only consider what happens during the first evaluation pass.
+       If we are querying a variable that is in the current SCC then its values during the first
+       pass will always be undefined.
+    *)
     Ast.same_pos_as (Literal Undefined) e
-  | Var var when
-      (VariableMap.find var p.program_vars).var_is_defined_circularly &&
-      begin try (VariableMap.find ctx.ctx_inside_var p.program_vars).var_is_defined_circularly with
-        | Not_found -> false end
-    -> Ast.same_pos_as (Literal Undefined) e
   | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
       | Not_found -> assert false (* should not happen *)
     end with
@@ -257,60 +264,61 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
       e
 
 let partially_evaluate (p: program) : program =
-  let dep_graph = Dependency.create_dependency_graph p in
-  (* TODO: Topological traversal should take into account circularly defined variables *)
-  Dependency.TopologicalOrder.fold (fun var p ->
-      try
-        let def = VariableMap.find var p.program_vars in
-        let new_def = match def.var_definition with
-          | InputVar -> InputVar
-          | SimpleVar e ->
-            SimpleVar (partial_evaluation (empty_ctx var None) p e)
-          | TableVar (size, def) -> begin match def with
-              | IndexGeneric e ->
-                TableVar(
-                  size,
-                  IndexGeneric
-                    (partial_evaluation (empty_ctx var None) p e))
-              | IndexTable es ->
-                TableVar(
-                  size,
-                  IndexTable
-                    (IndexMap.mapi
-                       (fun idx e ->
-                          (partial_evaluation (empty_ctx var (Some idx)) p e)) es))
-            end
-        in
-        { p with program_vars =
-                   VariableMap.add var { def with var_definition = new_def } p.program_vars
-        }
-      with
-      | Not_found ->
-        let cond = VariableMap.find var p.program_conds in
-        match (partial_evaluation (empty_ctx var None) p cond.cond_expr) with
-        | (Literal (Bool false), _) | (Literal Undefined, _) ->
-          { p with
-            program_conds =
-              VariableMap.remove
-                var
-                p.program_conds
-          }
-        | (Literal (Bool true) , _) ->   raise (Interpreter.RuntimeError (
-            Interpreter.ConditionViolated (
-              Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
-                (Format_ast.format_position (Ast.get_position cond.cond_expr))
-                (String.concat "\n" (List.map (fun err ->
-                     Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
-                   ) cond.cond_errors))
-                (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
-            ), Interpreter.empty_ctx
-          ))
-        | new_cond_expr ->
-          { p with
-            program_conds =
-              VariableMap.add
-                var
-                { cond with cond_expr = new_cond_expr }
-                p.program_conds
-          }
-    ) dep_graph p
+  let exec_order = Execution_order.get_execution_order p in
+  List.fold_left (fun p scc ->
+      VariableMap.fold (fun var _ p ->
+          try
+            let def = VariableMap.find var p.program_vars in
+            let new_def = match def.var_definition with
+              | InputVar -> InputVar
+              | SimpleVar e ->
+                SimpleVar (partial_evaluation (empty_ctx var None scc) p e)
+              | TableVar (size, def) -> begin match def with
+                  | IndexGeneric e ->
+                    TableVar(
+                      size,
+                      IndexGeneric
+                        (partial_evaluation (empty_ctx var None scc) p e))
+                  | IndexTable es ->
+                    TableVar(
+                      size,
+                      IndexTable
+                        (IndexMap.mapi
+                           (fun idx e ->
+                              (partial_evaluation (empty_ctx var (Some idx) scc) p e)) es))
+                end
+            in
+            { p with program_vars =
+                       VariableMap.add var { def with var_definition = new_def } p.program_vars
+            }
+          with
+          | Not_found ->
+            let cond = VariableMap.find var p.program_conds in
+            match (partial_evaluation (empty_ctx var None scc) p cond.cond_expr) with
+            | (Literal (Bool false), _) | (Literal Undefined, _) ->
+              { p with
+                program_conds =
+                  VariableMap.remove
+                    var
+                    p.program_conds
+              }
+            | (Literal (Bool true) , _) ->   raise (Interpreter.RuntimeError (
+                Interpreter.ConditionViolated (
+                  Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
+                    (Format_ast.format_position (Ast.get_position cond.cond_expr))
+                    (String.concat "\n" (List.map (fun err ->
+                         Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
+                       ) cond.cond_errors))
+                    (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
+                ), Interpreter.empty_ctx
+              ))
+            | new_cond_expr ->
+              { p with
+                program_conds =
+                  VariableMap.add
+                    var
+                    { cond with cond_expr = new_cond_expr }
+                    p.program_conds
+              }
+        ) scc p
+    ) p exec_order

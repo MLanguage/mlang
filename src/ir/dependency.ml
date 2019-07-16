@@ -170,10 +170,9 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.progra
 module SCC = Graph.Components.Make(DepGraph)
 
 (**
-   Outputs a warning in case of cycles. Also sets a boolean flag to true to the circularly defined variables,
-   hence returning a new program.
+   Outputs [true] and a warning in case of cycles.
 *)
-let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
+let check_for_cycle (g: DepGraph.t) (p: Mvg.program) (print_debug: bool) : bool =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
   if List.length sccs < DepGraph.nb_vertex g then begin
@@ -183,7 +182,7 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
     begin try Unix.mkdir dir 0o750 with
       | Unix.Unix_error (Unix.EEXIST, _, _) -> ()
     end;
-    if !Cli.print_cycles_flag then begin
+    if !Cli.print_cycles_flag && print_debug then begin
       List.iteri (fun i scc ->
           let new_g = DepGraph.fold_vertex (fun vertex new_g ->
               if List.mem vertex scc then
@@ -205,24 +204,9 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) : Mvg.program =
       let oc = open_out (dir ^ "/variable_cycles.txt") in
       Printf.fprintf oc "%s" (String.concat "\n\n" !cycles_strings);
       close_out oc
-    end
-  end;
-  List.fold_left (fun (p: Mvg.program) scc ->
-      if List.length scc = 1 then p else begin
-        List.fold_left
-          (fun (p: Mvg.program) var ->
-             { p with
-               Mvg.program_vars =
-                 Mvg.VariableMap.add var (
-                   { (Mvg.VariableMap.find var p.program_vars) with
-                     Mvg.var_is_defined_circularly = true
-                   }
-                 ) p.program_vars;
-             }
-          )
-          p scc
-      end
-    ) p sccs
+    end;
+    true
+  end else false
 
 module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
     (struct

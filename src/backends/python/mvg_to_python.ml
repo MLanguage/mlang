@@ -124,106 +124,95 @@ let rec generate_python_expr (e: expression) : string = match e with
     Printf.sprintf "(lambda v%d: %s)(%s)"  lvar.LocalVariable.id s2 s1
 
 let generate_python_program (program: program) (filename : string) : unit =
-  let oc = open_out filename in
-  let dep_graph = Dependency.create_dependency_graph program in
-  let input_vars =
-    List.map
-      (fun (var, _) -> var)
-      (List.filter
-         (fun (_, data) -> data.var_io = Input)
-         (VariableMap.bindings program.program_vars)
-      )
-  in
-  Printf.fprintf oc "from math import floor\n\n";
-  Printf.fprintf oc "%s\n"
-    (String.concat
-       "\n"
-       (List.map
-          (fun var ->
-             Printf.sprintf "# %s: %s"
-               (generate_name var)
-               (Ast.unmark var.Variable.descr)
-          )
-          input_vars
-       )
-    );
-  Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
-  List.iter (fun var ->
-      match (VariableMap.find var program.program_vars).var_typ with
-      | Some typ ->
-        Printf.fprintf oc
-          "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
-          (generate_name var)
-          (generate_variable var)
-          (generate_typ typ)
-          (generate_name var)
-      | None -> ()
-    ) input_vars;
-  Printf.fprintf oc "\n";
-  (** First initialize all variables *)
-  (* VariableMap.iter (fun var data ->
-      if data.var_io = Regular then
-        match data.var_definition with
-        | SimpleVar _ ->
-          Printf.fprintf oc "\t%s = %s\n" (generate_variable var) none_value
-        | TableVar (size, IndexTable _) ->
-          Printf.fprintf oc "\t%s = [%s]*%d\n" (generate_variable var) none_value size
-        | TableVar (_, IndexGeneric _) ->
-          Printf.fprintf oc "\t%s = lambda generic_index: %s\n" (generate_variable var) none_value
-        | InputVar -> assert false (* should not happen *)
-      else ()
-     ) program.program_vars;
-     Printf.fprintf oc "\n"; *)
-  (** Then print the actual program *)
-  Dependency.TopologicalOrder.iter (fun var ->
-      try
-        let data = VariableMap.find var program.program_vars in
-        if data.var_io = Regular || data.var_io = Output then begin
-          Printf.fprintf oc "\t# %s: %s\n"
+  if Dependency.check_for_cycle (Dependency.create_dependency_graph program) program false then
+    Cli.error_print "Python code generation not supported for programs containing irreductible circular variables definition"
+  else begin
+    let oc = open_out filename in
+    let dep_graph = Dependency.create_dependency_graph program in
+    let input_vars =
+      List.map
+        (fun (var, _) -> var)
+        (List.filter
+           (fun (_, data) -> data.var_io = Input)
+           (VariableMap.bindings program.program_vars)
+        )
+    in
+    Printf.fprintf oc "from math import floor\n\n";
+    Printf.fprintf oc "%s\n"
+      (String.concat
+         "\n"
+         (List.map
+            (fun var ->
+               Printf.sprintf "# %s: %s"
+                 (generate_name var)
+                 (Ast.unmark var.Variable.descr)
+            )
+            input_vars
+         )
+      );
+    Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
+    List.iter (fun var ->
+        match (VariableMap.find var program.program_vars).var_typ with
+        | Some typ ->
+          Printf.fprintf oc
+            "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
             (generate_name var)
-            (Ast.unmark var.Variable.descr);
-          match data.var_definition with
-          | SimpleVar e ->
-            Printf.fprintf oc "\t# Defined %s\n\t%s = %s\n\n"
-              (Format_ast.format_position (Ast.get_position e))
-              (generate_variable var)
-              (generate_python_expr (Ast.unmark e))
-          | TableVar (_, IndexTable es) -> begin
-              IndexMap.iter (fun i e ->
-                  Printf.fprintf oc "\t# Defined %s\n\t%s[%d] = %s\n"
-                    (Format_ast.format_position (Ast.get_position e))
-                    (generate_variable var)
-                    i
-                    (generate_python_expr (Ast.unmark e))
-                ) es;
-              Printf.fprintf oc "\n"
-            end
-          | TableVar (_, IndexGeneric e) ->
-            Printf.fprintf oc "\t# Defined %s\n\t%s = lambda generic_index: %s\n\n"
-              (Format_ast.format_position (Ast.get_position e))
-              (generate_variable var)
-              (generate_python_expr (Ast.unmark e))
-          | InputVar -> assert false (* should not happen *)
-        end;
-        if data.var_io = Output then
-          Printf.fprintf oc "\treturn %s\n\n" (generate_variable var)
-      with
-      | Not_found ->
-        let cond = VariableMap.find var program.program_conds in
-        Printf.fprintf oc
-          "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Error triggered\\n%s\")\n\n"
-          (Format_ast.format_position (Ast.get_position cond.cond_expr))
-          (generate_python_expr (Ast.unmark cond.cond_expr))
-          (String.concat "\\n"
-             (List.map
-                (fun err ->
-                   Printf.sprintf "%s: %s"
-                     (Ast.unmark err.Error.name)
-                     (Ast.unmark err.Error.descr)
-                )
-                cond.cond_errors
-             )
-          )
-    ) dep_graph;
+            (generate_variable var)
+            (generate_typ typ)
+            (generate_name var)
+        | None -> ()
+      ) input_vars;
+    Printf.fprintf oc "\n";
+    Dependency.TopologicalOrder.iter (fun var ->
+        try
+          let data = VariableMap.find var program.program_vars in
+          if data.var_io = Regular || data.var_io = Output then begin
+            Printf.fprintf oc "\t# %s: %s\n"
+              (generate_name var)
+              (Ast.unmark var.Variable.descr);
+            match data.var_definition with
+            | SimpleVar e ->
+              Printf.fprintf oc "\t# Defined %s\n\t%s = %s\n\n"
+                (Format_ast.format_position (Ast.get_position e))
+                (generate_variable var)
+                (generate_python_expr (Ast.unmark e))
+            | TableVar (_, IndexTable es) -> begin
+                IndexMap.iter (fun i e ->
+                    Printf.fprintf oc "\t# Defined %s\n\t%s[%d] = %s\n"
+                      (Format_ast.format_position (Ast.get_position e))
+                      (generate_variable var)
+                      i
+                      (generate_python_expr (Ast.unmark e))
+                  ) es;
+                Printf.fprintf oc "\n"
+              end
+            | TableVar (_, IndexGeneric e) ->
+              Printf.fprintf oc "\t# Defined %s\n\t%s = lambda generic_index: %s\n\n"
+                (Format_ast.format_position (Ast.get_position e))
+                (generate_variable var)
+                (generate_python_expr (Ast.unmark e))
+            | InputVar -> assert false (* should not happen *)
+          end;
+          if data.var_io = Output then
+            Printf.fprintf oc "\treturn %s\n\n" (generate_variable var)
+        with
+        | Not_found ->
+          let cond = VariableMap.find var program.program_conds in
+          Printf.fprintf oc
+            "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Error triggered\\n%s\")\n\n"
+            (Format_ast.format_position (Ast.get_position cond.cond_expr))
+            (generate_python_expr (Ast.unmark cond.cond_expr))
+            (String.concat "\\n"
+               (List.map
+                  (fun err ->
+                     Printf.sprintf "%s: %s"
+                       (Ast.unmark err.Error.name)
+                       (Ast.unmark err.Error.descr)
+                  )
+                  cond.cond_errors
+               )
+            )
+      ) dep_graph;
 
-  close_out oc;
+    close_out oc;
+  end

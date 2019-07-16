@@ -90,7 +90,7 @@ let main () : int =
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
-    let program = Dependency.check_for_cycle dep_graph program in
+    ignore (Dependency.check_for_cycle dep_graph program true);
 
 
     Cli.debug_print "Extracting the desired function from the whole program...";
@@ -104,14 +104,16 @@ let main () : int =
       if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program dep_graph typing
       else if String.lowercase_ascii !Cli.backend = "interpreteur" then
-        let f = Interface.make_function_from_program program in
+        let f = Interface.make_function_from_program program 1 in
         Interface.print_output program
           (f (Mvg.VariableMap.add (Mvg.find_var_by_alias program "0CF") (Mvg.Literal (Mvg.Int 0))
                 (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
              )
           )
       else
-        Mvg_to_python.generate_python_program program "main.py"
+        let output_file = "main.py" in
+        Mvg_to_python.generate_python_program program "main.py";
+        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s." output_file);
     in
 
     exit 0
