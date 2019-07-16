@@ -95,5 +95,5 @@ let optimize
     (Printf.sprintf "Program variables count down to %d!"
        (Mvg.VariableMap.cardinal program.program_vars));
   let dep_graph = Dependency.create_dependency_graph program in
-  Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_after_optimization.dot") dep_graph program;
+  Dependency.print_dependency_graph !Cli.dep_graph_file dep_graph program;
   program

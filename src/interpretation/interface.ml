@@ -32,6 +32,8 @@ knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
 open Mvg
+open Lexing
+open Lexer
 
 type mvg_function = {
   func_variable_inputs: unit VariableMap.t;
@@ -120,6 +122,36 @@ let var_set_from_name_list (p: program) (names : (string * expression) list) =
       let var = VarNameToID.find name p.program_idmap in
       VariableMap.add var e acc
     ) VariableMap.empty names
+
+let read_function_from_spec (_: program) : mvg_function =
+  if !Cli.function_spec = "" then
+    raise (Errors.ArgumentError "Function specification file is not specified using --function_spec");
+  let input = open_in !Cli.function_spec in
+  let filebuf =  Lexing.from_channel input in
+  Cli.debug_print (Printf.sprintf "Parsing %s" !Cli.function_spec);
+  let filebuf = {filebuf with
+                 lex_curr_p = { filebuf.lex_curr_p with
+                                pos_fname = Filename.basename !Cli.function_spec
+                              }
+                }
+  in
+  try
+    Parse_utils.current_file := !Cli.function_spec;
+    let _ = Parser.source_file token filebuf in
+    assert false
+  with
+  | Errors.LexingError msg | Errors.ParsingError msg ->
+    Cli.error_print msg; exit 1
+  | Parser.Error -> begin
+      Cli.error_print
+        (Printf.sprintf "Lexer error in file %s at position %s"
+           (!Parse_utils.current_file)
+           (Errors.print_lexer_position filebuf.lex_curr_p));
+      close_in input;
+      ignore (exit 1)
+    end;
+    close_in input;
+    assert false
 
 let simulateur_simplifie_ir_2017 (p: program) : mvg_function =
   let input_aliases = [

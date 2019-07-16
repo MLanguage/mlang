@@ -41,7 +41,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 let source_files : string list ref = ref []
 
 (** Prefix for dependency graph output files *)
-let dep_graph_file : string ref = ref "dep_graph"
+let dep_graph_file : string ref = ref "dep_graph.dot"
 
 (** Use Z3 to check if verif rules hold all the time *)
 let verify_flag = ref false
@@ -58,17 +58,15 @@ let print_cycles_flag = ref false
 (** Name of application to consider (drops all the rules not corresponding to it) *)
 let application = ref ""
 
-(** Wheter given back variables should be marked as program output *)
-let flag_output_given_back = ref false
-
-(** Output variable *)
-let output_variable = ref ""
-
 (** Displays timing information *)
 let display_time = ref false
 
 (** Run the optimisations on the M variable graph *)
 let optimize = ref false
+
+let output_file = ref ""
+
+let function_spec = ref ""
 
 let backend = ref "python"
 
@@ -85,21 +83,21 @@ let parse_cli_args () =
       ("--display_time", Arg.Set display_time,
        " Affiche le temps passé entre chaque information donnée par --debug");
       ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Préfixe pour le fichier où écrire le graphe de dépendance avec --debug (par défault \"dep_graph\")");
-      ("--given_back_output", Arg.Set flag_output_given_back,
-       "Marque les variables \"restituées\" comme des \"sortie()\" du programme");
+       " Nom du fichier où écrire le graphe de dépendance avec --debug");
       ("--print_cycles", Arg.Set print_cycles_flag,
        " Affiche les cycles de définition dans les variables");
       ("--optimize", Arg.Set optimize,
        "Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
-      ("--output", Arg.Set_string output_variable,
-       "Marque une variable particulière comme sortie du programme (elle sera alors la seule sortie)");
       ("--var_info", Arg.Set var_info_flag,
        " Affiche des informations sur les variables du programmes mal définies");
       ("--verify", Arg.Set verify_flag,
        " Vérifie que les conditions sont valables dans tous les cas");
       ("--backend", Arg.Set_string backend,
        " Défini le backend (Python, Z3, Interpreteur)");
+      ("--function_spec", Arg.Set_string function_spec,
+       " Fichier de spécification des entrées et sorties voulues");
+      ("--output", Arg.Set_string output_file,
+       " Nom du fichier de sortie pour le résultat de la compilation")
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."

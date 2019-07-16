@@ -89,19 +89,17 @@ let main () : int =
 
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
-    Dependency.print_dependency_graph (!Cli.dep_graph_file ^ "_before_optimization.dot") dep_graph program;
     ignore (Dependency.check_for_cycle dep_graph program true);
 
 
     Cli.debug_print "Extracting the desired function from the whole program...";
-    let program = Interface.fit_function program (Interface.simulateur_simplifie_ir_2017 program) in
+    let program = Interface.fit_function program (Interface.read_function_from_spec program) in
 
     let program = if !Cli.optimize then Optimize.optimize program else program in
 
     Cli.debug_print "Interpreting the program...";
 
-    let () =
-      if String.lowercase_ascii !Cli.backend = "z3" then
+    begin if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program dep_graph typing
       else if String.lowercase_ascii !Cli.backend = "interpreteur" then
         let f = Interface.make_function_from_program program 1 in
@@ -110,11 +108,14 @@ let main () : int =
                 (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
              )
           )
-      else
-        let output_file = "main.py" in
-        Mvg_to_python.generate_python_program program "main.py";
-        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s." output_file);
-    in
+      else if String.lowercase_ascii !Cli.backend = "python" then begin
+        if !Cli.output_file = "" then
+          raise (Errors.ArgumentError "an output file must be defined with --output");
+        Mvg_to_python.generate_python_program program !Cli.output_file;
+        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+      end else
+        raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
+    end;
 
     exit 0
 
@@ -123,5 +124,7 @@ let main () : int =
     Cli.error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg) ->
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); exit 1
+  | Errors.ArgumentError msg ->
+    Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); exit 1
 
 let _ = main ()

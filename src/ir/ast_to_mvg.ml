@@ -472,7 +472,7 @@ let get_variables_decl
                       let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
                       let new_idmap = Mvg.VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
                       let new_out_list = if List.exists (fun x -> match Ast.unmark x with
-                          | Ast.GivenBack -> !Cli.flag_output_given_back
+                          | Ast.GivenBack -> true
                           | Ast.Base -> false
                         ) cvar.Ast.comp_subtyp then
                           cvar.Ast.comp_name::out_list
@@ -523,27 +523,14 @@ let get_variables_decl
           ) (vars, idmap, errors, out_list) source_file
       ) (vars, idmap, [], []) p in
   let vars : var_decl_data Mvg.VariableMap.t =
-    if !Cli.output_variable = "" then
-      List.fold_left (fun vars out ->
-          let out_var = get_var_from_name idmap out in
-          try
-            let data = Mvg.VariableMap.find out_var vars in
-            Mvg.VariableMap.add out_var { data with var_decl_io = Output } vars
-          with
-          | Not_found -> assert false (* should not happen *)
-        ) vars out_list
-    else
-      try
-        let out_var = Mvg.VarNameToID.find !Cli.output_variable idmap in
-        let data = Mvg.VariableMap.find out_var vars in
-        Mvg.VariableMap.add out_var { data with var_decl_io = Output } vars
-      with
-      | Not_found -> raise (
-          Errors.TypeError (
-            Errors.Variable (
-              Printf.sprintf "Output variable \"%s\" from command line options is not a program variable"
-                !Cli.output_variable
-            )))
+    List.fold_left (fun vars out ->
+        let out_var = get_var_from_name idmap out in
+        try
+          let data = Mvg.VariableMap.find out_var vars in
+          Mvg.VariableMap.add out_var { data with var_decl_io = Output } vars
+        with
+        | Not_found -> assert false (* should not happen *)
+      ) vars out_list
   in
   (vars, errors, idmap)
 

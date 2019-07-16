@@ -47,13 +47,10 @@ build:
 test: build
 		dune exec src/main.exe -- --debug test.m
 
-batch: build
-		dune exec src/main.exe -- $(SOURCE_FILES) --application batch  --debug --given_back_output --display_time
-
 iliad: build
-		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad --display_time --debug --optimize
-bareme: build
-		dune exec src/main.exe --  $(SOURCE_FILES)  --application bareme --debug --output IINET
+		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
+		 	--display_time --debug --optimize \
+			--backend Python --output ir_2018.py
 
 
 doc:

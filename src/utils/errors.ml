@@ -78,3 +78,7 @@ let format_typ_error (e: typ_error) : string = match e with
   | Inlining s -> Printf.sprintf "Inlining error: %s" s
 
 exception Unimplemented of string
+
+(**{1 Others}*)
+
+exception ArgumentError of string

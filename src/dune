@@ -4,13 +4,14 @@
  (name main)
  (modules ("main"))
  (libraries verifisc)
+ (ocamlopt_flags (-cclib -lstdc++))
  (preprocess (pps ppx_deriving.std))
 )
 
 (library
  (public_name verifisc)
  (modules (:standard \ main))
- (libraries ocamlgraph z3 re ANSITerminal)
+ (libraries ocamlgraph z3 re ANSITerminal threads)
  (preprocess (pps ppx_deriving.std))
 )
 

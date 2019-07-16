@@ -1,3 +1,0 @@
-true: use_menhir
-true: package(ppx_deriving.std, ANSITerminal, str, ocamlgraph, z3)
-<src/**>: include, thread, bin_annot
