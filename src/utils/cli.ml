@@ -89,7 +89,7 @@ let parse_cli_args () =
       ("--print_cycles", Arg.Set print_cycles_flag,
        " Affiche les cycles de définition dans les variables");
       ("--optimize", Arg.Set optimize,
-       "Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
+       " Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
       ("--var_info", Arg.Set var_info_flag,
        " Affiche des informations sur les variables du programmes mal définies");
       ("--verify", Arg.Set verify_flag,
@@ -104,7 +104,7 @@ let parse_cli_args () =
        " Nombre de passes d'exécution pour les variables définies circulairement (défault 1)")
     ]
   in let usage_msg =
-       "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."
+       "Parseur et compilateur pour le langage M de la DGFiP, utilisé pour spécifier le calcul de la fiscalité française."
   in
   let anon_func (file: string) : unit =
     source_files := file::!source_files

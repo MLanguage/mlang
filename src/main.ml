@@ -40,43 +40,45 @@ open Lexer
 let main () : int =
   Cli.parse_cli_args ();
   Cli.debug_print "Reading files...";
-  let program = ref [] in
-  List.iter (fun source_file ->
-      let (filebuf, input) = if source_file <> "" then
-          let input = open_in source_file in
-          (Lexing.from_channel input, Some input)
-        else if source_file <> "" then
-          (Lexing.from_string source_file, None)
-        else
-          failwith "You have to specify at least one file!"
-      in
-      Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
-      let filebuf = {filebuf with
-                     lex_curr_p = { filebuf.lex_curr_p with
-                                    pos_fname = Filename.basename source_file
-                                  }
-                    }
-      in
-      try
-        Parse_utils.current_file := source_file;
-        let commands = Parser.source_file token filebuf in
-        program := commands::!program
-      with
-      | Errors.LexingError msg | Errors.ParsingError msg ->
-        Cli.error_print msg
-      | Parser.Error -> begin
-          Cli.error_print
-            (Printf.sprintf "Lexer error in file %s at position %s"
-               (!Parse_utils.current_file)
-               (Errors.print_lexer_position filebuf.lex_curr_p));
-          begin match input with
-            | Some input -> close_in input
-            | None -> ()
-          end;
-          exit (-1)
-        end
-    ) !Cli.source_files;
   try
+    let program = ref [] in
+    if List.length !Cli.source_files = 0 then
+      raise (Errors.ArgumentError "please provide at least one M source file");
+    List.iter (fun source_file ->
+        let (filebuf, input) = if source_file <> "" then
+            let input = open_in source_file in
+            (Lexing.from_channel input, Some input)
+          else if source_file <> "" then
+            (Lexing.from_string source_file, None)
+          else
+            failwith "You have to specify at least one file!"
+        in
+        Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
+        let filebuf = {filebuf with
+                       lex_curr_p = { filebuf.lex_curr_p with
+                                      pos_fname = Filename.basename source_file
+                                    }
+                      }
+        in
+        try
+          Parse_utils.current_file := source_file;
+          let commands = Parser.source_file token filebuf in
+          program := commands::!program
+        with
+        | Errors.LexingError msg | Errors.ParsingError msg ->
+          Cli.error_print msg
+        | Parser.Error -> begin
+            Cli.error_print
+              (Printf.sprintf "Lexer error in file %s at position %s"
+                 (!Parse_utils.current_file)
+                 (Errors.print_lexer_position filebuf.lex_curr_p));
+            begin match input with
+              | Some input -> close_in input
+              | None -> ()
+            end;
+            exit (-1)
+          end
+      ) !Cli.source_files;
     let program, _ =
       Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
     in
