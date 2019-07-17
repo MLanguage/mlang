@@ -68,6 +68,8 @@ let output_file = ref ""
 
 let function_spec = ref ""
 
+let number_of_passes = ref 1
+
 let backend = ref "python"
 
 (**{2 Argument parsing }*)
@@ -97,7 +99,9 @@ let parse_cli_args () =
       ("--function_spec", Arg.Set_string function_spec,
        " Fichier de spécification des entrées et sorties voulues");
       ("--output", Arg.Set_string output_file,
-       " Nom du fichier de sortie pour le résultat de la compilation")
+       " Nom du fichier de sortie pour le résultat de la compilation");
+      ("--number_of_passes", Arg.Set_int number_of_passes,
+       " Nombre de passes d'exécution pour les variables définies circulairement (défault 1)")
     ]
   in let usage_msg =
        "Parser and compiler for M, the language used by DGFiP to encode fiscal rules."

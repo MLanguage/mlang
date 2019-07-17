@@ -98,18 +98,18 @@ let main () : int =
 
     let program = if !Cli.optimize then Optimize.optimize program else program in
 
-    Cli.debug_print "Interpreting the program...";
-
     begin if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program dep_graph typing
-      else if String.lowercase_ascii !Cli.backend = "interpreteur" then
-        let f = Interface.make_function_from_program program 1 in
+      else if String.lowercase_ascii !Cli.backend = "interpreteur" then begin
+        Cli.debug_print "Interpreting the program...";
+        let f = Interface.make_function_from_program program !Cli.number_of_passes in
         Interface.print_output mvg_func
           (f (Interface.read_inputs_from_stdin mvg_func))
-      else if String.lowercase_ascii !Cli.backend = "python" then begin
+      end else if String.lowercase_ascii !Cli.backend = "python" then begin
+        Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program !Cli.output_file;
+        Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
         Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
       end else
         raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))

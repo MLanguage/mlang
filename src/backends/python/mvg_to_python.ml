@@ -67,41 +67,41 @@ let generate_typ (typ: typ) : string = match typ with
   | Real -> "float"
   | Boolean -> "bool"
 
-let rec generate_python_expr (e: expression) : string = match e with
+let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string = match e with
   | Comparison (op, e1, e2) ->
-    let s1 = generate_python_expr (Ast.unmark e1) in
-    let s2 = generate_python_expr (Ast.unmark e2) in
+    let s1 = generate_python_expr (Ast.unmark e1) scc in
+    let s2 = generate_python_expr (Ast.unmark e2) scc in
     Printf.sprintf "(%s %s %s)" s1 (generate_comp_op (Ast.unmark op)) s2
   | Binop ((Ast.Div, _), e1, e2) ->
-    let s1 = generate_python_expr (Ast.unmark e1) in
-    let s2 = generate_python_expr (Ast.unmark e2) in
+    let s1 = generate_python_expr (Ast.unmark e1) scc in
+    let s2 = generate_python_expr (Ast.unmark e2) scc in
     Printf.sprintf "((%s / %s) if %s != 0 else %s)" s1 s2 s2 none_value
   | Binop (op, e1, e2) ->
-    let s1 = generate_python_expr (Ast.unmark e1) in
-    let s2 = generate_python_expr (Ast.unmark e2) in
+    let s1 = generate_python_expr (Ast.unmark e1) scc in
+    let s2 = generate_python_expr (Ast.unmark e2) scc in
     Printf.sprintf "(%s %s %s)" s1 (generate_binop (Ast.unmark op)) s2
   | Unop (op, e) ->
-    let s = generate_python_expr (Ast.unmark e) in
+    let s = generate_python_expr (Ast.unmark e) scc in
     Printf.sprintf "(%s %s)" (Format_ast.format_unop op) s
   | Index (var, e) ->
-    let s = generate_python_expr (Ast.unmark e) in
+    let s = generate_python_expr (Ast.unmark e) scc in
     Printf.sprintf "%s[%s]" (generate_variable (Ast.unmark var)) s
   | Conditional (e1, e2, e3) ->
-    let s1 = generate_python_expr (Ast.unmark e1) in
-    let s2 = generate_python_expr (Ast.unmark e2) in
-    let s3 = generate_python_expr (Ast.unmark e3) in
+    let s1 = generate_python_expr (Ast.unmark e1) scc in
+    let s2 = generate_python_expr (Ast.unmark e2) scc in
+    let s3 = generate_python_expr (Ast.unmark e3) scc in
     Printf.sprintf "(%s if %s else %s)" s2 s1 s3
   | FunctionCall (PresentFunc, [arg]) ->
-    let sarg = generate_python_expr (Ast.unmark arg) in
+    let sarg = generate_python_expr (Ast.unmark arg) scc in
     Printf.sprintf "(%s != %s)" sarg none_value
   | FunctionCall (NullFunc, [arg]) ->
-    let sarg = generate_python_expr (Ast.unmark arg) in
+    let sarg = generate_python_expr (Ast.unmark arg) scc in
     Printf.sprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [arg]) ->
-    let sarg = generate_python_expr (Ast.unmark arg) in
+    let sarg = generate_python_expr (Ast.unmark arg) scc in
     Printf.sprintf "round(%s)" sarg
   | FunctionCall (InfFunc, [arg]) ->
-    let sarg = generate_python_expr (Ast.unmark arg) in
+    let sarg = generate_python_expr (Ast.unmark arg) scc in
     Printf.sprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Bool true) ->
@@ -114,105 +114,158 @@ let rec generate_python_expr (e: expression) : string = match e with
     Printf.sprintf "%f" f
   | Literal Undefined ->
     none_value
-  | Var var -> generate_variable var
+  | Var var ->
+    if VariableMap.mem var scc then
+      Printf.sprintf "scc[\"%s\"]" (generate_variable var)
+    else
+      generate_variable var
   | LocalVar lvar -> Printf.sprintf "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-    let s1 = generate_python_expr (Ast.unmark e1) in
-    let s2 = generate_python_expr (Ast.unmark e2) in
+    let s1 = generate_python_expr (Ast.unmark e1) scc in
+    let s2 = generate_python_expr (Ast.unmark e2) scc in
     Printf.sprintf "(lambda v%d: %s)(%s)"  lvar.LocalVariable.id s2 s1
 
-let generate_python_program (program: program) (filename : string) : unit =
-  if Dependency.check_for_cycle (Dependency.create_dependency_graph program) program false then
-    Cli.error_print "Python code generation not supported for programs containing irreductible circular variables definition"
-  else begin
-    let oc = open_out filename in
-    let dep_graph = Dependency.create_dependency_graph program in
-    let input_vars =
-      List.map
-        (fun (var, _) -> var)
-        (List.filter
-           (fun (_, data) -> data.var_io = Input)
-           (VariableMap.bindings program.program_vars)
-        )
-    in
-    Printf.fprintf oc "from math import floor\n\n";
-    Printf.fprintf oc "%s\n"
-      (String.concat
-         "\n"
+let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMap.t) (oc: out_channel) : unit =
+  let in_scc = VariableMap.cardinal scc > 1 in
+  let extra_tab = if in_scc then "\t" else "" in
+  try
+    let data = VariableMap.find var program.program_vars in
+    if data.var_io = Regular || data.var_io = Output then begin
+      Printf.fprintf oc "\t%s# %s: %s\n"
+        extra_tab
+        (generate_name var)
+        (Ast.unmark var.Variable.descr);
+      match data.var_definition with
+      | SimpleVar e ->
+        Printf.fprintf oc "\t%s# Defined %s\n\t%s%s = %s\n\n"
+          extra_tab
+          (Format_ast.format_position (Ast.get_position e))
+          extra_tab
+          (if in_scc then Printf.sprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
+          (generate_python_expr (Ast.unmark e) scc)
+      | TableVar (_, IndexTable es) -> begin
+          IndexMap.iter (fun i e ->
+              Printf.fprintf oc "\t%s# Defined %s\n\t%s%s[%d] = %s\n"
+                extra_tab
+                (Format_ast.format_position (Ast.get_position e))
+                extra_tab
+                (if in_scc then Printf.sprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
+                i
+                (generate_python_expr (Ast.unmark e) scc)
+            ) es;
+          Printf.fprintf oc "\n"
+        end
+      | TableVar (_, IndexGeneric e) ->
+        Printf.fprintf oc "\t%s# Defined %s\n\t%s%s = lambda generic_index: %s\n\n"
+          extra_tab
+          (Format_ast.format_position (Ast.get_position e))
+          extra_tab
+          (if in_scc then Printf.sprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
+          (generate_python_expr (Ast.unmark e) scc)
+      | InputVar -> assert false (* should not happen *)
+    end
+  with
+  | Not_found ->
+    let cond = VariableMap.find var program.program_conds in
+    Printf.fprintf oc
+      "\t%s# Verification condition %s\n\t%scond = %s\n\t%sif cond:\n\t%s\traise TypeError(\"Error triggered\\n%s\")\n\n"
+      extra_tab
+      (Format_ast.format_position (Ast.get_position cond.cond_expr))
+      extra_tab
+      (generate_python_expr (Ast.unmark cond.cond_expr) scc)
+      extra_tab
+      extra_tab
+      (String.concat "\\n"
          (List.map
-            (fun var ->
-               Printf.sprintf "# %s: %s"
-                 (generate_name var)
-                 (Ast.unmark var.Variable.descr)
+            (fun err ->
+               Printf.sprintf "%s: %s"
+                 (Ast.unmark err.Error.name)
+                 (Ast.unmark err.Error.descr)
             )
-            input_vars
+            cond.cond_errors
          )
-      );
-    Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
-    List.iter (fun var ->
-        match (VariableMap.find var program.program_vars).var_typ with
-        | Some typ ->
-          Printf.fprintf oc
-            "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
-            (generate_name var)
-            (generate_variable var)
-            (generate_typ typ)
-            (generate_name var)
-        | None -> ()
-      ) input_vars;
-    Printf.fprintf oc "\n";
-    Dependency.TopologicalOrder.iter (fun var ->
-        try
-          let data = VariableMap.find var program.program_vars in
-          if data.var_io = Regular || data.var_io = Output then begin
-            Printf.fprintf oc "\t# %s: %s\n"
-              (generate_name var)
-              (Ast.unmark var.Variable.descr);
-            match data.var_definition with
-            | SimpleVar e ->
-              Printf.fprintf oc "\t# Defined %s\n\t%s = %s\n\n"
-                (Format_ast.format_position (Ast.get_position e))
-                (generate_variable var)
-                (generate_python_expr (Ast.unmark e))
-            | TableVar (_, IndexTable es) -> begin
-                IndexMap.iter (fun i e ->
-                    Printf.fprintf oc "\t# Defined %s\n\t%s[%d] = %s\n"
-                      (Format_ast.format_position (Ast.get_position e))
-                      (generate_variable var)
-                      i
-                      (generate_python_expr (Ast.unmark e))
-                  ) es;
-                Printf.fprintf oc "\n"
-              end
-            | TableVar (_, IndexGeneric e) ->
-              Printf.fprintf oc "\t# Defined %s\n\t%s = lambda generic_index: %s\n\n"
-                (Format_ast.format_position (Ast.get_position e))
-                (generate_variable var)
-                (generate_python_expr (Ast.unmark e))
-            | InputVar -> assert false (* should not happen *)
-          end;
-          if data.var_io = Output then
-            Printf.fprintf oc "\treturn %s\n\n" (generate_variable var)
-        with
-        | Not_found ->
-          let cond = VariableMap.find var program.program_conds in
-          Printf.fprintf oc
-            "\t# Verification condition %s\n\tcond = %s\n\tif cond:\n\t\traise TypeError(\"Error triggered\\n%s\")\n\n"
-            (Format_ast.format_position (Ast.get_position cond.cond_expr))
-            (generate_python_expr (Ast.unmark cond.cond_expr))
-            (String.concat "\\n"
-               (List.map
-                  (fun err ->
-                     Printf.sprintf "%s: %s"
-                       (Ast.unmark err.Error.name)
-                       (Ast.unmark err.Error.descr)
-                  )
-                  cond.cond_errors
-               )
-            )
-      ) dep_graph;
+      )
 
-    close_out oc;
-  end
+let generate_python_program (program: program) (filename : string) (number_of_passes: int) : unit =
+  let oc = open_out filename in
+  let exec_order = Execution_order.get_execution_order program in
+  let input_vars =
+    List.map
+      (fun (var, _) -> var)
+      (List.filter
+         (fun (_, data) -> data.var_io = Input)
+         (VariableMap.bindings program.program_vars)
+      )
+  in
+  Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
+  Printf.fprintf oc "from math import floor\n\n";
+  Printf.fprintf oc "%s\n"
+    (String.concat
+       "\n"
+       (List.map
+          (fun var ->
+             Printf.sprintf "# %s: %s"
+               (generate_name var)
+               (Ast.unmark var.Variable.descr)
+          )
+          input_vars
+       )
+    );
+  Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
+  List.iter (fun var ->
+      match (VariableMap.find var program.program_vars).var_typ with
+      | Some typ ->
+        Printf.fprintf oc
+          "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
+          (generate_name var)
+          (generate_variable var)
+          (generate_typ typ)
+          (generate_name var)
+      | None -> ()
+    ) input_vars;
+  Printf.fprintf oc "\n";
+  List.iter (fun scc ->
+      let in_scc = VariableMap.cardinal scc > 1 in
+      if in_scc then begin
+        Printf.fprintf oc "\tscc = {}\n\n";
+        VariableMap.iter (fun var _ ->
+            Printf.fprintf oc "\tscc[\"%s\"] = %s\n"
+              (generate_variable var)
+              (none_value)
+          ) scc;
+        Printf.fprintf oc "\n\tfor _ in range(%d):\n" number_of_passes
+      end;
+      VariableMap.iter (fun var _ ->
+          generate_var_def program var scc oc
+        ) scc;
+      if in_scc then begin
+        VariableMap.iter (fun var _ ->
+            Printf.fprintf oc "\t%s = scc[\"%s\"]\n"
+              (generate_variable var)
+              (generate_variable var)
+          ) scc;
+        Printf.fprintf oc "\n"
+      end
+    ) exec_order;
+  let returned_variables =
+    List.map (fun (var, _) -> var ) (
+      List.filter
+        (fun (_, data) -> data.var_io = Output)
+        (VariableMap.bindings program.program_vars)
+    )
+  in
+  begin if List.length returned_variables = 1 then
+      Printf.fprintf oc "\treturn %s\n\n" (generate_variable (List.hd returned_variables))
+    else begin
+      Printf.fprintf oc "\tout = {}\n";
+      List.iter (fun var ->
+          Printf.fprintf oc "\tout[\"%s\"] = %s\n"
+            (generate_variable var)
+            (generate_variable var)
+        ) returned_variables;
+      Printf.fprintf oc "\treturn out\n"
+    end
+  end;
+  close_out oc
