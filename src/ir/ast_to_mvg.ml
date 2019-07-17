@@ -539,7 +539,6 @@ let get_variables_decl
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark i with
   | Ast.LiteralIndex i' -> Ast.same_pos_as (Mvg.Literal (Mvg.Int i')) i
-  | Ast.GenericIndex -> Ast.same_pos_as Mvg.GenericTableIndex i
   | Ast.SymbolIndex v ->
     let var = translate_variable ctx (Ast.same_pos_as v i) in
     var
@@ -710,7 +709,7 @@ let translate_lvalue
   in
   match (Ast.unmark lval).Ast.index with
   | Some ti -> begin match Ast.unmark ti with
-      | Ast.GenericIndex -> ({ ctx with table_definition = true }, var, GenericIndex)
+      | Ast.SymbolIndex (Ast.Normal "X") -> ({ ctx with table_definition = true }, var, GenericIndex)
       | Ast.LiteralIndex i -> (ctx, var, SingleIndex i)
       | Ast.SymbolIndex ((Ast.Normal _ ) as v) ->
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable v) ti) in

@@ -102,16 +102,13 @@ let parse_variable_or_int sloc (s:string) : parse_val  =
 
 (** Table index can be integer or [X], the generic table index variable *)
 let parse_table_index sloc (s: string) : Ast.table_index =
-  if String.equal s "X" then
-    Ast.GenericIndex
-  else
-    try Ast.LiteralIndex(int_of_string s) with
-    | Failure _ ->
-      begin try Ast.SymbolIndex (parse_variable sloc s) with
-        | E.ParsingError _ ->
-          Printf.printf "s: %s, %b\n" s (String.equal s "X");
-          E.parser_error sloc "table index should be an integer"
-      end
+  try Ast.LiteralIndex(int_of_string s) with
+  | Failure _ ->
+    begin try Ast.SymbolIndex (parse_variable sloc s) with
+      | E.ParsingError _ ->
+        Printf.printf "s: %s, %b\n" s (String.equal s "X");
+        E.parser_error sloc "table index should be an integer"
+    end
 
 (**{1 Literal parsing }*)
 

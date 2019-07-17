@@ -131,6 +131,7 @@ type ctx = {
   ctx_program : program;
   ctx_var_typ: Typ.t VariableMap.t;
   ctx_local_var_typ: Typ.t LocalVariableMap.t;
+  ctx_is_generic_table: bool;
 }
 
 
@@ -316,7 +317,14 @@ let rec typecheck_top_down
                  (Format_mvg.format_typ t)
               )))
     end
-  | (GenericTableIndex, Integer) -> ctx
+  | (GenericTableIndex, Integer) ->
+    if ctx.ctx_is_generic_table then
+      ctx
+    else
+      raise (Errors.TypeError
+               (Errors.Variable
+                  (Printf.sprintf "Generic table index appears outside of table %s"
+                     (Format_ast.format_position (Ast.get_position e)))))
   | (Index ((var, var_pos), e'), t) ->
     let ctx = typecheck_top_down ctx e' Integer in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
@@ -549,7 +557,14 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
                        t2_msg
                     )))
     end
-  | GenericTableIndex -> (ctx, Typ.integer (Ast.get_position e, Typ.Up))
+  | GenericTableIndex ->
+    if ctx.ctx_is_generic_table then
+      (ctx, Typ.integer (Ast.get_position e, Typ.Up))
+    else
+      raise (Errors.TypeError
+               (Errors.Variable
+                  (Printf.sprintf "Generic table index appears outside of table %s"
+                     (Format_ast.format_position (Ast.get_position e)))))
   | Index ((var, var_pos), e') ->
     let ctx = typecheck_top_down ctx e' Integer in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
@@ -655,19 +670,19 @@ let typecheck (p: program) : typ_info * program =
       match def.var_typ with
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
-            let new_ctx = typecheck_top_down ctx e t in
+            let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e t in
             (VariableMap.add var false acc,
              new_ctx,
              p)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
-                let new_ctx = typecheck_top_down ctx e t in
+                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e t in
                 (VariableMap.add var true acc,
                  new_ctx,
                  p)
               | IndexTable es ->
                 let new_ctx = IndexMap.fold (fun _ e ctx ->
-                    let new_ctx = typecheck_top_down ctx e t in
+                    let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e t in
                     new_ctx
                   ) es ctx in
                 let undefined_indexes = determine_def_complete_cover var size
@@ -702,7 +717,7 @@ let typecheck (p: program) : typ_info * program =
         end
       | None -> begin match def.var_definition with
           | SimpleVar e ->
-            let (new_ctx, t) = typecheck_bottom_up ctx e in
+            let (new_ctx, t) = typecheck_bottom_up { ctx with ctx_is_generic_table = false } e in
             let t = try
                 Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
               with
@@ -715,7 +730,7 @@ let typecheck (p: program) : typ_info * program =
             (VariableMap.add var false acc, new_ctx, p)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
-                let (new_ctx, t) = typecheck_bottom_up ctx e in
+                let (new_ctx, t) = typecheck_bottom_up { ctx with ctx_is_generic_table = true } e in
                 let t = try
                     Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
                   with
@@ -728,7 +743,7 @@ let typecheck (p: program) : typ_info * program =
                 (VariableMap.add var true acc, new_ctx, p)
               | IndexTable es ->
                 let (new_ctx, t) = IndexMap.fold (fun _ e (ctx, old_t) ->
-                    let (new_ctx, t) = typecheck_bottom_up ctx e in
+                    let (new_ctx, t) = typecheck_bottom_up { ctx with ctx_is_generic_table = false } e in
                     begin try
                         let t = Typ.unify t old_t in
                         let new_ctx =
@@ -797,6 +812,7 @@ let typecheck (p: program) : typ_info * program =
                               end
                           ) VariableMap.empty p.program_vars;
                         ctx_local_var_typ = LocalVariableMap.empty;
+                        ctx_is_generic_table = false
                       }, p.program_vars)
   in
   let ctx = typecheck_program_conds ctx p.program_conds in

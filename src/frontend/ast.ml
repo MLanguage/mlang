@@ -140,10 +140,10 @@ type literal =
 (**
    A table index is used in expressions like [TABLE[X]], and can be variables, integer or the special
    [X] variable that stands for a "generic" index (to define table values as a function of the index).
+   [X] is contained here in [SymbolIndex] because there can also be a variable named ["X"]...
 *)
 type table_index =
   | LiteralIndex of int
-  | GenericIndex
   | SymbolIndex of variable
 [@@deriving show]
 

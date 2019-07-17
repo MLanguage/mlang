@@ -76,7 +76,6 @@ let format_literal (l:literal) : string = match l with
 
 let format_table_index (i:table_index) : string = match i with
   | LiteralIndex i -> string_of_int i
-  | GenericIndex -> "X"
   | SymbolIndex v -> format_variable v
 
 let format_lvalue (lv: lvalue) : string =
