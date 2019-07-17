@@ -93,7 +93,8 @@ let main () : int =
 
 
     Cli.debug_print "Extracting the desired function from the whole program...";
-    let program = Interface.fit_function program (Interface.read_function_from_spec program) in
+    let mvg_func = Interface.read_function_from_spec program in
+    let program = Interface.fit_function program mvg_func in
 
     let program = if !Cli.optimize then Optimize.optimize program else program in
 
@@ -103,11 +104,8 @@ let main () : int =
         Z3_driver.translate_and_launch_query program dep_graph typing
       else if String.lowercase_ascii !Cli.backend = "interpreteur" then
         let f = Interface.make_function_from_program program 1 in
-        Interface.print_output program
-          (f (Mvg.VariableMap.add (Mvg.find_var_by_alias program "0CF") (Mvg.Literal (Mvg.Int 0))
-                (Mvg.VariableMap.singleton (Mvg.find_var_by_alias program "1AJ") (Mvg.Literal (Mvg.Int 30000)))
-             )
-          )
+        Interface.print_output mvg_func
+          (f (Interface.read_inputs_from_stdin mvg_func))
       else if String.lowercase_ascii !Cli.backend = "python" then begin
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");

@@ -13,7 +13,7 @@ You will need an OCaml distribution with the following Opam packages:
 
         ppx_deriving ANSITerminal ocamlgraph z3 odoc odig
 
-To build the project, simply enter:
+The Z3 Opam package takes a very long time to install. To build the project, simply enter:
 
         make build
 
@@ -27,7 +27,7 @@ will launch the compiler of the test file `test.m`. However, if you want to
 compile all the source code files released by the DGFiP for the year 2017,
 and analyse the code that computes the income tax, then launch
 
-        make bareme
+        make iliad
 
 To learn more about the available options, you can use
 

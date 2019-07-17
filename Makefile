@@ -47,11 +47,15 @@ build:
 test: build
 		dune exec src/main.exe -- --debug test.m
 
-iliad: build
-		dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
-		 	--display_time --debug --optimize \
-			--backend Python --output ir_2018.py --function_spec specs/simulateur_simplifie_2018.m_spec
+simulateur_simplifie_2018: build
+	dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
+	 	--display_time --debug --optimize \
+		--backend Python --output ir_2018.py --function_spec specs/simulateur_simplifie_2018.m_spec
 
+cas_basique_2018: build
+	dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
+	 	--display_time --debug --optimize \
+		--backend Interpreteur --function_spec specs/cas_basique.m_spec
 
 doc:
 	dune build @doc

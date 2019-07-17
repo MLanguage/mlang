@@ -446,7 +446,7 @@ let rec repeati (init: 'a) (f: 'a -> 'a) (n: int) : 'a =
 
 let evaluate_program
     (p: program)
-    (input_values: expression VariableMap.t)
+    (input_values: literal VariableMap.t)
     (number_of_passes : int)
   : ctx =
   try
@@ -458,10 +458,17 @@ let evaluate_program
           { ctx with
             ctx_current_scc_values =
               VariableMap.mapi (fun var _ ->
-                  match (VariableMap.find var p.program_vars).var_definition with
-                  | Mvg.SimpleVar _ -> SimpleVar Undefined
-                  | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
-                  | InputVar -> assert false (* should not happen *)
+                  try begin match (VariableMap.find var p.program_vars).var_definition with
+                    | Mvg.SimpleVar _ -> SimpleVar Undefined
+                    | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
+                    | InputVar -> begin match VariableMap.find_opt var input_values with
+                        | Some e -> SimpleVar e
+                        | None -> assert false (* should not happen *)
+                      end
+                  end with
+                  | Not_found ->
+                    let _ = VariableMap.find var p.program_conds in
+                    SimpleVar Undefined
                 ) scc
           }
         in
@@ -498,7 +505,12 @@ let evaluate_program
                              ctx.ctx_vars
                        }
                      | Mvg.InputVar -> begin try
-                           let l = evaluate_expr ctx p  (Ast.same_pos_as (VariableMap.find var input_values) var.Variable.name) in
+                           let l =
+                             evaluate_expr ctx p
+                               (
+                                 Ast.same_pos_as (Literal  (VariableMap.find var input_values))
+                                   var.Variable.name
+                               ) in
                            { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
                          with
                          | Not_found -> raise (
@@ -540,7 +552,10 @@ let evaluate_program
             (** After a pass we have to update the current SCC values to what has just been computed *)
             { ctx with
               ctx_current_scc_values =
-                VariableMap.mapi (fun var _ -> VariableMap.find var ctx.ctx_vars) ctx.ctx_current_scc_values
+                VariableMap.mapi
+                  (fun var _ -> try VariableMap.find var ctx.ctx_vars with
+                     | Not_found -> SimpleVar Undefined (* this is for verification conditions variables *)
+                  ) ctx.ctx_current_scc_values
             }
           )
           (** For SCC of one variable no need to repeat multiple passes *)

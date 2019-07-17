@@ -194,26 +194,46 @@ let read_function_from_spec (p: program) : mvg_function =
       exit 1
     end
 
-
 let make_function_from_program
     (program: program)
     (number_of_passes: int)
-  : expression VariableMap.t -> Interpreter.ctx =
+  : literal VariableMap.t -> Interpreter.ctx =
   fun input_values ->
   Interpreter.evaluate_program program input_values number_of_passes
 
-let print_output (p: program) (results: Interpreter.ctx) : unit =
+let read_inputs_from_stdin (f: mvg_function) : literal VariableMap.t =
+  Cli.result_print "Enter the input values of the program, followed by a semicolon:";
+  VariableMap.mapi (fun var _ ->
+      Printf.printf "%s (%s) = "
+        (match var.Variable.alias with Some s -> s | None -> Ast.unmark var.Variable.name)
+        (Ast.unmark var.Variable.descr);
+      let value = read_line () in
+      Parse_utils.current_file := "standard input";
+      try
+        let value_ast = Parser.literal_input token (Lexing.from_string value) in
+        match value_ast with
+        | Ast.Int i -> Mvg.Int i
+        | Ast.Float f -> Mvg.Float f
+        | Ast.Variable _ ->
+          raise
+            (Errors.TypeError
+               (Errors.Variable
+                  "Function input must be a numeric constant"
+               ))
+      with
+      | Errors.LexingError msg | Errors.ParsingError msg ->
+        Cli.error_print msg; exit 1
+      | Parser.Error -> begin
+          Cli.error_print
+            (Printf.sprintf "Lexer error in input!");
+          exit 1
+        end
+    ) f.func_variable_inputs
+
+let print_output (f: mvg_function) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
-      if (VariableMap.find var p.program_vars).Mvg.var_io = Mvg.Output &&
-         begin match VariableMap.find var results.ctx_vars with
-           | Interpreter.SimpleVar (Bool false)
-           | Interpreter.SimpleVar (Int 0)
-           | Interpreter.SimpleVar (Float 0.)
-           | Interpreter.SimpleVar Undefined -> false
-           | _ -> true
-         end then
+      if VariableMap.mem var f.func_outputs then
         Cli.result_print
           (Interpreter.format_var_literal_with_var var value)
     )
     results.ctx_vars;
-  Interpreter.repl_debugguer results p

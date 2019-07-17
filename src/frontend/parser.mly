@@ -58,8 +58,9 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 %token EOF
 
-%type <Ast.source_file> source_file
+%type<Ast.source_file> source_file
 %type<Ast.function_spec> function_spec
+%type<Ast.literal> literal_input
 
 %nonassoc SEMICOLON
 %left OR AND
@@ -68,6 +69,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 %start source_file
 %start function_spec
+%start literal_input
 
 %%
 
@@ -524,3 +526,6 @@ function_spec:
     spec_consts = [];
     spec_outputs = [];
  } }
+
+ literal_input:
+ | l = factor_literal SEMICOLON { l }
