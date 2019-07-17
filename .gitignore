@@ -1,8 +1,7 @@
 _build/
 doc/
 main.native
-dep_graph_before_optimization.dot
-dep_graph_after_optimization.dot
+dep_graph.dot
 results.json
 variable_cycles/
 README.mld

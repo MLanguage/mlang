@@ -1,0 +1,7 @@
+saisie: 0CF, 1AJ, 1BJ;
+
+const:
+V_ANREV = 2017;
+V_0AM = 1;
+
+sortie: IRNET;

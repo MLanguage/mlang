@@ -408,6 +408,14 @@ type source_file = source_file_item marked list
 type program = source_file list
 [@@deriving show]
 
+(**{1 Function specification AST }*)
+
+type function_spec = {
+  spec_inputs: variable_name list;
+  spec_consts: (variable_name * expression marked) list;
+  spec_outputs: variable_name list;
+}
+
 
 (** {1 Helper functions } *)
 

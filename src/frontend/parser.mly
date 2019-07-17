@@ -59,6 +59,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 %token EOF
 
 %type <Ast.source_file> source_file
+%type<Ast.function_spec> function_spec
 
 %nonassoc SEMICOLON
 %left OR AND
@@ -66,6 +67,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 %nonassoc SYMBOL
 
 %start source_file
+%start function_spec
 
 %%
 
@@ -489,3 +491,36 @@ marked_symbol:
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, marked_symbol) { ss }
+
+(* This is for the function spec file *)
+
+spec_input_list:
+| NOT { [] }
+| inputs = separated_nonempty_list(COMMA, SYMBOL)
+  { List.map (fun s -> parse_variable_name $sloc s) inputs }
+
+spec_output_list:
+| outputs = separated_nonempty_list(COMMA, SYMBOL)
+  { List.map (fun s -> parse_variable_name $sloc s) outputs  }
+
+const_input:
+| var = SYMBOL EQUALS expr = expression SEMICOLON { (parse_variable_name $sloc var, expr) }
+
+spec_const_list:
+| NOT { [] }
+| const = const_input { [const] }
+| const = const_input rest = spec_const_list { const::rest }
+
+function_spec:
+| INPUT COLON inputs = spec_input_list SEMICOLON
+  CONST COLON consts = spec_const_list
+  OUTPUT COLON outputs = spec_output_list SEMICOLON { {
+      spec_inputs = inputs;
+      spec_consts = consts;
+      spec_outputs = outputs;
+   } }
+| EOF { {
+    spec_inputs = [];
+    spec_consts = [];
+    spec_outputs = [];
+ } }
