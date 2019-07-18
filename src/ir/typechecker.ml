@@ -247,6 +247,9 @@ let rec typecheck_top_down
       ((Typ.boolean (Ast.get_position e, Typ.Up)))
       ((Typ.create_concrete t (Ast.get_position e, Typ.Down)));
     ctx
+  | (Literal Undefined, _) ->
+    (* Literal has all the types *)
+    ctx
   | (Var var, t) ->
     begin try match (VariableMap.find var ctx.ctx_program.program_vars).var_typ with
       | Some t' ->

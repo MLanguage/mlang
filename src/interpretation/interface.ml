@@ -115,7 +115,9 @@ let var_set_from_variable_name_list (p: program) (names : string list) : unit Va
   List.fold_left (fun acc name ->
       let var = try find_var_by_alias p name with
         | Errors.TypeError _ ->
-          VarNameToID.find name p.program_idmap
+          List.hd (List.sort (fun v1 v2 ->
+              compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+              (VarNameToID.find name p.program_idmap))
       in
       VariableMap.add var () acc
     ) VariableMap.empty names
@@ -137,9 +139,11 @@ let const_var_set_from_list
     (names : (string * Ast.expression Ast.marked) list)
   : Mvg.expression Ast.marked VariableMap.t =
   List.fold_left (fun acc (name, e) ->
-
       let var =
-        try VarNameToID.find name p.program_idmap with
+        try List.hd (List.sort (fun v1 v2 ->
+            compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+            (VarNameToID.find name p.program_idmap))
+        with
         | Not_found ->
           raise
             (Errors.TypeError
@@ -154,7 +158,8 @@ let const_var_set_from_list
           table_definition = false;
           idmap = p.program_idmap;
           lc = None;
-          int_const_values = VariableMap.empty
+          int_const_values = VariableMap.empty;
+          rule_number = -1
         }) e
       in
       check_const_expression_is_really_const new_e;

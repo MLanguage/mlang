@@ -79,7 +79,7 @@ let main () : int =
             exit (-1)
           end
       ) !Cli.source_files;
-    let program, _ =
+    let program =
       Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
     in
 

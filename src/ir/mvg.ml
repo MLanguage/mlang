@@ -39,6 +39,8 @@ knowledge of the CeCILL-C license and that you accept its terms.
 module Variable = struct
   type t = {
     name: string Ast.marked; (** The position is the variable declaration *)
+    execution_number: int;
+    (** The number associated with the rule of verification condition in which the variable is defined *)
     alias: string option; (** Input variable have an alias *)
     id: int; (** Each variable has an unique ID *)
     descr: string Ast.marked; (** Description taken from the variable declaration *)
@@ -52,8 +54,8 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string Ast.marked) (alias: string option) (descr: string Ast.marked) : t = {
-    name; id = fresh_id (); descr; alias
+  let new_var (name: string Ast.marked) (alias: string option) (descr: string Ast.marked) (execution_number : int) : t = {
+    name; id = fresh_id (); descr; alias; execution_number
   }
 
   let compare (var1 :t) (var2 : t) =
@@ -224,10 +226,11 @@ type condition_data = {
 
 (**
    We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
-   a mapping between the two.
+   a mapping between the two. A name is mapped to a list of variables because variables can be redefined
+   in different rules
 *)
 module VarNameToID = Map.Make(String)
-type idmap = Variable.t VarNameToID.t
+type idmap = Variable.t list VarNameToID.t
 
 type program = {
   program_vars: variable_data VariableMap.t;

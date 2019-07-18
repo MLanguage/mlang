@@ -94,16 +94,27 @@ let repl_debugguer
     if query = "explain" then begin
       Printf.printf ">> ";
       let query = read_line () in
-      try let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
+      try let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         Printf.printf "%s\n"
-          (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+          (String.concat "\n"
+             (List.map (fun var ->
+                  Printf.sprintf "Règle %d: %s"
+                    var.Variable.execution_number
+                    (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+                ) vars))
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
     end else try
-        let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
+        let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         try begin
-          let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-          Printf.printf "%s\n" (format_var_literal_with_var var var_l)
+          Printf.printf "%s\n"
+            (String.concat "\n"
+               (List.map (fun var ->
+                    let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
+                    Printf.sprintf "Règle %d: %s "
+                      var.Variable.execution_number
+                      (format_var_literal_with_var var var_l)
+                  ) vars))
         end with
         | Not_found -> Printf.printf "Variable not computed yet\n"
       with
