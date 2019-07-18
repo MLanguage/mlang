@@ -664,9 +664,46 @@ let typecheck_program_conds (ctx: ctx) (conds: condition_data VariableMap.t) : c
       typecheck_top_down ctx cond.cond_expr Mvg.Boolean
     ) conds ctx
 
+let rec check_non_recursivity_expr (e: expression Ast.marked) (lvar :Variable.t) : unit =
+  match Ast.unmark e with
+  | Comparison (_, e1, e2) | Binop (_, e1, e2) | LocalLet (_, e1, e2) ->
+    check_non_recursivity_expr e1 lvar;
+    check_non_recursivity_expr e2 lvar
+  | Unop (_, e1) ->
+    check_non_recursivity_expr e1 lvar
+  | Index (_, e1) ->
+    (*
+      We don't check for recursivity in indexes because tables can refer to themselves in definition.
+      It is only at runtime that we return [Undefined] for index definitions that refer to indexes
+      of the same table greater than themselves.
+    *)
+    check_non_recursivity_expr e1 lvar
+  | Conditional (e1, e2, e3) ->
+    check_non_recursivity_expr e1 lvar;
+    check_non_recursivity_expr e2 lvar;
+    check_non_recursivity_expr e3 lvar
+  | FunctionCall (_, args) ->
+    List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
+  | Literal _ | LocalVar _ | GenericTableIndex | Error -> ()
+  | Var var -> if var = lvar then
+      raise (Errors.TypeError (
+          Errors.Variable
+            (Printf.sprintf "You cannot refer to the variable %s since you are defining it (%s)"
+               (Ast.unmark var.Variable.name)
+               (Format_ast.format_position (Ast.get_position e))
+            )))
+    else ()
+
+let check_non_recursivity_of_variable_defs (var: Variable.t) (def: variable_def) : unit =
+  match def with
+  | SimpleVar e ->
+    check_non_recursivity_expr e var
+  | TableVar _ | InputVar -> ()
+
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p: program) : typ_info * program =
   let (are_tables, ctx, p_vars) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
+      check_non_recursivity_of_variable_defs var def.var_definition;
       match def.var_typ with
       | Some t -> begin match def.var_definition with
           | SimpleVar e ->
@@ -800,7 +837,7 @@ let typecheck (p: program) : typ_info * program =
             else begin
               (VariableMap.add var false acc, ctx, p)
             end
-        end
+        end;
     ) p.program_vars (Mvg.VariableMap.empty,
                       { ctx_program = p;
                         ctx_var_typ = VariableMap.merge (fun var _ def ->
