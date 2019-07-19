@@ -161,6 +161,16 @@ let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.p
     in
     { ctx with lc = Some merged_lc }
 
+
+let rec list_max_execution_number (l: Mvg.Variable.t list) : Mvg.Variable.t =
+  match l with
+  | [] -> raise Not_found
+  | [v] -> v
+  | v::rest -> let max_rest = list_max_execution_number rest in
+    match Mvg.(v.Mvg.Variable.execution_number ^^ max_rest.Mvg.Variable.execution_number) with
+    | Mvg.Left -> v
+    | Mvg.Right -> max_rest
+
 (**
    Queries a [type: Mvg.variable.t] from an [type:idmap] mapping, the name of a variable and the rule number
    from which the variable is requested. Returns the variable with the same name and highest rule number
@@ -173,18 +183,9 @@ let get_var_from_name
   : Mvg.Variable.t =
   try
     let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
-    (List.hd
-       (List.sort (* Decreasing order *)
-          (fun v1 v2 -> Mvg.compare_execution_number v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
-          (List.filter (fun var -> Mvg.(var.Mvg.Variable.execution_number <| exec_number)) same_name)))
+    list_max_execution_number
+      (List.filter (fun var -> Mvg.(var.Mvg.Variable.execution_number <| exec_number)) same_name)
   with
-  | Failure s when s = "hd" ->
-    raise (Errors.TypeError
-             (Errors.Variable
-                (Printf.sprintf "variable %s used %s, has not been declared"
-                   (Ast.unmark name)
-                   (Format_ast.format_position (Ast.get_position name))
-                )))
   | Not_found ->
     raise (Errors.TypeError
              (Errors.Variable
@@ -192,6 +193,29 @@ let get_var_from_name
                    (Ast.unmark name)
                    (Format_ast.format_position (Ast.get_position name))
                 )))
+
+(** Same but also take into account variables defined in the same execution unit *)
+let get_var_from_name_lax
+    (d:Mvg.Variable.t list Mvg.VarNameToID.t)
+    (name:Ast.variable_name Ast.marked)
+    (exec_number: Mvg.execution_number)
+  : Mvg.Variable.t =
+  try
+    let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
+    list_max_execution_number
+      (List.filter (fun var -> Mvg.(
+           var.Mvg.Variable.execution_number <| exec_number ||
+           var.Mvg.Variable.execution_number <=> exec_number
+         )) same_name)
+  with
+  | Not_found ->
+    raise (Errors.TypeError
+             (Errors.Variable
+                (Printf.sprintf "variable %s used %s, has not been declared"
+                   (Ast.unmark name)
+                   (Format_ast.format_position (Ast.get_position name))
+                )))
+
 
 
 (**{1 Translation }*)
@@ -582,7 +606,7 @@ let get_variables_decl
   let vars : var_decl_data Mvg.VariableMap.t =
     List.fold_left (fun vars out_name ->
         try
-          let out_var = get_var_from_name
+          let out_var = get_var_from_name_lax
               idmap
               out_name
               (dummy_exec_number (Ast.get_position out_name))
@@ -1033,7 +1057,7 @@ let get_var_data
                     ((var_data, ctx.idmap), seq_number + 1)
                 ) ((var_data, idmap), 0) r.Ast.rule_formulaes)
           | Ast.VariableDecl (Ast.ConstVar (name, lit)) ->
-            let var = get_var_from_name idmap name (dummy_exec_number (Ast.get_position name)) in
+            let var = get_var_from_name_lax idmap name (dummy_exec_number (Ast.get_position name)) in
             (add_var_def var_data var (Ast.same_pos_as (Mvg.Literal (begin match Ast.unmark lit with
                  | Ast.Variable var ->
                    raise (Errors.TypeError (
@@ -1046,7 +1070,7 @@ let get_var_data
                  | Ast.Float f -> Mvg.Float f
                end)) lit) NoIndex var_decl_data idmap, idmap)
           | Ast.VariableDecl (Ast.InputVar (var, pos)) ->
-            let var = get_var_from_name idmap var.Ast.input_name (dummy_exec_number pos) in
+            let var = get_var_from_name_lax idmap var.Ast.input_name (dummy_exec_number pos) in
             let var_decl = try Mvg.VariableMap.find var var_decl_data with
               | Not_found -> assert false (* should not happen *)
             in

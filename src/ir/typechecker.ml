@@ -488,11 +488,22 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
           end
         | _ -> raise (Errors.TypeError
                         (Errors.Typing
-                           (Printf.sprintf "function %s should have only one arguemnt"
+                           (Printf.sprintf "function %s should have only one argument"
                               (Format_ast.format_position pos)
                            )))
       end
-  | Mvg.Multimax  -> raise (Errors.Unimplemented ("multimax or supzero"))
+  | Mvg.Multimax  ->
+    fun ctx args ->
+      begin match args with
+        | [bound; table] ->
+          let ctx = typecheck_top_down ctx bound Integer in
+          typecheck_bottom_up ctx table 
+        | _ -> raise (Errors.TypeError
+                        (Errors.Typing
+                           (Printf.sprintf "function %s should have two arguments"
+                              (Format_ast.format_position pos)
+                           )))
+      end
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Ast.marked) : (ctx * Typ.t) =
   match Ast.unmark e with

@@ -120,8 +120,8 @@ let main () : int =
     exit 0
 
   with
-  | Errors.TypeError e ->
-    Cli.error_print (Errors.format_typ_error e); exit 1
+  (* | Errors.TypeError e ->
+     Cli.error_print (Errors.format_typ_error e); exit 1 *)
   | Errors.Unimplemented (msg) ->
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); exit 1
   | Errors.ArgumentError msg ->

@@ -39,6 +39,12 @@ let format_execution_number (exec_number: execution_number) : string =
     exec_number.seq_number
     (Format_ast.format_position exec_number.pos)
 
+let format_execution_number_short (exec_number: execution_number) : string =
+  Printf.sprintf "%d#%d"
+    exec_number.rule_number
+    exec_number.seq_number
+
+
 let format_typ (t: typ) : string = match t with
   | Integer -> "integer"
   | Real -> "real"
@@ -83,7 +89,10 @@ let rec format_expression (e: expression) : string = match e with
                                (format_func f )
                                (String.concat "," (List.map (fun e -> format_expression (Ast.unmark e)) args))
   | Literal lit -> format_literal lit
-  | Var var -> Ast.unmark var.Variable.name
+  | Var var ->
+    Printf.sprintf "%s[%s]"
+      (Ast.unmark var.Variable.name)
+      (format_execution_number_short var.Variable.execution_number)
   | LocalVar lvar -> "t" ^ (string_of_int lvar.LocalVariable.id)
   | GenericTableIndex -> "X"
   | Error -> "erreur"

@@ -112,13 +112,16 @@ let fit_function (p: program) (f: mvg_function) : program =
   }
 
 let var_set_from_variable_name_list (p: program) (names : string list) : unit VariableMap.t =
-  List.fold_left (fun acc name ->
-      let var = try find_var_by_alias p name with
-        | Errors.TypeError _ ->
-          List.hd (List.sort (fun v1 v2 ->
-              compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
-              (VarNameToID.find name p.program_idmap))
+  List.fold_left (fun acc alias ->
+      let name = try find_var_name_by_alias p alias with
+        | Errors.TypeError _ -> alias
       in
+      let var =
+        Ast_to_mvg.list_max_execution_number (VarNameToID.find name p.program_idmap)
+      in
+      Printf.printf "Picked variable: %s (%s)\n" (Ast.unmark var.Mvg.Variable.name)
+        (Format_mvg.format_execution_number var.Mvg.Variable.execution_number);
+      Interpreter.repl_debugguer (Interpreter.empty_ctx) p;
       VariableMap.add var () acc
     ) VariableMap.empty names
 

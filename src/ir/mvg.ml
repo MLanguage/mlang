@@ -48,15 +48,25 @@ type execution_number = {
 }
 [@@deriving show]
 
-let compare_execution_number (en1: execution_number) (en2: execution_number) : int =
-  let x = compare en1.rule_number en2.rule_number in
-  if x <> 0 then x else
-    compare en1.seq_number en2.seq_number
 
-(** This is the operator used to determine which variable assignment to choose *)
-let (<|) (en1: execution_number) (en2: execution_number) = compare_execution_number en1 en2 <= 0
+type max_result = Left | Right
+(** Operator used to select the most preferable variable to choose *)
+let (^^) (left: execution_number) (right: execution_number) : max_result =
+  if left.rule_number > right.rule_number then Left else
+  if left.rule_number < right.rule_number then Right else
+  if left.seq_number > right.seq_number then Left else
+  if left.seq_number < right.seq_number then Right else
+    Left
 
-let (<=>) (en1: execution_number) (en2: execution_number) = compare_execution_number en1 en2 = 0
+(** This is the operator used to determine the valid *)
+let (<|) (candidate: execution_number) (current: execution_number) : bool =
+  if candidate.rule_number <> current.rule_number then true else
+    candidate.seq_number < current.seq_number
+
+
+(** This is the operator used to find a particular variable in the [idmap] *)
+let (<=>) (en1: execution_number) (en2: execution_number) : bool =
+  en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
 module Variable = struct
   type t = {
@@ -270,11 +280,11 @@ type program = {
 
 
 (** Throws an error in case of alias not found *)
-let find_var_by_alias (p: program) (alias: string) : Variable.t =
+let find_var_name_by_alias (p: program) (alias: string) : string =
   let v = VariableMap.fold (fun v _ acc ->
       match acc, v.Variable.alias with
       | (Some _, _) | (None, None ) -> acc
-      | (None, Some v_alias) -> if v_alias = alias then Some v else None
+      | (None, Some v_alias) -> if v_alias = alias then Some (Ast.unmark v.Variable.name) else None
     ) p.program_vars None in
   match v with
   | Some v -> v
