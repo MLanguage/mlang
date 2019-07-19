@@ -36,10 +36,32 @@ knowledge of the CeCILL-C license and that you accept its terms.
 (**{1 Variables} *)
 
 (** Variables are first-class objects *)
+
+(**
+   To determine in which order execute the different variable assigment we have to record their
+   position in the graph.
+*)
+type execution_number = {
+  rule_number: int; (** Written in the name of the rule or verification condition *)
+  seq_number: int; (** Index in the sequence of the definitions in the rule *)
+  pos: Ast.position;
+}
+[@@deriving show]
+
+let compare_execution_number (en1: execution_number) (en2: execution_number) : int =
+  let x = compare en1.rule_number en2.rule_number in
+  if x <> 0 then x else
+    compare en1.seq_number en2.seq_number
+
+(** This is the operator used to determine which variable assignment to choose *)
+let (<|) (en1: execution_number) (en2: execution_number) = compare_execution_number en1 en2 <= 0
+
+let (<=>) (en1: execution_number) (en2: execution_number) = compare_execution_number en1 en2 = 0
+
 module Variable = struct
   type t = {
     name: string Ast.marked; (** The position is the variable declaration *)
-    execution_number: int;
+    execution_number: execution_number;
     (** The number associated with the rule of verification condition in which the variable is defined *)
     alias: string option; (** Input variable have an alias *)
     id: int; (** Each variable has an unique ID *)
@@ -54,9 +76,15 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string Ast.marked) (alias: string option) (descr: string Ast.marked) (execution_number : int) : t = {
-    name; id = fresh_id (); descr; alias; execution_number
-  }
+  let new_var
+      (name: string Ast.marked)
+      (alias: string option)
+      (descr: string Ast.marked)
+      (execution_number : execution_number)
+    : t =
+    {
+      name; id = fresh_id (); descr; alias; execution_number
+    }
 
   let compare (var1 :t) (var2 : t) =
     compare var1.id var2.id

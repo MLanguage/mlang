@@ -159,7 +159,7 @@ let const_var_set_from_list
           idmap = p.program_idmap;
           lc = None;
           int_const_values = VariableMap.empty;
-          rule_number = -1
+          exec_number = Ast_to_mvg.dummy_exec_number Ast.no_pos
         }) e
       in
       check_const_expression_is_really_const new_e;

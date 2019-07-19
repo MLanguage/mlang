@@ -288,7 +288,8 @@ let rec typecheck_top_down
                   )))
         end
       with
-      | Not_found -> assert false (* should not happen *)
+      | Not_found ->
+        assert false (* should not happen *)
     end
   | (LocalLet (local_var, e1, e2), t) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
