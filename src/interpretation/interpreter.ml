@@ -480,8 +480,18 @@ let evaluate_program
                       end
                   end with
                   | Not_found ->
-                    let _ = VariableMap.find var p.program_conds in
-                    SimpleVar Undefined
+                    try
+                      let _ = VariableMap.find var p.program_conds in
+                      SimpleVar Undefined
+                    with
+                    | Not_found ->
+                      Printf.printf "Variable not found: %s %s\nSame name: %s\n"
+                        (Ast.unmark var.Mvg.Variable.name)
+                        (Format_mvg.format_execution_number var.Mvg.Variable.execution_number)
+                        (String.concat "," (List.map (fun var ->
+                             Printf.sprintf "%s[%s]" (Ast.unmark var.Mvg.Variable.name) (Format_mvg.format_execution_number_short var.Mvg.Variable.execution_number)
+                           ) (Mvg.VarNameToID.find (Ast.unmark var.Mvg.Variable.name) p.Mvg.program_idmap)));
+                      assert false
                 ) scc
           }
         in

@@ -119,9 +119,9 @@ let var_set_from_variable_name_list (p: program) (names : string list) : unit Va
       let var =
         Ast_to_mvg.list_max_execution_number (VarNameToID.find name p.program_idmap)
       in
-      Printf.printf "Picked variable: %s (%s)\n" (Ast.unmark var.Mvg.Variable.name)
-        (Format_mvg.format_execution_number var.Mvg.Variable.execution_number);
-      Interpreter.repl_debugguer (Interpreter.empty_ctx) p;
+      (*  Printf.printf "Picked variable: %s (%s)\n" (Ast.unmark var.Mvg.Variable.name)
+          (Format_mvg.format_execution_number var.Mvg.Variable.execution_number);
+          Interpreter.repl_debugguer (Interpreter.empty_ctx) p;*)
       VariableMap.add var () acc
     ) VariableMap.empty names
 

@@ -350,113 +350,6 @@ let format_zero_padding (zp: zero_padding) : string = match zp with
   | ZPAdd -> "add zero padding"
   | ZPRemove -> "remove zero padding"
 
-(** Main function that translates variable giving the context *)
-let rec translate_variable
-    (idmap: Mvg.idmap)
-    (exec_number: Mvg.execution_number)
-    (table_definition : bool)
-    (lc: loop_context option)
-    (var: Ast.variable Ast.marked)
-    (lax: bool)
-  : Mvg.expression Ast.marked =
-  match Ast.unmark var with
-  | Ast.Normal name ->
-    Ast.same_pos_as (get_var_or_x idmap exec_number (Ast.same_pos_as name var) table_definition lax) var
-  | Ast.Generic gen_name ->
-    if List.length gen_name.Ast.parameters == 0 then
-      translate_variable idmap exec_number table_definition lc (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var) lax
-    else match lc with
-      | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some _ -> instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name (Ast.get_position var) lax
-
-(** The following function deal with the "trying all cases" pragma *)
-
-and instantiate_generic_variables_parameters
-    (idmap: Mvg.idmap)
-    (exec_number: Mvg.execution_number)
-    (table_definition : bool)
-    (lc: loop_context option)
-    (gen_name:Ast.variable_generic_name)
-    (pos: Ast.position)
-    (lax: bool)
-  : Mvg.expression Ast.marked =
-  instantiate_generic_variables_parameters_aux idmap exec_number table_definition lc gen_name.Ast.base ZPNone pos lax
-
-and instantiate_generic_variables_parameters_aux
-    (idmap: Mvg.idmap)
-    (exec_number: Mvg.execution_number)
-    (table_definition : bool)
-    (lc: loop_context option)
-    (var_name:string)
-    (pad_zero: zero_padding)
-    (pos: Ast.position)
-    (lax: bool)
-  : Mvg.expression Ast.marked
-  =
-  try match ParamsMap.choose_opt (
-      match lc with
-      | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some lc -> lc
-    ) with
-  | None ->
-    translate_variable idmap exec_number table_definition lc (Ast.Normal var_name, pos) lax
-  | Some (param, value) ->
-      (*
-        The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
-        trailing 0 before the index. So the algorithm first tries to find a definition without the
-        trailing 0, and if it fails it tries with a trailing 0.
-    *)
-    let new_var_name = match value with
-      | VarName value ->
-          (*
-            Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
-            already there... So we need to remove it here.
-          *)
-        let value = match pad_zero with
-          | ZPNone -> value
-          | ZPRemove ->
-            string_of_int (int_of_string value)
-          | ZPAdd ->
-            "0" ^ value
-        in
-        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param)) value var_name
-      | RangeInt i ->
-        let value = match pad_zero with
-          | ZPNone -> string_of_int i
-          | ZPRemove ->
-            string_of_int i
-          | ZPAdd ->
-            "0" ^ string_of_int i
-        in
-        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param))
-          value var_name
-    in
-    instantiate_generic_variables_parameters_aux
-      idmap exec_number table_definition
-      (Some (ParamsMap.remove param (match lc with
-           | None ->
-             raise (Errors.TypeError
-                      (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-           | Some lc -> lc))) new_var_name pad_zero pos lax
-  with
-  | err when (match lc with
-      | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some lc ->
-        ParamsMap.cardinal lc > 0
-    ) ->
-    let new_pad_zero = match pad_zero with
-      | ZPNone -> ZPRemove
-      | ZPRemove -> ZPAdd
-      | _ -> raise err
-    in
-    instantiate_generic_variables_parameters_aux  idmap exec_number table_definition lc var_name new_pad_zero pos lax
-
 (**{2 Preliminary passes }*)
 
 (**
@@ -640,33 +533,212 @@ let get_variables_decl
   in
   (vars, errors, idmap)
 
-    (*
-let get_var_redefinitions =
-  | Ast.Rule r ->
-    let rule_number = Ast.rule_number r.Ast.rule_name in
-    if not (belongs_to_app r.Ast.rule_applications application) then
-      (vars, idmap, errors, out_list)
-    else
-      fst (List.fold_left (fun ((vars, idmap, errors, out_list), seq_number) formula ->
-          match Ast.unmark formula with
-          | Ast.SingleFormula f ->
-            let new_var =
-              Mvg.Variable.new_var
-                (Ast.unmark f.Ast.lvalue).Ast.var
-                (Some (Ast.unmark ivar.Ast.input_alias))
-                ivar.Ast.input_description
-                {
-                  Mvg.rule_number = rule_number;
-                  Mvg.seq_number = seq_number;
-                  Mvg.pos = Ast.get_position f.Ast.lvalue
-                }
-            in
-            let new_idmap = Mvg.VarNameToID.add (Ast.unmark ivar.Ast.input_name) [new_var] idmap in
-            (new_vars, new_idmap, errors, out_list)
-          | Ast.MultipleFormulaes (lvs, f) ->
-            assert false
-        ) ((vars, idmap, errors, out_list), 0) r.Ast.rule_formulaes)
-*)
+
+(** Main function that translates variable giving the context *)
+let rec translate_variable
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
+    (var: Ast.variable Ast.marked)
+    (lax: bool)
+  : Mvg.expression Ast.marked =
+  match Ast.unmark var with
+  | Ast.Normal name ->
+    Ast.same_pos_as (get_var_or_x idmap exec_number (Ast.same_pos_as name var) table_definition lax) var
+  | Ast.Generic gen_name ->
+    if List.length gen_name.Ast.parameters == 0 then
+      translate_variable idmap exec_number table_definition lc (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var) lax
+    else match lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some _ -> instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name (Ast.get_position var) lax
+
+(** The following function deal with the "trying all cases" pragma *)
+
+and instantiate_generic_variables_parameters
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
+    (gen_name:Ast.variable_generic_name)
+    (pos: Ast.position)
+    (lax: bool)
+  : Mvg.expression Ast.marked =
+  instantiate_generic_variables_parameters_aux idmap exec_number table_definition lc gen_name.Ast.base ZPNone pos lax
+
+and instantiate_generic_variables_parameters_aux
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
+    (var_name:string)
+    (pad_zero: zero_padding)
+    (pos: Ast.position)
+    (lax: bool)
+  : Mvg.expression Ast.marked
+  =
+  try match ParamsMap.choose_opt (
+      match lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc -> lc
+    ) with
+  | None ->
+    translate_variable idmap exec_number table_definition lc (Ast.Normal var_name, pos) lax
+  | Some (param, value) ->
+        (*
+          The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
+          trailing 0 before the index. So the algorithm first tries to find a definition without the
+          trailing 0, and if it fails it tries with a trailing 0.
+      *)
+    let new_var_name = match value with
+      | VarName value ->
+            (*
+              Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
+              already there... So we need to remove it here.
+            *)
+        let value = match pad_zero with
+          | ZPNone -> value
+          | ZPRemove ->
+            string_of_int (int_of_string value)
+          | ZPAdd ->
+            "0" ^ value
+        in
+        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param)) value var_name
+      | RangeInt i ->
+        let value = match pad_zero with
+          | ZPNone -> string_of_int i
+          | ZPRemove ->
+            string_of_int i
+          | ZPAdd ->
+            "0" ^ string_of_int i
+        in
+        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param))
+          value var_name
+    in
+    instantiate_generic_variables_parameters_aux
+      idmap exec_number table_definition
+      (Some (ParamsMap.remove param (match lc with
+           | None ->
+             raise (Errors.TypeError
+                      (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+           | Some lc -> lc))) new_var_name pad_zero pos lax
+  with
+  | err when (match lc with
+      | None ->
+        raise (Errors.TypeError
+                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+      | Some lc ->
+        ParamsMap.cardinal lc > 0
+    ) ->
+    let new_pad_zero = match pad_zero with
+      | ZPNone -> ZPRemove
+      | ZPRemove -> ZPAdd
+      | _ -> raise err
+    in
+    instantiate_generic_variables_parameters_aux  idmap exec_number table_definition lc var_name new_pad_zero pos lax
+
+
+let get_var_redefinitions
+    (p: Ast.program)
+    (idmap: Mvg.idmap)
+    (int_const_vals: int Mvg.VariableMap.t)
+    (application: string option)
+  : Mvg.idmap =
+  let idmap =
+    List.fold_left (fun (idmap: Mvg.idmap) source_file ->
+        List.fold_left (fun (idmap: Mvg.idmap) source_file_item ->
+            match Ast.unmark source_file_item with
+            | Ast.Rule r ->
+              let rule_number = Ast.rule_number r.Ast.rule_name in
+              if not (belongs_to_app r.Ast.rule_applications application) then
+                idmap
+              else
+                fst (List.fold_left (fun (idmap, seq_number) formula ->
+                    match Ast.unmark formula with
+                    | Ast.SingleFormula f ->
+                      let exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
+                      } in
+                      let lvar = match Ast.unmark begin
+                          translate_variable
+                            idmap
+                            exec_number
+                            ((Ast.unmark f.Ast.lvalue).Ast.index <> None)
+                            None
+                            (Ast.unmark f.Ast.lvalue).Ast.var
+                            false
+                        end with
+                      | Mvg.Var var -> var
+                      | _ -> assert false (* should not happen *)
+                      in
+                      let new_var =
+                        Mvg.Variable.new_var
+                          lvar.Mvg.Variable.name
+                          None
+                          lvar.Mvg.Variable.descr
+                          exec_number
+                      in
+                      let new_idmap =
+                        Mvg.VarNameToID.add
+                          (Ast.unmark lvar.Mvg.Variable.name)
+                          (new_var::(Mvg.VarNameToID.find (Ast.unmark lvar.Mvg.Variable.name) idmap))
+                          idmap
+                      in
+                      (new_idmap, seq_number + 1)
+                    | Ast.MultipleFormulaes (lvs, f) ->
+                      let exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
+                      } in
+                      let ctx = {
+                        idmap;
+                        lc = None;
+                        int_const_values = int_const_vals;
+                        table_definition = false;
+                        exec_number;
+                      } in
+                      let loop_context_provider = translate_loop_variables lvs ctx in
+                      let translator = fun lc idx ->
+                        let exec_number = { exec_number with Mvg.seq_number = seq_number + idx } in
+                        let lvar = match Ast.unmark begin
+                            translate_variable
+                              idmap
+                              exec_number
+                              ((Ast.unmark f.Ast.lvalue).Ast.index <> None)
+                              (Some lc)
+                              (Ast.unmark f.Ast.lvalue).Ast.var
+                              false
+                          end with
+                        | Mvg.Var var -> var
+                        | _ -> assert false (* should not happen *)
+                        in
+                        let new_var =
+                          Mvg.Variable.new_var
+                            lvar.Mvg.Variable.name
+                            None
+                            lvar.Mvg.Variable.descr
+                            exec_number
+                        in
+                        (Ast.unmark lvar.Mvg.Variable.name, new_var)
+                      in
+                      let new_var_defs = loop_context_provider translator in
+                      List.fold_left (fun (idmap, seq_number) (var_name, var_def) ->
+                          (Mvg.VarNameToID.add var_name (
+                              var_def::(Mvg.VarNameToID.find var_name idmap)
+                            ) idmap, seq_number + 1)
+                        ) (idmap, seq_number) new_var_defs
+                  ) (idmap, 0) r.Ast.rule_formulaes)
+            | _ -> idmap
+          ) idmap source_file
+      ) (idmap : Mvg.idmap) p in
+  idmap
 
 (** {2 Main translation }*)
 
@@ -1262,6 +1334,7 @@ let get_conds
 let translate (p: Ast.program) (application : string option): Mvg.program =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, error_decls, idmap) = get_variables_decl p var_decl_data idmap in
+  let idmap = get_var_redefinitions p idmap int_const_vals application in
   let var_data, idmap = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = check_if_all_variables_defined var_data var_decl_data idmap in
   let conds = get_conds error_decls idmap p application in

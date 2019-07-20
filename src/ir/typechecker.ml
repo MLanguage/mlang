@@ -497,7 +497,7 @@ and typecheck_func_args (f: func) (pos: Ast.position) :
       begin match args with
         | [bound; table] ->
           let ctx = typecheck_top_down ctx bound Integer in
-          typecheck_bottom_up ctx table 
+          typecheck_bottom_up ctx table
         | _ -> raise (Errors.TypeError
                         (Errors.Typing
                            (Printf.sprintf "function %s should have two arguments"
@@ -877,8 +877,14 @@ let typecheck (p: program) : typ_info * program =
             This case is needed because of declared but undefined and unused variables
           *)
           None
+        | (Some t, None) ->
+          (*
+            In this case, the variable is declared without type, used but never defined : we say it's not a table
+          *)
+          Some (Typ.to_concrete t, false)
         | _ -> assert false (* should not happen *)
       ) ctx.ctx_var_typ are_tables;
     typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
   },
-    { p with program_vars = p_vars } )
+    { p with program_vars = p_vars }
+  )
