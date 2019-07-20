@@ -255,10 +255,10 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : i
    [let f = fun lc i ctx -> ...]  and use {!val: merge_loop_ctx} inside [...] before translating the loop
    body. [lc] is the loop context, [i] the loop sequence index and [ctx] the translation context.
 *)
-let translate_loop_variables (lvs: Ast.loop_variables Ast.marked) :
-  ((loop_context -> int -> translating_context -> ('a * translating_context)) -> translating_context -> ('a list * translating_context)) =
+let translate_loop_variables (lvs: Ast.loop_variables Ast.marked) (ctx: translating_context) :
+  ((loop_context -> int -> 'a ) -> 'a list) =
   match Ast.unmark lvs with
-  | Ast.ValueSets lvs -> (fun translator ctx ->
+  | Ast.ValueSets lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.flatten (List.map (fun value -> match value with
               | Ast.VarParam v -> [VarName (Ast.unmark v)]
@@ -266,17 +266,17 @@ let translate_loop_variables (lvs: Ast.loop_variables Ast.marked) :
             ) values) in
           ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
-      let (_, (t_list, ctx)) =
+      let (_, t_list) =
         (List.fold_left
-           (fun (i, (t_list, ctx)) lc ->
-              let new_t, ctx = translator lc i ctx in
-              (i+1, (new_t::t_list, ctx)))
-           (0, ([], ctx))
+           (fun (i, t_list) lc ->
+              let new_t = translator lc i in
+              (i+1, new_t::t_list))
+           (0, [])
            (iterate_all_combinations varying_domain))
       in
-      (List.rev t_list, ctx)
+      (List.rev t_list)
     )
-  | Ast.Ranges lvs -> (fun translator ctx ->
+  | Ast.Ranges lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
           let values = List.map (fun value -> match value with
               | Ast.VarParam v -> [VarName (Ast.unmark v)]
@@ -284,15 +284,15 @@ let translate_loop_variables (lvs: Ast.loop_variables Ast.marked) :
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
         ) ParamsMap.empty lvs in
-      let (_, (t_list, ctx)) =
+      let (_, t_list) =
         (List.fold_left
-           (fun (i, (t_list, ctx)) lc ->
-              let new_t, ctx = translator lc i ctx in
-              (i+1, (new_t::t_list, ctx)))
-           (0, ([], ctx))
+           (fun (i, t_list) lc ->
+              let new_t = translator lc i in
+              (i+1, new_t::t_list))
+           (0, [])
            (iterate_all_combinations varying_domain))
       in
-      (List.rev t_list, ctx)
+      (List.rev t_list)
     )
 
 (**{2 Variables }*)
@@ -314,9 +314,12 @@ let get_var_or_x
     (exec_number: Mvg.execution_number)
     (name:Ast.variable_name Ast.marked)
     (in_table: bool)
+    (lax: bool)
   : Mvg.expression =
   if Ast.unmark name = "X" && in_table then
     Mvg.GenericTableIndex
+  else if lax then
+    Mvg.Var (get_var_from_name_lax d name exec_number)
   else
     Mvg.Var (get_var_from_name d name exec_number)
 
@@ -348,44 +351,59 @@ let format_zero_padding (zp: zero_padding) : string = match zp with
   | ZPRemove -> "remove zero padding"
 
 (** Main function that translates variable giving the context *)
-let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Mvg.expression Ast.marked =
+let rec translate_variable
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
+    (var: Ast.variable Ast.marked)
+    (lax: bool)
+  : Mvg.expression Ast.marked =
   match Ast.unmark var with
   | Ast.Normal name ->
-    Ast.same_pos_as (get_var_or_x ctx.idmap ctx.exec_number (Ast.same_pos_as name var) ctx.table_definition) var
+    Ast.same_pos_as (get_var_or_x idmap exec_number (Ast.same_pos_as name var) table_definition lax) var
   | Ast.Generic gen_name ->
     if List.length gen_name.Ast.parameters == 0 then
-      translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
-    else match ctx.lc with
+      translate_variable idmap exec_number table_definition lc (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var) lax
+    else match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some _ -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
+      | Some _ -> instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name (Ast.get_position var) lax
 
 (** The following function deal with the "trying all cases" pragma *)
 
 and instantiate_generic_variables_parameters
-    (ctx: translating_context)
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
     (gen_name:Ast.variable_generic_name)
     (pos: Ast.position)
+    (lax: bool)
   : Mvg.expression Ast.marked =
-  instantiate_generic_variables_parameters_aux ctx gen_name.Ast.base ZPNone pos
+  instantiate_generic_variables_parameters_aux idmap exec_number table_definition lc gen_name.Ast.base ZPNone pos lax
 
 and instantiate_generic_variables_parameters_aux
-    (ctx: translating_context)
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
     (var_name:string)
     (pad_zero: zero_padding)
     (pos: Ast.position)
+    (lax: bool)
   : Mvg.expression Ast.marked
   =
   try match ParamsMap.choose_opt (
-      match ctx.lc with
+      match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc -> lc
     ) with
   | None ->
-    translate_variable ctx (Ast.Normal var_name, pos)
+    translate_variable idmap exec_number table_definition lc (Ast.Normal var_name, pos) lax
   | Some (param, value) ->
       (*
         The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
@@ -418,28 +436,26 @@ and instantiate_generic_variables_parameters_aux
           value var_name
     in
     instantiate_generic_variables_parameters_aux
-      { ctx with
-        lc =
-          Some (ParamsMap.remove param (match ctx.lc with
-              | None ->
-                raise (Errors.TypeError
-                         (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-              | Some lc -> lc))
-      } new_var_name pad_zero pos
+      idmap exec_number table_definition
+      (Some (ParamsMap.remove param (match lc with
+           | None ->
+             raise (Errors.TypeError
+                      (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+           | Some lc -> lc))) new_var_name pad_zero pos lax
   with
-  | err when (match ctx.lc with
+  | err when (match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc ->
         ParamsMap.cardinal lc > 0
-    )->
+    ) ->
     let new_pad_zero = match pad_zero with
       | ZPNone -> ZPRemove
       | ZPRemove -> ZPAdd
       | _ -> raise err
     in
-    instantiate_generic_variables_parameters_aux ctx var_name new_pad_zero pos
+    instantiate_generic_variables_parameters_aux  idmap exec_number table_definition lc var_name new_pad_zero pos lax
 
 (**{2 Preliminary passes }*)
 
@@ -500,6 +516,11 @@ let get_constants
     ) Mvg.VariableMap.empty int_const_list
   in
   (vars, idmap, int_const_vals)
+
+let belongs_to_app (r: Ast.application Ast.marked list) (application: string option) : bool = match application with
+  | None -> true
+  | Some application ->
+    List.exists (fun app -> Ast.unmark app = application) r
 
 (**
    Retrieves variable declaration data. Done in a separate pass because wen don't want to deal
@@ -619,13 +640,41 @@ let get_variables_decl
   in
   (vars, errors, idmap)
 
+    (*
+let get_var_redefinitions =
+  | Ast.Rule r ->
+    let rule_number = Ast.rule_number r.Ast.rule_name in
+    if not (belongs_to_app r.Ast.rule_applications application) then
+      (vars, idmap, errors, out_list)
+    else
+      fst (List.fold_left (fun ((vars, idmap, errors, out_list), seq_number) formula ->
+          match Ast.unmark formula with
+          | Ast.SingleFormula f ->
+            let new_var =
+              Mvg.Variable.new_var
+                (Ast.unmark f.Ast.lvalue).Ast.var
+                (Some (Ast.unmark ivar.Ast.input_alias))
+                ivar.Ast.input_description
+                {
+                  Mvg.rule_number = rule_number;
+                  Mvg.seq_number = seq_number;
+                  Mvg.pos = Ast.get_position f.Ast.lvalue
+                }
+            in
+            let new_idmap = Mvg.VarNameToID.add (Ast.unmark ivar.Ast.input_name) [new_var] idmap in
+            (new_vars, new_idmap, errors, out_list)
+          | Ast.MultipleFormulaes (lvs, f) ->
+            assert false
+        ) ((vars, idmap, errors, out_list), 0) r.Ast.rule_formulaes)
+*)
+
 (** {2 Main translation }*)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark i with
   | Ast.LiteralIndex i' -> Ast.same_pos_as (Mvg.Literal (Mvg.Int i')) i
   | Ast.SymbolIndex v ->
-    let var = translate_variable ctx (Ast.same_pos_as v i) in
+    let var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as v i) false in
     var
 
 
@@ -662,7 +711,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
              | Ast.VarValue set_var ->  Mvg.Comparison (
                  Ast.same_pos_as Ast.Eq set_var,
                  Ast.same_pos_as local_var_expr e,
-                 translate_variable ctx set_var
+                 translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc set_var false
                )
              | Ast.IntValue i -> Mvg.Comparison (
                  Ast.same_pos_as Ast.Eq i,
@@ -713,7 +762,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
        let new_e = translate_expression ctx e in
        Mvg.Unop (op, new_e)
      | Ast.Index (t, i) ->
-       let t_var = translate_variable ctx t in
+       let t_var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc t false in
        let new_i = translate_table_index ctx i in
        Mvg.Index ((match Ast.unmark t_var with
            | Mvg.Var v -> Ast.same_pos_as v t_var
@@ -741,19 +790,19 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
        Mvg.FunctionCall (f_correct, new_args)
      | Ast.Literal l -> begin match l with
          | Ast.Variable var ->
-           let new_var = translate_variable ctx (Ast.same_pos_as var f) in
+           let new_var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as var f) false in
            Ast.unmark new_var
          | Ast.Int i -> Mvg.Literal (Mvg.Int i)
          | Ast.Float f -> Mvg.Literal (Mvg.Float f)
        end
      (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
      | Ast.Loop (lvs, e) ->
-       let loop_context_provider = translate_loop_variables lvs in
-       let translator = fun lc _ ctx ->
+       let loop_context_provider = translate_loop_variables lvs ctx in
+       let translator = fun lc _ ->
          let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
-         (translate_expression new_ctx e, ctx)
+         translate_expression new_ctx e
        in
-       let (loop_exprs, _) = loop_context_provider translator ctx in
+       let loop_exprs = loop_context_provider translator in
        List.fold_left (fun acc loop_expr ->
            Mvg.Binop(
              Ast.same_pos_as Ast.Or e,
@@ -770,13 +819,12 @@ and translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.e
       translate_expression ctx arg
     ) args
   | Ast.LoopList (lvs, e) ->
-    let loop_context_provider = translate_loop_variables lvs in
-    let translator = fun lc _ ctx ->
+    let loop_context_provider = translate_loop_variables lvs ctx in
+    let translator = fun lc _ ->
       let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
-      (translate_expression new_ctx e, ctx)
+      translate_expression new_ctx e
     in
-    let (args, _) = loop_context_provider translator ctx in
-    args
+    loop_context_provider translator
 
 type index_def =
   | NoIndex
@@ -788,29 +836,10 @@ let translate_lvalue
     (ctx: translating_context)
     (lval: Ast.lvalue Ast.marked)
   : translating_context * Mvg.Variable.t * index_def =
-  let var, ctx = match
-      Ast.unmark (translate_variable ctx (Ast.unmark lval).Ast.var)
+  let var = match
+      Ast.unmark (translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.unmark lval).Ast.var true)
     with
-    | Mvg.Var (var: Mvg.Variable.t) ->
-      (**
-         if the translated lvalue has a different rule number than the rule we're examining now
-         it means that we have to add a new variable to the [ctx] with the new rule number
-      *)
-      if var.Mvg.Variable.execution_number <> ctx.exec_number then
-        let new_var = Mvg.Variable.new_var
-            (Ast.same_pos_as (Ast.unmark var.Mvg.Variable.name) lval)
-            var.Mvg.Variable.alias
-            var.Mvg.Variable.descr
-            ctx.exec_number in
-        (new_var,
-         { ctx with
-           idmap = Mvg.VarNameToID.add
-               (Ast.unmark var.Mvg.Variable.name)
-               (new_var::(Mvg.VarNameToID.find (Ast.unmark var.Mvg.Variable.name) ctx.idmap))
-               ctx.idmap
-         })
-      else
-        var, ctx
+    | Mvg.Var (var: Mvg.Variable.t) -> var
     | _ -> assert false (* should not happen *)
   in
   match (Ast.unmark lval).Ast.index with
@@ -821,7 +850,7 @@ let translate_lvalue
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable v) ti) in
         (ctx, var, SingleIndex i)
       | Ast.SymbolIndex ((Ast.Generic _ ) as v) ->
-        let mvg_v = translate_variable ctx (Ast.same_pos_as v ti) in
+        let mvg_v = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as v ti) false in
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable (match Ast.unmark mvg_v with
             | Mvg.Var v -> Ast.Normal (Ast.unmark v.Mvg.Variable.name)
             | _ -> assert false (* should not happen*)
@@ -979,11 +1008,6 @@ let add_var_def
         *)
     ) var_data
 
-let belongs_to_app (r: Ast.application Ast.marked list) (application: string option) : bool = match application with
-  | None -> true
-  | Some application ->
-    List.exists (fun app -> Ast.unmark app = application) r
-
 
 (** Linear pass on the program to add variable definitions *)
 let get_var_data
@@ -1031,8 +1055,8 @@ let get_var_data
                         Mvg.pos = Ast.get_position f.Ast.lvalue
                       }
                     } in
-                    let loop_context_provider = translate_loop_variables lvs in
-                    let translator = fun lc idx ctx ->
+                    let loop_context_provider = translate_loop_variables lvs ctx in
+                    let translator = fun lc idx ->
                       let new_ctx =
                         { ctx with
                           lc = Some lc ;
@@ -1045,9 +1069,9 @@ let get_var_data
                       in
                       let (new_ctx, var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
                       let var_expr = translate_expression new_ctx f.Ast.formula in
-                      ((var_lvalue, var_expr, def_kind), ctx)
+                      (var_lvalue, var_expr, def_kind)
                     in
-                    let (data_to_add, ctx) = loop_context_provider translator ctx in
+                    let data_to_add = loop_context_provider translator in
                     let var_data, seq_number =
                       List.fold_left
                         (fun (var_data, seq_number) (var_lvalue, var_expr, def_kind) ->
