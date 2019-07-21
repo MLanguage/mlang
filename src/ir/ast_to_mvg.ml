@@ -171,6 +171,19 @@ let rec list_max_execution_number (l: Mvg.Variable.t list) : Mvg.Variable.t =
     | Mvg.Left -> v
     | Mvg.Right -> max_rest
 
+let  find_var_among_candidates
+    (exec_number: Mvg.execution_number)
+    (l: Mvg.Variable.t list)
+  : Mvg.Variable.t =
+  let same_rule =
+    List.filter
+      (fun var -> var.Mvg.Variable.execution_number.Mvg.rule_number = exec_number.Mvg.rule_number)
+      l
+  in
+  if List.length same_rule = 0 then
+    list_max_execution_number l
+  else list_max_execution_number same_rule
+
 (**
    Queries a [type: Mvg.variable.t] from an [type:idmap] mapping, the name of a variable and the rule number
    from which the variable is requested. Returns the variable with the same name and highest rule number
@@ -183,7 +196,7 @@ let get_var_from_name
   : Mvg.Variable.t =
   try
     let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
-    list_max_execution_number
+    find_var_among_candidates exec_number
       (List.filter (fun var -> Mvg.(var.Mvg.Variable.execution_number <| exec_number)) same_name)
   with
   | Not_found ->
@@ -202,7 +215,7 @@ let get_var_from_name_lax
   : Mvg.Variable.t =
   try
     let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
-    list_max_execution_number
+    find_var_among_candidates exec_number
       (List.filter (fun var -> Mvg.(
            var.Mvg.Variable.execution_number <| exec_number ||
            var.Mvg.Variable.execution_number <=> exec_number
@@ -967,121 +980,68 @@ let add_var_def
        | Some x -> Some (x, var_decl.var_pos)
        | None -> None)
   in
-  try
-    let old_var_expr = Mvg.VariableMap.find var_lvalue var_data in
-    match (old_var_expr.Mvg.var_definition, def_kind) with
-    | (Mvg.SimpleVar old_e, SingleIndex _) | (Mvg.SimpleVar old_e, GenericIndex) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable definition %s %s is indexed but previous definition %s was not"
-            (Ast.unmark var_lvalue.Mvg.Variable.name)
-            (Format_ast.format_position (Ast.get_position var_expr))
-            (Format_ast.format_position (Ast.get_position old_e))
-        )))
-    | (Mvg.InputVar, _) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "input variable %s defined %s is re-defined %s "
-            (Ast.unmark (var_lvalue.Mvg.Variable.name))
-            (Format_ast.format_position (Ast.get_position var_lvalue.Mvg.Variable.name))
-            (Format_ast.format_position (Ast.get_position var_expr))
-        )))
-    | (Mvg.TableVar (_, Mvg.IndexGeneric _), NoIndex) | (Mvg.TableVar (_, Mvg.IndexTable _), NoIndex) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable %s definition %s is not indexed but previous definitions were"
-            (Ast.unmark var_lvalue.Mvg.Variable.name)
-            (Format_ast.format_position (Ast.get_position var_expr))
-        )))
-    | (Mvg.TableVar (_, Mvg.IndexGeneric old_e), SingleIndex _) | (Mvg.TableVar (_, Mvg.IndexGeneric old_e), GenericIndex)
-    | (Mvg.SimpleVar old_e, NoIndex) ->
-      Cli.var_info_print
-        (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
-           (Ast.unmark var_lvalue.Mvg.Variable.name)
-           (Format_ast.format_position (Ast.get_position var_expr))
-           (Format_ast.format_position (Ast.get_position old_e)));
-      var_data
-    | (Mvg.TableVar (size, Mvg.IndexTable _), GenericIndex) ->
-      Cli.var_info_print
-        (Printf.sprintf "Definition of %s %s will supercede previous partial definitions"
-           (Ast.unmark var_lvalue.Mvg.Variable.name)
-           (Format_ast.format_position (Ast.get_position var_expr)));
-      Mvg.VariableMap.add var_lvalue
-        { old_var_expr with
-          Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
-        } var_data
-    | (Mvg.TableVar (size, Mvg.IndexTable old_defs), SingleIndex i) -> begin try
-          let old_def = Mvg.IndexMap.find i old_defs in
-          Cli.var_info_print
-            (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
-               (Ast.unmark var_lvalue.Mvg.Variable.name)
-               (Format_ast.format_position (Ast.get_position var_expr))
-               (Format_ast.format_position (Ast.get_position old_def)));
-          var_data
-        with
-        | Not_found ->
-          let new_defs = Mvg.IndexMap.add i var_expr old_defs in
-          Mvg.VariableMap.add var_lvalue
-            { old_var_expr with
-              Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_defs)
-            } var_data
-      end
-  with
-  | Not_found -> Mvg.VariableMap.add var_lvalue (
-      try
-        let decl_data =
-          let var_at_declaration =
-            List.find
-              (fun var ->
-                 Mvg.(var.Mvg.Variable.execution_number <=>
-                      (dummy_exec_number (Ast.get_position var_expr))))
-              (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
-          in
-          Mvg.VariableMap.find var_at_declaration var_decl_data
+  Mvg.VariableMap.add var_lvalue (
+    try
+      let decl_data =
+        let var_at_declaration =
+          List.find
+            (fun var ->
+               Mvg.(var.Mvg.Variable.execution_number <=>
+                    (dummy_exec_number (Ast.get_position var_expr))))
+            (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
         in
-        let io = match decl_data.var_decl_io with
-          | Input -> Mvg.Input
-          | Constant | Regular -> Mvg.Regular
-          | Output -> Mvg.Output
-        in
-        if def_kind = NoIndex then
-          { Mvg.var_definition = Mvg.SimpleVar var_expr;
-            Mvg.var_typ = var_typ;
-            Mvg.var_io = io;
-          }
-        else
-          match decl_data.var_decl_is_table with
-          | Some size -> begin
-              match def_kind with
-              | NoIndex -> assert false (* should not happen*)
-              | SingleIndex i ->
-                {
-                  Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable (Mvg.IndexMap.singleton i var_expr));
-                  Mvg.var_typ = var_typ;
-                  Mvg.var_io = io;
-                }
-              | GenericIndex ->
-                {
-                  Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
-                  Mvg.var_typ = var_typ;
-                  Mvg.var_io = io;
-                }
-            end
-          | None -> raise (Errors.TypeError (
-              Errors.Variable (
-                Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
-                  (Ast.unmark var_lvalue.Mvg.Variable.name)
-                  (Format_ast.format_position (Ast.get_position var_expr))
-                  (Format_ast.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos)
-              )
-            ))
-      with
-      | Not_found -> assert false (* should not happen *)
+        Mvg.VariableMap.find var_at_declaration var_decl_data
+      in
+      let io = match decl_data.var_decl_io with
+        | Input -> Mvg.Input
+        | Constant | Regular -> Mvg.Regular
+        | Output -> Mvg.Output
+      in
+      if def_kind = NoIndex then
+        { Mvg.var_definition = Mvg.SimpleVar var_expr;
+          Mvg.var_typ = var_typ;
+          Mvg.var_io = io;
+        }
+      else
+        match decl_data.var_decl_is_table with
+        | Some size -> begin
+            match def_kind with
+            | NoIndex -> assert false (* should not happen*)
+            | SingleIndex i ->
+              {
+                Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable (Mvg.IndexMap.singleton i var_expr));
+                Mvg.var_typ = var_typ;
+                Mvg.var_io = io;
+              }
+            | GenericIndex ->
+              {
+                Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
+                Mvg.var_typ = var_typ;
+                Mvg.var_io = io;
+              }
+          end
+        | None -> raise (Errors.TypeError (
+            Errors.Variable (
+              Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
+                (Ast.unmark var_lvalue.Mvg.Variable.name)
+                (Format_ast.format_position (Ast.get_position var_expr))
+                (Format_ast.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos)
+            )
+          ))
+    with
+    | Not_found -> assert false (* should not happen *)
         (*
           should not happen since we already looked into idmap to get the var value
           from its name
         *)
-    ) var_data
+  ) var_data
 
 
-(** Linear pass on the program to add variable definitions *)
+(**
+   Main translation pass that deal with regular variable definition; returns a map whose keys are
+   the variables being defined (with the execution number corresponding to the place where it is
+   defined) and whose values are the expressions corresponding to the definitions.
+*)
 let get_var_data
     (idmap: Mvg.idmap)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
@@ -1185,30 +1145,35 @@ let get_var_data
 
 
 (**
-   After the linear pass, some variables declared might still be undefined in the application. For
-   these, we insert a placholder definition with the value zero and add an [undefined] flag.
-
+   At this point [var_data] contains the definition data for all the times a variable is defined.
+   However the M language deals with undefined variable, so for each variable we have to insert
+   a dummy definition corresponding to the declaration and whose value is [Undefined].
 *)
 let add_dummy_definition_for_variable_declaration
     (var_data: Mvg.variable_data Mvg.VariableMap.t)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
+    (idmap: Mvg.idmap)
   : Mvg.variable_data Mvg.VariableMap.t =
   Mvg.VariableMap.fold (fun var decl (var_data : Mvg.variable_data Mvg.VariableMap.t) ->
       (* The variable has not been defined in a rule *)
       begin match decl.var_decl_io with
         | Output | Regular  ->
-          Cli.var_info_print (
-            Printf.sprintf "variable %s declared %s is never defined in the application"
-              (Ast.unmark var.Mvg.Variable.name)
-              (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
-          );
+          if List.for_all (fun var' ->
+              var'.Mvg.Variable.execution_number.Mvg.rule_number = -1
+            ) (Mvg.VarNameToID.find (Ast.unmark var.Mvg.Variable.name) idmap)
+          then
+            Cli.var_info_print (
+              Printf.sprintf "variable %s declared %s is never defined in the application"
+                (Ast.unmark var.Mvg.Variable.name)
+                (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
+            );
           (* This is the case where the variable is not defined. *)
           let io = match decl.var_decl_io with
             | Output -> Mvg.Output
             | Regular | Constant -> Mvg.Regular
             | Input -> assert false (* should not happen *)
           in
-          (** We insert the Undef expr *)
+          (* We insert the Undef expr *)
           begin match decl.var_decl_is_table with
             | Some size -> Mvg.VariableMap.add var {
                 Mvg.var_definition = Mvg.TableVar (
@@ -1239,11 +1204,13 @@ let add_dummy_definition_for_variable_declaration
                  | Some typ -> Some (Ast.same_pos_as typ var.name));
             Mvg.var_io = Mvg.Input;
           } var_data
-        | Constant -> var_data (** the variable's definition has already been inserted in [var_data] *)
+        | Constant -> var_data (* the variable's definition has already been inserted in [var_data] *)
       end
     ) var_decl_data var_data
 
-
+(**
+   Returns a map whose keys are dummy variables and whose values are the verification conditions.
+*)
 let get_conds
     (error_decls: Mvg.Error.t list)
     (idmap: Mvg.idmap)
@@ -1313,17 +1280,36 @@ let get_conds
     ) Mvg.VariableMap.empty p
 
 (**
-   The translate function returns two values :
-   {ul
-   {li [var_data] which is the actual MVG program;}
-   {li [idmap] containing the name to variable mapping;}
-   }
+   Main translation function from the M AST to the M Variable Graph. This function performs 6 linear
+   passes on the input code:
+    {ul
+      {li
+        [get_constants] gets the value of all constant variables, the values of which are needed
+        to compute certain loop bounds;
+      }
+      {li [get_variables_decl] retrieves the declarations of all other variables and errors; }
+      {li
+        [get_var_redefinitions] incorporates into [idmap] all definitions inside rules
+        along with their execution number;
+      }
+      {li
+        [get_var_data] is the workhorse pass that translates all the expressions corresponding to the
+        definitions;
+      }
+      {li
+        [add_dummy_definition_for_variable_declaration] adds [Undefined] definitions placeholder for
+        all variables declarations;
+      }
+      {li
+        [get_errors_conds] parses the verification conditions definitions.
+      }
+    }
 *)
 let translate (p: Ast.program) (application : string option): Mvg.program =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, error_decls, idmap) = get_variables_decl p var_decl_data idmap in
   let idmap = get_var_redefinitions p idmap int_const_vals application in
   let var_data = get_var_data idmap var_decl_data int_const_vals p application in
-  let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data in
+  let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data idmap in
   let conds = get_conds error_decls idmap p application in
   { Mvg.program_vars = var_data; Mvg.program_conds = conds; Mvg.program_idmap = idmap}

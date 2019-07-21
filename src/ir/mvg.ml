@@ -58,9 +58,11 @@ let (^^) (left: execution_number) (right: execution_number) : max_result =
   if left.seq_number < right.seq_number then Right else
     Left
 
-(** This is the operator used to determine the valid *)
+(** This is the operator used to determine the if a candidate definition is valid at a given point *)
 let (<|) (candidate: execution_number) (current: execution_number) : bool =
-  if candidate.rule_number <> current.rule_number then true else
+  if candidate.rule_number <> current.rule_number then
+    true
+  else
     candidate.seq_number < current.seq_number
 
 

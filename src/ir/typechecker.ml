@@ -717,7 +717,7 @@ let check_non_recursivity_of_variable_defs (var: Variable.t) (def: variable_def)
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p: program) : typ_info * program =
-  let (are_tables, ctx, p_vars) = Mvg.VariableMap.fold (fun var def (acc, ctx, p) ->
+  let (are_tables, ctx, p_vars) = Mvg.VariableMap.fold (fun var def (acc, ctx, p_vars) ->
       check_non_recursivity_of_variable_defs var def.var_definition;
       match def.var_typ with
       | Some t -> begin match def.var_definition with
@@ -725,13 +725,13 @@ let typecheck (p: program) : typ_info * program =
             let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e t in
             (VariableMap.add var false acc,
              new_ctx,
-             p)
+             p_vars)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e t in
                 (VariableMap.add var true acc,
                  new_ctx,
-                 p)
+                 p_vars)
               | IndexTable es ->
                 let new_ctx = IndexMap.fold (fun _ e ctx ->
                     let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e t in
@@ -743,29 +743,34 @@ let typecheck (p: program) : typ_info * program =
                 if List.length undefined_indexes = 0 then
                   (VariableMap.add var true acc,
                    new_ctx,
-                   p)
+                   p_vars)
                 else begin
-                  Cli.var_info_print @@
-                  (Printf.sprintf "the definitions of table %s declared %s do not cover the following indexes: %s"
-                     (Ast.unmark var.Variable.name)
-                     (Format_ast.format_position (Ast.get_position var.Variable.name))
-                     (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
-                  );
+                  let previous_var_def =
+                    Ast_to_mvg.get_var_from_name
+                      p.program_idmap
+                      var.Variable.name
+                      var.Variable.execution_number
+                  in
                   let new_es = List.fold_left (fun es undef_index ->
-                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Literal (Mvg.Undefined)) var.Mvg.Variable.name) es
+                      Mvg.IndexMap.add undef_index
+                        (Ast.same_pos_as
+                           (Mvg.Index (
+                               Ast.same_pos_as previous_var_def var.Mvg.Variable.name,
+                               Ast.same_pos_as (Mvg.Literal (Int undef_index)) var.Mvg.Variable.name))
+                           var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc,
                    new_ctx,
                    Mvg.VariableMap.add var
                      { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es)}
-                     p
+                     p_vars
                   )
                 end
             end
           | InputVar ->
             (VariableMap.add var false acc,
              ctx,
-             p)
+             p_vars)
         end
       | None -> begin match def.var_definition with
           | SimpleVar e ->
@@ -779,7 +784,7 @@ let typecheck (p: program) : typ_info * program =
               { new_ctx with
                 ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
               } in
-            (VariableMap.add var false acc, new_ctx, p)
+            (VariableMap.add var false acc, new_ctx, p_vars)
           | TableVar (size, defs) -> begin match defs with
               | IndexGeneric e ->
                 let (new_ctx, t) = typecheck_bottom_up { ctx with ctx_is_generic_table = true } e in
@@ -792,7 +797,7 @@ let typecheck (p: program) : typ_info * program =
                   { new_ctx with
                     ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ
                   } in
-                (VariableMap.add var true acc, new_ctx, p)
+                (VariableMap.add var true acc, new_ctx, p_vars)
               | IndexTable es ->
                 let (new_ctx, t) = IndexMap.fold (fun _ e (ctx, old_t) ->
                     let (new_ctx, t) = typecheck_bottom_up { ctx with ctx_is_generic_table = false } e in
@@ -828,29 +833,34 @@ let typecheck (p: program) : typ_info * program =
                     (List.map (fun (x,e) -> (x, Ast.get_position e)) (IndexMap.bindings es))
                 in
                 if List.length undefined_indexes = 0 then
-                  (VariableMap.add var true acc, new_ctx, p)
+                  (VariableMap.add var true acc, new_ctx, p_vars)
                 else begin
-                  Cli.var_info_print @@
-                  (Printf.sprintf "the definitions of table %s declared %s do not cover the following indexes: %s"
-                     (Ast.unmark var.Variable.name)
-                     (Format_ast.format_position (Ast.get_position var.Variable.name))
-                     (String.concat ", " (List.map (fun x -> string_of_int x) undefined_indexes))
-                  );
+                  let previous_var_def =
+                    Ast_to_mvg.get_var_from_name
+                      p.program_idmap
+                      var.Variable.name
+                      var.Variable.execution_number
+                  in
                   let new_es = List.fold_left (fun es undef_index ->
-                      Mvg.IndexMap.add undef_index (Ast.same_pos_as (Mvg.Literal (Mvg.Undefined)) var.Mvg.Variable.name) es
+                      Mvg.IndexMap.add undef_index
+                        (Ast.same_pos_as
+                           (Mvg.Index (
+                               Ast.same_pos_as previous_var_def var.Mvg.Variable.name,
+                               Ast.same_pos_as (Mvg.Literal (Int undef_index)) var.Mvg.Variable.name))
+                           var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc, new_ctx,
                    Mvg.VariableMap.add var
                      { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es)}
-                     p
+                     p_vars
                   )
                 end
             end
           | InputVar ->
             if VariableMap.mem var acc then
-              (acc, ctx, p)
+              (acc, ctx, p_vars)
             else begin
-              (VariableMap.add var false acc, ctx, p)
+              (VariableMap.add var false acc, ctx, p_vars)
             end
         end;
     ) p.program_vars (Mvg.VariableMap.empty,
