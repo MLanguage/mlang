@@ -54,8 +54,8 @@ simulateur_simplifie_2018: build
 
 cas_basique_2018: build
 	dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
-	 	--display_time --debug \
-		--backend Interpreteur --function_spec specs/cas_basique.m_spec
+	 	--display_time --debug --optimize \
+		--backend Python --function_spec specs/cas_basique.m_spec --output ir_2018.py
 
 doc:
 	dune build @doc

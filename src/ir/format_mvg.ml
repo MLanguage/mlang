@@ -34,15 +34,20 @@ knowledge of the CeCILL-C license and that you accept its terms.
 open Mvg
 
 let format_execution_number (exec_number: execution_number) : string =
-  Printf.sprintf "rule %d, sequence index %d, %s"
-    exec_number.rule_number
-    exec_number.seq_number
-    (Format_ast.format_position exec_number.pos)
+  if exec_number.rule_number = -1 then
+    Printf.sprintf "declaration, %s"
+      (Format_ast.format_position exec_number.pos)
+  else
+    Printf.sprintf "rule %d, sequence index %d, %s"
+      exec_number.rule_number
+      exec_number.seq_number
+      (Format_ast.format_position exec_number.pos)
 
 let format_execution_number_short (exec_number: execution_number) : string =
-  Printf.sprintf "%d#%d"
-    exec_number.rule_number
-    exec_number.seq_number
+  if exec_number.rule_number = -1 then "declaration"else
+    Printf.sprintf "%d#%d"
+      exec_number.rule_number
+      exec_number.seq_number
 
 
 let format_typ (t: typ) : string = match t with

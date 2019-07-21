@@ -94,31 +94,33 @@ let repl_debugguer
     if query = "explain" then begin
       Printf.printf ">> ";
       let query = read_line () in
-      try let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
+      try
+        let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         Printf.printf "%s\n"
           (String.concat "\n"
              (List.map (fun var ->
-                  Printf.sprintf "Règle %d (#%d): %s"
-                    var.Variable.execution_number.rule_number
-                    var.Variable.execution_number.seq_number
+                  Printf.sprintf "[%s] -> %s"
+                    (Format_mvg.format_execution_number_short var.Variable.execution_number)
                     (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
                 ) vars))
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
     end else try
         let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
-        try begin
-          Printf.printf "%s\n"
-            (String.concat "\n"
-               (List.map (fun var ->
+        Printf.printf "%s\n"
+          (String.concat "\n"
+             (List.map (fun var ->
+                  try begin
                     let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-                    Printf.sprintf "Règle %d (#%d): %s "
-                      var.Variable.execution_number.rule_number
-                      var.Variable.execution_number.seq_number
+                    Printf.sprintf "[%s] -> %s "
+                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
                       (format_var_literal_with_var var var_l)
-                  ) vars))
-        end with
-        | Not_found -> Printf.printf "Variable not computed yet\n"
+                  end with
+                  | Not_found ->
+                    Printf.sprintf "[%s] -> not computed"
+                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
+                ) vars))
+
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
   done

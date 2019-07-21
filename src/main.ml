@@ -105,8 +105,9 @@ let main () : int =
       else if String.lowercase_ascii !Cli.backend = "interpreteur" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program !Cli.number_of_passes in
-        Interface.print_output mvg_func
-          (f (Interface.read_inputs_from_stdin mvg_func))
+        let results = f (Interface.read_inputs_from_stdin mvg_func) in
+        Interface.print_output mvg_func results;
+        Interpreter.repl_debugguer results program
       end else if String.lowercase_ascii !Cli.backend = "python" then begin
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
@@ -120,8 +121,8 @@ let main () : int =
     exit 0
 
   with
-  (* | Errors.TypeError e ->
-     Cli.error_print (Errors.format_typ_error e); exit 1 *)
+  | Errors.TypeError e ->
+    Cli.error_print (Errors.format_typ_error e); exit 1
   | Errors.Unimplemented (msg) ->
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); exit 1
   | Errors.ArgumentError msg ->
