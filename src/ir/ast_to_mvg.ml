@@ -161,7 +161,7 @@ let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.p
     in
     { ctx with lc = Some merged_lc }
 
-
+(** Helper to compute the max SSA candidate in a list *)
 let rec list_max_execution_number (l: Mvg.Variable.t list) : Mvg.Variable.t =
   match l with
   | [] -> raise Not_found
@@ -171,7 +171,11 @@ let rec list_max_execution_number (l: Mvg.Variable.t list) : Mvg.Variable.t =
     | Mvg.Left -> v
     | Mvg.Right -> max_rest
 
-let  find_var_among_candidates
+(**
+   Given a list of candidates for an SSA variable query, returns the correct one: the maximum in the
+   same rule or if no candidates in the same rule, the maximum in other rules.
+*)
+let find_var_among_candidates
     (exec_number: Mvg.execution_number)
     (l: Mvg.Variable.t list)
   : Mvg.Variable.t =
@@ -546,8 +550,20 @@ let get_variables_decl
   in
   (vars, errors, idmap)
 
+(**{2 SSA construction }*)
 
-(** Main function that translates variable giving the context *)
+(**
+   Call it with [translate_variable idmap exec_number table_definition lc var lax]. SSA is all about
+   assigning the correct variable assignment instance when a variable is used somewhere.
+   That is why [translate_variable] needs the [execution_number]. [table_definition] is needed because
+   the M language has a special ["X"] variable (generic table index) that has to be distinguished
+   from a variable simply named ["X"]. [lc] is the loop context and the thing that complicates this
+   function the most: variables used inside loops have loop parameters that have to be instantiated
+   to give a normal variable name. [var] is the main argument that you want to translate. [lax] is
+   a special argument for SSA construction that, if sets to [true], allows [translate_variable] to
+   return a variable assigned exactly at [exec_number] (otherwise it always return a variable) in
+   another rule or before in the same rule.
+*)
 let rec translate_variable
     (idmap: Mvg.idmap)
     (exec_number: Mvg.execution_number)
@@ -569,7 +585,6 @@ let rec translate_variable
       | Some _ -> instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name (Ast.get_position var) lax
 
 (** The following function deal with the "trying all cases" pragma *)
-
 and instantiate_generic_variables_parameters
     (idmap: Mvg.idmap)
     (exec_number: Mvg.execution_number)
@@ -654,7 +669,7 @@ and instantiate_generic_variables_parameters_aux
     in
     instantiate_generic_variables_parameters_aux  idmap exec_number table_definition lc var_name new_pad_zero pos lax
 
-
+(** Linear pass that fills [idmap] with all the variable assignments along with their execution number. *)
 let get_var_redefinitions
     (p: Ast.program)
     (idmap: Mvg.idmap)
@@ -753,7 +768,7 @@ let get_var_redefinitions
       ) (idmap : Mvg.idmap) p in
   idmap
 
-(** {2 Main translation }*)
+(** {2 Translation of expressions }*)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark i with
@@ -783,7 +798,7 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
       )))
 
 
-(** Main translation function *)
+(** Main translation function for expressions *)
 let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Mvg.expression Ast.marked =
   Ast.same_pos_as
     (match Ast.unmark f with
@@ -911,6 +926,9 @@ and translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.e
     in
     loop_context_provider translator
 
+(** {2 Translation of source file items }*)
+
+(** Helper type to indicate the kind of variable assignment *)
 type index_def =
   | NoIndex
   | SingleIndex of int
@@ -963,35 +981,25 @@ let add_var_def
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
     (idmap: Mvg.idmap)
   : Mvg.variable_data Mvg.VariableMap.t =
-  let var_decl = try
-      let var_at_declaration =
-        List.find
-          (fun var ->
-             Mvg.(var.Mvg.Variable.execution_number <=>
-                  (dummy_exec_number (Ast.get_position var_expr))))
-          (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
-      in
+  let var_at_declaration =
+    List.find
+      (fun var ->
+         Mvg.(var.Mvg.Variable.execution_number <=>
+              (dummy_exec_number (Ast.get_position var_expr))))
+      (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
+  in
+  let decl_data = try
       Mvg.VariableMap.find var_at_declaration var_decl_data
     with
     | Not_found -> assert false (* should not happen *)
   in
   let var_typ = translate_value_typ
-      (match var_decl.var_decl_typ with
-       | Some x -> Some (x, var_decl.var_pos)
+      (match decl_data.var_decl_typ with
+       | Some x -> Some (x, decl_data.var_pos)
        | None -> None)
   in
   Mvg.VariableMap.add var_lvalue (
     try
-      let decl_data =
-        let var_at_declaration =
-          List.find
-            (fun var ->
-               Mvg.(var.Mvg.Variable.execution_number <=>
-                    (dummy_exec_number (Ast.get_position var_expr))))
-            (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
-        in
-        Mvg.VariableMap.find var_at_declaration var_decl_data
-      in
       let io = match decl_data.var_decl_io with
         | Input -> Mvg.Input
         | Constant | Regular -> Mvg.Regular
