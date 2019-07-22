@@ -13,3 +13,5 @@ input_needed.txt
 src/**/.merlin
 *.py
 *.pyc
+verifisc.opam
+verifisc.install

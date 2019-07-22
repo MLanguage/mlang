@@ -112,10 +112,12 @@ let fit_function (p: program) (f: mvg_function) : program =
   }
 
 let var_set_from_variable_name_list (p: program) (names : string list) : unit VariableMap.t =
-  List.fold_left (fun acc name ->
-      let var = try find_var_by_alias p name with
-        | Errors.TypeError _ ->
-          VarNameToID.find name p.program_idmap
+  List.fold_left (fun acc alias ->
+      let name = try find_var_name_by_alias p alias with
+        | Errors.TypeError _ -> alias
+      in
+      let var =
+        Ast_to_mvg.list_max_execution_number (VarNameToID.find name p.program_idmap)
       in
       VariableMap.add var () acc
     ) VariableMap.empty names
@@ -137,9 +139,11 @@ let const_var_set_from_list
     (names : (string * Ast.expression Ast.marked) list)
   : Mvg.expression Ast.marked VariableMap.t =
   List.fold_left (fun acc (name, e) ->
-
       let var =
-        try VarNameToID.find name p.program_idmap with
+        try List.hd (List.sort (fun v1 v2 ->
+            compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+            (VarNameToID.find name p.program_idmap))
+        with
         | Not_found ->
           raise
             (Errors.TypeError
@@ -154,7 +158,8 @@ let const_var_set_from_list
           table_definition = false;
           idmap = p.program_idmap;
           lc = None;
-          int_const_values = VariableMap.empty
+          int_const_values = VariableMap.empty;
+          exec_number = Ast_to_mvg.dummy_exec_number Ast.no_pos
         }) e
       in
       check_const_expression_is_really_const new_e;

@@ -94,18 +94,33 @@ let repl_debugguer
     if query = "explain" then begin
       Printf.printf ">> ";
       let query = read_line () in
-      try let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
+      try
+        let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
         Printf.printf "%s\n"
-          (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+          (String.concat "\n"
+             (List.map (fun var ->
+                  Printf.sprintf "[%s] -> %s"
+                    (Format_mvg.format_execution_number_short var.Variable.execution_number)
+                    (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+                ) vars))
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
     end else try
-        let var = Mvg.VarNameToID.find query p.Mvg.program_idmap in
-        try begin
-          let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-          Printf.printf "%s\n" (format_var_literal_with_var var var_l)
-        end with
-        | Not_found -> Printf.printf "Variable not computed yet\n"
+        let vars = Mvg.VarNameToID.find query p.Mvg.program_idmap in
+        Printf.printf "%s\n"
+          (String.concat "\n"
+             (List.map (fun var ->
+                  try begin
+                    let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
+                    Printf.sprintf "[%s] -> %s "
+                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
+                      (format_var_literal_with_var var var_l)
+                  end with
+                  | Not_found ->
+                    Printf.sprintf "[%s] -> not computed"
+                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
+                ) vars))
+
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
   done
@@ -467,8 +482,18 @@ let evaluate_program
                       end
                   end with
                   | Not_found ->
-                    let _ = VariableMap.find var p.program_conds in
-                    SimpleVar Undefined
+                    try
+                      let _ = VariableMap.find var p.program_conds in
+                      SimpleVar Undefined
+                    with
+                    | Not_found ->
+                      Printf.printf "Variable not found: %s %s\nSame name: %s\n"
+                        (Ast.unmark var.Mvg.Variable.name)
+                        (Format_mvg.format_execution_number var.Mvg.Variable.execution_number)
+                        (String.concat "," (List.map (fun var ->
+                             Printf.sprintf "%s[%s]" (Ast.unmark var.Mvg.Variable.name) (Format_mvg.format_execution_number_short var.Mvg.Variable.execution_number)
+                           ) (Mvg.VarNameToID.find (Ast.unmark var.Mvg.Variable.name) p.Mvg.program_idmap)));
+                      assert false
                 ) scc
           }
         in

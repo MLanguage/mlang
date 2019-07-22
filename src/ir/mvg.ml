@@ -36,9 +36,45 @@ knowledge of the CeCILL-C license and that you accept its terms.
 (**{1 Variables} *)
 
 (** Variables are first-class objects *)
+
+(**
+   To determine in which order execute the different variable assigment we have to record their
+   position in the graph.
+*)
+type execution_number = {
+  rule_number: int; (** Written in the name of the rule or verification condition *)
+  seq_number: int; (** Index in the sequence of the definitions in the rule *)
+  pos: Ast.position;
+}
+[@@deriving show]
+
+
+type max_result = Left | Right
+(** Operator used to select the most preferable variable to choose *)
+let (^^) (left: execution_number) (right: execution_number) : max_result =
+  if left.rule_number > right.rule_number then Left else
+  if left.rule_number < right.rule_number then Right else
+  if left.seq_number > right.seq_number then Left else
+  if left.seq_number < right.seq_number then Right else
+    Left
+
+(** This is the operator used to determine the if a candidate definition is valid at a given point *)
+let (<|) (candidate: execution_number) (current: execution_number) : bool =
+  if candidate.rule_number <> current.rule_number then
+    true
+  else
+    candidate.seq_number < current.seq_number
+
+
+(** This is the operator used to find a particular variable in the [idmap] *)
+let (<=>) (en1: execution_number) (en2: execution_number) : bool =
+  en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
+
 module Variable = struct
   type t = {
     name: string Ast.marked; (** The position is the variable declaration *)
+    execution_number: execution_number;
+    (** The number associated with the rule of verification condition in which the variable is defined *)
     alias: string option; (** Input variable have an alias *)
     id: int; (** Each variable has an unique ID *)
     descr: string Ast.marked; (** Description taken from the variable declaration *)
@@ -52,9 +88,15 @@ module Variable = struct
     counter := !counter + 1;
     v
 
-  let new_var (name: string Ast.marked) (alias: string option) (descr: string Ast.marked) : t = {
-    name; id = fresh_id (); descr; alias
-  }
+  let new_var
+      (name: string Ast.marked)
+      (alias: string option)
+      (descr: string Ast.marked)
+      (execution_number : execution_number)
+    : t =
+    {
+      name; id = fresh_id (); descr; alias; execution_number
+    }
 
   let compare (var1 :t) (var2 : t) =
     compare var1.id var2.id
@@ -224,10 +266,11 @@ type condition_data = {
 
 (**
    We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep
-   a mapping between the two.
+   a mapping between the two. A name is mapped to a list of variables because variables can be redefined
+   in different rules
 *)
 module VarNameToID = Map.Make(String)
-type idmap = Variable.t VarNameToID.t
+type idmap = Variable.t list VarNameToID.t
 
 type program = {
   program_vars: variable_data VariableMap.t;
@@ -239,11 +282,11 @@ type program = {
 
 
 (** Throws an error in case of alias not found *)
-let find_var_by_alias (p: program) (alias: string) : Variable.t =
+let find_var_name_by_alias (p: program) (alias: string) : string =
   let v = VariableMap.fold (fun v _ acc ->
       match acc, v.Variable.alias with
       | (Some _, _) | (None, None ) -> acc
-      | (None, Some v_alias) -> if v_alias = alias then Some v else None
+      | (None, Some v_alias) -> if v_alias = alias then Some (Ast.unmark v.Variable.name) else None
     ) p.program_vars None in
   match v with
   | Some v -> v

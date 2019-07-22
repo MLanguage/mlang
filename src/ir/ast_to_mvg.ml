@@ -131,8 +131,13 @@ type translating_context = {
   table_definition: bool; (** [true] if translating an expression susceptible to contain a generic table index *)
   idmap : Mvg.idmap; (** Current string-to-{!type: Mvg.Variable.t} mapping *)
   lc: loop_context option; (** Current loop translation context *)
-  int_const_values: int Mvg.VariableMap.t (** Mapping from constant variables to their value *)
+  int_const_values: int Mvg.VariableMap.t; (** Mapping from constant variables to their value *)
+  exec_number: Mvg.execution_number; (** Number of the rule of verification condition being translated *)
 }
+
+(** Dummy execution number used for variable declarations *)
+let dummy_exec_number (pos: Ast.position) : Mvg.execution_number =
+  { Mvg.rule_number = -1; Mvg.seq_number = 0; pos }
 
 (**
    When entering a loop, you are provided with a new loop context that you have to integrate
@@ -156,9 +161,48 @@ let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Ast.p
     in
     { ctx with lc = Some merged_lc }
 
-(** Queries a [type: Mvg.variable.t] from an [type:idmap] mapping and the name of a variable *)
-let get_var_from_name (d:Mvg.Variable.t Mvg.VarNameToID.t) (name:Ast.variable_name Ast.marked) : Mvg.Variable.t =
-  try Mvg.VarNameToID.find (Ast.unmark name) d with
+(** Helper to compute the max SSA candidate in a list *)
+let rec list_max_execution_number (l: Mvg.Variable.t list) : Mvg.Variable.t =
+  match l with
+  | [] -> raise Not_found
+  | [v] -> v
+  | v::rest -> let max_rest = list_max_execution_number rest in
+    match Mvg.(v.Mvg.Variable.execution_number ^^ max_rest.Mvg.Variable.execution_number) with
+    | Mvg.Left -> v
+    | Mvg.Right -> max_rest
+
+(**
+   Given a list of candidates for an SSA variable query, returns the correct one: the maximum in the
+   same rule or if no candidates in the same rule, the maximum in other rules.
+*)
+let find_var_among_candidates
+    (exec_number: Mvg.execution_number)
+    (l: Mvg.Variable.t list)
+  : Mvg.Variable.t =
+  let same_rule =
+    List.filter
+      (fun var -> var.Mvg.Variable.execution_number.Mvg.rule_number = exec_number.Mvg.rule_number)
+      l
+  in
+  if List.length same_rule = 0 then
+    list_max_execution_number l
+  else list_max_execution_number same_rule
+
+(**
+   Queries a [type: Mvg.variable.t] from an [type:idmap] mapping, the name of a variable and the rule number
+   from which the variable is requested. Returns the variable with the same name and highest rule number
+   that is below the current rule number from where this variable is requested
+*)
+let get_var_from_name
+    (d:Mvg.Variable.t list Mvg.VarNameToID.t)
+    (name:Ast.variable_name Ast.marked)
+    (exec_number: Mvg.execution_number)
+  : Mvg.Variable.t =
+  try
+    let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
+    find_var_among_candidates exec_number
+      (List.filter (fun var -> Mvg.(var.Mvg.Variable.execution_number <| exec_number)) same_name)
+  with
   | Not_found ->
     raise (Errors.TypeError
              (Errors.Variable
@@ -166,6 +210,29 @@ let get_var_from_name (d:Mvg.Variable.t Mvg.VarNameToID.t) (name:Ast.variable_na
                    (Ast.unmark name)
                    (Format_ast.format_position (Ast.get_position name))
                 )))
+
+(** Same but also take into account variables defined in the same execution unit *)
+let get_var_from_name_lax
+    (d:Mvg.Variable.t list Mvg.VarNameToID.t)
+    (name:Ast.variable_name Ast.marked)
+    (exec_number: Mvg.execution_number)
+  : Mvg.Variable.t =
+  try
+    let same_name = Mvg.VarNameToID.find (Ast.unmark name) d in
+    find_var_among_candidates exec_number
+      (List.filter (fun var -> Mvg.(
+           var.Mvg.Variable.execution_number <| exec_number ||
+           var.Mvg.Variable.execution_number <=> exec_number
+         )) same_name)
+  with
+  | Not_found ->
+    raise (Errors.TypeError
+             (Errors.Variable
+                (Printf.sprintf "variable %s used %s, has not been declared"
+                   (Ast.unmark name)
+                   (Format_ast.format_position (Ast.get_position name))
+                )))
+
 
 
 (**{1 Translation }*)
@@ -182,7 +249,7 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : i
   | Ast.Variable v ->
     (* We look up the value of the variable, which has to be const *)
     begin try Mvg.VariableMap.find
-                (get_var_from_name ctx.idmap (Ast.same_pos_as (Ast.get_variable_name v) l))
+                (get_var_from_name ctx.idmap (Ast.same_pos_as (Ast.get_variable_name v) l) ctx.exec_number)
                 ctx.int_const_values
       with
       | Not_found ->
@@ -201,12 +268,12 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Ast.marked) : i
    way of translating the loop body generically over the values of the iterated variables, and produce
    a list corresponding of the unrolled loop bodies expressions containing the iterated values.
 
-   In OCaml terms, if you want [translate_loop_variables ctx lvs f], then you should define [f] by
-   [let f = fun lc -> ...]  and use {!val: merge_loop_ctx} inside [...] before translating the loop
-   body.
+   In OCaml terms, if you want [translate_loop_variables lvs f ctx], then you should define [f] by
+   [let f = fun lc i ctx -> ...]  and use {!val: merge_loop_ctx} inside [...] before translating the loop
+   body. [lc] is the loop context, [i] the loop sequence index and [ctx] the translation context.
 *)
-let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables Ast.marked) :
-  ((loop_context -> 'a) -> 'a list) =
+let translate_loop_variables (lvs: Ast.loop_variables Ast.marked) (ctx: translating_context) :
+  ((loop_context -> int -> 'a ) -> 'a list) =
   match Ast.unmark lvs with
   | Ast.ValueSets lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
@@ -216,7 +283,15 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
             ) values) in
           ParamsMap.add (Ast.unmark param) values domain
         ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
+      let (_, t_list) =
+        (List.fold_left
+           (fun (i, t_list) lc ->
+              let new_t = translator lc i in
+              (i+1, new_t::t_list))
+           (0, [])
+           (iterate_all_combinations varying_domain))
+      in
+      (List.rev t_list)
     )
   | Ast.Ranges lvs -> (fun translator ->
       let varying_domain = List.fold_left (fun domain (param, values) ->
@@ -226,7 +301,15 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
             ) values in
           ParamsMap.add (Ast.unmark param) (List.flatten values) domain
         ) ParamsMap.empty lvs in
-      List.map (fun lc -> translator lc) (iterate_all_combinations varying_domain)
+      let (_, t_list) =
+        (List.fold_left
+           (fun (i, t_list) lc ->
+              let new_t = translator lc i in
+              (i+1, new_t::t_list))
+           (0, [])
+           (iterate_all_combinations varying_domain))
+      in
+      (List.rev t_list)
     )
 
 (**{2 Variables }*)
@@ -244,14 +327,18 @@ let translate_loop_variables (ctx: translating_context) (lvs: Ast.loop_variables
    we return the variable [X] for ["X"].
 *)
 let get_var_or_x
-    (d:Mvg.Variable.t Mvg.VarNameToID.t)
+    (d:Mvg.Variable.t list Mvg.VarNameToID.t)
+    (exec_number: Mvg.execution_number)
     (name:Ast.variable_name Ast.marked)
     (in_table: bool)
+    (lax: bool)
   : Mvg.expression =
   if Ast.unmark name = "X" && in_table then
     Mvg.GenericTableIndex
+  else if lax then
+    Mvg.Var (get_var_from_name_lax d name exec_number)
   else
-    Mvg.Var (get_var_from_name d name)
+    Mvg.Var (get_var_from_name d name exec_number)
 
 
 (**
@@ -280,57 +367,267 @@ let format_zero_padding (zp: zero_padding) : string = match zp with
   | ZPAdd -> "add zero padding"
   | ZPRemove -> "remove zero padding"
 
-(** Main function that translates variable giving the context *)
-let rec translate_variable (ctx: translating_context) (var: Ast.variable Ast.marked) : Mvg.expression Ast.marked =
+(**{2 Preliminary passes }*)
+
+(**
+   Gets constant variables declaration data and values. Done in a separate pass because constant
+   variables can be used in loop ranges bounds.
+*)
+let get_constants
+    (p: Ast.program)
+  : (var_decl_data Mvg.VariableMap.t * Mvg.idmap * int Mvg.VariableMap.t) =
+  let (vars, idmap, int_const_list) =
+    List.fold_left (fun (vars, (idmap : Mvg.idmap), int_const_list) source_file ->
+        List.fold_left (fun (vars, (idmap : Mvg.idmap) , int_const_list) source_file_item ->
+            match Ast.unmark source_file_item with
+            | Ast.VariableDecl var_decl ->
+              begin match var_decl with
+                | Ast.ConstVar (marked_name, cval) ->
+                  begin try
+                      let old_var = List.hd (Mvg.VarNameToID.find (Ast.unmark marked_name) idmap) in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of constant variable %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Mvg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position marked_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
+                      (vars, idmap, int_const_list)
+                    with
+                    | Not_found ->
+                      let new_var  =
+                        Mvg.Variable.new_var
+                          marked_name
+                          None
+                          (Ast.same_pos_as "constant" marked_name)
+                          (dummy_exec_number (Ast.get_position marked_name))
+                      in
+                      let new_var_data = {
+                        var_decl_typ = None;
+                        var_decl_is_table = None;
+                        var_decl_descr = None;
+                        var_decl_io = Constant;
+                        var_pos = Ast.get_position source_file_item;
+                      } in
+                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark marked_name) [new_var] idmap in
+                      let new_int_const_list = match Ast.unmark cval with
+                        | Ast.Int i -> (new_var, i)::int_const_list
+                        | Ast.Float f -> (new_var, int_of_float f)::int_const_list
+                        | _ -> int_const_list
+                      in
+                      (new_vars, new_idmap, new_int_const_list)
+                  end
+                | _ -> (vars, idmap, int_const_list)
+              end
+            | _ -> (vars, idmap, int_const_list)
+          ) (vars, idmap, int_const_list) source_file
+      ) (Mvg.VariableMap.empty, Mvg.VarNameToID.empty, []) p in
+  let int_const_vals : int Mvg.VariableMap.t = List.fold_left (fun out (var, i)  ->
+      Mvg.VariableMap.add var i out
+    ) Mvg.VariableMap.empty int_const_list
+  in
+  (vars, idmap, int_const_vals)
+
+let belongs_to_app (r: Ast.application Ast.marked list) (application: string option) : bool = match application with
+  | None -> true
+  | Some application ->
+    List.exists (fun app -> Ast.unmark app = application) r
+
+(**
+   Retrieves variable declaration data. Done in a separate pass because wen don't want to deal
+   with sorting the dependencies between files or inside files.
+*)
+let get_variables_decl
+    (p: Ast.program)
+    (vars: var_decl_data Mvg.VariableMap.t)
+    (idmap: Mvg.idmap)
+  : (var_decl_data Mvg.VariableMap.t * Mvg.Error.t list * Mvg.idmap ) =
+  let (vars, idmap, errors, out_list) =
+    List.fold_left (fun (vars, (idmap: Mvg.idmap), errors, out_list) source_file ->
+        List.fold_left (fun (vars, (idmap: Mvg.idmap), errors, out_list) source_file_item ->
+            match Ast.unmark source_file_item with
+            | Ast.VariableDecl var_decl ->
+              begin match var_decl with
+                | Ast.ComputedVar cvar ->
+                  let cvar = Ast.unmark cvar in
+                  (* First we check if the variable has not been declared a first time *)
+                  begin try
+                      let old_var = List.hd (Mvg.VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap) in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Mvg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
+                      (vars, idmap, errors, out_list)
+                    with
+                    | Not_found ->
+                      let new_var =
+                        Mvg.Variable.new_var
+                          cvar.Ast.comp_name
+                          None
+                          cvar.Ast.comp_description
+                          (dummy_exec_number (Ast.get_position cvar.Ast.comp_name))
+                      in
+                      let new_var_data = {
+                        var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
+                        var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
+                        var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
+                        var_decl_io = Regular;
+                        var_pos = Ast.get_position source_file_item;
+                      }
+                      in
+                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark cvar.Ast.comp_name) [new_var] idmap in
+                      let new_out_list = if List.exists (fun x -> match Ast.unmark x with
+                          | Ast.GivenBack -> true
+                          | Ast.Base -> false
+                        ) cvar.Ast.comp_subtyp then
+                          cvar.Ast.comp_name::out_list
+                        else out_list
+                      in
+                      (new_vars, new_idmap, errors, new_out_list)
+                  end
+                | Ast.InputVar ivar ->
+                  let ivar = Ast.unmark ivar in
+                  begin try
+                      let old_var = List.hd (Mvg.VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap) in
+                      Cli.var_info_print
+                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
+                           (Ast.unmark old_var.Mvg.Variable.name)
+                           (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
+                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
+                      (vars, idmap, errors, out_list)
+                    with
+                    | Not_found ->
+                      let new_var =
+                        Mvg.Variable.new_var
+                          ivar.Ast.input_name
+                          (Some (Ast.unmark ivar.Ast.input_alias))
+                          ivar.Ast.input_description
+                          (dummy_exec_number (Ast.get_position ivar.Ast.input_name))
+                          (* Input variables also have a low order *)
+                      in
+                      let new_var_data = {
+                        var_decl_typ = begin match Ast.unmark_option ivar.Ast.input_typ with
+                          | Some x -> Some x
+                          | None -> begin match Ast.unmark ivar.Ast.input_subtyp with
+                              | Ast.Income -> Some Ast.Real
+                              | _ -> None
+                            end
+                        end;
+                        var_decl_is_table = None;
+                        var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
+                        var_decl_io = Input;
+                        var_pos = Ast.get_position source_file_item;
+                      } in
+                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
+                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark ivar.Ast.input_name) [new_var] idmap in
+                      (new_vars, new_idmap, errors, out_list)
+                  end
+                | Ast.ConstVar (_, _) -> (vars, idmap, errors, out_list) (* already treated before *)
+              end
+            | Ast.Output out_name ->
+              (vars, idmap, errors, out_name::out_list)
+            | Ast.Error err ->
+              let err = Mvg.Error.new_error err.Ast.error_name
+                  (Ast.same_pos_as (String.concat ":" (List.map (fun s -> Ast.unmark s) err.Ast.error_descr)) err.Ast.error_name) in
+              (vars, idmap, err::errors, out_list)
+            | _ -> (vars, idmap, errors, out_list)
+          ) (vars, idmap, errors, out_list) source_file
+      ) (vars, (idmap : Mvg.idmap), [], []) p in
+  let vars : var_decl_data Mvg.VariableMap.t =
+    List.fold_left (fun vars out_name ->
+        try
+          let out_var = get_var_from_name_lax
+              idmap
+              out_name
+              (dummy_exec_number (Ast.get_position out_name))
+          in
+          let data = Mvg.VariableMap.find out_var vars in
+          Mvg.VariableMap.add out_var { data with var_decl_io = Output } vars
+        with
+        | Not_found -> assert false (* should not happen *)
+      ) vars out_list
+  in
+  (vars, errors, idmap)
+
+(**{2 SSA construction }*)
+
+(**
+   Call it with [translate_variable idmap exec_number table_definition lc var lax]. SSA is all about
+   assigning the correct variable assignment instance when a variable is used somewhere.
+   That is why [translate_variable] needs the [execution_number]. [table_definition] is needed because
+   the M language has a special ["X"] variable (generic table index) that has to be distinguished
+   from a variable simply named ["X"]. [lc] is the loop context and the thing that complicates this
+   function the most: variables used inside loops have loop parameters that have to be instantiated
+   to give a normal variable name. [var] is the main argument that you want to translate. [lax] is
+   a special argument for SSA construction that, if sets to [true], allows [translate_variable] to
+   return a variable assigned exactly at [exec_number] (otherwise it always return a variable) in
+   another rule or before in the same rule.
+*)
+let rec translate_variable
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
+    (var: Ast.variable Ast.marked)
+    (lax: bool)
+  : Mvg.expression Ast.marked =
   match Ast.unmark var with
   | Ast.Normal name ->
-    Ast.same_pos_as (get_var_or_x ctx.idmap (Ast.same_pos_as name var) ctx.table_definition) var
+    Ast.same_pos_as (get_var_or_x idmap exec_number (Ast.same_pos_as name var) table_definition lax) var
   | Ast.Generic gen_name ->
     if List.length gen_name.Ast.parameters == 0 then
-      translate_variable ctx (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var)
-    else match ctx.lc with
+      translate_variable idmap exec_number table_definition lc (Ast.same_pos_as (Ast.Normal gen_name.Ast.base) var) lax
+    else match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-      | Some _ -> instantiate_generic_variables_parameters ctx gen_name (Ast.get_position var)
+      | Some _ -> instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name (Ast.get_position var) lax
 
 (** The following function deal with the "trying all cases" pragma *)
-
 and instantiate_generic_variables_parameters
-    (ctx: translating_context)
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
     (gen_name:Ast.variable_generic_name)
     (pos: Ast.position)
+    (lax: bool)
   : Mvg.expression Ast.marked =
-  instantiate_generic_variables_parameters_aux ctx gen_name.Ast.base ZPNone pos
+  instantiate_generic_variables_parameters_aux idmap exec_number table_definition lc gen_name.Ast.base ZPNone pos lax
 
 and instantiate_generic_variables_parameters_aux
-    (ctx: translating_context)
+    (idmap: Mvg.idmap)
+    (exec_number: Mvg.execution_number)
+    (table_definition : bool)
+    (lc: loop_context option)
     (var_name:string)
     (pad_zero: zero_padding)
     (pos: Ast.position)
+    (lax: bool)
   : Mvg.expression Ast.marked
   =
   try match ParamsMap.choose_opt (
-      match ctx.lc with
+      match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc -> lc
     ) with
   | None ->
-    translate_variable ctx (Ast.Normal var_name, pos)
+    translate_variable idmap exec_number table_definition lc (Ast.Normal var_name, pos) lax
   | Some (param, value) ->
-      (*
-        The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
-        trailing 0 before the index. So the algorithm first tries to find a definition without the
-        trailing 0, and if it fails it tries with a trailing 0.
-    *)
+        (*
+          The [pad_zero] parameter is here because RangeInt variables are sometimes defined with a
+          trailing 0 before the index. So the algorithm first tries to find a definition without the
+          trailing 0, and if it fails it tries with a trailing 0.
+      *)
     let new_var_name = match value with
       | VarName value ->
-          (*
-            Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
-            already there... So we need to remove it here.
-          *)
+            (*
+              Sometimes the DGFiP code inserts a extra 0 to the value they want to replace when it is
+              already there... So we need to remove it here.
+            *)
         let value = match pad_zero with
           | ZPNone -> value
           | ZPRemove ->
@@ -351,196 +648,133 @@ and instantiate_generic_variables_parameters_aux
           value var_name
     in
     instantiate_generic_variables_parameters_aux
-      { ctx with
-        lc =
-          Some (ParamsMap.remove param (match ctx.lc with
-              | None ->
-                raise (Errors.TypeError
-                         (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
-              | Some lc -> lc))
-      } new_var_name pad_zero pos
+      idmap exec_number table_definition
+      (Some (ParamsMap.remove param (match lc with
+           | None ->
+             raise (Errors.TypeError
+                      (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+           | Some lc -> lc))) new_var_name pad_zero pos lax
   with
-  | err when (match ctx.lc with
+  | err when (match lc with
       | None ->
         raise (Errors.TypeError
                  (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
       | Some lc ->
         ParamsMap.cardinal lc > 0
-    )->
+    ) ->
     let new_pad_zero = match pad_zero with
       | ZPNone -> ZPRemove
       | ZPRemove -> ZPAdd
       | _ -> raise err
     in
-    instantiate_generic_variables_parameters_aux ctx var_name new_pad_zero pos
+    instantiate_generic_variables_parameters_aux  idmap exec_number table_definition lc var_name new_pad_zero pos lax
 
-(**{2 Preliminary passes }*)
-
-(**
-   Gets constant variables declaration data and values. Done in a separate pass because constant
-   variables can be used in loop ranges bounds.
-*)
-let get_constants
+(** Linear pass that fills [idmap] with all the variable assignments along with their execution number. *)
+let get_var_redefinitions
     (p: Ast.program)
-  : (var_decl_data Mvg.VariableMap.t * Mvg.idmap * int Mvg.VariableMap.t) =
-  let (vars, idmap, int_const_list) =
-    List.fold_left (fun (vars, idmap, int_const_list) source_file ->
-        List.fold_left (fun (vars, idmap, int_const_list) source_file_item ->
-            match Ast.unmark source_file_item with
-            | Ast.VariableDecl var_decl ->
-              begin match var_decl with
-                | Ast.ConstVar (marked_name, cval) ->
-                  begin try
-                      let old_var = Mvg.VarNameToID.find (Ast.unmark marked_name) idmap in
-                      Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Ast.unmark old_var.Mvg.Variable.name)
-                           (Format_ast.format_position (Ast.get_position marked_name))
-                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
-                      (vars, idmap, int_const_list)
-                    with
-                    | Not_found ->
-                      let new_var  =
-                        Mvg.Variable.new_var marked_name None (Ast.same_pos_as "constant" marked_name)
-                      in
-                      let new_var_data = {
-                        var_decl_typ = None;
-                        var_decl_is_table = None;
-                        var_decl_descr = None;
-                        var_decl_io = Constant;
-                        var_pos = Ast.get_position source_file_item;
-                      } in
-                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark marked_name) new_var idmap in
-                      let new_int_const_list = match Ast.unmark cval with
-                        | Ast.Int i -> (marked_name, i)::int_const_list
-                        | Ast.Float f -> (marked_name, int_of_float f)::int_const_list
-                        | _ -> int_const_list
-                      in
-                      (new_vars, new_idmap, new_int_const_list)
-                  end
-                | _ -> (vars, idmap, int_const_list)
-              end
-            | _ -> (vars, idmap, int_const_list)
-          ) (vars, idmap, int_const_list) source_file
-      ) (Mvg.VariableMap.empty, Mvg.VarNameToID.empty, []) p in
-  let int_const_vals : int Mvg.VariableMap.t = List.fold_left (fun out (vname, i)  ->
-      Mvg.VariableMap.add (get_var_from_name idmap vname) i out
-    ) Mvg.VariableMap.empty int_const_list
-  in
-  (vars, idmap, int_const_vals)
-
-(**
-   Retrieves variable declaration data. Done in a separate pass because wen don't want to deal
-   with sorting the dependencies between files or inside files.
-*)
-let get_variables_decl
-    (p: Ast.program)
-    (vars: var_decl_data Mvg.VariableMap.t)
     (idmap: Mvg.idmap)
-  : (var_decl_data Mvg.VariableMap.t * Mvg.Error.t list * Mvg.idmap ) =
-  let (vars, idmap, errors, out_list) =
-    List.fold_left (fun (vars, idmap, errors, out_list) source_file ->
-        List.fold_left (fun (vars, idmap, errors, out_list) source_file_item ->
+    (int_const_vals: int Mvg.VariableMap.t)
+    (application: string option)
+  : Mvg.idmap =
+  let idmap =
+    List.fold_left (fun (idmap: Mvg.idmap) source_file ->
+        List.fold_left (fun (idmap: Mvg.idmap) source_file_item ->
             match Ast.unmark source_file_item with
-            | Ast.VariableDecl var_decl ->
-              begin match var_decl with
-                | Ast.ComputedVar cvar ->
-                  let cvar = Ast.unmark cvar in
-                  (* First we check if the variable has not been declared a first time *)
-                  begin try
-                      let old_var = Mvg.VarNameToID.find (Ast.unmark cvar.Ast.comp_name) idmap in
-                      Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Ast.unmark old_var.Mvg.Variable.name)
-                           (Format_ast.format_position (Ast.get_position cvar.Ast.comp_name))
-                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
-                      (vars, idmap, errors, out_list)
-                    with
-                    | Not_found ->
-                      let new_var =
-                        Mvg.Variable.new_var cvar.Ast.comp_name None cvar.Ast.comp_description
-                      in
-                      let new_var_data = {
-                        var_decl_typ = Ast.unmark_option cvar.Ast.comp_typ;
-                        var_decl_is_table = Ast.unmark_option cvar.Ast.comp_table;
-                        var_decl_descr = Some (Ast.unmark cvar.Ast.comp_description);
-                        var_decl_io = Regular;
-                        var_pos = Ast.get_position source_file_item;
-                      }
-                      in
-                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark cvar.Ast.comp_name) new_var idmap in
-                      let new_out_list = if List.exists (fun x -> match Ast.unmark x with
-                          | Ast.GivenBack -> true
-                          | Ast.Base -> false
-                        ) cvar.Ast.comp_subtyp then
-                          cvar.Ast.comp_name::out_list
-                        else out_list
-                      in
-                      (new_vars, new_idmap, errors, new_out_list)
-                  end
-                | Ast.InputVar ivar ->
-                  let ivar = Ast.unmark ivar in
-                  begin try
-                      let old_var = Mvg.VarNameToID.find (Ast.unmark ivar.Ast.input_name) idmap in
-                      Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Ast.unmark old_var.Mvg.Variable.name)
-                           (Format_ast.format_position (Ast.get_position ivar.Ast.input_name))
-                           (Format_ast.format_position (Ast.get_position old_var.Mvg.Variable.name)));
-                      (vars, idmap, errors, out_list)
-                    with
-                    | Not_found ->
-                      let new_var =
-                        Mvg.Variable.new_var ivar.Ast.input_name (Some (Ast.unmark ivar.Ast.input_alias)) ivar.Ast.input_description
-                      in
-                      let new_var_data = {
-                        var_decl_typ = begin match Ast.unmark_option ivar.Ast.input_typ with
-                          | Some x -> Some x
-                          | None -> begin match Ast.unmark ivar.Ast.input_subtyp with
-                              | Ast.Income -> Some Ast.Real
-                              | _ -> None
-                            end
-                        end;
-                        var_decl_is_table = None;
-                        var_decl_descr = Some (Ast.unmark ivar.Ast.input_description);
-                        var_decl_io = Input;
-                        var_pos = Ast.get_position source_file_item;
+            | Ast.Rule r ->
+              let rule_number = Ast.rule_number r.Ast.rule_name in
+              if not (belongs_to_app r.Ast.rule_applications application) then
+                idmap
+              else
+                fst (List.fold_left (fun (idmap, seq_number) formula ->
+                    match Ast.unmark formula with
+                    | Ast.SingleFormula f ->
+                      let exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
                       } in
-                      let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
-                      let new_idmap = Mvg.VarNameToID.add (Ast.unmark ivar.Ast.input_name) new_var idmap in
-                      (new_vars, new_idmap, errors, out_list)
-                  end
-                | Ast.ConstVar (_, _) -> (vars, idmap, errors, out_list) (* already treated before *)
-              end
-            | Ast.Output out_name -> (vars, idmap, errors, out_name::out_list)
-            | Ast.Error err ->
-              let err = Mvg.Error.new_error err.Ast.error_name
-                  (Ast.same_pos_as (String.concat ":" (List.map (fun s -> Ast.unmark s) err.Ast.error_descr)) err.Ast.error_name) in
-              (vars, idmap, err::errors, out_list)
-            | _ -> (vars, idmap, errors, out_list)
-          ) (vars, idmap, errors, out_list) source_file
-      ) (vars, idmap, [], []) p in
-  let vars : var_decl_data Mvg.VariableMap.t =
-    List.fold_left (fun vars out ->
-        let out_var = get_var_from_name idmap out in
-        try
-          let data = Mvg.VariableMap.find out_var vars in
-          Mvg.VariableMap.add out_var { data with var_decl_io = Output } vars
-        with
-        | Not_found -> assert false (* should not happen *)
-      ) vars out_list
-  in
-  (vars, errors, idmap)
+                      let lvar = match Ast.unmark begin
+                          translate_variable
+                            idmap
+                            exec_number
+                            ((Ast.unmark f.Ast.lvalue).Ast.index <> None)
+                            None
+                            (Ast.unmark f.Ast.lvalue).Ast.var
+                            false
+                        end with
+                      | Mvg.Var var -> var
+                      | _ -> assert false (* should not happen *)
+                      in
+                      let new_var =
+                        Mvg.Variable.new_var
+                          lvar.Mvg.Variable.name
+                          None
+                          lvar.Mvg.Variable.descr
+                          exec_number
+                      in
+                      let new_idmap =
+                        Mvg.VarNameToID.add
+                          (Ast.unmark lvar.Mvg.Variable.name)
+                          (new_var::(Mvg.VarNameToID.find (Ast.unmark lvar.Mvg.Variable.name) idmap))
+                          idmap
+                      in
+                      (new_idmap, seq_number + 1)
+                    | Ast.MultipleFormulaes (lvs, f) ->
+                      let exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
+                      } in
+                      let ctx = {
+                        idmap;
+                        lc = None;
+                        int_const_values = int_const_vals;
+                        table_definition = false;
+                        exec_number;
+                      } in
+                      let loop_context_provider = translate_loop_variables lvs ctx in
+                      let translator = fun lc idx ->
+                        let exec_number = { exec_number with Mvg.seq_number = seq_number + idx } in
+                        let lvar = match Ast.unmark begin
+                            translate_variable
+                              idmap
+                              exec_number
+                              ((Ast.unmark f.Ast.lvalue).Ast.index <> None)
+                              (Some lc)
+                              (Ast.unmark f.Ast.lvalue).Ast.var
+                              false
+                          end with
+                        | Mvg.Var var -> var
+                        | _ -> assert false (* should not happen *)
+                        in
+                        let new_var =
+                          Mvg.Variable.new_var
+                            lvar.Mvg.Variable.name
+                            None
+                            lvar.Mvg.Variable.descr
+                            exec_number
+                        in
+                        (Ast.unmark lvar.Mvg.Variable.name, new_var)
+                      in
+                      let new_var_defs = loop_context_provider translator in
+                      List.fold_left (fun (idmap, seq_number) (var_name, var_def) ->
+                          (Mvg.VarNameToID.add var_name (
+                              var_def::(Mvg.VarNameToID.find var_name idmap)
+                            ) idmap, seq_number + 1)
+                        ) (idmap, seq_number) new_var_defs
+                  ) (idmap, 0) r.Ast.rule_formulaes)
+            | _ -> idmap
+          ) idmap source_file
+      ) (idmap : Mvg.idmap) p in
+  idmap
 
-(** {2 Main translation }*)
+(** {2 Translation of expressions }*)
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Ast.marked) : Mvg.expression Ast.marked =
   match Ast.unmark i with
   | Ast.LiteralIndex i' -> Ast.same_pos_as (Mvg.Literal (Mvg.Int i')) i
   | Ast.SymbolIndex v ->
-    let var = translate_variable ctx (Ast.same_pos_as v i) in
+    let var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as v i) false in
     var
 
 
@@ -564,7 +798,7 @@ let translate_function_name (f_name : string Ast.marked) = match Ast.unmark f_na
       )))
 
 
-(** Main translation function *)
+(** Main translation function for expressions *)
 let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.marked) : Mvg.expression Ast.marked =
   Ast.same_pos_as
     (match Ast.unmark f with
@@ -577,7 +811,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
              | Ast.VarValue set_var ->  Mvg.Comparison (
                  Ast.same_pos_as Ast.Eq set_var,
                  Ast.same_pos_as local_var_expr e,
-                 translate_variable ctx set_var
+                 translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc set_var false
                )
              | Ast.IntValue i -> Mvg.Comparison (
                  Ast.same_pos_as Ast.Eq i,
@@ -628,7 +862,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
        let new_e = translate_expression ctx e in
        Mvg.Unop (op, new_e)
      | Ast.Index (t, i) ->
-       let t_var = translate_variable ctx t in
+       let t_var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc t false in
        let new_i = translate_table_index ctx i in
        Mvg.Index ((match Ast.unmark t_var with
            | Mvg.Var v -> Ast.same_pos_as v t_var
@@ -656,15 +890,15 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
        Mvg.FunctionCall (f_correct, new_args)
      | Ast.Literal l -> begin match l with
          | Ast.Variable var ->
-           let new_var = translate_variable ctx (Ast.same_pos_as var f) in
+           let new_var = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as var f) false in
            Ast.unmark new_var
          | Ast.Int i -> Mvg.Literal (Mvg.Int i)
          | Ast.Float f -> Mvg.Literal (Mvg.Float f)
        end
      (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
      | Ast.Loop (lvs, e) ->
-       let loop_context_provider = translate_loop_variables ctx lvs in
-       let translator = fun lc ->
+       let loop_context_provider = translate_loop_variables lvs ctx in
+       let translator = fun lc _ ->
          let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
          translate_expression new_ctx e
        in
@@ -685,13 +919,16 @@ and translate_func_args (ctx: translating_context) (args: Ast.func_args) : Mvg.e
       translate_expression ctx arg
     ) args
   | Ast.LoopList (lvs, e) ->
-    let loop_context_provider = translate_loop_variables ctx lvs in
-    let translator = fun lc ->
+    let loop_context_provider = translate_loop_variables lvs ctx in
+    let translator = fun lc _ ->
       let new_ctx = merge_loop_ctx ctx lc (Ast.get_position lvs) in
       translate_expression new_ctx e
     in
     loop_context_provider translator
 
+(** {2 Translation of source file items }*)
+
+(** Helper type to indicate the kind of variable assignment *)
 type index_def =
   | NoIndex
   | SingleIndex of int
@@ -702,9 +939,10 @@ let translate_lvalue
     (ctx: translating_context)
     (lval: Ast.lvalue Ast.marked)
   : translating_context * Mvg.Variable.t * index_def =
-  let var = match Ast.unmark (translate_variable ctx  (Ast.unmark lval).Ast.var)
+  let var = match
+      Ast.unmark (translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.unmark lval).Ast.var true)
     with
-    | Mvg.Var var -> var
+    | Mvg.Var (var: Mvg.Variable.t) -> var
     | _ -> assert false (* should not happen *)
   in
   match (Ast.unmark lval).Ast.index with
@@ -715,7 +953,7 @@ let translate_lvalue
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable v) ti) in
         (ctx, var, SingleIndex i)
       | Ast.SymbolIndex ((Ast.Generic _ ) as v) ->
-        let mvg_v = translate_variable ctx (Ast.same_pos_as v ti) in
+        let mvg_v = translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc (Ast.same_pos_as v ti) false in
         let i = var_or_int_value ctx (Ast.same_pos_as (Ast.Variable (match Ast.unmark mvg_v with
             | Mvg.Var v -> Ast.Normal (Ast.unmark v.Mvg.Variable.name)
             | _ -> assert false (* should not happen*)
@@ -741,170 +979,146 @@ let add_var_def
     (var_expr : Mvg.expression Ast.marked)
     (def_kind : index_def)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
+    (idmap: Mvg.idmap)
   : Mvg.variable_data Mvg.VariableMap.t =
-  let var_decl = try Mvg.VariableMap.find var_lvalue var_decl_data with
+  let var_at_declaration =
+    List.find
+      (fun var ->
+         Mvg.(var.Mvg.Variable.execution_number <=>
+              (dummy_exec_number (Ast.get_position var_expr))))
+      (Mvg.VarNameToID.find (Ast.unmark var_lvalue.name) idmap)
+  in
+  let decl_data = try
+      Mvg.VariableMap.find var_at_declaration var_decl_data
+    with
     | Not_found -> assert false (* should not happen *)
   in
   let var_typ = translate_value_typ
-      (match var_decl.var_decl_typ with
-       | Some x -> Some (x, var_decl.var_pos)
+      (match decl_data.var_decl_typ with
+       | Some x -> Some (x, decl_data.var_pos)
        | None -> None)
   in
-  try
-    let old_var_expr = Mvg.VariableMap.find var_lvalue var_data in
-    match (old_var_expr.Mvg.var_definition, def_kind) with
-    | (Mvg.SimpleVar old_e, SingleIndex _) | (Mvg.SimpleVar old_e, GenericIndex) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable definition %s %s is indexed but previous definition %s was not"
-            (Ast.unmark var_lvalue.Mvg.Variable.name)
-            (Format_ast.format_position (Ast.get_position var_expr))
-            (Format_ast.format_position (Ast.get_position old_e))
-        )))
-    | (Mvg.InputVar, _) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "input variable %s defined %s is re-defined %s "
-            (Ast.unmark (var_lvalue.Mvg.Variable.name))
-            (Format_ast.format_position (Ast.get_position var_lvalue.Mvg.Variable.name))
-            (Format_ast.format_position (Ast.get_position var_expr))
-        )))
-    | (Mvg.TableVar (_, Mvg.IndexGeneric _), NoIndex) | (Mvg.TableVar (_, Mvg.IndexTable _), NoIndex) ->
-      raise (Errors.TypeError (Errors.Variable (
-          Printf.sprintf "variable %s definition %s is not indexed but previous definitions were"
-            (Ast.unmark var_lvalue.Mvg.Variable.name)
-            (Format_ast.format_position (Ast.get_position var_expr))
-        )))
-    | (Mvg.TableVar (_, Mvg.IndexGeneric old_e), SingleIndex _) | (Mvg.TableVar (_, Mvg.IndexGeneric old_e), GenericIndex)
-    | (Mvg.SimpleVar old_e, NoIndex) ->
-      Cli.var_info_print
-        (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
-           (Ast.unmark var_lvalue.Mvg.Variable.name)
-           (Format_ast.format_position (Ast.get_position var_expr))
-           (Format_ast.format_position (Ast.get_position old_e)));
-      var_data
-    | (Mvg.TableVar (size, Mvg.IndexTable _), GenericIndex) ->
-      Cli.var_info_print
-        (Printf.sprintf "Definition of %s %s will supercede previous partial definitions"
-           (Ast.unmark var_lvalue.Mvg.Variable.name)
-           (Format_ast.format_position (Ast.get_position var_expr)));
-      Mvg.VariableMap.add var_lvalue
-        { old_var_expr with
-          Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
-        } var_data
-    | (Mvg.TableVar (size, Mvg.IndexTable old_defs), SingleIndex i) -> begin try
-          let old_def = Mvg.IndexMap.find i old_defs in
-          Cli.var_info_print
-            (Printf.sprintf "Dropping definition of %s %s because variable was previously defined %s"
-               (Ast.unmark var_lvalue.Mvg.Variable.name)
-               (Format_ast.format_position (Ast.get_position var_expr))
-               (Format_ast.format_position (Ast.get_position old_def)));
-          var_data
-        with
-        | Not_found ->
-          let new_defs = Mvg.IndexMap.add i var_expr old_defs in
-          Mvg.VariableMap.add var_lvalue
-            { old_var_expr with
-              Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_defs)
-            } var_data
-      end
-  with
-  | Not_found -> Mvg.VariableMap.add var_lvalue (
-      try
-        let decl_data = Mvg.VariableMap.find var_lvalue var_decl_data in
-        let io = match decl_data.var_decl_io with
-          | Input -> Mvg.Input
-          | Constant | Regular -> Mvg.Regular
-          | Output -> Mvg.Output
-        in
-        if def_kind = NoIndex then
-          { Mvg.var_definition = Mvg.SimpleVar var_expr;
-            Mvg.var_typ = var_typ;
-            Mvg.var_io = io;
-          }
-        else
-          match decl_data.var_decl_is_table with
-          | Some size -> begin
-              match def_kind with
-              | NoIndex -> assert false (* should not happen*)
-              | SingleIndex i ->
-                {
-                  Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable (Mvg.IndexMap.singleton i var_expr));
-                  Mvg.var_typ = var_typ;
-                  Mvg.var_io = io;
-                }
-              | GenericIndex ->
-                {
-                  Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
-                  Mvg.var_typ = var_typ;
-                  Mvg.var_io = io;
-                }
-            end
-          | None -> raise (Errors.TypeError (
-              Errors.Variable (
-                Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
-                  (Ast.unmark var_lvalue.Mvg.Variable.name)
-                  (Format_ast.format_position (Ast.get_position var_expr))
-                  (Format_ast.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos)
-              )
-            ))
-      with
-      | Not_found -> assert false
+  Mvg.VariableMap.add var_lvalue (
+    try
+      let io = match decl_data.var_decl_io with
+        | Input -> Mvg.Input
+        | Constant | Regular -> Mvg.Regular
+        | Output -> Mvg.Output
+      in
+      if def_kind = NoIndex then
+        { Mvg.var_definition = Mvg.SimpleVar var_expr;
+          Mvg.var_typ = var_typ;
+          Mvg.var_io = io;
+        }
+      else
+        match decl_data.var_decl_is_table with
+        | Some size -> begin
+            match def_kind with
+            | NoIndex -> assert false (* should not happen*)
+            | SingleIndex i ->
+              {
+                Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable (Mvg.IndexMap.singleton i var_expr));
+                Mvg.var_typ = var_typ;
+                Mvg.var_io = io;
+              }
+            | GenericIndex ->
+              {
+                Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexGeneric var_expr);
+                Mvg.var_typ = var_typ;
+                Mvg.var_io = io;
+              }
+          end
+        | None -> raise (Errors.TypeError (
+            Errors.Variable (
+              Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
+                (Ast.unmark var_lvalue.Mvg.Variable.name)
+                (Format_ast.format_position (Ast.get_position var_expr))
+                (Format_ast.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos)
+            )
+          ))
+    with
+    | Not_found -> assert false (* should not happen *)
         (*
           should not happen since we already looked into idmap to get the var value
           from its name
         *)
-    ) var_data
-
-let belongs_to_app (r: Ast.application Ast.marked list) (application: string option) : bool = match application with
-  | None -> true
-  | Some application ->
-    List.exists (fun app -> Ast.unmark app = application) r
+  ) var_data
 
 
-(** Linear pass on the program to add variable definitions *)
+(**
+   Main translation pass that deal with regular variable definition; returns a map whose keys are
+   the variables being defined (with the execution number corresponding to the place where it is
+   defined) and whose values are the expressions corresponding to the definitions.
+*)
 let get_var_data
     (idmap: Mvg.idmap)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
     (int_const_vals: int Mvg.VariableMap.t)
     (p: Ast.program)
-    (application : string option)
-  : Mvg.variable_data Mvg.VariableMap.t * Mvg.variable_data Mvg.VariableMap.t =
-  let var_data, var_defs_not_in_app = List.fold_left (fun (var_data, var_defs_not_in_app) source_file ->
+    (application: string option)
+  : Mvg.variable_data Mvg.VariableMap.t =
+  List.fold_left (fun var_data source_file ->
       Cli.debug_print (Printf.sprintf "Expanding definitions in %s" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
-      List.fold_left (fun (var_data, var_defs_not_in_app)  source_file_item -> match Ast.unmark source_file_item with
+      List.fold_left (fun var_data  source_file_item ->
+          match Ast.unmark source_file_item with
           | Ast.Rule r ->
-            let correct_var_data = if belongs_to_app r.Ast.rule_applications application then
-                var_data
-              else
-                var_defs_not_in_app
-            in
-            let new_correct_var_data = List.fold_left (fun var_data  formula ->
-                match Ast.unmark formula with
-                | Ast.SingleFormula f ->
-                  let ctx = { idmap; lc = None; int_const_values = int_const_vals; table_definition = false } in
-                  let (ctx, var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
-                  let var_expr = translate_expression ctx f.Ast.formula in
-                  add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-                | Ast.MultipleFormulaes (lvs, f) ->
-                  let ctx = { idmap; lc = None; int_const_values = int_const_vals; table_definition = false } in
-                  let loop_context_provider = translate_loop_variables ctx lvs in
-                  let translator = fun lc ->
-                    let new_ctx = { ctx with lc = Some lc } in
-                    let (new_ctx, var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
-                    let var_expr = translate_expression new_ctx f.Ast.formula in
-                    (var_lvalue, var_expr, def_kind)
-                  in
-                  let data_to_add = loop_context_provider translator in
-                  List.fold_left (fun var_data (var_lvalue, var_expr, def_kind) ->
-                      add_var_def var_data var_lvalue var_expr def_kind var_decl_data
-                    ) var_data data_to_add
-              ) correct_var_data r.Ast.rule_formulaes
-            in
-            if belongs_to_app r.Ast.rule_applications application then
-              (new_correct_var_data, var_defs_not_in_app)
+            let rule_number = Ast.rule_number r.Ast.rule_name in
+            if not (belongs_to_app r.Ast.rule_applications application) then
+              var_data
             else
-              (var_data, new_correct_var_data)
+              fst (List.fold_left (fun (var_data, seq_number) formula ->
+                  match Ast.unmark formula with
+                  | Ast.SingleFormula f ->
+                    let ctx = {
+                      idmap;
+                      lc = None;
+                      int_const_values = int_const_vals;
+                      table_definition = false;
+                      exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
+                      }
+                    } in
+                    let (ctx, var_lvalue, def_kind) = translate_lvalue ctx f.Ast.lvalue in
+                    let var_expr = translate_expression ctx f.Ast.formula in
+                    (add_var_def var_data var_lvalue var_expr def_kind var_decl_data idmap, seq_number + 1)
+                  | Ast.MultipleFormulaes (lvs, f) ->
+                    let ctx = {
+                      idmap;
+                      lc = None;
+                      int_const_values = int_const_vals;
+                      table_definition = false;
+                      exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = seq_number;
+                        Mvg.pos = Ast.get_position f.Ast.lvalue
+                      }
+                    } in
+                    let loop_context_provider = translate_loop_variables lvs ctx in
+                    let translator = fun lc idx ->
+                      let new_ctx =
+                        { ctx with
+                          lc = Some lc ;
+                          exec_number = {
+                            Mvg.rule_number = rule_number;
+                            Mvg.seq_number = seq_number + idx;
+                            Mvg.pos = Ast.get_position f.Ast.lvalue
+                          }
+                        }
+                      in
+                      let (new_ctx, var_lvalue, def_kind) = translate_lvalue new_ctx f.Ast.lvalue in
+                      let var_expr = translate_expression new_ctx f.Ast.formula in
+                      (var_lvalue, var_expr, def_kind)
+                    in
+                    let data_to_add = loop_context_provider translator in
+                    List.fold_left
+                      (fun (var_data, seq_number) (var_lvalue, var_expr, def_kind) ->
+                         (add_var_def var_data var_lvalue var_expr def_kind var_decl_data idmap, seq_number + 1)
+                      ) (var_data, seq_number) data_to_add
+                ) (var_data, 0) r.Ast.rule_formulaes)
           | Ast.VariableDecl (Ast.ConstVar (name, lit)) ->
-            let var = get_var_from_name idmap name in
+            let var = get_var_from_name_lax idmap name (dummy_exec_number (Ast.get_position name)) in
             (add_var_def var_data var (Ast.same_pos_as (Mvg.Literal (begin match Ast.unmark lit with
                  | Ast.Variable var ->
                    raise (Errors.TypeError (
@@ -915,9 +1129,9 @@ let get_var_data
                        )))
                  | Ast.Int i -> Mvg.Int i
                  | Ast.Float f -> Mvg.Float f
-               end)) lit) NoIndex var_decl_data, var_defs_not_in_app)
-          | Ast.VariableDecl (Ast.InputVar (var, _)) ->
-            let var = get_var_from_name idmap var.Ast.input_name in
+               end)) lit) NoIndex var_decl_data idmap)
+          | Ast.VariableDecl (Ast.InputVar (var, pos)) ->
+            let var = get_var_from_name_lax idmap var.Ast.input_name (dummy_exec_number pos) in
             let var_decl = try Mvg.VariableMap.find var var_decl_data with
               | Not_found -> assert false (* should not happen *)
             in
@@ -932,58 +1146,79 @@ let get_var_data
                  Mvg.var_typ = typ;
                  Mvg.var_io = Mvg.Input;
                }
-               var_data, var_defs_not_in_app)
-          | _ -> (var_data, var_defs_not_in_app)
-        ) (var_data, var_defs_not_in_app) source_file
-    ) (Mvg.VariableMap.empty, Mvg.VariableMap.empty) (List.rev p)
-  in var_data, var_defs_not_in_app
+               var_data)
+          | _ -> var_data
+        ) var_data source_file
+    ) Mvg.VariableMap.empty (List.rev p)
+
 
 (**
-   After the linear pass, some variables declared might still be undefined in the application. For
-   these, we insert a placholder definition with the value zero and add an [undefined] flag.
-
+   At this point [var_data] contains the definition data for all the times a variable is defined.
+   However the M language deals with undefined variable, so for each variable we have to insert
+   a dummy definition corresponding to the declaration and whose value is [Undefined].
 *)
-let check_if_all_variables_defined
+let add_dummy_definition_for_variable_declaration
     (var_data: Mvg.variable_data Mvg.VariableMap.t)
     (var_decl_data: var_decl_data Mvg.VariableMap.t)
+    (idmap: Mvg.idmap)
   : Mvg.variable_data Mvg.VariableMap.t =
-  (Mvg.VariableMap.merge (fun var data decl -> match data, decl with
-       | (Some x, Some _) -> Some x
-       | (None, Some decl) -> begin match decl.var_decl_io with
-           | Output | Regular | Constant ->
-             Cli.var_info_print (
-               Printf.sprintf "variable %s declared %s is never defined in the application"
-                 (Ast.unmark var.Mvg.Variable.name)
-                 (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
-             );
-             (* This is the case where the variable is not defined. *)
-             let io = match decl.var_decl_io with
-               | Output -> Mvg.Output
-               | Regular | Constant -> Mvg.Regular
-               | Input -> assert false (* should not happen *)
-             in
-             (** We insert the Undef expr *)
-             begin match decl.var_decl_is_table with
-               | Some _ -> Some {
-                   Mvg.var_definition = Mvg.TableVar (
-                       0,
-                       Mvg.IndexGeneric (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
-                     );
-                   Mvg.var_typ = None;
-                   Mvg.var_io = io;
-                 }
-               | None -> Some {
-                   Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
-                   Mvg.var_typ = None;
-                   Mvg.var_io = io;
-                 }
-             end
-           | Input -> assert false (* should not happen *)
-         end
-       | _ -> assert false (* should not happen *)
-     ) var_data var_decl_data)
+  Mvg.VariableMap.fold (fun var decl (var_data : Mvg.variable_data Mvg.VariableMap.t) ->
+      (* The variable has not been defined in a rule *)
+      begin match decl.var_decl_io with
+        | Output | Regular  ->
+          if List.for_all (fun var' ->
+              var'.Mvg.Variable.execution_number.Mvg.rule_number = -1
+            ) (Mvg.VarNameToID.find (Ast.unmark var.Mvg.Variable.name) idmap)
+          then
+            Cli.var_info_print (
+              Printf.sprintf "variable %s declared %s is never defined in the application"
+                (Ast.unmark var.Mvg.Variable.name)
+                (Format_ast.format_position (Ast.get_position var.Mvg.Variable.name))
+            );
+          (* This is the case where the variable is not defined. *)
+          let io = match decl.var_decl_io with
+            | Output -> Mvg.Output
+            | Regular | Constant -> Mvg.Regular
+            | Input -> assert false (* should not happen *)
+          in
+          (* We insert the Undef expr *)
+          begin match decl.var_decl_is_table with
+            | Some size -> Mvg.VariableMap.add var {
+                Mvg.var_definition = Mvg.TableVar (
+                    size,
+                    Mvg.IndexGeneric (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
+                  );
+                Mvg.var_typ = translate_value_typ
+                    (match decl.var_decl_typ with
+                     | None -> None
+                     | Some typ -> Some (Ast.same_pos_as typ var.name));
+                Mvg.var_io = io;
+              } var_data
+            | None -> Mvg.VariableMap.add var {
+                Mvg.var_definition = Mvg.SimpleVar (Ast.same_pos_as (Mvg.Literal Mvg.Undefined) var.Mvg.Variable.name);
+                Mvg.var_typ = translate_value_typ
+                    (match decl.var_decl_typ with
+                     | None -> None
+                     | Some typ -> Some (Ast.same_pos_as typ var.name));
+                Mvg.var_io = io;
+              } var_data
+          end
+        | Input ->
+          Mvg.VariableMap.add var {
+            Mvg.var_definition = Mvg.InputVar;
+            Mvg.var_typ = translate_value_typ
+                (match decl.var_decl_typ with
+                 | None -> None
+                 | Some typ -> Some (Ast.same_pos_as typ var.name));
+            Mvg.var_io = Mvg.Input;
+          } var_data
+        | Constant -> var_data (* the variable's definition has already been inserted in [var_data] *)
+      end
+    ) var_decl_data var_data
 
-
+(**
+   Returns a map whose keys are dummy variables and whose values are the verification conditions.
+*)
 let get_conds
     (error_decls: Mvg.Error.t list)
     (idmap: Mvg.idmap)
@@ -994,9 +1229,20 @@ let get_conds
       List.fold_left (fun conds source_file_item ->
           match Ast.unmark source_file_item with
           | Ast.Verification verif when belongs_to_app verif.Ast.verif_applications application ->
+            let rule_number = Ast.verification_number verif.verif_name in
             List.fold_left (fun conds verif_cond ->
                 let e = translate_expression
-                    { idmap; lc = None; int_const_values = Mvg.VariableMap.empty ; table_definition = false }
+                    {
+                      idmap;
+                      lc = None;
+                      int_const_values = Mvg.VariableMap.empty ;
+                      table_definition = false;
+                      exec_number = {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = 0;
+                        Mvg.pos = Ast.get_position verif_cond
+                      }
+                    }
                     (Ast.unmark verif_cond).Ast.verif_cond_expr
                 in
                 let errs = List.map
@@ -1023,6 +1269,11 @@ let get_conds
                     (Ast.same_pos_as (Printf.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
                     None
                     (Ast.same_pos_as (Format_ast.format_position (Ast.get_position e)) e)
+                    {
+                      Mvg.rule_number = rule_number;
+                      Mvg.seq_number = 0;
+                      Mvg.pos = Ast.get_position verif_cond
+                    }
                 in
                 Mvg.VariableMap.add dummy_var {
                   Mvg.cond_expr = e;
@@ -1037,17 +1288,36 @@ let get_conds
     ) Mvg.VariableMap.empty p
 
 (**
-   The translate function returns three values :
-   {ul
-   {li [var_data] which is the actual MVG program;}
-   {li [idmap] containing the name to variable mapping;}
-   {li [var_defs_not_in_app] containing the variables defined outside of the app but still present in the source program.}
-   }
+   Main translation function from the M AST to the M Variable Graph. This function performs 6 linear
+   passes on the input code:
+    {ul
+      {li
+        [get_constants] gets the value of all constant variables, the values of which are needed
+        to compute certain loop bounds;
+      }
+      {li [get_variables_decl] retrieves the declarations of all other variables and errors; }
+      {li
+        [get_var_redefinitions] incorporates into [idmap] all definitions inside rules
+        along with their execution number;
+      }
+      {li
+        [get_var_data] is the workhorse pass that translates all the expressions corresponding to the
+        definitions;
+      }
+      {li
+        [add_dummy_definition_for_variable_declaration] adds [Undefined] definitions placeholder for
+        all variables declarations;
+      }
+      {li
+        [get_errors_conds] parses the verification conditions definitions.
+      }
+    }
 *)
-let translate (p: Ast.program) (application : string option): (Mvg.program * Mvg.variable_data Mvg.VariableMap.t) =
+let translate (p: Ast.program) (application : string option): Mvg.program =
   let (var_decl_data, idmap, int_const_vals) = get_constants p in
   let (var_decl_data, error_decls, idmap) = get_variables_decl p var_decl_data idmap in
-  let (var_data, var_defs_not_in_app) = get_var_data idmap var_decl_data int_const_vals p application in
-  let var_data = check_if_all_variables_defined var_data var_decl_data in
+  let idmap = get_var_redefinitions p idmap int_const_vals application in
+  let var_data = get_var_data idmap var_decl_data int_const_vals p application in
+  let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data idmap in
   let conds = get_conds error_decls idmap p application in
-  { Mvg.program_vars = var_data; Mvg.program_conds = conds; Mvg.program_idmap = idmap}, var_defs_not_in_app
+  { Mvg.program_vars = var_data; Mvg.program_conds = conds; Mvg.program_idmap = idmap}

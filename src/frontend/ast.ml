@@ -48,6 +48,10 @@ let pp_position f (pos:position) : unit =
     s.Lexing.pos_lnum (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
     e.Lexing.pos_lnum (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
+let format_position (pos: position) : string =
+  pp_position (Format.str_formatter) pos;
+  Buffer.contents Format.stdbuf
+
 (** Everything related to the source code should keep its position stored, to improve error messages *)
 type 'a marked = ('a * position)
 [@@deriving show]
@@ -96,9 +100,20 @@ type application = string
 type chaining = string
 [@@deriving show]
 
-(** Rule can have multiple names. Currently unused in the compiler *)
+(**
+   Rule can have multiple names. The last one should be an integer, indicating the order of
+   execution of the rule.
+*)
 type rule_name = string marked list
 [@@deriving show]
+
+let rule_number (name : rule_name) : int =
+  try int_of_string (unmark (List.hd (List.rev name))) with
+  | _ ->
+    raise (Errors.TypeError (
+        Errors.Variable (Printf.sprintf "the rule %s doesn't have an execution number"
+                           (format_position (get_position (List.hd name))))
+      ))
 
 (** Variables are just strings *)
 type variable_name = string
@@ -118,6 +133,14 @@ type variable_generic_name = {
 (** Verification clauses can have multiple names, currently unused *)
 type verification_name = string marked list
 [@@deriving show]
+
+let verification_number (name : verification_name) : int =
+  try int_of_string (unmark (List.hd (List.rev name))) with
+  | _ ->
+    raise (Errors.TypeError (
+        Errors.Variable (Printf.sprintf "the rule %s doesn't have an execution number"
+                           (format_position (get_position (List.hd name))))
+      ))
 
 (** Ununsed for now *)
 type error_name = string
