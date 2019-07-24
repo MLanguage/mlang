@@ -48,14 +48,17 @@ test: build
 		dune exec src/main.exe -- --debug test.m
 
 simulateur_simplifie_2018: build
-	dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
+	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
-		--backend Python --output ir_2018.py --function_spec specs/simulateur_simplifie_2018.m_spec
+		--backend Python --output ir_2018.py \
+		--function_spec specs/simulateur_simplifie_2018.m_spec \
+		$(SOURCE_FILES)
 
 cas_basique_2018: build
-	dune exec src/main.exe --  $(SOURCE_FILES) --application iliad \
+	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
-		--backend Python --function_spec specs/cas_basique.m_spec --output ir_2018.py
+		--backend Python --function_spec specs/cas_basique.m_spec \
+		--output ir_2018.py $(SOURCE_FILES)
 
 doc:
 	dune build @doc
