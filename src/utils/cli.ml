@@ -248,8 +248,8 @@ let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.bl
 let time : float ref = ref (Unix.gettimeofday ())
 
 (** Prints [[DEBUG]] in purple on the terminal standard output as well as timing since last debug *)
-let debug_marker () =
-  if !display_time then begin
+let debug_marker (f_time: bool) =
+  if !display_time && f_time then begin
     let new_time = Unix.gettimeofday () in
     let old_time = !time in
     time := new_time;
@@ -278,7 +278,7 @@ let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.gree
 
 let debug_print (s: string) =
   if !debug_flag then begin
-    debug_marker ();
+    debug_marker true;
     Printf.printf "%s\n" s;
     flush stdout;
     flush stdout

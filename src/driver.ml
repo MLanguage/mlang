@@ -74,7 +74,10 @@ let driver
         else
           failwith "You have to specify at least one file!"
       in
-      Cli.debug_print (Printf.sprintf "Parsing %s" source_file);
+      Cli.debug_marker false;
+      Printf.printf "Parsing %s" source_file;
+      ANSITerminal.erase ANSITerminal.Below;
+      ANSITerminal.move_bol ();
       let filebuf = {filebuf with
                      lex_curr_p = { filebuf.lex_curr_p with
                                     pos_fname = Filename.basename source_file
@@ -100,6 +103,7 @@ let driver
           Cmdliner.Term.exit_status (`Ok 2);
         end
     ) !Cli.source_files;
+  Printf.printf "\n"; (* for the progress bar effect *)
   let program =
     Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
   in

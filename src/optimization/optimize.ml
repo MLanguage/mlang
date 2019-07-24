@@ -75,21 +75,27 @@ let optimize
   (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
+  Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
   while !nb_removed > 0 do
-    Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
     let new_program = Partial_evaluation.partially_evaluate !program  in
     let new_program = remove_unused_variables new_program in
     let new_nb_removed =
       Mvg.VariableMap.cardinal !program.program_vars -
       Mvg.VariableMap.cardinal new_program.program_vars
     in
-    Cli.debug_print
-      (Printf.sprintf
-         "Removing %d unused variables..."
-         new_nb_removed);
+    Cli.debug_marker false;
+    (Printf.printf
+       "Removing %d unused variables out of %d..."
+       new_nb_removed
+       (Mvg.VariableMap.cardinal !program.program_vars));
+    if new_nb_removed > 0 then begin
+      ANSITerminal.erase ANSITerminal.Below;
+      ANSITerminal.move_bol ();
+    end;
     program := new_program;
     nb_removed := new_nb_removed;
   done;
+  Printf.printf "\n";
   let program = !program in
   Cli.debug_print
     (Printf.sprintf "Program variables count down to %d!"

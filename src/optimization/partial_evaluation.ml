@@ -146,7 +146,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     begin match Ast.unmark new_e1 with
       | Literal (Bool true) -> new_e2
       | Literal (Bool false) -> new_e3
-      | Literal Undefined ->Ast.same_pos_as (Literal Undefined) e
+      | Literal Undefined -> Ast.same_pos_as (Literal Undefined) e
       | _ -> Ast.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
     end
   | Index (var, e1) ->
