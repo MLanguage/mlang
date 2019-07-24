@@ -35,6 +35,143 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 (**{1 Command line arguments }*)
 
+(**{2 Argument parsing }*)
+
+(** The command line interface is declared using {!module Cmdliner}  *)
+
+
+open Cmdliner
+
+let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M files to be compiled")
+
+let application = Arg.(
+    required &
+    opt (some string) None &
+    info ["application"; "a"]
+      ~docv:"APPLICATION"
+      ~doc:"Name of the M application to select rules from : iliad, batch, bareme..."
+  )
+
+let debug = Arg.(value & flag & info ["debug"; "d"] ~doc:"Prints debug information")
+
+let display_time = Arg.(
+    value &
+    flag &
+    info ["display_time"; "t"] ~doc:"Displays timing information (use with --debug)")
+
+let dep_graph_file =
+  let doc = "Name of the file where the variable dependency graph should be output \
+             (use with --debug)" in
+  Arg.(
+    value &
+    opt file "dep_graph.dot" &
+    info ["dep_graph_file"; "g"] ~docv:"DEP_GRAPH" ~doc
+  )
+
+let print_cycles =
+  let doc = "If set, the eventual circular dependencies in variables definition will\
+             be output to the \"variable_cycles\" directory" in
+  Arg.(
+    value &
+    flag &
+    info ["print_cycles"; "c"] ~doc
+  )
+
+let optimize =
+  Arg.(
+    value &
+    flag &
+    info ["optimize"; "O"] ~doc:"Optimize the program by partial evaluation"
+  )
+
+let backend =
+  Arg.(
+    required &
+    opt (some string) None &
+    info ["backend"; "b"]
+      ~docv:"BACKEND"
+      ~doc:"Backend selection: interpreter, python or z3"
+  )
+
+let function_spec =
+  Arg.(
+    required &
+    opt (some file) None &
+    info ["function_spec"; "f"]
+      ~docv:"SPEC"
+      ~doc:"M function specification file (extension .m_spec).\
+            $(i, SPEC) should define the expected inputs, outputs and \
+            constant values. This information will be used to select the \
+            relevant computational rules from the M code corpus."
+  )
+
+let output =
+  Arg.(
+    value &
+    opt (some string) None &
+    info ["output"; "o"]
+      ~docv:"OUTPUT"
+      ~doc:"$(i, OUTPUT) is the file that will contain the extracted function \
+            (for compiler backends)"
+  )
+
+let number_of_passes =
+  Arg.(
+    value &
+    opt int 1 &
+    info ["number_of_passes"; "n"] ~docv:"PASSES"
+      ~doc:"M programs can contain variables defined circularly. In this \
+            case, the value computed by the program depends on an arbitrary \
+            number of execution passes that you provide with $(i,PASSES)"
+  )
+
+
+
+let verifisc_t f =
+  Term.(
+    const f $
+    files $
+    application $
+    debug $
+    display_time $
+    dep_graph_file $
+    print_cycles $
+    optimize $
+    backend $
+    function_spec $
+    output $
+    number_of_passes
+  )
+
+let info =
+  let doc =  "Intepreter and compiler for M, the language created by the French \
+              Direction Generale des Finances Publiques (DGFiP)."
+  in
+  let man = [
+    `S Manpage.s_description;
+    `P "The M language is used by the DGFiP to encode the rules describing the computation \
+        of the French income tax. An M program consists in several *.m files in no particular \
+        order. $(tname) will parse all the rules contained in those files that correspond to a \
+        particular application tag. Then, it will extract from this set of rules an \
+        user-specified function, than can be interpreted with a command-line prompt or compiled \
+        to a function in the language of your choice.";
+    `S Manpage.s_authors;
+    `P "Denis Merigoux <denis.merigoux@inria.fr>";
+    `P "Raphael Monat <raphael.monat@lip6.fr>";
+    `S Manpage.s_examples;
+    `P "Typical usage:";
+    `Pre "verifisc -a iliad -f query.m_spec -b interpreter ir-calcul/sources2017m_6_10/*.m";
+    `S Manpage.s_bugs;
+    `P "Please file bug reports at https://gitlab.inria.fr/verifisc/verifisc-m/issues" ]
+  in
+  let exits = Term.default_exits @ [
+      Term.exit_info ~doc:"on M parsing error." 1;
+      Term.exit_info ~doc:"on M typechecking error." 2;
+    ] in
+  Term.info "verifisc" ~version:(match Build_info.V1.version () with
+      | None -> "n/a"
+      | Some v -> Build_info.V1.Version.to_string v) ~doc ~exits ~man
+
 (**{2 Flags and parameters}*)
 
 (** M source files to be compiled *)
@@ -72,43 +209,34 @@ let number_of_passes = ref 1
 
 let backend = ref "python"
 
-(**{2 Argument parsing }*)
-
-(** {!module Arg} function that specifies command-line arguments parsing *)
-let parse_cli_args () =
-  (* Code block to retrieve and parse command-line arguments. *)
-  let speclist = Arg.align [
-      ("--application", Arg.Set_string application,
-       " Nom de l'application (jette toutes les règles ne comportant pas cette mention)");
-      ("--debug", Arg.Set debug_flag,
-       " Affiche des informations de débuggage");
-      ("--display_time", Arg.Set display_time,
-       " Affiche le temps passé entre chaque information donnée par --debug");
-      ("--dep_graph_file", Arg.Set_string dep_graph_file,
-       " Nom du fichier où écrire le graphe de dépendance avec --debug");
-      ("--print_cycles", Arg.Set print_cycles_flag,
-       " Affiche les cycles de définition dans les variables");
-      ("--optimize", Arg.Set optimize,
-       " Optimise le programme (inlining, propagation des constantes, élimination du code mort)");
-      ("--var_info", Arg.Set var_info_flag,
-       " Affiche des informations sur les variables du programmes mal définies");
-      ("--verify", Arg.Set verify_flag,
-       " Vérifie que les conditions sont valables dans tous les cas");
-      ("--backend", Arg.Set_string backend,
-       " Défini le backend (Python, Z3, Interpreteur)");
-      ("--function_spec", Arg.Set_string function_spec,
-       " Fichier de spécification des entrées et sorties voulues");
-      ("--output", Arg.Set_string output_file,
-       " Nom du fichier de sortie pour le résultat de la compilation");
-      ("--number_of_passes", Arg.Set_int number_of_passes,
-       " Nombre de passes d'exécution pour les variables définies circulairement (défault 1)")
-    ]
-  in let usage_msg =
-       "Parseur et compilateur pour le langage M de la DGFiP, utilisé pour spécifier le calcul de la fiscalité française."
-  in
-  let anon_func (file: string) : unit =
-    source_files := file::!source_files
-  in Arg.parse speclist anon_func usage_msg
+let set_all_arg_refs
+    (files_: string list)
+    (application_: string)
+    (debug_: bool)
+    (display_time_: bool)
+    (dep_graph_file_: string)
+    (print_cycles_: bool)
+    (optimize_: bool)
+    (backend_: string)
+    (function_spec_: string)
+    (output_: string option)
+    (number_of_passes_: int)
+  =
+  source_files := files_;
+  application := application_;
+  debug_flag := debug_;
+  display_time := display_time_;
+  dep_graph_file := dep_graph_file_;
+  print_cycles_flag := print_cycles_;
+  optimize := optimize_;
+  backend := backend_;
+  function_spec := function_spec_;
+  output_file := begin match output_ with
+    | Some o -> o
+    | None -> if backend_ = "interpreter" then "" else
+        raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))
+  end;
+  number_of_passes := number_of_passes_
 
 (**{1 Terminal formatting }*)
 
