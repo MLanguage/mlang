@@ -51,7 +51,7 @@ type execution_number = {
 
 type max_result = Left | Right
 (** Operator used to select the most preferable variable to choose *)
-let (^^) (left: execution_number) (right: execution_number) : max_result =
+let max_exec_number (left: execution_number) (right: execution_number) : max_result =
   if left.rule_number > right.rule_number then Left else
   if left.rule_number < right.rule_number then Right else
   if left.seq_number > right.seq_number then Left else
@@ -59,15 +59,24 @@ let (^^) (left: execution_number) (right: execution_number) : max_result =
     Left
 
 (** This is the operator used to determine the if a candidate definition is valid at a given point *)
-let (<|) (candidate: execution_number) (current: execution_number) : bool =
-  if candidate.rule_number <> current.rule_number then
-    true
+let is_candidate_valid (candidate: execution_number) (current: execution_number) (using_var_in_def: bool) : bool =
+  if using_var_in_def then
+    (*
+      This is the case where we are using variable [VAR] while defining [VAR]. The valid definitions
+      here are either the declaration or earlier definitions in the same rules.
+    *)
+    candidate.rule_number = -1 ||
+    (candidate.rule_number = current.rule_number && candidate.seq_number < current.seq_number)
   else
-    candidate.seq_number < current.seq_number
+    (*
+      In this case, we are using [FOO] in the definition of [BAR]. Then valid definitions of [FOO]
+      include all that are in different rules or earlier definition in the same rule.
+    *)
+    candidate.rule_number <> current.rule_number || candidate.seq_number < current.seq_number
 
 
 (** This is the operator used to find a particular variable in the [idmap] *)
-let (<=>) (en1: execution_number) (en2: execution_number) : bool =
+let same_execution_number (en1: execution_number) (en2: execution_number) : bool =
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
 module Variable = struct

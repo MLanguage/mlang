@@ -750,6 +750,7 @@ let typecheck (p: program) : typ_info * program =
                       p.program_idmap
                       var.Variable.name
                       var.Variable.execution_number
+                      false
                   in
                   let new_es = List.fold_left (fun es undef_index ->
                       Mvg.IndexMap.add undef_index
@@ -840,6 +841,7 @@ let typecheck (p: program) : typ_info * program =
                       p.program_idmap
                       var.Variable.name
                       var.Variable.execution_number
+                      false
                   in
                   let new_es = List.fold_left (fun es undef_index ->
                       Mvg.IndexMap.add undef_index
