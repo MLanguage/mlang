@@ -1,6 +1,6 @@
 (lang dune 1.10)
 (name verifisc)
-(version 1.0.0)
+(version 1.0.1)
 (generate_opam_files true)
 
 (source (uri git+https://gitlab.inria.fr/verifisc/verifisc-m.git))

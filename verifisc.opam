@@ -11,7 +11,7 @@ authors: ["Denis Merigoux" "Raphaël Monat"]
 bug-reports: "https://gitlab.inria.fr/verifisc/verifisc-m/issues"
 homepage: "https://gitlab.inria.fr/verifisc/verifisc-m"
 license: "CeCiLL-C"
-version: "1.0.0"
+version: "1.0.1"
 dev-repo: "git+https://gitlab.inria.fr/verifisc/verifisc-m.git"
 synopsis: "Parser and compiler for DGFiP's M language"
 description: """
