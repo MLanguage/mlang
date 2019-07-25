@@ -247,20 +247,21 @@ let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.bl
 
 let time : float ref = ref (Unix.gettimeofday ())
 
+let time_marker ()  =
+  let new_time = Unix.gettimeofday () in
+  let old_time = !time in
+  time := new_time;
+  let delta = (new_time -. old_time) *. 1000. in
+  if delta > 100. then begin
+    ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.black]
+      "[TIME] ";
+    Printf.printf "%.0f ms\n"
+      delta
+  end
+
 (** Prints [[DEBUG]] in purple on the terminal standard output as well as timing since last debug *)
 let debug_marker (f_time: bool) =
-  if !display_time && f_time then begin
-    let new_time = Unix.gettimeofday () in
-    let old_time = !time in
-    time := new_time;
-    let delta = (new_time -. old_time) *. 1000. in
-    if delta > 100. then begin
-      ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.black]
-        "[TIME] ";
-      Printf.printf "%.0f ms\n"
-        delta
-    end
-  end;
+  if  f_time then time_marker ();
   ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.magenta] "[DEBUG] "
 
 (** Prints [[ERROR]] in red on the terminal error output *)
@@ -271,6 +272,20 @@ let warning_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.yel
 
 (** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.green] "[RESULT] "
+
+let clocks = Array.of_list ["🕛";"🕐";"🕑";"🕒";"🕓";"🕔";"🕕";"🕖";"🕗";"🕘";"🕙";"🕚"]
+
+(** Prints [[🕛]] in blue on the terminal standard output *)
+let clock_marker i =
+  let new_time = Unix.gettimeofday () in
+  let old_time = !time in
+  let delta = (new_time -. old_time)  in
+  ANSITerminal.printf
+    [ANSITerminal.Bold; ANSITerminal.blue]
+    "[%s  %.1f s] "
+    (Array.get clocks (i mod Array.length clocks))
+    delta
+
 
 (**{2 Printers}*)
 
@@ -297,6 +312,28 @@ let error_print (s: string) =
   Printf.eprintf "%s\n" s;
   flush stdout;
   flush stdout
+
+(**
+   Returns two functions: the first one, [current_progress], has to be called during the progress
+   loop and the other one, [finish], has to be called at the end of the progressive task.
+*)
+let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
+  let step_ticks = 3 in
+  let ticks = ref 0 in
+  ((fun current_progress_msg ->
+      clock_marker (!ticks / step_ticks);
+      ticks := !ticks + 1;
+      Printf.printf "%s: %s" task current_progress_msg;
+      ANSITerminal.erase ANSITerminal.Below;
+      ANSITerminal.move_bol ()),
+   fun finish_msg ->
+     debug_marker false;
+     Printf.printf "%s: %s" task finish_msg;
+     ANSITerminal.erase ANSITerminal.Below;
+     ANSITerminal.move_bol ();
+     Printf.printf "\n";
+     time_marker ()
+  )
 
 let warning_print (s: string) =
   warning_marker ();

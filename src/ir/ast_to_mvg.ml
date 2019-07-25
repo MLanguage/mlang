@@ -1057,11 +1057,9 @@ let get_var_data
     (p: Ast.program)
     (application: string option)
   : Mvg.variable_data Mvg.VariableMap.t =
+  let current_progress, finish = Cli.create_progress_bar "Translating to core language" in
   let out = List.fold_left (fun var_data source_file ->
-      Cli.debug_marker false;
-      (Printf.printf "Expanding definitions in %s" (Ast.get_position (List.hd source_file)).Ast.pos_filename);
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
+      current_progress (Ast.get_position (List.hd source_file)).Ast.pos_filename;
       List.fold_left (fun var_data  source_file_item ->
           match Ast.unmark source_file_item with
           | Ast.Rule r ->
@@ -1153,7 +1151,7 @@ let get_var_data
           | _ -> var_data
         ) var_data source_file
     ) Mvg.VariableMap.empty (List.rev p) in
-  Printf.printf "\n"; (* for the progress bar effect *)
+  finish "completed!";
   out
 
 

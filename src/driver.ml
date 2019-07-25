@@ -65,6 +65,7 @@ let driver
   let program = ref [] in
   if List.length !Cli.source_files = 0 then
     raise (Errors.ArgumentError "please provide at least one M source file");
+  let current_progress, finish = Cli.create_progress_bar "Parsing" in
   List.iter (fun source_file ->
       let (filebuf, input) = if source_file <> "" then
           let input = open_in source_file in
@@ -74,10 +75,7 @@ let driver
         else
           failwith "You have to specify at least one file!"
       in
-      Cli.debug_marker false;
-      Printf.printf "Parsing %s" source_file;
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
+      current_progress source_file;
       let filebuf = {filebuf with
                      lex_curr_p = { filebuf.lex_curr_p with
                                     pos_fname = Filename.basename source_file
@@ -103,7 +101,7 @@ let driver
           Cmdliner.Term.exit_status (`Ok 2);
         end
     ) !Cli.source_files;
-  Printf.printf "\n"; (* for the progress bar effect *)
+  finish "completed!";
   let program =
     Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
   in
