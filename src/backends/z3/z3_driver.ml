@@ -41,9 +41,10 @@ let translate_and_launch_query
   let ctx = (Z3.mk_context mvg) in
   let s = Z3.Solver.mk_solver ctx None in
   let typing_info = Z3_encoding.find_bitvec_repr program dep_graph typing_info in
-  Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
-    (Mvg.VariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_var)
-    (Mvg.LocalVariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_local_var);
+  Cli.debug_print "added dummy typing info (everything to 50 bits repr)";
+  (* Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
+   *   (Mvg.VariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_var)
+   *   (Mvg.LocalVariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_local_var); *)
   let z3_program = Mvg_to_z3.translate_program program dep_graph typing_info ctx s in
   let t0 = Sys.time () in
   Cli.debug_print

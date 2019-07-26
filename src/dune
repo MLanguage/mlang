@@ -12,3 +12,5 @@
   (package verifisc)
   (mld_files ("index"))
 )
+
+(env (_ (flags (:standard -w -27))))

@@ -50,7 +50,7 @@ let pp_position f (pos:position) : unit =
 
 let format_position (pos: position) : string =
   pp_position (Format.str_formatter) pos;
-  Buffer.contents Format.stdbuf
+  Format.flush_str_formatter ()
 
 (** Everything related to the source code should keep its position stored, to improve error messages *)
 type 'a marked = ('a * position)
