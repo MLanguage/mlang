@@ -178,14 +178,25 @@ let rec translate_expression
      * (\* (Format_mvg.format_expression @@ fst e); *\)
      * Cli.debug_print @@ Mvg.show_expression (Ast.unmark e);
      * assert false (\* should not happen *\) *)
-  | Mvg.FunctionCall (Mvg.ArrFunc , [_]) ->
-    assert false (* TODO: implement *)
-  | Mvg.FunctionCall (Mvg.InfFunc , [_]) ->
-    assert false (* TODO: implement *)
+  | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
+    (* Z3.FloatingPoint.RoundingMode.mk_round_nearest_ties_to_even *)
+    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let eargadded = Z3.BitVector.mk_add ctx earg (int_const 50 ctx) in
+    let hundred = int_const 100 ctx in
+    let eargdivided = Z3.BitVector.mk_sdiv ctx eargadded hundred in
+    Z3.BitVector.mk_mul ctx eargdivided hundred
+    (* we just need to add 50, divide by 100 (this loses precision) and then multiply by 100 *)
+  | Mvg.FunctionCall (Mvg.InfFunc , [arg]) ->
+    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let hundred = int_const 100 ctx in
+    let eargdivided = Z3.BitVector.mk_sdiv ctx earg hundred in
+    Z3.BitVector.mk_mul ctx eargdivided hundred
   | Mvg.FunctionCall _ -> assert false (* should not happen *)
   | Mvg.Literal (Mvg.Int i) ->
-    int_const i ctx
+    int_const (100 * i) ctx
   | Mvg.Literal (Mvg.Float f) ->
+    (* Z3.FloatingPoint.mk_to_ieee_bv ctx (Z3.FloatingPoint.mk_numeral_f ctx f (Z3.FloatingPoint.mk_sort_64 ctx)) *)
+    (* FIXME *)
     int_const (int_of_float (f *. 100.0)) ctx
   | Mvg.Literal (Mvg.Bool b) ->
     bool_const b ctx
@@ -252,7 +263,7 @@ let translate_program
       try
         let def = Mvg.VariableMap.find var p.program_vars in
         let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
-        (* Printf.printf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name); *)
+        Cli.debug_print (Format.sprintf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name));
         match def.Mvg.var_definition with
         | Mvg.InputVar ->
           { repr_data with
@@ -263,8 +274,8 @@ let translate_program
                 repr_data.Z3_encoding.repr_data_var
           }
         | Mvg.SimpleVar e ->
-          (* Printf.printf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
-           *   (Format_mvg.format_expression @@ fst e); *)
+          Cli.debug_print (Format.sprintf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
+            (Format_mvg.format_expression @@ fst e));
           let z3_e = translate_expression repr_data e ctx s in
           let z3_var = declare_var_not_table var typ ctx in
           let cast_expr = z3_e (dummy_param ctx typ)
