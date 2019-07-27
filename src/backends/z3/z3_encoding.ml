@@ -171,46 +171,60 @@ let find_bitvec_order
            ) 1 (Mvg.IndexMap.bindings orders), new_typing)
     end
 
+let bitvec_size = ref 2
+
 let find_bitvec_repr
     (p: Mvg.program)
     (dep_graph : Dependency.DepGraph.t)
     (old_typing: Typechecker.typ_info)
   : repr_info =
-  let vars =
-    Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
-  in
+  let exec_order = Execution_order.get_execution_order p in
+  let size = !bitvec_size in
   (*
     The variables are ordered starting from the input and by usage so when we find
     a variable B in the definition of A then B should already have been processed.
   *)
-  List.fold_left (fun (new_typing : repr_info) var ->
-      try
-        match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-        | (Mvg.Boolean, is_table) ->
-          {new_typing with
-           repr_info_var =
-             Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
-               new_typing.repr_info_var }
-        | (Mvg.Integer, is_table) ->
-          let (bitvec_order, new_typing) =
-            50, new_typing
-            (* find_bitvec_order p var new_typing old_typing *) in
-          {new_typing with
-           repr_info_var =
-             Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
-               new_typing.repr_info_var }
-        | (Mvg.Real, is_table) ->
-          let (bitvec_order, new_typing) =
-            50, new_typing
-            (* find_bitvec_order p var new_typing old_typing *) in
-          {new_typing with
-           repr_info_var =
-             Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
-               new_typing.repr_info_var }
-      with Not_found ->
-        (* fixme: add negation of condition to z3? *)
-        new_typing
-    ) {
-    repr_info_var = Mvg.VariableMap.empty ;
-    repr_info_local_var = Mvg.LocalVariableMap.empty;
-  } vars
+  let new_typing = { repr_info_var = Mvg.VariableMap.empty;
+                     repr_info_local_var =
+                       Mvg.LocalVariableMap.map (fun ty ->
+                           match ty with
+                           | Mvg.Boolean ->
+                             {repr_kind = Boolean; is_table = false}
+                           | Mvg.Integer ->
+                             {repr_kind = Integer size; is_table = false}
+                           | Mvg.Real ->
+                             {repr_kind = Real size; is_table = false}
+                         )
+                       old_typing.typ_info_local_var } in
+  List.fold_left (fun new_typing scc ->
+      Mvg.VariableMap.fold
+        (fun var () new_typing ->
+           if Mvg.VariableMap.mem var old_typing.Typechecker.typ_info_var then
+             match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
+             | (Mvg.Boolean, is_table) ->
+               {new_typing with
+                repr_info_var =
+                  Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
+                    new_typing.repr_info_var }
+             | (Mvg.Integer, is_table) ->
+               let (bitvec_order, new_typing) =
+                 size, new_typing
+                 (* find_bitvec_order p var new_typing old_typing *) in
+               {new_typing with
+                repr_info_var =
+                  Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
+                    new_typing.repr_info_var }
+             | (Mvg.Real, is_table) ->
+               let (bitvec_order, new_typing) =
+                 size, new_typing
+                 (* find_bitvec_order p var new_typing old_typing *) in
+               {new_typing with
+                repr_info_var =
+                  Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
+                    new_typing.repr_info_var }
+           else
+             let () = Cli.warning_print (Printf.sprintf "var %s not used when computing sizes\n" (Mvg.Variable.show var)) in
+             (* fixme: add negation of condition to z3? *)
+             new_typing
+        ) scc new_typing
+    ) new_typing exec_order

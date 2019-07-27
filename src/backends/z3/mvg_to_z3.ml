@@ -57,7 +57,7 @@ let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z
                            (bv_repr_ints_base * o))
 
 let int_const i ctx : Z3.Expr.expr =
-  Z3.BitVector.mk_numeral ctx (string_of_int i) bv_repr_ints_base
+  Z3.BitVector.mk_numeral ctx (string_of_int i) (bv_repr_ints_base * !Z3_encoding.bitvec_size)
 
 let dummy_param ctx typ =
   match typ.Z3_encoding.repr_kind with
@@ -78,22 +78,23 @@ let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
 
 let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3.Expr.expr * Z3.Expr.expr =
-  let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
-  let s2 = Z3.BitVector.get_size (Z3.Expr.get_sort e2) in
-  if s1 = s2 then
-    (e1, e2)
-  else if s1 < s2 then
-    (Z3.BitVector.mk_concat ctx
-       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
-       e1,
-     e2
-    )
-  else
-    (e1,
-     Z3.BitVector.mk_concat ctx
-       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
-       e2
-    )
+  e1, e2
+  (* let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
+   * let s2 = Z3.BitVector.get_size (Z3.Expr.get_sort e2) in
+   * if s1 = s2 then
+   *   (e1, e2)
+   * else if s1 < s2 then
+   *   (Z3.BitVector.mk_concat ctx
+   *      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
+   *      e1,
+   *    e2
+   *   )
+   * else
+   *   (e1,
+   *    Z3.BitVector.mk_concat ctx
+   *      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
+   *      e2
+   *   ) *)
 
 
 let rec translate_expression
@@ -168,11 +169,11 @@ let rec translate_expression
       | _ -> assert false (* should not happen *)
     end
   | Mvg.Conditional (cond, tt, ff) ->
-    let z3_cond = translate_expression repr_data cond ctx s in
-    let z3_tt = translate_expression repr_data cond ctx s in
-    let z3_ff = translate_expression repr_data cond ctx s in
+    let z3_cond = orig_arg |> translate_expression repr_data cond ctx s in
+    let z3_tt = orig_arg |> translate_expression repr_data tt ctx s in
+    let z3_ff = orig_arg |> translate_expression repr_data ff ctx s in
     (* this actually happens after desugaring due to rewriting basic functions into conditionals. I think. FIXME: We could add a check to verify it only happens here? *)
-    Z3.Boolean.mk_ite ctx (z3_cond orig_arg) (z3_tt orig_arg) (z3_ff orig_arg)
+    Z3.Boolean.mk_ite ctx z3_cond z3_tt z3_ff
     (* Cli.debug_print "conditional:\n";
      * Cli.debug_print @@ Ast.format_position (Ast.get_position e);
      * (\* (Format_mvg.format_expression @@ fst e); *\)
@@ -181,6 +182,7 @@ let rec translate_expression
   | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
     (* Z3.FloatingPoint.RoundingMode.mk_round_nearest_ties_to_even *)
     let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    Cli.debug_print @@ Z3.Expr.to_string earg;
     let eargadded = Z3.BitVector.mk_add ctx earg (int_const 50 ctx) in
     let hundred = int_const 100 ctx in
     let eargdivided = Z3.BitVector.mk_sdiv ctx eargadded hundred in
@@ -264,8 +266,8 @@ let translate_program
              if Mvg.VariableMap.mem var p.program_vars then
                let def = Mvg.VariableMap.find var p.program_vars in
                let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
-               Cli.debug_print (Format.sprintf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name));
-               Cli.debug_print (Format.sprintf "|repr_data| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var));
+               Cli.debug_print (Format.sprintf "Coucou %s" (*(Mvg.Variable.show var));*) (Ast.unmark var.Mvg.Variable.name));
+               Cli.debug_print (Format.sprintf "|repr_data| = %d; |repr_data_local| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var) (Mvg.LocalVariableMap.cardinal repr_data.Z3_encoding.repr_data_local_var));
                match def.Mvg.var_definition with
                | Mvg.InputVar ->
                  { repr_data with
