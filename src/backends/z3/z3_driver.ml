@@ -53,6 +53,10 @@ let translate_and_launch_query
        (Mvg.VariableMap.cardinal z3_program.Z3_encoding.repr_data_var +
         Mvg.LocalVariableMap.cardinal z3_program.Z3_encoding.repr_data_local_var)
     );
+  Cli.debug_print "VMap:\n";
+  Mvg.VariableMap.iter (fun v _ ->   Cli.debug_print @@ Mvg.Variable.show v) z3_program.repr_data_var;
+  Cli.debug_print "LVMap:\n";
+  Mvg.LocalVariableMap.iter (fun v _ -> Cli.debug_print @@ Mvg.LocalVariable.show v) z3_program.repr_data_local_var;
   match Z3.Solver.check s [] with
   | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!";
   | Z3.Solver.UNKNOWN -> Cli.result_print "Z3 didn't find an answer..."

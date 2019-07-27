@@ -230,13 +230,13 @@ let rec translate_expression
       | _ -> assert false (* should not happen *)
     end
 
-let cast ctx size expr =
-  let se = Z3.BitVector.get_size (Z3.Expr.get_sort expr) in
-  if se = size then expr
-  else if se < size then
-    Z3.BitVector.mk_concat ctx
-      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (size - se)) expr
-  else assert false
+(* let cast ctx size expr =
+ *   let se = Z3.BitVector.get_size (Z3.Expr.get_sort expr) in
+ *   if se = size then expr
+ *   else if se < size then
+ *     Z3.BitVector.mk_concat ctx
+ *       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (size - se)) expr
+ *   else assert false *)
 
 let translate_program
     (p: Mvg.program)
@@ -256,58 +256,64 @@ let translate_program
     { Z3_encoding.repr_data_var = Mvg.VariableMap.empty;
       Z3_encoding.repr_data_local_var = z3_local_vars }
   in
-  let vars_to_evaluate =
-    Dependency.TopologicalOrder.fold (fun var acc -> var::acc) dep_graph []
-  in
-  let repr_data = List.fold_left (fun repr_data var ->
-      try
-        let def = Mvg.VariableMap.find var p.program_vars in
-        let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
-        Cli.debug_print (Format.sprintf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name));
-        match def.Mvg.var_definition with
-        | Mvg.InputVar ->
-          { repr_data with
-            Z3_encoding.repr_data_var =
-              Mvg.VariableMap.add
-                var
-                (Z3_encoding.Regular (declare_var_not_table var typ ctx), typ)
-                repr_data.Z3_encoding.repr_data_var
-          }
-        | Mvg.SimpleVar e ->
-          Cli.debug_print (Format.sprintf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
-            (Format_mvg.format_expression @@ fst e));
-          let z3_e = translate_expression repr_data e ctx s in
-          let z3_var = declare_var_not_table var typ ctx in
-          let cast_expr = z3_e (dummy_param ctx typ)
-          (* cast ctx (Z3.BitVector.get_size (Z3.Expr.get_sort z3_var)) (z3_e (dummy_param ctx typ)) *) in
-          (* Printf.printf "\nz3_var: %s\nz3_e: %s (%d)\ncast_expr = %s\n"
-           *   (Z3.Expr.to_string z3_var)
-           *   (Z3.Expr.to_string (z3_e (dummy_param ctx typ)))
-           *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e (dummy_param ctx typ))))
-           *   (Z3.Expr.to_string cast_expr); *)
-          Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
-          { repr_data with
-            Z3_encoding.repr_data_var =
-              Mvg.VariableMap.add
-                var
-                (Z3_encoding.Regular z3_var, typ)
-                repr_data.Z3_encoding.repr_data_var
-          }
-        | Mvg.TableVar (_, def) -> begin match def with
-            | Mvg.IndexGeneric e ->
-              let z3_e = translate_expression repr_data e ctx s in
-              { repr_data with
-                Z3_encoding.repr_data_var =
-                  Mvg.VariableMap.add
-                    var
-                    (Z3_encoding.Table z3_e, typ)
-                    repr_data.Z3_encoding.repr_data_var
-              }
-            | Mvg.IndexTable _ ->
-              Cli.warning_print "TODO: implement";
-              repr_data
-          end
-      with Not_found -> repr_data (* fixme: verif condition *)
-    ) repr_data vars_to_evaluate in
+  let exec_order = Execution_order.get_execution_order p in
+  let repr_data =
+    List.fold_left (fun repr_data scc ->
+        Mvg.VariableMap.fold
+          (fun var () repr_data ->
+             if Mvg.VariableMap.mem var p.program_vars then
+               let def = Mvg.VariableMap.find var p.program_vars in
+               let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
+               Cli.debug_print (Format.sprintf "Coucou %s\n" (Ast.unmark var.Mvg.Variable.name));
+               Cli.debug_print (Format.sprintf "|repr_data| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var));
+               match def.Mvg.var_definition with
+               | Mvg.InputVar ->
+                 { repr_data with
+                   Z3_encoding.repr_data_var =
+                     Mvg.VariableMap.add
+                       var
+                       (Z3_encoding.Regular (declare_var_not_table var typ ctx), typ)
+                       repr_data.Z3_encoding.repr_data_var
+                 }
+               | Mvg.SimpleVar e ->
+                 Cli.debug_print (Format.sprintf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
+                                    (Format_mvg.format_expression @@ fst e));
+                 let z3_e = translate_expression repr_data e ctx s in
+                 let z3_var = declare_var_not_table var typ ctx in
+                 let cast_expr = z3_e (dummy_param ctx typ)
+                 (* cast ctx (Z3.BitVector.get_size (Z3.Expr.get_sort z3_var)) (z3_e (dummy_param ctx typ)) *) in
+                 (* Printf.printf "\nz3_var: %s\nz3_e: %s (%d)\ncast_expr = %s\n"
+                  *   (Z3.Expr.to_string z3_var)
+                  *   (Z3.Expr.to_string (z3_e (dummy_param ctx typ)))
+                  *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e (dummy_param ctx typ))))
+                  *   (Z3.Expr.to_string cast_expr); *)
+                 Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
+                 { repr_data with
+                   Z3_encoding.repr_data_var =
+                     Mvg.VariableMap.add
+                       var
+                       (Z3_encoding.Regular z3_var, typ)
+                       repr_data.Z3_encoding.repr_data_var
+                 }
+               | Mvg.TableVar (_, def) -> begin match def with
+                   | Mvg.IndexGeneric e ->
+                     let z3_e = translate_expression repr_data e ctx s in
+                     { repr_data with
+                       Z3_encoding.repr_data_var =
+                         Mvg.VariableMap.add
+                           var
+                           (Z3_encoding.Table z3_e, typ)
+                           repr_data.Z3_encoding.repr_data_var
+                     }
+                   | Mvg.IndexTable _ ->
+                     Cli.warning_print "TODO: implement";
+                     repr_data
+                 end
+             else
+               let () = Cli.warning_print (Printf.sprintf "FIXME: verif condition on %s but in verif conds = %b\n" (Mvg.Variable.show var) (Mvg.VariableMap.mem var p.program_conds)) in
+               repr_data
+          )
+          scc repr_data
+      ) repr_data exec_order in
   Cli.debug_print "Translation finished!\n";
   repr_data
