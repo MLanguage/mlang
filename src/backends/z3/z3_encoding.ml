@@ -184,24 +184,32 @@ let find_bitvec_repr
     a variable B in the definition of A then B should already have been processed.
   *)
   List.fold_left (fun (new_typing : repr_info) var ->
-      match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-      | (Mvg.Boolean, is_table) ->
-        {new_typing with
-         repr_info_var =
-           Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
-             new_typing.repr_info_var }
-      | (Mvg.Integer, is_table) ->
-        let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
-        {new_typing with
-         repr_info_var =
-           Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
-             new_typing.repr_info_var }
-      | (Mvg.Real, is_table) ->
-        let (bitvec_order, new_typing) = find_bitvec_order p var new_typing old_typing in
-        {new_typing with
-         repr_info_var =
-           Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
-             new_typing.repr_info_var }
+      try
+        match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
+        | (Mvg.Boolean, is_table) ->
+          {new_typing with
+           repr_info_var =
+             Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
+               new_typing.repr_info_var }
+        | (Mvg.Integer, is_table) ->
+          let (bitvec_order, new_typing) =
+            50, new_typing
+            (* find_bitvec_order p var new_typing old_typing *) in
+          {new_typing with
+           repr_info_var =
+             Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
+               new_typing.repr_info_var }
+        | (Mvg.Real, is_table) ->
+          let (bitvec_order, new_typing) =
+            50, new_typing
+            (* find_bitvec_order p var new_typing old_typing *) in
+          {new_typing with
+           repr_info_var =
+             Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
+               new_typing.repr_info_var }
+      with Not_found ->
+        (* fixme: add negation of condition to z3? *)
+        new_typing
     ) {
     repr_info_var = Mvg.VariableMap.empty ;
     repr_info_local_var = Mvg.LocalVariableMap.empty;
