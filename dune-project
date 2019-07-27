@@ -22,11 +22,12 @@
  )
  (depends
    (ocaml (>= 4.07.0))
-   (dune (and :build :build-info))
+   (dune (and :build ))
    (ANSITerminal (= 0.8.1))
    (re (= 1.9.0))
    (ppx_deriving (= 4.4))
    (ocamlgraph (= 1.8.8))
    (z3 (= 4.8.4))
+   (dune-build-info (= 1.11.0))
  )
 )
