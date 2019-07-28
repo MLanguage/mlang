@@ -171,7 +171,7 @@ let find_bitvec_order
            ) 1 (Mvg.IndexMap.bindings orders), new_typing)
     end
 
-let bitvec_size = ref 2
+let bitvec_size = ref 1
 
 let find_bitvec_repr
     (p: Mvg.program)

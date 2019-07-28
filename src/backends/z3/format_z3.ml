@@ -47,18 +47,17 @@ let format_z3_program
   : string =
   match Z3.Solver.get_model s with
   | Some model ->
-    Cli.warning_print @@ Z3.Model.to_string model;
+    Cli.warning_print (Format.sprintf "Z3 model: %s\n" (Z3.Model.to_string model));
     let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
         | Z3_encoding.Regular e ->
           (Ast.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
-                Cli.warning_print @@ Z3.Expr.to_string new_e;
+                Cli.warning_print (Format.sprintf "%s -> %s\n" (Ast.unmark var.Mvg.Variable.name) (Z3.Expr.to_string new_e));
                 begin match typ.Z3_encoding.repr_kind with
-                  | Z3_encoding.Integer _ ->
-                    Z3.BitVector.numeral_to_string new_e
+                  | Z3_encoding.Integer _
                   | Z3_encoding.Real _ ->
-                    string_of_float ((Big_int.float_of_big_int (Z3.Arithmetic.Integer.get_big_int new_e)) /. 100.0)
+                    string_of_float (Big_int.float_of_big_int (Big_int.big_int_of_string  (Z3.BitVector.numeral_to_string new_e)) /. 100.)
                   | Z3_encoding.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                       | Z3enums.L_FALSE -> "false"
                       | Z3enums.L_TRUE -> "true"

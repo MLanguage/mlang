@@ -125,11 +125,11 @@ let rec translate_expression
     let z3_e1 = translate_expression repr_data e1 ctx s in
     let z3_e2 = translate_expression repr_data e2 ctx s in
     let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
-    Printf.printf "binop: z3_e1: %s (%d), z3_e2: %s (%d)\n"
-      (Z3.Expr.to_string z3_e1)
-      (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e1)))
-      (Z3.Expr.to_string (z3_e2))
-      (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e2)));
+    (* Printf.printf "binop: z3_e1: %s (%d), z3_e2: %s (%d)\n"
+     *   (Z3.Expr.to_string z3_e1)
+     *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e1)))
+     *   (Z3.Expr.to_string (z3_e2))
+     *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e2))); *)
     begin match Ast.unmark op with
       | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1; z3_e2]
       | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1; z3_e2]
@@ -268,10 +268,11 @@ let translate_program
              if Mvg.VariableMap.mem var p.program_vars then
                let def = Mvg.VariableMap.find var p.program_vars in
                let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
-               Cli.debug_print (Format.sprintf "Coucou %s" (*(Mvg.Variable.show var));*) (Ast.unmark var.Mvg.Variable.name));
-               Cli.debug_print (Format.sprintf "|repr_data| = %d; |repr_data_local| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var) (Mvg.LocalVariableMap.cardinal repr_data.Z3_encoding.repr_data_local_var));
+               (* Cli.debug_print (Format.sprintf "Processing %s" (\*(Mvg.Variable.show var));*\) (Ast.unmark var.Mvg.Variable.name)); *)
+               (* Cli.debug_print (Format.sprintf "|repr_data| = %d; |repr_data_local| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var) (Mvg.LocalVariableMap.cardinal repr_data.Z3_encoding.repr_data_local_var)); *)
                match def.Mvg.var_definition with
                | Mvg.InputVar ->
+                 Cli.debug_print (Format.sprintf "input %s, repr=%s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr typ));
                  { repr_data with
                    Z3_encoding.repr_data_var =
                      Mvg.VariableMap.add
@@ -280,7 +281,7 @@ let translate_program
                        repr_data.Z3_encoding.repr_data_var
                  }
                | Mvg.SimpleVar e ->
-                 Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e));
+                 (* Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e)); *)
                  let z3_e = translate_expression repr_data e ctx s in
                  let z3_var = declare_var_not_table var typ ctx in
                  let cast_expr = z3_e (dummy_param ctx typ)

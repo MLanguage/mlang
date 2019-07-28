@@ -37,7 +37,7 @@ let translate_and_launch_query
     (typing_info: Typechecker.typ_info)
   : unit  =
   Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
-  let mvg = [("model", "true"); ("timeout", (string_of_int (1000 * 180)))] in
+  let mvg = [("model", "true"); ("timeout", (string_of_int (1000 * 18000)))] in
   let ctx = (Z3.mk_context mvg) in
   let s = Z3.Solver.mk_solver ctx None in
   (* ignore (Z3.Log.open_ "z3.log"); *)
