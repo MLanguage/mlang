@@ -114,7 +114,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
       | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false | Undefined))
       | (Ast.Div, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
         ->
-        Mvg.Literal (Mvg.Bool false)
+        Mvg.Literal (Mvg.Int 0)
       | (_, Literal _, Literal _) ->
         (Mvg.Literal
            (Interpreter.evaluate_expr Interpreter.empty_ctx p

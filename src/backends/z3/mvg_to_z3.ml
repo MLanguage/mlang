@@ -77,6 +77,9 @@ let bool_const b ctx : Z3.Expr.expr =
 let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
 
+(* let enforce_bitvec ctx e =
+ *   match Z3.Sort.get_sort_kind (Z3.Expr.get_sort e) with Z3enums.BOOL_SORT -> ... *)
+
 let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3.Expr.expr * Z3.Expr.expr =
   e1, e2
   (* let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
@@ -182,7 +185,6 @@ let rec translate_expression
   | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
     (* Z3.FloatingPoint.RoundingMode.mk_round_nearest_ties_to_even *)
     let earg = orig_arg |> translate_expression repr_data arg ctx s in
-    Cli.debug_print @@ Z3.Expr.to_string earg;
     let eargadded = Z3.BitVector.mk_add ctx earg (int_const 50 ctx) in
     let hundred = int_const 100 ctx in
     let eargdivided = Z3.BitVector.mk_sdiv ctx eargadded hundred in
@@ -278,8 +280,7 @@ let translate_program
                        repr_data.Z3_encoding.repr_data_var
                  }
                | Mvg.SimpleVar e ->
-                 Cli.debug_print (Format.sprintf "var: %s\nexpr: %s\n" (Mvg.Variable.show var)
-                                    (Format_mvg.format_expression @@ fst e));
+                 Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e));
                  let z3_e = translate_expression repr_data e ctx s in
                  let z3_var = declare_var_not_table var typ ctx in
                  let cast_expr = z3_e (dummy_param ctx typ)
