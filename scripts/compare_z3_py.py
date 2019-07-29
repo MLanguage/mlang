@@ -29,5 +29,9 @@ py_res = ir_2018.l
 for x in py_res:
     if py_to_z3_name(x) not in z3_res:
         print("Variablen {} which in py is {} not found in z3".format(x, py_res[x]))
-    elif py_res[x] != z3_res[py_to_z3_name(x)]:
-        print("Difference on {}: py={}, z3={}".format(py_to_z3_name(x), py_res[x], z3_res[py_to_z3_name(x)]))
+    else:
+        diff = abs(py_res[x] - z3_res[py_to_z3_name(x)])
+        if diff > 10**-6:
+            print("Difference on {}: py={}, z3={}".format(py_to_z3_name(x), py_res[x], z3_res[py_to_z3_name(x)]))
+        elif diff > 0:
+            print("FP error on {}: py={}, z3={}".format(py_to_z3_name(x), py_res[x], z3_res[py_to_z3_name(x)]))
