@@ -102,8 +102,9 @@ let driver
         end
     ) !Cli.source_files;
   finish "completed!";
+  let application = if !Cli.application = "" then None else Some !Cli.application in
   let program =
-    Ast_to_mvg.translate !program (if !Cli.application = "" then None else Some !Cli.application)
+    Ast_to_mvg.translate !program application
   in
 
   Cli.debug_print ("Expanding function definitions...");
@@ -111,17 +112,20 @@ let driver
 
   Cli.debug_print "Typechecking...";
   let typing, program = Typechecker.typecheck program in
-
   Cli.debug_print "Checking for circular variable definitions...";
   let dep_graph = Dependency.create_dependency_graph program in
   ignore (Dependency.check_for_cycle dep_graph program true);
 
 
   Cli.debug_print "Extracting the desired function from the whole program...";
-  let mvg_func = Interface.read_function_from_spec program in
+  let mvg_func = Interface.read_function_from_spec application program in
   let program = Interface.fit_function program mvg_func in
 
   let program = if !Cli.optimize then Optimize.optimize program else program in
+  (* Mvg.VariableMap.iter (fun var (ty, bool) ->
+   *     if Mvg.VariableMap.mem var program.program_vars then
+   *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Ast.unmark var.name) (Mvg.show_typ ty)))
+   *   typing.Typechecker.typ_info_var; *)
 
   begin if String.lowercase_ascii !Cli.backend = "z3" then
       Z3_driver.translate_and_launch_query program dep_graph typing
