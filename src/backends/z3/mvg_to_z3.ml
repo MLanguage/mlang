@@ -135,7 +135,7 @@ let rec translate_expression
       | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1; z3_e2]
       | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1; z3_e2]
       | Ast.Mul -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx (z3_e1) (z3_e2)) (    int_const mult_factor ctx)
-      | Ast.Div -> Z3.BitVector.mk_mul ctx (Z3.BitVector.mk_sdiv ctx (z3_e1) (z3_e2)) (int_const mult_factor ctx)
+      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx (z3_e1) (int_const mult_factor ctx)) (z3_e2)
       | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1) (z3_e2)
       | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1) (z3_e2)
     end
