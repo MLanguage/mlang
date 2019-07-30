@@ -60,7 +60,10 @@ let translate_and_launch_query
    * Cli.debug_print "LVMap:\n";
    * Mvg.LocalVariableMap.iter (fun v _ -> Cli.debug_print @@ Mvg.LocalVariable.show v) z3_program.repr_data_local_var; *)
   match Z3.Solver.check s [] with
-  | Z3.Solver.UNSATISFIABLE -> Cli.result_print "Z3 found that the constraints are unsatisfiable!";
+  | Z3.Solver.UNSATISFIABLE ->
+    Cli.result_print "Z3 found that the constraints are unsatisfiable!";
+    (* "\nUnsat core:\n";
+     * List.iter (fun e -> Cli.result_print (Z3.Expr.to_string e)) (Z3.Solver.get_unsat_core s) *)
   | Z3.Solver.UNKNOWN ->
     Cli.result_print (Printf.sprintf "Z3 didn't find an answer...\nReason: %s" (Z3.Solver.get_reason_unknown s))
   | Z3.Solver.SATISFIABLE ->

@@ -437,6 +437,7 @@ type function_spec = {
   spec_inputs: variable_name list;
   spec_consts: (variable_name * expression marked) list;
   spec_outputs: variable_name list;
+  spec_conditions: verification marked list;
 }
 
 

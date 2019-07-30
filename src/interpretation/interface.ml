@@ -39,6 +39,7 @@ type mvg_function = {
   func_variable_inputs: unit VariableMap.t;
   func_constant_inputs: expression Ast.marked VariableMap.t;
   func_outputs: unit VariableMap.t;
+  func_conds: condition_data VariableMap.t
 }
 
 let fit_function (p: program) (f: mvg_function) : program =
@@ -108,7 +109,8 @@ let fit_function (p: program) (f: mvg_function) : program =
                  | TableVar (size, old) -> TableVar (size, old)
              }
         )
-        p.program_vars
+        p.program_vars;
+    program_conds = VariableMap.union (fun var cond_data1 cond_data2 -> assert false) p.program_conds f.func_conds
   }
 
 let var_set_from_variable_name_list (p: program) (names : string list) : unit VariableMap.t =
@@ -167,7 +169,15 @@ let const_var_set_from_list
       VariableMap.add var new_e acc
     ) VariableMap.empty names
 
-let read_function_from_spec (p: program) : mvg_function =
+let translate_cond application idmap (conds:Ast.verification Ast.marked list) : condition_data VariableMap.t =
+  let program =
+    List.fold_left (fun prog cond ->
+        let verif = Ast.unmark cond in
+        let pos = Ast.get_position cond in
+        (Ast.Verification verif, pos) :: prog) [] conds in
+  Ast_to_mvg.get_conds [] idmap [program] application
+
+let read_function_from_spec application (p: program) : mvg_function =
   if !Cli.function_spec = "" then
     raise (Errors.ArgumentError "Function specification file is not specified using --function_spec");
   let input = open_in !Cli.function_spec in
@@ -187,6 +197,7 @@ let read_function_from_spec (p: program) : mvg_function =
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Ast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Ast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Ast.spec_outputs;
+      func_conds = translate_cond application p.program_idmap func_spec.Ast.spec_conditions;
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->

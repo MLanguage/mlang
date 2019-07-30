@@ -77,9 +77,6 @@ let bool_const b ctx : Z3.Expr.expr =
 let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
 
-(* let enforce_bitvec ctx e =
- *   match Z3.Sort.get_sort_kind (Z3.Expr.get_sort e) with Z3enums.BOOL_SORT -> ... *)
-
 let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3.Expr.expr * Z3.Expr.expr =
   e1, e2
   (* let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
@@ -287,8 +284,6 @@ let translate_program
                | Mvg.InputVar ->
                  (* Cli.debug_print (Format.sprintf "input %s, repr=%s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr typ)); *)
                  let in_var = declare_var_not_table var typ ctx in
-                 Z3.Solver.add s [Z3.BitVector.mk_sge ctx in_var (int_const 0 ctx);
-                                  Z3.BitVector.mk_sle ctx in_var (int_const 100000000 ctx)];
                  { repr_data with
                    Z3_encoding.repr_data_var =
                      Mvg.VariableMap.add
@@ -297,12 +292,12 @@ let translate_program
                        repr_data.Z3_encoding.repr_data_var
                  }
                | Mvg.SimpleVar e ->
-                 Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e));
+                 (* Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e)); *)
                  let z3_e = translate_expression repr_data e ctx s in
                  let z3_var = declare_var_not_table var typ ctx in
                  let cast_expr = z3_e (dummy_param ctx typ)
                  (* cast ctx (Z3.BitVector.get_size (Z3.Expr.get_sort z3_var)) (z3_e (dummy_param ctx typ)) *) in
-                 Cli.debug_print (Format.sprintf "texpr: %s\n" (Z3.Expr.to_string cast_expr));
+                 (* Cli.debug_print (Format.sprintf "texpr: %s\n" (Z3.Expr.to_string cast_expr)); *)
                  (* Printf.printf "\nz3_var: %s\nz3_e: %s (%d)\ncast_expr = %s\n"
                   *   (Z3.Expr.to_string z3_var)
                   *   (Z3.Expr.to_string (z3_e (dummy_param ctx typ)))
