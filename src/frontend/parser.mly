@@ -405,7 +405,7 @@ expression:
 
 logical_binop:
 | AND { (And, mk_position $sloc) }
-| OR { (And, mk_position $sloc) }
+| OR { (Or, mk_position $sloc) }
 
 
 sum_expression:
@@ -520,11 +520,22 @@ function_spec:
       spec_inputs = inputs;
       spec_consts = consts;
       spec_outputs = outputs;
+      spec_conditions = [];
+                           } }
+| INPUT COLON inputs = spec_input_list SEMICOLON
+  CONST COLON consts = spec_const_list
+  verification_singl = verification
+  OUTPUT COLON outputs = spec_output_list SEMICOLON { {
+      spec_inputs = inputs;
+      spec_consts = consts;
+      spec_outputs = outputs;
+      spec_conditions = [(verification_singl, mk_position $sloc)];
    } }
 | EOF { {
     spec_inputs = [];
     spec_consts = [];
     spec_outputs = [];
+    spec_conditions = [];
  } }
 
  literal_input:
