@@ -52,11 +52,11 @@ let remove_unused_variables (program:Mvg.program) : Mvg.program =
     program with
     Mvg.program_vars =
       Mvg.VariableMap.filter
-        (fun var _ -> is_necessary_to_output var)
+        (fun var _ ->  is_necessary_to_output var )
         program.program_vars;
     Mvg.program_conds = Mvg.VariableMap.filter
         (fun var _ ->
-           List.for_all (fun used -> is_necessary_to_output used) (Dependency.DepGraph.pred g var)
+           List.for_all (fun used -> is_necessary_to_output used ) (Dependency.DepGraph.pred g var)
         ) program.program_conds;
   } in
   program

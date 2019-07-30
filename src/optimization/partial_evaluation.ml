@@ -293,32 +293,35 @@ let partially_evaluate (p: program) : program =
             }
           with
           | Not_found ->
-            let cond = VariableMap.find var p.program_conds in
-            match (partial_evaluation (empty_ctx var None scc) p cond.cond_expr) with
-            | (Literal (Bool false), _) | (Literal Undefined, _) ->
-              { p with
-                program_conds =
-                  VariableMap.remove
-                    var
-                    p.program_conds
-              }
-            | (Literal (Bool true) , _) ->   raise (Interpreter.RuntimeError (
-                Interpreter.ConditionViolated (
-                  Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
-                    (Format_ast.format_position (Ast.get_position cond.cond_expr))
-                    (String.concat "\n" (List.map (fun err ->
-                         Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
-                       ) cond.cond_errors))
-                    (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
-                ), Interpreter.empty_ctx
-              ))
-            | new_cond_expr ->
-              { p with
-                program_conds =
-                  VariableMap.add
-                    var
-                    { cond with cond_expr = new_cond_expr }
-                    p.program_conds
-              }
+            try
+              let cond = VariableMap.find var p.program_conds in
+              match (partial_evaluation (empty_ctx var None scc) p cond.cond_expr) with
+              | (Literal (Bool false), _) | (Literal Undefined, _) ->
+                { p with
+                  program_conds =
+                    VariableMap.remove
+                      var
+                      p.program_conds
+                }
+              | (Literal (Bool true) , _) ->   raise (Interpreter.RuntimeError (
+                  Interpreter.ConditionViolated (
+                    Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
+                      (Format_ast.format_position (Ast.get_position cond.cond_expr))
+                      (String.concat "\n" (List.map (fun err ->
+                           Printf.sprintf "Error %s [%s]" (Ast.unmark err.Error.name) (Ast.unmark err.Error.descr)
+                         ) cond.cond_errors))
+                      (Format_mvg.format_expression (Ast.unmark cond.cond_expr))
+                  ), Interpreter.empty_ctx
+                ))
+              | new_cond_expr ->
+                { p with
+                  program_conds =
+                    VariableMap.add
+                      var
+                      { cond with cond_expr = new_cond_expr }
+                      p.program_conds
+                }
+            with
+            | Not_found -> assert false (* should not happen *)
         ) scc p
     ) p exec_order

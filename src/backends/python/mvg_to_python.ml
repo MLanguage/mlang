@@ -55,7 +55,7 @@ let generate_variable (var:Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Ast.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
   let v =
-    if same_execution_number var.Variable.execution_number 
+    if same_execution_number var.Variable.execution_number
         (Ast_to_mvg.dummy_exec_number (Ast.get_position var.Variable.name))
     then v else
       Printf.sprintf "%s_%d_%d" v
