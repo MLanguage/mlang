@@ -55,7 +55,7 @@ let generate_variable (var:Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Ast.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
   let v =
-    if same_execution_number var.Variable.execution_number 
+    if same_execution_number var.Variable.execution_number
         (Ast_to_mvg.dummy_exec_number (Ast.get_position var.Variable.name))
     then v else
       Printf.sprintf "%s_%d_%d" v
@@ -209,6 +209,7 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
   in
   Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
   Printf.fprintf oc "from math import floor\n\n";
+  Printf.fprintf oc "l = dict()\n\n";
   Printf.fprintf oc "%s\n"
     (String.concat
        "\n"
@@ -264,6 +265,7 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
         (VariableMap.bindings program.program_vars)
     )
   in
+  Printf.fprintf oc "\t# The following two lines help us keep all previously defined variable bindings\n\tglobal l\n\tl = locals()\n";
   begin if List.length returned_variables = 1 then
       Printf.fprintf oc "\treturn %s\n\n" (generate_variable (List.hd returned_variables))
     else begin

@@ -1,4 +1,3 @@
-# this script relies on a patched ir_2018 version, featuring "l = dict ()" at line 4 and "global l" as well as "l = locals()" just before main's return
 import json, sys
 try:
     import ir_2018
