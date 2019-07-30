@@ -60,95 +60,90 @@ let driver
     function_spec
     output
     number_of_passes;
-
-  Cli.debug_print "Reading files...";
-  let program = ref [] in
-  if List.length !Cli.source_files = 0 then
-    raise (Errors.ArgumentError "please provide at least one M source file");
-  let current_progress, finish = Cli.create_progress_bar "Parsing" in
-  List.iter (fun source_file ->
-      let (filebuf, input) = if source_file <> "" then
-          let input = open_in source_file in
-          (Lexing.from_channel input, Some input)
-        else if source_file <> "" then
-          (Lexing.from_string source_file, None)
-        else
-          failwith "You have to specify at least one file!"
-      in
-      current_progress source_file;
-      let filebuf = {filebuf with
-                     lex_curr_p = { filebuf.lex_curr_p with
-                                    pos_fname = Filename.basename source_file
-                                  }
-                    }
-      in
-      try
-        Parse_utils.current_file := source_file;
-        let commands = Parser.source_file token filebuf in
-        program := commands::!program
-      with
-      | Errors.LexingError msg | Errors.ParsingError msg ->
-        Cli.error_print msg
-      | Parser.Error -> begin
-          Cli.error_print
-            (Printf.sprintf "Lexer error in file %s at position %s"
-               (!Parse_utils.current_file)
-               (Errors.print_lexer_position filebuf.lex_curr_p));
-          begin match input with
-            | Some input -> close_in input
-            | None -> ()
-          end;
-          Cmdliner.Term.exit_status (`Ok 2);
-        end
-    ) !Cli.source_files;
-  finish "completed!";
-  let application = if !Cli.application = "" then None else Some !Cli.application in
-  let program =
-    Ast_to_mvg.translate !program application
-  in
-
-  Cli.debug_print ("Expanding function definitions...");
-  let program = Functions.expand_functions program in
-
-  Cli.debug_print "Typechecking...";
-  let typing, program = Typechecker.typecheck program in
-  Cli.debug_print "Checking for circular variable definitions...";
-  let dep_graph = Dependency.create_dependency_graph program in
-  ignore (Dependency.check_for_cycle dep_graph program true);
-
-
-  Cli.debug_print "Extracting the desired function from the whole program...";
-  let mvg_func = Interface.read_function_from_spec application program in
-  let program = Interface.fit_function program mvg_func in
-
-  let program = if !Cli.optimize then Optimize.optimize program else program in
-  (* Mvg.VariableMap.iter (fun var (ty, bool) ->
-   *     if Mvg.VariableMap.mem var program.program_vars then
-   *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Ast.unmark var.name) (Mvg.show_typ ty)))
-   *   typing.Typechecker.typ_info_var; *)
-
-  begin if String.lowercase_ascii !Cli.backend = "z3" then
-      Z3_driver.translate_and_launch_query program dep_graph typing
-    else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
-      Cli.debug_print "Interpreting the program...";
-      let f = Interface.make_function_from_program program !Cli.number_of_passes in
-      let results = f (Interface.read_inputs_from_stdin mvg_func) in
-      Interface.print_output mvg_func results;
-      Interpreter.repl_debugguer results program
-    end else if String.lowercase_ascii !Cli.backend = "python" then begin
-      Cli.debug_print "Compiling the program to Python...";
-      if !Cli.output_file = "" then
-        raise (Errors.ArgumentError "an output file must be defined with --output");
-      Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
-      Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
-    end else
-      raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
-  end
-
-
-let main () =
   try
-    Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.verifisc_t driver, Cli.info)
+    Cli.debug_print "Reading files...";
+    let program = ref [] in
+    if List.length !Cli.source_files = 0 then
+      raise (Errors.ArgumentError "please provide at least one M source file");
+    let current_progress, finish = Cli.create_progress_bar "Parsing" in
+    List.iter (fun source_file ->
+        let (filebuf, input) = if source_file <> "" then
+            let input = open_in source_file in
+            (Lexing.from_channel input, Some input)
+          else if source_file <> "" then
+            (Lexing.from_string source_file, None)
+          else
+            failwith "You have to specify at least one file!"
+        in
+        current_progress source_file;
+        let filebuf = {filebuf with
+                       lex_curr_p = { filebuf.lex_curr_p with
+                                      pos_fname = Filename.basename source_file
+                                    }
+                      }
+        in
+        try
+          Parse_utils.current_file := source_file;
+          let commands = Parser.source_file token filebuf in
+          program := commands::!program
+        with
+        | Errors.LexingError msg | Errors.ParsingError msg ->
+          Cli.error_print msg
+        | Parser.Error -> begin
+            Cli.error_print
+              (Printf.sprintf "Lexer error in file %s at position %s"
+                 (!Parse_utils.current_file)
+                 (Errors.print_lexer_position filebuf.lex_curr_p));
+            begin match input with
+              | Some input -> close_in input
+              | None -> ()
+            end;
+            Cmdliner.Term.exit_status (`Ok 2);
+          end
+      ) !Cli.source_files;
+    finish "completed!";
+    let application = if !Cli.application = "" then None else Some !Cli.application in
+    let program =
+      Ast_to_mvg.translate !program application
+    in
+
+    Cli.debug_print ("Expanding function definitions...");
+    let program = Functions.expand_functions program in
+
+    Cli.debug_print "Typechecking...";
+    let typing, program = Typechecker.typecheck program in
+    Cli.debug_print "Checking for circular variable definitions...";
+    let dep_graph = Dependency.create_dependency_graph program in
+    ignore (Dependency.check_for_cycle dep_graph program true);
+
+
+    Cli.debug_print "Extracting the desired function from the whole program...";
+    let mvg_func = Interface.read_function_from_spec application program in
+    let program = Interface.fit_function program mvg_func in
+
+    let program = if !Cli.optimize then Optimize.optimize program else program in
+    (* Mvg.VariableMap.iter (fun var (ty, bool) ->
+     *     if Mvg.VariableMap.mem var program.program_vars then
+     *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Ast.unmark var.name) (Mvg.show_typ ty)))
+     *   typing.Typechecker.typ_info_var; *)
+
+    begin if String.lowercase_ascii !Cli.backend = "z3" then
+        Z3_driver.translate_and_launch_query program dep_graph typing
+      else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+        Cli.debug_print "Interpreting the program...";
+        let f = Interface.make_function_from_program program !Cli.number_of_passes in
+        let results = f (Interface.read_inputs_from_stdin mvg_func) in
+        Interface.print_output mvg_func results;
+        Interpreter.repl_debugguer results program
+      end else if String.lowercase_ascii !Cli.backend = "python" then begin
+        Cli.debug_print "Compiling the program to Python...";
+        if !Cli.output_file = "" then
+          raise (Errors.ArgumentError "an output file must be defined with --output");
+        Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
+        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+      end else
+        raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
+    end
   with
   | Errors.TypeError e ->
     Cli.error_print (Errors.format_typ_error e); Cmdliner.Term.exit_status (`Ok 2)
@@ -156,3 +151,6 @@ let main () =
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
     Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
+
+let main () =
+  Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.verifisc_t driver, Cli.info)
