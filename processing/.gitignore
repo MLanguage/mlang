@@ -1,0 +1,3 @@
+ir_*.py
+ir_*.pyc
+__pycache__/

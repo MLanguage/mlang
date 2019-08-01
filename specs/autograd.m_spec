@@ -1,0 +1,9 @@
+saisie: 1AJ;
+
+const:
+V_ANREV = 2018;
+V_0AC = 1;
+V_0CF = 0;
+TSHALLOC = 0000.0;
+
+sortie: IRNET;

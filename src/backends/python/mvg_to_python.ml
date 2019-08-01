@@ -167,6 +167,9 @@ let generate_typ (typ: typ) : string = match typ with
   | Real -> "float"
   | Boolean -> "bool"
 
+let autograd () : bool =
+  !Cli.backend = "autograd"
+
 let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string = match e with
   | Comparison (op, e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
@@ -199,17 +202,26 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
     Printf.sprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) scc in
-    Printf.sprintf "round(%s)" sarg
+    if autograd () then
+      Printf.sprintf "%s" sarg
+    else
+      Printf.sprintf "round(%s)" sarg
   | FunctionCall (InfFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) scc in
-    Printf.sprintf "floor(%s)" sarg
+    if autograd () then
+      Printf.sprintf "%s" sarg
+    else
+      Printf.sprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Bool true) ->
-    "True"
+    if autograd () then "1.0" else "True"
   | Literal (Bool false) ->
-    "False"
+    if autograd () then "0.0" else "False"
   | Literal (Int i) ->
-    Printf.sprintf "%d" i
+    if autograd () then
+      Printf.sprintf "%.1f" (float_of_int i)
+    else
+      Printf.sprintf "%d" i
   | Literal (Float f) ->
     Printf.sprintf "%f" f
   | Literal Undefined ->
@@ -300,7 +312,10 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
       )
   in
   Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
-  Printf.fprintf oc "from math import floor\n\n";
+  if autograd () then
+    Printf.fprintf oc "import numpy as np\n\n"
+  else
+    Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "%s\n\n" undefined_class_prelude;
   Printf.fprintf oc "%s\n"
     (String.concat
