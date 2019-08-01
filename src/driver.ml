@@ -135,7 +135,10 @@ let driver
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program
-      end else if String.lowercase_ascii !Cli.backend = "python" then begin
+      end else if
+        String.lowercase_ascii !Cli.backend = "python" ||
+        String.lowercase_ascii !Cli.backend = "autograd"
+      then begin
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");

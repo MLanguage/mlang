@@ -16,6 +16,6 @@ saisie:
 7BL, 7WJ, 7WL, 8UT, 8TF, 8TI, 8TK;
 
 const:
-V_ANREV = 2017;
+V_ANREV = 2018;
 
 sortie: IRNET;

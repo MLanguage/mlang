@@ -88,6 +88,14 @@ let create_dependency_graph (p: Mvg.program) : DepGraph.t =
             ) es acc
         end
     ) p.program_vars DepGraph.empty in
+  (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
+  let g = DepGraph.fold_vertex (fun (var : Mvg.Variable.t) (g :DepGraph.t) ->
+      match (Mvg.VariableMap.find_opt var p.program_vars) with
+      | None -> g
+      | Some data -> if data.Mvg.var_io = Mvg.Output then
+          DepGraph.fold_succ (fun (succ: Mvg.Variable.t) (g: DepGraph.t) -> DepGraph.remove_edge g var succ) g var g
+        else g
+    ) g g in
   Mvg.VariableMap.fold (fun cond_var cond acc ->
       add_usages cond_var cond.Mvg.cond_expr acc
     ) p.program_conds g
@@ -217,19 +225,7 @@ module OutputToInputReachability = Graph.Fixpoint.Make(DepGraph)
       let direction = Graph.Fixpoint.Backward
       let equal = (=)
       let join = (||)
-      let analyze _ = (fun _ -> true) (* TODO: figure out why x -> x is not working ??? *)
-    end)
-
-module Constability = Graph.Fixpoint.Make(DepGraph)
-    (struct
-      type vertex = DepGraph.E.vertex
-      type edge = DepGraph.E.t
-      type g = DepGraph.t
-      type data = bool
-      let direction = Graph.Fixpoint.Backward
-      let equal = (=)
-      let join = (&&)
-      let analyze _ = (fun x -> x)
+      let analyze _ = fun x -> x
     end)
 
 module TopologicalOrder = Graph.Topological.Make(DepGraph)

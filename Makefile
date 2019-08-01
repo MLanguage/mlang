@@ -50,15 +50,24 @@ test: build
 simulateur_simplifie_2018: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
-		--backend Python --output ir_2018_simulateur.py \
+		--backend python --output ir_2018.py \
 		--function_spec specs/simulateur_simplifie_2018.m_spec \
 		$(SOURCE_FILES)
 
 cas_basique_2018: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
-		--backend Python --function_spec specs/cas_basique.m_spec \
-		--output ir_2018.py $(SOURCE_FILES)
+		--backend python --function_spec specs/cas_basique.m_spec \
+		--output processing/ir_2018.py $(SOURCE_FILES) && \
+	python processing/example_simple.py
+
+autograd: build
+	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --optimize \
+		--backend autograd --function_spec specs/autograd.m_spec \
+		--output processing/ir_2018.py $(SOURCE_FILES) && \
+	python processing/example_autograd.py
+
 
 z3_basique: build
 	OCAMLRUNPARAM=b	dune exec src/main.exe -- --application iliad \

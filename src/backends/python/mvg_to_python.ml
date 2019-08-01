@@ -33,7 +33,99 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 open Mvg
 
-let none_value = "0.0"
+let undefined_class_prelude : string = "\
+class Undefined:
+    def __init__(self):
+        pass
+
+    def __add__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __radd__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __sub__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __rsub__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __mul__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __rmul__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return rhs
+
+    def __truediv__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return 0.0
+
+    def __rtruediv__(self, lhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __lt__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __lte__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __gt__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __gte__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __eq__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+
+    def __neq__(self, rhs):
+        if isinstance(rhs, Undefined):
+            return Undefined()
+        else:
+            return Undefined()
+"
+
+
+let none_value = "Undefined()"
+
 
 let generate_comp_op (op: Ast.comp_op) : string = match op with
   | Ast.Gt -> ">"
@@ -75,6 +167,9 @@ let generate_typ (typ: typ) : string = match typ with
   | Real -> "float"
   | Boolean -> "bool"
 
+let autograd () : bool =
+  !Cli.backend = "autograd"
+
 let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string = match e with
   | Comparison (op, e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
@@ -83,7 +178,7 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
   | Binop ((Ast.Div, _), e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
     let s2 = generate_python_expr (Ast.unmark e2) scc in
-    Printf.sprintf "((%s / %s) if %s != 0 else %s)" s1 s2 s2 none_value
+    Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
     let s2 = generate_python_expr (Ast.unmark e2) scc in
@@ -107,17 +202,26 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
     Printf.sprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) scc in
-    Printf.sprintf "round(%s)" sarg
+    if autograd () then
+      Printf.sprintf "%s" sarg
+    else
+      Printf.sprintf "round(%s)" sarg
   | FunctionCall (InfFunc, [arg]) ->
     let sarg = generate_python_expr (Ast.unmark arg) scc in
-    Printf.sprintf "floor(%s)" sarg
+    if autograd () then
+      Printf.sprintf "%s" sarg
+    else
+      Printf.sprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Bool true) ->
-    "True"
+    if autograd () then "1.0" else "True"
   | Literal (Bool false) ->
-    "False"
+    if autograd () then "0.0" else "False"
   | Literal (Int i) ->
-    Printf.sprintf "%d" i
+    if autograd () then
+      Printf.sprintf "%.1f" (float_of_int i)
+    else
+      Printf.sprintf "%d" i
   | Literal (Float f) ->
     Printf.sprintf "%f" f
   | Literal Undefined ->
@@ -137,17 +241,17 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
 
 let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMap.t) (oc: out_channel) : unit =
   let in_scc = VariableMap.cardinal scc > 1 in
-  let extra_tab = if in_scc then "\t" else "" in
+  let extra_tab = if in_scc then "    " else "" in
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then begin
-      Printf.fprintf oc "\t%s# %s: %s\n"
+      Printf.fprintf oc "    %s# %s: %s\n"
         extra_tab
         (generate_name var)
         (Ast.unmark var.Variable.descr);
       match data.var_definition with
       | SimpleVar e ->
-        Printf.fprintf oc "\t%s# Defined %s\n\t%s%s = %s\n\n"
+        Printf.fprintf oc "    %s# Defined %s\n    %s%s = %s\n\n"
           extra_tab
           (Format_ast.format_position (Ast.get_position e))
           extra_tab
@@ -155,7 +259,7 @@ let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMa
           (generate_python_expr (Ast.unmark e) scc)
       | TableVar (_, IndexTable es) -> begin
           IndexMap.iter (fun i e ->
-              Printf.fprintf oc "\t%s# Defined %s\n\t%s%s[%d] = %s\n"
+              Printf.fprintf oc "    %s# Defined %s\n    %s%s[%d] = %s\n"
                 extra_tab
                 (Format_ast.format_position (Ast.get_position e))
                 extra_tab
@@ -166,7 +270,7 @@ let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMa
           Printf.fprintf oc "\n"
         end
       | TableVar (_, IndexGeneric e) ->
-        Printf.fprintf oc "\t%s# Defined %s\n\t%s%s = lambda generic_index: %s\n\n"
+        Printf.fprintf oc "    %s# Defined %s\n    %s%s = lambda generic_index: %s\n\n"
           extra_tab
           (Format_ast.format_position (Ast.get_position e))
           extra_tab
@@ -178,7 +282,7 @@ let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMa
   | Not_found ->
     let cond = VariableMap.find var program.program_conds in
     Printf.fprintf oc
-      "\t%s# Verification condition %s\n\t%scond = %s\n\t%sif cond:\n\t%s\traise TypeError(\"Error triggered\\n%s\")\n\n"
+      "    %s# Verification condition %s\n    %scond = %s\n    %sif cond:\n    %s    raise TypeError(\"Error triggered\\n%s\")\n\n"
       extra_tab
       (Format_ast.format_position (Ast.get_position cond.cond_expr))
       extra_tab
@@ -208,6 +312,11 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
       )
   in
   Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
+  if autograd () then
+    Printf.fprintf oc "import numpy as np\n\n"
+  else
+    Printf.fprintf oc "from math import floor\n\n";
+  Printf.fprintf oc "%s\n\n" undefined_class_prelude;
   Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "l = dict()\n\n";
   Printf.fprintf oc "%s\n"
@@ -223,35 +332,23 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
        )
     );
   Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
-  List.iter (fun var ->
-      match (VariableMap.find var program.program_vars).var_typ with
-      | Some typ ->
-        Printf.fprintf oc
-          "\t# Enforcing type of %s\n\tif not isinstance(%s, %s):\n\t\traise TypeError(\"Wrong type for %s !\")\n\n"
-          (generate_name var)
-          (generate_variable var)
-          (generate_typ typ)
-          (generate_name var)
-      | None -> ()
-    ) input_vars;
-  Printf.fprintf oc "\n";
   List.iter (fun scc ->
       let in_scc = VariableMap.cardinal scc > 1 in
       if in_scc then begin
-        Printf.fprintf oc "\tscc = {}\n\n";
+        Printf.fprintf oc "    scc = {}\n\n";
         VariableMap.iter (fun var _ ->
-            Printf.fprintf oc "\tscc[\"%s\"] = %s\n"
+            Printf.fprintf oc "    scc[\"%s\"] = %s\n"
               (generate_variable var)
               (none_value)
           ) scc;
-        Printf.fprintf oc "\n\tfor _ in range(%d):\n" number_of_passes
+        Printf.fprintf oc "\n    for _ in range(%d):\n" number_of_passes
       end;
       VariableMap.iter (fun var _ ->
           generate_var_def program var scc oc
         ) scc;
       if in_scc then begin
         VariableMap.iter (fun var _ ->
-            Printf.fprintf oc "\t%s = scc[\"%s\"]\n"
+            Printf.fprintf oc "    %s = scc[\"%s\"]\n"
               (generate_variable var)
               (generate_variable var)
           ) scc;
@@ -265,17 +362,17 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
         (VariableMap.bindings program.program_vars)
     )
   in
-  Printf.fprintf oc "\t# The following two lines help us keep all previously defined variable bindings\n\tglobal l\n\tl = locals()\n";
+  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global l\n    l = locals()\n";
   begin if List.length returned_variables = 1 then
-      Printf.fprintf oc "\treturn %s\n\n" (generate_variable (List.hd returned_variables))
+      Printf.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
     else begin
-      Printf.fprintf oc "\tout = {}\n";
+      Printf.fprintf oc "    out = {}\n";
       List.iter (fun var ->
-          Printf.fprintf oc "\tout[\"%s\"] = %s\n"
+          Printf.fprintf oc "    out[\"%s\"] = %s\n"
             (generate_variable var)
             (generate_variable var)
         ) returned_variables;
-      Printf.fprintf oc "\treturn out\n"
+      Printf.fprintf oc "    return out\n"
     end
   end;
   close_out oc

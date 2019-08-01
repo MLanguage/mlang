@@ -101,7 +101,10 @@ let repl_debugguer
              (List.map (fun var ->
                   Printf.sprintf "[%s] -> %s"
                     (Format_mvg.format_execution_number_short var.Variable.execution_number)
-                    (Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition)
+                    (try
+                       Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition
+                     with
+                     | Not_found -> "unused definition")
                 ) vars))
       with
       | Not_found -> Printf.printf "Inexisting variable\n"
