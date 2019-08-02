@@ -77,8 +77,10 @@ let optimize
   let nb_removed = ref max_int in
   Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
   let current_progress, finish = Cli.create_progress_bar "Partial evaluation" in
+
   while !nb_removed > 0 do
-    let new_program = Partial_evaluation.partially_evaluate !program  in
+    let new_program = Global_value_numbering.optimize !program in
+    let new_program = Partial_evaluation.partially_evaluate new_program  in
     let new_program = remove_unused_variables new_program in
     let new_nb_removed =
       Mvg.VariableMap.cardinal !program.program_vars -

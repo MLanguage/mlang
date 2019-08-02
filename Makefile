@@ -50,7 +50,7 @@ test: build
 simulateur_simplifie_2018: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
-		--backend python --output ir_2018.py \
+		--backend python --output processing/ir_2018.py \
 		--function_spec specs/simulateur_simplifie_2018.m_spec \
 		$(SOURCE_FILES)
 
