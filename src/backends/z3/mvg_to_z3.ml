@@ -77,24 +77,13 @@ let bool_const b ctx : Z3.Expr.expr =
 let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
 
-let harmonize_sizes (ctx: Z3.context) (e1: Z3.Expr.expr) (e2: Z3.Expr.expr) : Z3.Expr.expr * Z3.Expr.expr =
-  e1, e2
-  (* let s1 = Z3.BitVector.get_size (Z3.Expr.get_sort e1) in
-   * let s2 = Z3.BitVector.get_size (Z3.Expr.get_sort e2) in
-   * if s1 = s2 then
-   *   (e1, e2)
-   * else if s1 < s2 then
-   *   (Z3.BitVector.mk_concat ctx
-   *      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
-   *      e1,
-   *    e2
-   *   )
-   * else
-   *   (e1,
-   *    Z3.BitVector.mk_concat ctx
-   *      (Z3.BitVector.mk_numeral ctx (string_of_int 0) (s2 - s1))
-   *      e2
-   *   ) *)
+(* let cast ctx size expr =
+ *   let se = Z3.BitVector.get_size (Z3.Expr.get_sort expr) in
+ *   if se = size then expr
+ *   else if se < size then
+ *     Z3.BitVector.mk_concat ctx
+ *       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (size - se)) expr
+ *   else assert false *)
 
 let mult_factor = 100
 
@@ -104,43 +93,38 @@ let rec translate_expression
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : Z3.Expr.expr -> Z3.Expr.expr =
+  let zero = int_const 0 ctx in
+  let imult_factor = int_const mult_factor ctx in
+  let hundred = imult_factor in
   fun orig_arg ->
   match Ast.unmark e with
   | Mvg.Comparison (op, e1, e2) ->
-    let z3_e1 = translate_expression repr_data e1 ctx s in
-    let z3_e2 = translate_expression repr_data e2 ctx s in
-    let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
+    let z3_e1 = orig_arg |> translate_expression repr_data e1 ctx s in
+    let z3_e2 = orig_arg |> translate_expression repr_data e2 ctx s in
     begin match Ast.unmark op with
       | Ast.Gt -> Z3.BitVector.mk_sgt ctx z3_e1 z3_e2
       | Ast.Gte -> Z3.BitVector.mk_sge ctx z3_e1 z3_e2
       | Ast.Lt -> Z3.BitVector.mk_slt ctx z3_e1 z3_e2
       | Ast.Lte -> Z3.BitVector.mk_sle ctx z3_e1 z3_e2
       | Ast.Eq -> Z3.Boolean.mk_eq ctx z3_e1 z3_e2
-      | Ast.Neq ->
-        Z3.Boolean.mk_not ctx (Z3.Boolean.mk_eq ctx z3_e1 z3_e2)
+      | Ast.Neq -> Z3.Boolean.mk_distinct ctx [z3_e1; z3_e2]
     end
   | Mvg.Binop (op, e1, e2) ->
-    let z3_e1 = translate_expression repr_data e1 ctx s in
-    let z3_e2 = translate_expression repr_data e2 ctx s in
-    let (z3_e1, z3_e2) = harmonize_sizes ctx (z3_e1 orig_arg) (z3_e2 orig_arg) in
-    (* Printf.printf "binop: z3_e1: %s (%d), z3_e2: %s (%d)\n"
-     *   (Z3.Expr.to_string z3_e1)
-     *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e1)))
-     *   (Z3.Expr.to_string (z3_e2))
-     *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e2))); *)
+    let z3_e1 = orig_arg |> translate_expression repr_data e1 ctx s in
+    let z3_e2 = orig_arg |> translate_expression repr_data e2 ctx s in
     begin match Ast.unmark op with
       | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1; z3_e2]
       | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1; z3_e2]
-      | Ast.Mul -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx (z3_e1) (z3_e2)) (    int_const mult_factor ctx)
-      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx (z3_e1) (int_const mult_factor ctx)) (z3_e2)
-      | Ast.Sub -> Z3.BitVector.mk_sub ctx (z3_e1) (z3_e2)
-      | Ast.Add -> Z3.BitVector.mk_add ctx (z3_e1) (z3_e2)
+      | Ast.Mul -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx z3_e1 z3_e2) imult_factor
+      | Ast.Div -> Z3.BitVector.mk_sdiv ctx (Z3.BitVector.mk_mul ctx z3_e1 imult_factor) z3_e2
+      | Ast.Sub -> Z3.BitVector.mk_sub ctx z3_e1 z3_e2
+      | Ast.Add -> Z3.BitVector.mk_add ctx z3_e1 z3_e2
     end
   | Mvg.Unop (op, e1) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
     begin match op with
       | Ast.Not -> Z3.Boolean.mk_not ctx (z3_e1 orig_arg)
-      | Ast.Minus -> Z3.BitVector.mk_sub ctx (int_const 0 ctx) (z3_e1 orig_arg)
+      | Ast.Minus -> Z3.BitVector.mk_sub ctx zero (z3_e1 orig_arg)
     end
   | Mvg.Index ((var, _), index) ->
     let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_encoding.repr_data_var in
@@ -175,31 +159,27 @@ let rec translate_expression
     let z3_ff = orig_arg |> translate_expression repr_data ff ctx s in
     (* this actually happens after desugaring due to rewriting basic functions into conditionals. I think. FIXME: We could add a check to verify it only happens here? *)
     Z3.Boolean.mk_ite ctx z3_cond z3_tt z3_ff
-    (* Cli.debug_print "conditional:\n";
-     * Cli.debug_print @@ Ast.format_position (Ast.get_position e);
-     * (\* (Format_mvg.format_expression @@ fst e); *\)
-     * Cli.debug_print @@ Mvg.show_expression (Ast.unmark e);
-     * assert false (\* should not happen *\) *)
   | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
-    (* Z3.FloatingPoint.RoundingMode.mk_round_nearest_ties_to_even *)
+    (* we just need to add 50, divide by 100 (this loses precision) and then multiply by 100 *)
     let earg = orig_arg |> translate_expression repr_data arg ctx s in
     let eargadded = Z3.BitVector.mk_add ctx earg (int_const (mult_factor / 2) ctx) in
-    let hundred = int_const mult_factor ctx in
     let eargdivided = Z3.BitVector.mk_sdiv ctx eargadded hundred in
     Z3.BitVector.mk_mul ctx eargdivided hundred
-    (* we just need to add 50, divide by 100 (this loses precision) and then multiply by 100 *)
   | Mvg.FunctionCall (Mvg.InfFunc , [arg]) ->
     let earg = orig_arg |> translate_expression repr_data arg ctx s in
-    let hundred = int_const mult_factor ctx in
     let eargdivided = Z3.BitVector.mk_sdiv ctx earg hundred in
     Z3.BitVector.mk_mul ctx eargdivided hundred
+  | Mvg.FunctionCall (Mvg.PresentFunc, [arg]) ->
+    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    Z3.Boolean.mk_distinct ctx [earg; zero]
+  | Mvg.FunctionCall (Mvg.NullFunc, [arg]) ->
+    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    Z3.Boolean.mk_eq ctx earg zero
   | Mvg.FunctionCall _ -> assert false (* should not happen *)
   | Mvg.Literal (Mvg.Int i) ->
     int_const (mult_factor * i) ctx
   | Mvg.Literal (Mvg.Float f) ->
-    (* Z3.FloatingPoint.mk_to_ieee_bv ctx (Z3.FloatingPoint.mk_numeral_f ctx f (Z3.FloatingPoint.mk_sort_64 ctx)) *)
-    (* FIXME *)
-    int_const (int_of_float (f *. 100.0)) ctx
+    int_const (int_of_float (f *. (float_of_int mult_factor))) ctx
   | Mvg.Literal (Mvg.Bool b) ->
     bool_const b ctx
   | Mvg.Literal Mvg.Undefined -> assert false (* TODO: implement *)
@@ -232,17 +212,8 @@ let rec translate_expression
       | _ -> assert false (* should not happen *)
     end
 
-(* let cast ctx size expr =
- *   let se = Z3.BitVector.get_size (Z3.Expr.get_sort expr) in
- *   if se = size then expr
- *   else if se < size then
- *     Z3.BitVector.mk_concat ctx
- *       (Z3.BitVector.mk_numeral ctx (string_of_int 0) (size - se)) expr
- *   else assert false *)
-
 let translate_program
     (p: Mvg.program)
-    (dep_graph: Dependency.DepGraph.t)
     (typing: Z3_encoding.repr_info)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
@@ -263,26 +234,11 @@ let translate_program
     List.fold_left (fun repr_data scc ->
         Mvg.VariableMap.fold
           (fun var () repr_data ->
-             (* let () = match Z3.Solver.check s [] with
-              *   | Z3.Solver.UNSATISFIABLE  ->
-              *     Cli.debug_print "unsat, core:\n";
-              *     List.iter (fun e -> Cli.debug_print (Z3.Expr.to_string e)) (Z3.Solver.get_unsat_core s)
-              *   | Z3.Solver.SATISFIABLE ->
-              *     begin match Z3.Solver.get_model s with
-              *       | Some m ->
-              *         Cli.debug_print (Format.sprintf "sat: %s\n" (Z3.Model.to_string m))
-              *       | _ -> ()
-              *     end
-              *   | _ -> ()
-              * in *)
              if Mvg.VariableMap.mem var p.program_vars then
                let def = Mvg.VariableMap.find var p.program_vars in
                let typ = Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in
-               Cli.debug_print (Format.sprintf "Processing %s (type = %s)" (*(Mvg.Variable.show var));*) (Ast.unmark var.Mvg.Variable.name) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var));
-               (* Cli.debug_print (Format.sprintf "|repr_data| = %d; |repr_data_local| = %d\n" (Mvg.VariableMap.cardinal repr_data.Z3_encoding.repr_data_var) (Mvg.LocalVariableMap.cardinal repr_data.Z3_encoding.repr_data_local_var)); *)
                match def.Mvg.var_definition with
                | Mvg.InputVar ->
-                 (* Cli.debug_print (Format.sprintf "input %s, repr=%s\n" (Mvg.Variable.show var) (Z3_encoding.show_repr typ)); *)
                  let in_var = declare_var_not_table var typ ctx in
                  { repr_data with
                    Z3_encoding.repr_data_var =
@@ -292,17 +248,9 @@ let translate_program
                        repr_data.Z3_encoding.repr_data_var
                  }
                | Mvg.SimpleVar e ->
-                 (* Cli.debug_print (Format.sprintf "var: %s, type: %s\nexpr: %s" (Mvg.Variable.show var) (Z3_encoding.show_repr @@ Mvg.VariableMap.find var typing.repr_info_var) (Format_mvg.format_expression @@ fst e)); *)
                  let z3_e = translate_expression repr_data e ctx s in
                  let z3_var = declare_var_not_table var typ ctx in
-                 let cast_expr = z3_e (dummy_param ctx typ)
-                 (* cast ctx (Z3.BitVector.get_size (Z3.Expr.get_sort z3_var)) (z3_e (dummy_param ctx typ)) *) in
-                 (* Cli.debug_print (Format.sprintf "texpr: %s\n" (Z3.Expr.to_string cast_expr)); *)
-                 (* Printf.printf "\nz3_var: %s\nz3_e: %s (%d)\ncast_expr = %s\n"
-                  *   (Z3.Expr.to_string z3_var)
-                  *   (Z3.Expr.to_string (z3_e (dummy_param ctx typ)))
-                  *   (Z3.BitVector.get_size (Z3.Expr.get_sort (z3_e (dummy_param ctx typ))))
-                  *   (Z3.Expr.to_string cast_expr); *)
+                 let cast_expr = z3_e (dummy_param ctx typ) in
                  Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
                  { repr_data with
                    Z3_encoding.repr_data_var =
@@ -329,13 +277,10 @@ let translate_program
                let cond = Mvg.VariableMap.find var p.program_conds in
                (* FIXME: specify which error is raised in that case? *)
                let typ = {Z3_encoding.repr_kind = Boolean; is_table = false} in
-               (*Mvg.VariableMap.find var typing.Z3_encoding.repr_info_var in*)
                let z3_var = declare_var_not_table var typ ctx in
                let z3_e = translate_expression repr_data cond.cond_expr ctx s in
                let neg_z3e = Z3.Boolean.mk_not ctx (z3_e (dummy_param ctx typ)) in
-               Cli.debug_print (Format.sprintf "Following verif condition added: %s (for var %s)\n" (Z3.Expr.to_string neg_z3e) (Ast.unmark var.name));
                Z3.Solver.add s [neg_z3e];
-               (* repr_data *)
                { repr_data with
                  Z3_encoding.repr_data_var =
                    Mvg.VariableMap.add var
@@ -344,5 +289,5 @@ let translate_program
           )
           scc repr_data
       ) repr_data exec_order in
-  Cli.debug_print "Translation finished!\n";
+  Cli.debug_print "Translation finished!";
   repr_data

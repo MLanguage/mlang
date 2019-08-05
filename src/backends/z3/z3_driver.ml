@@ -33,7 +33,6 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 let translate_and_launch_query
     (program: Mvg.program)
-    (dep_graph: Dependency.DepGraph.t)
     (typing_info: Typechecker.typ_info)
   : unit  =
   Cli.debug_print (Printf.sprintf "Translating the program into a Z3 query...");
@@ -41,13 +40,9 @@ let translate_and_launch_query
   let ctx = (Z3.mk_context mvg) in
   let s = Z3.Solver.mk_solver ctx None in
   (* ignore (Z3.Log.open_ "z3.log"); *)
-  Cli.debug_print (Format.sprintf "|globals| = %d; |locals| = %d\n" (Mvg.VariableMap.cardinal typing_info.typ_info_var) (Mvg.LocalVariableMap.cardinal typing_info.typ_info_local_var));
-  let typing_info = Z3_encoding.find_bitvec_repr program dep_graph typing_info in
-  Cli.debug_print (Format.sprintf "added dummy typing info (everything to %d bits repr)" !Z3_encoding.bitvec_size);
-  (* Cli.debug_print @@ Printf.sprintf "repr_info_var: %s\nrepr_info_local_var: %s\n"
-   *   (Mvg.VariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_var)
-   *   (Mvg.LocalVariableMap.show Z3_encoding.show_repr typing_info.Z3_encoding.repr_info_local_var); *)
-  let z3_program = Mvg_to_z3.translate_program program dep_graph typing_info ctx s in
+  let typing_info = Z3_encoding.find_bitvec_repr program typing_info in
+  Cli.debug_print (Printf.sprintf "added dummy bitsize info (everything to %d bits repr)" (!Z3_encoding.bitvec_size * Mvg_to_z3.bv_repr_ints_base));
+  let z3_program = Mvg_to_z3.translate_program program typing_info ctx s in
   let t0 = Sys.time () in
   Cli.debug_print
     (Printf.sprintf
@@ -55,15 +50,9 @@ let translate_and_launch_query
        (Mvg.VariableMap.cardinal z3_program.Z3_encoding.repr_data_var +
         Mvg.LocalVariableMap.cardinal z3_program.Z3_encoding.repr_data_local_var)
     );
-  (* Cli.debug_print "VMap:\n";
-   * Mvg.VariableMap.iter (fun v _ ->   Cli.debug_print @@ Mvg.Variable.show v) z3_program.repr_data_var;
-   * Cli.debug_print "LVMap:\n";
-   * Mvg.LocalVariableMap.iter (fun v _ -> Cli.debug_print @@ Mvg.LocalVariable.show v) z3_program.repr_data_local_var; *)
   match Z3.Solver.check s [] with
   | Z3.Solver.UNSATISFIABLE ->
     Cli.result_print "Z3 found that the constraints are unsatisfiable!";
-    (* "\nUnsat core:\n";
-     * List.iter (fun e -> Cli.result_print (Z3.Expr.to_string e)) (Z3.Solver.get_unsat_core s) *)
   | Z3.Solver.UNKNOWN ->
     Cli.result_print (Printf.sprintf "Z3 didn't find an answer...\nReason: %s" (Z3.Solver.get_reason_unknown s))
   | Z3.Solver.SATISFIABLE ->

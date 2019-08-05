@@ -51,13 +51,12 @@ let format_z3_program
   : string =
   match Z3.Solver.get_model s with
   | Some model ->
-    Cli.warning_print (Format.sprintf "Z3 model: %s\n" (Z3.Model.to_string model));
+    Cli.warning_print (Printf.sprintf "Z3 model: %s" (Z3.Model.to_string model));
     let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
         | Z3_encoding.Regular e ->
           (Ast.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
-                Cli.warning_print (Format.sprintf "%s -> %s\n" (Ast.unmark var.Mvg.Variable.name) (Z3.Expr.to_string new_e));
                 begin match typ.Z3_encoding.repr_kind with
                   | Z3_encoding.Integer _
                   | Z3_encoding.Real _ ->

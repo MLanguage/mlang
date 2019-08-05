@@ -6,8 +6,8 @@ V_0AM = 1;
 
 verif 201920192019:
 application : iliad ;
-si TSHALLOV < 0 ou TSHALLOV > 1000000 alors erreur A000;
-si TSHALLOC < 0 ou TSHALLOC > 1000000 alors erreur A000;
-si V_0CF < 0 alors erreur A000;
+si TSHALLOV <= 0 ou TSHALLOV > 1000000 alors erreur A000;
+si TSHALLOC <= 0 ou TSHALLOC > 1000000 alors erreur A000;
+si V_0CF < 0 ou V_0CF > 2 alors erreur A000;
 
 sortie: IRNET;

@@ -1,6 +1,6 @@
 import json, sys
 try:
-    import ir_2018
+    import processing.ir_2018 as ir_2018
 except ModuleNotFoundError:
     print("ERROR: please launch this script from the root of the project")
     sys.exit(1)
@@ -28,7 +28,7 @@ py_res = ir_2018.l
 
 for x in py_res:
     if py_to_z3_name(x) not in z3_res:
-        print("Variablen {} which in py is {} not found in z3".format(x, py_res[x]))
+        print("Variable {} which in py is {} not found in z3".format(x, py_res[x]))
     else:
         diff = abs(py_res[x] - z3_res[py_to_z3_name(x)])
         if diff > 10**-6:

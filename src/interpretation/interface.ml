@@ -110,7 +110,7 @@ let fit_function (p: program) (f: mvg_function) : program =
              }
         )
         p.program_vars;
-    program_conds = VariableMap.union (fun var cond_data1 cond_data2 -> assert false) p.program_conds f.func_conds
+    program_conds = VariableMap.union (fun _ _ _ -> assert false) p.program_conds f.func_conds
   }
 
 let var_set_from_variable_name_list (p: program) (names : string list) : unit VariableMap.t =
