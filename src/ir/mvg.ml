@@ -176,21 +176,20 @@ type func =
    construct to avoid code duplication.
 *)
 
-
 type expression =
-  | Comparison of Ast.comp_op Ast.marked * expression Ast.marked * expression Ast.marked
-  | Binop of Ast.binop Ast.marked * expression Ast.marked * expression Ast.marked
-  | Unop of Ast.unop * expression Ast.marked
-  | Index of Variable.t Ast.marked * expression Ast.marked
-  | Conditional of expression Ast.marked * expression Ast.marked * expression Ast.marked
-  | FunctionCall of func * expression Ast.marked list
-  | Literal of literal
-  | Var of Variable.t
-  | LocalVar of LocalVariable.t
+  | Unop of (Ast.unop[@opaque]) * (expression * (Ast.position[@opaque]))
+  | Comparison of (Ast.comp_op * Ast.position[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
+  | Binop of (Ast.binop * Ast.position[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
+  | Index of (Variable.t * Ast.position[@opaque]) * (expression * (Ast.position[@opaque]))
+  | Conditional of (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
+  | FunctionCall of (func[@opaque]) * (expression * (Ast.position[@opaque])) list
+  | Literal of (literal[@opaque])
+  | Var of (Variable.t[@opaque])
+  | LocalVar of (LocalVariable.t[@opaque])
   | GenericTableIndex
   | Error
-  | LocalLet of LocalVariable.t * expression Ast.marked * expression Ast.marked
-[@@deriving show]
+  | LocalLet of (LocalVariable.t[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
+[@@deriving show, visitors { variety = "iter" } ]
 
 (**
    MVG programs are just mapping from variables to their definitions, and make a massive use

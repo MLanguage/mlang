@@ -27,6 +27,7 @@ depends: [
   "ANSITerminal" {= "0.8.1"}
   "re" {= "1.9.0"}
   "ppx_deriving" {= "4.4"}
+  "visitors" {>= "20190711"}
   "ocamlgraph" {= "1.8.8"}
   "z3" {= "4.8.4"}
   "dune-build-info" {= "1.11.0"}
