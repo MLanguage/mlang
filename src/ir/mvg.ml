@@ -141,7 +141,12 @@ type typ =
   | Integer
   | Real
   | Boolean
-[@@deriving show]
+[@@deriving show, visitors {
+    variety = "iter";
+    nude = true;
+    polymorphic = true;
+    name = "typ_iter"
+  }]
 
 type literal =
   | Int of int
@@ -176,10 +181,14 @@ type func =
    construct to avoid code duplication.
 *)
 
+let current_visitor_pos : Ast.position ref = ref Ast.no_pos
+
 (** Custom visitor for the [Ast.marked] type *)
-class ['self] marked_iter = object
-  method  visit_marked: 'env 'a . ('env  -> 'a -> unit) -> 'env  -> 'a Ast.marked -> unit =
-    fun f env x -> f env (Ast.unmark x)
+class ['self] marked_iter = object 
+  method visit_marked: 'env 'a . ('env  -> 'a -> unit) -> 'env  -> 'a Ast.marked -> unit =
+    fun f env x ->
+    current_visitor_pos := Ast.get_position x;
+    f env (Ast.unmark x)
 end
 
 type expression =
@@ -195,7 +204,7 @@ type expression =
   | GenericTableIndex
   | Error
   | LocalLet of (LocalVariable.t[@opaque]) * (expression Ast.marked) * (expression Ast.marked)
-[@@deriving show, visitors { variety = "iter"; ancestors = ["marked_iter"]; polymorphic = true }]
+[@@deriving show, visitors { variety = "iter"; ancestors = ["marked_iter"]; name = "expression_iter" }]
 
 (**
    MVG programs are just mapping from variables to their definitions, and make a massive use
@@ -208,6 +217,7 @@ struct
   let show vprinter map = fold (fun k v acc ->
       Printf.sprintf "%s\n%s -> %s" acc (Variable.show k) (vprinter v)) map ""
 end
+
 
 module LocalVariableMap =
 struct
@@ -223,9 +233,22 @@ end
 *)
 module IndexMap = Map.Make(struct type t = int let compare = compare end)
 
+(** Custom visitor for the [IndexMap.t] type *)
+class ['self] index_map_iter = object
+  method  visit_index_map: 'env 'a . ('env  -> 'a  -> unit) -> 'env  -> 'a IndexMap.t -> unit =
+    fun f env x ->
+    IndexMap.iter (fun _ x -> f env x) x
+end
+
 type index_def =
-  | IndexTable of (expression Ast.marked) IndexMap.t
+  | IndexTable of ((expression Ast.marked) IndexMap.t[@name "index_map"])
   | IndexGeneric of expression Ast.marked
+[@@deriving visitors {
+    variety = "iter";
+    ancestors = ["index_map_iter"; "expression_iter"];
+    nude = true;
+    name = "index_def_iter"
+  }]
 
 (**
    The definitions here are modeled closely to the source M language. One could also adopt
@@ -235,17 +258,34 @@ type variable_def =
   | SimpleVar of expression Ast.marked
   | TableVar of int * index_def
   | InputVar
+[@@deriving visitors {
+    variety = "iter";
+    ancestors = ["index_def_iter"];
+    nude = true;
+    name = "variable_def_iter"
+  }]
 
 type io =
   | Input
   | Output
   | Regular
+[@@deriving visitors {
+    variety = "iter";
+    nude = true;
+    name = "io_iter"
+  }]
 
 type variable_data = {
   var_definition: variable_def;
   var_typ : typ option; (** The typing info here comes from the variable declaration in the source program *)
   var_io: io;
 }
+[@@deriving visitors {
+    variety = "iter";
+    ancestors = ["variable_def_iter"; "io_iter"; "typ_iter"];
+    nude = true;
+    name = "variable_data_iter"
+  }]
 
 (**{1 Verification conditions}*)
 
@@ -275,8 +315,14 @@ end
 
 type condition_data = {
   cond_expr: expression Ast.marked;
-  cond_errors: Error.t list;
+  cond_errors: (Error.t[@opaque]) list;
 }
+[@@deriving visitors {
+    variety = "iter";
+    ancestors = ["expression_iter"];
+    nude = true;
+    name = "condition_data_iter"
+  }]
 
 (**
    We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to keep

@@ -1,29 +1,45 @@
-let check_expr (expr: Mvg.expression Ast.marked) : unit =
-  let open Mvg in
+(*
+Copyright Inria, contributors:
+  Denis Merigoux <denis.merigoux@inria.fr> (2019)
+  Raphël Monat <raphael.monat@lip6.fr> (2019)
+
+This software is a computer program whose purpose is to compile and analyze
+programs written in the M langage, created by the DGFiP.
+
+This software is governed by the CeCILL-C license under French law and
+abiding by the rules of distribution of free software.  You can  use,
+modify and/ or redistribute the software under the terms of the CeCILL-C
+license as circulated by CEA, CNRS and INRIA at the following URL
+http://www.cecill.info.
+
+As a counterpart to the access to the source code and  rights to copy,
+modify and redistribute granted by the license, users are provided only
+with a limited warranty  and the software's author,  the holder of the
+economic rights,  and the successive licensors  have only  limited
+liability.
+
+In this respect, the user's attention is drawn to the risks associated
+with loading,  using,  modifying and/or developing or reproducing the
+software by the user in light of its specific status of free software,
+that may mean  that it is complicated to manipulate,  and  that  also
+therefore means  that it is reserved for developers  and  experienced
+professionals having in-depth computer knowledge. Users are therefore
+encouraged to load and test the software's suitability as regards their
+requirements in conditions enabling the security of their systems and/or
+data to be ensured and,  more generally, to use and operate it in the
+same conditions as regards security.
+
+The fact that you are presently reading this means that you have had
+knowledge of the CeCILL-C license and that you accept its terms.
+*)
+
+let check (program: Mvg.program) : unit =
   let v = object
-    inherit [_] iter
+    inherit [_] Execution_order.program_iter
     method! visit_Literal _ l =
       match l with
       | Undefined ->
-        raise (Errors.TypeError (Typing ("undef still in " ^ (Ast.format_position @@ Ast.get_position expr))))
+        raise (Errors.TypeError (Typing ("undef still in " ^ (Ast.format_position @@ !Mvg.current_visitor_pos))))
       | _ -> ()
   end in
-  v#visit_expression () (Ast.unmark expr)
-
-let check (program: Mvg.program) : unit =
-  let vars = program.program_vars in
-  let exec_order = Execution_order.get_execution_order program in
-  List.fold_left (fun () scc ->
-      let open Mvg in
-      VariableMap.fold (fun var () ()  ->
-          if VariableMap.mem var vars then
-            let def = VariableMap.find var vars in
-            match def.var_definition with
-            | InputVar -> ()
-            | SimpleVar e ->
-              (* Cli.debug_print (Printf.sprintf "Checking %s at position %s" (Ast.unmark var.name) (Ast.format_position @@ Ast.get_position var.name));
-               * Cli.debug_print (Printf.sprintf "Expr is %s" (Format_mvg.format_expression @@ Ast.unmark e)); *)
-              check_expr e
-            | TableVar _ -> assert false
-        )
-        scc ()) () exec_order
+  v#visit_program () program

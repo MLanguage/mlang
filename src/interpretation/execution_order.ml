@@ -87,3 +87,27 @@ let get_execution_order (p: Mvg.program) : execution_order =
       let new_scc = execution_graph.execution_scc_graph_contents.(scc_id) in
       new_scc::exec_order
     ) execution_graph.execution_scc_graph [])
+
+(**
+   This custom visitor uses [get_execution_order] to visit all the expressions in the program in
+   the correct order.
+*)
+class ['self] program_iter = object (self: 'self)
+  inherit [_] variable_data_iter
+  inherit [@ warning "-7"] [_] condition_data_iter
+  method visit_program env this =
+    let exec_order = get_execution_order this in
+    List.iter (fun scc ->
+        VariableMap.iter (fun var ()  ->
+            try let data = VariableMap.find var this.program_vars in
+              self#visit_variable_data env data
+            with
+            | Not_found ->
+              try
+                let cond = VariableMap.find var this.program_conds in
+                self#visit_condition_data env cond
+              with
+              | Not_found -> assert false
+          )
+          scc) exec_order
+end
