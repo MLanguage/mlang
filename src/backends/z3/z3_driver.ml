@@ -41,7 +41,7 @@ let translate_and_launch_query
   let s = Z3.Solver.mk_solver ctx None in
   (* ignore (Z3.Log.open_ "z3.log"); *)
   let typing_info = Z3_encoding.find_bitvec_repr program typing_info in
-  Cli.debug_print (Printf.sprintf "added dummy bitsize info (everything to %d bits repr)" (!Z3_encoding.bitvec_size * Mvg_to_z3.bv_repr_ints_base));
+  Cli.debug_print (Printf.sprintf "added dummy bitsize info (everything to %d bits repr)" !Z3_encoding.bitvec_size);
   let z3_program = Mvg_to_z3.translate_program program typing_info ctx s in
   let t0 = Sys.time () in
   Cli.debug_print
@@ -61,7 +61,7 @@ let translate_and_launch_query
     let filename = "results.json" in
     Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
     let file = open_out filename in
-    Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_encoding.repr_data_var ctx s);
+    Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_encoding.repr_data_var s);
     Cli.result_print
       (Printf.sprintf
          "The query took %f seconds to execute. Here are some statistics about it:\n%s"

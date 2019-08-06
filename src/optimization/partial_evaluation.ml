@@ -81,12 +81,6 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
         Mvg.Literal (Interpreter.evaluate_expr Interpreter.empty_ctx p
                        (Ast.same_pos_as (Comparison (op,new_e1, new_e2)) e)
                     )
-      | (FunctionCall (PresentFunc, [arg]), Literal (Int i)) when Ast.unmark op = Neq && i <> 0 ->
-        Comparison (op, arg, new_e2)
-      | (Literal (Int i), FunctionCall (PresentFunc, [arg])) when Ast.unmark op = Neq && i <> 0 ->
-        Comparison (op, arg, new_e1)
-        (* present(a) != z (z neq 0) <=> a!=0
-         * present(a) != 0 <=> a==0 *)
       | _ -> Comparison (op, new_e1, new_e2)
     end e
   | Binop (op, e1, e2) ->

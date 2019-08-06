@@ -46,7 +46,6 @@ let convert_to_signed (f:float) (bsize:int) =
 
 let format_z3_program
     (p: (Z3_encoding.var_repr * Z3_encoding.repr) Mvg.VariableMap.t)
-    (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : string =
   match Z3.Solver.get_model s with
@@ -60,7 +59,7 @@ let format_z3_program
                 begin match typ.Z3_encoding.repr_kind with
                   | Z3_encoding.Integer _
                   | Z3_encoding.Real _ ->
-                    string_of_float (convert_to_signed (Big_int.float_of_big_int (Big_int.big_int_of_string  (Z3.BitVector.numeral_to_string new_e))) (!Z3_encoding.bitvec_size * Mvg_to_z3.bv_repr_ints_base) /. (float_of_int Mvg_to_z3.mult_factor))
+                    string_of_float (convert_to_signed (Big_int.float_of_big_int (Big_int.big_int_of_string  (Z3.BitVector.numeral_to_string new_e))) !Z3_encoding.bitvec_size /. (float_of_int Mvg_to_z3.mult_factor))
                   | Z3_encoding.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                       | Z3enums.L_FALSE -> "false"
                       | Z3enums.L_TRUE -> "true"
@@ -70,11 +69,8 @@ let format_z3_program
               | None -> "could not evaluate variable" end,
            format_Z3_encoding typ
           )::acc
-        | Z3_encoding.Table f ->
-          (Ast.unmark var.Mvg.Variable.name,
-           Z3.Expr.to_string
-             (f (Z3.BitVector.mk_const_s ctx "X" Mvg_to_z3.bv_repr_ints_base)),
-           format_Z3_encoding typ)::acc
+        | Z3_encoding.Table _ ->
+          assert false (* not implemented yet *)
       ) p []
     in
     "{\n"^

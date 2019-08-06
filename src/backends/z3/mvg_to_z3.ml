@@ -31,16 +31,14 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-let bv_repr_ints_base = 20
-
 let declare_var_not_table (var: Mvg.Variable.t) (typ: Z3_encoding.repr) (ctx: Z3.context) : Z3.Expr.expr =
   match typ.Z3_encoding.repr_kind with
   | Z3_encoding.Boolean ->
     Z3.Boolean.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name)
   | Z3_encoding.Integer o ->
-    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) (bv_repr_ints_base * o)
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) o
   | Z3_encoding.Real o ->
-    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) (bv_repr_ints_base * o)
+    Z3.BitVector.mk_const_s ctx (Ast.unmark var.Mvg.Variable.name) o
 
 let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z3.context) : Z3_encoding.var_repr =
   match typ.Z3_encoding.repr_kind with
@@ -50,29 +48,18 @@ let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z
   | Z3_encoding.Integer o ->
     Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
                            ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
-                           (bv_repr_ints_base * o))
+                           o)
   | Z3_encoding.Real o ->
     Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
                            ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
-                           (bv_repr_ints_base * o))
+                           o)
 
 let int_const i ctx : Z3.Expr.expr =
-  Z3.BitVector.mk_numeral ctx (string_of_int i) (bv_repr_ints_base * !Z3_encoding.bitvec_size)
-
-let dummy_param ctx typ =
-  match typ.Z3_encoding.repr_kind with
-  | Z3_encoding.Boolean ->
-    Z3.Boolean.mk_true ctx
-  | Z3_encoding.Integer o ->
-    Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
-  | Z3_encoding.Real o ->
-    Z3.BitVector.mk_numeral ctx (string_of_int 0) (bv_repr_ints_base * o)
+  Z3.BitVector.mk_numeral ctx (string_of_int i) !Z3_encoding.bitvec_size
 
 let bool_const b ctx : Z3.Expr.expr =
-  if b then
-    Z3.Boolean.mk_true ctx
-  else
-    Z3.Boolean.mk_false ctx
+  if b then Z3.Boolean.mk_true ctx
+  else Z3.Boolean.mk_false ctx
 
 let error_const ctx : Z3.Expr.expr =
   Z3.Expr.mk_numeral_string ctx "error" (Z3.Sort.mk_uninterpreted_s ctx "error")
@@ -92,15 +79,14 @@ let rec translate_expression
     (e: Mvg.expression Ast.marked)
     (ctx: Z3.context)
     (s: Z3.Solver.solver)
-  : Z3.Expr.expr -> Z3.Expr.expr =
+  : Z3.Expr.expr =
   let zero = int_const 0 ctx in
   let imult_factor = int_const mult_factor ctx in
   let hundred = imult_factor in
-  fun orig_arg ->
   match Ast.unmark e with
   | Mvg.Comparison (op, e1, e2) ->
-    let z3_e1 = orig_arg |> translate_expression repr_data e1 ctx s in
-    let z3_e2 = orig_arg |> translate_expression repr_data e2 ctx s in
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
     begin match Ast.unmark op with
       | Ast.Gt -> Z3.BitVector.mk_sgt ctx z3_e1 z3_e2
       | Ast.Gte -> Z3.BitVector.mk_sge ctx z3_e1 z3_e2
@@ -110,8 +96,8 @@ let rec translate_expression
       | Ast.Neq -> Z3.Boolean.mk_distinct ctx [z3_e1; z3_e2]
     end
   | Mvg.Binop (op, e1, e2) ->
-    let z3_e1 = orig_arg |> translate_expression repr_data e1 ctx s in
-    let z3_e2 = orig_arg |> translate_expression repr_data e2 ctx s in
+    let z3_e1 = translate_expression repr_data e1 ctx s in
+    let z3_e2 = translate_expression repr_data e2 ctx s in
     begin match Ast.unmark op with
       | Ast.And -> Z3.Boolean.mk_and ctx [z3_e1; z3_e2]
       | Ast.Or -> Z3.Boolean.mk_or ctx [z3_e1; z3_e2]
@@ -123,17 +109,11 @@ let rec translate_expression
   | Mvg.Unop (op, e1) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
     begin match op with
-      | Ast.Not -> Z3.Boolean.mk_not ctx (z3_e1 orig_arg)
-      | Ast.Minus -> Z3.BitVector.mk_sub ctx zero (z3_e1 orig_arg)
+      | Ast.Not -> Z3.Boolean.mk_not ctx z3_e1
+      | Ast.Minus -> Z3.BitVector.mk_sub ctx zero z3_e1
     end
-  | Mvg.Index ((var, _), index) ->
-    let (z3_var , _) = Mvg.VariableMap.find var repr_data.Z3_encoding.repr_data_var in
-    let z3_index = translate_expression repr_data index ctx s in
-    begin match z3_var with
-      | Z3_encoding.Table z3_var ->
-        z3_var (z3_index orig_arg)
-      | _ -> assert false (* should not happen *)
-    end
+  | Mvg.Index _ ->
+    raise (Errors.Unimplemented "z3: Mvg.Index")
   | Mvg.LocalLet (lvar1, (Mvg.Conditional (e1, e2, e3), _), (Mvg.LocalVar lvar2, _))
     when lvar1 = lvar2 ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -144,36 +124,36 @@ let rec translate_expression
       | Z3_encoding.Regular z3_lvar ->
         Z3.Solver.add s [
           Z3.Boolean.mk_implies ctx
-            (z3_e1 orig_arg)
-            (Z3.Boolean.mk_eq ctx z3_lvar (z3_e2 orig_arg));
+            z3_e1
+            (Z3.Boolean.mk_eq ctx z3_lvar z3_e2);
           Z3.Boolean.mk_implies ctx
-            (Z3.Boolean.mk_not ctx (z3_e1 orig_arg))
-            (Z3.Boolean.mk_eq ctx z3_lvar (z3_e3 orig_arg))
+            (Z3.Boolean.mk_not ctx z3_e1)
+            (Z3.Boolean.mk_eq ctx z3_lvar z3_e3)
         ];
         z3_lvar
       | _ -> assert false (* should not happen *)
     end
   | Mvg.Conditional (cond, tt, ff) ->
-    let z3_cond = orig_arg |> translate_expression repr_data cond ctx s in
-    let z3_tt = orig_arg |> translate_expression repr_data tt ctx s in
-    let z3_ff = orig_arg |> translate_expression repr_data ff ctx s in
+    let z3_cond = translate_expression repr_data cond ctx s in
+    let z3_tt = translate_expression repr_data tt ctx s in
+    let z3_ff = translate_expression repr_data ff ctx s in
     (* this actually happens after desugaring due to rewriting basic functions into conditionals. I think. FIXME: We could add a check to verify it only happens here? *)
     Z3.Boolean.mk_ite ctx z3_cond z3_tt z3_ff
   | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
     (* we just need to add 50, divide by 100 (this loses precision) and then multiply by 100 *)
-    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let earg = translate_expression repr_data arg ctx s in
     let eargadded = Z3.BitVector.mk_add ctx earg (int_const (mult_factor / 2) ctx) in
     let eargdivided = Z3.BitVector.mk_sdiv ctx eargadded hundred in
     Z3.BitVector.mk_mul ctx eargdivided hundred
   | Mvg.FunctionCall (Mvg.InfFunc , [arg]) ->
-    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let earg = translate_expression repr_data arg ctx s in
     let eargdivided = Z3.BitVector.mk_sdiv ctx earg hundred in
     Z3.BitVector.mk_mul ctx eargdivided hundred
   | Mvg.FunctionCall (Mvg.PresentFunc, [arg]) ->
-    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let earg = translate_expression repr_data arg ctx s in
     Z3.Boolean.mk_distinct ctx [earg; zero]
   | Mvg.FunctionCall (Mvg.NullFunc, [arg]) ->
-    let earg = orig_arg |> translate_expression repr_data arg ctx s in
+    let earg = translate_expression repr_data arg ctx s in
     Z3.Boolean.mk_eq ctx earg zero
   | Mvg.FunctionCall _ -> assert false (* should not happen *)
   | Mvg.Literal (Mvg.Int i) ->
@@ -199,7 +179,8 @@ let rec translate_expression
         z3_lvar
       | _ -> assert false (* should not happen *)
     end
-  | Mvg.GenericTableIndex -> orig_arg
+  | Mvg.GenericTableIndex ->
+    raise (Errors.Unimplemented "z3: Mvg.GenericTableIndex")
   | Mvg.Error -> error_const ctx
   | Mvg.LocalLet (lvar, e1, e2) ->
     let z3_e1 = translate_expression repr_data e1 ctx s in
@@ -207,8 +188,8 @@ let rec translate_expression
     let (z3_lvar, _) = Mvg.LocalVariableMap.find lvar repr_data.Z3_encoding.repr_data_local_var in
     begin match z3_lvar with
       | Z3_encoding.Regular z3_lvar ->
-        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_lvar (z3_e1 orig_arg)];
-        (z3_e2 orig_arg)
+        Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_lvar z3_e1];
+        z3_e2
       | _ -> assert false (* should not happen *)
     end
 
@@ -221,7 +202,7 @@ let translate_program
   (* first we declare to Z3 all the local variables *)
   let z3_local_vars =  Mvg.LocalVariableMap.mapi (fun lvar typ ->
       try
-        (declare_local_var lvar typ ctx, typ)
+        declare_local_var lvar typ ctx, typ
       with
       | Not_found -> assert false (* should not happen *)
     ) typing.Z3_encoding.repr_info_local_var in
@@ -250,8 +231,7 @@ let translate_program
                | Mvg.SimpleVar e ->
                  let z3_e = translate_expression repr_data e ctx s in
                  let z3_var = declare_var_not_table var typ ctx in
-                 let cast_expr = z3_e (dummy_param ctx typ) in
-                 Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var cast_expr];
+                 Z3.Solver.add s [Z3.Boolean.mk_eq ctx z3_var z3_e];
                  { repr_data with
                    Z3_encoding.repr_data_var =
                      Mvg.VariableMap.add
@@ -259,33 +239,23 @@ let translate_program
                        (Z3_encoding.Regular z3_var, typ)
                        repr_data.Z3_encoding.repr_data_var
                  }
-               | Mvg.TableVar (_, def) -> begin match def with
-                   | Mvg.IndexGeneric e ->
-                     let z3_e = translate_expression repr_data e ctx s in
-                     { repr_data with
-                       Z3_encoding.repr_data_var =
-                         Mvg.VariableMap.add
-                           var
-                           (Z3_encoding.Table z3_e, typ)
-                           repr_data.Z3_encoding.repr_data_var
-                     }
-                   | Mvg.IndexTable _ ->
-                     Cli.warning_print "TODO: implement";
-                     repr_data
-                 end
+               | Mvg.TableVar _ ->
+                 raise (Errors.Unimplemented "z3: Mvg.TableVar")
              else
-               let cond = Mvg.VariableMap.find var p.program_conds in
-               (* FIXME: specify which error is raised in that case? *)
-               let typ = {Z3_encoding.repr_kind = Boolean; is_table = false} in
-               let z3_var = declare_var_not_table var typ ctx in
-               let z3_e = translate_expression repr_data cond.cond_expr ctx s in
-               let neg_z3e = Z3.Boolean.mk_not ctx (z3_e (dummy_param ctx typ)) in
-               Z3.Solver.add s [neg_z3e];
-               { repr_data with
-                 Z3_encoding.repr_data_var =
-                   Mvg.VariableMap.add var
-                     (Z3_encoding.Regular z3_var, typ)
-                     repr_data.Z3_encoding.repr_data_var }
+               try
+                 let cond = Mvg.VariableMap.find var p.program_conds in
+                 (* FIXME: specify which error is raised in that case? *)
+                 let typ = {Z3_encoding.repr_kind = Boolean; is_table = false} in
+                 let z3_var = declare_var_not_table var typ ctx in
+                 let z3_e = translate_expression repr_data cond.cond_expr ctx s in
+                 let neg_z3e = Z3.Boolean.mk_not ctx z3_e in
+                 Z3.Solver.add s [neg_z3e];
+                 { repr_data with
+                   Z3_encoding.repr_data_var =
+                     Mvg.VariableMap.add var
+                       (Z3_encoding.Regular z3_var, typ)
+                       repr_data.Z3_encoding.repr_data_var }
+               with Not_found -> assert false
           )
           scc repr_data
       ) repr_data exec_order in
