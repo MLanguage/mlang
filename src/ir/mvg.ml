@@ -176,20 +176,26 @@ type func =
    construct to avoid code duplication.
 *)
 
+(** Custom visitor for the [Ast.marked] type *)
+class ['self] marked_iter = object
+  method  visit_marked: 'env 'a . ('env  -> 'a -> unit) -> 'env  -> 'a Ast.marked -> unit =
+    fun f env x -> f env (Ast.unmark x)
+end
+
 type expression =
-  | Unop of (Ast.unop[@opaque]) * (expression * (Ast.position[@opaque]))
-  | Comparison of (Ast.comp_op * Ast.position[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
-  | Binop of (Ast.binop * Ast.position[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
-  | Index of (Variable.t * Ast.position[@opaque]) * (expression * (Ast.position[@opaque]))
-  | Conditional of (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
-  | FunctionCall of (func[@opaque]) * (expression * (Ast.position[@opaque])) list
+  | Unop of (Ast.unop[@opaque] ) * (expression Ast.marked)
+  | Comparison of ((Ast.comp_op[@opaque]) Ast.marked) * (expression Ast.marked) * (expression Ast.marked)
+  | Binop of ((Ast.binop[@opaque]) Ast.marked) * (expression Ast.marked) * (expression Ast.marked)
+  | Index of ((Variable.t[@opaque]) Ast.marked) * (expression Ast.marked)
+  | Conditional of (expression Ast.marked) * (expression Ast.marked) * (expression Ast.marked)
+  | FunctionCall of (func[@opaque]) * (expression Ast.marked) list
   | Literal of (literal[@opaque])
   | Var of (Variable.t[@opaque])
   | LocalVar of (LocalVariable.t[@opaque])
   | GenericTableIndex
   | Error
-  | LocalLet of (LocalVariable.t[@opaque]) * (expression * (Ast.position[@opaque])) * (expression * (Ast.position[@opaque]))
-[@@deriving show, visitors { variety = "iter" } ]
+  | LocalLet of (LocalVariable.t[@opaque]) * (expression Ast.marked) * (expression Ast.marked)
+[@@deriving show, visitors { variety = "iter"; ancestors = ["marked_iter"]; polymorphic = true }]
 
 (**
    MVG programs are just mapping from variables to their definitions, and make a massive use
