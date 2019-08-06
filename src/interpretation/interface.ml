@@ -170,10 +170,22 @@ let const_var_set_from_list
     ) VariableMap.empty names
 
 let translate_cond idmap (conds:Ast.expression Ast.marked list) : condition_data VariableMap.t =
+  let check_boolean (mexpr: Ast.expression Ast.marked) =
+    match Ast.unmark mexpr with
+    | Binop (((And | Or), _), _, _) -> true
+    | Comparison (_, _, _) -> true
+    | Unop (Not, _) -> true
+    | TestInSet _ -> true
+    (* TODO: check Literal Variable ? *)
+    | _ -> false
+  in
   let mk_neg (mexpr: Ast.expression Ast.marked) =
     Ast.same_pos_as (Ast.Unop (Ast.Not, mexpr)) mexpr in
   let verif_conds =
     List.fold_left (fun acc cond ->
+        if not (check_boolean cond) then
+          raise (Errors.TypeError (Typing (Printf.sprintf "in spec: cond %s should have type bool" (Ast.show_expression (Ast.unmark cond)))))
+        else
         (Ast.same_pos_as {Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = []} cond) :: acc) [] conds in
   let program = Ast.Verification {verif_name = [("000", Ast.no_pos)];
                                   verif_applications = [];

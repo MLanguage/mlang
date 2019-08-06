@@ -31,6 +31,9 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+let bitvec_size = ref 30
+
+
 type repr_kind =
   | Integer of int
   | Real of int
@@ -54,8 +57,6 @@ type repr_data = {
   repr_data_var : (var_repr * repr) Mvg.VariableMap.t;
   repr_data_local_var : (var_repr * repr) Mvg.LocalVariableMap.t
 }
-
-let bitvec_size = ref 40
 
 let find_bitvec_repr
     (p: Mvg.program)

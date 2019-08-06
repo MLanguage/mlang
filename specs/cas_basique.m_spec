@@ -6,7 +6,7 @@ V_0AM = 1;
 
 precondition:
 TSHALLOC >= 10000 et TSHALLOC <= 20000;
-TSHALLOV = 18000;
-V_0CF = 1;
+TSHALLOV >= 10000 et TSHALLOV <= 20000;
+V_0CF = 1 ou V_0CF = 2 ou V_0CF = 0;
 
 sortie: IRNET;
