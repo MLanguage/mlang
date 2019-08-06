@@ -169,15 +169,18 @@ let const_var_set_from_list
       VariableMap.add var new_e acc
     ) VariableMap.empty names
 
-let translate_cond application idmap (conds:Ast.verification Ast.marked list) : condition_data VariableMap.t =
-  let program =
-    List.fold_left (fun prog cond ->
-        let verif = Ast.unmark cond in
-        let pos = Ast.get_position cond in
-        (Ast.Verification verif, pos) :: prog) [] conds in
-  Ast_to_mvg.get_conds [] idmap [program] application
+let translate_cond idmap (conds:Ast.expression Ast.marked list) : condition_data VariableMap.t =
+  let mk_neg (mexpr: Ast.expression Ast.marked) =
+    Ast.same_pos_as (Ast.Unop (Ast.Not, mexpr)) mexpr in
+  let verif_conds =
+    List.fold_left (fun acc cond ->
+        (Ast.same_pos_as {Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = []} cond) :: acc) [] conds in
+  let program = Ast.Verification {verif_name = [("000", Ast.no_pos)];
+                                  verif_applications = [];
+                                  verif_conditions = verif_conds} in
+  Ast_to_mvg.get_conds [] idmap [[(program, Ast.no_pos)]] None
 
-let read_function_from_spec application (p: program) : mvg_function =
+let read_function_from_spec (p: program) : mvg_function =
   if !Cli.function_spec = "" then
     raise (Errors.ArgumentError "Function specification file is not specified using --function_spec");
   let input = open_in !Cli.function_spec in
@@ -197,7 +200,7 @@ let read_function_from_spec application (p: program) : mvg_function =
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Ast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Ast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Ast.spec_outputs;
-      func_conds = translate_cond application p.program_idmap func_spec.Ast.spec_conditions;
+      func_conds = translate_cond p.program_idmap func_spec.Ast.spec_conditions;
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->

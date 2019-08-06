@@ -53,7 +53,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE BASE GIVEN_BACK TABLE
 %token COMPUTED CONST ALIAS CONTEXT FAMILY PENALITY INCOME INPUT FOR
-%token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE
+%token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE PRECONDITION
 %token INFORMATIVE OUTPUT FONCTION
 
 %token EOF
@@ -513,6 +513,12 @@ spec_const_list:
 | const = const_input { [const] }
 | const = const_input rest = spec_const_list { const::rest }
 
+
+spec_conds_list:
+| cond = expression SEMICOLON { [cond] }
+| cond = expression SEMICOLON others = spec_conds_list { cond::others }
+
+
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
@@ -524,12 +530,12 @@ function_spec:
                            } }
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
-  verification_singl = verification
+  PRECONDITION COLON precs = spec_conds_list
   OUTPUT COLON outputs = spec_output_list SEMICOLON { {
       spec_inputs = inputs;
       spec_consts = consts;
       spec_outputs = outputs;
-      spec_conditions = [(verification_singl, mk_position $sloc)];
+      spec_conditions = precs;
    } }
 | EOF { {
     spec_inputs = [];

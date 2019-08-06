@@ -147,6 +147,8 @@ rule token = parse
   { ERROR }
 | "verif"
   { VERIFICATION }
+| "precondition"
+  { PRECONDITION }
 | "anomalie"
   { ANOMALY }
 | "discordance"

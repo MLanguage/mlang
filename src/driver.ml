@@ -118,7 +118,7 @@ let driver
 
 
     Cli.debug_print "Extracting the desired function from the whole program...";
-    let mvg_func = Interface.read_function_from_spec application program in
+    let mvg_func = Interface.read_function_from_spec program in
     let program = Interface.fit_function program mvg_func in
 
     let program = if !Cli.optimize then Optimize.optimize program else program in

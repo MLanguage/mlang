@@ -4,10 +4,9 @@ const:
 V_ANREV = 2018;
 V_0AM = 1;
 
-verif 201920192019:
-application : iliad ;
-si TSHALLOV <= 0 ou TSHALLOV > 1000000 alors erreur A000;
-si TSHALLOC <= 0 ou TSHALLOC > 1000000 alors erreur A000;
-si non (V_0CF = 0 ou V_0CF = 1 ou V_0CF = 2) alors erreur A000;
+precondition:
+TSHALLOC >= 10000 et TSHALLOC <= 20000;
+TSHALLOV = 18000;
+V_0CF = 1;
 
 sortie: IRNET;

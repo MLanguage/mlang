@@ -46,10 +46,12 @@ let translate_and_launch_query
   let t0 = Sys.time () in
   Cli.debug_print
     (Printf.sprintf
-       "The Z3 query will contain %d different variables"
+       "The Z3 query will contain %d different variables, and has been exported in query.z3"
        (Mvg.VariableMap.cardinal z3_program.Z3_encoding.repr_data_var +
         Mvg.LocalVariableMap.cardinal z3_program.Z3_encoding.repr_data_local_var)
     );
+  let z3_file = open_out "query.z3" in
+  Printf.fprintf z3_file "%s" (Z3.Solver.to_string s);
   match Z3.Solver.check s [] with
   | Z3.Solver.UNSATISFIABLE ->
     Cli.result_print "Z3 found that the constraints are unsatisfiable!";
