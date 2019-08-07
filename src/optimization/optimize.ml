@@ -75,11 +75,18 @@ let optimize
   (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
-  Cli.debug_print (Printf.sprintf "Partially evaluating expressions...");
-  let current_progress, finish = Cli.create_progress_bar "Partial evaluation" in
+  let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
 
   while !nb_removed > 0 do
+    current_progress
+      (Printf.sprintf
+         "performing global value numbering..."
+      );
     let new_program = Global_value_numbering.optimize !program in
+    current_progress
+      (Printf.sprintf
+         "performing partial evaluation..."
+      );
     let new_program = Partial_evaluation.partially_evaluate new_program  in
     let new_program = remove_unused_variables new_program in
     let new_nb_removed =

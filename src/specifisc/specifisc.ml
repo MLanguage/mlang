@@ -67,7 +67,9 @@ module Variable (_ : sig end) = struct
 end
 
 module BoolVariable = Variable ()
+module BoolVariableMap = Map.Make(BoolVariable)
 module IntVariable = Variable ()
+module IntVariableMap = Map.Make(IntVariable)
 module ArithmeticFunctionVariable = Variable ()
 module ArithmeticFunctionVariableMap = Map.Make(ArithmeticFunctionVariable)
 module FunctionVariable = Variable ()
@@ -92,6 +94,7 @@ type logical_expression =
 
 and arithmetic_expression =
   | ArithmeticBinop of arithmetic_binop Ast.marked * arithmetic_expression Ast.marked * arithmetic_expression Ast.marked
+  | ArithmeticMinus of arithmetic_expression Ast.marked
   | Conditional of logical_expression Ast.marked * arithmetic_expression Ast.marked * arithmetic_expression Ast.marked
   | IntLiteral of Int64.t
   | IntVar of IntVariable.t

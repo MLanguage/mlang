@@ -184,7 +184,7 @@ type func =
 let current_visitor_pos : Ast.position ref = ref Ast.no_pos
 
 (** Custom visitor for the [Ast.marked] type *)
-class ['self] marked_iter = object 
+class ['self] marked_iter = object
   method visit_marked: 'env 'a . ('env  -> 'a -> unit) -> 'env  -> 'a Ast.marked -> unit =
     fun f env x ->
     current_visitor_pos := Ast.get_position x;

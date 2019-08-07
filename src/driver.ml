@@ -131,7 +131,10 @@ let driver
 
     begin if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program dep_graph typing
-      else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+      else if String.lowercase_ascii !Cli.backend = "specifisc" then begin
+        Cli.debug_print "Translating the M program to Specifisc";
+        ignore (Mvg_to_specifisc.translate_program program typing)
+      end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program !Cli.number_of_passes in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
@@ -156,7 +159,8 @@ let driver
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
     Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
-
+  | Errors.UnsupportedBySpecifisc msg ->
+    Cli.error_print (Printf.sprintf "Unsupported by Specifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
 
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.verifisc_t driver, Cli.info)

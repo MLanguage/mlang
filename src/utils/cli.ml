@@ -167,6 +167,7 @@ let info =
   let exits = Term.default_exits @ [
       Term.exit_info ~doc:"on M parsing error." 1;
       Term.exit_info ~doc:"on M typechecking error." 2;
+      Term.exit_info ~doc:"on Specifisc error." 3; 
     ] in
   Term.info "verifisc" ~version:(match Build_info.V1.version () with
       | None -> "n/a"
