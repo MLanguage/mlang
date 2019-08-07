@@ -137,7 +137,7 @@ let rec translate_expression
     let z3_cond = translate_expression repr_data cond ctx s in
     let z3_tt = translate_expression repr_data tt ctx s in
     let z3_ff = translate_expression repr_data ff ctx s in
-    (* this actually happens after desugaring due to rewriting basic functions into conditionals. I think. FIXME: We could add a check to verify it only happens here? *)
+    (* this actually happens after desugaring due to rewriting basic functions into conditionals. *)
     Z3.Boolean.mk_ite ctx z3_cond z3_tt z3_ff
   | Mvg.FunctionCall (Mvg.ArrFunc , [arg]) ->
     (* we just need to add 50, divide by 100 (this loses precision) and then multiply by 100 *)
@@ -247,14 +247,19 @@ let translate_program
                  (* FIXME: specify which error is raised in that case? *)
                  let typ = {Z3_encoding.repr_kind = Boolean; is_table = false} in
                  let z3_var = declare_var_not_table var typ ctx in
-                 let z3_e = translate_expression repr_data cond.cond_expr ctx s in
-                 let neg_z3e = Z3.Boolean.mk_not ctx z3_e in
-                 Z3.Solver.add s [neg_z3e];
-                 { repr_data with
-                   Z3_encoding.repr_data_var =
-                     Mvg.VariableMap.add var
-                       (Z3_encoding.Regular z3_var, typ)
-                       repr_data.Z3_encoding.repr_data_var }
+                 begin match Ast.unmark cond.cond_expr with
+                 | Mvg.Unop (Ast.Not, cond_expr) ->
+                   let z3_e = translate_expression repr_data cond_expr ctx s in
+                   Z3.Solver.add s [z3_e]
+                 | _ ->
+                   let z3_e = translate_expression repr_data cond.cond_expr ctx s in
+                   let neg_z3e = Z3.Boolean.mk_not ctx z3_e in
+                   Z3.Solver.add s [neg_z3e] end;
+                   { repr_data with
+                     Z3_encoding.repr_data_var =
+                       Mvg.VariableMap.add var
+                         (Z3_encoding.Regular z3_var, typ)
+                         repr_data.Z3_encoding.repr_data_var }
                with Not_found -> assert false
           )
           scc repr_data
