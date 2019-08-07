@@ -975,15 +975,7 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Ast.
          | None -> Ast.same_pos_as (Mvg.Literal Mvg.Undefined) e2
          (* the absence of a else branch for a ternary operators can yield an undefined term *)
        in
-       let cond_var = Mvg.LocalVariable.new_var () in
-       (*
-         We put every conditional behind a local var to make it easier for later
-         when we infer the bitvec size of every expression for Z3
-       *)
-       Mvg.LocalLet(cond_var,
-                    Ast.same_pos_as (Mvg.Conditional (new_e1, new_e2, new_e3)) f,
-                    Ast.same_pos_as (Mvg.LocalVar cond_var) f
-                   )
+       Mvg.Conditional (new_e1, new_e2, new_e3)
      | Ast.FunctionCall (f_name, args) ->
        let f_correct = translate_function_name f_name in
        let new_args = translate_func_args ctx args in
