@@ -4,9 +4,11 @@ const:
 V_ANREV = 2018;
 V_0AM = 1;
 
-precondition:
-TSHALLOC >= 10000 et TSHALLOC <= 20000;
-TSHALLOV >= 10000 et TSHALLOV <= 20000;
-V_0CF = 1 ou V_0CF = 2 ou V_0CF = 0;
+condition:
+TSHALLOC >= 10000 et TSHALLOC <= 200000;
+TSHALLOV >= 10000 et TSHALLOV <= 200000;
+IRNET >= 100;
+V_0CF dans (0..10);
+((IRNET / (1 + V_0CF / 2))  > 0.1 * (TSHALLOV + TSHALLOC));
 
 sortie: IRNET;

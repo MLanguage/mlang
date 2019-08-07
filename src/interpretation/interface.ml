@@ -66,8 +66,10 @@ let fit_function (p: program) (f: mvg_function) : program =
                var_data with
                var_io = Regular ;
                var_definition = match var_data.var_definition with
-                 | SimpleVar _ -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                 | InputVar -> SimpleVar (VariableMap.find var f.func_constant_inputs)
+                 | SimpleVar _ ->
+                   SimpleVar (VariableMap.find var f.func_constant_inputs)
+                 | InputVar ->
+                   SimpleVar (VariableMap.find var f.func_constant_inputs)
                  | TableVar _ ->
                    raise (Errors.TypeError (
                        Errors.Variable (
