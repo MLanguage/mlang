@@ -106,10 +106,11 @@ let driver
     let program =
       Ast_to_mvg.translate !program application
     in
-
+    Cli.debug_print "Extracting the desired function from the whole program...";
+    let mvg_func = Interface.read_function_from_spec program in
+    let program = Interface.fit_function program mvg_func in
     Cli.debug_print ("Expanding function definitions...");
     let program = Functions.expand_functions program in
-
     Cli.debug_print "Typechecking...";
     let typing, program = Typechecker.typecheck program in
     Cli.debug_print "Checking for circular variable definitions...";
@@ -117,9 +118,6 @@ let driver
     ignore (Dependency.check_for_cycle dep_graph program true);
 
 
-    Cli.debug_print "Extracting the desired function from the whole program...";
-    let mvg_func = Interface.read_function_from_spec program in
-    let program = Interface.fit_function program mvg_func in
 
     let program = if !Cli.optimize then Optimize.optimize program else program in
     (* Noundef.check program; *)
