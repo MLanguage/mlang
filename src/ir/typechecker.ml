@@ -232,6 +232,14 @@ let rec typecheck_top_down
                  (Format_mvg.format_typ t)
               )))
     end
+  | (Literal (Bool _), t)
+  | (Literal (Int 0), t)
+  | (Literal (Int 1), t)
+    ->
+    Typ.coerce
+      ((Typ.boolean (Ast.get_position e, Typ.Up)))
+      ((Typ.create_concrete t (Ast.get_position e, Typ.Down)));
+    ctx
   | (Literal (Int _), t) ->
     Typ.coerce
       ((Typ.integer (Ast.get_position e, Typ.Up)))
@@ -240,11 +248,6 @@ let rec typecheck_top_down
   | (Literal (Float _), t) ->
     Typ.coerce
       ((Typ.real (Ast.get_position e, Typ.Up)))
-      ((Typ.create_concrete t (Ast.get_position e, Typ.Down)));
-    ctx
-  | (Literal (Bool _), t) ->
-    Typ.coerce
-      ((Typ.boolean (Ast.get_position e, Typ.Up)))
       ((Typ.create_concrete t (Ast.get_position e, Typ.Down)));
     ctx
   | (Literal Undefined, _) ->

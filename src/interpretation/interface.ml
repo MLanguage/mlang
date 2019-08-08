@@ -39,6 +39,7 @@ type mvg_function = {
   func_variable_inputs: unit VariableMap.t;
   func_constant_inputs: expression Ast.marked VariableMap.t;
   func_outputs: unit VariableMap.t;
+  func_conds: condition_data VariableMap.t
 }
 
 let fit_function (p: program) (f: mvg_function) : program =
@@ -65,8 +66,10 @@ let fit_function (p: program) (f: mvg_function) : program =
                var_data with
                var_io = Regular ;
                var_definition = match var_data.var_definition with
-                 | SimpleVar _ -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                 | InputVar -> SimpleVar (VariableMap.find var f.func_constant_inputs)
+                 | SimpleVar _ ->
+                   SimpleVar (VariableMap.find var f.func_constant_inputs)
+                 | InputVar ->
+                   SimpleVar (VariableMap.find var f.func_constant_inputs)
                  | TableVar _ ->
                    raise (Errors.TypeError (
                        Errors.Variable (
@@ -108,7 +111,8 @@ let fit_function (p: program) (f: mvg_function) : program =
                  | TableVar (size, old) -> TableVar (size, old)
              }
         )
-        p.program_vars
+        p.program_vars;
+    program_conds = VariableMap.union (fun _ _ _ -> assert false) p.program_conds f.func_conds
   }
 
 let var_set_from_variable_name_list (p: program) (names : string list) : unit VariableMap.t =
@@ -140,19 +144,26 @@ let const_var_set_from_list
   : Mvg.expression Ast.marked VariableMap.t =
   List.fold_left (fun acc (name, e) ->
       let var =
-        try List.hd (List.sort (fun v1 v2 ->
+        try
+          List.hd (List.sort (fun v1 v2 ->
             compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
             (VarNameToID.find name p.program_idmap))
         with
         | Not_found ->
-          raise
-            (Errors.TypeError
-               (Errors.Variable
-                  (Printf.sprintf
-                     "Unknown variable %s (%s)"
-                     name
-                     (Format_ast.format_position (Ast.get_position e))
-                  )))
+          try
+            let name = find_var_name_by_alias p name in
+            List.hd (List.sort (fun v1 v2 ->
+                compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+                (VarNameToID.find name p.program_idmap))
+          with Errors.TypeError (Errors.Variable _) ->
+            raise
+              (Errors.TypeError
+                 (Errors.Variable
+                    (Printf.sprintf
+                       "Unknown variable %s (%s)"
+                       name
+                       (Format_ast.format_position (Ast.get_position e))
+                    )))
       in
       let new_e = Ast_to_mvg.translate_expression ({
           table_definition = false;
@@ -166,6 +177,29 @@ let const_var_set_from_list
       check_const_expression_is_really_const new_e;
       VariableMap.add var new_e acc
     ) VariableMap.empty names
+
+let translate_cond idmap (conds:Ast.expression Ast.marked list) : condition_data VariableMap.t =
+  let check_boolean (mexpr: Ast.expression Ast.marked) =
+    match Ast.unmark mexpr with
+    | Binop (((And | Or), _), _, _) -> true
+    | Comparison (_, _, _) -> true
+    | Unop (Not, _) -> true
+    | TestInSet _ -> true
+    (* TODO: check Literal Variable ? *)
+    | _ -> false
+  in
+  let mk_neg (mexpr: Ast.expression Ast.marked) =
+    Ast.same_pos_as (Ast.Unop (Ast.Not, mexpr)) mexpr in
+  let verif_conds =
+    List.fold_left (fun acc cond ->
+        if not (check_boolean cond) then
+          raise (Errors.TypeError (Typing (Printf.sprintf "in spec: cond %s should have type bool" (Ast.show_expression (Ast.unmark cond)))))
+        else
+        (Ast.same_pos_as {Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = []} cond) :: acc) [] conds in
+  let program = Ast.Verification {verif_name = [("000", Ast.no_pos)];
+                                  verif_applications = [];
+                                  verif_conditions = verif_conds} in
+  Ast_to_mvg.get_conds [] idmap [[(program, Ast.no_pos)]] None
 
 let read_function_from_spec (p: program) : mvg_function =
   if !Cli.function_spec = "" then
@@ -187,6 +221,7 @@ let read_function_from_spec (p: program) : mvg_function =
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Ast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Ast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Ast.spec_outputs;
+      func_conds = translate_cond p.program_idmap func_spec.Ast.spec_conditions;
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->

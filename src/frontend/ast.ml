@@ -50,7 +50,7 @@ let pp_position f (pos:position) : unit =
 
 let format_position (pos: position) : string =
   pp_position (Format.str_formatter) pos;
-  Buffer.contents Format.stdbuf
+  Format.flush_str_formatter ()
 
 (** Everything related to the source code should keep its position stored, to improve error messages *)
 type 'a marked = ('a * position)
@@ -437,6 +437,7 @@ type function_spec = {
   spec_inputs: variable_name list;
   spec_consts: (variable_name * expression marked) list;
   spec_outputs: variable_name list;
+  spec_conditions: expression marked list;
 }
 
 

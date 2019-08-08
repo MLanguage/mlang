@@ -234,7 +234,7 @@ let set_all_arg_refs
   function_spec := function_spec_;
   output_file := begin match output_ with
     | Some o -> o
-    | None -> if backend_ = "interpreter" then "" else
+    | None -> if backend_ = "interpreter" || backend_ = "z3" then "" else
         raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))
   end;
   number_of_passes := number_of_passes_

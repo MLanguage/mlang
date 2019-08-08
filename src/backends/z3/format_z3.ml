@@ -40,25 +40,26 @@ let format_Z3_encoding (t: Z3_encoding.repr) : string =
   let second = if t.Z3_encoding.is_table then "[X]" else "" in
   first ^ second
 
+let convert_to_signed (f:float) (bsize:int) =
+  if f <= 2. ** (float_of_int (bsize - 1)) then f
+  else f -. 2. ** (float_of_int bsize)
+
 let format_z3_program
     (p: (Z3_encoding.var_repr * Z3_encoding.repr) Mvg.VariableMap.t)
-    (ctx: Z3.context)
     (s: Z3.Solver.solver)
   : string =
   match Z3.Solver.get_model s with
   | Some model ->
-    Cli.warning_print @@ Z3.Model.to_string model;
+    Cli.warning_print (Printf.sprintf "Z3 model: %s" (Z3.Model.to_string model));
     let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
         | Z3_encoding.Regular e ->
           (Ast.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
-                Cli.warning_print @@ Z3.Expr.to_string new_e;
                 begin match typ.Z3_encoding.repr_kind with
-                  | Z3_encoding.Integer _ ->
-                    Z3.BitVector.numeral_to_string new_e
+                  | Z3_encoding.Integer _
                   | Z3_encoding.Real _ ->
-                    string_of_float ((Big_int.float_of_big_int (Z3.Arithmetic.Integer.get_big_int new_e)) /. 100.0)
+                    string_of_float (convert_to_signed (Big_int.float_of_big_int (Big_int.big_int_of_string  (Z3.BitVector.numeral_to_string new_e))) !Z3_encoding.bitvec_size /. (float_of_int Mvg_to_z3.mult_factor))
                   | Z3_encoding.Boolean -> (match Z3.Boolean.get_bool_value new_e with
                       | Z3enums.L_FALSE -> "false"
                       | Z3enums.L_TRUE -> "true"
@@ -68,11 +69,8 @@ let format_z3_program
               | None -> "could not evaluate variable" end,
            format_Z3_encoding typ
           )::acc
-        | Z3_encoding.Table f ->
-          (Ast.unmark var.Mvg.Variable.name,
-           Z3.Expr.to_string
-             (f (Z3.BitVector.mk_const_s ctx "X" Mvg_to_z3.bv_repr_ints_base)),
-           format_Z3_encoding typ)::acc
+        | Z3_encoding.Table _ ->
+          assert false (* not implemented yet *)
       ) p []
     in
     "{\n"^

@@ -77,6 +77,10 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     Ast.same_pos_as begin match (Ast.unmark new_e1, Ast.unmark new_e2) with
       | (Literal Undefined, _) | (_, Literal Undefined) ->
         Literal Undefined
+      | (Conditional (b, (Literal (Int 1), _), (Literal (Int 0), _)), Literal (Int 1)) when Ast.unmark op = Ast.Eq ->
+        Ast.unmark b
+      | (FunctionCall (Mvg.PresentFunc, _) as fc, Literal (Int 1)) when Ast.unmark op = Ast.Neq ->
+        Unop (Ast.Not, Ast.same_pos_as fc new_e1)
       | (Literal _, Literal _) ->
         Mvg.Literal (Interpreter.evaluate_expr Interpreter.empty_ctx p
                        (Ast.same_pos_as (Comparison (op,new_e1, new_e2)) e)
@@ -114,7 +118,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
       | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false | Undefined))
       | (Ast.Div, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
         ->
-        Mvg.Literal (Mvg.Bool false)
+        Mvg.Literal (Mvg.Int 0)
       | (_, Literal _, Literal _) ->
         (Mvg.Literal
            (Interpreter.evaluate_expr Interpreter.empty_ctx p
@@ -220,6 +224,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Ast.marked) : 
     end
   | GenericTableIndex -> e
   | Error -> e
+  | LocalLet (l1, b, (LocalVar l2, _)) when LocalVariable.compare l1 l2 = 0 -> b
   | LocalLet (lvar, e1, e2) ->
     let new_e1 = partial_evaluation ctx p e1 in
     begin match Ast.unmark new_e1 with

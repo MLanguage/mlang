@@ -75,10 +75,23 @@ specifisc_cas_basique_2018: build
 		--output processing/ir_2018.py $(SOURCE_FILES) && \
 	python processing/example_simple.py
 
+z3_basique: build
+	OCAMLRUNPARAM=b	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --optimize \
+		--backend z3 --function_spec specs/cas_basique.m_spec \
+		$(SOURCE_FILES)
+
+z3_simulateur: build
+	OCAMLRUNPARAM=b	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --optimize \
+		--backend z3 --function_spec specs/simulateur_simplifie_2018.m_spec \
+		$(SOURCE_FILES)
+
+
 doc:
 	dune build @doc
 
 graph:
-	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -Gratio=0.707106781 -o Graphe_IR_2015.svg dep_graph_after_optimization.dot
-	inkscape -z -e Graphe_IR_2015.png -d 96 Graphe_IR_2015.svg
-	convert -resize 1980x1024 Graphe_IR_2015.png Graphe_IR_2015_Miniature.png
+	dot -Ksfdp -Goverlap=false -Goutputorder=edgesfirst -Nmargin=0.22,0.11 -Tsvg -Gratio=0.707106781 -o Graphe_IR.svg dep_graph.dot
+	inkscape -z -e Graphe_IR.png -d 96 Graphe_IR.svg
+	convert -resize 1980x1024 Graphe_IR.png Graphe_IR_Miniature.png

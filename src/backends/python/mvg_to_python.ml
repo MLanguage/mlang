@@ -143,6 +143,11 @@ let generate_binop (op: Ast.binop) : string = match op with
   | Ast.Mul -> "*"
   | Ast.Div -> "/"
 
+let generate_unop (op: Ast.unop) : string = match op with
+  | Ast.Not -> "not"
+  | Ast.Minus -> "-"
+
+
 let generate_variable (var:Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Ast.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
@@ -178,14 +183,19 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
   | Binop ((Ast.Div, _), e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
     let s2 = generate_python_expr (Ast.unmark e2) scc in
-    Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
+    begin match Ast.unmark e2 with
+      | Literal (Int i) when i <> 0 ->
+        Printf.sprintf "(%s / %s)" s1 s2
+      | _ ->
+        Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
+    end
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Ast.unmark e1) scc in
     let s2 = generate_python_expr (Ast.unmark e2) scc in
     Printf.sprintf "(%s %s %s)" s1 (generate_binop (Ast.unmark op)) s2
   | Unop (op, e) ->
     let s = generate_python_expr (Ast.unmark e) scc in
-    Printf.sprintf "(%s %s)" (Format_ast.format_unop op) s
+    Printf.sprintf "(%s %s)" (generate_unop op) s
   | Index (var, e) ->
     let s = generate_python_expr (Ast.unmark e) scc in
     Printf.sprintf "%s[%s]" (generate_variable (Ast.unmark var)) s
@@ -317,6 +327,8 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
   else
     Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "%s\n\n" undefined_class_prelude;
+  Printf.fprintf oc "from math import floor\n\n";
+  Printf.fprintf oc "l = dict()\n\n";
   Printf.fprintf oc "%s\n"
     (String.concat
        "\n"
@@ -360,6 +372,7 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
         (VariableMap.bindings program.program_vars)
     )
   in
+  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global l\n    l = locals()\n";
   begin if List.length returned_variables = 1 then
       Printf.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
     else begin
