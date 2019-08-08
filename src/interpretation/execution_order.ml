@@ -87,3 +87,8 @@ let get_execution_order (p: Mvg.program) : execution_order =
       let new_scc = execution_graph.execution_scc_graph_contents.(scc_id) in
       new_scc::exec_order
     ) execution_graph.execution_scc_graph [])
+
+let fold_on_vars (f: Variable.t -> 'a -> 'a) (p: Mvg.program)  (init : 'a) : 'a =
+  let exec_order = get_execution_order p in
+  List.fold_left (fun acc scc ->
+      Mvg.VariableMap.fold (fun v () a-> f v a) scc acc) init exec_order
