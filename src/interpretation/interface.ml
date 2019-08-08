@@ -144,19 +144,26 @@ let const_var_set_from_list
   : Mvg.expression Ast.marked VariableMap.t =
   List.fold_left (fun acc (name, e) ->
       let var =
-        try List.hd (List.sort (fun v1 v2 ->
+        try
+          List.hd (List.sort (fun v1 v2 ->
             compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
             (VarNameToID.find name p.program_idmap))
         with
         | Not_found ->
-          raise
-            (Errors.TypeError
-               (Errors.Variable
-                  (Printf.sprintf
-                     "Unknown variable %s (%s)"
-                     name
-                     (Format_ast.format_position (Ast.get_position e))
-                  )))
+          try
+            let name = find_var_name_by_alias p name in
+            List.hd (List.sort (fun v1 v2 ->
+                compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+                (VarNameToID.find name p.program_idmap))
+          with Errors.TypeError (Errors.Variable _) ->
+            raise
+              (Errors.TypeError
+                 (Errors.Variable
+                    (Printf.sprintf
+                       "Unknown variable %s (%s)"
+                       name
+                       (Format_ast.format_position (Ast.get_position e))
+                    )))
       in
       let new_e = Ast_to_mvg.translate_expression ({
           table_definition = false;
