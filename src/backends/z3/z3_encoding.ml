@@ -63,7 +63,6 @@ let find_bitvec_repr
     (old_typing: Typechecker.typ_info)
   : repr_info =
   let size = !bitvec_size in
-  let exec_order = Execution_order.get_execution_order p in
   let new_typing = { repr_info_var = Mvg.VariableMap.empty;
                      repr_info_local_var =
                        Mvg.LocalVariableMap.map (fun ty ->
@@ -75,35 +74,33 @@ let find_bitvec_repr
                            | Mvg.Real ->
                              {repr_kind = Real size; is_table = false}
                          )
-                       old_typing.typ_info_local_var } in
-  List.fold_left (fun new_typing scc ->
-      Mvg.VariableMap.fold
-        (fun var () new_typing ->
-           if Mvg.VariableMap.mem var old_typing.Typechecker.typ_info_var then
-             match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-             | (Mvg.Boolean, is_table) ->
-               {new_typing with
-                repr_info_var =
-                  Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
-                    new_typing.repr_info_var }
-             | (Mvg.Integer, is_table) ->
-               let (bitvec_order, new_typing) =
-                 size, new_typing
-                 (* find_bitvec_order p var new_typing old_typing *) in
-               {new_typing with
-                repr_info_var =
-                  Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
-                    new_typing.repr_info_var }
-             | (Mvg.Real, is_table) ->
-               let (bitvec_order, new_typing) =
-                 size, new_typing
-                 (* find_bitvec_order p var new_typing old_typing *) in
-               {new_typing with
-                repr_info_var =
-                  Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
-                    new_typing.repr_info_var }
-           else
-             (* let () = Cli.warning_print (Printf.sprintf "var %s not used when computing sizes\n" (Mvg.Variable.show var)) in *)
-             new_typing
-        ) scc new_typing
-    ) new_typing exec_order
+                         old_typing.typ_info_local_var } in
+  Execution_order.fold_on_vars
+    (fun var new_typing ->
+       if Mvg.VariableMap.mem var old_typing.Typechecker.typ_info_var then
+         match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
+         | (Mvg.Boolean, is_table) ->
+           {new_typing with
+            repr_info_var =
+              Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
+                new_typing.repr_info_var }
+         | (Mvg.Integer, is_table) ->
+           let (bitvec_order, new_typing) =
+             size, new_typing
+             (* find_bitvec_order p var new_typing old_typing *) in
+           {new_typing with
+            repr_info_var =
+              Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
+                new_typing.repr_info_var }
+         | (Mvg.Real, is_table) ->
+           let (bitvec_order, new_typing) =
+             size, new_typing
+             (* find_bitvec_order p var new_typing old_typing *) in
+           {new_typing with
+            repr_info_var =
+              Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
+                new_typing.repr_info_var }
+       else
+         (* let () = Cli.warning_print (Printf.sprintf "var %s not used when computing sizes\n" (Mvg.Variable.show var)) in *)
+         new_typing
+    ) p new_typing

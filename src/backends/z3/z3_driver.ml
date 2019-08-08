@@ -52,6 +52,7 @@ let translate_and_launch_query
     );
   let z3_file = open_out "query.z3" in
   Printf.fprintf z3_file "%s" (Z3.Solver.to_string s);
+  close_out z3_file;
   match Z3.Solver.check s [] with
   | Z3.Solver.UNSATISFIABLE ->
     Cli.result_print "Z3 found that the constraints are unsatisfiable!";
@@ -64,6 +65,7 @@ let translate_and_launch_query
     Cli.result_print (Printf.sprintf "The values of all variables are written in %s" filename);
     let file = open_out filename in
     Printf.fprintf file "%s" (Format_z3.format_z3_program z3_program.Z3_encoding.repr_data_var s);
+    close_out file;
     Cli.result_print
       (Printf.sprintf
          "The query took %f seconds to execute. Here are some statistics about it:\n%s"
