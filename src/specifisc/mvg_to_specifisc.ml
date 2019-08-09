@@ -128,6 +128,7 @@ and translate_arithmetic_expression
     let op = match op with
       | Ast.Add -> Specifisc.Add
       | Ast.Sub -> Specifisc.Sub
+      (* TODO: generate constraint to check that we are not dividing by zero ! *)
       | Ast.Div -> Specifisc.Div
       | Ast.Mul -> Specifisc.Mul
       | _ -> assert false (* should not happen*)
