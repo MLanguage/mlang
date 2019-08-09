@@ -167,7 +167,7 @@ let info =
   let exits = Term.default_exits @ [
       Term.exit_info ~doc:"on M parsing error." 1;
       Term.exit_info ~doc:"on M typechecking error." 2;
-      Term.exit_info ~doc:"on Specifisc error." 3; 
+      Term.exit_info ~doc:"on Specifisc error." 3;
     ] in
   Term.info "verifisc" ~version:(match Build_info.V1.version () with
       | None -> "n/a"
@@ -248,6 +248,8 @@ let var_info_marker () = ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.bl
 
 let time : float ref = ref (Unix.gettimeofday ())
 
+let initial_time : float ref = ref (Unix.gettimeofday ())
+
 let time_marker ()  =
   let new_time = Unix.gettimeofday () in
   let old_time = !time in
@@ -279,8 +281,8 @@ let clocks = Array.of_list ["🕛";"🕐";"🕑";"🕒";"🕓";"🕔";"🕕";"�
 (** Prints [[🕛]] in blue on the terminal standard output *)
 let clock_marker i =
   let new_time = Unix.gettimeofday () in
-  let old_time = !time in
-  let delta = (new_time -. old_time)  in
+  let initial_time = !initial_time in
+  let delta = (new_time -. initial_time)  in
   ANSITerminal.printf
     [ANSITerminal.Bold; ANSITerminal.blue]
     "[%s  %.1f s] "
@@ -321,19 +323,30 @@ let error_print (s: string) =
 let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
   let step_ticks = 3 in
   let ticks = ref 0 in
-  ((fun current_progress_msg ->
+  let msg = ref task in
+  let stop = ref false in
+  let timer = fun () ->
+    while true do
+      if !stop then Thread.exit ();
       clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
-      Printf.printf "%s: %s" task current_progress_msg;
+      Printf.printf "%s" !msg;
       ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ()),
+      ANSITerminal.move_bol ();
+      Unix.sleepf 0.05;
+    done;
+  in
+  let _ = Thread.create timer () in
+  ((fun current_progress_msg ->
+      msg := Printf.sprintf "%s: %s" task current_progress_msg;),
    fun finish_msg ->
+     stop := true;
      debug_marker false;
      Printf.printf "%s: %s" task finish_msg;
      ANSITerminal.erase ANSITerminal.Below;
      ANSITerminal.move_bol ();
      Printf.printf "\n";
-     time_marker ()
+     time_marker ();
   )
 
 let warning_print (s: string) =

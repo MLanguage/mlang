@@ -1,3 +1,3 @@
 from ir_2018 import main
 
-print(main(20000.0, 30000.0, 1))
+print(main(10023, 42598, 0))
