@@ -134,5 +134,6 @@ type func = {
 
 type program = {
   program_functions: func FunctionVariableMap.t;
-  arith_functions : arithmetic_func ArithmeticFunctionVariableMap.t
+  arith_functions : arithmetic_func ArithmeticFunctionVariableMap.t;
+  mult_factor: int
 }

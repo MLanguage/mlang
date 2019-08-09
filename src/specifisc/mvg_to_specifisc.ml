@@ -114,7 +114,9 @@ let rec translate_logical_expression
   | _ ->
     raise
       (Errors.UnsupportedBySpecifisc
-         (Printf.sprintf "expression %s" (Format_ast.format_position (Ast.get_position e))
+         (Printf.sprintf "boolean expression %s %s"
+            (Format_mvg.format_expression (Ast.unmark e))
+            (Format_ast.format_position (Ast.get_position e))
          )
       )
 
@@ -148,6 +150,10 @@ and translate_arithmetic_expression
     (Ast.same_pos_as (
         Specifisc.IntLiteral (Int64.of_int (i * mult_precision_factor_int_real))
       ) e, [], ctx)
+  | Mvg.Literal (Mvg.Float f) ->
+    (Ast.same_pos_as (
+        Specifisc.IntLiteral (Int64.of_float (f *. (float_of_int mult_precision_factor_int_real)))
+      ) e, [], ctx)
   | Mvg.Var var ->
     begin match Mvg.VariableMap.find var ctx.ctx_var_mapping with
       | Int int_var -> (Ast.same_pos_as (Specifisc.IntVar int_var) e, [], ctx)
@@ -159,9 +165,9 @@ and translate_arithmetic_expression
       | _ -> assert false (* should not happen *)
     end
   | Mvg.LocalLet (lvar, e1, e2) ->
-    if Mvg.LocalVariableMap.find lvar ctx.ctx_typ_info.typ_info_local_var <> Mvg.Boolean then
-      assert false (* should not happen *);
-    let se1, conds1, ctx = translate_arithmetic_expression e1 ctx in
+    if Mvg.LocalVariableMap.find lvar ctx.ctx_typ_info.typ_info_local_var = Mvg.Boolean then
+      assert false; (* should not happen *)
+    let se1, conds1, ctx =  translate_arithmetic_expression e1 ctx in
     let int_var = Specifisc.IntVariable.new_var
         (Ast.same_pos_as ("t" ^ (string_of_int lvar.Mvg.LocalVariable.id)) e)
         (Ast.same_pos_as ("Local variable") e)
@@ -181,7 +187,9 @@ and translate_arithmetic_expression
   | _ ->
     raise
       (Errors.UnsupportedBySpecifisc
-         (Printf.sprintf "expression %s" (Format_ast.format_position (Ast.get_position e))
+         (Printf.sprintf "arithmetic expression %s %s"
+            (Format_mvg.format_expression (Ast.unmark e))
+            (Format_ast.format_position (Ast.get_position e))
          )
       )
 
@@ -202,27 +210,24 @@ let translate_variable_data
          )
       )
   | SimpleVar e ->
-    begin match Mvg.VariableMap.find var ctx.ctx_typ_info.Typechecker.typ_info_var with
-      | (Mvg.Boolean, _) ->
-        let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-        let se, conds, ctx = translate_logical_expression e ctx in
-        let new_cmds = (Specifisc.BoolDef (bool_var, se))::conds in
-        (new_cmds,
-         { ctx with
-           ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping
-         })
-      | (Mvg.Integer | Mvg.Real as t, _) ->
-        let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-        let se, conds, ctx = translate_arithmetic_expression e ctx in
-        let new_cmds = (Specifisc.IntDef (int_var, se))::conds in
-        (new_cmds,
-         { ctx with
-           ctx_var_mapping = Mvg.VariableMap.add var (
-               match t with
-               | Mvg.Integer -> Int int_var
-               | _ -> assert false (*s should not happen *)
-             ) ctx.ctx_var_mapping
-         })
+    begin match begin try Mvg.VariableMap.find var ctx.ctx_typ_info.Typechecker.typ_info_var with
+      | Not_found -> assert false end with
+    | (Mvg.Boolean, _) ->
+      let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+      let se, conds, ctx = translate_logical_expression e ctx in
+      let new_cmds = (Specifisc.BoolDef (bool_var, se))::conds in
+      (new_cmds,
+       { ctx with
+         ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping
+       })
+    | ((Mvg.Integer | Mvg.Real), _) ->
+      let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+      let se, conds, ctx = translate_arithmetic_expression e ctx in
+      let new_cmds = (Specifisc.IntDef (int_var, se))::conds in
+      (new_cmds,
+       { ctx with
+         ctx_var_mapping = Mvg.VariableMap.add var (Int int_var) ctx.ctx_var_mapping
+       })
     end
 
 let translate_cond
@@ -235,6 +240,24 @@ let translate_cond
 
 let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : Specifisc.program =
   let exec_order = Execution_order.get_execution_order program in
+  let ctx = empty_ctx typing in
+  (** We have to populate the context with the input variables *)
+  let ctx =
+    Mvg.VariableMap.fold (fun var data ctx ->
+        match data.Mvg.var_io with
+        | Mvg.Input ->
+          let typ = Mvg.VariableMap.find var typing.Typechecker.typ_info_var in
+          begin match fst typ with
+            | Mvg.Real | Mvg.Integer ->
+              let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+              { ctx with ctx_var_mapping = Mvg.VariableMap.add var (Int int_var) ctx.ctx_var_mapping }
+            | Mvg.Boolean ->
+              let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+              { ctx with ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping }
+          end
+        | _ -> ctx
+      ) program.program_vars ctx
+  in
   let func_body, _ = List.fold_left (fun (cmds, ctx) scc  ->
       if Mvg.VariableMap.cardinal scc > 1 then
         raise (Errors.UnsupportedBySpecifisc
@@ -244,7 +267,7 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
       else
         Mvg.VariableMap.fold (fun var () (cmds, ctx) ->
             try let data = Mvg.VariableMap.find var program.program_vars in
-              let new_cmds, ctx = translate_variable_data var data ctx in
+              let new_cmds, ctx =  translate_variable_data var data ctx in
               (new_cmds@cmds, ctx)
             with
             | Not_found ->
@@ -255,7 +278,7 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
               with
               | Not_found -> assert false
           )
-          scc (cmds, ctx)) ([], empty_ctx typing) exec_order
+          scc (cmds, ctx)) ([], ctx ) exec_order
   in
   let func_body = List.rev func_body in
   let func_id = Specifisc.FunctionVariable.new_var ("Whole program", Ast.no_pos) ("", Ast.no_pos) in
@@ -265,5 +288,6 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
         Specifisc.inputs = assert false;
         Specifisc.outputs = assert false;
       };
-    Specifisc.arith_functions = assert false
+    Specifisc.arith_functions = assert false;
+    Specifisc.mult_factor = mult_precision_factor_int_real
   }
