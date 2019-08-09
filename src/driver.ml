@@ -131,7 +131,8 @@ let driver
         Z3_driver.translate_and_launch_query program typing
       else if String.lowercase_ascii !Cli.backend = "specifisc" then begin
         Cli.debug_print "Translating the M program to Specifisc";
-        ignore (Mvg_to_specifisc.translate_program program typing)
+        let program = Mvg_to_specifisc.translate_program program typing in
+        Cli.result_print (Printf.sprintf "Result:\n%s" (Format_specifisc.format_program program)) 
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program !Cli.number_of_passes in

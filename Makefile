@@ -72,8 +72,7 @@ specifisc_cas_basique_2018: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
 		--backend specifisc --function_spec specs/cas_basique.m_spec \
-		--output processing/ir_2018.py $(SOURCE_FILES) && \
-	python processing/example_simple.py
+		--output processing/ir_2018.py $(SOURCE_FILES)
 
 z3_basique: build
 	OCAMLRUNPARAM=b	dune exec src/main.exe -- --application iliad \

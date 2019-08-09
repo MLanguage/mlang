@@ -49,12 +49,6 @@ let empty_ctx (typing : Typechecker.typ_info): ctx = {
 
 let mult_precision_factor_int_real = 100
 
-let arr_func_id : Specifisc.ArithmeticFunctionVariable.t =
-  Specifisc.ArithmeticFunctionVariable.new_var ("arr", Ast.no_pos) ("", Ast.no_pos)
-
-let inf_func_id : Specifisc.ArithmeticFunctionVariable.t =
-  Specifisc.ArithmeticFunctionVariable.new_var ("inf", Ast.no_pos) ("", Ast.no_pos)
-
 let rec translate_logical_expression
     (e: Mvg.expression Ast.marked)
     (ctx: ctx)
@@ -180,10 +174,36 @@ and translate_arithmetic_expression
     (se2, conds2@[Specifisc.IntDef (int_var, se1)]@conds1, ctx)
   | Mvg.FunctionCall (Mvg.ArrFunc, [arg]) ->
     let sarg, conds, ctx = translate_arithmetic_expression arg ctx in
-    (Ast.same_pos_as (Specifisc.FunctionCall (Ast.same_pos_as arr_func_id e, [sarg])) e, conds, ctx)
+    let e' =
+      Specifisc.ArithmeticBinop (
+        Ast.same_pos_as Specifisc.Mul e,
+        Ast.same_pos_as (Specifisc.ArithmeticBinop (
+            Ast.same_pos_as Specifisc.Mul e,
+            Ast.same_pos_as (Specifisc.ArithmeticBinop (
+                Ast.same_pos_as Specifisc.Add e,
+                sarg,
+                Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int (mult_precision_factor_int_real / 2))) e
+              )) e,
+            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+          )) e,
+        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+      )
+    in
+    (Ast.same_pos_as e' e, conds, ctx)
   | Mvg.FunctionCall (Mvg.InfFunc, [arg]) ->
     let sarg, conds, ctx = translate_arithmetic_expression arg ctx in
-    (Ast.same_pos_as (Specifisc.FunctionCall (Ast.same_pos_as inf_func_id e, [sarg])) e, conds, ctx)
+    let e' =
+      Specifisc.ArithmeticBinop (
+        Ast.same_pos_as Specifisc.Mul e,
+        Ast.same_pos_as (Specifisc.ArithmeticBinop (
+            Ast.same_pos_as Specifisc.Mul e,
+            sarg,
+            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+          )) e,
+        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+      )
+    in
+    (Ast.same_pos_as e' e, conds, ctx)
   | _ ->
     raise
       (Errors.UnsupportedBySpecifisc
@@ -241,24 +261,37 @@ let translate_cond
 let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : Specifisc.program =
   let exec_order = Execution_order.get_execution_order program in
   let ctx = empty_ctx typing in
-  (** We have to populate the context with the input variables *)
-  let ctx =
-    Mvg.VariableMap.fold (fun var data ctx ->
+  (** We have to populate the context with the input variables and fetch the io variables *)
+  let ctx, input_vars, output_vars =
+    Mvg.VariableMap.fold (fun var data (ctx, (int_inputs, bool_inputs), (int_outputs, bool_outputs)) ->
         match data.Mvg.var_io with
         | Mvg.Input ->
           let typ = Mvg.VariableMap.find var typing.Typechecker.typ_info_var in
           begin match fst typ with
             | Mvg.Real | Mvg.Integer ->
               let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-              { ctx with ctx_var_mapping = Mvg.VariableMap.add var (Int int_var) ctx.ctx_var_mapping }
+              ({ ctx with ctx_var_mapping = Mvg.VariableMap.add var (Int int_var) ctx.ctx_var_mapping },
+               (int_var::int_inputs, bool_inputs), (int_outputs, bool_outputs))
             | Mvg.Boolean ->
               let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-              { ctx with ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping }
+              ({ ctx with ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping },
+               (int_inputs, bool_var::bool_inputs), (int_outputs, bool_outputs))
           end
-        | _ -> ctx
-      ) program.program_vars ctx
+        | Mvg.Output ->
+          let typ = Mvg.VariableMap.find var typing.Typechecker.typ_info_var in
+          begin match fst typ with
+            | Mvg.Real | Mvg.Integer ->
+              let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+              (ctx, (int_inputs, bool_inputs), (int_var::int_outputs, bool_outputs))
+            | Mvg.Boolean ->
+              let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
+              (ctx, (int_inputs, bool_inputs), (int_outputs, bool_var::bool_outputs))
+          end
+        | _ -> (ctx, (int_inputs, bool_inputs), (int_outputs, bool_outputs))
+      ) program.program_vars (ctx, ([], []), ([], []))
   in
-  let func_body, _ = List.fold_left (fun (cmds, ctx) scc  ->
+  (* Then the main translation *)
+  let func_body, ctx = List.fold_left (fun (cmds, ctx) scc  ->
       if Mvg.VariableMap.cardinal scc > 1 then
         raise (Errors.UnsupportedBySpecifisc
                  (Printf.sprintf "circular variable dependencies (%s)"
@@ -285,9 +318,22 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
   {
     Specifisc.program_functions = Specifisc.FunctionVariableMap.singleton func_id {
         Specifisc.body = func_body;
-        Specifisc.inputs = assert false;
-        Specifisc.outputs = assert false;
+        Specifisc.inputs = input_vars;
+        Specifisc.outputs = output_vars;
       };
-    Specifisc.arith_functions = assert false;
-    Specifisc.mult_factor = mult_precision_factor_int_real
+    Specifisc.program_arith_functions = Specifisc.ArithmeticFunctionVariableMap.empty;
+    Specifisc.program_mult_factor = mult_precision_factor_int_real;
+    Specifisc.program_idmap = Mvg.VarNameToID.fold (fun name l new_idmap ->
+        try
+          Mvg.VarNameToID.add name (List.map (fun var ->
+              match Mvg.VariableMap.find var ctx.ctx_var_mapping with
+              | Bool bool_var ->
+                Specifisc.IDBoolVar bool_var
+              | Int int_var ->
+                Specifisc.IDIntVar int_var
+
+            ) l) new_idmap
+        with
+        | Not_found -> new_idmap
+      ) program.Mvg.program_idmap Mvg.VarNameToID.empty
   }

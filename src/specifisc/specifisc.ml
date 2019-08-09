@@ -112,11 +112,14 @@ type arith_args_spec =
   | SpecVariable  (* At least one *)
 
 (** The specification is of the form [fun args ret -> ...] *)
-type arith_func_spec = Z3.Expr.expr list -> Z3.Expr.expr -> Z3.Expr.expr
+type arith_func_z3_spec = Z3.Expr.expr list -> Z3.Expr.expr -> Z3.Expr.expr
+
+type arith_func_interpreter_spec = Int64.t list -> Int64.t
 
 type arithmetic_func = {
   arith_func_args_typ: arith_args_spec;
-  arith_func_spec: arith_func_spec
+  arith_func_z3_spec: arith_func_z3_spec;
+  arith_func_interpreter_spec: arith_func_interpreter_spec;
 }
 
 type command =
@@ -132,8 +135,15 @@ type func = {
   outputs: variables;
 }
 
+type idmap_var =
+  | IDBoolVar of BoolVariable.t
+  | IDIntVar of IntVariable.t
+
+type idmap = idmap_var list Mvg.VarNameToID.t
+
 type program = {
   program_functions: func FunctionVariableMap.t;
-  arith_functions : arithmetic_func ArithmeticFunctionVariableMap.t;
-  mult_factor: int
+  program_arith_functions : arithmetic_func ArithmeticFunctionVariableMap.t;
+  program_mult_factor: int;
+  program_idmap: idmap
 }
