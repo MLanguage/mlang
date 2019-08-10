@@ -67,6 +67,8 @@ rule token = parse
   { ENDSHARP }
 | '-'? ['0' - '9']+ as i
   { INTEGER i }
+| '-'? ['0' - '9']+ '.' ['0' - '9']* as f
+  { FLOAT f }
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
 | eof

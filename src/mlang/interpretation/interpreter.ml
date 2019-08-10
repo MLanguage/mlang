@@ -549,6 +549,7 @@ let evaluate_program
                    with
                    | Not_found ->
                      let cond = VariableMap.find var p.program_conds in
+                     (* Cli.debug_print  (Printf.sprintf "checking cond  %s" (Format_mvg.format_precondition cond)); *)
                      let l_cond = evaluate_expr ctx p cond.cond_expr in
                      match l_cond with
                      | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)

@@ -78,13 +78,18 @@ let parse_file test_name =
   | Some f -> f
   | None -> assert false
 
+let to_ast_literal value : Ast.literal =
+  match value with
+  | I i -> Int i
+  | F f -> Float f
+
 let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_function =
   let func_variable_inputs = VariableMap.empty in
   let func_constant_inputs =
     Interface.const_var_set_from_list program
       (List.map (fun (var, value) ->
            (* Cli.debug_print (Printf.sprintf "input %s" var); *)
-           let mexpr : Ast.expression Pos.marked = Literal (Int value), Pos.no_pos in
+           let mexpr : Ast.expression Pos.marked = Literal (to_ast_literal value), Pos.no_pos in
            var, mexpr
          )
           t.ep)
@@ -97,12 +102,13 @@ let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_functio
       (List.map (fun (var, value) ->
            Ast.Comparison ((Eq, Pos.no_pos),
                            (Literal (Variable (Normal var)), Pos.no_pos),
-                           (Literal (Int value), Pos.no_pos)),
+                           (Literal (to_ast_literal value), Pos.no_pos)),
            Pos.no_pos) t.rp) in
   { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
 
 
 let check_test (p: Mvg.program) (test_name: string) =
+  Cli.debug_print (Printf.sprintf "Parsing %s..." test_name);
   let t = parse_file test_name in
   Cli.debug_print (Printf.sprintf "Running test %s..." t.nom);
   let f = to_mvg_function p t in
@@ -113,4 +119,6 @@ let check_test (p: Mvg.program) (test_name: string) =
 
 let check_all_tests (p:Mvg.program) =
   let arr = Sys.readdir "tests/" in
+  Array.sort (fun f1 f2 ->
+      Pervasives.compare (Unix.stat ("tests/" ^ f1)).st_size (Unix.stat ("tests/" ^ f2)).st_size) arr;
   Array.iter (fun name -> check_test p ("tests/" ^ name)) arr

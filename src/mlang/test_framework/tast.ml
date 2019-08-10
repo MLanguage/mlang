@@ -32,7 +32,11 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-type var_values = (string * int) list
+type literal =
+  | I of int
+  | F of float
+
+type var_values = (string * literal) list
 
 type test_file =
   { nom : string;

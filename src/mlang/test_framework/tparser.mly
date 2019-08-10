@@ -36,6 +36,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 %token<string> SYMBOL
 %token<string> INTEGER
+%token<string> FLOAT
 
 %token SLASH
 %token NOM FIP
@@ -51,9 +52,11 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 %%
 
+
+
 test_file:
 | NOM nom = SYMBOL
-  FIP SLASH SYMBOL
+  fip?
   ENTREESP
   ep = list(variable_and_value)
   CONTROLESP
@@ -69,5 +72,10 @@ test_file:
   ENDSHARP { { nom; ep; cp; rp; ec; cc; rc } }
 | EOF { assert false }
 
+
+fip:
+  FIP SLASH SYMBOL { }
+
 variable_and_value:
-| var = SYMBOL SLASH value = INTEGER  { (var, int_of_string value) }
+| var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value)) }
+| var = SYMBOL SLASH value = FLOAT  { (var, F (float_of_string value)) }
