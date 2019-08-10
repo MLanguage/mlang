@@ -35,32 +35,19 @@ knowledge of the CeCILL-C license and that you accept its terms.
 open Mvg
 open Tast
 
-type mvg_test_file =
-  { nom : string;
-    ep : literal VariableMap.t;
-    cp : literal VariableMap.t;
-    rp : literal VariableMap.t;
-    ec : literal VariableMap.t;
-    cc : literal VariableMap.t;
-    rc : literal VariableMap.t
-  }
 
-let process idmap =
+let process program =
+  let idmap = program.program_idmap in
   List.fold_left (fun acc (var, value) ->
-      let v = List.hd @@ Pos.VarNameToID.find var idmap in
+      let v =
+        try Ast_to_mvg.list_max_execution_number @@ Pos.VarNameToID.find var idmap
+        with Not_found ->
+          let n = Mvg.find_var_name_by_alias program var in
+          Ast_to_mvg.list_max_execution_number @@ Pos.VarNameToID.find n idmap
+      in
       VariableMap.add v (Mvg.Int value) acc
     ) VariableMap.empty
 
-let to_mvg (idmap:Mvg.idmap) (t: test_file) : mvg_test_file =
-  let p = process idmap in
-  { nom = t.nom;
-    ep = p t.ep;
-    cp = p t.cp;
-    rp = p t.rp;
-    ec = p t.ec;
-    cc = p t.cc;
-    rc = p t.rc
-  }
 
 let parse_file test_name =
   let input = open_in test_name in
@@ -91,25 +78,39 @@ let parse_file test_name =
   | Some f -> f
   | None -> assert false
 
+let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_function =
+  let func_variable_inputs = VariableMap.empty in
+  let func_constant_inputs =
+    Interface.const_var_set_from_list program
+      (List.map (fun (var, value) ->
+           (* Cli.debug_print (Printf.sprintf "input %s" var); *)
+           let mexpr : Ast.expression Pos.marked = Literal (Int value), Pos.no_pos in
+           var, mexpr
+         )
+          t.ep)
+  in
+  let func_outputs = VariableMap.empty in
+  (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
+  (* some output variables are actually input, so we don't declare any for now *)
+  let func_conds =
+    (* Mvg.VariableMap.empty in *)
+    Interface.translate_cond program.program_idmap
+      (List.map (fun (var, value) ->
+           Ast.Comparison ((Eq, Pos.no_pos),
+                           (Literal (Variable (Normal var)), Pos.no_pos),
+                           (Literal (Int value), Pos.no_pos)),
+           Pos.no_pos) t.rp) in
+  { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
+
 
 let check_test (p: Mvg.program) (test_name: string) =
   let t = parse_file test_name in
   Cli.debug_print (Printf.sprintf "Running test %s..." t.nom);
-  let t = to_mvg p.program_idmap t in
-  let ctx = Interpreter.evaluate_program p t.ep 1 in
-  VariableMap.iter (fun var value ->
-      let v_interp = VariableMap.find var ctx.ctx_vars in
-      match v_interp with
-      | SimpleVar interp_lit ->
-        if not @@ Mvg.equal_literal interp_lit value then
-          raise @@ Errors.TestError
-            (Printf.sprintf "variable %s has value %s in the interpreter, compared to %s in test %s" 
-               (Pos.unmark var.name)
-               (Format_mvg.format_literal interp_lit)
-               (Format_mvg.format_literal value)
-               t.nom)
-      | _ -> assert false
-    ) t.rp
+  let f = to_mvg_function p t in
+  Cli.debug_print (Printf.sprintf "Executing program");
+  let p = Interface.fit_function p f in
+  let _ =  Interpreter.evaluate_program p VariableMap.empty 3 in
+  ()
 
 let check_all_tests (p:Mvg.program) =
   let arr = Sys.readdir "tests/" in

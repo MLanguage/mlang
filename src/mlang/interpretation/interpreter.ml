@@ -371,10 +371,15 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
           | TableVar _ -> assert false
         with
         (* Else it is a value that has been computed before in the SCC graph *)
-        | Not_found -> begin match VariableMap.find var ctx.ctx_vars with
-            | SimpleVar l -> l (* should not happen *)
-            | TableVar _ -> assert false
-          end
+        | Not_found ->
+          try
+            begin match VariableMap.find var ctx.ctx_vars with
+              | SimpleVar l -> l (* should not happen *)
+              | TableVar _ -> assert false
+            end
+          with Not_found ->
+            Cli.debug_print (Format.sprintf "variable %s not found!" (Pos.unmark var.name));
+            assert false
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
         | None -> assert false (* should not happen *)
@@ -491,10 +496,12 @@ let evaluate_program
         repeati ctx (fun (ctx : ctx) ->
             let ctx = VariableMap.fold
                 (fun var _ (ctx : ctx) ->
+                   (* Cli.debug_print (Printf.sprintf "processing var %s" (Ast.unmark var.name)); *)
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
                        let l_e = evaluate_expr ctx p e in
+                       (* Cli.debug_print (Printf.sprintf "evaluated from %s to %s" (Format_mvg.format_expression @@ Ast.unmark e) (Format_mvg.format_literal l_e)); *)
                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
                      | Mvg.TableVar (size, es) ->
                     (*
@@ -528,7 +535,8 @@ let evaluate_program
                                ) in
                            { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
                          with
-                         | Not_found -> raise (
+                         | Not_found ->
+                           raise (
                              RuntimeError (
                                MissingInputValue (
                                  Printf.sprintf "%s (%s)"
