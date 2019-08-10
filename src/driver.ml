@@ -31,6 +31,7 @@ let driver
     (function_spec: string)
     (output: string option)
     (number_of_passes: int)
+    (real_precision : int)
   =
   Cli.set_all_arg_refs
     files
@@ -43,7 +44,8 @@ let driver
     backend
     function_spec
     output
-    number_of_passes;
+    number_of_passes
+    real_precision;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in

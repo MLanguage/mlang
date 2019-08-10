@@ -65,7 +65,7 @@ let optimize =
   Arg.(
     value &
     flag &
-    info ["optimize"; "O"] ~doc:"Optimize the program by partial evaluation"
+    info ["optimize"; "O"] ~doc:"Enables the optimizations passes on the M program"
   )
 
 let backend =
@@ -109,7 +109,15 @@ let number_of_passes =
             number of execution passes that you provide with $(i,PASSES)"
   )
 
-
+let real_precision =
+  Arg.(
+    value &
+    opt int 100 &
+    info ["real_precision"; "p"] ~docv:"PRECISION"
+      ~doc:"Specifisc only deals with integer arithmetic, while M supports floating point values. \
+            This parameter lets you choose the level of precision you want for Specifisc computations, \
+            which is equal to 1/$(i, PRECISION)."
+  )
 
 let verifisc_t f =
   Term.(
@@ -124,7 +132,8 @@ let verifisc_t f =
     backend $
     function_spec $
     output $
-    number_of_passes
+    number_of_passes $
+    real_precision
   )
 
 let info =
@@ -192,6 +201,8 @@ let function_spec = ref ""
 
 let number_of_passes = ref 1
 
+let real_precision = ref 100
+
 let backend = ref "python"
 
 let set_all_arg_refs
@@ -206,6 +217,7 @@ let set_all_arg_refs
     (function_spec_: string)
     (output_: string option)
     (number_of_passes_: int)
+    (real_precision_ : int)
   =
   source_files := files_;
   application := application_;
@@ -216,6 +228,7 @@ let set_all_arg_refs
   optimize := optimize_;
   backend := backend_;
   function_spec := function_spec_;
+  real_precision := real_precision_;
   output_file := begin match output_ with
     | Some o -> o
     | None -> if backend_ = "interpreter" || backend_ = "z3" then "" else

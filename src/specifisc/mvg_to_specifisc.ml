@@ -31,8 +31,6 @@ let empty_ctx (typing : Typechecker.typ_info): ctx = {
   ctx_local_var_mapping = Mvg.LocalVariableMap.empty;
 }
 
-let mult_precision_factor_int_real = 100
-
 let switch_div_mul (op: Ast.binop) : Specifisc.arithmetic_binop = match op with
   | Ast.Div -> Specifisc.Mul
   | Ast.Mul -> Specifisc.Div
@@ -125,20 +123,20 @@ and translate_arithmetic_expression
     let se = Specifisc.ArithmeticBinop ((op, pos), se1, se2) in
     (Ast.same_pos_as (match op with
          (* so in Mvg everything is a real which we have to translate to fixed precisions integers
-            in Specifisc. The precision is set using [mult_precision_factor_int_real]. However,
+            in Specifisc. The precision is set using [!Cli.real_precision]. However,
             when performing multiplications or divisions, we have to offset this scaling factor.
             This is done with the cases below
          *)
          | Specifisc.Mul -> Specifisc.ArithmeticBinop (
              Ast.same_pos_as Specifisc.Div e,
              Ast.same_pos_as se e,
-             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
            )
          | Specifisc.Div ->
            Specifisc.ArithmeticBinop (
              Ast.same_pos_as Specifisc.Mul e,
              Ast.same_pos_as se e,
-             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
            )
          | Specifisc.Add | Specifisc.Sub -> se
        ) e,
@@ -151,11 +149,18 @@ and translate_arithmetic_expression
      conds3@conds2@conds1, ctx)
   | Mvg.Literal (Mvg.Int i) ->
     (Ast.same_pos_as (
-        Specifisc.IntLiteral (Int64.of_int (i * mult_precision_factor_int_real))
+        Specifisc.IntLiteral (Int64.of_int (i * !Cli.real_precision))
       ) e, [], ctx)
   | Mvg.Literal (Mvg.Float f) ->
+    if f < (1.0 /. (float_of_int !Cli.real_precision)) then
+      Cli.warning_print
+        (Printf.sprintf "Float constant too small for choosen fixed precision (%f) : %f %s"
+           (1.0 /. (float_of_int !Cli.real_precision))
+           f
+           (Format_ast.format_position (Ast.get_position e))
+        );
     (Ast.same_pos_as (
-        Specifisc.IntLiteral (Int64.of_float (f *. (float_of_int mult_precision_factor_int_real)))
+        Specifisc.IntLiteral (Int64.of_float (f *. (float_of_int !Cli.real_precision)))
       ) e, [], ctx)
   | Mvg.Var var ->
     begin match Mvg.VariableMap.find var ctx.ctx_var_mapping with
@@ -191,11 +196,11 @@ and translate_arithmetic_expression
             Ast.same_pos_as (Specifisc.ArithmeticBinop (
                 Ast.same_pos_as Specifisc.Add e,
                 sarg,
-                Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int (mult_precision_factor_int_real / 2))) e
+                Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int (!Cli.real_precision / 2))) e
               )) e,
-            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
           )) e,
-        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
       )
     in
     (Ast.same_pos_as e' e, conds, ctx)
@@ -207,9 +212,9 @@ and translate_arithmetic_expression
         Ast.same_pos_as (Specifisc.ArithmeticBinop (
             Ast.same_pos_as Specifisc.Div e,
             sarg,
-            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+            Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
           )) e,
-        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+        Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int !Cli.real_precision)) e
       )
     in
     (Ast.same_pos_as e' e, conds, ctx)
@@ -333,7 +338,7 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
         Specifisc.inputs = input_vars;
         Specifisc.outputs = output_vars;
       };
-    Specifisc.program_mult_factor = mult_precision_factor_int_real;
+    Specifisc.program_mult_factor = !Cli.real_precision;
     Specifisc.program_idmap = Mvg.VarNameToID.fold (fun name l new_idmap ->
         try
           Mvg.VarNameToID.add name (List.map (fun var ->
