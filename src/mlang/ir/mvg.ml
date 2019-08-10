@@ -141,7 +141,7 @@ type literal =
   | Float of float
   | Bool of bool
   | Undefined
-
+[@@deriving eq]
 
 (** MVg only supports a restricted set of functions *)
 type func =

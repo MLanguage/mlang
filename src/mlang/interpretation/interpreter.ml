@@ -466,7 +466,9 @@ let evaluate_program
                     | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
                     | InputVar -> begin match VariableMap.find_opt var input_values with
                         | Some e -> SimpleVar e
-                        | None -> assert false (* should not happen *)
+                        | None ->
+                          Cli.error_print @@ Pos.unmark @@ var.name;
+                          assert false (* should not happen *)
                       end
                   end with
                   | Not_found ->

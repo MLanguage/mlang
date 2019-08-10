@@ -32,6 +32,8 @@ let driver
     (output: string option)
     (number_of_passes: int)
     (real_precision : int)
+    (run_all_tests: bool)
+    (run_test: string option)
   =
   Cli.set_all_arg_refs
     files
@@ -45,7 +47,9 @@ let driver
     function_spec
     output
     number_of_passes
-    real_precision;
+    real_precision
+    run_all_tests
+    run_test;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in
@@ -103,49 +107,59 @@ let driver
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
 
+    if !Cli.run_all_tests then
+      Test.check_all_tests program
+    else if !Cli.run_test <> None then
+      begin
+        match !Cli.run_test with
+        | Some t -> Test.check_test program t
+        | None -> assert false
+      end
+    else
 
 
-    let program = if !Cli.optimize then Optimization.optimize program else program in
-    (* Noundef.check program; *)
 
-    (* Mvg.VariableMap.iter (fun var (ty, bool) ->
-     *     if Mvg.VariableMap.mem var program.program_vars then
-     *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
-     *   typing.Typechecker.typ_info_var; *)
+      let program = if !Cli.optimize then Optimization.optimize program else program in
+      (* Noundef.check program; *)
 
-    begin if String.lowercase_ascii !Cli.backend = "z3" then
-        Z3_driver.translate_and_launch_query program typing
-      else if String.lowercase_ascii !Cli.backend = "verifisc" then begin
-        Cli.debug_print "Translating the M program to Verifisc";
-        let program = Mvg_to_verifisc.translate_program program typing in
-        Cli.debug_print "Typechecking the Verifisc program";
-        Verifisc.Typechecker.typecheck program;
-        let program = Verifisc.Ast_to_ir.translate_program program in
-        Cli.debug_print "Optimizing the Verifisc program";
-        let nb_before = Verifisc.Ir.nb_commands program in
-        let program = Verifisc.Optimization.optimize program in
-        let nb_after = Verifisc.Ir.nb_commands program in
-        Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-        (* Cli.result_print (Printf.sprintf "Result:\n%s" (Verifisc.Format_ir.format_program program)); *)
-        ()
-      end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
-        Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program !Cli.number_of_passes in
-        let results = f (Interface.read_inputs_from_stdin mvg_func) in
-        Interface.print_output mvg_func results;
-        Interpreter.repl_debugguer results program
-      end else if
-        String.lowercase_ascii !Cli.backend = "python" ||
-        String.lowercase_ascii !Cli.backend = "autograd"
-      then begin
-        Cli.debug_print "Compiling the program to Python...";
-        if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
-        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
-      end else
-        raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
-    end
+      (* Mvg.VariableMap.iter (fun var (ty, bool) ->
+       *     if Mvg.VariableMap.mem var program.program_vars then
+       *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
+       *   typing.Typechecker.typ_info_var; *)
+
+      begin if String.lowercase_ascii !Cli.backend = "z3" then
+          Z3_driver.translate_and_launch_query program typing
+        else if String.lowercase_ascii !Cli.backend = "specifisc" then begin
+          Cli.debug_print "Translating the M program to Verifisc";
+          let program = Mvg_to_verifisc.translate_program program typing in
+          Cli.debug_print "Typechecking the Verifisc program";
+          Verifisc.Typechecker.typecheck program;
+          let program = Verifisc.Ast_to_ir.translate_program program in
+          Cli.debug_print "Optimizing the Verifisc program";
+          let nb_before = Verifisc.Ir.nb_commands program in
+          let program = Verifisc.Optimization.optimize program in
+          let nb_after = Verifisc.Ir.nb_commands program in
+          Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
+          (* Cli.result_print (Printf.sprintf "Result:\n%s" (Verifisc.Format_ir.format_program program)); *)
+          ()
+        end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+          Cli.debug_print "Interpreting the program...";
+          let f = Interface.make_function_from_program program !Cli.number_of_passes in
+          let results = f (Interface.read_inputs_from_stdin mvg_func) in
+          Interface.print_output mvg_func results;
+          Interpreter.repl_debugguer results program
+        end else if
+          String.lowercase_ascii !Cli.backend = "python" ||
+          String.lowercase_ascii !Cli.backend = "autograd"
+        then begin
+          Cli.debug_print "Compiling the program to Python...";
+          if !Cli.output_file = "" then
+            raise (Errors.ArgumentError "an output file must be defined with --output");
+          Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
+          Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+        end else
+          raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
+      end
   with
   | Errors.TypeError e ->
     Cli.error_print (Errors.format_typ_error e); Cmdliner.Term.exit_status (`Ok 2)
