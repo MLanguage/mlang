@@ -120,6 +120,9 @@ let driver
         let program = Mvg_to_specifisc.translate_program program typing in
         Cli.debug_print "Typechecking the Specifisc program";
         Semantics.typecheck program;
+        Cli.debug_print "Optmizing the Specifisc program";
+        let program = Optimizations.GlobalValueNumbering.optimize program in
+        let program = Optimizations.DeadCodeElimination.optimize program in
         Cli.result_print (Printf.sprintf "Result:\n%s" (Format_specifisc.format_program program))
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
