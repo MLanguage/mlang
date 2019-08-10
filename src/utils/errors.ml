@@ -68,3 +68,5 @@ exception Unimplemented of string
 exception ArgumentError of string
 
 exception UnsupportedBySpecifisc of string
+
+exception SpecifiscTypeError of string

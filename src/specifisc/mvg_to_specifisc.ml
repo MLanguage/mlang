@@ -33,6 +33,12 @@ let empty_ctx (typing : Typechecker.typ_info): ctx = {
 
 let mult_precision_factor_int_real = 100
 
+let switch_div_mul (op: Ast.binop) : Specifisc.arithmetic_binop = match op with
+  | Ast.Div -> Specifisc.Mul
+  | Ast.Mul -> Specifisc.Div
+  | _ -> assert false (* should not happen *)
+
+
 let rec translate_logical_expression
     (e: Mvg.expression Ast.marked)
     (ctx: ctx)
@@ -112,12 +118,30 @@ and translate_arithmetic_expression
     let op = match op with
       | Ast.Add -> Specifisc.Add
       | Ast.Sub -> Specifisc.Sub
-      (* TODO: generate constraint to check that we are not dividing by zero ! *)
       | Ast.Div -> Specifisc.Div
       | Ast.Mul -> Specifisc.Mul
       | _ -> assert false (* should not happen*)
     in
-    (Ast.same_pos_as (Specifisc.ArithmeticBinop ((op, pos), se1, se2)) e,
+    let se = Specifisc.ArithmeticBinop ((op, pos), se1, se2) in
+    (Ast.same_pos_as (match op with
+         (* so in Mvg everything is a real which we have to translate to fixed precisions integers
+            in Specifisc. The precision is set using [mult_precision_factor_int_real]. However,
+            when performing multiplications or divisions, we have to offset this scaling factor.
+            This is done with the cases below
+         *)
+         | Specifisc.Mul -> Specifisc.ArithmeticBinop (
+             Ast.same_pos_as Specifisc.Div e,
+             Ast.same_pos_as se e,
+             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+           )
+         | Specifisc.Div ->
+           Specifisc.ArithmeticBinop (
+             Ast.same_pos_as Specifisc.Mul e,
+             Ast.same_pos_as se e,
+             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
+           )
+         | Specifisc.Add | Specifisc.Sub -> se
+       ) e,
      conds2@conds1, ctx)
   | Mvg.Conditional (e1, e2, e3) ->
     let se1, conds1, ctx = translate_logical_expression e1 ctx in
@@ -163,7 +187,7 @@ and translate_arithmetic_expression
       Specifisc.ArithmeticBinop (
         Ast.same_pos_as Specifisc.Mul e,
         Ast.same_pos_as (Specifisc.ArithmeticBinop (
-            Ast.same_pos_as Specifisc.Mul e,
+            Ast.same_pos_as Specifisc.Div e,
             Ast.same_pos_as (Specifisc.ArithmeticBinop (
                 Ast.same_pos_as Specifisc.Add e,
                 sarg,
@@ -181,7 +205,7 @@ and translate_arithmetic_expression
       Specifisc.ArithmeticBinop (
         Ast.same_pos_as Specifisc.Mul e,
         Ast.same_pos_as (Specifisc.ArithmeticBinop (
-            Ast.same_pos_as Specifisc.Mul e,
+            Ast.same_pos_as Specifisc.Div e,
             sarg,
             Ast.same_pos_as (Specifisc.IntLiteral (Int64.of_int mult_precision_factor_int_real)) e
           )) e,
@@ -247,8 +271,8 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
   let exec_order = Execution_order.get_execution_order program in
   let ctx = empty_ctx typing in
   (** We have to populate the context with the input variables and fetch the io variables *)
-  let ctx, input_vars, output_vars =
-    Mvg.VariableMap.fold (fun var data (ctx, (int_inputs, bool_inputs), (int_outputs, bool_outputs)) ->
+  let ctx, input_vars =
+    Mvg.VariableMap.fold (fun var data (ctx, (int_inputs, bool_inputs)) ->
         match data.Mvg.var_io with
         | Mvg.Input ->
           let typ = Mvg.VariableMap.find var typing.Typechecker.typ_info_var in
@@ -256,24 +280,14 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
             | Mvg.Real | Mvg.Integer ->
               let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
               ({ ctx with ctx_var_mapping = Mvg.VariableMap.add var (Int int_var) ctx.ctx_var_mapping },
-               (int_var::int_inputs, bool_inputs), (int_outputs, bool_outputs))
+               (int_var::int_inputs, bool_inputs))
             | Mvg.Boolean ->
               let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
               ({ ctx with ctx_var_mapping = Mvg.VariableMap.add var (Bool bool_var) ctx.ctx_var_mapping },
-               (int_inputs, bool_var::bool_inputs), (int_outputs, bool_outputs))
+               (int_inputs, bool_var::bool_inputs))
           end
-        | Mvg.Output ->
-          let typ = Mvg.VariableMap.find var typing.Typechecker.typ_info_var in
-          begin match fst typ with
-            | Mvg.Real | Mvg.Integer ->
-              let int_var = Specifisc.IntVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-              (ctx, (int_inputs, bool_inputs), (int_var::int_outputs, bool_outputs))
-            | Mvg.Boolean ->
-              let bool_var = Specifisc.BoolVariable.new_var (var.Mvg.Variable.name) (var.Mvg.Variable.descr) in
-              (ctx, (int_inputs, bool_inputs), (int_outputs, bool_var::bool_outputs))
-          end
-        | _ -> (ctx, (int_inputs, bool_inputs), (int_outputs, bool_outputs))
-      ) program.program_vars (ctx, ([], []), ([], []))
+        | _ -> (ctx, (int_inputs, bool_inputs))
+      ) program.program_vars (ctx, ([], []))
   in
   (* Then the main translation *)
   let func_body, ctx = List.fold_left (fun (cmds, ctx) scc  ->
@@ -299,6 +313,19 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
           scc (cmds, ctx)) ([], ctx ) exec_order
   in
   let func_body = List.rev func_body in
+  let output_vars =
+    Mvg.VariableMap.fold (fun var data (int_outputs, bool_outputs) ->
+        match data.Mvg.var_io with
+        | Mvg.Output ->
+          begin match Mvg.VariableMap.find var ctx.ctx_var_mapping with
+            | Int int_var ->
+              (int_var::int_outputs, bool_outputs)
+            | Bool bool_var ->
+              (int_outputs, bool_var::bool_outputs)
+          end
+        | _ -> (int_outputs, bool_outputs)
+      ) program.program_vars ([], [])
+  in
   let func_id = Specifisc.FunctionVariable.new_var ("Whole program", Ast.no_pos) ("", Ast.no_pos) in
   {
     Specifisc.program_functions = Specifisc.FunctionVariableMap.singleton func_id {
@@ -306,7 +333,6 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
         Specifisc.inputs = input_vars;
         Specifisc.outputs = output_vars;
       };
-    Specifisc.program_arith_functions = Specifisc.ArithmeticFunctionVariableMap.empty;
     Specifisc.program_mult_factor = mult_precision_factor_int_real;
     Specifisc.program_idmap = Mvg.VarNameToID.fold (fun name l new_idmap ->
         try

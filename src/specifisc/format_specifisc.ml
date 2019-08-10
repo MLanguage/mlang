@@ -85,7 +85,6 @@ and format_arithmetic_expression (e: arithmetic_expression) : string = match e w
     Printf.sprintf "- %s" (format_arithmetic_expression (Ast.unmark e1))
   | IntLiteral i -> Int64.to_string i
   | IntVar v -> format_int_var v
-  | _ -> raise (Errors.Unimplemented "specifisc formatting")
 
 let format_command (c: command) : string = match c with
   | BoolDef (bv, e) ->

@@ -116,6 +116,8 @@ let driver
       else if String.lowercase_ascii !Cli.backend = "specifisc" then begin
         Cli.debug_print "Translating the M program to Specifisc";
         let program = Mvg_to_specifisc.translate_program program typing in
+        Cli.debug_print "Typechecking the Specifisc program";
+        Semantics.typecheck program;
         Cli.result_print (Printf.sprintf "Result:\n%s" (Format_specifisc.format_program program))
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
@@ -144,6 +146,8 @@ let driver
     Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
   | Errors.UnsupportedBySpecifisc msg ->
     Cli.error_print (Printf.sprintf "Unsupported by Specifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
+  | Errors.SpecifiscTypeError msg ->
+    Cli.error_print (Printf.sprintf "Specifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
 
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.verifisc_t driver, Cli.info)

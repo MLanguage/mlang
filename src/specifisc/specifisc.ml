@@ -54,8 +54,6 @@ module BoolVariable = Variable ()
 module BoolVariableMap = Map.Make(BoolVariable)
 module IntVariable = Variable ()
 module IntVariableMap = Map.Make(IntVariable)
-module ArithmeticFunctionVariable = Variable ()
-module ArithmeticFunctionVariableMap = Map.Make(ArithmeticFunctionVariable)
 module FunctionVariable = Variable ()
 module FunctionVariableMap = Map.Make(FunctionVariable)
 
@@ -82,29 +80,6 @@ and arithmetic_expression =
   | Conditional of logical_expression Ast.marked * arithmetic_expression Ast.marked * arithmetic_expression Ast.marked
   | IntLiteral of Int64.t
   | IntVar of IntVariable.t
-  | FunctionCall of ArithmeticFunctionVariable.t Ast.marked * arithmetic_expression Ast.marked list
-
-
-(**
-   Specifisc programs can feature custom arithmetic functions, as long as those have a defined
-   specification in Z3.
-*)
-
-
-type arith_args_spec =
-  | SpecFixed of int
-  | SpecVariable  (* At least one *)
-
-(** The specification is of the form [fun args ret -> ...] *)
-type arith_func_z3_spec = Z3.Expr.expr list -> Z3.Expr.expr -> Z3.Expr.expr
-
-type arith_func_interpreter_spec = Int64.t list -> Int64.t
-
-type arithmetic_func = {
-  arith_func_args_typ: arith_args_spec;
-  arith_func_z3_spec: arith_func_z3_spec;
-  arith_func_interpreter_spec: arith_func_interpreter_spec;
-}
 
 type command =
   | BoolDef of BoolVariable.t * logical_expression Ast.marked
@@ -127,7 +102,6 @@ type idmap = idmap_var list Mvg.VarNameToID.t
 
 type program = {
   program_functions: func FunctionVariableMap.t;
-  program_arith_functions : arithmetic_func ArithmeticFunctionVariableMap.t;
   program_mult_factor: int;
   program_idmap: idmap
 }
