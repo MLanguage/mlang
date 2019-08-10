@@ -93,7 +93,6 @@ let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_functio
   (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    (* Mvg.VariableMap.empty in *)
     Interface.translate_cond program.program_idmap
       (List.map (fun (var, value) ->
            Ast.Comparison ((Eq, Pos.no_pos),
