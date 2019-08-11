@@ -44,9 +44,6 @@ deps:
 build:
 	dune build src/main.exe
 
-test: build
-		dune exec src/main.exe -- --debug test.m
-
 simulateur_simplifie_2018: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
@@ -84,6 +81,14 @@ z3_simulateur: build
 	OCAMLRUNPARAM=b	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --optimize \
 		--backend z3 --function_spec specs/z3_simulateur.m_spec \
+		$(SOURCE_FILES)
+
+# use: TEST_FILE=bla make test
+test: build
+	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --backend z3 \
+		--function_spec specs/simulateur_simplifie_2018.m_spec \
+		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build

@@ -378,7 +378,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
               | TableVar _ -> assert false
             end
           with Not_found ->
-            Cli.debug_print (Format.sprintf "variable %s not found!" (Pos.unmark var.name));
+            Cli.debug_print (Format.sprintf "variable %s not found!" (Pos.unmark var.Mvg.Variable.name));
             assert false
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
@@ -430,6 +430,35 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | _ -> Bool false
       end
 
+    | FunctionCall (Multimax, [arg1; arg2]) ->
+      let up = match evaluate_expr ctx p arg1 with
+        | Int x -> x
+        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | e ->
+          raise (RuntimeError (ErrorValue
+                                 (Printf.sprintf
+                                    "evaluation of %s should be an integer, not %s"
+                                    (Format_mvg.format_expression @@ Pos.unmark arg1)
+                                    (Format_mvg.format_literal e)
+                                 ), ctx))
+      in
+      let var_arg2 = match Pos.unmark arg2 with
+        | Var v -> v
+        | _ -> assert false (* todo: rte *) in
+      let cast_to_int e = match e with
+        | Int x -> x
+        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | Undefined ->
+          Cli.warning_print "cast from undefined to 0 in multimax computation";
+          0
+        | _ -> assert false in
+      let pos = Pos.get_position arg2 in
+      let access_index i = cast_to_int @@ evaluate_expr ctx p (Index ((var_arg2, pos), (Literal (Int i), pos)), pos) in
+      let maxi = ref (access_index 0) in
+      for i = 0 to up do
+        maxi := max !maxi (access_index i)
+      done;
+      Int !maxi
     | FunctionCall (func, _) ->
       raise
         (RuntimeError
@@ -460,6 +489,19 @@ let evaluate_program
   try
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
+    List.iter
+      (fun scc ->
+         if VariableMap.exists (fun var () -> Pos.unmark var.name = "NBYV1") scc then
+           begin
+             Cli.debug_print "scc with nbyv1:";
+             VariableMap.iter (fun v () -> Cli.debug_print (Pos.unmark v.Mvg.Variable.name)) scc
+           end
+         else if VariableMap.exists (fun var () -> Pos.unmark var.name = "NBPT") scc then
+           begin
+             Cli.debug_print "scc with nbpt:";
+             VariableMap.iter (fun v () -> Cli.debug_print (Pos.unmark v.Mvg.Variable.name)) scc
+           end
+      ) execution_order;
     let ctx = List.fold_left (fun (ctx : ctx) (scc: unit VariableMap.t) ->
         (** We have to update the current scc value *)
         let ctx =
@@ -496,12 +538,12 @@ let evaluate_program
         repeati ctx (fun (ctx : ctx) ->
             let ctx = VariableMap.fold
                 (fun var _ (ctx : ctx) ->
-                   (* Cli.debug_print (Printf.sprintf "processing var %s" (Ast.unmark var.name)); *)
+                   Cli.debug_print (Printf.sprintf "processing var %s"  (Pos.unmark var.Mvg.Variable.name));
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
                        let l_e = evaluate_expr ctx p e in
-                       (* Cli.debug_print (Printf.sprintf "evaluated from %s to %s" (Format_mvg.format_expression @@ Ast.unmark e) (Format_mvg.format_literal l_e)); *)
+                       (* Cli.debug_print (Printf.sprintf "evaluated from %s to %s" (Format_mvg.format_expression @@ Pos.unmark e) (Format_mvg.format_literal l_e)); *)
                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
                      | Mvg.TableVar (size, es) ->
                     (*

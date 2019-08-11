@@ -94,16 +94,17 @@ let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_functio
          )
           t.ep)
   in
-  let func_outputs = VariableMap.empty in
-  (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
+  let func_outputs =(* VariableMap.empty in *)
+    Interface.var_set_from_variable_name_list program (List.map fst t.rp) in
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    Interface.translate_cond program.program_idmap
-      (List.map (fun (var, value) ->
-           Ast.Comparison ((Eq, Pos.no_pos),
-                           (Literal (Variable (Normal var)), Pos.no_pos),
-                           (Literal (to_ast_literal value), Pos.no_pos)),
-           Pos.no_pos) t.rp) in
+    VariableMap.empty in
+  (* Interface.translate_cond program.program_idmap
+   *   (List.map (fun (var, value) ->
+   *        Ast.Comparison ((Eq, Pos.no_pos),
+   *                    (Literal (Variable (Normal var)), Pos.no_pos),
+   *                    (Literal (to_ast_literal value), Pos.no_pos)),
+   *                    Pos.no_pos) t.rp) in *)
   { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
 
 
