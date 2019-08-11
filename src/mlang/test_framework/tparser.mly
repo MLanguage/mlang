@@ -32,7 +32,8 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
-%{ open Tast %}
+%{ open Tast
+   open Parse_utils %}
 
 %token<string> SYMBOL
 %token<string> INTEGER
@@ -77,5 +78,5 @@ fip:
   FIP SLASH SYMBOL { }
 
 variable_and_value:
-| var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value)) }
-| var = SYMBOL SLASH value = FLOAT  { (var, F (float_of_string value)) }
+| var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value), mk_position $sloc) }
+| var = SYMBOL SLASH value = FLOAT  { (var, F (float_of_string value), mk_position $sloc) }

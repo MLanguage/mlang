@@ -32,11 +32,13 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL-C license and that you accept its terms.
 *)
 
+module Pos = Specifisc.Pos
+
 type literal =
   | I of int
   | F of float
 
-type var_values = (string * literal) list
+type var_values = (string * literal * Pos.position) list
 
 type test_file =
   { nom : string;

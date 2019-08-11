@@ -50,6 +50,7 @@ let process program =
 
 
 let parse_file test_name =
+  Parse_utils.current_file := test_name;
   let input = open_in test_name in
   let filebuf = Lexing.from_channel input in
   let filebuf = {filebuf with
@@ -87,24 +88,24 @@ let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_functio
   let func_variable_inputs = VariableMap.empty in
   let func_constant_inputs =
     Interface.const_var_set_from_list program
-      (List.map (fun (var, value) ->
+      (List.map (fun (var, value, pos) ->
            (* Cli.debug_print (Printf.sprintf "input %s" var); *)
-           let mexpr : Ast.expression Pos.marked = Literal (to_ast_literal value), Pos.no_pos in
+           let mexpr : Ast.expression Pos.marked = Literal (to_ast_literal value), pos in
            var, mexpr
          )
           t.ep)
   in
-  let func_outputs =(* VariableMap.empty in *)
-    Interface.var_set_from_variable_name_list program (List.map fst t.rp) in
+  let func_outputs = VariableMap.empty in
+  (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    VariableMap.empty in
-  (* Interface.translate_cond program.program_idmap
-   *   (List.map (fun (var, value) ->
-   *        Ast.Comparison ((Eq, Pos.no_pos),
-   *                    (Literal (Variable (Normal var)), Pos.no_pos),
-   *                    (Literal (to_ast_literal value), Pos.no_pos)),
-   *                    Pos.no_pos) t.rp) in *)
+    (* VariableMap.empty in *)
+    Interface.translate_cond program.program_idmap
+      (List.map (fun (var, value, pos) ->
+           Ast.Comparison ((Eq, pos),
+                           (Literal (Variable (Normal var)), pos),
+                           (Literal (to_ast_literal value), pos)),
+           pos) t.rp) in
   { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
 
 
@@ -115,7 +116,9 @@ let check_test (p: Mvg.program) (test_name: string) =
   let f = to_mvg_function p t in
   Cli.debug_print (Printf.sprintf "Executing program");
   let p = Interface.fit_function p f in
-  let _ =  Interpreter.evaluate_program p VariableMap.empty 3 in
+  let dep_graph = Dependency.create_dependency_graph p in
+  Dependency.print_dependency_graph "dep_graph_unop.dot" dep_graph p;
+  let _ =  Interpreter.evaluate_program p VariableMap.empty 1 in
   ()
 
 let check_all_tests (p:Mvg.program) =
