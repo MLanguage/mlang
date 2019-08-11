@@ -87,14 +87,14 @@ z3_simulateur: build
 test: build
 	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend z3 \
-		--function_spec specs/simulateur_simplifie_2018.m_spec \
+		--function_spec specs/tests.m_spec \
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build
 	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend z3 \
-		--function_spec specs/simulateur_simplifie_2018.m_spec \
+		--function_spec specs/tests.m_spec \
 		--run_all_tests \
 		$(SOURCE_FILES)
 

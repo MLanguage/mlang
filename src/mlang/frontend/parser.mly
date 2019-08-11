@@ -489,6 +489,7 @@ spec_input_list:
   { List.map (fun s -> parse_variable_name $sloc s) inputs }
 
 spec_output_list:
+| NOT { [] }
 | outputs = separated_nonempty_list(COMMA, SYMBOL)
   { List.map (fun s -> parse_variable_name $sloc s) outputs  }
 
