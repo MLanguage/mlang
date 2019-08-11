@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Mvg
 
-let repl_debug = ref false
+let repl_debug = ref true
 
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
@@ -426,13 +426,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Undefined -> Bool false
         | _ -> Bool true
       end
-    | FunctionCall (NullFunc, [arg]) ->
-      begin match evaluate_expr ctx p arg with
-        | Undefined -> Bool true
-        | Int 0 -> Bool true
-        | Float 0. -> Bool true
-        | _ -> Bool false
-      end
+
     | FunctionCall (Multimax, [arg1; arg2]) ->
       let up = match evaluate_expr ctx p arg1 with
         | Int x -> x
@@ -541,7 +535,7 @@ let evaluate_program
         repeati ctx (fun (ctx : ctx) ->
             let ctx = VariableMap.fold
                 (fun var _ (ctx : ctx) ->
-                   (* Cli.debug_print (Printf.sprintf "processing var %s" (Pos.unmark var.Mvg.Variable.name)); *)
+                   Cli.debug_print (Pos.unmark var.Mvg.Variable.name);
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->

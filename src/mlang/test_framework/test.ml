@@ -116,8 +116,6 @@ let check_test (p: Mvg.program) (test_name: string) =
   let f = to_mvg_function p t in
   Cli.debug_print (Printf.sprintf "Executing program");
   let p = Interface.fit_function p f in
-  let dep_graph = Dependency.create_dependency_graph p in
-  Dependency.print_dependency_graph "dep_graph_unop.dot" dep_graph p;
   let _ =  Interpreter.evaluate_program p VariableMap.empty 1 in
   ()
 
