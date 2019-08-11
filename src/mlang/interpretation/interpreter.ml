@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Mvg
 
-let repl_debug = ref true
+let repl_debug = ref false
 
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
