@@ -35,9 +35,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 %{ open Tast
    open Parse_utils %}
 
-%token<string> SYMBOL
-%token<string> INTEGER
-%token<string> FLOAT
+%token<string> SYMBOL NAME INTEGER FLOAT
 
 %token SLASH
 %token NOM FIP
@@ -56,7 +54,7 @@ knowledge of the CeCILL-C license and that you accept its terms.
 
 
 test_file:
-| NOM nom = SYMBOL
+| NOM nom = name
   fip?
   ENTREESP
   ep = list(variable_and_value)
@@ -73,6 +71,9 @@ test_file:
   ENDSHARP { { nom; ep; cp; rp; ec; cc; rc } }
 | EOF { assert false }
 
+name:
+| n = NAME { n }
+| n = SYMBOL { n }
 
 fip:
   FIP SLASH SYMBOL { }

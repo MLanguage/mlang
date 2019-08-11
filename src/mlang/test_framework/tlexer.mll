@@ -71,6 +71,8 @@ rule token = parse
   { FLOAT f }
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
+| ['a'-'z' 'A'-'Z' ' ' '0'-'9' ';' '-']+ as s
+  { NAME s }
 | eof
   { EOF }
 | _

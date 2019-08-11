@@ -317,10 +317,10 @@ let clock_marker i =
 
 (** All the printers below print their argument after the correct marker *)
 
-let debug_print (s: string) =
+let debug_print ?(endline="\n") (s: string) =
   if !debug_flag then begin
     debug_marker true;
-    Printf.printf "%s\n" s;
+    Printf.printf "%s%s" s endline;
     flush stdout;
     flush stdout
   end
