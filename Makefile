@@ -84,8 +84,8 @@ z3_simulateur: build
 		$(SOURCE_FILES)
 
 # use: TEST_FILE=bla make test
-test: build
-	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
+test: #build
+	./main.exe --application iliad \
 	 	--display_time --debug --backend z3 \
 		--function_spec specs/tests.m_spec \
 		--run_test=$(TEST_FILE) \
@@ -98,6 +98,10 @@ tests: build
 		--run_all_tests \
 		$(SOURCE_FILES)
 
+# check that the repl_debuguer is disabled
+test_report: build
+	./scripts/tests.sh 2> test_results.txt
+	python3 scripts/categorize_erros.py > test_report.txt
 
 
 doc:
