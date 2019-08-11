@@ -1,10 +1,8 @@
-(include_subdirs unqualified)
-
 (executable
  (name main)
  (public_name verifisc)
  (ocamlopt_flags (-cclib -lstdc++))
- (libraries ocamlgraph z3 re ANSITerminal cmdliner dune-build-info)
+ (libraries mcompiler)
  (preprocess (pps ppx_deriving.std visitors.ppx))
 )
 

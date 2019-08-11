@@ -1,0 +1,8 @@
+(include_subdirs unqualified)
+
+(library
+ (name mcompiler)
+ (ocamlopt_flags (-cclib -lstdc++))
+ (libraries ocamlgraph z3 re ANSITerminal cmdliner dune-build-info specifisc)
+ (preprocess (pps ppx_deriving.std visitors.ppx))
+)

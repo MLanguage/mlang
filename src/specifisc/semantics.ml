@@ -15,16 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-open Specifisc
+open Verifisc_utils
+open Ast
 
 type ctx = {
   ctx_defined_variables : variables;
 }
 
 let rec typecheck_logical_expression
-    (e: logical_expression Ast.marked)
+    (e: logical_expression Pos.marked)
     (ctx: ctx)
-  : unit = match Ast.unmark e with
+  : unit = match Pos.unmark e with
   | Comparison (_, e1, e2) ->
     typecheck_arithmetic_expression e1 ctx;
     typecheck_arithmetic_expression e2 ctx
@@ -39,14 +40,14 @@ let rec typecheck_logical_expression
       raise
         (Errors.SpecifiscTypeError
            (Printf.sprintf "boolean variable %s used %s is undefined"
-              (Ast.unmark var.BoolVariable.name)
-              (Format_ast.format_position (Ast.get_position e))
+              (Pos.unmark var.BoolVariable.name)
+              (Pos.format_position (Pos.get_position e))
            ))
 
 and typecheck_arithmetic_expression
-    (e: arithmetic_expression Ast.marked)
+    (e: arithmetic_expression Pos.marked)
     (ctx: ctx)
-  : unit = match Ast.unmark e with
+  : unit = match Pos.unmark e with
   | ArithmeticBinop (_, e1, e2) ->
     typecheck_arithmetic_expression e1 ctx;
     typecheck_arithmetic_expression e2 ctx
@@ -62,8 +63,8 @@ and typecheck_arithmetic_expression
       raise
         (Errors.SpecifiscTypeError
            (Printf.sprintf "integer variable %s used %s is undefined"
-              (Ast.unmark var.IntVariable.name)
-              (Format_ast.format_position (Ast.get_position e))
+              (Pos.unmark var.IntVariable.name)
+              (Pos.format_position (Pos.get_position e))
            ))
 
 let typecheck (program : program) : unit =
@@ -96,7 +97,7 @@ let typecheck (program : program) : unit =
             raise
               (Errors.SpecifiscTypeError
                  (Printf.sprintf "integer output variable %s is undefined"
-                    (Ast.unmark output_var.IntVariable.name)
+                    (Pos.unmark output_var.IntVariable.name)
                  ))
         ) (fst func.outputs);
       List.iter (fun output_var ->
@@ -104,7 +105,7 @@ let typecheck (program : program) : unit =
             raise
               (Errors.SpecifiscTypeError
                  (Printf.sprintf "boolean output variable %s is undefined"
-                    (Ast.unmark output_var.BoolVariable.name)
+                    (Pos.unmark output_var.BoolVariable.name)
                  ))
         ) (snd func.outputs)
     ) program.program_functions
