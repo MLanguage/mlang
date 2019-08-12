@@ -351,13 +351,14 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       if new_e1 = Undefined then Undefined else
         begin
           (* First we look if the value used is inside the current SCC. If yes then we return the value for this pass *)
-          try match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
+          try match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
             | SimpleVar _ -> assert false (* should not happen *)
             | TableVar (size, values) ->
+              (* nope, scc is not up-to-date, we start with ctx_vars *)
               evaluate_array_index ctx new_e1 size values (Pos.get_position e1)
           with
           (* Else it is a value that has been computed before in the SCC graph *)
-          | Not_found -> begin match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
+          | Not_found -> begin match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
               | SimpleVar _ -> assert false (* should not happen *)
               | TableVar (size, values) ->
                 evaluate_array_index ctx new_e1 size values (Pos.get_position e1)
@@ -380,7 +381,6 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
               | TableVar _ -> assert false
             end
           with Not_found ->
-            Cli.debug_print (Format.sprintf "variable %s not found!" (Pos.unmark var.Mvg.Variable.name));
             assert false
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
@@ -486,19 +486,6 @@ let evaluate_program
   try
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
-    List.iter
-      (fun scc ->
-         if VariableMap.exists (fun var () -> Pos.unmark var.name = "NBYV1") scc then
-           begin
-             Cli.debug_print "scc with nbyv1:";
-             VariableMap.iter (fun v () -> Cli.debug_print (Pos.unmark v.Mvg.Variable.name)) scc
-           end
-         else if VariableMap.exists (fun var () -> Pos.unmark var.name = "NBPT") scc then
-           begin
-             Cli.debug_print "scc with nbpt:";
-             VariableMap.iter (fun v () -> Cli.debug_print (Pos.unmark v.Mvg.Variable.name)) scc
-           end
-      ) execution_order;
     let ctx = List.fold_left (fun (ctx : ctx) (scc: unit VariableMap.t) ->
         (** We have to update the current scc value *)
         let ctx =
@@ -535,12 +522,10 @@ let evaluate_program
         repeati ctx (fun (ctx : ctx) ->
             let ctx = VariableMap.fold
                 (fun var _ (ctx : ctx) ->
-                   Cli.debug_print (Pos.unmark var.Mvg.Variable.name);
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
                        let l_e = evaluate_expr ctx p e in
-                       (* Cli.debug_print (Printf.sprintf "evaluated from %s to %s" (Format_mvg.format_expression @@ Pos.unmark e) (Format_mvg.format_literal l_e)); *)
                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
                      | Mvg.TableVar (size, es) ->
                     (*
@@ -559,7 +544,8 @@ let evaluate_program
                                       | IndexGeneric e ->
                                         evaluate_expr { ctx with ctx_generic_index = Some idx } p e
                                       | IndexTable es ->
-                                        evaluate_expr ctx p (IndexMap.find idx es)
+                                        let e = (IndexMap.find idx es) in
+                                        evaluate_expr ctx p e
                                    )
                                )
                              )
@@ -588,7 +574,7 @@ let evaluate_program
                    with
                    | Not_found ->
                      let cond = VariableMap.find var p.program_conds in
-                     (* Cli.debug_print  (Printf.sprintf "checking cond  %s" (Format_mvg.format_precondition cond)); *)
+                     Cli.debug_print  (Printf.sprintf "checking cond  %s" (Format_mvg.format_precondition cond));
                      let l_cond = evaluate_expr ctx p cond.cond_expr in
                      match l_cond with
                      | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
