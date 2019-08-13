@@ -2,5 +2,4 @@
 
 (library
  (name specifisc)
- (libraries verifisc_utils)
 )

@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    include peehole optimizations that must be checked for compatibility with M's semantics.
 *)
 
-open Verifisc_utils
+module Pos = Specifisc.Pos
 open Mvg
 
 type partial_expr =

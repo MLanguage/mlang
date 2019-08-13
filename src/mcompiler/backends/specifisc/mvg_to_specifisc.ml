@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-open Verifisc_utils
+module Pos = Specifisc.Pos
 
 type translated_var =
   | Bool of Specifisc.Ast.BoolVariable.t
@@ -97,7 +97,7 @@ let rec translate_logical_expression
     (se2, conds2@[Specifisc.Ast.BoolDef (bool_var, se1)]@conds1, ctx)
   | _ ->
     raise
-      (Errors.UnsupportedBySpecifisc
+      (Specifisc.Errors.UnsupportedBySpecifisc
          (Printf.sprintf "boolean expression %s %s"
             (Format_mvg.format_expression (Pos.unmark e))
             (Pos.format_position (Pos.get_position e))
@@ -222,7 +222,7 @@ and translate_arithmetic_expression
     (Pos.same_pos_as e' e, conds, ctx)
   | _ ->
     raise
-      (Errors.UnsupportedBySpecifisc
+      (Specifisc.Errors.UnsupportedBySpecifisc
          (Printf.sprintf "arithmetic expression %s %s"
             (Format_mvg.format_expression (Pos.unmark e))
             (Pos.format_position (Pos.get_position e))
@@ -238,7 +238,7 @@ let translate_variable_data
   | InputVar -> [], ctx
   | TableVar (_, def) ->
     raise
-      (Errors.UnsupportedBySpecifisc
+      (Specifisc.Errors.UnsupportedBySpecifisc
          (Printf.sprintf "table variable %s" (Pos.format_position (match def with
               | IndexGeneric e -> Pos.get_position e
               | IndexTable es -> Pos.get_position (snd (Mvg.IndexMap.choose es))
@@ -299,7 +299,7 @@ let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : S
   (* Then the main translation *)
   let func_body, ctx = List.fold_left (fun (cmds, ctx) scc  ->
       if Mvg.VariableMap.cardinal scc > 1 then
-        raise (Errors.UnsupportedBySpecifisc
+        raise (Specifisc.Errors.UnsupportedBySpecifisc
                  (Printf.sprintf "circular variable dependencies (%s)"
                     (String.concat "," (List.map (fun (var, _) ->
                          Pos.unmark var.Mvg.Variable.name) (Mvg.VariableMap.bindings scc)))))

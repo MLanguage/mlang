@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-open Verifisc_utils
+module Pos = Specifisc.Pos
 open Lexing
 open Lexer
 
@@ -150,9 +150,9 @@ let driver
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
     Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
-  | Errors.UnsupportedBySpecifisc msg ->
+  | Specifisc.Errors.UnsupportedBySpecifisc msg ->
     Cli.error_print (Printf.sprintf "Unsupported by Specifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
-  | Errors.SpecifiscTypeError msg ->
+  | Specifisc.Errors.SpecifiscTypeError msg ->
     Cli.error_print (Printf.sprintf "Specifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
 
 let main () =

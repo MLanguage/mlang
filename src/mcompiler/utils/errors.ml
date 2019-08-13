@@ -66,7 +66,3 @@ exception Unimplemented of string
 (**{1 Others}*)
 
 exception ArgumentError of string
-
-exception UnsupportedBySpecifisc of string
-
-exception SpecifiscTypeError of string

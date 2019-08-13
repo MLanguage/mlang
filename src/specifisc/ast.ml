@@ -24,8 +24,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    This language is meant for formal analysis of the tax specification.
 *)
 
-open Verifisc_utils
-
 module Variable (_ : sig end) = struct
   type t = {
     name: string Pos.marked;

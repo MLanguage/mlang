@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    are polymorphic.
 *)
 
-open Verifisc_utils
+module Pos = Specifisc.Pos
 open Mvg
 
 (** This module defines the internal representation of type variables during the typechecking. *)
