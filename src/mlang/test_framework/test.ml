@@ -116,7 +116,7 @@ let check_test (p: Mvg.program) (test_name: string) =
   let f = to_mvg_function p t in
   Cli.debug_print (Printf.sprintf "Executing program");
   let p = Interface.fit_function p f in
-  let _ =  Interpreter.evaluate_program p VariableMap.empty 1 in
+  let _ =  Interpreter.evaluate_program p VariableMap.empty 5 in
   ()
 
 let check_all_tests (p:Mvg.program) =

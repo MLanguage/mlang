@@ -34,6 +34,9 @@ for i in pieces:
     else:
         print("Unhandled:" + i)
 
+assert len(pieces) == len(errors)
+print("{} errors".format(len(errors)))
+
 d = defaultdict(list)
 for e in errors:
     d[e.variable].append(e.filename)

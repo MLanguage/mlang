@@ -159,7 +159,10 @@ let evaluate_array_index
   else
     Array.get values idx
 
+let eval_debug = ref false
+
 let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : literal =
+  if !eval_debug then Cli.debug_print (Printf.sprintf "evaluate_expr %s" (Format_mvg.format_expression @@ Pos.unmark e));
   try begin match Pos.unmark e with
     | Comparison (op, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
@@ -351,14 +354,13 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       if new_e1 = Undefined then Undefined else
         begin
           (* First we look if the value used is inside the current SCC. If yes then we return the value for this pass *)
-          try match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
+          try match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
             | SimpleVar _ -> assert false (* should not happen *)
             | TableVar (size, values) ->
-              (* nope, scc is not up-to-date, we start with ctx_vars *)
               evaluate_array_index ctx new_e1 size values (Pos.get_position e1)
           with
           (* Else it is a value that has been computed before in the SCC graph *)
-          | Not_found -> begin match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
+          | Not_found -> begin match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
               | SimpleVar _ -> assert false (* should not happen *)
               | TableVar (size, values) ->
                 evaluate_array_index ctx new_e1 size values (Pos.get_position e1)
@@ -392,6 +394,8 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       ))
     | LocalLet (lvar, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
+      if !eval_debug then
+        Cli.debug_print (Printf.sprintf "t%d -> %s" lvar.id (Format_mvg.format_literal new_e1));
       let new_e2 =
         evaluate_expr
           { ctx with
@@ -525,8 +529,16 @@ let evaluate_program
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
+                       (* if Pos.unmark var.name = "NAPCRP" then
+                        *   begin Cli.debug_print (Printf.sprintf "expr of NAPCRP is %s" (Format_mvg.format_expression @@ Pos.unmark e));
+                        *     eval_debug := true end; *)
+
                        let l_e = evaluate_expr ctx p e in
-                       { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+                       eval_debug := false;
+                       (* if Pos.unmark var.name = "NAPCRP" then
+                        *   (\* ce qui est drôle c'est qu'après les variables ont les bonnes valeurs. ça pue l'ordonnancement ce truc *\)
+                        *   raise (RuntimeError (ErrorValue "",                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars })); *)
+                       { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars };
                      | Mvg.TableVar (size, es) ->
                     (*
                       Right now we suppose that the different indexes of table arrays don't depend on each other
