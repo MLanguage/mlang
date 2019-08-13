@@ -11,4 +11,4 @@ defined_output_variables.txt
 optimized_program.mvg
 input_needed.txt
 src/**/.merlin
-verifisc.install
+*.install

@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Specifisc.Pos
 open Lexing
 open Lexer
 
@@ -106,7 +105,7 @@ let driver
 
 
 
-    let program = if !Cli.optimize then Optimize.optimize program else program in
+    let program = if !Cli.optimize then Optimization.optimize program else program in
     (* Noundef.check program; *)
 
     (* Mvg.VariableMap.iter (fun var (ty, bool) ->
@@ -122,8 +121,8 @@ let driver
         Cli.debug_print "Typechecking the Specifisc program";
         Specifisc.Semantics.typecheck program;
         Cli.debug_print "Optmizing the Specifisc program";
-        let program = Specifisc.Optimizations.GlobalValueNumbering.optimize program in
-        let program = Specifisc.Optimizations.DeadCodeElimination.optimize program in
+        let program = Specifisc.Global_value_numbering.optimize program in
+        let program = Specifisc.Dead_code_elimination.optimize program in
         Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_specifisc.format_program program))
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";

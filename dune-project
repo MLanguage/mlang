@@ -1,6 +1,6 @@
 (lang dune 1.10)
-(name verifisc)
-(version 1.0.1)
+(name mlang)
+(version 1.0.2)
 (generate_opam_files true)
 
 (source (uri git+https://gitlab.inria.fr/verifisc/verifisc-m.git))
@@ -8,12 +8,12 @@
 (bug_reports https://gitlab.inria.fr/verifisc/verifisc-m/issues)
 (authors "Denis Merigoux" "Raphaël Monat" )
 (maintainers "denis.merigoux@inria.fr")
-(license CeCiLL-C)
+(license GPLv3)
 
 (using menhir 2.0)
 (package
- (name verifisc)
- (synopsis "Parser and compiler for DGFiP's M language")
+ (name mlang)
+ (synopsis "Compiler for DGFiP's M language")
  (description "\| The Direction Générale des Finances Publiques (DGFiP)
               "\| uses the M language to specify how French taxes are computed
               "\| from the characteristics of a fiscal household. This compiler
@@ -29,6 +29,19 @@
    (visitors (>= 20190711))
    (ocamlgraph (= 1.8.8))
    (z3 (= 4.8.4))
+   (specifisc (= 1.0.2))
    (dune-build-info (= 1.11.0))
+ )
+)
+
+(package
+ (name specifisc)
+ (synopsis "Low-level language for tax code specification")
+ (description "\| The Specifisc language is designed to be a low-level target for
+              "\| higher-level specification languages for fiscal legislation.
+ )
+ (depends
+   (ocaml (>= 4.07.0))
+   (dune (and :build ))
  )
 )

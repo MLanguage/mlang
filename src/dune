@@ -1,12 +1,8 @@
 (executable
  (name main)
- (public_name verifisc)
+ (package mlang)
+ (public_name mlang)
  (ocamlopt_flags (-cclib -lstdc++))
- (libraries mcompiler)
+ (libraries mlang)
  (preprocess (pps ppx_deriving.std visitors.ppx))
-)
-
-(documentation
-  (package verifisc)
-  (mld_files ("index"))
 )

@@ -1,0 +1,15 @@
+(include_subdirs unqualified)
+
+(library
+ (public_name mlang)
+ (ocamlopt_flags (-cclib -lstdc++))
+ (libraries
+  ocamlgraph z3 re ANSITerminal cmdliner dune-build-info specifisc
+ )
+ (preprocess (pps ppx_deriving.std visitors.ppx))
+)
+
+(documentation
+  (package mlang)
+  (mld_files ("index"))
+)

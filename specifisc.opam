@@ -10,25 +10,15 @@ maintainer: ["denis.merigoux@inria.fr"]
 authors: ["Denis Merigoux" "Raphaël Monat"]
 bug-reports: "https://gitlab.inria.fr/verifisc/verifisc-m/issues"
 homepage: "https://gitlab.inria.fr/verifisc/verifisc-m"
-license: "CeCiLL-C"
-version: "1.0.1"
+license: "GPLv3"
+version: "1.0.2"
 dev-repo: "git+https://gitlab.inria.fr/verifisc/verifisc-m.git"
-synopsis: "Parser and compiler for DGFiP's M language"
+synopsis: "Low-level language for tax code specification"
 description: """
-The Direction Générale des Finances Publiques (DGFiP)
-uses the M language to specify how French taxes are computed
-from the characteristics of a fiscal household. This compiler
-parser the M code into a formalized compact intermediate language
-before translating it into various backend languages.
+The Specifisc language is designed to be a low-level target for
+higher-level specification languages for fiscal legislation.
 """
 depends: [
   "ocaml" {>= "4.07.0"}
   "dune" {build}
-  "ANSITerminal" {= "0.8.1"}
-  "re" {= "1.9.0"}
-  "ppx_deriving" {= "4.4"}
-  "visitors" {>= "20190711"}
-  "ocamlgraph" {= "1.8.8"}
-  "z3" {= "4.8.4"}
-  "dune-build-info" {= "1.11.0"}
 ]

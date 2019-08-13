@@ -1,0 +1,57 @@
+{0 Mlang}
+
+The Mlang compiler has a traditionnal architecture consisting of various
+intermediate representations going fro mthe source code to the target backend.
+
+{1 Frontend}
+
+First, the source code is parsed according to the Menhir grammar specified in
+{!module: Mlang.Parser}. The grammar is not exactly LR(1) so we rely on {!module: Mlang.Parse_utils}
+to backtrack, especially on symbol parsing. The target intermediate representation
+is {!module: Mlang.Ast}, which is very close to the concrete syntax and can be
+printed using {!module: Mlang.Format_ast}.
+
+{!modules: Mlang.Ast Mlang.Format_ast Mlang.Parser Mlang.Parse_utils }
+
+{1 M Variable Graph}
+
+The M language has a lot of weird syntactic sugars and constructs linked to its
+usage inside multiple DGFiP applications. {!module: Mlang.Ast_to_mvg } extracts from the
+AST the computational core corresponding to a DGFiP application into the M Variable
+Graph ({!module: Mlang.Mvg}), which consists basically of a flat map of all the definitions of
+the variables used in the application. The type system of M is very primitive,
+and basically all programs typecheck ; however {!module: Mlang.Typechecker} provides
+a bidirectional typechecking algorithm with lattice-based unificiation (with {!module: Mlang.Union_find})
+to infer missing variable types.
+
+At this point, the {!module: Mlang.Dependency} modules interprets the MVG as a first-class
+graph and computes various reachability and cycle analysis in order to determine
+the computational flow inside the program.
+
+{!modules: Mlang.Mvg Mlang.Ast_to_mvg Mlang.Format_mvg Mlang.Typechecker Mlang.Union_find Mlang.Dependency }
+
+{1 Optimizations }
+
+The MVG is the right place to perform some basic program optimizations. {!module: Mlang.Functions}
+expands all the functions used in the program to basic arithmetic operators, while
+{!module: Mlang.Partial_evaluation } simplify the MVG.
+
+{!modules: Mlang.Optimize Mlang.Functions Mlang.Partial_evaluation }
+
+{1 Interpreter}
+
+{!module: Mlang.Interpreter} contains the dynamic semantics of the M language.
+{!module: Mlang.Interface } allows the user to specify its own inputs and outputs
+on top of an existing M program.
+
+{!modules: Mlang.Interpreter Mlang.Interface }
+
+{1 Translation to Z3 }
+
+Work in progress.
+
+{!modules: Mlang.Z3_encoding Mlang.Format_z3 Mlang.Mvg_to_z3}
+
+{1 Utils }
+
+{!modules: Mlang.Cli Mlang.Errors}
