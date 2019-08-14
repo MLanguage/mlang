@@ -123,7 +123,9 @@ let driver
         Cli.debug_print "Optmizing the Specifisc program";
         let program = Specifisc.Global_value_numbering.optimize program in
         let program = Specifisc.Dead_code_elimination.optimize program in
-        Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_specifisc.format_program program))
+        Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_specifisc.format_program program));
+        let _ = Specifisc.Ast_to_ir.translate_program program in
+        ()
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program !Cli.number_of_passes in
