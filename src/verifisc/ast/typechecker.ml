@@ -37,7 +37,7 @@ let rec typecheck_logical_expression
   | BoolVar var ->
     if not (List.mem var (snd ctx.ctx_defined_variables)) then
       raise
-        (Errors.SpecifiscTypeError
+        (Errors.VerifiscTypeError
            (Printf.sprintf "boolean variable %s used %s is undefined"
               (Pos.unmark var.BoolVariable.name)
               (Pos.format_position (Pos.get_position e))
@@ -60,7 +60,7 @@ and typecheck_arithmetic_expression
   | IntVar var ->
     if not (List.mem var (fst ctx.ctx_defined_variables)) then
       raise
-        (Errors.SpecifiscTypeError
+        (Errors.VerifiscTypeError
            (Printf.sprintf "integer variable %s used %s is undefined"
               (Pos.unmark var.IntVariable.name)
               (Pos.format_position (Pos.get_position e))
@@ -94,7 +94,7 @@ let typecheck (program : program) : unit =
       List.iter (fun output_var ->
           if not (List.mem output_var (fst ctx.ctx_defined_variables)) then
             raise
-              (Errors.SpecifiscTypeError
+              (Errors.VerifiscTypeError
                  (Printf.sprintf "integer output variable %s is undefined"
                     (Pos.unmark output_var.IntVariable.name)
                  ))
@@ -102,7 +102,7 @@ let typecheck (program : program) : unit =
       List.iter (fun output_var ->
           if not (List.mem output_var (snd ctx.ctx_defined_variables)) then
             raise
-              (Errors.SpecifiscTypeError
+              (Errors.VerifiscTypeError
                  (Printf.sprintf "boolean output variable %s is undefined"
                     (Pos.unmark output_var.BoolVariable.name)
                  ))

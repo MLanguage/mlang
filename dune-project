@@ -35,9 +35,9 @@
 )
 
 (package
- (name specifisc)
+ (name verifisc)
  (synopsis "Low-level language for tax code specification")
- (description "\| The Specifisc language is designed to be a low-level target for
+ (description "\| The Verifisc language is designed to be a low-level target for
               "\| higher-level specification languages for fiscal legislation.
  )
  (depends

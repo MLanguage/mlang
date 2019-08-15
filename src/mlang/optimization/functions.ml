@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    the language, so we expand these.
 *)
 
-module Pos = Specifisc.Pos
+module Pos = Verifisc.Pos
 open Mvg
 
 let rec expand_functions_expr (e: expression Pos.marked) : expression Pos.marked =

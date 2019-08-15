@@ -15,6 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-exception UnsupportedBySpecifisc of string
+exception UnsupportedByVerifisc of string
 
-exception SpecifiscTypeError of string
+exception VerifiscTypeError of string

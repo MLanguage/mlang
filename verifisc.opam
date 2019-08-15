@@ -15,7 +15,7 @@ version: "1.0.2"
 dev-repo: "git+https://gitlab.inria.fr/verifisc/verifisc-m.git"
 synopsis: "Low-level language for tax code specification"
 description: """
-The Specifisc language is designed to be a low-level target for
+The Verifisc language is designed to be a low-level target for
 higher-level specification languages for fiscal legislation.
 """
 depends: [

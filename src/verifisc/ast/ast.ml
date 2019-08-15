@@ -16,8 +16,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
 (**
-   This module describes the core backend language for describing tax specifications : Specifisc.
-   Programs in Specifisc only deal with boolean logic and integer arithmetic modulo 2^64. The
+   This module describes the core backend language for describing tax specifications : Verifisc.
+   Programs in Verifisc only deal with boolean logic and integer arithmetic modulo 2^64. The
    language is imperative, each function consisting of variable definitions and constraints that
    should hold during the program execution.
 

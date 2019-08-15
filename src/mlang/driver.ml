@@ -115,18 +115,18 @@ let driver
 
     begin if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program typing
-      else if String.lowercase_ascii !Cli.backend = "specifisc" then begin
-        Cli.debug_print "Translating the M program to Specifisc";
-        let program = Mvg_to_specifisc.translate_program program typing in
-        Cli.debug_print "Typechecking the Specifisc program";
-        Specifisc.Typechecker.typecheck program;
-        let program = Specifisc.Ast_to_ir.translate_program program in
-        Cli.debug_print "Optimizing the Specifisc program";
-        let nb_before = Specifisc.Ir.nb_commands program in
-        let program = Specifisc.Optimization.optimize program in
-        let nb_after = Specifisc.Ir.nb_commands program in
+      else if String.lowercase_ascii !Cli.backend = "verifisc" then begin
+        Cli.debug_print "Translating the M program to Verifisc";
+        let program = Mvg_to_verifisc.translate_program program typing in
+        Cli.debug_print "Typechecking the Verifisc program";
+        Verifisc.Typechecker.typecheck program;
+        let program = Verifisc.Ast_to_ir.translate_program program in
+        Cli.debug_print "Optimizing the Verifisc program";
+        let nb_before = Verifisc.Ir.nb_commands program in
+        let program = Verifisc.Optimization.optimize program in
+        let nb_after = Verifisc.Ir.nb_commands program in
         Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-        (* Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_ir.format_program program)); *)
+        (* Cli.result_print (Printf.sprintf "Result:\n%s" (Verifisc.Format_ir.format_program program)); *)
         ()
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
@@ -153,10 +153,10 @@ let driver
     Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
     Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
-  | Specifisc.Errors.UnsupportedBySpecifisc msg ->
-    Cli.error_print (Printf.sprintf "Unsupported by Specifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
-  | Specifisc.Errors.SpecifiscTypeError msg ->
-    Cli.error_print (Printf.sprintf "Specifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
+  | Verifisc.Errors.UnsupportedByVerifisc msg ->
+    Cli.error_print (Printf.sprintf "Unsupported by Verifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
+  | Verifisc.Errors.VerifiscTypeError msg ->
+    Cli.error_print (Printf.sprintf "Verifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
 
 let main () =
-  Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.verifisc_t driver, Cli.info)
+  Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)

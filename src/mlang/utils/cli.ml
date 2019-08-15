@@ -29,8 +29,8 @@ open Cmdliner
 let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
 let application = Arg.(
-    required &
-    opt (some string) None &
+    value &
+    opt (string) "iliad" &
     info ["application"; "a"]
       ~docv:"APPLICATION"
       ~doc:"Name of the M application to select rules from : iliad, batch, bareme..."
@@ -114,12 +114,12 @@ let real_precision =
     value &
     opt int 100 &
     info ["real_precision"; "p"] ~docv:"PRECISION"
-      ~doc:"Specifisc only deals with integer arithmetic, while M supports floating point values. \
-            This parameter lets you choose the level of precision you want for Specifisc computations, \
+      ~doc:"Verifisc only deals with integer arithmetic, while M supports floating point values. \
+            This parameter lets you choose the level of precision you want for Verifisc computations, \
             which is equal to 1/$(i, PRECISION)."
   )
 
-let verifisc_t f =
+let mlang_t f =
   Term.(
     const f $
     files $
@@ -153,16 +153,16 @@ let info =
     `P "Raphael Monat <raphael.monat@lip6.fr>";
     `S Manpage.s_examples;
     `P "Typical usage:";
-    `Pre "verifisc -a iliad -f query.m_spec -b interpreter ir-calcul/sources2017m_6_10/*.m";
+    `Pre "mlang -a iliad -f query.m_spec -b interpreter ir-calcul/sources2017m_6_10/*.m";
     `S Manpage.s_bugs;
     `P "Please file bug reports at https://gitlab.inria.fr/verifisc/verifisc-m/issues" ]
   in
   let exits = Term.default_exits @ [
       Term.exit_info ~doc:"on M parsing error." 1;
       Term.exit_info ~doc:"on M typechecking error." 2;
-      Term.exit_info ~doc:"on Specifisc error." 3;
+      Term.exit_info ~doc:"on Verifisc error." 3;
     ] in
-  Term.info "verifisc" ~version:(match Build_info.V1.version () with
+  Term.info "mlang" ~version:(match Build_info.V1.version () with
       | None -> "n/a"
       | Some v -> Build_info.V1.Version.to_string v) ~doc ~exits ~man
 

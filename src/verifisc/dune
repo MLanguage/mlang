@@ -1,5 +1,5 @@
 (include_subdirs unqualified)
 
 (library
- (public_name specifisc)
+ (public_name verifisc)
 )

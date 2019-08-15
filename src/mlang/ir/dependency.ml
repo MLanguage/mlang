@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Specifisc.Pos
+module Pos = Verifisc.Pos
 
 (** Defines the dependency graph of an M program *)
 

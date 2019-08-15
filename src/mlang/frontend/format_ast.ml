@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 (** AST pretty printer *)
 
-module Pos = Specifisc.Pos
+module Pos = Verifisc.Pos
 open Ast
 
 let format_application (app: application) : string  =
