@@ -119,12 +119,14 @@ let driver
         Cli.debug_print "Translating the M program to Specifisc";
         let program = Mvg_to_specifisc.translate_program program typing in
         Cli.debug_print "Typechecking the Specifisc program";
-        Specifisc.Semantics.typecheck program;
-        Cli.debug_print "Optmizing the Specifisc program";
-        let program = Specifisc.Global_value_numbering.optimize program in
-        let program = Specifisc.Dead_code_elimination.optimize program in
-        Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_specifisc.format_program program));
-        let _ = Specifisc.Ast_to_ir.translate_program program in
+        Specifisc.Typechecker.typecheck program;
+        let program = Specifisc.Ast_to_ir.translate_program program in
+        Cli.debug_print "Optimizing the Specifisc program";
+        let nb_before = Specifisc.Ir.nb_commands program in
+        let program = Specifisc.Optimization.optimize program in
+        let nb_after = Specifisc.Ir.nb_commands program in
+        Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
+        (* Cli.result_print (Printf.sprintf "Result:\n%s" (Specifisc.Format_ir.format_program program)); *)
         ()
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";

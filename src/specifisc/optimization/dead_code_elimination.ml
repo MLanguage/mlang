@@ -15,70 +15,79 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-
-open Ast
+open Ir
 
 type data = {
-  used_bool_vars : unit BoolVariableMap.t;
-  used_int_vars: unit IntVariableMap.t;
+  used_bool_vars : unit Ast.BoolVariableMap.t;
+  used_int_vars: unit Ast.IntVariableMap.t;
 }
 
 let empty_data (func: func) = {
   used_bool_vars = List.fold_left (fun acc var ->
-      BoolVariableMap.add var () acc
-    ) BoolVariableMap.empty (snd func.outputs);
+      Ast.BoolVariableMap.add var () acc
+    ) Ast.BoolVariableMap.empty (snd func.outputs);
   used_int_vars =  List.fold_left (fun acc var ->
-      IntVariableMap.add var () acc
-    ) IntVariableMap.empty (fst func.outputs);
+      Ast.IntVariableMap.add var () acc
+    ) Ast.IntVariableMap.empty (fst func.outputs);
 }
 
-let add_bool_use (var: BoolVariable.t) (data: data) : data =
+let add_bool_use (var: Ast.BoolVariable.t) (data: data) : data =
   { data with
-    used_bool_vars = BoolVariableMap.add var () data.used_bool_vars
+    used_bool_vars = Ast.BoolVariableMap.add var () data.used_bool_vars
   }
 
-let add_int_use (var: IntVariable.t) (data: data) : data =
-  { data with
-    used_int_vars = IntVariableMap.add var () data.used_int_vars
-  }
-
-let rec process_bool_expr (e: logical_expression Pos.marked) (data: data) : data =
-  match Pos.unmark e with
-  | Comparison (_, e1, e2) ->
-    let data = process_int_expr e1 data in
-    let data = process_int_expr e2 data in
-    data
-  | LogicalBinop (_, e1, e2) ->
-    let data = process_bool_expr e1 data in
-    let data = process_bool_expr e2 data in
-    data
-  | LogicalNot e1 ->
-    let data = process_bool_expr e1 data in
-    data
-  | BoolLiteral _ -> data
+let process_bool_value (v : bool_literal Pos.marked) (data: data) : data =
+  match Pos.unmark v with
+  | Bool _ -> data
   | BoolVar v -> add_bool_use v data
 
-and process_int_expr (e: arithmetic_expression Pos.marked) (data: data) : data =
-  match Pos.unmark e with
-  | ArithmeticBinop (_, e1, e2) ->
-    let data = process_int_expr e1 data in
-    let data = process_int_expr e2 data in
-    data
-  | ArithmeticMinus e1 ->
-    let data = process_int_expr e1 data in
-    data
-  | Conditional (e1, e2, e3) ->
-    let data = process_bool_expr e1 data in
-    let data = process_int_expr e2 data in
-    let data = process_int_expr e3 data in
-    data
-  | IntLiteral _ -> data
+
+let add_int_use (var: Ast.IntVariable.t) (data: data) : data =
+  { data with
+    used_int_vars = Ast.IntVariableMap.add var () data.used_int_vars
+  }
+
+let process_int_value (v : int_literal Pos.marked) (data: data) : data =
+  match Pos.unmark v with
+  | Int _ -> data
   | IntVar v -> add_int_use v data
+
+
+let process_bool_expr (e: logical_expression Pos.marked) (data: data) : data =
+  match Pos.unmark e with
+  | Comparison (_, v1, v2) ->
+    let data = process_int_value v1 data in
+    let data = process_int_value v2 data in
+    data
+  | LogicalBinop (_, v1, v2) ->
+    let data = process_bool_value v1 data in
+    let data = process_bool_value v2 data in
+    data
+  | LogicalNot v1 ->
+    let data = process_bool_value v1 data in
+    data
+  | BoolLiteral v -> process_bool_value v data
+
+let process_int_expr (e: arithmetic_expression Pos.marked) (data: data) : data =
+  match Pos.unmark e with
+  | ArithmeticBinop (_, v1, v2) ->
+    let data = process_int_value v1 data in
+    let data = process_int_value v2 data in
+    data
+  | ArithmeticMinus v1 ->
+    let data = process_int_value v1 data in
+    data
+  | Conditional (v1, v2, v3) ->
+    let data = process_bool_value v1 data in
+    let data = process_int_value v2 data in
+    let data = process_int_value v3 data in
+    data
+  | IntLiteral v -> process_int_value v data
 
 let process_command (c: command) (data: data)
   : bool * data = match c with
   | BoolDef (var, e) ->
-    let is_necessary = BoolVariableMap.mem var data.used_bool_vars in
+    let is_necessary = Ast.BoolVariableMap.mem var data.used_bool_vars in
     let data =
       if is_necessary then
         process_bool_expr e data
@@ -86,7 +95,7 @@ let process_command (c: command) (data: data)
     in
     (is_necessary, data)
   | IntDef (var, e) ->
-    let is_necessary = IntVariableMap.mem var data.used_int_vars in
+    let is_necessary = Ast.IntVariableMap.mem var data.used_int_vars in
     let data =
       if is_necessary then
         process_int_expr e data
@@ -98,7 +107,7 @@ let process_command (c: command) (data: data)
 
 let optimize (p: program) : program =
   { p with
-    program_functions = FunctionVariableMap.map (fun func ->
+    program_functions = Ast.FunctionVariableMap.map (fun func ->
         { func with
           body =
             let data = empty_data func in

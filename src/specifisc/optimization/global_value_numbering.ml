@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-open Ast
+open Ir
 
 module ValueNumber = struct
   type t = int
@@ -34,11 +34,10 @@ module ValueNumberMap = Map.Make(ValueNumber)
 
 module BooleanNumberExp = struct
   type t =
-    | Comparison of comparison_op * ValueNumber.t * ValueNumber.t
-    | LogicalBinop of logical_binop * ValueNumber.t * ValueNumber.t
+    | Comparison of Ast.comparison_op * ValueNumber.t * ValueNumber.t
+    | LogicalBinop of Ast.logical_binop * ValueNumber.t * ValueNumber.t
     | LogicalNot of ValueNumber.t
-    | BoolLiteral of bool
-    | BoolVar of BoolVariable.t
+    | BoolLiteral of bool_literal
   let compare = compare
 end
 
@@ -46,29 +45,20 @@ module BooleanNumberExpMap = Map.Make(BooleanNumberExp)
 
 module ArithmeticNumberExp = struct
   type t =
-    | ArithmeticBinop of arithmetic_binop * ValueNumber.t * ValueNumber.t
+    | ArithmeticBinop of Ast.arithmetic_binop * ValueNumber.t * ValueNumber.t
     | ArithmeticMinus of ValueNumber.t
     | Conditional of ValueNumber.t * ValueNumber.t * ValueNumber.t
-    | IntLiteral of Int64.t
-    | IntVar of IntVariable.t
+    | IntLiteral of int_literal
   let compare = compare
 end
 
 module ArithmeticNumberExpMap = Map.Make(ArithmeticNumberExp)
 
-type int_definition =
-  | DefIntVar of IntVariable.t Pos.marked
-  | DefIntLiteral of Int64.t Pos.marked
-
-type bool_definition =
-  | DefBoolVar of BoolVariable.t Pos.marked
-  | DefBoolLiteral of bool Pos.marked
-
 type data = {
   int_numbering : ValueNumber.t ArithmeticNumberExpMap.t;
-  int_definitions :  int_definition ValueNumberMap.t;
+  int_definitions :  int_literal Pos.marked ValueNumberMap.t;
   bool_numbering : ValueNumber.t BooleanNumberExpMap.t;
-  bool_definitions :  bool_definition ValueNumberMap.t;
+  bool_definitions :  bool_literal Pos.marked ValueNumberMap.t;
 }
 
 let empty_data = {
@@ -86,6 +76,9 @@ let update_data_bool (expn : BooleanNumberExp.t) (data : data) : ValueNumber.t *
       (vn, {data with bool_numbering = BooleanNumberExpMap.add expn vn data.bool_numbering})
   end
 
+let get_bool_literal (v: bool_literal Pos.marked) (data: data) : ValueNumber.t * data =
+  update_data_bool (BoolLiteral (Pos.unmark v)) data
+
 let update_data_int (expn : ArithmeticNumberExp.t) (data : data) : ValueNumber.t * data =
   begin match ArithmeticNumberExpMap.find_opt expn data.int_numbering with
     | Some vn -> vn, data
@@ -94,116 +87,75 @@ let update_data_int (expn : ArithmeticNumberExp.t) (data : data) : ValueNumber.t
       (vn, {data with int_numbering = ArithmeticNumberExpMap.add expn vn data.int_numbering})
   end
 
-let rec logical_expr_to_value_number
+let get_int_literal (v: int_literal Pos.marked) (data: data) : ValueNumber.t * data =
+  update_data_int (IntLiteral (Pos.unmark v)) data
+
+let logical_expr_to_value_number
     (e: logical_expression Pos.marked)
     (data : data)
-  : ValueNumber.t * data = match Pos.unmark e with
-  | Comparison (op, e1, e2) ->
-    let ne1, data = arithmetic_expr_to_value_number e1 data in
-    let ne2, data = arithmetic_expr_to_value_number e2 data in
-    let expn = BooleanNumberExp.Comparison (Pos.unmark op, ne1, ne2) in
+  : ValueNumber.t * data =
+  match Pos.unmark e with
+  | Comparison (op, v1, v2) ->
+    let nv1, data = get_int_literal v1 data in
+    let nv2, data = get_int_literal v2 data in
+    let expn = BooleanNumberExp.Comparison (Pos.unmark op, nv1, nv2) in
     update_data_bool expn data
-  | LogicalBinop (op, e1, e2) ->
-    let ne1, data = logical_expr_to_value_number e1 data in
-    let ne2, data = logical_expr_to_value_number e2 data in
-    let expn = BooleanNumberExp.LogicalBinop (Pos.unmark op, ne1, ne2) in
+  | LogicalBinop (op, v1, v2) ->
+    let nv1, data = get_bool_literal v1 data in
+    let nv2, data = get_bool_literal v2 data in
+    let expn = BooleanNumberExp.LogicalBinop (Pos.unmark op, nv1, nv2) in
     update_data_bool expn data
-  | LogicalNot e1 ->
-    let ne1, data = logical_expr_to_value_number e1 data in
-    let expn = BooleanNumberExp.LogicalNot ne1 in
+  | LogicalNot v1 ->
+    let nv1, data = get_bool_literal v1 data in
+    let expn = BooleanNumberExp.LogicalNot nv1 in
     update_data_bool expn data
-  | BoolLiteral b ->
-    let expn = BooleanNumberExp.BoolLiteral b in
-    update_data_bool expn data
-  | BoolVar var ->
-    let expn = BooleanNumberExp.BoolVar var in
-    update_data_bool expn data
+  | BoolLiteral v -> get_bool_literal v data
 
-and arithmetic_expr_to_value_number
+let arithmetic_expr_to_value_number
     (e: arithmetic_expression Pos.marked)
     (data : data)
   : ValueNumber.t * data = match Pos.unmark e with
-  | ArithmeticBinop (op, e1, e2) ->
-    let ne1, data = arithmetic_expr_to_value_number e1 data in
-    let ne2, data = arithmetic_expr_to_value_number e2 data in
-    let expn = ArithmeticNumberExp.ArithmeticBinop (Pos.unmark op, ne1, ne2) in
+  | ArithmeticBinop (op, v1, v2) ->
+    let nv1, data = get_int_literal v1 data in
+    let nv2, data = get_int_literal v2 data in
+    let expn = ArithmeticNumberExp.ArithmeticBinop (Pos.unmark op, nv1, nv2) in
     update_data_int expn data
-  | ArithmeticMinus e1 ->
-    let ne1, data = arithmetic_expr_to_value_number e1 data in
-    let expn = ArithmeticNumberExp.ArithmeticMinus ne1 in
+  | ArithmeticMinus v1 ->
+    let nv1, data = get_int_literal v1 data in
+    let expn = ArithmeticNumberExp.ArithmeticMinus nv1 in
     update_data_int expn data
-  | Conditional (e1, e2, e3) ->
-    let ne1, data = logical_expr_to_value_number e1 data in
-    let ne2, data = arithmetic_expr_to_value_number e2 data in
-    let ne3, data = arithmetic_expr_to_value_number e3 data in
-    let expn = ArithmeticNumberExp.Conditional (ne1, ne2, ne3) in
+  | Conditional (v1, v2, v3) ->
+    let nv1, data = get_bool_literal v1 data in
+    let nv2, data = get_int_literal v2 data in
+    let nv3, data = get_int_literal v3 data in
+    let expn = ArithmeticNumberExp.Conditional (nv1, nv2, nv3) in
     update_data_int expn data
-  | IntLiteral i ->
-    let expn = ArithmeticNumberExp.IntLiteral i in
-    update_data_int expn data
-  | IntVar var ->
-    let expn = ArithmeticNumberExp.IntVar var in
-    update_data_int expn data
+  | IntLiteral v -> get_int_literal v data
 
-let bool_definition_to_expression (def: bool_definition) : logical_expression Pos.marked =
-  match def with
-  | DefBoolLiteral b -> Pos.same_pos_as (BoolLiteral (Pos.unmark b)) b
-  | DefBoolVar v -> Pos.same_pos_as (BoolVar (Pos.unmark v)) v
+let bool_definition_to_expression (def: bool_literal Pos.marked) : logical_expression Pos.marked =
+  Pos.same_pos_as (BoolLiteral def) def
 
-let int_definition_to_expression (def: int_definition) : arithmetic_expression Pos.marked =
-  match def with
-  | DefIntLiteral b -> Pos.same_pos_as (IntLiteral (Pos.unmark b)) b
-  | DefIntVar v -> Pos.same_pos_as (IntVar (Pos.unmark v)) v
+let int_definition_to_expression (def: int_literal Pos.marked) : arithmetic_expression Pos.marked =
+  Pos.same_pos_as (IntLiteral def) def
 
-let rec gvn_bool_exp (e: logical_expression Pos.marked) (data: data)
+let gvn_bool_exp (e: logical_expression Pos.marked) (data: data)
   : logical_expression Pos.marked * data * ValueNumber.t =
   let expn, data = logical_expr_to_value_number e data in
   match Pos.unmark e with
   | BoolLiteral _ -> (e, data, expn)
-  | _ -> begin match ValueNumberMap.find_opt expn  data.bool_definitions with
+  | _ -> begin match ValueNumberMap.find_opt expn data.bool_definitions with
       | Some def -> (bool_definition_to_expression def, data, expn)
-      | None -> begin match Pos.unmark e with
-          | BoolLiteral _ -> assert false
-          | Comparison (op, e1, e2) ->
-            let ne1, data, _ = gvn_int_exp e1 data in
-            let ne2, data, _ = gvn_int_exp e2 data in
-            Pos.same_pos_as (Comparison (op, ne1, ne2)) e, data, expn
-          | LogicalBinop (op, e1, e2) ->
-            let ne1, data, _ = gvn_bool_exp e1 data in
-            let ne2, data, _ = gvn_bool_exp e2 data in
-            Pos.same_pos_as (LogicalBinop (op, ne1, ne2)) e, data, expn
-          | LogicalNot e1 ->
-            let ne1, data, _ = gvn_bool_exp e1 data in
-            Pos.same_pos_as (LogicalNot ne1) e, data, expn
-          | BoolVar _ ->
-            e, data, expn
-        end
+      | None -> e, data, expn
     end
 
-and gvn_int_exp (e: arithmetic_expression Pos.marked) (data: data)
+let gvn_int_exp (e: arithmetic_expression Pos.marked) (data: data)
   : arithmetic_expression Pos.marked * data * ValueNumber.t =
   let expn, data = arithmetic_expr_to_value_number e data in
   match Pos.unmark e with
   | IntLiteral _ -> (e, data, expn)
   | _ -> begin match ValueNumberMap.find_opt expn  data.int_definitions with
       | Some def -> (int_definition_to_expression def, data, expn)
-      | None -> begin match Pos.unmark e with
-          | IntLiteral _ -> assert false
-          | Conditional (e1, e2, e3) ->
-            let ne1, data, _ = gvn_bool_exp e1 data in
-            let ne2, data, _ = gvn_int_exp e2 data in
-            let ne3, data, _ = gvn_int_exp e3 data in
-            Pos.same_pos_as (Conditional (ne1, ne2,ne3)) e, data, expn
-          | ArithmeticBinop (op, e1, e2) ->
-            let ne1, data, _ = gvn_int_exp e1 data in
-            let ne2, data, _ = gvn_int_exp e2 data in
-            Pos.same_pos_as (ArithmeticBinop (op, ne1, ne2)) e, data, expn
-          | ArithmeticMinus e1 ->
-            let ne1, data, _ = gvn_int_exp e1 data in
-            Pos.same_pos_as (ArithmeticMinus ne1) e, data, expn
-          | IntVar _ ->
-            e, data, expn
-        end
+      | None -> e, data, expn
     end
 
 let gvn_command
@@ -215,7 +167,7 @@ let gvn_command
     let data =
       { data with
         bool_definitions = ValueNumberMap.update expn (fun def -> match def with
-            | None -> Some (DefBoolVar (Pos.same_pos_as var e))
+            | None -> Some (BoolVar var, Pos.get_position e)
             | Some _ -> def (* we always keep the old definition ! *)
           ) data.bool_definitions
       } in
@@ -225,7 +177,7 @@ let gvn_command
     let data =
       { data with
         int_definitions = ValueNumberMap.update expn (fun def -> match def with
-            | None -> Some (DefIntVar (Pos.same_pos_as var e))
+            | None -> Some (IntVar var, Pos.get_position e)
             | Some _ -> def (* we always keep the old definition ! *)
           ) data.int_definitions
       } in
@@ -236,7 +188,7 @@ let gvn_command
 
 let optimize (p: program) : program =
   { p with
-    program_functions = FunctionVariableMap.map (fun func ->
+    program_functions = Ast.FunctionVariableMap.map (fun func ->
         { func with
           body =
             let data = empty_data in
