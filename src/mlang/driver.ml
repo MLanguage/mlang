@@ -126,6 +126,12 @@ let driver
         let program = Verifisc.Optimization.optimize program in
         let nb_after = Verifisc.Ir.nb_commands program in
         Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
+        let filename = "output.verifisc" in
+        Cli.debug_print (Printf.sprintf "Writing the program to %s" filename);
+        let oc = open_out filename in
+        Printf.fprintf oc "%s" (Verifisc.Format_ir.format_program program);
+        close_out oc;
+        Cli.result_print "Interpreting the program...";
         Verifisc.Interpreter.repl_interpreter program
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";

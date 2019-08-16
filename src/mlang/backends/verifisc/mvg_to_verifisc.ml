@@ -271,7 +271,12 @@ let translate_cond
     (ctx: ctx)
   : Verifisc.Ast.command list * ctx =
   let se, conds, ctx = translate_logical_expression cond.cond_expr ctx in
-  let new_cmds = (Verifisc.Ast.Constraint se)::conds in
+  (** Verifisc has assertions while M raises errors, so we need the negation *)
+  let new_cmds = (Verifisc.Ast.Constraint
+                    (Pos.same_pos_as
+                       (Verifisc.Ast.LogicalNot (se))
+                       cond.cond_expr))::conds
+  in
   (new_cmds, ctx )
 
 let translate_program (program: Mvg.program) (typing : Typechecker.typ_info) : Verifisc.Ast.program =
