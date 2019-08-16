@@ -66,14 +66,18 @@ let optimize
   while !nb_removed > 0 do
     current_progress
       (Printf.sprintf
-         "performing global value numbering..."
-      );
-    let new_program = Global_value_numbering.optimize !program in
-    current_progress
-      (Printf.sprintf
          "performing partial evaluation..."
       );
-    let new_program = Partial_evaluation.partially_evaluate new_program  in
+    let new_program = Partial_evaluation.partially_evaluate !program  in
+    current_progress
+      (Printf.sprintf
+         "performing global value numbering..."
+      );
+    let new_program = Global_value_numbering.optimize new_program in
+    current_progress
+      (Printf.sprintf
+         "removing unused variables..."
+      );
     let new_program = remove_unused_variables new_program in
     let new_nb_removed =
       Mvg.VariableMap.cardinal !program.program_vars -
