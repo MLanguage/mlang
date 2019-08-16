@@ -177,6 +177,7 @@ let translate_cond idmap (conds:Ast.expression Pos.marked list) : condition_data
   in
   let mk_neg (mexpr: Ast.expression Pos.marked) =
     Pos.same_pos_as (Ast.Unop (Ast.Not, mexpr)) mexpr in
+  let test_error = Mvg.Error.new_error ("-1", Pos.no_pos) ("Condition error in tests", Pos.no_pos) Ast.Anomaly in
   let verif_conds =
     List.fold_left (fun acc cond ->
         if not (check_boolean cond) then
@@ -186,11 +187,12 @@ let translate_cond idmap (conds:Ast.expression Pos.marked list) : condition_data
                   (Format_ast.format_expression (Pos.unmark cond))
               )))
         else
-          (Pos.same_pos_as {Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = []} cond) :: acc) [] conds in
+          (Pos.same_pos_as {Ast.verif_cond_expr = mk_neg cond;
+                            verif_cond_errors = [("-1", Pos.no_pos)]} cond) :: acc) [] conds in
   let program = Ast.Verification {verif_name = [("000", Pos.no_pos)];
                                   verif_applications = [];
                                   verif_conditions = verif_conds} in
-  Ast_to_mvg.get_conds [] idmap [[(program, Pos.no_pos)]] None
+  Ast_to_mvg.get_conds [test_error] idmap [[(program, Pos.no_pos)]] None
 
 let read_function_from_spec (p: program) : mvg_function =
   if !Cli.function_spec = "" then
