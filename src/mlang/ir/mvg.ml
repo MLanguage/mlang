@@ -272,6 +272,7 @@ module Error = struct
     name: string Pos.marked; (** The position is the variable declaration *)
     id: int; (** Each variable has an unique ID *)
     descr: string Pos.marked; (** Description taken from the variable declaration *)
+    typ: Ast.error_typ;
   }
 
 
@@ -282,8 +283,8 @@ module Error = struct
     counter := !counter + 1;
     v
 
-  let new_error (name: string Pos.marked) (descr: string Pos.marked) : t = {
-    name; id = fresh_id (); descr;
+  let new_error (name: string Pos.marked) (descr: string Pos.marked) (error_typ: Ast.error_typ) : t = {
+    name; id = fresh_id (); descr; typ = error_typ
   }
 
   let compare (var1 :t) (var2 : t) =

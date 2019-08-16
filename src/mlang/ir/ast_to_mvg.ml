@@ -527,7 +527,9 @@ let get_variables_decl
               (vars, idmap, errors, out_name::out_list)
             | Ast.Error err ->
               let err = Mvg.Error.new_error err.Ast.error_name
-                  (Pos.same_pos_as (String.concat ":" (List.map (fun s -> Pos.unmark s) err.Ast.error_descr)) err.Ast.error_name) in
+                  (Pos.same_pos_as (String.concat ":" (List.map (fun s -> Pos.unmark s) err.Ast.error_descr)) err.Ast.error_name)
+                  (Pos.unmark err.error_typ)
+              in
               (vars, idmap, err::errors, out_list)
             | _ -> (vars, idmap, errors, out_list)
           ) (vars, idmap, errors, out_list) source_file
@@ -1381,24 +1383,35 @@ let get_conds
                     )
                     (Pos.unmark verif_cond).Ast.verif_cond_errors
                 in
-                let dummy_var =
-                  Mvg.Variable.new_var
-                    (Pos.same_pos_as (Printf.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
-                    None
-                    (Pos.same_pos_as (Pos.format_position (Pos.get_position e)) e)
-                    {
-                      Mvg.rule_number = rule_number;
-                      Mvg.seq_number = 0;
-                      Mvg.pos = Pos.get_position verif_cond
-                    }
-                in
-                Mvg.VariableMap.add dummy_var {
-                  Mvg.cond_expr = e;
-                  Mvg.cond_errors =
-                    List.map
-                      (fun x -> match x with | Some x -> x | None -> assert false (* should not happen *))
-                      (List.filter (fun x -> match x with Some _ -> true | None -> false) errs)
-                } conds
+                if List.for_all (fun err -> match err with
+                    | None -> true
+                    | Some err -> err.Mvg.Error.typ = Ast.Information
+                  ) errs
+                then
+                  (**
+                     If all errors raised by this verification condition are informative, we don't
+                     need it!
+                  *)
+                  conds
+                else
+                  let dummy_var =
+                    Mvg.Variable.new_var
+                      (Pos.same_pos_as (Printf.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
+                      None
+                      (Pos.same_pos_as (Pos.format_position (Pos.get_position e)) e)
+                      {
+                        Mvg.rule_number = rule_number;
+                        Mvg.seq_number = 0;
+                        Mvg.pos = Pos.get_position verif_cond
+                      }
+                  in
+                  Mvg.VariableMap.add dummy_var {
+                    Mvg.cond_expr = e;
+                    Mvg.cond_errors =
+                      List.map
+                        (fun x -> match x with | Some x -> x | None -> assert false (* should not happen *))
+                        (List.filter (fun x -> match x with Some _ -> true | None -> false) errs)
+                  } conds
               ) conds verif.Ast.verif_conditions
           | _ -> conds
         ) conds source_file
