@@ -126,8 +126,7 @@ let driver
         let program = Verifisc.Optimization.optimize program in
         let nb_after = Verifisc.Ir.nb_commands program in
         Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-        (* Cli.result_print (Printf.sprintf "Result:\n%s" (Verifisc.Format_ir.format_program program)); *)
-        ()
+        Verifisc.Interpreter.repl_interpreter program
       end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program !Cli.number_of_passes in
@@ -157,6 +156,8 @@ let driver
     Cli.error_print (Printf.sprintf "Unsupported by Verifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
   | Verifisc.Errors.VerifiscTypeError msg ->
     Cli.error_print (Printf.sprintf "Verifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
+  | Verifisc.Errors.VerifiscRuntimeError msg ->
+    Cli.error_print (Printf.sprintf "Verifisc runtime error: %s" msg); Cmdliner.Term.exit_status (`Ok 5)
 
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)
