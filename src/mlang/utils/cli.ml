@@ -122,9 +122,9 @@ let real_precision =
 let run_all_tests =
   Arg.(
     value &
-    flag &
+    opt (some file) None &
     info ["run_all_tests"; "R"] ~docv:"TESTS"
-      ~doc:"Run all tests in folder tests/"
+      ~doc:"Run all tests in folder specified folder"
   )
 
 let run_test =
@@ -223,7 +223,7 @@ let real_precision = ref 100
 
 let backend = ref "python"
 
-let run_all_tests = ref false
+let run_all_tests : string option ref = ref None
 let run_test : string option ref = ref None
 
 
@@ -240,7 +240,7 @@ let set_all_arg_refs
     (output_: string option)
     (number_of_passes_: int)
     (real_precision_ : int)
-    (run_all_tests_: bool)
+    (run_all_tests_: string option)
     (run_test_: string option)
   =
   source_files := files_;

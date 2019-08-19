@@ -19,21 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 open Mvg
 open Tast
 
-
-let process program =
-  let idmap = program.program_idmap in
-  List.fold_left (fun acc (var, value) ->
-      let v =
-        try Ast_to_mvg.list_max_execution_number @@ Pos.VarNameToID.find var idmap
-        with Not_found ->
-          let n = Mvg.find_var_name_by_alias program var in
-          Ast_to_mvg.list_max_execution_number @@ Pos.VarNameToID.find n idmap
-      in
-      VariableMap.add v (Mvg.Int value) acc
-    ) VariableMap.empty
-
-
-let parse_file test_name =
+let parse_file (test_name:string) : test_file =
   Parse_utils.current_file := test_name;
   let input = open_in test_name in
   let filebuf = Lexing.from_channel input in
@@ -63,7 +49,7 @@ let parse_file test_name =
   | Some f -> f
   | None -> assert false
 
-let to_ast_literal value : Ast.literal =
+let to_ast_literal (value:Tast.literal) : Ast.literal =
   match value with
   | I i -> Int i
   | F f -> Float f
@@ -101,8 +87,9 @@ let check_test (p: Mvg.program) (test_name: string) =
   let _ =  Interpreter.evaluate_program p VariableMap.empty 5 in
   ()
 
-let check_all_tests (p:Mvg.program) =
-  let arr = Sys.readdir "tests/" in
+let check_all_tests (p:Mvg.program) (test_dir: string) =
+  let arr = Sys.readdir test_dir in
+  (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort (fun f1 f2 ->
-      Pervasives.compare (Unix.stat ("tests/" ^ f1)).st_size (Unix.stat ("tests/" ^ f2)).st_size) arr;
-  Array.iter (fun name -> check_test p ("tests/" ^ name)) arr
+      Pervasives.compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr;
+  Array.iter (fun name -> check_test p (test_dir ^ name)) arr

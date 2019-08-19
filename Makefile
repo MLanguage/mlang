@@ -95,7 +95,7 @@ tests: build
 	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend z3 \
 		--function_spec specs/tests.m_spec \
-		--run_all_tests \
+		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 
 # check that the repl_debuguer is disabled
