@@ -116,16 +116,8 @@ let driver
         | None -> assert false
       end
     else
-
-
-
       let program = if !Cli.optimize then Optimization.optimize program else program in
       (* Noundef.check program; *)
-
-      (* Mvg.VariableMap.iter (fun var (ty, bool) ->
-       *     if Mvg.VariableMap.mem var program.program_vars then
-       *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
-       *   typing.Typechecker.typ_info_var; *)
 
       begin if String.lowercase_ascii !Cli.backend = "z3" then
           Z3_driver.translate_and_launch_query program typing
@@ -140,7 +132,6 @@ let driver
           let program = Verifisc.Optimization.optimize program in
           let nb_after = Verifisc.Ir.nb_commands program in
           Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-          (* Cli.result_print (Printf.sprintf "Result:\n%s" (Verifisc.Format_ir.format_program program)); *)
           ()
         end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
           Cli.debug_print "Interpreting the program...";

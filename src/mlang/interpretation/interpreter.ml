@@ -394,8 +394,6 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       ))
     | LocalLet (lvar, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
-      if !eval_debug then
-        Cli.debug_print (Printf.sprintf "t%d -> %s" lvar.id (Format_mvg.format_literal new_e1));
       let new_e2 =
         evaluate_expr
           { ctx with
@@ -529,15 +527,7 @@ let evaluate_program
                    try
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
-                       (* if Pos.unmark var.name = "NAPCRP" then
-                        *   begin Cli.debug_print (Printf.sprintf "expr of NAPCRP is %s" (Format_mvg.format_expression @@ Pos.unmark e));
-                        *     eval_debug := true end; *)
-
                        let l_e = evaluate_expr ctx p e in
-                       eval_debug := false;
-                       (* if Pos.unmark var.name = "NAPCRP" then
-                        *   (\* ce qui est drôle c'est qu'après les variables ont les bonnes valeurs. ça pue l'ordonnancement ce truc *\)
-                        *   raise (RuntimeError (ErrorValue "",                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars })); *)
                        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars };
                      | Mvg.TableVar (size, es) ->
                     (*
