@@ -32,6 +32,8 @@ let driver
     (output: string option)
     (number_of_passes: int)
     (real_precision : int)
+    (run_all_tests: string option)
+    (run_test: string option)
   =
   Cli.set_all_arg_refs
     files
@@ -45,7 +47,9 @@ let driver
     function_spec
     output
     number_of_passes
-    real_precision;
+    real_precision
+    run_all_tests
+    run_test;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in
@@ -103,6 +107,13 @@ let driver
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
 
+    if !Cli.run_all_tests <> None then
+      Test.check_all_tests program (match !Cli.run_all_tests with Some s -> s | _ -> assert false)
+    else if !Cli.run_test <> None then
+      Test.check_test program (match !Cli.run_test with Some s -> s | _ -> assert false)
+    else
+      let program = if !Cli.optimize then Optimization.optimize program else program in
+      (* Noundef.check program; *)
 
 
     let program = if !Cli.optimize then Optimization.optimize program else program in

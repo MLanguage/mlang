@@ -119,6 +119,22 @@ let real_precision =
             which is equal to 1/$(i, PRECISION)."
   )
 
+let run_all_tests =
+  Arg.(
+    value &
+    opt (some file) None &
+    info ["run_all_tests"; "R"] ~docv:"TESTS"
+      ~doc:"Run all tests in folder specified folder"
+  )
+
+let run_test =
+  Arg.(
+    value &
+    opt (some file) None &
+    info ["run_test"; "r"] ~docv:"TESTS"
+      ~doc:"Run specific test passed as argument"
+  )
+
 let mlang_t f =
   Term.(
     const f $
@@ -133,7 +149,9 @@ let mlang_t f =
     function_spec $
     output $
     number_of_passes $
-    real_precision
+    real_precision $
+    run_all_tests $
+    run_test
   )
 
 let info =
@@ -205,6 +223,10 @@ let real_precision = ref 100
 
 let backend = ref "python"
 
+let run_all_tests : string option ref = ref None
+let run_test : string option ref = ref None
+
+
 let set_all_arg_refs
     (files_: string list)
     (application_: string)
@@ -218,6 +240,8 @@ let set_all_arg_refs
     (output_: string option)
     (number_of_passes_: int)
     (real_precision_ : int)
+    (run_all_tests_: string option)
+    (run_test_: string option)
   =
   source_files := files_;
   application := application_;
@@ -234,7 +258,9 @@ let set_all_arg_refs
     | None -> if backend_ = "interpreter" || backend_ = "z3" then "" else
         raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))
   end;
-  number_of_passes := number_of_passes_
+  number_of_passes := number_of_passes_;
+  run_all_tests := run_all_tests_;
+  run_test := run_test_
 
 (**{1 Terminal formatting }*)
 
@@ -291,10 +317,10 @@ let clock_marker i =
 
 (** All the printers below print their argument after the correct marker *)
 
-let debug_print (s: string) =
+let debug_print ?(endline="\n") (s: string) =
   if !debug_flag then begin
     debug_marker true;
-    Printf.printf "%s\n" s;
+    Printf.printf "%s%s" s endline;
     flush stdout;
     flush stdout
   end

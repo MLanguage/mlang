@@ -18,6 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Mvg
 
+let repl_debug = ref false
+
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
 
@@ -157,7 +159,10 @@ let evaluate_array_index
   else
     Array.get values idx
 
+let eval_debug = ref false
+
 let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : literal =
+  if !eval_debug then Cli.debug_print (Printf.sprintf "evaluate_expr %s" (Format_mvg.format_expression @@ Pos.unmark e));
   try begin match Pos.unmark e with
     | Comparison (op, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
@@ -371,10 +376,14 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
           | TableVar _ -> assert false
         with
         (* Else it is a value that has been computed before in the SCC graph *)
-        | Not_found -> begin match VariableMap.find var ctx.ctx_vars with
-            | SimpleVar l -> l (* should not happen *)
-            | TableVar _ -> assert false
-          end
+        | Not_found ->
+          try
+            begin match VariableMap.find var ctx.ctx_vars with
+              | SimpleVar l -> l (* should not happen *)
+              | TableVar _ -> assert false
+            end
+          with Not_found ->
+            assert false
       end
     | GenericTableIndex -> begin match ctx.ctx_generic_index with
         | None -> assert false (* should not happen *)
@@ -419,12 +428,36 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Undefined -> Bool false
         | _ -> Bool true
       end
-    | FunctionCall (NullFunc, [arg]) ->
-      begin match evaluate_expr ctx p arg with
-        | Undefined -> Bool true
-        | _ -> Bool false
-      end
 
+    | FunctionCall (Multimax, [arg1; arg2]) ->
+      let up = match evaluate_expr ctx p arg1 with
+        | Int x -> x
+        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | e ->
+          raise (RuntimeError (ErrorValue
+                                 (Printf.sprintf
+                                    "evaluation of %s should be an integer, not %s"
+                                    (Format_mvg.format_expression @@ Pos.unmark arg1)
+                                    (Format_mvg.format_literal e)
+                                 ), ctx))
+      in
+      let var_arg2 = match Pos.unmark arg2 with
+        | Var v -> v
+        | _ -> assert false (* todo: rte *) in
+      let cast_to_int e = match e with
+        | Int x -> x
+        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | Undefined ->
+          Cli.warning_print "cast from undefined to 0 in multimax computation";
+          0
+        | _ -> assert false in
+      let pos = Pos.get_position arg2 in
+      let access_index i = cast_to_int @@ evaluate_expr ctx p (Index ((var_arg2, pos), (Literal (Int i), pos)), pos) in
+      let maxi = ref (access_index 0) in
+      for i = 0 to up do
+        maxi := max !maxi (access_index i)
+      done;
+      Int !maxi
     | FunctionCall (func, _) ->
       raise
         (RuntimeError
@@ -440,7 +473,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       Cli.error_print (format_runtime_error e);
       flush_all ();
       flush_all ();
-      repl_debugguer ctx p ;
+      if !repl_debug then repl_debugguer ctx p ;
       exit 1
     end
 
@@ -466,7 +499,9 @@ let evaluate_program
                     | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
                     | InputVar -> begin match VariableMap.find_opt var input_values with
                         | Some e -> SimpleVar e
-                        | None -> assert false (* should not happen *)
+                        | None ->
+                          Cli.error_print @@ Pos.unmark @@ var.name;
+                          assert false (* should not happen *)
                       end
                   end with
                   | Not_found ->
@@ -493,7 +528,7 @@ let evaluate_program
                      match (VariableMap.find var p.program_vars).var_definition with
                      | Mvg.SimpleVar e ->
                        let l_e = evaluate_expr ctx p e in
-                       { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+                       { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars };
                      | Mvg.TableVar (size, es) ->
                     (*
                       Right now we suppose that the different indexes of table arrays don't depend on each other
@@ -511,7 +546,8 @@ let evaluate_program
                                       | IndexGeneric e ->
                                         evaluate_expr { ctx with ctx_generic_index = Some idx } p e
                                       | IndexTable es ->
-                                        evaluate_expr ctx p (IndexMap.find idx es)
+                                        let e = (IndexMap.find idx es) in
+                                        evaluate_expr ctx p e
                                    )
                                )
                              )
@@ -526,7 +562,8 @@ let evaluate_program
                                ) in
                            { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
                          with
-                         | Not_found -> raise (
+                         | Not_found ->
+                           raise (
                              RuntimeError (
                                MissingInputValue (
                                  Printf.sprintf "%s (%s)"
@@ -580,6 +617,6 @@ let evaluate_program
       Cli.error_print (format_runtime_error e);
       flush_all ();
       flush_all ();
-      repl_debugguer ctx p ;
+      if !repl_debug then repl_debugguer ctx p ;
       exit 1
     end
