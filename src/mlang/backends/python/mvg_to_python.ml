@@ -165,15 +165,6 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
     let s1 = generate_python_expr (Pos.unmark e1) scc in
     let s2 = generate_python_expr (Pos.unmark e2) scc in
     Printf.sprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
-  | Binop ((Ast.Div, _), e1, e2) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    begin match Pos.unmark e2 with
-      | Literal (Int i) when i <> 0 ->
-        Printf.sprintf "(%s / %s)" s1 s2
-      | _ ->
-        Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
-    end
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Pos.unmark e1) scc in
     let s2 = generate_python_expr (Pos.unmark e2) scc in

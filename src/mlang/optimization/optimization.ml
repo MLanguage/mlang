@@ -62,7 +62,6 @@ let optimize
   let program = ref program in
   let nb_removed = ref max_int in
   let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
-
   while !nb_removed > 0 do
     current_progress
       (Printf.sprintf
@@ -74,6 +73,11 @@ let optimize
          "performing global value numbering..."
       );
     let new_program = Global_value_numbering.optimize new_program in
+    current_progress
+      (Printf.sprintf
+         "performing partial evaluation..."
+      );
+    let new_program = Partial_evaluation.partially_evaluate new_program in
     current_progress
       (Printf.sprintf
          "removing unused variables..."
