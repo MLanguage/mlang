@@ -19,6 +19,7 @@ module Pos = Verifisc.Pos
 open Mvg
 
 let repl_debug = ref false
+let exit_on_rte = ref true
 
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
@@ -470,11 +471,18 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
            ))
   end with
   | RuntimeError (e,ctx) -> begin
-      Cli.error_print (format_runtime_error e);
-      flush_all ();
-      flush_all ();
-      if !repl_debug then repl_debugguer ctx p ;
-      exit 1
+      if !exit_on_rte then
+        begin
+          Cli.error_print (format_runtime_error e);
+          flush_all ();
+          flush_all ();
+          if !repl_debug then repl_debugguer ctx p ;
+          exit 1
+        end
+      else
+        begin
+          raise (RuntimeError(e, ctx))
+        end
     end
 
 let rec repeati (init: 'a) (f: 'a -> 'a) (n: int) : 'a =
@@ -613,10 +621,14 @@ let evaluate_program
       ) empty_ctx execution_order
     in ctx
   with
-  | RuntimeError (e,ctx) -> begin
-      Cli.error_print (format_runtime_error e);
-      flush_all ();
-      flush_all ();
-      if !repl_debug then repl_debugguer ctx p ;
-      exit 1
-    end
+  | RuntimeError (e,ctx) ->
+    if !exit_on_rte then
+      begin
+        Cli.error_print (format_runtime_error e);
+        flush_all ();
+        flush_all ();
+        if !repl_debug then repl_debugguer ctx p ;
+        exit 1
+      end
+    else
+      raise (RuntimeError (e, ctx))

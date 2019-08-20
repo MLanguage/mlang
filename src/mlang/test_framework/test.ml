@@ -89,7 +89,16 @@ let check_test (p: Mvg.program) (test_name: string) =
 
 let check_all_tests (p:Mvg.program) (test_dir: string) =
   let arr = Sys.readdir test_dir in
+  Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort (fun f1 f2 ->
       Pervasives.compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr;
-  Array.iter (fun name -> check_test p (test_dir ^ name)) arr
+  Cli.debug_flag := false;
+  Cli.warning_flag := false;
+  let process = fun name ->
+      try
+        check_test p (test_dir ^ name);
+        Cli.debug_print (Printf.sprintf "Success on %s!" name)
+      with Interpreter.RuntimeError (e, _) ->
+        Cli.debug_print @@ Interpreter.format_runtime_error e in
+  Array.iter process arr
