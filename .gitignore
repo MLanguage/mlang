@@ -13,4 +13,5 @@ src/**/.merlin
 *.install
 tests/*
 !tests/tests.m_spec
+!tests/test2.m_spec
 doc.html
