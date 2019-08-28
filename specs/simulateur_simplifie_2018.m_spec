@@ -19,4 +19,6 @@ const:
 V_ANREV = 2017;
 PREM8_11 = 0;
 
+condition: non;
+
 sortie: IRNET;

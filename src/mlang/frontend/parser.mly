@@ -503,19 +503,11 @@ spec_const_list:
 
 
 spec_conds_list:
+| NOT SEMICOLON { [] }
 | cond = expression SEMICOLON { [cond] }
 | cond = expression SEMICOLON others = spec_conds_list { cond::others }
 
-
 function_spec:
-| INPUT COLON inputs = spec_input_list SEMICOLON
-  CONST COLON consts = spec_const_list
-  OUTPUT COLON outputs = spec_output_list SEMICOLON { {
-      spec_inputs = inputs;
-      spec_consts = consts;
-      spec_outputs = outputs;
-      spec_conditions = [];
-                           } }
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
   CONDITION COLON precs = spec_conds_list
