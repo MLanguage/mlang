@@ -24,7 +24,10 @@ To install the compiler as an opam package, simply use:
     opam install ./
 
 Otherwise, the project is managed using Dune, so you can use `dune build` or
-`dune exec` commands.
+`dune exec` commands. To use the M source code released by the DGFiP, you have
+to initiate the `ir-calcul` submodule with
+
+    git submodule update --init --recursive
 
 ## Usage
 
