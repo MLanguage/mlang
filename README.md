@@ -12,22 +12,21 @@ released by the DGFiP.
 
 You will need an OCaml distribution with the following Opam packages:
 
-        opam install ppx_deriving ANSITerminal ocamlgraph z3 re odoc odig
+        opam install ppx_deriving ANSITerminal ocamlgraph z3 re odoc odig dune
 
-The Z3 Opam package takes a very long time to install (10 minutes). You also need
-to install the [Verifisc](https://gitlab.inria.fr/verifisc/verifisc) intermediate
-language library as an opam package (follow the instructions in the README of
-this repo).
+The Z3 Opam package takes a very long time to install (10 minutes).
 
-To install the compiler as an opam package, simply use:
-
-    opam install ./
-
-Otherwise, the project is managed using Dune, so you can use `dune build` or
-`dune exec` commands. To use the M source code released by the DGFiP, you have
-to initiate the `ir-calcul` submodule with
+You also need to install the
+[Verifisc](https://gitlab.inria.fr/verifisc/verifisc) intermediate
+language library as an opam package (follow the instructions in the
+README of this repo). As verifisc is a submodule, you can launch
 
     git submodule update --init --recursive
+
+
+To fetch the source of verifisc. Additionnally, this will fetch the
+M source code released by the DGFiP.
+You can then use `dune build` to build all source files.
 
 ## Usage
 
