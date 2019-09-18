@@ -193,11 +193,14 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
        pass will always be undefined.
     *)
     Pos.same_pos_as (Literal Undefined) e
-  | Var var -> begin match begin try (VariableMap.find var p.program_vars).var_definition with
+  | Var var ->
+    begin match begin try (VariableMap.find var p.program_vars).var_definition with
       | Not_found -> assert false (* should not happen *)
     end with
-    | SimpleVar e'  -> begin match Pos.unmark e' with
-        | Var _ | Literal _ ->  e'
+    | SimpleVar e'  ->
+      begin match Pos.unmark e' with
+        | Literal _ | Var _ ->
+          e'
         | _ -> e
       end
     | TableVar _ | InputVar -> e
@@ -262,7 +265,8 @@ let partially_evaluate (p: program) : program =
             let new_def = match def.var_definition with
               | InputVar -> InputVar
               | SimpleVar e ->
-                SimpleVar (partial_evaluation (empty_ctx var None scc) p e)
+                let e' = partial_evaluation (empty_ctx var None scc) p e in
+                SimpleVar e'
               | TableVar (size, def) -> begin match def with
                   | IndexGeneric e ->
                     TableVar(

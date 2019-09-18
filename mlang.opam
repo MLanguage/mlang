@@ -30,6 +30,6 @@ depends: [
   "visitors" {>= "20190711"}
   "ocamlgraph" {= "1.8.8"}
   "z3" {= "4.8.4"}
-  "specifisc" {= "1.0.2"}
+  "verifisc" {= "1.0.2"}
   "dune-build-info" {= "1.11.0"}
 ]

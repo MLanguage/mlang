@@ -124,7 +124,7 @@ Inductive type :=
 
 Inductive envtypes :=
 | TScalar : type -> envtypes
-| TTable : type -> table_size -> envtypes .
+| TTable : type -> envtypes.
 
 Inductive values :=
 | Bool : bool ->  values
@@ -448,8 +448,8 @@ Inductive well_typed : type_environment -> expression -> type -> Prop :=
 | WTArith : forall Gamma op e1 e2, well_typed Gamma e1 TFloat ->
                              well_typed Gamma e2 TFloat ->
                              well_typed Gamma (Arith op e1 e2) TFloat
-| WTIndex : forall Gamma tabvar index tabtau tabsize,
-    Gamma(tabvar) = Some (TTable tabtau tabsize) ->
+| WTIndex : forall Gamma tabvar index tabtau,
+    Gamma(tabvar) = Some (TTable tabtau) ->
     well_typed Gamma index TFloat ->
     well_typed Gamma (TableAccess tabvar index) tabtau
 | WTFuncFloat1Bool :
@@ -491,7 +491,7 @@ Definition related_envs_some_scalar (Gamma: type_environment) (Omega: environmen
 
 Definition related_envs_some_tbl (Gamma: type_environment) (Omega: environment) :=
   forall (s: string),
-    forall tau size, Gamma s = Some (TTable tau size) -> exists v, Omega s = Some (VTable v size) /\ List.Forall (fun el => value_of_type el tau) v /\ (N.to_nat size) = List.length v.
+    forall tau, Gamma s = Some (TTable tau) -> exists v size, Omega s = Some (VTable v size) /\ List.Forall (fun el => value_of_type el tau) v /\ (N.to_nat size) = List.length v.
 (* I don't know if we need size = size', or if we can prove size = size' or sth... *)
 
 Definition related_envs_none (Gamma: type_environment) (Omega: environment) :=
@@ -550,8 +550,8 @@ Proof.
       inversion IHe2t as [? | f2 | ?]; subst; destruct H4; subst; simpl; eauto.
   - destruct (IHe _ H5) as [ve [O_eq v_ty]]; rewrite O_eq; simpl.
     inversion v_ty; subst; eauto.
-    specialize (rGOST _ _ _ H3).
-    destruct rGOST as [v0 [Ov0_eq [Altau v0_eq]]].
+    specialize (rGOST _ _ H3).
+    destruct rGOST as [v0 [s0 [Ov0_eq [Altau v0_eq]]]].
     rewrite Ov0_eq.
     destruct (valid_integer_access f _) eqn:VIA.
     + rewrite List.Forall_forall in Altau.
@@ -635,7 +635,7 @@ Inductive well_typed_cmd : type_environment -> command -> type_environment -> Pr
 | WTCAssign : forall Gamma var expr tau, well_typed Gamma expr tau -> well_typed_cmd Gamma (Assign var expr) (upd_map _ var  (TScalar tau) Gamma)
 | WTCAssignTable : forall Gamma var tabsize expr tau,
     tabsize <> N0 ->
-    well_typed (upd_map _ "X"%string (TScalar TFloat) Gamma) expr tau -> well_typed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var (TTable tau tabsize) Gamma)
+    well_typed (upd_map _ "X"%string (TScalar TFloat) Gamma) expr tau -> well_typed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var (TTable tau) Gamma)
 | WTCCond : forall Gamma cond err, well_typed Gamma cond TBool -> well_typed_cmd Gamma (Verif cond err) Gamma.
 
 Inductive well_typed_prog : type_environment -> program -> type_environment -> Prop :=
@@ -655,7 +655,7 @@ Hint Unfold related_envs.
 Lemma upd_related_envs_scalar_table :
   forall Gamma Omega v tau vals size,
     related_envs_some_scalar Gamma Omega ->
-    related_envs_some_scalar (upd_map envtypes v (TTable tau size) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_some_scalar (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
   intros s tau' Hup.
@@ -670,10 +670,10 @@ Lemma upd_related_envs_table_table :
     related_envs_some_tbl Gamma Omega ->
     List.Forall (fun el => value_of_type el tau) vals ->
     (N.to_nat size) = List.length vals ->
-    related_envs_some_tbl (upd_map envtypes v (TTable tau size) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_some_tbl (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
-  intros ? ? ? Hup.
+  intros ? ? Hup.
   unfold upd_map in *.
   destruct (string_dec v s); subst.
   - inversion Hup; subst; eauto.
@@ -683,7 +683,7 @@ Qed.
 Lemma upd_related_envs_none_table :
   forall Gamma Omega v tau vals size,
     related_envs_none Gamma Omega ->
-    related_envs_none (upd_map envtypes v (TTable tau size) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_none (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
   intros s Hup.
@@ -714,7 +714,7 @@ Lemma upd_related_envs_table_scalar :
     related_envs_some_tbl (upd_map _ k (TScalar tau) Gamma) (upd_map _ k (VScalar v) Omega).
 Proof.
   intros.
-  intros s tau' size Hup.
+  intros s tau' Hup.
   unfold upd_map in *.
   destruct (string_dec _ s); subst.
   - inversion Hup; eauto.
@@ -859,6 +859,6 @@ Proof.
   exists (fun _ => None); repeat split.
   - intros ? ? ?.
     inversion H0.
-  - intros ? ? ? ?.
+  - intros ? ? ?.
     inversion H0.
 Qed.

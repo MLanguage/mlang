@@ -10,4 +10,6 @@ FLAG_PVRO = 0;
 # MOISAN = 052017;
 # CMAJ = 0;
 
+condition: non;
+
 sortie: non;

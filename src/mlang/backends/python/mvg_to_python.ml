@@ -312,7 +312,6 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
   else
     Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "%s\n\n" undefined_class_prelude;
-  Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "l = dict()\n\n";
   Printf.fprintf oc "%s\n"
     (String.concat

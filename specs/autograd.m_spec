@@ -6,4 +6,6 @@ V_0AC = 1;
 V_0CF = 0;
 TSHALLOC = 0000.0;
 
+condition: non;
+
 sortie: IRNET;

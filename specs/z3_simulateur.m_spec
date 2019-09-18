@@ -41,4 +41,6 @@ TSHALLOV = 1;
 8YS = 45000;
 9YF = 0;
 
+condition: non;
+
 sortie: IRNET;
