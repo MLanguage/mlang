@@ -119,6 +119,8 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
   finish "done!";
   Cli.debug_print (Printf.sprintf "%d successes, on: %s" (List.length s) (String.concat ", " s));
   Cli.debug_print "Failures:";
-  VariableMap.iter (fun var infos ->
-      Cli.debug_print (Printf.sprintf "\t%s, %d errors in files %s" (Pos.unmark var.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
-    ) f
+  let f_l = List.sort (fun (_, i) (_, i') -> - Pervasives.compare (List.length i) (List.length i')) (VariableMap.bindings f) in
+  List.iter
+    (fun (var, infos) ->
+      Cli.debug_print (Printf.sprintf "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
+    ) f_l
