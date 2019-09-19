@@ -92,35 +92,44 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
   Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort Pervasives.compare arr;
-    (* (fun f1 f2 ->
-     *   Pervasives.compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr; *)
+  (* (fun f1 f2 ->
+   *   Pervasives.compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr; *)
   Cli.warning_flag := false;
   Cli.display_time := false;
-  let current_progress, finish = Cli.create_progress_bar "Testing files" in
-  let filenumber = Array.length arr in
-  let process = fun (pos, successes, failures) name ->
-    current_progress (Printf.sprintf "%d/%d -- %s" pos filenumber name);
+  let _, finish = Cli.create_progress_bar "Testing files" in
+  let process = fun name (successes, failures) ->
     try
       Cli.debug_flag := false;
       check_test p (test_dir ^ name);
       Cli.debug_flag := true;
-      (pos+1, name :: successes, failures)
-      (* Cli.debug_print (Printf.sprintf "Success on %s" name) *)
+      (name :: successes, failures)
+    (* Cli.debug_print (Printf.sprintf "Success on %s" name) *)
     with Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) ->
       Cli.debug_flag := true;
       match bindings, Pos.unmark expr with
       | [v, Interpreter.SimpleVar l1], Unop (Not, (Comparison ((Ast.Eq, _), _, (Literal l2, _)), _)) ->
         (* Cli.debug_print (Printf.sprintf "Failure on %s, var = %s, got = %s, expected = %s" name varname (Format_mvg.format_literal l1) (Format_mvg.format_literal l2)); *)
         let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-        (pos+1, successes, VariableMap.add v ((name,l1,l2)::errs_varname) failures)
+        (successes, VariableMap.add v ((name,l1,l2)::errs_varname) failures)
       | _ -> assert false in
-      (* Cli.debug_print @@ Interpreter.format_runtime_error e in *)
-  let _, s, f = Array.fold_left process (1, [], VariableMap.empty) arr in
+  (* Cli.debug_print @@ Interpreter.format_runtime_error e in *)
+  let (s, f) =
+    Parmap.parfold
+      ~chunksize: 10
+      process
+      (Parmap.A arr)
+      ([], VariableMap.empty)
+      (fun (old_s, old_f) (new_s, new_f) ->
+         (
+           new_s@old_s,
+           VariableMap.union (fun _ x1 x2 -> Some(x1@x2)) old_f new_f
+         ))
+  in
   finish "done!";
   Cli.debug_print (Printf.sprintf "%d successes, on: %s" (List.length s) (String.concat ", " s));
   Cli.debug_print "Failures:";
   let f_l = List.sort (fun (_, i) (_, i') -> - Pervasives.compare (List.length i) (List.length i')) (VariableMap.bindings f) in
   List.iter
     (fun (var, infos) ->
-      Cli.debug_print (Printf.sprintf "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
+       Cli.debug_print (Printf.sprintf "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
     ) f_l

@@ -12,7 +12,7 @@ released by the DGFiP.
 
 You will need an OCaml distribution with the following Opam packages:
 
-        opam install ppx_deriving ANSITerminal ocamlgraph z3 re odoc odig dune
+        opam install ppx_deriving ANSITerminal parmap ocamlgraph z3 re odoc odig dune
 
 The Z3 Opam package takes a very long time to install (10 minutes).
 
