@@ -12,4 +12,5 @@ optimized_program.mvg
 input_needed.txt
 src/**/.merlin
 *.install
-tests/
+tests/*
+!tests/tests.m_spec

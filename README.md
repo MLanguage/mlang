@@ -10,42 +10,51 @@ released by the DGFiP.
 
 ## Installation
 
-You will need an OCaml distribution with the following Opam packages:
+Mlang is implemented in OCaml. To manage dependencies,
+[install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
+of OCaml that is at least 4.0.7. Then, you can install Mlang's dependencies using
 
-        opam install ppx_deriving ANSITerminal ocamlgraph z3 re odoc odig dune
+    make deps
 
-The Z3 Opam package takes a very long time to install (10 minutes).
-
-You also need to install the
-[Verifisc](https://gitlab.inria.fr/verifisc/verifisc) intermediate
-language library as an opam package (follow the instructions in the
-README of this repo). As verifisc is a submodule, you can launch
+Warning: the Z3 opam package takes a very long time to install (10 minutes).
+Next, fetch the source code dependencies of Mlang with
 
     git submodule update --init --recursive
 
+This will fetch the source code of [Verifisc](https://gitlab.inria.fr/verifisc/verifisc),
+and the M source code released by the DGFiP.
 
-To fetch the source of verifisc. Additionnally, this will fetch the
-M source code released by the DGFiP.
-You can then use `dune build` to build all source files.
+You can then use `dune build` to build all source files, and other dune commands.
+
+If you want to install the `mlang` executable and the opam packages, use
+
+    chmod +x install.h && ./install.sh
 
 ## Usage
 
-The `Makefile` contains several examples of invocation of the `mlang` executable.
+If the `mlang` executable is install, you can consult its man page with
 
-For instance, if you want to
+    mlang --help
+
+The `examples` folder  contains several examples of invocation of the `mlang` executable,
+catagorized by the backend used. For instance, if you want to
 compile all the source code files released by the DGFiP for the year 2017,
-and analyse the code that computes the income tax, then launch
+and produce a Python module equivalent to the official simplified simulator available
+[published by the DGFiP](https://www3.impots.gouv.fr/simulateur/calcul_impot/2018/simplifie/index.htm),
+go to the `examples/python` folder and use
 
-        make case_basique_2018
+        make simulateur_simplifie_2018
+
+Mlang should generate a file named `ir_2018.py` containing the generated Python code.
 
 ## Documentation
 
-The OCaml code is self-documented using `ocamldoc`. You can generate the HTML
+The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML
 documentation using
 
         make doc
 
-The output will be in the `doc` folder, rooted at file `index.html`.
+To browse the documentation, just open the file `doc.html` with your browser.
 
 ## License
 

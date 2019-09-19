@@ -3,4 +3,4 @@
 	url = https://framagit.org/denismerigoux/ir-calcul.git
 [submodule "verifisc"]
 	path = verifisc
-	url = git@gitlab.inria.fr:verifisc/verifisc.git
+	url = https://gitlab.inria.fr/verifisc/verifisc.git

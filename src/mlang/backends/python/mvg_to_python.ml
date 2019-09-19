@@ -174,6 +174,28 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
       | _ ->
         Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
     end
+  (*
+    This special case has been added, because otherwise huge sums would produce
+    too many parenthesis, causing the Python parser to crash
+  *)
+  | Binop ((Ast.Add, _), e1,
+           (Binop ((Ast.Add, _), e2,
+                   (Binop ((Ast.Add, _), e3,
+                           (Binop ((Ast.Add, _), e4,
+                                   (Binop ((Ast.Add, _), e5,
+                                           e6
+                                          ), _)
+                                  ), _)
+                          ), _)
+                  ), _)
+          ) ->
+    let s1 = generate_python_expr (Pos.unmark e1) scc in
+    let s2 = generate_python_expr (Pos.unmark e2) scc in
+    let s3 = generate_python_expr (Pos.unmark e3) scc in
+    let s4 = generate_python_expr (Pos.unmark e4) scc in
+    let s5 = generate_python_expr (Pos.unmark e5) scc in
+    let s6 = generate_python_expr (Pos.unmark e6) scc in
+    Printf.sprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Pos.unmark e1) scc in
     let s2 = generate_python_expr (Pos.unmark e2) scc in
