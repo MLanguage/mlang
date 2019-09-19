@@ -312,8 +312,8 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
   else
     Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "%s\n\n" undefined_class_prelude;
-  Printf.fprintf oc "l = dict()\n\n";
-  Printf.fprintf oc "%s\n"
+  Printf.fprintf oc "local_variables = dict()\n\n\n";
+  Printf.fprintf oc "# The following keys must be present in the input:\n%s\n"
     (String.concat
        "\n"
        (List.map
@@ -325,7 +325,14 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
           input_vars
        )
     );
-  Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
+  Printf.fprintf oc "def extracted(input_variables):\n\n";
+  Printf.fprintf oc "    # First we extract the input variables from the dictionnary:\n%s\n\n"
+    (String.concat "\n" (List.map (fun var ->
+         Printf.sprintf "    %s = input_variables[\"%s\"]"
+           (generate_variable var)
+           (generate_name var)
+       ) input_vars
+       ));
   List.iter (fun scc ->
       let in_scc = VariableMap.cardinal scc > 1 in
       if in_scc then begin
@@ -356,7 +363,7 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
         (VariableMap.bindings program.program_vars)
     )
   in
-  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global l\n    l = locals()\n";
+  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global local_variables\n    local_variables = locals()\n\n";
   begin if List.length returned_variables = 1 then
       Printf.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
     else begin
