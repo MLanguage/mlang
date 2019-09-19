@@ -453,19 +453,22 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Var v -> v
         | _ -> assert false (* todo: rte *) in
       let cast_to_int e = match e with
-        | Int x -> x
-        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | Int x -> Some x
+        | Float f when float_of_int (int_of_float f) = f -> Some (int_of_float f)
         | Undefined ->
-          Cli.warning_print "cast from undefined to 0 in multimax computation";
-          0
+          None
         | _ -> assert false in
       let pos = Pos.get_position arg2 in
       let access_index i = cast_to_int @@ evaluate_expr ctx p (Index ((var_arg2, pos), (Literal (Int i), pos)), pos) in
       let maxi = ref (access_index 0) in
       for i = 0 to up do
-        maxi := max !maxi (access_index i)
+        maxi := match !maxi, access_index i with
+          | None, _ | _, None -> None
+          | Some m, Some v -> Some (max m v)
       done;
-      Int !maxi
+      begin match !maxi with
+      | None -> Undefined
+      | Some v -> Int v end
     | FunctionCall (func, _) ->
       raise
         (RuntimeError
