@@ -4,7 +4,6 @@ SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 
 SOURCE_FILES=$(shell find $(SOURCE_DIR_2017) -name "*.m")
 
-# export LD_LIBRARY_PATH=$(Z3_FOLDER)
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 
 deps:

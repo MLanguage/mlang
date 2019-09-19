@@ -71,7 +71,7 @@ to enable or disable parts of the computation.
 
 The DGFiP has not published the details of this iterative computation. Hence,
 until they do, the amounts of taxes computed by Mlang-generated programs are usually
-false (until on very simple situations).
+false (except on very simple situations).
 
 ## Contributors
 
@@ -81,6 +81,13 @@ if you are interested.
 
 Please note that the copyright of this code is owned by Inria; by contributing,
 you disclaim all copyright interests in favor of Inria.
+
+## Formal semantics
+
+The `formal_semantics` folder contains two separate formalizations for the core of the
+M language, that roughly corresponds to the `Mvg` internal representation in Mlang.
+The reference formalization is the Coq one, in file `semantique.v`. The F* formalization
+is a proof of concept.
 
 ## License
 
