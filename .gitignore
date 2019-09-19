@@ -1,5 +1,4 @@
 _build/
-doc/
 main.native
 dep_graph.dot
 results.json
@@ -14,3 +13,4 @@ src/**/.merlin
 *.install
 tests/*
 !tests/tests.m_spec
+doc.html

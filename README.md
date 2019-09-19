@@ -79,6 +79,9 @@ The project accepts pull requests. There is currently no formalized contribution
 guide or centralized discussion place about the project. Please email the authors
 if you are interested.
 
+Please note that the copyright of this code is owned by Inria; by contributing,
+you disclaim all copyright interests in favor of Inria.
+
 ## License
 
 The compiler is released under the GPL license (version 3).
