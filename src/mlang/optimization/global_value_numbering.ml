@@ -244,13 +244,7 @@ let optimize (p: program) : program =
                 }, data
               | (Literal (Bool true) , _) ->   raise (Interpreter.RuntimeError (
                   Interpreter.ConditionViolated (
-                    Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s"
-                      (Pos.format_position (Pos.get_position cond.cond_expr))
-                      (String.concat "\n" (List.map (fun err ->
-                           Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
-                         ) cond.cond_errors))
-                      (Format_mvg.format_expression (Pos.unmark cond.cond_expr))
-                  ), Interpreter.empty_ctx
+                    cond.cond_errors, cond.cond_expr, []), Interpreter.empty_ctx
                 ))
               | new_cond_expr ->
                 { p with

@@ -322,7 +322,7 @@ let clock_marker i =
 
 let debug_print ?(endline="\n") (s: string) =
   if !debug_flag then begin
-    debug_marker true;
+    debug_marker !display_time;
     Printf.printf "%s%s" s endline;
     flush stdout;
     flush stdout
