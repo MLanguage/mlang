@@ -122,7 +122,7 @@ type run_error =
   | FloatIndex of string
   | IndexOutOfBounds of string
   | MissingInputValue of string
-  | ConditionViolated of string
+  | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
 
 exception RuntimeError of run_error * ctx
 
@@ -132,7 +132,14 @@ let format_runtime_error (e: run_error) : string = match e with
   | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
   | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
   | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s
-  | ConditionViolated s -> Printf.sprintf "Verification condition failed: %s" s
+  | ConditionViolated (errors, condition, bindings) ->
+    Printf.sprintf "Verification condition failed: %s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
+      (Pos.format_position (Pos.get_position condition))
+      (String.concat "\n" (List.map (fun err ->
+           Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
+         ) errors))
+      (Format_mvg.format_expression (Pos.unmark condition))
+      (String.concat "\n" (List.map (fun (v, l) -> format_var_literal_with_var v l) bindings))
 
 let evaluate_array_index
     (ctx: ctx)
@@ -589,20 +596,9 @@ let evaluate_program
                      | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
                      | Bool true -> (* the condition is triggered, we throw errors *)
                        raise (RuntimeError (
-                           ConditionViolated (
-                             Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
-                               (Pos.format_position (Pos.get_position cond.cond_expr))
-                               (String.concat "\n" (List.map (fun err ->
-                                    Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
-                                  ) cond.cond_errors))
-                               (Format_mvg.format_expression (Pos.unmark cond.cond_expr))
-                               (String.concat "\n" (List.map (fun (var) ->
-                                    let l = VariableMap.find var ctx.ctx_vars in
-                                    format_var_literal_with_var var l
-                                  ) (
-                                    Dependency.DepGraph.pred dep_graph var
-                                  )))
-                           ), ctx
+                           ConditionViolated (cond.cond_errors, cond.cond_expr,
+                                              List.rev @@ List.fold_left (fun acc var -> (var, VariableMap.find var ctx.ctx_vars)::acc) [] (Dependency.DepGraph.pred dep_graph var))
+                           , ctx
                          ))
                      | _ -> assert false (* should not happen *)
                 ) scc ctx
