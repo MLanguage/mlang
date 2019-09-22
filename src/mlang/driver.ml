@@ -116,52 +116,58 @@ let driver
       (* Noundef.check program; *)
 
 
-    let program = if !Cli.optimize then Optimization.optimize program else program in
-    (* Noundef.check program; *)
+      let program = if !Cli.optimize then Optimization.optimize program else program in
+      (* Noundef.check program; *)
 
-    (* Mvg.VariableMap.iter (fun var (ty, bool) ->
-     *     if Mvg.VariableMap.mem var program.program_vars then
-     *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
-     *   typing.Typechecker.typ_info_var; *)
+      (* Mvg.VariableMap.iter (fun var (ty, bool) ->
+       *     if Mvg.VariableMap.mem var program.program_vars then
+       *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
+       *   typing.Typechecker.typ_info_var; *)
 
-    begin if String.lowercase_ascii !Cli.backend = "z3" then
-        Z3_driver.translate_and_launch_query program typing
-      else if String.lowercase_ascii !Cli.backend = "verifisc" then begin
-        Cli.debug_print "Translating the M program to Verifisc";
-        let program = Mvg_to_verifisc.translate_program program typing in
-        Cli.debug_print "Typechecking the Verifisc program";
-        Verifisc.Typechecker.typecheck program;
-        let program = Verifisc.Ast_to_ir.translate_program program in
-        Cli.debug_print "Optimizing the Verifisc program";
-        let nb_before = Verifisc.Ir.nb_commands program in
-        let program = Verifisc.Optimization.optimize program in
-        let nb_after = Verifisc.Ir.nb_commands program in
-        Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-        let filename = "output.verifisc" in
-        Cli.debug_print (Printf.sprintf "Writing the program to %s" filename);
-        let oc = open_out filename in
-        Printf.fprintf oc "%s" (Verifisc.Format_ir.format_program program);
-        close_out oc;
-        Cli.result_print "Interpreting the program...";
-        Verifisc.Interpreter.repl_interpreter program
-      end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
-        Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program !Cli.number_of_passes in
-        let results = f (Interface.read_inputs_from_stdin mvg_func) in
-        Interface.print_output mvg_func results;
-        Interpreter.repl_debugguer results program
-      end else if
-        String.lowercase_ascii !Cli.backend = "python" ||
-        String.lowercase_ascii !Cli.backend = "autograd"
-      then begin
-        Cli.debug_print "Compiling the program to Python...";
-        if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
-        Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
-      end else
-        raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
-    end
+      begin if String.lowercase_ascii !Cli.backend = "z3" then
+          Z3_driver.translate_and_launch_query program typing
+        else if String.lowercase_ascii !Cli.backend = "verifisc" then begin
+          Cli.debug_print "Translating the M program to Verifisc";
+          let program = Mvg_to_verifisc.translate_program program typing in
+          Cli.debug_print "Typechecking the Verifisc program";
+          Verifisc.Typechecker.typecheck program;
+          let program = Verifisc.Ast_to_ir.translate_program program in
+          Cli.debug_print "Optimizing the Verifisc program";
+          let nb_before = Verifisc.Ir.nb_commands program in
+          let program = Verifisc.Optimization.optimize program in
+          let nb_after = Verifisc.Ir.nb_commands program in
+          Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
+          let filename = "output.verifisc" in
+          Cli.debug_print (Printf.sprintf "Writing the program to %s" filename);
+          let oc = open_out filename in
+          Printf.fprintf oc "%s" (Verifisc.Format_ir.format_program program);
+          close_out oc;
+          Cli.result_print "Interpreting the program...";
+          Verifisc.Interpreter.repl_interpreter program
+        end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+          Cli.debug_print "Interpreting the program...";
+          let f = Interface.make_function_from_program program !Cli.number_of_passes in
+          let results = f (Interface.read_inputs_from_stdin mvg_func) in
+          Interface.print_output mvg_func results;
+          Interpreter.repl_debugguer results program
+        end else if
+          String.lowercase_ascii !Cli.backend = "python" ||
+          String.lowercase_ascii !Cli.backend = "autograd"
+        then begin
+          Cli.debug_print "Compiling the program to Python...";
+          if !Cli.output_file = "" then
+            raise (Errors.ArgumentError "an output file must be defined with --output");
+          Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
+          Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+        end else if String.lowercase_ascii !Cli.backend = "java" then begin
+          Cli.debug_print "Compiling the program to Java...";
+          if !Cli.output_file = "" then
+            raise (Errors.ArgumentError "an output file must be defined with --output");
+          Mvg_to_java.generate_java_program program !Cli.output_file !Cli.number_of_passes;
+          Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+        end else
+          raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
+      end
   with
   | Errors.TypeError e ->
     Cli.error_print (Errors.format_typ_error e); Cmdliner.Term.exit_status (`Ok 2)

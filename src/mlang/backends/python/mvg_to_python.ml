@@ -18,7 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Mvg
 
-let undefined_class_prelude : string = "\
+let undefined_class_prelude : string =
+  "\
 class Undefined:
     def __init__(self):
         pass
@@ -328,7 +329,8 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
          (VariableMap.bindings program.program_vars)
       )
   in
-  Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
+  Printf.fprintf oc "# -*- coding: utf-8 -*-\n";
+  Printf.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then
     Printf.fprintf oc "import numpy as np\n\n"
   else

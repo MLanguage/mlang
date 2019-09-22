@@ -74,7 +74,7 @@ let backend =
     opt (some string) None &
     info ["backend"; "b"]
       ~docv:"BACKEND"
-      ~doc:"Backend selection: interpreter, python or z3"
+      ~doc:"Backend selection: interpreter, python, java or z3"
   )
 
 let function_spec =
