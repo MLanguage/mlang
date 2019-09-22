@@ -56,50 +56,69 @@ let generate_binop (op: Ast.binop) : string = match op with
   Since there is no way to have inline let bindings, we have to collect all local
   variables created...
 *)
-let rec generate_java_expr (e: expression) (scc: unit VariableMap.t) : string * string list =
-  match e with
+let rec generate_java_expr (e: expression Pos.marked) (scc: unit VariableMap.t) : string * string list =
+  match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-    let s1, ls1 = generate_java_expr (Pos.unmark e1) scc in
-    let s2, ls2 = generate_java_expr (Pos.unmark e2) scc in
+    let s1, ls1 = generate_java_expr e1 scc in
+    let s2, ls2 = generate_java_expr e2 scc in
     Printf.sprintf "%s.%s(%s)" s1 (generate_comp_op (Pos.unmark op)) s2,
     ls1@ls2
   | Binop (op, e1, e2) ->
-    let s1, ls1 = generate_java_expr (Pos.unmark e1) scc in
-    let s2, ls2 = generate_java_expr (Pos.unmark e2) scc in
+    let s1, ls1 = generate_java_expr e1 scc in
+    let s2, ls2 = generate_java_expr e2 scc in
     Printf.sprintf "%s.%s(%s)" s1 (generate_binop (Pos.unmark op)) s2,
     ls1@ls2
   | Unop (Ast.Minus, e) ->
-    let s, ls = generate_java_expr (Pos.unmark e) scc in
+    let s, ls = generate_java_expr e scc in
     Printf.sprintf "%s.minus()" s,
     ls
   | Unop (Ast.Not, e) ->
-    let s, ls = generate_java_expr (Pos.unmark e) scc in
-    Printf.sprintf "(! %s)" s,
+    let s, ls = generate_java_expr e scc in
+    Printf.sprintf "%s.not()" s,
     ls
   | Index _ ->
     assert false (* unimplemented *)
-  | Conditional (e1, e2, e3) ->
-    let s1, ls1 = generate_java_expr (Pos.unmark e1) scc in
-    let s2, ls2 = generate_java_expr (Pos.unmark e2) scc in
-    let s3, ls3 = generate_java_expr (Pos.unmark e3) scc in
+  | Conditional (((LocalVar _, _) as e1), ((LocalVar _, _) as e2), ((LocalVar _, _) as e3)) ->
+    let s1, ls1 = generate_java_expr e1 scc in
+    let s2, ls2 = generate_java_expr e2 scc in
+    let s3, ls3 = generate_java_expr e3 scc in
     Printf.sprintf "(%s.is_undefined() ? new MValue() : (%s.get_bool_value() ? %s : %s))"
       s1
       s1 s2 s3,
     ls1@ls2@ls3 (* be careful, this is wrong is any of these has side effects ! *)
+  | Conditional (e1, e2, e3) ->
+    let v1 = LocalVariable.new_var () in
+    let v2 = LocalVariable.new_var () in
+    let v3 = LocalVariable.new_var () in
+    let new_e = Pos.same_pos_as (LocalLet (
+        v1, e1,
+        Pos.same_pos_as (LocalLet (
+            v2, e2,
+            Pos.same_pos_as (LocalLet (
+                v3, e3,
+                Pos.same_pos_as (Conditional (
+                    (Pos.same_pos_as (LocalVar v1) e1),
+                    (Pos.same_pos_as (LocalVar v2) e2),
+                    (Pos.same_pos_as (LocalVar v3) e3)
+                  )) e
+              )) e
+          )) e
+      )) e
+    in generate_java_expr new_e scc
   | FunctionCall (PresentFunc, [arg]) ->
-    let sarg, lsarg = generate_java_expr (Pos.unmark arg) scc in
-    Printf.sprintf "!%s.is_undefined()" sarg,
+    let sarg, lsarg = generate_java_expr arg scc in
+    Printf.sprintf "new MValue(!%s.is_undefined())" sarg,
     lsarg
   | FunctionCall (NullFunc, [arg]) ->
-    let sarg, lsarg = generate_java_expr (Pos.unmark arg) scc in
-    Printf.sprintf "%s.is_undefined()" sarg,
+    let sarg, lsarg = generate_java_expr arg scc in
+    Printf.sprintf "new MValue(%s.is_undefined())" sarg,
     lsarg
   | FunctionCall (ArrFunc, [arg]) ->
-    let sarg, lsarg = generate_java_expr (Pos.unmark arg) scc in
+    let sarg, lsarg = generate_java_expr arg scc in
     Printf.sprintf "%s.round()" sarg,
     lsarg
   | FunctionCall (InfFunc, [arg]) ->
-    let sarg, lsarg = generate_java_expr (Pos.unmark arg) scc in
+    let sarg, lsarg = generate_java_expr arg scc in
     Printf.sprintf "%s.floor()" sarg,
     lsarg
   | FunctionCall _ -> assert false (* should not happen *)
@@ -117,12 +136,12 @@ let rec generate_java_expr (e: expression) (scc: unit VariableMap.t) : string * 
   | GenericTableIndex -> assert false (* unimplemented *)
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-    let s1, ls1 = generate_java_expr (Pos.unmark e1) scc in
-    let s2, ls2 = generate_java_expr (Pos.unmark e2) scc in
+    let s1, ls1 = generate_java_expr e1 scc in
+    let s2, ls2 = generate_java_expr e2 scc in
     s2,
-    ls1@ls2@[
+    ls1@[
       Printf.sprintf "        MValue v%d = %s;"  lvar.LocalVariable.id s1
-    ]
+    ]@ls2
 
 
 let generate_var_def
@@ -138,29 +157,35 @@ let generate_var_def
         (Pos.unmark var.Variable.descr);
       match data.var_definition with
       | SimpleVar e ->
-        let s, ls = generate_java_expr (Pos.unmark e) scc in
+        Printf.fprintf oc "        // Defined %s\n"
+          (Pos.format_position (Pos.get_position e));
+        let s, ls = generate_java_expr e scc in
         List.iter (fun s ->
             Printf.fprintf oc "%s\n" s;
           ) ls;
-        Printf.fprintf oc "        // Defined %s\n        MValue %s = %s;\n\n"
-          (Pos.format_position (Pos.get_position e))
+        Printf.fprintf oc "        MValue %s = %s;\n\n"
           (generate_variable var)
           s
-      | TableVar _ ->
+      | TableVar (_, _) ->
         assert false (* unimplemented *)
       | InputVar -> assert false (* should not happen *)
     end
   with
   | Not_found ->
     let cond = VariableMap.find var program.program_conds in
-    let s, ls = generate_java_expr (Pos.unmark cond.cond_expr) scc in
+    let s, ls = generate_java_expr cond.cond_expr scc in
+    let fresh = LocalVariable.new_var () in
+    let cond_name = Printf.sprintf "cond%d"   fresh.LocalVariable.id in
     List.iter (fun s ->
         Printf.fprintf oc "%s\n" s;
       ) ls;
     Printf.fprintf oc
-      "        // Verification condition %s\n        MValue cond = %s;\n        if ((!cond.is_undefined()) && cond.get_bool_value()) {\n            throw new MError(\"Error triggered\\n%s\");\n        }\n"
+      "        // Verification condition %s\n        MValue %s = %s;\n        if ((!%s.is_undefined()) && %s.get_bool_value()) {\n            throw new MError(\"Error triggered\\n%s\");\n        }\n"
       (Pos.format_position (Pos.get_position cond.cond_expr))
+      cond_name
       s
+      cond_name
+      cond_name
       (String.concat "\\n"
          (List.map
             (fun err ->
@@ -200,7 +225,7 @@ let generate_java_program
   Printf.fprintf oc "// %s\n\n" Prelude.message;
   Printf.fprintf oc "\
 
-class MError extends RuntimeException {
+class MError extends Exception {
     public MError(String s) {
       super(s);
     }
@@ -266,6 +291,13 @@ class MValue {
             return new MValue();
         }
         return new MValue(- this.value);
+    }
+
+    public MValue not() {
+        if (this.is_undefined) {
+            return new MValue();
+        }
+        return new MValue(!this.bool_value);
     }
 
     public MValue div(MValue rhs) {
@@ -368,7 +400,7 @@ class IR {
     }
 
     // Main tax computation. Call before any output getter.
-    public void compute() {
+    public void compute() throws MError {
 "
     (String.concat
        "\n"
@@ -421,7 +453,7 @@ class IR {
         ) scc;
     ) exec_order;
   Printf.fprintf oc "\n";
-  Printf.fprintf oc "    %s"
+  Printf.fprintf oc "%s\n"
     (String.concat "\n"
        (List.map
           (fun var ->

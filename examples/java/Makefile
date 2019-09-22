@@ -13,3 +13,11 @@ cas_basique_2018:
 		--output Ir2018.java $(SOURCE_FILES)
 	javac Ir2018.java CasBasique2018.java
 	java CasBasique2018
+
+simulateur_simplifie_2018:
+	$(MLANG) --application iliad \
+	 	--display_time --debug --optimize \
+		--backend java --output Ir2018.java \
+		--function_spec simulateur_simplifie_2018.m_spec \
+		$(SOURCE_FILES)
+	javac Ir2018.java

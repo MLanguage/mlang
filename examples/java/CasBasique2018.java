@@ -1,6 +1,6 @@
 
 class CasBasique2018 {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws MError {
         IR ir = new IR(
             1.0,
             10023.0,
