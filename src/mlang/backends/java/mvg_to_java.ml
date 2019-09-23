@@ -152,20 +152,43 @@ let generate_var_def
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then begin
-      Printf.fprintf oc "        // %s: %s\n"
+      Printf.fprintf oc "    // %s: %s\n"
         (generate_name var)
         (Pos.unmark var.Variable.descr);
       match data.var_definition with
       | SimpleVar e ->
-        Printf.fprintf oc "        // Defined %s\n"
+        Printf.fprintf oc "    // Defined %s\n"
           (Pos.format_position (Pos.get_position e));
         let s, ls = generate_java_expr e scc in
+        Printf.fprintf oc "    void compute_%s() {\n"
+          (generate_variable var);
         List.iter (fun s ->
             Printf.fprintf oc "%s\n" s;
           ) ls;
-        Printf.fprintf oc "        MValue %s = %s;\n\n"
+        Printf.fprintf oc "        this.%s = %s;\n"
           (generate_variable var)
-          s
+          s;
+        Printf.fprintf oc "    }\n\n"
+      | TableVar (_, _) ->
+        assert false (* unimplemented *)
+      | InputVar -> assert false (* should not happen *)
+    end
+  with
+  | Not_found ->
+    ()
+
+let generate_var_call
+    (program : program)
+    (var: Variable.t)
+    (scc: unit VariableMap.t)
+    (oc: out_channel) : unit =
+  try
+    let data = VariableMap.find var program.program_vars in
+    if data.var_io = Regular || data.var_io = Output then begin
+      match data.var_definition with
+      | SimpleVar _ ->
+        Printf.fprintf oc "        this.compute_%s();\n"
+          (generate_variable var);
       | TableVar (_, _) ->
         assert false (* unimplemented *)
       | InputVar -> assert false (* should not happen *)
@@ -205,6 +228,13 @@ let generate_java_program
   : unit =
   let oc = open_out filename in
   let exec_order = Execution_order.get_execution_order program in
+  let all_vars =
+    List.rev
+      (List.map
+         (fun (var, _) -> var)
+         (VariableMap.bindings program.program_vars)
+      )
+  in
   let input_vars =
     List.rev
       (List.map
@@ -387,9 +417,7 @@ class MValue {
 }
 
 class IR {
-    // Input variables
-%s
-    // Output variables
+    // Internal variables
 %s
 
     // Constructor
@@ -398,9 +426,6 @@ class IR {
     ) {
 %s
     }
-
-    // Main tax computation. Call before any output getter.
-    public void compute() throws MError {
 "
     (String.concat
        "\n"
@@ -409,17 +434,7 @@ class IR {
              Printf.sprintf "    MValue %s;"
                (generate_variable var)
           )
-          input_vars
-       )
-    )
-    (String.concat
-       "\n"
-       (List.map
-          (fun var ->
-             Printf.sprintf "    MValue %s;"
-               (generate_variable var)
-          )
-          output_vars
+          all_vars
        )
     )
     (String.concat
@@ -452,22 +467,25 @@ class IR {
           generate_var_def program var scc oc
         ) scc;
     ) exec_order;
-  Printf.fprintf oc "\n";
-  Printf.fprintf oc "%s\n"
-    (String.concat "\n"
-       (List.map
-          (fun var ->
-             Printf.sprintf "       this.%s = %s;"
-               (generate_variable var)
-               (generate_variable var)
-          )
-          output_vars
-       )
-    );
+  Printf.fprintf oc "\
+
+    // Main tax computation. Call before any output getter.
+    public void compute() throws MError {
+";
+  List.iter (fun scc ->
+      let in_scc = VariableMap.cardinal scc > 1 in
+      if in_scc then begin
+        assert false (* unimplemented *)
+      end;
+      VariableMap.iter (fun var _ ->
+          generate_var_call program var scc oc
+        ) scc;
+    ) exec_order;
   Printf.fprintf oc "    }\n\n";
-  Printf.fprintf oc "    %s" begin
-    String.concat "\n\n    " begin List.map begin fun var ->
+  Printf.fprintf oc "%s" begin
+    String.concat "\n    " begin List.map begin fun var ->
         Printf.sprintf "\
+
     // Returning output %s
     public MValue get%s() {
         return this.%s;
