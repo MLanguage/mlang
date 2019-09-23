@@ -421,9 +421,7 @@ class IR {
 %s
 
     // Constructor
-    public IR(
-%s
-    ) {
+    public IR(java.util.Map<String, MValue> input_values) {
 %s
     }
 "
@@ -438,22 +436,12 @@ class IR {
        )
     )
     (String.concat
-       ",\n"
-       (List.map
-          (fun var ->
-             Printf.sprintf "       double %s"
-               (generate_variable var)
-          )
-          input_vars
-       )
-    )
-    (String.concat
        "\n"
        (List.map
           (fun var ->
-             Printf.sprintf "       this.%s = new MValue(%s);"
+             Printf.sprintf "       this.%s = input_values.get(\"%s\");"
                (generate_variable var)
-               (generate_variable var)
+               (generate_name var)
           )
           input_vars
        )
