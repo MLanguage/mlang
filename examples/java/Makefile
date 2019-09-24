@@ -20,4 +20,5 @@ simulateur_simplifie_2018:
 		--backend java --output Ir2018.java \
 		--function_spec simulateur_simplifie_2018.m_spec \
 		$(SOURCE_FILES)
-	javac Ir2018.java
+	javac Ir2018.java SimulateurSimplifie2018.java
+	java SimulateurSimplifie2018
