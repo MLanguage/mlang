@@ -209,9 +209,7 @@ class SimulateurSimplifie2018 {
         inputs.put("0DJ", new MValue(0.0));
         inputs.put("0DN", new MValue(0.0));
         IR ir = new IR(inputs);
-        for (int i=0; i < 10000; i++) {
-            ir.compute();
-        }
+        ir.compute();
         double ir_net = ir.getIRNET().get_value();
         System.out.println(ir_net);
     }
