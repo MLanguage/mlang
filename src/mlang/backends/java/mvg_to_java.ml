@@ -78,30 +78,26 @@ let rec generate_java_expr (e: expression Pos.marked) (scc: unit VariableMap.t) 
     ls
   | Index _ ->
     assert false (* unimplemented *)
-  | Conditional (((LocalVar _, _) as e1), ((LocalVar _, _) as e2), ((LocalVar _, _) as e3)) ->
+  | Conditional (((LocalVar _, _) as e1), e2, e3) ->
     let s1, ls1 = generate_java_expr e1 scc in
     let s2, ls2 = generate_java_expr e2 scc in
     let s3, ls3 = generate_java_expr e3 scc in
-    Printf.sprintf "(%s.is_undefined() ? new MValue() : (%s.get_bool_value() ? %s : %s))"
-      s1
-      s1 s2 s3,
-    ls1@ls2@ls3 (* be careful, this is wrong is any of these has side effects ! *)
+    let v = LocalVariable.new_var () in
+    let s_def =
+      Printf.sprintf "(%s.is_undefined() ? new MValue() : (%s.get_bool_value() ? %s : %s))"
+        s1 s1 s2 s3
+    in
+    let s = Printf.sprintf "        MValue v%d = %s;" (v.LocalVariable.id) s_def in
+    Printf.sprintf "v%d" v.LocalVariable.id,
+    ls1@ls2@ls3@[s] (* be careful, this is wrong is any of these has side effects ! *)
   | Conditional (e1, e2, e3) ->
     let v1 = LocalVariable.new_var () in
-    let v2 = LocalVariable.new_var () in
-    let v3 = LocalVariable.new_var () in
     let new_e = Pos.same_pos_as (LocalLet (
         v1, e1,
-        Pos.same_pos_as (LocalLet (
-            v2, e2,
-            Pos.same_pos_as (LocalLet (
-                v3, e3,
-                Pos.same_pos_as (Conditional (
-                    (Pos.same_pos_as (LocalVar v1) e1),
-                    (Pos.same_pos_as (LocalVar v2) e2),
-                    (Pos.same_pos_as (LocalVar v3) e3)
-                  )) e
-              )) e
+        Pos.same_pos_as (Conditional (
+            (Pos.same_pos_as (LocalVar v1) e1),
+            e2,
+            e3
           )) e
       )) e
     in generate_java_expr new_e scc
@@ -131,7 +127,7 @@ let rec generate_java_expr (e: expression Pos.marked) (scc: unit VariableMap.t) 
   | Literal Undefined ->
     "new MValue()", []
   | Var var ->
-    generate_variable var, []
+    "this." ^ generate_variable var, []
   | LocalVar lvar -> Printf.sprintf "v%d" lvar.LocalVariable.id, []
   | GenericTableIndex -> assert false (* unimplemented *)
   | Error -> assert false (* TODO *)
