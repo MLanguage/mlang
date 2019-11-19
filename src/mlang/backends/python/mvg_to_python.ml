@@ -18,7 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Mvg
 
-let undefined_class_prelude : string = "\
+let undefined_class_prelude : string =
+  "\
 class Undefined:
     def __init__(self):
         pass
@@ -174,6 +175,28 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
       | _ ->
         Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
     end
+  (*
+    This special case has been added, because otherwise huge sums would produce
+    too many parenthesis, causing the Python parser to crash
+  *)
+  | Binop ((Ast.Add, _), e1,
+           (Binop ((Ast.Add, _), e2,
+                   (Binop ((Ast.Add, _), e3,
+                           (Binop ((Ast.Add, _), e4,
+                                   (Binop ((Ast.Add, _), e5,
+                                           e6
+                                          ), _)
+                                  ), _)
+                          ), _)
+                  ), _)
+          ) ->
+    let s1 = generate_python_expr (Pos.unmark e1) scc in
+    let s2 = generate_python_expr (Pos.unmark e2) scc in
+    let s3 = generate_python_expr (Pos.unmark e3) scc in
+    let s4 = generate_python_expr (Pos.unmark e4) scc in
+    let s5 = generate_python_expr (Pos.unmark e5) scc in
+    let s6 = generate_python_expr (Pos.unmark e6) scc in
+    Printf.sprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
   | Binop (op, e1, e2) ->
     let s1 = generate_python_expr (Pos.unmark e1) scc in
     let s2 = generate_python_expr (Pos.unmark e2) scc in
@@ -306,14 +329,15 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
          (VariableMap.bindings program.program_vars)
       )
   in
-  Printf.fprintf oc "# -*- coding: utf-8 -*-\n\n";
+  Printf.fprintf oc "# -*- coding: utf-8 -*-\n";
+  Printf.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then
     Printf.fprintf oc "import numpy as np\n\n"
   else
     Printf.fprintf oc "from math import floor\n\n";
   Printf.fprintf oc "%s\n\n" undefined_class_prelude;
-  Printf.fprintf oc "l = dict()\n\n";
-  Printf.fprintf oc "%s\n"
+  Printf.fprintf oc "local_variables = dict()\n\n\n";
+  Printf.fprintf oc "# The following keys must be present in the input:\n%s\n"
     (String.concat
        "\n"
        (List.map
@@ -325,7 +349,14 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
           input_vars
        )
     );
-  Printf.fprintf oc "def main(%s):\n\n" (String.concat ", " (List.map (fun var -> generate_variable var) input_vars));
+  Printf.fprintf oc "def extracted(input_variables):\n\n";
+  Printf.fprintf oc "    # First we extract the input variables from the dictionnary:\n%s\n\n"
+    (String.concat "\n" (List.map (fun var ->
+         Printf.sprintf "    %s = input_variables[\"%s\"]"
+           (generate_variable var)
+           (generate_name var)
+       ) input_vars
+       ));
   List.iter (fun scc ->
       let in_scc = VariableMap.cardinal scc > 1 in
       if in_scc then begin
@@ -356,7 +387,7 @@ let generate_python_program (program: program) (filename : string) (number_of_pa
         (VariableMap.bindings program.program_vars)
     )
   in
-  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global l\n    l = locals()\n";
+  Printf.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global local_variables\n    local_variables = locals()\n\n";
   begin if List.length returned_variables = 1 then
       Printf.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
     else begin

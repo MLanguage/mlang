@@ -7,45 +7,87 @@ declarations and arithmetic operations. This work is based on a retro-engineerin
 of the syntax and the semantics of M, from the [codebase](https://framagit.org/dgfip/ir-calcul)
 released by the DGFiP.
 
+## Disclaimer
+
+There is currently no guarantee of any kind about the correctness of the code
+produced by the Mlang compiler, or by the results produced by the interpreter of
+Mlang. However, authors are in contact with DGFiP to try and validate the
+semantics of M implemented in Mlang.
 
 ## Installation
 
-You will need an OCaml distribution with the following Opam packages:
+Mlang is implemented in OCaml. To manage dependencies,
+[install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
+of OCaml that is at least 4.0.7. Then, you can install Mlang's dependencies using
 
-        opam install ppx_deriving ANSITerminal parmap ocamlgraph z3 re odoc odig dune
+    make deps
 
-The Z3 Opam package takes a very long time to install (10 minutes).
-
-You also need to install the
-[Verifisc](https://gitlab.inria.fr/verifisc/verifisc) intermediate
-language library as an opam package (follow the instructions in the
-README of this repo). As verifisc is a submodule, you can launch
+Warning: the Z3 opam package takes a very long time to install (10 minutes).
+Next, fetch the source code dependencies of Mlang with
 
     git submodule update --init --recursive
 
+This will fetch the source code of [Verifisc](https://gitlab.inria.fr/verifisc/verifisc),
+and the M source code released by the DGFiP.
 
-To fetch the source of verifisc. Additionnally, this will fetch the
-M source code released by the DGFiP.
-You can then use `dune build` to build all source files.
+You can then use `dune build` to build all source files, and other dune commands.
+
+If you want to install the `mlang` executable and the opam packages, use
+
+    chmod +x install.h && ./install.sh
 
 ## Usage
 
-The `Makefile` contains several examples of invocation of the `mlang` executable.
+If the `mlang` executable is install, you can consult its man page with
 
-For instance, if you want to
+    mlang --help
+
+The `examples` folder  contains several examples of invocation of the `mlang` executable,
+catagorized by the backend used. For instance, if you want to
 compile all the source code files released by the DGFiP for the year 2017,
-and analyse the code that computes the income tax, then launch
+and produce a Python module equivalent to the official simplified simulator available
+[published by the DGFiP](https://www3.impots.gouv.fr/simulateur/calcul_impot/2018/simplifie/index.htm),
+go to the `examples/python` folder and use
 
-        make case_basique_2018
+        make simulateur_simplifie_2018
+
+Mlang should generate a file named `ir_2018.py` containing the generated Python code.
 
 ## Documentation
 
-The OCaml code is self-documented using `ocamldoc`. You can generate the HTML
+The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML
 documentation using
 
         make doc
 
-The output will be in the `doc` folder, rooted at file `index.html`.
+To browse the documentation, just open the file `doc.html` with your browser.
+
+## Known Limitations
+
+The code released by the DGFiP is not complete as of September 2019. Indeed,
+in order to correctly compute the amount of taxes for a fiscal household, the DGFiP
+executes the M program several times, each time changing the values of some variables
+to enable or disable parts of the computation.
+
+The DGFiP has not published the details of this iterative computation. Hence,
+until they do, the amounts of taxes computed by Mlang-generated programs are usually
+false (except on very simple situations).
+
+## Contributors
+
+The project accepts pull requests. There is currently no formalized contribution
+guide or centralized discussion place about the project. Please email the authors
+if you are interested.
+
+Please note that the copyright of this code is owned by Inria; by contributing,
+you disclaim all copyright interests in favor of Inria.
+
+## Formal semantics
+
+The `formal_semantics` folder contains two separate formalizations for the core of the
+M language, that roughly corresponds to the `Mvg` internal representation in Mlang.
+The reference formalization is the Coq one, in file `semantique.v`. The F* formalization
+is a proof of concept.
 
 ## License
 

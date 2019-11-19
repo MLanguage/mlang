@@ -3,9 +3,9 @@
 (version 1.0.2)
 (generate_opam_files true)
 
-(source (uri git+https://gitlab.inria.fr/verifisc/verifisc-m.git))
-(homepage https://gitlab.inria.fr/verifisc/verifisc-m)
-(bug_reports https://gitlab.inria.fr/verifisc/verifisc-m/issues)
+(source (uri git+https://gitlab.inria.fr/verifisc/mlang.git))
+(homepage https://gitlab.inria.fr/verifisc/mlang)
+(bug_reports https://gitlab.inria.fr/verifisc/mlang/issues)
 (authors "Denis Merigoux" "Raphaël Monat")
 (maintainers "denis.merigoux@inria.fr")
 (license GPLv3)
