@@ -485,13 +485,13 @@ symbol_enumeration:
 
 spec_input_list:
 | NOT { [] }
-| inputs = separated_nonempty_list(COMMA, SYMBOL)
-  { List.map (fun s -> parse_variable_name $sloc s) inputs }
+| inputs = separated_nonempty_list(COMMA, marked_symbol)
+  { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) inputs }
 
 spec_output_list:
 | NOT { [] }
-| outputs = separated_nonempty_list(COMMA, SYMBOL)
-  { List.map (fun s -> parse_variable_name $sloc s) outputs  }
+| outputs = separated_nonempty_list(COMMA, marked_symbol)
+  { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) outputs  }
 
 const_input:
 | var = SYMBOL EQUALS expr = expression SEMICOLON { (parse_variable_name $sloc var, expr) }
