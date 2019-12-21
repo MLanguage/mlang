@@ -154,7 +154,6 @@ let generate_name (v:Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
 let generate_typ (typ: typ) : string = match typ with
-  | Integer -> "int"
   | Real -> "float"
   | Boolean -> "bool"
 
@@ -170,8 +169,6 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
     let s1 = generate_python_expr (Pos.unmark e1) scc in
     let s2 = generate_python_expr (Pos.unmark e2) scc in
     begin match Pos.unmark e2 with
-      | Literal (Int i) when i <> 0 ->
-        Printf.sprintf "(%s / %s)" s1 s2
       | _ ->
         Printf.sprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
     end
@@ -235,11 +232,6 @@ let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string 
     if autograd () then "1.0" else "True"
   | Literal (Bool false) ->
     if autograd () then "0.0" else "False"
-  | Literal (Int i) ->
-    if autograd () then
-      Printf.sprintf "%.1f" (float_of_int i)
-    else
-      Printf.sprintf "%d" i
   | Literal (Float f) ->
     Printf.sprintf "%f" f
   | Literal Undefined ->

@@ -39,7 +39,6 @@ struct
   module T = struct
     type t =
       | Real
-      | Integer
       | Boolean
       | All
     [@@deriving eq, ord]
@@ -54,7 +53,6 @@ struct
   let format_typ (t:t) : string =
     Printf.sprintf "%s (%s %s)"
       (match UF.find (fst t) with
-       | T.Integer -> "integer"
        | T.Real -> "real"
        | T.Boolean -> "boolean"
        | T.All -> "unconstrained")
@@ -65,26 +63,22 @@ struct
 
   let to_concrete (t: t) : typ =
     match UF.find (fst t) with
-    | T.Integer -> Mvg.Integer
     | T.Real -> Mvg.Real
     | T.Boolean -> Mvg.Boolean
     | T.All -> Mvg.Boolean
 
   let boolean (pos: infer_info) = (UF.create T.Boolean, pos)
-  let integer (pos: infer_info) = (UF.create T.Integer, pos)
   let real (pos: infer_info) = (UF.create T.Real, pos)
   let integer_or_real (pos: infer_info) = (UF.create T.All, pos)
 
   let create_concrete (t: typ) (pos: infer_info) : t = match t with
-    | Mvg.Integer -> integer pos
     | Mvg.Real -> real pos
     | Mvg.Boolean -> boolean pos
 
   let is_lattice_transition (t1: t) (t2:t) : bool =
     match (UF.find (fst t1),UF.find (fst t2)) with
-    | (T.All, (T.Real | T.Boolean | T.Integer))
-    | (T.Boolean, (T.Integer | T.Real))
-    | (T.Integer, T.Real)
+    | (T.All, (T.Real | T.Boolean))
+    | (T.Boolean, T.Real)
       -> true
     | (t1, t2) when t1 = t2 -> true
     | _ -> false
@@ -151,12 +145,12 @@ let rec typecheck_top_down
               )))
     end
   | (Binop (((Ast.And | Ast.Or), _), e1, e2), Boolean)
-  | (Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2), (Integer | Real)) ->
+  | (Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2), Real) ->
     let ctx = typecheck_top_down ctx e1 t in
     let ctx = typecheck_top_down ctx e2 t in
     ctx
   | (Unop (Ast.Not, e), Boolean)
-  | (Unop (Ast.Minus, e), (Integer | Real))  ->
+  | (Unop (Ast.Minus, e), Real)  ->
     let ctx = typecheck_top_down ctx e t in
     ctx
   | (Conditional (e1, e2, e3), t) ->
@@ -207,16 +201,11 @@ let rec typecheck_top_down
               )))
     end
   | (Literal (Bool _), t)
-  | (Literal (Int 0), t)
-  | (Literal (Int 1), t)
+  | (Literal (Float 0.0), t)
+  | (Literal (Float 1.0), t)
     ->
     Typ.coerce
       ((Typ.boolean (Pos.get_position e, Typ.Up)))
-      ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
-    ctx
-  | (Literal (Int _), t) ->
-    Typ.coerce
-      ((Typ.integer (Pos.get_position e, Typ.Up)))
       ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
     ctx
   | (Literal (Float _), t) ->
@@ -298,7 +287,7 @@ let rec typecheck_top_down
                  (Format_mvg.format_typ t)
               )))
     end
-  | (GenericTableIndex, Integer) ->
+  | (GenericTableIndex, Real) ->
     if ctx.ctx_is_generic_table then
       ctx
     else
@@ -307,7 +296,7 @@ let rec typecheck_top_down
                   (Printf.sprintf "Generic table index appears outside of table %s"
                      (Pos.format_position (Pos.get_position e)))))
   | (Index ((var, var_pos), e'), t) ->
-    let ctx = typecheck_top_down ctx e' Integer in
+    let ctx = typecheck_top_down ctx e' Real in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
@@ -451,7 +440,7 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
           begin try
               Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down));
-              (ctx, Typ.integer (pos, Typ.Down))
+              (ctx, Typ.real (pos, Typ.Down))
             with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               raise (Errors.TypeError
@@ -473,7 +462,7 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
     fun ctx args ->
       begin match args with
         | [bound; table] ->
-          let ctx = typecheck_top_down ctx bound Integer in
+          let ctx = typecheck_top_down ctx bound Real in
           typecheck_bottom_up ctx table
         | _ -> raise (Errors.TypeError
                         (Errors.Typing
@@ -491,7 +480,6 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
         let ctx = { ctx with ctx_var_typ = VariableMap.add var t ctx.ctx_var_typ } in
         (ctx, t)
     end
-  | Literal (Int _) -> (ctx, Typ.integer (Pos.get_position e, Typ.Up))
   | Literal (Float _) -> (ctx, Typ.real (Pos.get_position e, Typ.Up))
   | Literal (Bool _) -> (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
   | Literal (Undefined) -> (ctx, Typ.create_variable (Pos.get_position e, Typ.Up))
@@ -551,14 +539,14 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
     end
   | GenericTableIndex ->
     if ctx.ctx_is_generic_table then
-      (ctx, Typ.integer (Pos.get_position e, Typ.Up))
+      (ctx, Typ.real (Pos.get_position e, Typ.Up))
     else
       raise (Errors.TypeError
                (Errors.Variable
                   (Printf.sprintf "Generic table index appears outside of table %s"
                      (Pos.format_position (Pos.get_position e)))))
   | Index ((var, var_pos), e') ->
-    let ctx = typecheck_top_down ctx e' Integer in
+    let ctx = typecheck_top_down ctx e' Real in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
@@ -734,7 +722,7 @@ let typecheck (p: program) : typ_info * program =
                         (Pos.same_pos_as
                            (Mvg.Index (
                                Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
-                               Pos.same_pos_as (Mvg.Literal (Int undef_index)) var.Mvg.Variable.name))
+                               Pos.same_pos_as (Mvg.Literal (Float (float_of_int undef_index))) var.Mvg.Variable.name))
                            var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc,
@@ -825,7 +813,7 @@ let typecheck (p: program) : typ_info * program =
                         (Pos.same_pos_as
                            (Mvg.Index (
                                Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
-                               Pos.same_pos_as (Mvg.Literal (Int undef_index)) var.Mvg.Variable.name))
+                               Pos.same_pos_as (Mvg.Literal (Float (float_of_int undef_index))) var.Mvg.Variable.name))
                            var.Mvg.Variable.name) es
                     ) es undefined_indexes in
                   (VariableMap.add var true acc, new_ctx,

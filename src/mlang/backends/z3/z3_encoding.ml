@@ -21,7 +21,6 @@ let bitvec_size = ref 30
 
 
 type repr_kind =
-  | Integer of int
   | Real of int
   | Boolean
 
@@ -55,8 +54,6 @@ let find_bitvec_repr
                            match ty with
                            | Mvg.Boolean ->
                              {repr_kind = Boolean; is_table = false}
-                           | Mvg.Integer ->
-                             {repr_kind = Integer size; is_table = false}
                            | Mvg.Real ->
                              {repr_kind = Real size; is_table = false}
                          )
@@ -69,14 +66,6 @@ let find_bitvec_repr
            {new_typing with
             repr_info_var =
               Mvg.VariableMap.add var { repr_kind = Boolean; is_table }
-                new_typing.repr_info_var }
-         | (Mvg.Integer, is_table) ->
-           let (bitvec_order, new_typing) =
-             size, new_typing
-             (* find_bitvec_order p var new_typing old_typing *) in
-           {new_typing with
-            repr_info_var =
-              Mvg.VariableMap.add var { repr_kind = Integer bitvec_order ; is_table }
                 new_typing.repr_info_var }
          | (Mvg.Real, is_table) ->
            let (bitvec_order, new_typing) =

@@ -62,9 +62,9 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
     Pos.same_pos_as begin match (Pos.unmark new_e1, Pos.unmark new_e2) with
       | (Literal Undefined, _) | (_, Literal Undefined) ->
         Literal Undefined
-      | (Conditional (b, (Literal (Int 1), _), (Literal (Int 0), _)), Literal (Int 1)) when Pos.unmark op = Ast.Eq ->
+      | (Conditional (b, (Literal (Float 1.), _), (Literal (Float 0.), _)), Literal (Float 1.)) when Pos.unmark op = Ast.Eq ->
         Pos.unmark b
-      | (FunctionCall (Mvg.PresentFunc, _) as fc, Literal (Int 1)) when Pos.unmark op = Ast.Neq ->
+      | (FunctionCall (Mvg.PresentFunc, _) as fc, Literal (Float 1.)) when Pos.unmark op = Ast.Neq ->
         Unop (Ast.Not, Pos.same_pos_as fc new_e1)
       | (Literal _, Literal _) ->
         Mvg.Literal (Interpreter.evaluate_expr Interpreter.empty_ctx p
@@ -90,20 +90,20 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
       | (Ast.And, e', Literal (Bool true))
       | (Ast.Or, Literal (Bool false), e')
       | (Ast.Or, e', Literal (Bool false))
-      | (Ast.Add, Literal ((Int 0) | Float 0. | Bool false | Undefined), e')
-      | (Ast.Add, e', Literal ((Int 0) | Float 0. | Bool false | Undefined))
-      | (Ast.Mul, Literal ((Int 1) | Float 1. | Bool true), e')
-      | (Ast.Mul, e', Literal ((Int 1) | Float 1. | Bool true ))
-      | (Ast.Div, e', Literal ((Int 1) | Float 1. | Bool true ))
-      | (Ast.Sub, e', Literal ((Int 0) | Float 0. | Bool false | Undefined))
+      | (Ast.Add, Literal (Float 0. | Bool false | Undefined), e')
+      | (Ast.Add, e', Literal (Float 0. | Bool false | Undefined))
+      | (Ast.Mul, Literal (Float 1. | Bool true), e')
+      | (Ast.Mul, e', Literal (Float 1. | Bool true ))
+      | (Ast.Div, e', Literal (Float 1. | Bool true ))
+      | (Ast.Sub, e', Literal (Float 0. | Bool false | Undefined))
         -> e'
-      | (Ast.Sub, Literal ((Int 0) | Float 0. | Bool false | Undefined), e') ->
+      | (Ast.Sub, Literal (Float 0. | Bool false | Undefined), e') ->
         Unop (Minus, Pos.same_pos_as e' e)
-      | (Ast.Mul, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
-      | (Ast.Mul, _, Literal ((Int 0) | Float 0. | Bool false | Undefined))
-      | (Ast.Div, Literal ((Int 0) | Float 0. | Bool false | Undefined), _)
+      | (Ast.Mul, Literal (Float 0. | Bool false | Undefined), _)
+      | (Ast.Mul, _, Literal (Float 0. | Bool false | Undefined))
+      | (Ast.Div, Literal (Float 0. | Bool false | Undefined), _)
         ->
-        Mvg.Literal (Mvg.Int 0)
+        Mvg.Literal (Mvg.Float 0.)
       | (_, Literal _, Literal _) ->
         (Mvg.Literal
            (Interpreter.evaluate_expr Interpreter.empty_ctx p
@@ -111,8 +111,6 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
            ))
       | (Ast.Add, _, Literal (Float f)) when f < 0. ->
         Binop (Pos.same_pos_as Ast.Sub op, e1, Pos.same_pos_as (Literal (Float (-. f))) e2)
-      | (Ast.Add, _, Literal (Int i)) when i < 0 ->
-        Binop (Pos.same_pos_as Ast.Sub op, e1, Pos.same_pos_as (Literal (Int (- i))) e2)
       | (Ast.Add, _, Unop (Minus, e2')) ->
         Binop (Pos.same_pos_as Ast.Sub op, e1, e2')
       | _ -> Binop (op, new_e1, new_e2)
@@ -147,7 +145,6 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
         | Literal l ->
           let idx =  match l with
             | Bool b -> Interpreter.int_of_bool b
-            | Int i -> i
             | Undefined  -> assert false (* should not happen *)
             | Float f ->
               if let (fraction, _) = modf f in fraction = 0. then
@@ -173,10 +170,10 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
                 Pos.same_pos_as (Literal Undefined) e
               else match Pos.unmark (IndexMap.find idx es') with
                 | Literal _  | Var _ -> IndexMap.find idx es'
-                | Index (inner_var, (Literal (Int inner_idx), _))
+                | Index (inner_var, (Literal (Float inner_idx), _))
                   (* If the current index depends on the value of a greater index of the same table we return undefined *)
                   when (Pos.unmark inner_var = ctx.ctx_inside_var && begin match ctx.ctx_inside_table_index with
-                      | Some i when i >= inner_idx -> true
+                      | Some i when i >= (int_of_float inner_idx) -> true
                       | _-> false
                     end)
                   ->

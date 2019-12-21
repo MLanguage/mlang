@@ -833,7 +833,7 @@ let get_var_redefinitions
 
 let translate_table_index (ctx: translating_context) (i: Ast.table_index Pos.marked) : Mvg.expression Pos.marked =
   match Pos.unmark i with
-  | Ast.LiteralIndex i' -> Pos.same_pos_as (Mvg.Literal (Mvg.Int i')) i
+  | Ast.LiteralIndex i' -> Pos.same_pos_as (Mvg.Literal (Mvg.Float (float_of_int i'))) i
   | Ast.SymbolIndex v ->
     let var =
       translate_variable
@@ -890,10 +890,10 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Pos.
                    ctx.current_lvalue
                    false
                )
-             | Ast.IntValue i -> Mvg.Comparison (
+             | Ast.FloatValue i -> Mvg.Comparison (
                  Pos.same_pos_as Ast.Eq i,
                  Pos.same_pos_as local_var_expr e,
-                 Pos.same_pos_as (Mvg.Literal (Mvg.Int (Pos.unmark i))) i
+                 Pos.same_pos_as (Mvg.Literal (Mvg.Float (Pos.unmark i))) i
                )
              | Ast.Interval (bn,en) ->
                if Pos.unmark bn > Pos.unmark en then
@@ -907,12 +907,12 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Pos.
                    Pos.same_pos_as (Mvg.Comparison (
                        Pos.same_pos_as Ast.Gte bn,
                        Pos.same_pos_as local_var_expr e,
-                       Pos.same_pos_as (Mvg.Literal (Mvg.Int (Pos.unmark bn))) bn
+                       Pos.same_pos_as (Mvg.Literal (Mvg.Float (float_of_int (Pos.unmark bn)))) bn
                      )) bn,
                    Pos.same_pos_as (Mvg.Comparison (
                        Pos.same_pos_as Ast.Lte en,
                        Pos.same_pos_as local_var_expr e,
-                       Pos.same_pos_as (Mvg.Literal (Mvg.Int (Pos.unmark en))) en
+                       Pos.same_pos_as (Mvg.Literal (Mvg.Float (float_of_int (Pos.unmark en)))) en
                      )) en
                  )
            in
@@ -1070,10 +1070,9 @@ let translate_lvalue
 (** Date types are not supported *)
 let translate_value_typ (typ: Ast.value_typ Pos.marked option) : Mvg.typ option =
   match typ with
-  | Some (Ast.Integer, _) -> Some Mvg.Integer
   | Some (Ast.Boolean, _) -> Some Mvg.Boolean
   | Some (Ast.Real, _) -> Some Mvg.Real
-  | Some (_ , _) -> Some Mvg.Integer
+  | Some (_ , _) -> Some Mvg.Real
   | None -> None
 
 (** Main toplevel declaration translator that adds a variable definition to the MVG program *)

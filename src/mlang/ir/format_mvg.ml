@@ -36,7 +36,6 @@ let format_execution_number_short (exec_number: execution_number) : string =
 
 
 let format_typ (t: typ) : string = match t with
-  | Integer -> "integer"
   | Real -> "real"
   | Boolean -> "boolean"
 
@@ -60,7 +59,6 @@ let format_func (f: func) : string = match f with
   | Supzero -> "supzero"
 
 let format_literal (l: literal) : string = match l with
-  | Int i -> string_of_int i
   | Float f -> string_of_float f
   | Bool b -> string_of_bool b
   | Undefined -> "indéfini"

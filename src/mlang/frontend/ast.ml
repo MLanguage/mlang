@@ -111,7 +111,7 @@ type table_index =
 
 
 type set_value =
-  | IntValue of int Pos.marked
+  | FloatValue of float Pos.marked
   | VarValue of variable Pos.marked
   | Interval of int Pos.marked * int Pos.marked
 

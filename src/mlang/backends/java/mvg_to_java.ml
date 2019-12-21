@@ -120,8 +120,6 @@ let rec generate_java_expr (e: expression Pos.marked) (scc: unit VariableMap.t) 
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Bool true) -> "true", []
   | Literal (Bool false) -> "false", []
-  | Literal (Int i) ->
-    Printf.sprintf "new MValue(%d.0)" i, []
   | Literal (Float f) ->
     Printf.sprintf "new MValue(%f)" f, []
   | Literal Undefined ->

@@ -19,7 +19,6 @@ module Pos = Verifisc.Pos
 
 let format_Z3_encoding (t: Z3_encoding.repr) : string =
   let first = match t.Z3_encoding.repr_kind with
-    | Z3_encoding.Integer _ -> Format_mvg.format_typ Mvg.Integer
     | Z3_encoding.Real _ -> Format_mvg.format_typ Mvg.Real
     | Z3_encoding.Boolean -> Format_mvg.format_typ Mvg.Boolean
   in
@@ -43,7 +42,6 @@ let format_z3_program
           (Pos.unmark var.Mvg.Variable.name, begin match Z3.Model.eval model e true with
               | Some new_e ->
                 begin match typ.Z3_encoding.repr_kind with
-                  | Z3_encoding.Integer _
                   | Z3_encoding.Real _ ->
                     string_of_float (convert_to_signed (Big_int.float_of_big_int (Big_int.big_int_of_string  (Z3.BitVector.numeral_to_string new_e))) !Z3_encoding.bitvec_size /. (float_of_int Mvg_to_z3.mult_factor))
                   | Z3_encoding.Boolean -> (match Z3.Boolean.get_bool_value new_e with

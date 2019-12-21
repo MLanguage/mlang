@@ -69,10 +69,10 @@ let rec expand_functions_expr (e: expression Pos.marked) : expression Pos.marked
             (Comparison (
                 Pos.same_pos_as Ast.Gt e,
                 expand_functions_expr arg,
-                Pos.same_pos_as (Literal (Int 0)) e)
+                Pos.same_pos_as (Literal (Float 0.0)) e)
             ) e,
-          Pos.same_pos_as (Literal (Int 1)) e,
-          Pos.same_pos_as (Literal (Int 0)) e)
+          Pos.same_pos_as (Literal (Float 1.0)) e,
+          Pos.same_pos_as (Literal (Float 0.0)) e)
       ) e
   | FunctionCall (GtezFunc, [arg]) ->
     Pos.same_pos_as
@@ -81,10 +81,10 @@ let rec expand_functions_expr (e: expression Pos.marked) : expression Pos.marked
             (Comparison (
                 Pos.same_pos_as Ast.Gte e,
                 expand_functions_expr arg,
-                Pos.same_pos_as (Literal (Int 0)) e)
+                Pos.same_pos_as (Literal (Float 0.0)) e)
             ) e,
-          Pos.same_pos_as (Literal (Int 1)) e,
-          Pos.same_pos_as (Literal (Int 0)) e)
+          Pos.same_pos_as (Literal (Float 1.0)) e,
+          Pos.same_pos_as (Literal (Float 0.0)) e)
       ) e
   | FunctionCall (MinFunc, args) ->
     Pos.same_pos_as (
@@ -158,7 +158,7 @@ let rec expand_functions_expr (e: expression Pos.marked) : expression Pos.marked
               (Pos.same_pos_as (Comparison (
                    Pos.same_pos_as Ast.Lt e,
                    Pos.same_pos_as (LocalVar arg_var) e,
-                   Pos.same_pos_as (Literal (Int 0)) e)) e,
+                   Pos.same_pos_as (Literal (Float 0.0)) e)) e,
                Pos.same_pos_as (Unop (Ast.Minus, Pos.same_pos_as (LocalVar arg_var) e)) e,
                Pos.same_pos_as (LocalVar arg_var) e
               ))) e)) e
@@ -169,10 +169,10 @@ let rec expand_functions_expr (e: expression Pos.marked) : expression Pos.marked
             (Comparison (
                 Pos.same_pos_as Ast.Eq e,
                 expand_functions_expr arg,
-                Pos.same_pos_as (Literal (Int 0)) e)
+                Pos.same_pos_as (Literal (Float 0.0)) e)
             ) e,
-          Pos.same_pos_as (Literal (Int 1)) e,
-          Pos.same_pos_as (Literal (Int 0)) e)
+          Pos.same_pos_as (Literal (Float 1.0)) e,
+          Pos.same_pos_as (Literal (Float 0.0)) e)
       ) e
   | FunctionCall (PresentFunc, [arg]) ->
     (* we do not expand this function as it deals specifically with undefined variables  *)

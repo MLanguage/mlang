@@ -126,25 +126,7 @@ let driver
 
       begin if String.lowercase_ascii !Cli.backend = "z3" then
           Z3_driver.translate_and_launch_query program typing
-        else if String.lowercase_ascii !Cli.backend = "verifisc" then begin
-          Cli.debug_print "Translating the M program to Verifisc";
-          let program = Mvg_to_verifisc.translate_program program typing in
-          Cli.debug_print "Typechecking the Verifisc program";
-          Verifisc.Typechecker.typecheck program;
-          let program = Verifisc.Ast_to_ir.translate_program program in
-          Cli.debug_print "Optimizing the Verifisc program";
-          let nb_before = Verifisc.Ir.nb_commands program in
-          let program = Verifisc.Optimization.optimize program in
-          let nb_after = Verifisc.Ir.nb_commands program in
-          Cli.debug_print (Printf.sprintf "Number of commands decreased from %d to %d!" nb_before nb_after);
-          let filename = "output.verifisc" in
-          Cli.debug_print (Printf.sprintf "Writing the program to %s" filename);
-          let oc = open_out filename in
-          Printf.fprintf oc "%s" (Verifisc.Format_ir.format_program program);
-          close_out oc;
-          Cli.result_print "Interpreting the program...";
-          Verifisc.Interpreter.repl_interpreter program
-        end else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+        else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
           Cli.debug_print "Interpreting the program...";
           let f = Interface.make_function_from_program program !Cli.number_of_passes in
           let results = f (Interface.read_inputs_from_stdin mvg_func) in

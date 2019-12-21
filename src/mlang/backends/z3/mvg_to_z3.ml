@@ -23,8 +23,6 @@ let declare_var_not_table (var: Mvg.Variable.t) (typ: Z3_encoding.repr) (ctx: Z3
   match typ.Z3_encoding.repr_kind with
   | Z3_encoding.Boolean ->
     Z3.Boolean.mk_const_s ctx (Pos.unmark var.Mvg.Variable.name)
-  | Z3_encoding.Integer o ->
-    Z3.BitVector.mk_const_s ctx (Pos.unmark var.Mvg.Variable.name) o
   | Z3_encoding.Real o ->
     Z3.BitVector.mk_const_s ctx (Pos.unmark var.Mvg.Variable.name) o
 
@@ -33,10 +31,6 @@ let declare_local_var (var: Mvg.LocalVariable.t) (typ: Z3_encoding.repr) (ctx: Z
   | Z3_encoding.Boolean ->
     Z3_encoding.Regular (Z3.Boolean.mk_const_s ctx
                            ("t" ^ (string_of_int var.Mvg.LocalVariable.id)))
-  | Z3_encoding.Integer o ->
-    Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
-                           ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
-                           o)
   | Z3_encoding.Real o ->
     Z3_encoding.Regular (Z3.BitVector.mk_const_s ctx
                            ("t" ^ (string_of_int var.Mvg.LocalVariable.id))
@@ -121,8 +115,6 @@ let rec translate_expression
     let earg = translate_expression repr_data arg ctx s false in
     Z3.Boolean.mk_eq ctx earg zero
   | Mvg.FunctionCall _ -> assert false (* should not happen *)
-  | Mvg.Literal (Mvg.Int i) ->
-    int_const (mult_factor * i) ctx
   | Mvg.Literal (Mvg.Float f) ->
     int_const (int_of_float (f *. (float_of_int mult_factor))) ctx
   | Mvg.Literal (Mvg.Bool b) ->

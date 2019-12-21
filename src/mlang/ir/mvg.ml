@@ -126,7 +126,6 @@ end
 
 (** Type of MVG values *)
 type typ =
-  | Integer
   | Real
   | Boolean
 [@@deriving visitors {
@@ -137,7 +136,6 @@ type typ =
   }]
 
 type literal =
-  | Int of int
   | Float of float
   | Bool of bool
   | Undefined

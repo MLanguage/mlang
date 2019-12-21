@@ -64,7 +64,7 @@ let format_lvalue (lv: lvalue) : string =
 let format_set_value (sv: set_value) : string = match sv with
   | VarValue v -> format_variable (Pos.unmark v)
   | Interval (i1, i2) -> Printf.sprintf "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | IntValue i -> string_of_int (Pos.unmark i)
+  | FloatValue i -> string_of_float (Pos.unmark i)
 
 let format_set_value_loop (sv: set_value_loop) : string = match sv with
   | VarParam v -> Printf.sprintf "%s" (Pos.unmark v)

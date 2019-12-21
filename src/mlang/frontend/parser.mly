@@ -368,7 +368,7 @@ enumeration_item:
 | s = SYMBOL {
     match parse_variable_or_int $sloc s with
     | ParseVar v -> VarValue (v, mk_position $sloc)
-    | ParseInt i -> IntValue (i, mk_position $sloc)
+    | ParseInt i -> FloatValue (float_of_int i, mk_position $sloc)
 }
 
 interval:
