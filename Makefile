@@ -6,8 +6,10 @@ SOURCE_FILES=$(shell find $(SOURCE_DIR_2017) -name "*.m")
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 
+default: build
+
 deps:
-	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir cmdliner dune-build-info visitors
+	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir cmdliner dune-build-info visitors parmap
 
 build:
 	dune build src/main.exe
