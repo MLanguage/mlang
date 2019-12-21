@@ -208,7 +208,7 @@ Definition type_environment := partial_map envtypes.
 (* Semantics of some functions and binary operators *)
 (****************************************************)
 
-Fixpoint add (l:values) (r:values) : option values :=
+Definition add (l:values) (r:values) : option values :=
   match l, r with
   | Undef, Undef => Some Undef
   | Undef, Float f2 => Some (Float f2)
@@ -217,7 +217,7 @@ Fixpoint add (l:values) (r:values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint sub (l:values) (r:values) : option values :=
+Definition sub (l:values) (r:values) : option values :=
   match l, r with
   | Undef, Undef => Some Undef
   | Undef, Float f2 => Some (Float (fopp f2))
@@ -226,7 +226,7 @@ Fixpoint sub (l:values) (r:values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint mul (l:values) (r:values) : option values :=
+Definition mul (l:values) (r:values) : option values :=
   match l, r with
   | Undef, Undef => Some Undef
   | Undef, Float f2 => Some (Float fzero)
@@ -235,7 +235,7 @@ Fixpoint mul (l:values) (r:values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint div (l: values) (r: values) : option values :=
+Definition div (l: values) (r: values) : option values :=
   match l, r with
   | Undef, Undef => Some Undef
   | Float f1, Undef => Some Undef
@@ -245,7 +245,7 @@ Fixpoint div (l: values) (r: values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint and (l: values) (r: values) : option values :=
+Definition and (l: values) (r: values) : option values :=
   match l, r with
   | Undef, _ => Some Undef
   | _, Undef => Some Undef
@@ -253,7 +253,7 @@ Fixpoint and (l: values) (r: values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint or (l: values) (r: values) : option values :=
+Definition or (l: values) (r: values) : option values :=
   match l, r with
   | Undef, _ => Some Undef
   | _, Undef => Some Undef
@@ -261,7 +261,7 @@ Fixpoint or (l: values) (r: values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint lt (l: values) (r: values) : option values :=
+Definition lt (l: values) (r: values) : option values :=
   match l, r with
   | Undef, _ => Some Undef
   | _, Undef => Some Undef
@@ -269,7 +269,7 @@ Fixpoint lt (l: values) (r: values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint eq (l: values) (r: values) : option values :=
+Definition eq (l: values) (r: values) : option values :=
   match l, r with
   | Undef, _ => Some Undef
   | _, Undef => Some Undef
@@ -277,7 +277,7 @@ Fixpoint eq (l: values) (r: values) : option values :=
   | _, _ => None
   end.
 
-Fixpoint scalar_of_envvalue (e : envvalues) : option values :=
+Definition scalar_of_envvalue (e : envvalues) : option values :=
   match e with
   | VScalar v => Some v
   | _ => None
@@ -349,12 +349,16 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
   | FunCall1 Round arg1 =>
     match eval Omega arg1 with
     | Some (Float f) => Some (Float f)
+    (* FIXME: there should be a round here, but I haven't found the
+    corresponding Flocq definition yet. We could always cast to
+    integers and back... *)
     | Some Undef => Some (Float fzero)
     | _ => None
     end
   | FunCall1 Inf arg1 =>
     match eval Omega arg1 with
     | Some (Float f) => Some (Float f)
+    (* FIXME: Inf missing in the float computation *)
     | Some Undef => Some (Float fzero)
     | _ => None
     end
@@ -378,7 +382,7 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
     end
   | FunCall1 Null arg1 =>
     match eval Omega arg1 with
-    | Some Undef => (* ??? *) Some (Bool true)
+    | Some Undef => Some Undef
     | Some (Float f) => Some (Bool (feq f fzero))
     | Some (Bool b) => Some (Bool (Bool.eqb b false))
     | _ => None

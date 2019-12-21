@@ -19,6 +19,7 @@ module Pos = Verifisc.Pos
 open Mvg
 
 let repl_debug = ref false
+let exit_on_rte = ref true
 
 let truncatef x = snd (modf x)
 let roundf x = snd (modf (x +. copysign 0.5 x))
@@ -121,7 +122,7 @@ type run_error =
   | FloatIndex of string
   | IndexOutOfBounds of string
   | MissingInputValue of string
-  | ConditionViolated of string
+  | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
 
 exception RuntimeError of run_error * ctx
 
@@ -131,7 +132,14 @@ let format_runtime_error (e: run_error) : string = match e with
   | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
   | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
   | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s
-  | ConditionViolated s -> Printf.sprintf "Verification condition failed: %s" s
+  | ConditionViolated (errors, condition, bindings) ->
+    Printf.sprintf "Verification condition failed: %s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
+      (Pos.format_position (Pos.get_position condition))
+      (String.concat "\n" (List.map (fun err ->
+           Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
+         ) errors))
+      (Format_mvg.format_expression (Pos.unmark condition))
+      (String.concat "\n" (List.map (fun (v, l) -> format_var_literal_with_var v l) bindings))
 
 let evaluate_array_index
     (ctx: ctx)
@@ -445,19 +453,22 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Var v -> v
         | _ -> assert false (* todo: rte *) in
       let cast_to_int e = match e with
-        | Int x -> x
-        | Float f when float_of_int (int_of_float f) = f -> int_of_float f
+        | Int x -> Some x
+        | Float f when float_of_int (int_of_float f) = f -> Some (int_of_float f)
         | Undefined ->
-          Cli.warning_print "cast from undefined to 0 in multimax computation";
-          0
+          None
         | _ -> assert false in
       let pos = Pos.get_position arg2 in
       let access_index i = cast_to_int @@ evaluate_expr ctx p (Index ((var_arg2, pos), (Literal (Int i), pos)), pos) in
       let maxi = ref (access_index 0) in
       for i = 0 to up do
-        maxi := max !maxi (access_index i)
+        maxi := match !maxi, access_index i with
+          | None, _ | _, None -> None
+          | Some m, Some v -> Some (max m v)
       done;
-      Int !maxi
+      begin match !maxi with
+      | None -> Undefined
+      | Some v -> Int v end
     | FunctionCall (func, _) ->
       raise
         (RuntimeError
@@ -470,11 +481,18 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
            ))
   end with
   | RuntimeError (e,ctx) -> begin
-      Cli.error_print (format_runtime_error e);
-      flush_all ();
-      flush_all ();
-      if !repl_debug then repl_debugguer ctx p ;
-      exit 1
+      if !exit_on_rte then
+        begin
+          Cli.error_print (format_runtime_error e);
+          flush_all ();
+          flush_all ();
+          if !repl_debug then repl_debugguer ctx p ;
+          exit 1
+        end
+      else
+        begin
+          raise (RuntimeError(e, ctx))
+        end
     end
 
 let rec repeati (init: 'a) (f: 'a -> 'a) (n: int) : 'a =
@@ -581,20 +599,9 @@ let evaluate_program
                      | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
                      | Bool true -> (* the condition is triggered, we throw errors *)
                        raise (RuntimeError (
-                           ConditionViolated (
-                             Printf.sprintf "%s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
-                               (Pos.format_position (Pos.get_position cond.cond_expr))
-                               (String.concat "\n" (List.map (fun err ->
-                                    Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
-                                  ) cond.cond_errors))
-                               (Format_mvg.format_expression (Pos.unmark cond.cond_expr))
-                               (String.concat "\n" (List.map (fun (var) ->
-                                    let l = VariableMap.find var ctx.ctx_vars in
-                                    format_var_literal_with_var var l
-                                  ) (
-                                    Dependency.DepGraph.pred dep_graph var
-                                  )))
-                           ), ctx
+                           ConditionViolated (cond.cond_errors, cond.cond_expr,
+                                              List.rev @@ List.fold_left (fun acc var -> (var, VariableMap.find var ctx.ctx_vars)::acc) [] (Dependency.DepGraph.pred dep_graph var))
+                           , ctx
                          ))
                      | _ -> assert false (* should not happen *)
                 ) scc ctx
@@ -613,10 +620,14 @@ let evaluate_program
       ) empty_ctx execution_order
     in ctx
   with
-  | RuntimeError (e,ctx) -> begin
-      Cli.error_print (format_runtime_error e);
-      flush_all ();
-      flush_all ();
-      if !repl_debug then repl_debugguer ctx p ;
-      exit 1
-    end
+  | RuntimeError (e,ctx) ->
+    if !exit_on_rte then
+      begin
+        Cli.error_print (format_runtime_error e);
+        flush_all ();
+        flush_all ();
+        if !repl_debug then repl_debugguer ctx p ;
+        exit 1
+      end
+    else
+      raise (RuntimeError (e, ctx))

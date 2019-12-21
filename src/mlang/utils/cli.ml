@@ -201,6 +201,9 @@ let debug_flag = ref false
 (** Print infomation about variables declared, defined ou used incorrectly *)
 let var_info_flag = ref false
 
+(** Print warning info *)
+let warning_flag = ref true
+
 (** Dump circular definitions of variables *)
 let print_cycles_flag = ref false
 
@@ -319,7 +322,7 @@ let clock_marker i =
 
 let debug_print ?(endline="\n") (s: string) =
   if !debug_flag then begin
-    debug_marker true;
+    debug_marker !display_time;
     Printf.printf "%s%s" s endline;
     flush stdout;
     flush stdout
@@ -336,8 +339,8 @@ let var_info_print (s: string) =
 let error_print (s: string) =
   error_marker ();
   Printf.eprintf "%s\n" s;
-  flush stdout;
-  flush stdout
+  flush stderr;
+  flush stderr
 
 (**
    Returns two functions: the first one, [current_progress], has to be called during the progress
@@ -373,10 +376,13 @@ let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
   )
 
 let warning_print (s: string) =
-  warning_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
+  if !warning_flag then
+    begin
+      warning_marker ();
+      Printf.printf "%s\n" s;
+      flush stdout;
+      flush stdout
+    end
 
 let result_print (s: string) =
   result_marker ();
