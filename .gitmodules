@@ -1,6 +1,3 @@
 [submodule "ir-calcul"]
 	path = ir-calcul
 	url = https://framagit.org/denismerigoux/ir-calcul.git
-[submodule "verifisc"]
-	path = verifisc
-	url = https://gitlab.inria.fr/verifisc/verifisc.git

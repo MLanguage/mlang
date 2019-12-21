@@ -27,8 +27,7 @@ Next, fetch the source code dependencies of Mlang with
 
     git submodule update --init --recursive
 
-This will fetch the source code of [Verifisc](https://gitlab.inria.fr/verifisc/verifisc),
-and the M source code released by the DGFiP.
+This will fetch the M source code released by the DGFiP.
 
 You can then use `dune build` to build all source files, and other dune commands.
 
