@@ -51,7 +51,7 @@ let parse_file (test_name:string) : test_file =
 
 let to_ast_literal (value:Tast.literal) : Ast.literal =
   match value with
-  | I i -> Int i
+  | I i -> Float (float_of_int i)
   | F f -> Float f
 
 let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_function =

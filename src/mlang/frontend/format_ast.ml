@@ -49,7 +49,6 @@ let format_error_name (e:error_name) : string =
 
 let format_literal (l:literal) : string = match l with
   | Variable v -> format_variable v
-  | Int i -> string_of_int i
   | Float f -> string_of_float f
 
 let format_table_index (i:table_index) : string = match i with

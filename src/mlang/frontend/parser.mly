@@ -354,7 +354,7 @@ interval_loop:
   {
       let parse_to_literal (v: parse_val) : literal = match v with
       | ParseVar v -> Variable v
-      | ParseInt v -> Int v
+      | ParseInt v -> Float (float_of_int v)
       in
       IntervalLoop ((parse_to_literal (parse_variable_or_int $sloc i1), mk_position $sloc),
     (parse_to_literal (parse_variable_or_int $sloc i2), mk_position $sloc)) }

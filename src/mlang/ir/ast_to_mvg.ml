@@ -239,7 +239,6 @@ let get_var_from_name_lax
    queries the const value in the context if needed.
 *)
 let var_or_int_value (ctx: translating_context) (l : Ast.literal Pos.marked) : int = match Pos.unmark l with
-  | Ast.Int i -> i
   | Ast.Variable v ->
     (* We look up the value of the variable, which has to be const *)
     begin try
@@ -257,7 +256,7 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Pos.marked) : i
                        (Pos.format_position (Pos.get_position l))
                     )))
     end
-  | Ast.Float _ -> assert false (* should not happen *)
+  | Ast.Float f -> int_of_float f
 
 (**
    This function is the workhorse of loop unrolling : it takes a loop prefix containing the set of
@@ -408,7 +407,6 @@ let get_constants
                       let new_vars = Mvg.VariableMap.add new_var new_var_data vars in
                       let new_idmap = Pos.VarNameToID.add (Pos.unmark marked_name) [new_var] idmap in
                       let new_int_const_list = match Pos.unmark cval with
-                        | Ast.Int i -> (new_var, i)::int_const_list
                         | Ast.Float f -> (new_var, int_of_float f)::int_const_list
                         | _ -> int_const_list
                       in
@@ -981,7 +979,6 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Pos.
                false
            in
            Pos.unmark new_var
-         | Ast.Int i -> Mvg.Literal (Mvg.Int i)
          | Ast.Float f -> Mvg.Literal (Mvg.Float f)
        end
      (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
@@ -1243,7 +1240,6 @@ let get_var_data
                            (Format_ast.format_variable var)
                            (Pos.format_position (Pos.get_position source_file_item))
                        )))
-                 | Ast.Int i -> Mvg.Int i
                  | Ast.Float f -> Mvg.Float f
                end)) lit) NoIndex var_decl_data idmap)
           | Ast.VariableDecl (Ast.InputVar (var, pos)) ->

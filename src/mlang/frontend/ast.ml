@@ -97,7 +97,6 @@ type variable =
 
 type literal =
   | Variable of variable
-  | Int of int
   | Float of float
 
 

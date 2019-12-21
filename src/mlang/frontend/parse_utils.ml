@@ -99,10 +99,9 @@ let parse_table_index sloc (s: string) : Ast.table_index =
 (**{1 Literal parsing }*)
 
 let parse_literal sloc (s: string) : Ast.literal =
-  try Ast.Int (int_of_string s) with
-  | Failure _ -> try Ast.Float (float_of_string s) with
-    | Failure _ ->
-      Ast.Variable (parse_variable sloc s)
+  try Ast.Float (float_of_string s) with
+  | Failure _ ->
+    Ast.Variable (parse_variable sloc s)
 
 let parse_func_name _ (s: string) : Ast.func_name =
   (s)

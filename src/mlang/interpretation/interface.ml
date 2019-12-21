@@ -257,7 +257,6 @@ let read_inputs_from_stdin (f: mvg_function) : literal VariableMap.t =
       try
         let value_ast = Parser.literal_input token (Lexing.from_string value) in
         match value_ast with
-        | Ast.Int i -> Mvg.Int i
         | Ast.Float f -> Mvg.Float f
         | Ast.Variable _ ->
           raise
