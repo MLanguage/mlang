@@ -16,22 +16,16 @@ build:
 
 # use: TEST_FILE=bla make test
 test: build
-	OCAMLRUNPARAM=b dune exec src/main.exe --application iliad \
-	 	--display_time --debug --backend z3 \
-		--function_spec specs/tests.m_spec \
+	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --backend interpreter\
+		--function_spec tests/tests.m_spec \
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
-test2: #build
-	./main.exe --application iliad \
-	 	--display_time --debug --backend z3 \
-		--function_spec specs/test2.m_spec \
-		--run_test=$(TEST_FILE) \
-		$(SOURCE_FILES)
-
+		
 tests: build
-	OCAMLRUNPARAM=b dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend z3 \
-		--function_spec specs/tests.m_spec \
+	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --backend interpreter \
+		--function_spec tests/tests.m_spec \
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 

@@ -6,9 +6,9 @@ PREM8_11 = 0;
 FLAG_PVRO = 0;
 # it seems PASCS needs FLAG_ACO = 2;
 # But pascq needs FLAG_ACO set to something else /o\
-# V_IND_TRAIT = 4;
-# MOISAN = 052017;
-# CMAJ = 0;
+V_IND_TRAIT = 4;
+MOISAN = 052017;
+CMAJ = 0;
 
 condition: non;
 

@@ -311,9 +311,6 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | (Ast.Div, Undefined, _) -> Int 0
 
         | (Ast.Div, _, l2) when is_zero l2  ->
-          Cli.warning_print (Printf.sprintf "Division by 0: %s"
-                               (Pos.format_position (Pos.get_position e))
-                            );
           Undefined
         | (Ast.Div, Bool i1, Bool i2)     -> Int   (int_of_bool i1   /  int_of_bool i2)
         | (Ast.Div, Bool i1, Int i2)      -> Float (float_of_bool i1 /. float_of_int i2)
@@ -467,8 +464,8 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
           | Some m, Some v -> Some (max m v)
       done;
       begin match !maxi with
-      | None -> Undefined
-      | Some v -> Int v end
+        | None -> Undefined
+        | Some v -> Int v end
     | FunctionCall (func, _) ->
       raise
         (RuntimeError
@@ -601,7 +598,7 @@ let evaluate_program
                        raise (RuntimeError (
                            ConditionViolated (cond.cond_errors, cond.cond_expr,
                                               List.rev @@ List.fold_left (fun acc var -> (var, VariableMap.find var ctx.ctx_vars)::acc) [] (Dependency.DepGraph.pred dep_graph var))
-                           , ctx
+                         , ctx
                          ))
                      | _ -> assert false (* should not happen *)
                 ) scc ctx
