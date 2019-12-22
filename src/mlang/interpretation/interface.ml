@@ -40,13 +40,9 @@ let fit_function (p: program) (f: mvg_function) : program =
                var_definition = match var_data.var_definition with
                  | InputVar | SimpleVar _ -> InputVar
                  | TableVar _ ->
-                   raise (Errors.TypeError (
-                       Errors.Variable (
-                         Printf.sprintf "Defining a variable input for a table variable (%s, %s) is not supported"
-                           (Pos.unmark var.Variable.name)
-                           (Pos.format_position (Pos.get_position var.Variable.name))
-                       )
-                     ))
+                   Errors.raise_typ_error Variable "Defining a variable input for a table variable (%s, %a) is not supported"
+                     (Pos.unmark var.Variable.name)
+                     Pos.format_position (Pos.get_position var.Variable.name)
              }
            else if VariableMap.mem var f.func_constant_inputs then
              {
@@ -58,13 +54,9 @@ let fit_function (p: program) (f: mvg_function) : program =
                  | InputVar ->
                    SimpleVar (VariableMap.find var f.func_constant_inputs)
                  | TableVar _ ->
-                   raise (Errors.TypeError (
-                       Errors.Variable (
-                         Printf.sprintf "Defining a constant input for a table variable (%s, %s) is not supported"
+                   Errors.raise_typ_error Variable "Defining a constant input for a table variable (%s, %a) is not supported"
                            (Pos.unmark var.Variable.name)
-                           (Pos.format_position (Pos.get_position var.Variable.name))
-                       )
-                     ))
+                           Pos.format_position (Pos.get_position var.Variable.name)
              }
            else if VariableMap.mem var f.func_outputs then
              {
@@ -73,21 +65,13 @@ let fit_function (p: program) (f: mvg_function) : program =
                var_definition = match var_data.var_definition with
                  | SimpleVar old_e -> SimpleVar old_e
                  | InputVar ->
-                   raise (Errors.TypeError (
-                       Errors.Variable (
-                         Printf.sprintf "Defining an output for a input variable (%s, %s) who is not defined is not supported"
+                   Errors.raise_typ_error Variable "Defining an output for a input variable (%s, %a) who is not defined is not supported"
                            (Pos.unmark var.Variable.name)
-                           (Pos.format_position (Pos.get_position var.Variable.name))
-                       )
-                     ))
+                           Pos.format_position (Pos.get_position var.Variable.name)
                  | TableVar _ ->
-                   raise (Errors.TypeError (
-                       Errors.Variable (
-                         Printf.sprintf "Defining an output for a table variable (%s, %s) is not supported"
+                   Errors.raise_typ_error Variable "Defining an output for a table variable (%s, %a) is not supported"
                            (Pos.unmark var.Variable.name)
-                           (Pos.format_position (Pos.get_position var.Variable.name))
-                       )
-                     ))
+                           Pos.format_position (Pos.get_position var.Variable.name)
              }
            else
              { var_data with
@@ -112,14 +96,9 @@ let var_set_from_variable_name_list (p: program) (names : string Pos.marked list
           Ast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.program_idmap)
         with
         | Not_found ->
-          raise
-            (Errors.TypeError
-               (Errors.Variable
-                  (Printf.sprintf
-                     "unknown variable %s %s"
+          Errors.raise_typ_error Variable "unknown variable %s %a"
                      name
-                     (Pos.format_position (Pos.get_position alias))
-                  )))
+                     Pos.format_position (Pos.get_position alias)
       in
       VariableMap.add var () acc
     ) VariableMap.empty names
@@ -128,13 +107,8 @@ let check_const_expression_is_really_const (e: expression Pos.marked) : unit =
   match Pos.unmark e with
   | Literal _ -> ()
   | _ ->
-    raise
-      (Errors.TypeError
-         (Errors.Variable
-            (Printf.sprintf
-               "Constant input defined in function specification file is not a constant expression (%s)"
-               (Pos.format_position (Pos.get_position e))
-            )))
+    Errors.raise_typ_error Variable "Constant input defined in function specification file is not a constant expression (%a)"
+      Pos.format_position (Pos.get_position e)
 
 let const_var_set_from_list
     (p: program)
@@ -153,15 +127,11 @@ let const_var_set_from_list
             List.hd (List.sort (fun v1 v2 ->
                 compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
                 (Pos.VarNameToID.find name p.program_idmap))
-          with Errors.TypeError (Errors.Variable _) ->
-            raise
-              (Errors.TypeError
-                 (Errors.Variable
-                    (Printf.sprintf
-                       "Unknown variable %s (%s)"
-                       name
-                       (Pos.format_position (Pos.get_position e))
-                    )))
+          with Errors.TypeError (Errors.Variable, _) ->
+            Errors.raise_typ_error Variable
+              "Unknown variable %s (%a)"
+              name
+              Pos.format_position (Pos.get_position e)
       in
       let new_e = Ast_to_mvg.translate_expression ({
           table_definition = false;
@@ -192,11 +162,8 @@ let translate_cond idmap (conds:Ast.expression Pos.marked list) : condition_data
   let verif_conds =
     List.fold_left (fun acc cond ->
         if not (check_boolean cond) then
-          raise (Errors.TypeError (
-              Typing (
-                Printf.sprintf "in spec: cond %s should have type bool"
-                  (Format_ast.format_expression (Pos.unmark cond))
-              )))
+          Errors.raise_typ_error Typing "in spec: cond %a should have type bool"
+            Format_ast.format_expression (Pos.unmark cond)
         else
           (Pos.same_pos_as {Ast.verif_cond_expr = mk_neg cond;
                             verif_cond_errors = [("-1", Pos.no_pos)]} cond) :: acc) [] conds in
@@ -210,7 +177,7 @@ let read_function_from_spec (p: program) : mvg_function =
     raise (Errors.ArgumentError "Function specification file is not specified using --function_spec");
   let input = open_in !Cli.function_spec in
   let filebuf =  Lexing.from_channel input in
-  Cli.debug_print (Printf.sprintf "Parsing %s" !Cli.function_spec);
+  Cli.debug_print "Parsing %s" !Cli.function_spec;
   let filebuf = {filebuf with
                  lex_curr_p = { filebuf.lex_curr_p with
                                 pos_fname = Filename.basename !Cli.function_spec
@@ -229,12 +196,11 @@ let read_function_from_spec (p: program) : mvg_function =
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->
-    Cli.error_print msg; close_in input; exit 1
+    Cli.error_print "%s" msg; close_in input; exit 1
   | Parser.Error -> begin
-      Cli.error_print
-        (Printf.sprintf "Lexer error in file %s at position %s"
+      Cli.error_print "Lexer error in file %s at position %a"
            (!Parse_utils.current_file)
-           (Errors.print_lexer_position filebuf.lex_curr_p));
+           Errors.print_lexer_position filebuf.lex_curr_p;
       close_in input;
       exit 1
     end
@@ -249,7 +215,7 @@ let make_function_from_program
 let read_inputs_from_stdin (f: mvg_function) : literal VariableMap.t =
   Cli.result_print "Enter the input values of the program, followed by a semicolon:";
   VariableMap.mapi (fun var _ ->
-      Printf.printf "%s (%s) = "
+      Format.printf "%s (%s) = "
         (match var.Variable.alias with Some s -> s | None -> Pos.unmark var.Variable.name)
         (Pos.unmark var.Variable.descr);
       let value = read_line () in
@@ -259,17 +225,13 @@ let read_inputs_from_stdin (f: mvg_function) : literal VariableMap.t =
         match value_ast with
         | Ast.Float f -> Mvg.Float f
         | Ast.Variable _ ->
-          raise
-            (Errors.TypeError
-               (Errors.Variable
-                  "Function input must be a numeric constant"
-               ))
+          Errors.raise_typ_error Variable "Function input must be a numeric constant"
       with
       | Errors.LexingError msg | Errors.ParsingError msg ->
-        Cli.error_print msg; exit 1
-      | Parser.Error -> begin
-          Cli.error_print
-            (Printf.sprintf "Lexer error in input!");
+        Cli.error_print "%s" msg; exit 1
+      | Parser.Error ->
+        begin
+          Cli.error_print "Lexer error in input!";
           exit 1
         end
     ) f.func_variable_inputs
@@ -278,6 +240,6 @@ let print_output (f: mvg_function) (results: Interpreter.ctx) : unit =
   VariableMap.iter (fun var value ->
       if VariableMap.mem var f.func_outputs then
         Cli.result_print
-          (Interpreter.format_var_literal_with_var var value)
+          "%a" Interpreter.format_var_literal_with_var (var, value)
     )
     results.ctx_vars;

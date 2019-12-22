@@ -20,249 +20,276 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 module Pos = Verifisc.Pos
 open Ast
 
-let format_application (app: application) : string  =
-  app
+let pp_print_list_comma eldisplay fmt l =
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
+    eldisplay fmt l
 
-let format_chaining (c: chaining) : string =
-  c
+let pp_unmark f = fun fmt e -> f fmt (Pos.unmark e)
 
-let format_rule_name (rn : rule_name) : string =
-  String.concat " " (List.map Pos.unmark rn)
+let pp_print_list_space eldisplay fmt l =
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " ") eldisplay fmt l
 
-let format_variable_name (v: variable_name) : string =
-  v
+let pp_print_list_endline eldisplay fmt l =
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") eldisplay fmt l
 
-let format_func_name (f:func_name) : string = f
 
-let format_variable_generic_name (v: variable_generic_name) : string =
-  v.base
+let format_application fmt (app: application)  =
+  Format.fprintf fmt "%s" app
 
-let format_variable (v: variable) : string = match v with
-  | Normal v -> format_variable_name v
-  | Generic v -> format_variable_generic_name v
+let format_chaining fmt (c: chaining) =
+  Format.fprintf fmt "%s" c
 
-let format_verification_name (n: verification_name) : string =
-  String.concat " " (List.map Pos.unmark n)
+let format_rule_name fmt (rn : rule_name) =
+  (pp_print_list_space (pp_unmark Format.pp_print_string)) fmt rn
 
-let format_error_name (e:error_name) : string =
-  e
+let format_variable_name fmt (v: variable_name) =
+  Format.fprintf fmt "%s" v
 
-let format_literal (l:literal) : string = match l with
-  | Variable v -> format_variable v
-  | Float f -> string_of_float f
+let format_func_name fmt (f:func_name) =
+  Format.fprintf fmt "%s" f
 
-let format_table_index (i:table_index) : string = match i with
-  | LiteralIndex i -> string_of_int i
-  | SymbolIndex v -> format_variable v
+let format_variable_generic_name fmt (v: variable_generic_name) =
+  Format.fprintf fmt "%s" v.base
 
-let format_lvalue (lv: lvalue) : string =
-  Printf.sprintf "%s%s" (format_variable (Pos.unmark lv.var)) (match lv.index with
-      | Some vi -> "[" ^ (format_table_index (Pos.unmark vi)) ^ "]"
-      | None -> ""
-    )
+let format_variable fmt (v: variable) = match v with
+  | Normal v -> format_variable_name fmt v
+  | Generic v -> format_variable_generic_name fmt v
 
-let format_set_value (sv: set_value) : string = match sv with
-  | VarValue v -> format_variable (Pos.unmark v)
-  | Interval (i1, i2) -> Printf.sprintf "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | FloatValue i -> string_of_float (Pos.unmark i)
+let format_verification_name fmt (n: verification_name) =
+  (pp_print_list_space (pp_unmark Format.pp_print_string)) fmt n
 
-let format_set_value_loop (sv: set_value_loop) : string = match sv with
-  | VarParam v -> Printf.sprintf "%s" (Pos.unmark v)
-  | IntervalLoop (i1, i2) -> Printf.sprintf "%s..%s" (format_literal (Pos.unmark i1)) (format_literal (Pos.unmark i2))
+let format_error_name fmt (e:error_name) =
+  Format.fprintf fmt "%s" e
 
-let format_comp_op (op: comp_op) : string = match op with
+let format_literal fmt (l:literal) = match l with
+  | Variable v -> format_variable fmt v
+  | Float f -> Format.fprintf fmt "%f" f
+
+let format_table_index fmt (i:table_index) = match i with
+  | LiteralIndex i -> Format.fprintf fmt "%d" i
+  | SymbolIndex v -> format_variable fmt v
+
+let format_lvalue fmt (lv: lvalue) =
+  match lv.index with
+  | Some vi ->
+    Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark lv.var)
+      format_table_index (Pos.unmark vi)
+  | None ->
+    Format.fprintf fmt "%a" format_variable (Pos.unmark lv.var)
+
+let format_set_value fmt (sv: set_value) = match sv with
+  | VarValue v -> format_variable fmt (Pos.unmark v)
+  | Interval (i1, i2) -> Format.fprintf fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
+  | FloatValue i -> Format.fprintf fmt "%f" (Pos.unmark i)
+
+let format_set_value_loop fmt (sv: set_value_loop) = match sv with
+  | VarParam v -> Format.fprintf fmt "%s" (Pos.unmark v)
+  | IntervalLoop (i1, i2) -> Format.fprintf fmt "%a..%a" format_literal (Pos.unmark i1) format_literal (Pos.unmark i2)
+
+let format_comp_op fmt (op: comp_op) =
+  Format.pp_print_string fmt (match op with
   | Gt -> ">"
   | Gte -> ">="
   | Lt -> "<"
   | Lte -> "<="
   | Eq -> "="
-  | Neq -> "!="
+  | Neq -> "!=")
 
-let format_binop (op: binop) : string = match op with
+let format_binop fmt (op: binop) =
+  Format.pp_print_string fmt (match op with
   | And -> "et"
   | Or -> "ou"
   | Add -> "+"
   | Sub -> "-"
   | Mul -> "*"
-  | Div -> "/"
+  | Div -> "/")
 
-let format_unop (op: unop) : string = match op with
+let format_unop fmt (op: unop) =
+  Format.pp_print_string fmt (match op with
   | Not -> "non"
-  | Minus -> "-"
+  | Minus -> "-")
 
-let format_loop_variable_ranges ((v, vs): loop_variable) =
-  Printf.sprintf "un %c dans %s"
+let format_loop_variable_ranges fmt ((v, vs): loop_variable) =
+  Format.fprintf fmt "un %c dans %a"
     (Pos.unmark v)
-    (String.concat "," (List.map (fun sv -> format_set_value_loop sv) vs))
+    (pp_print_list_comma format_set_value_loop) vs
 
-let format_loop_variable_value_set ((v, vs): loop_variable) =
-  Printf.sprintf "%c=%s"
+let format_loop_variable_value_set fmt ((v, vs): loop_variable) =
+  Format.fprintf fmt "%c=%a"
     (Pos.unmark v)
-    (String.concat "," (List.map (fun sv -> format_set_value_loop sv) vs))
+    (pp_print_list_comma format_set_value_loop) vs
 
-let format_loop_variables (lvs: loop_variables) : string =
-  Printf.sprintf "%s:" (match lvs with
-      | Ranges vvs ->
-        String.concat " et "
-          (List.map (fun (v, vs) -> format_loop_variable_ranges (v,vs)) vvs)
-      | ValueSets vvs ->
-        String.concat ";"
-          (List.map (fun (v, vs) -> format_loop_variable_value_set (v,vs)) vvs)
-    )
+let format_loop_variables fmt (lvs: loop_variables) =
+  match lvs with
+  | Ranges vvs ->
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " et ") format_loop_variable_ranges fmt vvs
+  | ValueSets vvs ->
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ";") format_loop_variable_value_set fmt vvs
 
-let rec format_expression (e: expression) : string = match e with
+let option_print pp fmt o = match o with
+  | None -> ()
+  | Some e -> pp fmt e
+
+let option_bind f o = match o with
+  | None -> None
+  | Some e -> Some (f e)
+
+let rec format_expression fmt (e: expression) = match e with
   | TestInSet (belong, e, values) ->
-    Printf.sprintf "(%s %sdans %s)"
-      (format_expression (Pos.unmark e))
+    Format.fprintf fmt "(%a %sdans %a)"
+      format_expression (Pos.unmark e)
       (if belong then "" else "non ")
-      (String.concat ", " (List.map (fun value -> format_set_value value) values))
+      (pp_print_list_comma format_set_value) values
   | Comparison (op, e1, e2) ->
-    Printf.sprintf "(%s %s %s)"
-      (format_expression (Pos.unmark e1))
-      (format_comp_op (Pos.unmark op))
-      (format_expression (Pos.unmark e2))
+    Format.fprintf fmt "(%a %a %a)"
+      format_expression (Pos.unmark e1)
+      format_comp_op (Pos.unmark op)
+      format_expression (Pos.unmark e2)
   | Binop (op, e1, e2) ->
-    Printf.sprintf "(%s %s %s)"
-      (format_expression (Pos.unmark e1))
-      (format_binop (Pos.unmark op))
-      (format_expression (Pos.unmark e2))
+    Format.fprintf fmt "(%a %a %a)"
+      format_expression (Pos.unmark e1)
+      format_binop (Pos.unmark op)
+      format_expression (Pos.unmark e2)
   | Unop (op, e) ->
-    (format_unop op) ^ " " ^ (format_expression (Pos.unmark e))
+    Format.fprintf fmt "%a %a"
+      format_unop op
+      format_expression (Pos.unmark e)
   | Index (v, i) ->
-    Printf.sprintf "%s[%s]"
-      (format_variable (Pos.unmark v))
-      (format_table_index (Pos.unmark i))
+    Format.fprintf fmt "%a[%a]"
+      format_variable (Pos.unmark v)
+      format_table_index (Pos.unmark i)
   | Conditional (e1, e2, e3) ->
-    Printf.sprintf "(si %s alors %s %sfinsi)"
-      (format_expression (Pos.unmark e1))
-      (format_expression (Pos.unmark e2))
-      (match e3 with
-       | None -> ""
-       | Some e3 -> (format_expression (Pos.unmark e3))^ " ")
+    Format.fprintf fmt "(si %a alors %a %afinsi)"
+      format_expression (Pos.unmark e1)
+      format_expression (Pos.unmark e2)
+      (option_print format_expression) (option_bind Pos.unmark e3)
   | FunctionCall (f, args) ->
-    Printf.sprintf "%s(%s)" (format_func_name (Pos.unmark f))
-      (format_func_args args)
-  | Literal l -> format_literal l
+    Format.fprintf fmt "%a(%a)" format_func_name (Pos.unmark f)
+      format_func_args args
+  | Literal l -> format_literal fmt l
   | Loop (lvs, e) ->
-    Printf.sprintf "pour %s%s"
-      (format_loop_variables (Pos.unmark lvs))
-      (format_expression (Pos.unmark e))
+    Format.fprintf fmt "pour %a%a"
+      format_loop_variables (Pos.unmark lvs)
+      format_expression (Pos.unmark e)
 
-and format_func_args (args:func_args) : string = match args with
-  | ArgList args -> String.concat ", "
-                      (List.map (fun arg -> format_expression (Pos.unmark arg)) args)
+and format_func_args fmt (args:func_args) = match args with
+  | ArgList args ->
+    pp_print_list_space (pp_unmark format_expression) fmt args
   | LoopList (lvs, e) ->
-    Printf.sprintf "%s%s"
-      (format_loop_variables (Pos.unmark lvs))
-      (format_expression (Pos.unmark e))
+    Format.fprintf fmt "%a%a"
+      format_loop_variables (Pos.unmark lvs)
+      format_expression (Pos.unmark e)
 
-let format_formula_decl (f:formula_decl) : string =
-  Printf.sprintf "%s = %s"
-    (format_lvalue (Pos.unmark f.lvalue))
-    (format_expression (Pos.unmark f.formula))
+let format_formula_decl fmt (f:formula_decl) =
+  Format.fprintf fmt "%a = %a"
+    format_lvalue (Pos.unmark f.lvalue)
+    format_expression (Pos.unmark f.formula)
 
-let format_formula (f:formula) : string = match f with
-  | SingleFormula f -> format_formula_decl f
+let format_formula fmt (f:formula) = match f with
+  | SingleFormula f ->
+    format_formula_decl fmt f
   | MultipleFormulaes (lvs, f) ->
-    Printf.sprintf "pour %s\n%s"
-      (format_loop_variables (Pos.unmark lvs))
-      (format_formula_decl f)
+    Format.fprintf fmt "pour %a\n%a"
+      format_loop_variables (Pos.unmark lvs)
+      format_formula_decl f
 
-let format_rule (r: rule) : string =
-  Printf.sprintf "regle %s:\napplication %s;\n%s;\n"
-    (String.concat " " (List.map Pos.unmark r.rule_name))
-    (String.concat ", " (List.map Pos.unmark r.rule_applications))
-    (String.concat ";\n" (List.map (fun f -> format_formula (Pos.unmark f)) r.rule_formulaes))
+let format_rule fmt (r: rule) =
+  Format.fprintf fmt
+    "regle %a:\napplication %a;\n%a;\n"
+    (pp_print_list_space (pp_unmark Format.pp_print_string)) r.rule_name
+    (pp_print_list_comma (pp_unmark Format.pp_print_string)) r.rule_applications
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ";\n")
+       (pp_unmark format_formula)) r.rule_formulaes
 
-let format_computed_typ (t:computed_typ) : string = match t with
-  | Base -> "base"
-  | GivenBack -> "restituee"
+let format_computed_typ fmt (t:computed_typ) = match t with
+  | Base -> Format.fprintf fmt "base"
+  | GivenBack -> Format.fprintf fmt "restituee"
 
-let format_input_variable_subtype (t: input_variable_subtype) : string = match t with
+let format_input_variable_subtype fmt (t: input_variable_subtype) =
+  Format.pp_print_string fmt (match t with
   | Context -> "contexte"
   | Family -> "famille"
   | Penality -> "penalite"
-  | Income -> "revenu"
+  | Income -> "revenu")
 
-let format_value_typ (t:value_typ) : string = match t with
+let format_value_typ fmt (t:value_typ) =
+  Format.pp_print_string fmt (match t with
   | Boolean -> "BOOLEEN"
   | DateYear -> "DATE_AAAA"
   | DateDayMonthYear -> "DATE_JJMMAAAA"
   | DateMonth -> "DATE_MM"
   | Integer -> "ENTIER"
-  | Real -> "REEL"
+  | Real -> "REEL")
 
-let format_input_attribute ((n,v): input_variable_attribute Pos.marked * literal Pos.marked) : string =
-  Printf.sprintf "%s = %s"
+let format_input_attribute fmt ((n,v): input_variable_attribute Pos.marked * literal Pos.marked) =
+  Format.fprintf fmt "%s = %a"
     (Pos.unmark n)
-    (format_literal (Pos.unmark v))
+    format_literal (Pos.unmark v)
 
-let format_input_variable (v:input_variable) : string =
-  Printf.sprintf "%s saisie %s %s%s %s : %s%s;"
-    (format_variable_name (Pos.unmark v.input_name))
-    (format_input_variable_subtype (Pos.unmark v.input_subtyp))
-    (String.concat " " (List.map format_input_attribute v.input_attributes))
+let format_input_variable fmt (v:input_variable) =
+  Format.fprintf fmt "%a saisie %a %a%s %a : %s%a;"
+    format_variable_name (Pos.unmark v.input_name)
+    format_input_variable_subtype (Pos.unmark v.input_subtyp)
+    (pp_print_list_space format_input_attribute) v.input_attributes
     (if v.input_given_back then " restituee" else "")
-    (format_variable_name (Pos.unmark v.input_alias))
+    format_variable_name (Pos.unmark v.input_alias)
     (Pos.unmark v.input_description)
-    (match v.input_typ with
-     | None -> ""
-     | Some t ->format_value_typ (Pos.unmark t))
+    (option_print format_value_typ) (option_bind Pos.unmark v.input_typ)
 
-let format_computed_variable (v: computed_variable) : string =
-  Printf.sprintf "%s%s calculee %s : %s%s;"
+let format_computed_variable fmt (v: computed_variable) =
+  Format.fprintf fmt "%s%a calculee %a : %a%s;"
     (Pos.unmark v.comp_name)
-    (match v.comp_table with
-     | None -> ""
-     | Some t -> " " ^ (string_of_int (Pos.unmark t)))
-    (String.concat " " (List.map (fun st -> format_computed_typ (Pos.unmark st)) v.comp_subtyp))
-    (match v.comp_typ with
-     | None -> ""
-     | Some t -> " " ^ (format_value_typ (Pos.unmark t)))
+    (option_print Format.pp_print_int) (option_bind Pos.unmark v.comp_table)
+    (pp_print_list_space (pp_unmark format_computed_typ)) v.comp_subtyp
+    (option_print format_value_typ) (option_bind Pos.unmark v.comp_typ)
     (Pos.unmark v.comp_description)
 
-let format_variable_decl (v: variable_decl) : string = match v with
-  | ComputedVar v -> format_computed_variable (Pos.unmark v)
-  | ConstVar (name, value)->
-    Printf.sprintf "%s : const = %s"
-      (format_variable_name (Pos.unmark name))
-      (format_literal (Pos.unmark value))
-  | InputVar v -> format_input_variable (Pos.unmark v)
+let format_variable_decl fmt (v: variable_decl) =
+  match v with
+  | ComputedVar v -> format_computed_variable fmt (Pos.unmark v)
+  | ConstVar (name, value) ->
+    Format.fprintf fmt "%a : const = %a"
+      format_variable_name (Pos.unmark name)
+      format_literal (Pos.unmark value)
+  | InputVar v -> format_input_variable fmt (Pos.unmark v)
 
-let format_verification_condition (vc: verification_condition) : string =
-  Printf.sprintf "si %s\n alors erreur %s;"
-    (format_expression (Pos.unmark vc.verif_cond_expr))
-    (String.concat " " (List.map (fun n -> format_error_name (Pos.unmark n)) vc.verif_cond_errors))
+let format_verification_condition fmt (vc: verification_condition) =
+  Format.fprintf fmt "si %a\n alors erreur %a;"
+    format_expression (Pos.unmark vc.verif_cond_expr)
+    (pp_print_list_space (pp_unmark format_error_name)) vc.verif_cond_errors
 
-let format_verification (v: verification) : string =
-  Printf.sprintf "verif %s : %s;\n%s"
-    (format_verification_name v.verif_name)
-    (String.concat " " (List.map (fun app -> format_application (Pos.unmark app)) v.verif_applications))
-    (String.concat "\n" (List.map (fun vc -> format_verification_condition (Pos.unmark vc)) v.verif_conditions))
+let format_verification fmt (v: verification) =
+  Format.fprintf fmt "verif %a : %a;\n%a"
+    format_verification_name v.verif_name
+    (pp_print_list_space (pp_unmark format_application)) v.verif_applications
+    (pp_print_list_space (pp_unmark format_verification_condition)) v.verif_conditions
 
-let format_error_typ (e:error_typ) : string = match e with
+let format_error_typ fmt (e:error_typ) =
+  Format.pp_print_string fmt (match e with
   | Anomaly -> "anomalie"
   | Discordance -> "discordance"
-  | Information -> "information"
+  | Information -> "information")
 
-let format_error_ (e:error_) : string =
-  Printf.sprintf "%s : %s : %s;"
-    (format_error_name (Pos.unmark e.error_name))
-    (format_error_typ (Pos.unmark e.error_typ))
-    (String.concat " : " (List.map (fun d -> (Pos.unmark d)) e.error_descr))
+let format_error_ fmt (e:error_) =
+  Format.fprintf fmt "%a : %a : %a;"
+    format_error_name (Pos.unmark e.error_name)
+    format_error_typ (Pos.unmark e.error_typ)
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " : ")
+       (pp_unmark Format.pp_print_string)) e.error_descr
 
-let format_source_file_item (i:source_file_item) : string = match i with
-  | Application app -> Printf.sprintf "application %s;" (format_application (Pos.unmark app))
+let format_source_file_item fmt (i:source_file_item) =
+  match i with
+  | Application app -> Format.fprintf fmt "application %a;" format_application (Pos.unmark app)
   | Chaining (c, apps) ->
-    Printf.sprintf "enchaineur %s %s;"
-      (format_chaining c)
-      (String.concat " " (List.map (fun app -> format_application (Pos.unmark app)) apps))
-  | VariableDecl vd -> format_variable_decl vd
-  | Rule r -> format_rule r
-  | Verification v -> format_verification v
-  | Function  -> ""
-  | Error e -> format_error_ e
-  | Output o -> Printf.sprintf "sortie(%s);" (format_variable_name (Pos.unmark o))
+    Format.fprintf fmt "enchaineur %a %a;"
+      format_chaining c
+      (pp_print_list_space (pp_unmark format_application)) apps
+  | VariableDecl vd -> format_variable_decl fmt vd
+  | Rule r -> format_rule fmt r
+  | Verification v -> format_verification fmt v
+  | Function  -> ()
+  | Error e -> format_error_ fmt e
+  | Output o -> Format.fprintf fmt "sortie(%a);" format_variable_name (Pos.unmark o)
 
-let format_source_file (f: source_file) : string =
-  String.concat "\n" (List.map (fun i -> format_source_file_item (Pos.unmark i)) f)
+let format_source_file fmt (f: source_file) =
+  pp_print_list_endline (pp_unmark format_source_file_item) fmt f

@@ -57,29 +57,29 @@ let optimize
     (program: Mvg.program)
   : Mvg.program =
 
-  Cli.debug_print (Printf.sprintf "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars));
+  Cli.debug_print "Optimizing program with %d variables..." (Mvg.VariableMap.cardinal program.program_vars);
   (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
   let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
   while !nb_removed > 0 do
     current_progress
-      (Printf.sprintf
+      (Format.asprintf
          "performing partial evaluation..."
       );
     let new_program = Partial_evaluation.partially_evaluate !program  in
     current_progress
-      (Printf.sprintf
+      (Format.asprintf
          "performing global value numbering..."
       );
     let new_program = Global_value_numbering.optimize new_program in
     current_progress
-      (Printf.sprintf
+      (Format.asprintf
          "performing partial evaluation..."
       );
     let new_program = Partial_evaluation.partially_evaluate new_program in
     current_progress
-      (Printf.sprintf
+      (Format.asprintf
          "removing unused variables..."
       );
     let new_program = remove_unused_variables new_program in
@@ -88,7 +88,7 @@ let optimize
       Mvg.VariableMap.cardinal new_program.program_vars
     in
     current_progress
-      (Printf.sprintf
+      (Format.asprintf
          "removing %d unused variables out of %d..."
          new_nb_removed
          (Mvg.VariableMap.cardinal !program.program_vars));
@@ -98,8 +98,8 @@ let optimize
   finish "completed!";
   let program = !program in
   Cli.debug_print
-    (Printf.sprintf "Program variables count down to %d!"
-       (Mvg.VariableMap.cardinal program.program_vars));
+    "Program variables count down to %d!"
+    (Mvg.VariableMap.cardinal program.program_vars);
   let dep_graph = Dependency.create_dependency_graph program in
   Dependency.print_dependency_graph !Cli.dep_graph_file dep_graph program;
   program

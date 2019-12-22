@@ -76,6 +76,5 @@ let find_bitvec_repr
               Mvg.VariableMap.add var { repr_kind = Real bitvec_order; is_table}
                 new_typing.repr_info_var }
        else
-         (* let () = Cli.warning_print (Printf.sprintf "var %s not used when computing sizes\n" (Mvg.Variable.show var)) in *)
          new_typing
     ) p new_typing

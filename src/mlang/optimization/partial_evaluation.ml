@@ -152,7 +152,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
               else
                 raise (Interpreter.RuntimeError (
                     Interpreter.FloatIndex (
-                      Printf.sprintf "%s" (Pos.format_position (Pos.get_position e1))
+                      Format.asprintf "%a" Pos.format_position (Pos.get_position e1)
                     ), Interpreter.empty_ctx
                   ))
           in

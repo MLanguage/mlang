@@ -196,17 +196,46 @@ type expression =
    MVG programs are just mapping from variables to their definitions, and make a massive use
    of [VariableMap].
 *)
-module VariableMap = Map.Make(Variable)
+module VariableMap =
+  (struct
+    include Map.Make(Variable)
+
+    let map_printer key_printer value_printer fmt map =
+      Format.fprintf fmt "{ %a }"
+        (fun fmt -> iter (fun k v ->
+             Format.fprintf fmt "%a ~> %a, " key_printer k value_printer v
+           )) map
+  end)
 
 
-module LocalVariableMap = Map.Make(LocalVariable)
+
+module LocalVariableMap =
+    (struct
+    include Map.Make(LocalVariable)
+
+    let map_printer value_printer fmt map =
+      Format.fprintf fmt "{ %a }"
+        (fun fmt -> iter (fun var v ->
+             Format.fprintf fmt "%d ~> %a, " var.id value_printer v
+           )) map
+  end)
+
 
 
 (**
    This map is used to store the definitions of all the cells of a table variable that is not
    not defined generically
 *)
-module IndexMap = Map.Make(struct type t = int let compare = compare end)
+module IndexMap =
+  (struct
+    include Map.Make(struct type t = int let compare = compare end)
+
+    let map_printer value_printer fmt map =
+      Format.fprintf fmt "{ %a }"
+        (fun fmt -> iter (fun k v ->
+             Format.fprintf fmt "%d ~> %a, " k value_printer v
+           )) map
+  end)
 
 (** Custom visitor for the [IndexMap.t] type *)
 class ['self] index_map_iter = object
@@ -326,6 +355,4 @@ let find_var_name_by_alias (p: program) (alias: string) : string =
   match v with
   | Some v -> v
   | None ->
-    raise (Errors.TypeError (
-        Errors.Variable (Printf.sprintf "alias not found (%s)" alias)
-      ))
+    Errors.raise_typ_error Variable "alias not found (%s)" alias

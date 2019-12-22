@@ -33,14 +33,13 @@ let parse_file (test_name:string) : test_file =
     with
     | Errors.LexingError msg | Errors.ParsingError msg ->
       close_in input;
-      Cli.error_print msg;
+      Cli.error_print "%s" msg;
       Cmdliner.Term.exit_status (`Ok 2);
       None
     | Tparser.Error -> begin
-        Cli.error_print
-          (Printf.sprintf "Lexer error in file %s at position %s"
+        Cli.error_print "Lexer error in file %s at position %a"
              test_name
-             (Errors.print_lexer_position filebuf.lex_curr_p));
+             Errors.print_lexer_position filebuf.lex_curr_p;
         close_in input;
         Cmdliner.Term.exit_status (`Ok 2);
         None
@@ -78,11 +77,11 @@ let to_mvg_function (program:Mvg.program) (t: test_file) : Interface.mvg_functio
 
 
 let check_test (p: Mvg.program) (test_name: string) =
-  Cli.debug_print (Printf.sprintf "Parsing %s..." test_name);
+  Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
-  Cli.debug_print (Printf.sprintf "Running test %s..." t.nom);
+  Cli.debug_print "Running test %s..." t.nom;
   let f = to_mvg_function p t in
-  Cli.debug_print (Printf.sprintf "Executing program");
+  Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
   let _ =  Interpreter.evaluate_program p VariableMap.empty 5 in
   ()
@@ -103,12 +102,12 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
       check_test p (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures)
-    (* Cli.debug_print (Printf.sprintf "Success on %s" name) *)
+    (* Cli.debug_print "Success on %s" name *)
     with Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) ->
       Cli.debug_flag := true;
       match bindings, Pos.unmark expr with
       | [v, Interpreter.SimpleVar l1], Unop (Not, (Comparison ((Ast.Eq, _), _, (Literal l2, _)), _)) ->
-        (* Cli.debug_print (Printf.sprintf "Failure on %s, var = %s, got = %s, expected = %s" name varname (Format_mvg.format_literal l1) (Format_mvg.format_literal l2)); *)
+        (* Cli.debug_print "Failure on %s, var = %s, got = %a, expected = %a" name varname Format_mvg.format_literal l1 Format_mvg.format_literal l2; *)
         let errs_varname = try VariableMap.find v failures with Not_found -> [] in
         (successes, VariableMap.add v ((name,l1,l2)::errs_varname) failures)
       | _ -> assert false in
@@ -126,10 +125,10 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
          ))
   in
   finish "done!";
-  Cli.debug_print (Printf.sprintf "%d successes, on: %s" (List.length s) (String.concat ", " s));
+  Cli.debug_print "%d successes, on: %s" (List.length s) (String.concat ", " s);
   Cli.debug_print "Failures:";
   let f_l = List.sort (fun (_, i) (_, i') -> - Pervasives.compare (List.length i) (List.length i')) (VariableMap.bindings f) in
   List.iter
     (fun (var, infos) ->
-       Cli.debug_print (Printf.sprintf "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
+       Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos))
     ) f_l

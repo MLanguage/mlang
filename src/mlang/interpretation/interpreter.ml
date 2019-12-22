@@ -28,24 +28,24 @@ type var_literal =
   | SimpleVar of literal
   | TableVar of int * literal array
 
-let format_var_literal_with_var (var: Variable.t) (vl: var_literal) : string = match vl with
+let format_var_literal_with_var fmt (var, vl: Variable.t * var_literal) =
+  match vl with
   | SimpleVar value ->
-    Printf.sprintf "%s (%s): %s"
+    Format.fprintf fmt "%s (%s): %a"
       (Pos.unmark var.Variable.name)
       (Pos.unmark var.Variable.descr)
-      (Format_mvg.format_literal value)
+      Format_mvg.format_literal value
   | TableVar (size, values) ->
-    Printf.sprintf "%s (%s): Table (%d values)\n%s"
+    Format.fprintf fmt "%s (%s): Table (%d values)@\n"
       (Pos.unmark var.Variable.name)
       (Pos.unmark var.Variable.descr)
-      size
-      (String.concat "\n"
-         (List.mapi
-            (fun idx value ->
-               Printf.sprintf "| %d -> %s"
-                 idx
-                 (Format_mvg.format_literal value)
-            ) (Array.to_list values)))
+      size;
+    List.iteri
+       (fun idx value ->
+          Format.fprintf fmt "| %d -> %a"
+            idx
+            Format_mvg.format_literal value
+       ) (Array.to_list values)
 
 type ctx = {
   ctx_local_vars: literal Pos.marked LocalVariableMap.t;
@@ -72,48 +72,45 @@ let repl_debugguer
     (ctx: ctx )
     (p: Mvg.program) : unit
   =
-  Cli.warning_print ("Starting interactive debugger. Please query the interpreter state for the values of variables." ^
-                     " Exit with \"quit\".");
+  Cli.warning_print "Starting interactive debugger. Please query the interpreter state for the values of variables. Exit with \"quit\".";
   let exit = ref false in
   while not !exit do
-    Printf.printf "> ";
+    Format.printf "> ";
     let query = read_line () in
     if query = "quit" then exit := true else
     if query = "explain" then begin
-      Printf.printf ">> ";
+      Format.printf ">> ";
       let query = read_line () in
       try
         let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
-        Printf.printf "%s\n"
-          (String.concat "\n"
-             (List.map (fun var ->
-                  Printf.sprintf "[%s] -> %s"
-                    (Format_mvg.format_execution_number_short var.Variable.execution_number)
-                    (try
-                       Format_mvg.format_variable_def (VariableMap.find var p.program_vars).Mvg.var_definition
-                     with
-                     | Not_found -> "unused definition")
-                ) vars))
-      with
-      | Not_found -> Printf.printf "Inexisting variable\n"
-    end else try
-        let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
-        Printf.printf "%s\n"
-          (String.concat "\n"
-             (List.map (fun var ->
-                  try begin
-                    let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-                    Printf.sprintf "[%s] -> %s "
-                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
-                      (format_var_literal_with_var var var_l)
-                  end with
+        (List.iter (fun var ->
+             Format.printf "[%a] -> %a"
+               Format_mvg.format_execution_number_short var.Variable.execution_number
+               (fun fmt () ->
+                  try
+                    Format_mvg.format_variable_def fmt (VariableMap.find var p.program_vars).Mvg.var_definition
+                  with
                   | Not_found ->
-                    Printf.sprintf "[%s] -> not computed"
-                      (Format_mvg.format_execution_number_short var.Variable.execution_number)
-                ) vars))
-
+                    Format.fprintf fmt "unused definition") ()
+           ) vars)
       with
-      | Not_found -> Printf.printf "Inexisting variable\n"
+      | Not_found -> Format.printf "Inexisting variable@\n"
+    end
+    else try
+        let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
+        (List.iter (fun var ->
+             try begin
+               let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
+               Format.printf "[%a] -> %a "
+                 Format_mvg.format_execution_number_short var.Variable.execution_number
+                 format_var_literal_with_var (var, var_l)
+             end with
+             | Not_found ->
+               Format.printf "[%a] -> not computed"
+                 Format_mvg.format_execution_number_short var.Variable.execution_number
+           ) vars)
+      with
+      | Not_found -> Format.printf "Inexisting variable\n"
   done
 
 type run_error =
@@ -126,20 +123,24 @@ type run_error =
 
 exception RuntimeError of run_error * ctx
 
-let format_runtime_error (e: run_error) : string = match e with
-  | UndefinedValue s -> Printf.sprintf "Undefined value at runtime: %s" s
-  | ErrorValue s -> Printf.sprintf "Error value at runtime: %s" s
-  | FloatIndex s -> Printf.sprintf "Index is not an integer: %s" s
-  | IndexOutOfBounds s -> Printf.sprintf "Index out of bounds: %s" s
-  | MissingInputValue s -> Printf.sprintf "Missing input value: %s" s
+let format_runtime_error fmt (e: run_error)= match e with
+  | UndefinedValue s ->
+    Format.fprintf fmt "Undefined value at runtime: %s" s
+  | ErrorValue s ->
+    Format.fprintf fmt "Error value at runtime: %s" s
+  | FloatIndex s ->
+    Format.fprintf fmt "Index is not an integer: %s" s
+  | IndexOutOfBounds s ->
+    Format.fprintf fmt "Index out of bounds: %s" s
+  | MissingInputValue s ->
+    Format.fprintf fmt "Missing input value: %s" s
   | ConditionViolated (errors, condition, bindings) ->
-    Printf.sprintf "Verification condition failed: %s. Errors thrown:\n%s\nViolated condition:\n%s\nValues of the relevant variables at this point:\n%s"
-      (Pos.format_position (Pos.get_position condition))
-      (String.concat "\n" (List.map (fun err ->
-           Printf.sprintf "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)
-         ) errors))
-      (Format_mvg.format_expression (Pos.unmark condition))
-      (String.concat "\n" (List.map (fun (v, l) -> format_var_literal_with_var v l) bindings))
+    Format.fprintf fmt "Verification condition failed: %a. Errors thrown:\n%a\nViolated condition:\n%a\nValues of the relevant variables at this point:\n%a"
+      Pos.format_position (Pos.get_position condition)
+      (Format_ast.pp_print_list_endline (fun fmt err ->
+           Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))) errors
+      Format_mvg.format_expression (Pos.unmark condition)
+      (Format_ast.pp_print_list_endline format_var_literal_with_var) bindings
 
 let evaluate_array_index
     (ctx: ctx)
@@ -157,7 +158,7 @@ let evaluate_array_index
       else
         raise (RuntimeError (
             FloatIndex (
-              Printf.sprintf "%s" (Pos.format_position pos)
+              Format.asprintf "%a" Pos.format_position pos
             ), ctx
           ))
   in
@@ -169,7 +170,7 @@ let evaluate_array_index
 let eval_debug = ref false
 
 let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : literal =
-  if !eval_debug then Cli.debug_print (Printf.sprintf "evaluate_expr %s" (Format_mvg.format_expression @@ Pos.unmark e));
+  if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark e);
   try begin match Pos.unmark e with
     | Comparison (op, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
@@ -335,7 +336,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Some i -> Float (float_of_int i)
       end
     | Error -> raise (RuntimeError (
-        ErrorValue (Pos.format_position (Pos.get_position e)), ctx
+        ErrorValue (Format.asprintf "%a" Pos.format_position (Pos.get_position e)), ctx
       ))
     | LocalLet (lvar, e1, e2) ->
       let new_e1 = evaluate_expr ctx p e1 in
@@ -377,10 +378,10 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | Float f when float_of_int (int_of_float f) = f -> int_of_float f
         | e ->
           raise (RuntimeError (ErrorValue
-                                 (Printf.sprintf
-                                    "evaluation of %s should be an integer, not %s"
-                                    (Format_mvg.format_expression @@ Pos.unmark arg1)
-                                    (Format_mvg.format_literal e)
+                                 (Format.asprintf
+                                    "evaluation of %a should be an integer, not %a"
+                                    Format_mvg.format_expression (Pos.unmark arg1)
+                                    Format_mvg.format_literal e
                                  ), ctx))
       in
       let var_arg2 = match Pos.unmark arg2 with
@@ -408,17 +409,17 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       raise
         (RuntimeError
            (ErrorValue
-              (Printf.sprintf
-                 "the function %s %s has not been expanded"
-                 (Format_mvg.format_func func)
-                 (Pos.format_position (Pos.get_position e))),
+              (Format.asprintf
+                 "the function %a %a has not been expanded"
+                 Format_mvg.format_func func
+                 Pos.format_position (Pos.get_position e)),
             ctx
            ))
   end with
   | RuntimeError (e,ctx) -> begin
       if !exit_on_rte then
         begin
-          Cli.error_print (format_runtime_error e);
+          Cli.error_print "%a@?" format_runtime_error e;
           flush_all ();
           flush_all ();
           if !repl_debug then repl_debugguer ctx p ;
@@ -453,7 +454,7 @@ let evaluate_program
                     | InputVar -> begin match VariableMap.find_opt var input_values with
                         | Some e -> SimpleVar e
                         | None ->
-                          Cli.error_print @@ Pos.unmark @@ var.name;
+                          Cli.error_print "%s" (Pos.unmark @@ var.name);
                           assert false (* should not happen *)
                       end
                   end with
@@ -463,11 +464,11 @@ let evaluate_program
                       SimpleVar Undefined
                     with
                     | Not_found ->
-                      Printf.printf "Variable not found: %s %s\nSame name: %s\n"
+                      Format.printf "Variable not found: %s %a\nSame name: %s\n"
                         (Pos.unmark var.Mvg.Variable.name)
-                        (Format_mvg.format_execution_number var.Mvg.Variable.execution_number)
+                        Format_mvg.format_execution_number var.Mvg.Variable.execution_number
                         (String.concat "," (List.map (fun var ->
-                             Printf.sprintf "%s[%s]" (Pos.unmark var.Mvg.Variable.name) (Format_mvg.format_execution_number_short var.Mvg.Variable.execution_number)
+                             Format.asprintf "%s[%a]" (Pos.unmark var.Mvg.Variable.name) Format_mvg.format_execution_number_short var.Mvg.Variable.execution_number
                            ) (Pos.VarNameToID.find (Pos.unmark var.Mvg.Variable.name) p.Mvg.program_idmap)));
                       assert false
                 ) scc
@@ -519,7 +520,7 @@ let evaluate_program
                            raise (
                              RuntimeError (
                                MissingInputValue (
-                                 Printf.sprintf "%s (%s)"
+                                 Format.asprintf "%s (%s)"
                                    (Pos.unmark var.Mvg.Variable.name)
                                    (Pos.unmark var.Mvg.Variable.descr)
                                ), ctx
@@ -558,7 +559,7 @@ let evaluate_program
   | RuntimeError (e,ctx) ->
     if !exit_on_rte then
       begin
-        Cli.error_print (format_runtime_error e);
+        Cli.error_print "%a" format_runtime_error e;
         flush_all ();
         flush_all ();
         if !repl_debug then repl_debugguer ctx p ;

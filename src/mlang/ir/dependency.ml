@@ -111,21 +111,21 @@ module Dot = Graph.Graphviz.Dot(struct
           match var_data.Mvg.var_io with
           | Mvg.Input -> [
               `Fillcolor input_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
-              `Label (Printf.sprintf "%s\n%s"
+              `Label (Format.asprintf "%s\n%s"
                         (match v.Mvg.Variable.alias with Some s -> s | None -> Pos.unmark v.Mvg.Variable.name)
                         (Pos.unmark v.Mvg.Variable.descr)
                      )
             ]
           | Mvg.Regular -> [
               `Fillcolor regular_color; `Style `Filled; `Shape `Box; `Fontcolor text_color;
-              `Label (Printf.sprintf "%s\n%s"
+              `Label (Format.asprintf "%s\n%s"
                         (Pos.unmark v.Mvg.Variable.name)
                         (Pos.unmark v.Mvg.Variable.descr)
                      )
             ]
           | Mvg.Output -> [
               `Fillcolor output_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
-              `Label (Printf.sprintf "%s\n%s"
+              `Label (Format.asprintf "%s\n%s"
                         (Pos.unmark v.Mvg.Variable.name)
                         (Pos.unmark v.Mvg.Variable.descr)
                      )
@@ -135,7 +135,7 @@ module Dot = Graph.Graphviz.Dot(struct
           let _ = Mvg.VariableMap.find v p.program_conds in
           [
             `Fillcolor cond_color; `Shape `Box; `Style `Filled; `Fontcolor text_color;
-            `Label (Printf.sprintf "%s\n%s"
+            `Label (Format.asprintf "%s\n%s"
                       (Pos.unmark v.Mvg.Variable.name)
                       (Pos.unmark v.Mvg.Variable.descr)
                    )
@@ -152,10 +152,9 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.progra
   let file = open_out_bin filename in
   (* let graph = DepgGraphOper.transitive_reduction graph in *)
   program_when_printing:= Some p;
-  Cli.debug_print (Printf.sprintf
-                     "Writing variables dependency graph to %s (%d variables)"
+  Cli.debug_print "Writing variables dependency graph to %s (%d variables)"
                      filename
-                     (DepGraph.nb_vertex graph));
+                     (DepGraph.nb_vertex graph);
   if !Cli.debug_flag then
     Dot.output_graph file graph;
   close_out file
@@ -184,9 +183,9 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) (print_debug: bool) : bool 
               else
                 DepGraph.remove_vertex new_g vertex
             ) g g in
-          let filename = Printf.sprintf "%s/strongly_connected_component_%d.dot" dir i in
+          let filename = Format.asprintf "%s/strongly_connected_component_%d.dot" dir i in
           print_dependency_graph filename new_g p;
-          cycles_strings := (Printf.sprintf "The following variables are defined circularly: %s\n\
+          cycles_strings := (Format.asprintf "The following variables are defined circularly: %s\n\
                                              The dependency graph of this circular definition has been written to %s"
                                (String.concat " <-> "
                                   (List.map
@@ -196,7 +195,7 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) (print_debug: bool) : bool 
                             )::!cycles_strings;
         ) sccs;
       let oc = open_out (dir ^ "/variable_cycles.txt") in
-      Printf.fprintf oc "%s" (String.concat "\n\n" !cycles_strings);
+      Format.fprintf (Format.formatter_of_out_channel oc) "%s" (String.concat "\n\n" !cycles_strings);
       close_out oc
     end;
     true

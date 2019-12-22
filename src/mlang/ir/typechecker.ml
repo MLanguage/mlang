@@ -50,14 +50,14 @@ struct
 
   exception UnificationError of string * string
 
-  let format_typ (t:t) : string =
-    Printf.sprintf "%s (%s %s)"
+  let format_typ fmt (t:t) =
+    Format.fprintf fmt "%s (%s %a)"
       (match UF.find (fst t) with
        | T.Real -> "real"
        | T.Boolean -> "boolean"
        | T.All -> "unconstrained")
       (match snd (snd t) with Up -> "inferred" | Down -> "constrained")
-      (Pos.format_position (fst (snd t)))
+      Pos.format_position (fst (snd t))
 
   let create_variable (pos: infer_info) : t = (UF.create T.All, pos)
 
@@ -89,8 +89,8 @@ struct
       ()
     else
       raise (UnificationError (
-          format_typ t,
-          format_typ coerce
+          Format.asprintf "%a" format_typ t,
+          Format.asprintf "%a" format_typ coerce
         ))
 
 
@@ -101,8 +101,8 @@ struct
       UF.union (fst t1) (fst t2); t1
     end else
       raise (UnificationError (
-          format_typ t1,
-          format_typ t2
+          Format.asprintf "%a" format_typ t1,
+          Format.asprintf "%a" format_typ t2
         ))
 end
 
@@ -134,15 +134,12 @@ let rec typecheck_top_down
         ctx
       with
       | Typ.UnificationError _ ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-                 (Format_mvg.format_expression (Pos.unmark e1))
-                 (Pos.format_position (Pos.get_position e1))
-                 (Typ.format_typ t1)
-                 (Pos.format_position (Pos.get_position e2))
-                 (Typ.format_typ t2)
-              )))
+        Errors.raise_typ_error Typing "expression %a (%a) of type %a has not the same type than expression %a of type %a"
+          Format_mvg.format_expression (Pos.unmark e1)
+          Pos.format_position (Pos.get_position e1)
+          Typ.format_typ t1
+          Pos.format_position (Pos.get_position e2)
+          Typ.format_typ t2
     end
   | (Binop (((Ast.And | Ast.Or), _), e1, e2), Boolean)
   | (Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2), Real) ->
@@ -165,40 +162,31 @@ let rec typecheck_top_down
             ctx
           with
           | Typ.UnificationError _ ->
-            raise (Errors.TypeError (
-                Errors.Typing
-                  (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s, and both should be of type %s"
-                     (Format_mvg.format_expression (Pos.unmark e1))
-                     (Pos.format_position (Pos.get_position e1))
-                     (Typ.format_typ t1)
-                     (Pos.format_position (Pos.get_position e2))
-                     (Typ.format_typ t2)
-                     (Format_mvg.format_typ t)
-                  )))
+            Errors.raise_typ_error Typing "expression %a (%a) of type %a has not the same type than expression %a of type %a, and both should be of type %a"
+              Format_mvg.format_expression (Pos.unmark e1)
+              Pos.format_position (Pos.get_position e1)
+              Typ.format_typ t1
+              Pos.format_position (Pos.get_position e2)
+              Typ.format_typ t2
+              Format_mvg.format_typ t
         end
       with
       | Typ.UnificationError _ ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
-                 (Format_mvg.format_expression (Pos.unmark e1))
-                 (Pos.format_position (Pos.get_position e1))
-                 (Typ.format_typ t1)
-              )))
+        Errors.raise_typ_error Typing "expression %a (%a) of type %a should be of type boolean"
+          Format_mvg.format_expression (Pos.unmark e1)
+          Pos.format_position (Pos.get_position e1)
+          Typ.format_typ t1
     end
   | (FunctionCall (func, args), t) ->
     let typechecker = typecheck_func_args func (Pos.get_position e) in
     let (ctx, t') = typechecker ctx args in
     begin try Typ.coerce t' (Typ.create_concrete t (Pos.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError _ ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "function call to %s (%s) return type is %s but should be %s"
-                 (Format_mvg.format_func func)
-                 (Pos.format_position (Pos.get_position e))
-                 (Typ.format_typ t')
-                 (Format_mvg.format_typ t)
-              )))
+        Errors.raise_typ_error Typing "function call to %a (%a) return type is %a but should be %a"
+          Format_mvg.format_func func
+          Pos.format_position (Pos.get_position e)
+          Typ.format_typ t'
+          Format_mvg.format_typ t
     end
   | (Literal (Bool _), t)
   | (Literal (Float 0.0), t)
@@ -227,14 +215,10 @@ let rec typecheck_top_down
             }
           with
           |  Typ.UnificationError (string_t, string_t') ->
-            raise (Errors.TypeError (
-                Errors.Typing
-                  (Printf.sprintf "variable %s used %s should be of type %s but has been declared of type %s"
-                     (Pos.unmark var.Variable.name)
-                     (Pos.format_position (Pos.get_position e))
-                     (string_t)
-                     (string_t')
-                  )))
+            Errors.raise_typ_error Typing "variable %s used %a should be of type %s but has been declared of type %s"
+              (Pos.unmark var.Variable.name)
+              Pos.format_position (Pos.get_position e)
+              string_t string_t'
         end
       | None ->
         let (ctx, t') = typecheck_bottom_up ctx e in
@@ -244,14 +228,11 @@ let rec typecheck_top_down
             }
           with
           | Typ.UnificationError (t_msg, _) ->
-            raise (Errors.TypeError (
-                Errors.Typing
-                  (Printf.sprintf "variable %s %s is of type %s but should be %s"
+            Errors.raise_typ_error Typing "variable %s %a is of type %s but should be %a"
                      (Pos.unmark var.Variable.name)
-                     (Pos.format_position (Pos.get_position var.Variable.name))
+                     Pos.format_position (Pos.get_position var.Variable.name)
                      t_msg
-                     (Format_mvg.format_typ t)
-                  )))
+                     Format_mvg.format_typ t
         end
       with
       | Not_found ->
@@ -263,13 +244,10 @@ let rec typecheck_top_down
     let (ctx, t2) = typecheck_bottom_up ctx e2 in
     begin try Typ.coerce t2 (Typ.create_concrete t (Pos.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError (t2_msg, _) ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "expression %s has type %s but should be %s"
-                 (Pos.format_position (Pos.get_position e))
-                 t2_msg
-                 (Format_mvg.format_typ t)
-              )))
+        Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
+          Pos.format_position (Pos.get_position e)
+          t2_msg
+          Format_mvg.format_typ t
     end
   | (Error, _) ->
     ctx
@@ -279,34 +257,27 @@ let rec typecheck_top_down
     in
     begin try Typ.coerce t' (Typ.create_concrete t (Pos.get_position e, Typ.Down)); ctx with
       | Typ.UnificationError (t_msg, _) ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "expression %s has type %s but should be %s"
-                 (Pos.format_position (Pos.get_position e))
-                 t_msg
-                 (Format_mvg.format_typ t)
-              )))
+        Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
+          Pos.format_position (Pos.get_position e)
+          t_msg
+          Format_mvg.format_typ t
     end
   | (GenericTableIndex, Real) ->
     if ctx.ctx_is_generic_table then
       ctx
     else
-      raise (Errors.TypeError
-               (Errors.Variable
-                  (Printf.sprintf "Generic table index appears outside of table %s"
-                     (Pos.format_position (Pos.get_position e)))))
+      Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
+        Pos.format_position (Pos.get_position e)
+
   | (Index ((var, var_pos), e'), t) ->
     let ctx = typecheck_top_down ctx e' Real in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
-        raise (Errors.TypeError
-                 (Errors.Typing
-                    (Printf.sprintf "variable %s is accessed %s as a table but it is not defined as one %s"
-                       (Pos.unmark var.Variable.name)
-                       (Pos.format_position var_pos)
-                       (Pos.format_position (Pos.get_position var.Variable.name))
-                    )))
+        Errors.raise_typ_error Typing "variable %s is accessed %a as a table but it is not defined as one %a"
+          (Pos.unmark var.Variable.name)
+          Pos.format_position var_pos
+          Pos.format_position (Pos.get_position var.Variable.name)
       | TableVar _ ->
         begin try
             let var_typ = VariableMap.find var ctx.ctx_var_typ in
@@ -317,13 +288,10 @@ let rec typecheck_top_down
                 ctx
               with
               | Typ.UnificationError (t_msg, _) ->
-                raise (Errors.TypeError (
-                    Errors.Typing
-                      (Printf.sprintf "expression %s has type %s but should be %s"
-                         (Pos.format_position (Pos.get_position e))
-                         t_msg
-                         (Format_mvg.format_typ t)
-                      )))
+                Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
+                  Pos.format_position (Pos.get_position e)
+                  t_msg
+                  Format_mvg.format_typ t
             end
           with
           | Not_found ->
@@ -333,28 +301,20 @@ let rec typecheck_top_down
             }
         end
     end
-  | _ -> raise (Errors.TypeError (
-      Errors.Typing
-        (Printf.sprintf "expression %s (%s) should be of type %s, but is of type %s"
-           (Format_mvg.format_expression (Pos.unmark e))
-           (Pos.format_position (Pos.get_position e))
-           (Format_mvg.format_typ t)
-           (
-             let (_, t') =  typecheck_bottom_up ctx e in
-             Typ.format_typ t'
-           )
-        )))
+  | _ ->
+    Errors.raise_typ_error Typing "expression %a (%a) should be of type %a, but is of type %a"
+      Format_mvg.format_expression (Pos.unmark e)
+      Pos.format_position (Pos.get_position e)
+      Format_mvg.format_typ t
+      Typ.format_typ
+      (snd @@ typecheck_bottom_up ctx e)
 
 and typecheck_func_args (f: func) (pos: Pos.position) :
   (ctx -> Mvg.expression Pos.marked list -> ctx * Typ.t) =
   match f with
   | SumFunc | MinFunc | MaxFunc -> fun ctx args ->
     if List.length args = 0 then
-      raise (Errors.TypeError
-               (Errors.Typing
-                  (Printf.sprintf "sum function must be called %s with at least one argument"
-                     (Pos.format_position pos)
-                  )))
+      Errors.raise_typ_error Typing "sum function must be called %a with at least one argument" Pos.format_position pos
     else
       let (ctx, t1) = typecheck_bottom_up ctx (List.hd args) in
       begin try
@@ -365,28 +325,22 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
                   let t1 = Typ.unify t_arg t1 in
                   (ctx, t1) with
               | Typ.UnificationError (t_arg_msg,t2_msg) ->
-                raise (Errors.TypeError
-                         (Errors.Typing
-                            (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                               (Format_mvg.format_expression (Pos.unmark arg))
-                               (Pos.format_position (Pos.get_position arg))
-                               t_arg_msg
-                               t2_msg
-                            )))
+                Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
+                  Format_mvg.format_expression (Pos.unmark arg)
+                  Pos.format_position (Pos.get_position arg)
+                  t_arg_msg
+                  t2_msg
               end
             ) (ctx, t1) args
           in
           (ctx, t1)
         with
         | Typ.UnificationError (t_arg_msg,t2_msg) ->
-          raise (Errors.TypeError
-                   (Errors.Typing
-                      (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                         (Format_mvg.format_expression (Pos.unmark (List.hd args)))
-                         (Pos.format_position (Pos.get_position (List.hd args)))
-                         t_arg_msg
-                         t2_msg
-                      )))
+          Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
+            Format_mvg.format_expression (Pos.unmark (List.hd args))
+            Pos.format_position (Pos.get_position (List.hd args))
+            t_arg_msg
+            t2_msg
       end
   | AbsFunc ->
     fun ctx args ->
@@ -395,20 +349,15 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
           begin try Typ.coerce t_arg (Typ.integer_or_real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
-              raise (Errors.TypeError
-                       (Errors.Typing
-                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_mvg.format_expression (Pos.unmark arg))
-                             (Pos.format_position (Pos.get_position arg))
-                             t_arg_msg
-                             t2_msg
-                          )))
+              Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
+                Format_mvg.format_expression (Pos.unmark arg)
+                Pos.format_position (Pos.get_position arg)
+                t_arg_msg
+                t2_msg
           end
-        | _ -> raise (Errors.TypeError
-                        (Errors.Typing
-                           (Printf.sprintf "function abs %s should have only one arguemnt"
-                              (Pos.format_position pos)
-                           )))
+        | _ ->
+          Errors.raise_typ_error Typing "function abs %a should have only one argument"
+            Pos.format_position pos
       end
   | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero ->
     (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
@@ -418,20 +367,15 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
           begin try Typ.coerce t_arg (Typ.integer_or_real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
-              raise (Errors.TypeError
-                       (Errors.Typing
-                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_mvg.format_expression (Pos.unmark arg))
-                             (Pos.format_position (Pos.get_position arg))
-                             t_arg_msg
-                             t2_msg
-                          )))
+              Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
+                Format_mvg.format_expression (Pos.unmark arg)
+                Pos.format_position (Pos.get_position arg)
+                t_arg_msg
+                t2_msg
           end
-        | _ -> raise (Errors.TypeError
-                        (Errors.Typing
-                           (Printf.sprintf "function %s should have only one arguemnt"
-                              (Pos.format_position pos)
-                           )))
+        | _ ->
+          Errors.raise_typ_error Typing "function %a should have only one argument"
+            Pos.format_position pos
       end
   | ArrFunc | InfFunc ->
     fun ctx args ->
@@ -443,20 +387,15 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
               (ctx, Typ.real (pos, Typ.Down))
             with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
-              raise (Errors.TypeError
-                       (Errors.Typing
-                          (Printf.sprintf "function argument %s (%s) has type %s but should have type %s"
-                             (Format_mvg.format_expression (Pos.unmark arg))
-                             (Pos.format_position (Pos.get_position arg))
-                             t_arg_msg
-                             t2_msg
-                          )))
+              Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
+                Format_mvg.format_expression (Pos.unmark arg)
+                Pos.format_position (Pos.get_position arg)
+                t_arg_msg
+                t2_msg
           end
-        | _ -> raise (Errors.TypeError
-                        (Errors.Typing
-                           (Printf.sprintf "function %s should have only one argument"
-                              (Pos.format_position pos)
-                           )))
+        | _ ->
+          Errors.raise_typ_error Typing "function %a should have only one argument"
+            Pos.format_position pos
       end
   | Mvg.Multimax  ->
     fun ctx args ->
@@ -464,11 +403,9 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
         | [bound; table] ->
           let ctx = typecheck_top_down ctx bound Real in
           typecheck_bottom_up ctx table
-        | _ -> raise (Errors.TypeError
-                        (Errors.Typing
-                           (Printf.sprintf "function %s should have two arguments"
-                              (Pos.format_position pos)
-                           )))
+        | _ ->
+          Errors.raise_typ_error Typing "function %a should have two arguments"
+            Pos.format_position pos
       end
 
 and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
@@ -495,14 +432,11 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
         (ctx, t')
       with
       | Typ.UnificationError (t1_msg, t2_msg) ->
-        raise (Errors.TypeError
-                 (Errors.Typing
-                    (Printf.sprintf "arguments of operator (%s) %s have to be of the same type but instead are of type %s and %s"
-                       (Format_ast.format_binop (Pos.unmark op))
-                       (Pos.format_position (Pos.get_position op))
-                       t1_msg
-                       t2_msg
-                    )))
+        Errors.raise_typ_error Typing "arguments of operator (%a) %a have to be of the same type but instead are of type %s and %s"
+          Format_ast.format_binop (Pos.unmark op)
+          Pos.format_position (Pos.get_position op)
+          t1_msg
+          t2_msg
     end
   | Comparison (_, e1, e2) ->
     let (ctx, t1) = typecheck_bottom_up ctx e1 in
@@ -511,15 +445,12 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
         ignore (Typ.unify t1 t2);
         (ctx, Typ.boolean (Pos.get_position e, Typ.Up)) with
     | Typ.UnificationError _ ->
-      raise (Errors.TypeError (
-          Errors.Typing
-            (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-               (Format_mvg.format_expression (Pos.unmark e1))
-               (Pos.format_position (Pos.get_position e1))
-               (Typ.format_typ t1)
-               (Pos.format_position (Pos.get_position e2))
-               (Typ.format_typ t2)
-            )))
+      Errors.raise_typ_error Typing "expression %a (%a) of type %a has not the same type than expression %a of type %a"
+        Format_mvg.format_expression (Pos.unmark e1)
+        Pos.format_position (Pos.get_position e1)
+        Typ.format_typ t1
+        Pos.format_position (Pos.get_position e2)
+        Typ.format_typ t2
     end
   | Unop (Ast.Not, e) ->
     let ctx = typecheck_top_down ctx e Boolean in
@@ -528,35 +459,27 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
     let (ctx, t) = typecheck_bottom_up ctx e' in
     begin try Typ.coerce t (Typ.integer_or_real (Pos.get_position e', Typ.Down)); (ctx, t) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
-        raise (Errors.TypeError
-                 (Errors.Typing
-                    (Printf.sprintf "arguments of operator (%s) %s has type %s but should be of type %s"
-                       (Format_ast.format_unop (Ast.Minus))
-                       (Pos.format_position (Pos.get_position e))
-                       t1_msg
-                       t2_msg
-                    )))
+        Errors.raise_typ_error Typing  "arguments of operator (%a) %a has type %s but should be of type %s"
+          Format_ast.format_unop (Ast.Minus)
+          Pos.format_position (Pos.get_position e)
+          t1_msg
+          t2_msg
     end
   | GenericTableIndex ->
     if ctx.ctx_is_generic_table then
       (ctx, Typ.real (Pos.get_position e, Typ.Up))
     else
-      raise (Errors.TypeError
-               (Errors.Variable
-                  (Printf.sprintf "Generic table index appears outside of table %s"
-                     (Pos.format_position (Pos.get_position e)))))
+      Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
+        Pos.format_position (Pos.get_position e)
   | Index ((var, var_pos), e') ->
     let ctx = typecheck_top_down ctx e' Real in
     let var_data = VariableMap.find var ctx.ctx_program.program_vars in
     begin match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
-        raise (Errors.TypeError
-                 (Errors.Typing
-                    (Printf.sprintf "variable %s is accessed %s as a table but it is not defined as one %s"
-                       (Pos.unmark var.Variable.name)
-                       (Pos.format_position var_pos)
-                       (Pos.format_position (Pos.get_position var.Variable.name))
-                    )))
+        Errors.raise_typ_error Typing "variable %s is accessed %a as a table but it is not defined as one %a"
+          (Pos.unmark var.Variable.name)
+          Pos.format_position var_pos
+          Pos.format_position (Pos.get_position var.Variable.name)
       | TableVar _ ->
         begin try (ctx, VariableMap.find var ctx.ctx_var_typ) with
           | Not_found ->
@@ -575,25 +498,19 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
             let t' = Typ.unify t2 t3 in (ctx, t')
           with
           | Typ.UnificationError _ ->
-            raise (Errors.TypeError (
-                Errors.Typing
-                  (Printf.sprintf "expression %s (%s) of type %s has not the same type than expression %s of type %s"
-                     (Format_mvg.format_expression (Pos.unmark e1))
-                     (Pos.format_position (Pos.get_position e1))
-                     (Typ.format_typ t1)
-                     (Pos.format_position (Pos.get_position e2))
-                     (Typ.format_typ t2)
-                  )))
+            Errors.raise_typ_error Typing "expression %a (%a) of type %a has not the same type than expression %a of type %a"
+              Format_mvg.format_expression (Pos.unmark e1)
+              Pos.format_position (Pos.get_position e1)
+              Typ.format_typ t1
+              Pos.format_position (Pos.get_position e2)
+              Typ.format_typ t2
         end
       with
       | Typ.UnificationError _ ->
-        raise (Errors.TypeError (
-            Errors.Typing
-              (Printf.sprintf "expression %s (%s) of type %s should be of type boolean"
-                 (Format_mvg.format_expression (Pos.unmark e1))
-                 (Pos.format_position (Pos.get_position e1))
-                 (Typ.format_typ t1)
-              )))
+        Errors.raise_typ_error Typing "expression %a (%a) of type %a should be of type boolean"
+          Format_mvg.format_expression (Pos.unmark e1)
+          Pos.format_position (Pos.get_position e1)
+          Typ.format_typ t1
     end
   | FunctionCall(func, args) ->
     let typechecker = typecheck_func_args func (Pos.get_position e) in
@@ -622,15 +539,12 @@ let determine_def_complete_cover
         defs_array.(def) <- true
       with
       | Invalid_argument _ ->
-        raise (Errors.TypeError (
-            Errors.Variable
-              (Printf.sprintf "the definitions of index %d %s, from table %s of size %d declared %s is out of bounds"
+        Errors.raise_typ_error Variable "the definitions of index %d %a, from table %s of size %d declared %a is out of bounds"
                  def
-                 (Pos.format_position def_pos)
+                 Pos.format_position def_pos
                  (Pos.unmark table_var.Variable.name)
                  size
-                 (Pos.format_position (Pos.get_position table_var.Variable.name))
-              )))
+                 Pos.format_position (Pos.get_position table_var.Variable.name)
     ) defs;
   let undefined = ref [] in
   Array.iteri (fun index defined ->
@@ -666,12 +580,9 @@ let rec check_non_recursivity_expr (e: expression Pos.marked) (lvar :Variable.t)
     List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
   | Literal _ | LocalVar _ | GenericTableIndex | Error -> ()
   | Var var -> if var = lvar then
-      raise (Errors.TypeError (
-          Errors.Variable
-            (Printf.sprintf "You cannot refer to the variable %s since you are defining it (%s)"
+      Errors.raise_typ_error Variable "You cannot refer to the variable %s since you are defining it (%a)"
                (Pos.unmark var.Variable.name)
-               (Pos.format_position (Pos.get_position e))
-            )))
+               Pos.format_position (Pos.get_position e)
     else ()
 
 let check_non_recursivity_of_variable_defs (var: Variable.t) (def: variable_def) : unit =
@@ -776,14 +687,11 @@ let typecheck (p: program) : typ_info * program =
                         (new_ctx, t)
                       with
                       | Typ.UnificationError (t1_msg, t2_msg) ->
-                        raise (Errors.TypeError (
-                            Errors.Typing
-                              (Printf.sprintf "different definitions of specific index of table variable %s declared %s have different indexes: %s and %s"
+                        Errors.raise_typ_error Typing "different definitions of specific index of table variable %s declared %a have different indexes: %s and %s"
                                  (Pos.unmark var.Variable.name)
-                                 (Pos.format_position (Pos.get_position var.Variable.name))
+                                 Pos.format_position (Pos.get_position var.Variable.name)
                                  t1_msg
                                  t2_msg
-                              )))
                     end
                   ) es (ctx, Typ.create_variable (Pos.get_position var.Variable.name, Typ.Up)) in
                 let t = try

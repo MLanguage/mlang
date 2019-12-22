@@ -48,16 +48,26 @@ type var_decl_data = {
 *)
 
 (** Map whose keys are loop parameters *)
-module ParamsMap = Map.Make(Char)
+module ParamsMap =
+  (struct
+    include Map.Make(Char)
+
+    let map_printer value_printer fmt map =
+      Format.fprintf fmt "{ %a }"
+        (fun fmt -> iter (fun k v ->
+             Format.fprintf fmt "%c=%a; " k value_printer v
+           )) map
+    end)
 
 (** The values of the map can be either strings of integers *)
 type loop_param_value =
   | VarName of Ast.variable_name
   | RangeInt of int
 
-let format_loop_param_value (v: loop_param_value) : string = match v with
-  | VarName v -> v
-  | RangeInt i -> string_of_int i
+let format_loop_param_value fmt (v: loop_param_value) =
+  match v with
+  | VarName v -> Format.fprintf fmt "%s" v
+  | RangeInt i -> Format.fprintf fmt "%d" i
 
 (**
    This is the context when iterating a loop : for each loop parameter, we have access to the
@@ -69,15 +79,11 @@ type loop_context = loop_param_value ParamsMap.t
 (** Loops can have multiple loop parameters *)
 type loop_domain = loop_param_value list ParamsMap.t
 
-let format_loop_context (ld: loop_context) : string = ParamsMap.fold (fun param value acc ->
-    acc ^ "; " ^ (Printf.sprintf "%c=" param)  ^
-    format_loop_param_value value
-  ) ld ""
+let format_loop_context fmt (ld: loop_context) =
+  ParamsMap.map_printer format_loop_param_value fmt ld
 
-let format_loop_domain (ld: loop_domain) : string = ParamsMap.fold (fun param values acc ->
-    acc ^ "; " ^ (Printf.sprintf "%c=" param)  ^
-    (String.concat "," (List.map (fun value -> format_loop_param_value value) values))
-  ) ld ""
+let format_loop_domain fmt (ld: loop_domain) =
+  ParamsMap.map_printer (Format_ast.pp_print_list_comma format_loop_param_value) fmt ld
 
 (**
    From a loop domain of varying loop parameters, builds by cartesian product the list of all
@@ -138,10 +144,9 @@ let merge_loop_ctx (ctx: translating_context) (new_lc : loop_context) (pos:Pos.p
     let merged_lc = ParamsMap.merge (fun param old_val new_val ->
         match (old_val, new_val) with
         | (Some _ , Some _) ->
-          raise (Errors.TypeError
-                   (Errors.LoopParam
-                      (Printf.sprintf "Same loop parameter %c used in two nested loop contexts, %s"
-                         param (Pos.format_position pos))))
+          Errors.raise_typ_error Errors.LoopParam
+            "Same loop parameter %c used in two nested loop contexts, %a"
+            param Pos.format_position pos
         | (Some v, None) | (None, Some v) -> Some v
         | (None, None) -> assert false (* should not happen *)
       ) old_lc new_lc
@@ -197,12 +202,10 @@ let get_var_from_name
          ) same_name)
   with
   | Not_found ->
-    raise (Errors.TypeError
-             (Errors.Variable
-                (Printf.sprintf "variable %s used %s, has not been declared"
-                   (Pos.unmark name)
-                   (Pos.format_position (Pos.get_position name))
-                )))
+    Errors.raise_typ_error Errors.Variable
+      "variable %s used %a, has not been declared"
+      (Pos.unmark name)
+      Pos.format_position (Pos.get_position name)
 
 (** Same but also take into account variables defined in the same execution unit *)
 let get_var_from_name_lax
@@ -220,12 +223,10 @@ let get_var_from_name_lax
          ) same_name)
   with
   | Not_found ->
-    raise (Errors.TypeError
-             (Errors.Variable
-                (Printf.sprintf "variable %s used %s, has not been declared"
-                   (Pos.unmark name)
-                   (Pos.format_position (Pos.get_position name))
-                )))
+    Errors.raise_typ_error Errors.Variable
+      "variable %s used %a, has not been declared"
+      (Pos.unmark name)
+      Pos.format_position (Pos.get_position name)
 
 
 
@@ -249,12 +250,10 @@ let var_or_int_value (ctx: translating_context) (l : Ast.literal Pos.marked) : i
           ctx.int_const_values
       with
       | Not_found ->
-        raise (Errors.TypeError
-                 (Errors.Variable
-                    (Printf.sprintf "variable %s used %s, is not an integer constant and cannot be used here"
-                       (Ast.get_variable_name v)
-                       (Pos.format_position (Pos.get_position l))
-                    )))
+        Errors.raise_typ_error Errors.Variable
+          "variable %s used %a, is not an integer constant and cannot be used here"
+          (Ast.get_variable_name v)
+          Pos.format_position (Pos.get_position l)
     end
   | Ast.Float f -> int_of_float f
 
@@ -380,13 +379,14 @@ let get_constants
             | Ast.VariableDecl var_decl ->
               begin match var_decl with
                 | Ast.ConstVar (marked_name, cval) ->
-                  begin try
+                  begin
+                    try
                       let old_var = List.hd (Pos.VarNameToID.find (Pos.unmark marked_name) idmap) in
                       Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of constant variable %s %s because variable was previously defined %s"
+                        "Dropping declaration of constant variable %s %a because variable was previously defined %a"
                            (Pos.unmark old_var.Mvg.Variable.name)
-                           (Pos.format_position (Pos.get_position marked_name))
-                           (Pos.format_position (Pos.get_position old_var.Mvg.Variable.name)));
+                           Pos.format_position (Pos.get_position marked_name)
+                           Pos.format_position (Pos.get_position old_var.Mvg.Variable.name);
                       (vars, idmap, int_const_list)
                     with
                     | Not_found ->
@@ -423,7 +423,8 @@ let get_constants
   in
   (vars, idmap, int_const_vals)
 
-let belongs_to_app (r: Ast.application Pos.marked list) (application: string option) : bool = match application with
+let belongs_to_app (r: Ast.application Pos.marked list) (application: string option) : bool =
+  match application with
   | None -> true
   | Some application ->
     List.exists (fun app -> Pos.unmark app = application) r
@@ -449,10 +450,10 @@ let get_variables_decl
                   begin try
                       let old_var = List.hd (Pos.VarNameToID.find (Pos.unmark cvar.Ast.comp_name) idmap) in
                       Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Pos.unmark old_var.Mvg.Variable.name)
-                           (Pos.format_position (Pos.get_position cvar.Ast.comp_name))
-                           (Pos.format_position (Pos.get_position old_var.Mvg.Variable.name)));
+                        "Dropping declaration of %s %a because variable was previously defined %a"
+                        (Pos.unmark old_var.Mvg.Variable.name)
+                        Pos.format_position (Pos.get_position cvar.Ast.comp_name)
+                        Pos.format_position (Pos.get_position old_var.Mvg.Variable.name);
                       (vars, idmap, errors, out_list)
                     with
                     | Not_found ->
@@ -487,10 +488,10 @@ let get_variables_decl
                   begin try
                       let old_var = List.hd (Pos.VarNameToID.find (Pos.unmark ivar.Ast.input_name) idmap) in
                       Cli.var_info_print
-                        (Printf.sprintf "Dropping declaration of %s %s because variable was previously defined %s"
-                           (Pos.unmark old_var.Mvg.Variable.name)
-                           (Pos.format_position (Pos.get_position ivar.Ast.input_name))
-                           (Pos.format_position (Pos.get_position old_var.Mvg.Variable.name)));
+                        "Dropping declaration of %s %a because variable was previously defined %a"
+                        (Pos.unmark old_var.Mvg.Variable.name)
+                        Pos.format_position (Pos.get_position ivar.Ast.input_name)
+                        Pos.format_position (Pos.get_position old_var.Mvg.Variable.name);
                       (vars, idmap, errors, out_list)
                     with
                     | Not_found ->
@@ -595,8 +596,7 @@ let rec translate_variable
         lax
     else match lc with
       | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+        Errors.raise_typ_error Errors.LoopParam  "variable contains loop parameters but is not used inside a loop context"
       | Some _ ->
         instantiate_generic_variables_parameters
           idmap
@@ -645,8 +645,7 @@ and instantiate_generic_variables_parameters_aux
   try match ParamsMap.choose_opt (
       match lc with
       | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+        Errors.raise_typ_error Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"
       | Some lc -> lc
     ) with
   | None ->
@@ -677,7 +676,7 @@ and instantiate_generic_variables_parameters_aux
           | ZPAdd ->
             "0" ^ value
         in
-        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param)) value var_name
+        Re.Str.replace_first (Re.Str.regexp (Format.asprintf "%c" param)) value var_name
       | RangeInt i ->
         let value = match pad_zero with
           | ZPNone -> string_of_int i
@@ -686,7 +685,7 @@ and instantiate_generic_variables_parameters_aux
           | ZPAdd ->
             "0" ^ string_of_int i
         in
-        Re.Str.replace_first (Re.Str.regexp (Printf.sprintf "%c" param))
+        Re.Str.replace_first (Re.Str.regexp (Format.asprintf "%c" param))
           value var_name
     in
     instantiate_generic_variables_parameters_aux
@@ -695,8 +694,7 @@ and instantiate_generic_variables_parameters_aux
       table_definition
       (Some (ParamsMap.remove param (match lc with
            | None ->
-             raise (Errors.TypeError
-                      (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+             Errors.raise_typ_error Errors.LoopParam  "variable contains loop parameters but is not used inside a loop context"
            | Some lc -> lc)))
       new_var_name
       current_lvalue
@@ -706,8 +704,7 @@ and instantiate_generic_variables_parameters_aux
   with
   | err when (match lc with
       | None ->
-        raise (Errors.TypeError
-                 (Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"))
+        Errors.raise_typ_error Errors.LoopParam "variable contains loop parameters but is not used inside a loop context"
       | Some lc ->
         ParamsMap.cardinal lc > 0
     ) ->
@@ -862,10 +859,8 @@ let translate_function_name (f_name : string Pos.marked) = match Pos.unmark f_na
   | "present" -> Mvg.PresentFunc
   | "multimax" -> Mvg.Multimax
   | "supzero" -> Mvg.Supzero
-  | x -> raise (Errors.TypeError (
-      Errors.Function (
-        Printf.sprintf "unknown function %s %s" x (Pos.format_position (Pos.get_position f_name))
-      )))
+  | x ->
+    Errors.raise_typ_error Errors.Function "unknown function %s %a" x Pos.format_position (Pos.get_position f_name)
 
 
 (** Main translation function for expressions *)
@@ -897,10 +892,8 @@ let rec translate_expression (ctx : translating_context) (f: Ast.expression Pos.
                )
              | Ast.Interval (bn,en) ->
                if Pos.unmark bn > Pos.unmark en then
-                 raise (Errors.TypeError
-                          (Errors.Numeric
-                             (Printf.sprintf "wrong interval bounds %s"
-                                (Pos.format_position (Pos.get_position bn)))))
+                 Errors.raise_typ_error Errors.Numeric
+                   "wrong interval bounds %a" Pos.format_position (Pos.get_position bn)
                else
                  Mvg.Binop (
                    Pos.same_pos_as Ast.And bn,
@@ -1131,14 +1124,12 @@ let add_var_def
                 Mvg.var_io = io;
               }
           end
-        | None -> raise (Errors.TypeError (
-            Errors.Variable (
-              Printf.sprintf "variable %s is defined %s as a table but has been declared %s as a non-table"
+        | None ->
+          Errors.raise_typ_error Errors.Variable
+            "variable %s is defined %a as a table but has been declared %a as a non-table"
                 (Pos.unmark var_lvalue.Mvg.Variable.name)
-                (Pos.format_position (Pos.get_position var_expr))
-                (Pos.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos)
-            )
-          ))
+                Pos.format_position (Pos.get_position var_expr)
+                Pos.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos
     with
     | Not_found -> assert false (* should not happen *)
         (*
@@ -1233,12 +1224,10 @@ let get_var_data
             in
             (add_var_def var_data var (Pos.same_pos_as (Mvg.Literal (begin match Pos.unmark lit with
                  | Ast.Variable var ->
-                   raise (Errors.TypeError (
-                       Errors.Variable (
-                         Printf.sprintf "const variable %s declared %s cannot be defined as another variable"
-                           (Format_ast.format_variable var)
-                           (Pos.format_position (Pos.get_position source_file_item))
-                       )))
+                   Errors.raise_typ_error Errors.Variable
+                     "const variable %a declared %a cannot be defined as another variable"
+                     Format_ast.format_variable var
+                     Pos.format_position (Pos.get_position source_file_item)
                  | Ast.Float f -> Mvg.Float f
                end)) lit) NoIndex var_decl_data idmap)
           | Ast.VariableDecl (Ast.InputVar (var, pos)) ->
@@ -1283,11 +1272,9 @@ let add_dummy_definition_for_variable_declaration
               var'.Mvg.Variable.execution_number.Mvg.rule_number = -1
             ) (Pos.VarNameToID.find (Pos.unmark var.Mvg.Variable.name) idmap)
           then
-            Cli.var_info_print (
-              Printf.sprintf "variable %s declared %s is never defined in the application"
+            Cli.var_info_print "variable %s declared %a is never defined in the application"
                 (Pos.unmark var.Mvg.Variable.name)
-                (Pos.format_position (Pos.get_position var.Mvg.Variable.name))
-            );
+                Pos.format_position (Pos.get_position var.Mvg.Variable.name);
           (* This is the case where the variable is not defined. *)
           let io = match decl.var_decl_io with
             | Output -> Mvg.Output
@@ -1369,10 +1356,9 @@ let get_conds
                        with
                        | Not_found -> begin
                            Cli.var_info_print
-                             (Printf.sprintf "undeclared error %s %s"
+                             "undeclared error %s %a"
                                 (Pos.unmark err_name)
-                                (Pos.format_position (Pos.get_position err_name))
-                             );
+                                Pos.format_position (Pos.get_position err_name);
                            None
                          end
                     )
@@ -1391,9 +1377,9 @@ let get_conds
                 else
                   let dummy_var =
                     Mvg.Variable.new_var
-                      (Pos.same_pos_as (Printf.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
+                      (Pos.same_pos_as (Format.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
                       None
-                      (Pos.same_pos_as (Pos.format_position (Pos.get_position e)) e)
+                      (Pos.same_pos_as (let () = Pos.format_position Format.str_formatter (Pos.get_position e) in Format.flush_str_formatter ()) e)
                       {
                         Mvg.rule_number = rule_number;
                         Mvg.seq_number = 0;
