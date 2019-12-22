@@ -19,7 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %{
  open Ast
- module Pos = Verifisc.Pos
  open Parse_utils
 
  (** Module generated automaticcaly by Menhir, the parser generator *)

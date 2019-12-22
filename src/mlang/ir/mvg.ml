@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 (** Main data structure for M analysis *)
 
 (**{1 Variables} *)
@@ -210,7 +208,7 @@ module VariableMap =
 
 
 module LocalVariableMap =
-    (struct
+  (struct
     include Map.Make(LocalVariable)
 
     let map_printer value_printer fmt map =

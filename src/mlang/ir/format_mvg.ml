@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
 open Mvg
 
 let format_execution_number fmt (exec_number: execution_number) =
@@ -37,35 +36,35 @@ let format_execution_number_short fmt (exec_number: execution_number) =
 
 let format_typ fmt (t: typ) =
   Format.pp_print_string fmt (match t with
-  | Real -> "real"
-  | Boolean -> "boolean")
+      | Real -> "real"
+      | Boolean -> "boolean")
 
 let format_io fmt (io: io) =
   Format.pp_print_string fmt (match io with
-  | Input -> "input"
-  | Output -> "output"
-  | Regular -> "regular")
+      | Input -> "input"
+      | Output -> "output"
+      | Regular -> "regular")
 
 let format_func fmt (f: func) =
   Format.pp_print_string fmt (match f with
-  | SumFunc -> "somme"
-  | AbsFunc -> "abs"
-  | MinFunc -> "min"
-  | MaxFunc -> "max"
-  | GtzFunc -> "positif"
-  | GtezFunc -> "positif_ou_nul"
-  | NullFunc -> "null"
-  | ArrFunc -> "arr"
-  | InfFunc -> "inf"
-  | PresentFunc -> "present"
-  | Multimax -> "multimax"
-  | Supzero -> "supzero")
+      | SumFunc -> "somme"
+      | AbsFunc -> "abs"
+      | MinFunc -> "min"
+      | MaxFunc -> "max"
+      | GtzFunc -> "positif"
+      | GtezFunc -> "positif_ou_nul"
+      | NullFunc -> "null"
+      | ArrFunc -> "arr"
+      | InfFunc -> "inf"
+      | PresentFunc -> "present"
+      | Multimax -> "multimax"
+      | Supzero -> "supzero")
 
 let format_literal fmt (l: literal) =
   Format.pp_print_string fmt (match l with
-  | Float f -> string_of_float f
-  | Bool b -> string_of_bool b
-  | Undefined -> "indéfini")
+      | Float f -> string_of_float f
+      | Bool b -> string_of_bool b
+      | Undefined -> "indéfini")
 
 let rec format_expression fmt (e: expression) = match e with
   | Comparison ((op, _), (e1, _), (e2, _)) ->

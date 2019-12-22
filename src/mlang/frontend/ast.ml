@@ -15,8 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 (** Abstract Syntax Tree for M *)
 
 (** {1 Abstract Syntax Tree } *)

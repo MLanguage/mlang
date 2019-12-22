@@ -22,7 +22,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    are polymorphic.
 *)
 
-module Pos = Verifisc.Pos
 open Mvg
 
 (** This module defines the internal representation of type variables during the typechecking. *)
@@ -229,10 +228,10 @@ let rec typecheck_top_down
           with
           | Typ.UnificationError (t_msg, _) ->
             Errors.raise_typ_error Typing "variable %s %a is of type %s but should be %a"
-                     (Pos.unmark var.Variable.name)
-                     Pos.format_position (Pos.get_position var.Variable.name)
-                     t_msg
-                     Format_mvg.format_typ t
+              (Pos.unmark var.Variable.name)
+              Pos.format_position (Pos.get_position var.Variable.name)
+              t_msg
+              Format_mvg.format_typ t
         end
       with
       | Not_found ->
@@ -540,11 +539,11 @@ let determine_def_complete_cover
       with
       | Invalid_argument _ ->
         Errors.raise_typ_error Variable "the definitions of index %d %a, from table %s of size %d declared %a is out of bounds"
-                 def
-                 Pos.format_position def_pos
-                 (Pos.unmark table_var.Variable.name)
-                 size
-                 Pos.format_position (Pos.get_position table_var.Variable.name)
+          def
+          Pos.format_position def_pos
+          (Pos.unmark table_var.Variable.name)
+          size
+          Pos.format_position (Pos.get_position table_var.Variable.name)
     ) defs;
   let undefined = ref [] in
   Array.iteri (fun index defined ->
@@ -581,8 +580,8 @@ let rec check_non_recursivity_expr (e: expression Pos.marked) (lvar :Variable.t)
   | Literal _ | LocalVar _ | GenericTableIndex | Error -> ()
   | Var var -> if var = lvar then
       Errors.raise_typ_error Variable "You cannot refer to the variable %s since you are defining it (%a)"
-               (Pos.unmark var.Variable.name)
-               Pos.format_position (Pos.get_position e)
+        (Pos.unmark var.Variable.name)
+        Pos.format_position (Pos.get_position e)
     else ()
 
 let check_non_recursivity_of_variable_defs (var: Variable.t) (def: variable_def) : unit =
@@ -688,10 +687,10 @@ let typecheck (p: program) : typ_info * program =
                       with
                       | Typ.UnificationError (t1_msg, t2_msg) ->
                         Errors.raise_typ_error Typing "different definitions of specific index of table variable %s declared %a have different indexes: %s and %s"
-                                 (Pos.unmark var.Variable.name)
-                                 Pos.format_position (Pos.get_position var.Variable.name)
-                                 t1_msg
-                                 t2_msg
+                          (Pos.unmark var.Variable.name)
+                          Pos.format_position (Pos.get_position var.Variable.name)
+                          t1_msg
+                          t2_msg
                     end
                   ) es (ctx, Typ.create_variable (Pos.get_position var.Variable.name, Typ.Up)) in
                 let t = try

@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
 open Mvg
 open Lexing
 open Lexer
@@ -55,8 +54,8 @@ let fit_function (p: program) (f: mvg_function) : program =
                    SimpleVar (VariableMap.find var f.func_constant_inputs)
                  | TableVar _ ->
                    Errors.raise_typ_error Variable "Defining a constant input for a table variable (%s, %a) is not supported"
-                           (Pos.unmark var.Variable.name)
-                           Pos.format_position (Pos.get_position var.Variable.name)
+                     (Pos.unmark var.Variable.name)
+                     Pos.format_position (Pos.get_position var.Variable.name)
              }
            else if VariableMap.mem var f.func_outputs then
              {
@@ -66,12 +65,12 @@ let fit_function (p: program) (f: mvg_function) : program =
                  | SimpleVar old_e -> SimpleVar old_e
                  | InputVar ->
                    Errors.raise_typ_error Variable "Defining an output for a input variable (%s, %a) who is not defined is not supported"
-                           (Pos.unmark var.Variable.name)
-                           Pos.format_position (Pos.get_position var.Variable.name)
+                     (Pos.unmark var.Variable.name)
+                     Pos.format_position (Pos.get_position var.Variable.name)
                  | TableVar _ ->
                    Errors.raise_typ_error Variable "Defining an output for a table variable (%s, %a) is not supported"
-                           (Pos.unmark var.Variable.name)
-                           Pos.format_position (Pos.get_position var.Variable.name)
+                     (Pos.unmark var.Variable.name)
+                     Pos.format_position (Pos.get_position var.Variable.name)
              }
            else
              { var_data with
@@ -97,8 +96,8 @@ let var_set_from_variable_name_list (p: program) (names : string Pos.marked list
         with
         | Not_found ->
           Errors.raise_typ_error Variable "unknown variable %s %a"
-                     name
-                     Pos.format_position (Pos.get_position alias)
+            name
+            Pos.format_position (Pos.get_position alias)
       in
       VariableMap.add var () acc
     ) VariableMap.empty names
@@ -199,8 +198,8 @@ let read_function_from_spec (p: program) : mvg_function =
     Cli.error_print "%s" msg; close_in input; exit 1
   | Parser.Error -> begin
       Cli.error_print "Lexer error in file %s at position %a"
-           (!Parse_utils.current_file)
-           Errors.print_lexer_position filebuf.lex_curr_p;
+        (!Parse_utils.current_file)
+        Errors.print_lexer_position filebuf.lex_curr_p;
       close_in input;
       exit 1
     end

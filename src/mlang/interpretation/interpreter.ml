@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
 open Mvg
 
 let repl_debug = ref false
@@ -41,11 +40,11 @@ let format_var_literal_with_var fmt (var, vl: Variable.t * var_literal) =
       (Pos.unmark var.Variable.descr)
       size;
     List.iteri
-       (fun idx value ->
-          Format.fprintf fmt "| %d -> %a"
-            idx
-            Format_mvg.format_literal value
-       ) (Array.to_list values)
+      (fun idx value ->
+         Format.fprintf fmt "| %d -> %a"
+           idx
+           Format_mvg.format_literal value
+      ) (Array.to_list values)
 
 type ctx = {
   ctx_local_vars: literal Pos.marked LocalVariableMap.t;

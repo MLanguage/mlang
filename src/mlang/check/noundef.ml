@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 let check (program: Mvg.program) : unit =
   let v = object
     inherit [_] Execution_order.program_iter

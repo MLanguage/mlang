@@ -20,8 +20,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
    variables as input, most of them are undefined all the time.
 *)
 
-module Pos = Verifisc.Pos
-
 (** Unused variables are determined by areachability analysis from the outputs *)
 let remove_unused_variables (program:Mvg.program) : Mvg.program =
   let g = Dependency.create_dependency_graph program in

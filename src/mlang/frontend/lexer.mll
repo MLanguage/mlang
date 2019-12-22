@@ -16,7 +16,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
 {
-  module Pos = Verifisc.Pos
   open Lexing
   open Parser
   open Errors

@@ -17,7 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 (** AST pretty printer *)
 
-module Pos = Verifisc.Pos
 open Ast
 
 let pp_print_list_comma eldisplay fmt l =
@@ -88,26 +87,26 @@ let format_set_value_loop fmt (sv: set_value_loop) = match sv with
 
 let format_comp_op fmt (op: comp_op) =
   Format.pp_print_string fmt (match op with
-  | Gt -> ">"
-  | Gte -> ">="
-  | Lt -> "<"
-  | Lte -> "<="
-  | Eq -> "="
-  | Neq -> "!=")
+      | Gt -> ">"
+      | Gte -> ">="
+      | Lt -> "<"
+      | Lte -> "<="
+      | Eq -> "="
+      | Neq -> "!=")
 
 let format_binop fmt (op: binop) =
   Format.pp_print_string fmt (match op with
-  | And -> "et"
-  | Or -> "ou"
-  | Add -> "+"
-  | Sub -> "-"
-  | Mul -> "*"
-  | Div -> "/")
+      | And -> "et"
+      | Or -> "ou"
+      | Add -> "+"
+      | Sub -> "-"
+      | Mul -> "*"
+      | Div -> "/")
 
 let format_unop fmt (op: unop) =
   Format.pp_print_string fmt (match op with
-  | Not -> "non"
-  | Minus -> "-")
+      | Not -> "non"
+      | Minus -> "-")
 
 let format_loop_variable_ranges fmt ((v, vs): loop_variable) =
   Format.fprintf fmt "un %c dans %a"
@@ -207,19 +206,19 @@ let format_computed_typ fmt (t:computed_typ) = match t with
 
 let format_input_variable_subtype fmt (t: input_variable_subtype) =
   Format.pp_print_string fmt (match t with
-  | Context -> "contexte"
-  | Family -> "famille"
-  | Penality -> "penalite"
-  | Income -> "revenu")
+      | Context -> "contexte"
+      | Family -> "famille"
+      | Penality -> "penalite"
+      | Income -> "revenu")
 
 let format_value_typ fmt (t:value_typ) =
   Format.pp_print_string fmt (match t with
-  | Boolean -> "BOOLEEN"
-  | DateYear -> "DATE_AAAA"
-  | DateDayMonthYear -> "DATE_JJMMAAAA"
-  | DateMonth -> "DATE_MM"
-  | Integer -> "ENTIER"
-  | Real -> "REEL")
+      | Boolean -> "BOOLEEN"
+      | DateYear -> "DATE_AAAA"
+      | DateDayMonthYear -> "DATE_JJMMAAAA"
+      | DateMonth -> "DATE_MM"
+      | Integer -> "ENTIER"
+      | Real -> "REEL")
 
 let format_input_attribute fmt ((n,v): input_variable_attribute Pos.marked * literal Pos.marked) =
   Format.fprintf fmt "%s = %a"
@@ -266,9 +265,9 @@ let format_verification fmt (v: verification) =
 
 let format_error_typ fmt (e:error_typ) =
   Format.pp_print_string fmt (match e with
-  | Anomaly -> "anomalie"
-  | Discordance -> "discordance"
-  | Information -> "information")
+      | Anomaly -> "anomalie"
+      | Discordance -> "discordance"
+      | Information -> "information")
 
 let format_error_ fmt (e:error_) =
   Format.fprintf fmt "%a : %a : %a;"

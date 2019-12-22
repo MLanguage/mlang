@@ -15,13 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 let format_Z3_encoding fmt (t: Z3_encoding.repr) =
   Format.fprintf fmt "%s%s"
     (match t.Z3_encoding.repr_kind with
-    | Z3_encoding.Real _ -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Real
-    | Z3_encoding.Boolean -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Boolean)
+     | Z3_encoding.Real _ -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Real
+     | Z3_encoding.Boolean -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Boolean)
     (if t.Z3_encoding.is_table then "[X]" else "")
 
 let convert_to_signed (f:float) (bsize:int) =

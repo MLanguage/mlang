@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 let translate_and_launch_query
     (program: Mvg.program)
     (typing_info: Typechecker.typ_info)
@@ -33,10 +31,10 @@ let translate_and_launch_query
   let z3_program = Mvg_to_z3.translate_program program typing_info ctx s in
   let t0 = Sys.time () in
   Cli.debug_print
-       "The Z3 query will contain %d different variables, and has been exported in query.z3"
-       (Mvg.VariableMap.cardinal z3_program.Z3_encoding.repr_data_var +
-        Mvg.LocalVariableMap.cardinal z3_program.Z3_encoding.repr_data_local_var)
-    ;
+    "The Z3 query will contain %d different variables, and has been exported in query.z3"
+    (Mvg.VariableMap.cardinal z3_program.Z3_encoding.repr_data_var +
+     Mvg.LocalVariableMap.cardinal z3_program.Z3_encoding.repr_data_local_var)
+  ;
   let z3_file = open_out "query.z3" in
   Format.fprintf (Format.formatter_of_out_channel z3_file) "%s" (Z3.Solver.to_string s);
   close_out z3_file;

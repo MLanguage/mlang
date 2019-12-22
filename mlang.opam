@@ -8,11 +8,11 @@ build: [
 ]
 maintainer: ["denis.merigoux@inria.fr"]
 authors: ["Denis Merigoux" "Raphaël Monat"]
-bug-reports: "https://gitlab.inria.fr/verifisc/verifisc-m/issues"
-homepage: "https://gitlab.inria.fr/verifisc/verifisc-m"
+bug-reports: "https://gitlab.inria.fr/verifisc/mlang/issues"
+homepage: "https://gitlab.inria.fr/verifisc/mlang"
 license: "GPLv3"
 version: "1.0.2"
-dev-repo: "git+https://gitlab.inria.fr/verifisc/verifisc-m.git"
+dev-repo: "git+https://gitlab.inria.fr/verifisc/mlang.git"
 synopsis: "Compiler for DGFiP's M language"
 description: """
 The Direction Générale des Finances Publiques (DGFiP)
@@ -29,7 +29,6 @@ depends: [
   "ppx_deriving" {= "4.4"}
   "visitors" {>= "20190711"}
   "ocamlgraph" {= "1.8.8"}
-  "z3" {= "4.8.4"}
-  "verifisc" {= "1.0.2"}
+  "z3" {= "4.8.6"}
   "dune-build-info" {= "1.11.0"}
 ]

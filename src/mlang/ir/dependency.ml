@@ -15,8 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 (** Defines the dependency graph of an M program *)
 
 (** Each node corresponds to a variable, each edge to a variable use.
@@ -153,8 +151,8 @@ let print_dependency_graph (filename: string) (graph: DepGraph.t) (p: Mvg.progra
   (* let graph = DepgGraphOper.transitive_reduction graph in *)
   program_when_printing:= Some p;
   Cli.debug_print "Writing variables dependency graph to %s (%d variables)"
-                     filename
-                     (DepGraph.nb_vertex graph);
+    filename
+    (DepGraph.nb_vertex graph);
   if !Cli.debug_flag then
     Dot.output_graph file graph;
   close_out file
@@ -186,7 +184,7 @@ let check_for_cycle (g: DepGraph.t) (p: Mvg.program) (print_debug: bool) : bool 
           let filename = Format.asprintf "%s/strongly_connected_component_%d.dot" dir i in
           print_dependency_graph filename new_g p;
           cycles_strings := (Format.asprintf "The following variables are defined circularly: %s\n\
-                                             The dependency graph of this circular definition has been written to %s"
+                                              The dependency graph of this circular definition has been written to %s"
                                (String.concat " <-> "
                                   (List.map
                                      (fun var -> Pos.unmark var.Mvg.Variable.name)

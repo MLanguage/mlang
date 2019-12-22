@@ -15,8 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Pos = Verifisc.Pos
-
 (** {!module: Ast } to {!module: Mvg } translation of M programs. *)
 
 (** {1 Translation context } *)
@@ -57,7 +55,7 @@ module ParamsMap =
         (fun fmt -> iter (fun k v ->
              Format.fprintf fmt "%c=%a; " k value_printer v
            )) map
-    end)
+  end)
 
 (** The values of the map can be either strings of integers *)
 type loop_param_value =
@@ -384,9 +382,9 @@ let get_constants
                       let old_var = List.hd (Pos.VarNameToID.find (Pos.unmark marked_name) idmap) in
                       Cli.var_info_print
                         "Dropping declaration of constant variable %s %a because variable was previously defined %a"
-                           (Pos.unmark old_var.Mvg.Variable.name)
-                           Pos.format_position (Pos.get_position marked_name)
-                           Pos.format_position (Pos.get_position old_var.Mvg.Variable.name);
+                        (Pos.unmark old_var.Mvg.Variable.name)
+                        Pos.format_position (Pos.get_position marked_name)
+                        Pos.format_position (Pos.get_position old_var.Mvg.Variable.name);
                       (vars, idmap, int_const_list)
                     with
                     | Not_found ->
@@ -1127,9 +1125,9 @@ let add_var_def
         | None ->
           Errors.raise_typ_error Errors.Variable
             "variable %s is defined %a as a table but has been declared %a as a non-table"
-                (Pos.unmark var_lvalue.Mvg.Variable.name)
-                Pos.format_position (Pos.get_position var_expr)
-                Pos.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos
+            (Pos.unmark var_lvalue.Mvg.Variable.name)
+            Pos.format_position (Pos.get_position var_expr)
+            Pos.format_position (Mvg.VariableMap.find var_lvalue var_decl_data).var_pos
     with
     | Not_found -> assert false (* should not happen *)
         (*
@@ -1273,8 +1271,8 @@ let add_dummy_definition_for_variable_declaration
             ) (Pos.VarNameToID.find (Pos.unmark var.Mvg.Variable.name) idmap)
           then
             Cli.var_info_print "variable %s declared %a is never defined in the application"
-                (Pos.unmark var.Mvg.Variable.name)
-                Pos.format_position (Pos.get_position var.Mvg.Variable.name);
+              (Pos.unmark var.Mvg.Variable.name)
+              Pos.format_position (Pos.get_position var.Mvg.Variable.name);
           (* This is the case where the variable is not defined. *)
           let io = match decl.var_decl_io with
             | Output -> Mvg.Output
@@ -1357,8 +1355,8 @@ let get_conds
                        | Not_found -> begin
                            Cli.var_info_print
                              "undeclared error %s %a"
-                                (Pos.unmark err_name)
-                                Pos.format_position (Pos.get_position err_name);
+                             (Pos.unmark err_name)
+                             Pos.format_position (Pos.get_position err_name);
                            None
                          end
                     )

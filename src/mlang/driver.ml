@@ -157,12 +157,5 @@ let driver
     Cli.error_print "unimplemented (%s)" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
     Cli.error_print "Command line argument error: %s" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
-  | Verifisc.Errors.UnsupportedByVerifisc msg ->
-    Cli.error_print "Unsupported by Verifisc: %s" msg; Cmdliner.Term.exit_status (`Ok 3)
-  | Verifisc.Errors.VerifiscTypeError msg ->
-    Cli.error_print "Verifisc typechecking error: %s" msg; Cmdliner.Term.exit_status (`Ok 4)
-  | Verifisc.Errors.VerifiscRuntimeError msg ->
-    Cli.error_print "Verifisc runtime error: %s" msg; Cmdliner.Term.exit_status (`Ok 5)
-
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)
