@@ -18,14 +18,14 @@ build:
 test: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter\
-		--function_spec tests/tests.m_spec \
+		--function_spec tests.m_spec --number_of_passes 5\
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
-		
+
 tests: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
-		--function_spec tests/tests.m_spec \
+		--function_spec tests.m_spec --number_of_passes 5\
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 

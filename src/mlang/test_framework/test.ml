@@ -38,8 +38,8 @@ let parse_file (test_name:string) : test_file =
       None
     | Tparser.Error -> begin
         Cli.error_print "Lexer error in file %s at position %a"
-             test_name
-             Errors.print_lexer_position filebuf.lex_curr_p;
+          test_name
+          Errors.print_lexer_position filebuf.lex_curr_p;
         close_in input;
         Cmdliner.Term.exit_status (`Ok 2);
         None
@@ -83,7 +83,7 @@ let check_test (p: Mvg.program) (test_name: string) =
   let f = to_mvg_function p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let _ =  Interpreter.evaluate_program p VariableMap.empty 5 in
+  let _ =  Interpreter.evaluate_program p VariableMap.empty !Cli.number_of_passes in
   ()
 
 let check_all_tests (p:Mvg.program) (test_dir: string) =

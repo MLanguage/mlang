@@ -34,6 +34,14 @@ type execution_number = {
 }
 
 
+let compare_execution_number
+    (n1 : execution_number)
+    (n2 : execution_number)
+  : int =
+  if n1.rule_number = n2.rule_number then
+    compare n1.seq_number n2.seq_number
+  else
+    compare n1.rule_number n2.rule_number
 
 type max_result = Left | Right
 (** Operator used to select the most preferable variable to choose *)

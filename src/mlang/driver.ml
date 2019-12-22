@@ -109,9 +109,10 @@ let driver
 
     if !Cli.run_all_tests <> None then
       Test.check_all_tests program (match !Cli.run_all_tests with Some s -> s | _ -> assert false)
-    else if !Cli.run_test <> None then
+    else if !Cli.run_test <> None then begin
+      Interpreter.repl_debug := true;
       Test.check_test program (match !Cli.run_test with Some s -> s | _ -> assert false)
-    else
+    end else
       let program = if !Cli.optimize then Optimization.optimize program else program in
       (* Noundef.check program; *)
 

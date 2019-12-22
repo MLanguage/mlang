@@ -282,7 +282,7 @@ let time_marker ()  =
   let delta = (new_time -. old_time) *. 1000. in
   if delta > 100. then
     ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.black]
-      "[TIME] %.0f ms@\n" delta
+      "[TIME] %.0f ms\n" delta
 
 (** Prints [[DEBUG]] in purple on the terminal standard output as well as timing since last debug *)
 let debug_marker (f_time: bool) =
@@ -342,7 +342,9 @@ let var_info_print kont =
 let error_print kont =
   Format.kasprintf (fun str ->
       Format.printf "%a%s@?"
-        (fun _ -> error_marker) () str) kont
+        (fun _ -> error_marker) ()
+        str
+    ) kont
 
 (**
    Returns two functions: the first one, [current_progress], has to be called during the progress

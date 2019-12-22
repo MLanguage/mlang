@@ -41,7 +41,7 @@ let format_var_literal_with_var fmt (var, vl: Variable.t * var_literal) =
       size;
     List.iteri
       (fun idx value ->
-         Format.fprintf fmt "| %d -> %a"
+         Format.fprintf fmt "| %d -> %a\n"
            idx
            Format_mvg.format_literal value
       ) (Array.to_list values)
@@ -82,9 +82,15 @@ let repl_debugguer
       let query = read_line () in
       try
         let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
+        let vars = List.sort
+            (fun var1 var2 -> compare_execution_number
+                var1.Variable.execution_number
+                var2.Variable.execution_number) vars
+        in
         (List.iter (fun var ->
-             Format.printf "[%a] -> %a"
+             Format.printf "[%a %a] -> %a\n"
                Format_mvg.format_execution_number_short var.Variable.execution_number
+               Pos.format_position var.Variable.execution_number.pos
                (fun fmt () ->
                   try
                     Format_mvg.format_variable_def fmt (VariableMap.find var p.program_vars).Mvg.var_definition
@@ -93,20 +99,27 @@ let repl_debugguer
                     Format.fprintf fmt "unused definition") ()
            ) vars)
       with
-      | Not_found -> Format.printf "Inexisting variable@\n"
+      | Not_found -> Format.printf "Inexisting variable\n"
     end
     else try
         let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
+        let vars = List.sort
+            (fun var1 var2 -> compare_execution_number
+                var1.Variable.execution_number
+                var2.Variable.execution_number) vars
+        in
         (List.iter (fun var ->
              try begin
                let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-               Format.printf "[%a] -> %a "
+               Format.printf "[%a %a] -> %a\n"
                  Format_mvg.format_execution_number_short var.Variable.execution_number
+                 Pos.format_position var.Variable.execution_number.pos
                  format_var_literal_with_var (var, var_l)
              end with
              | Not_found ->
-               Format.printf "[%a] -> not computed"
+               Format.printf "[%a %a] -> not computed\n"
                  Format_mvg.format_execution_number_short var.Variable.execution_number
+                 Pos.format_position var.Variable.execution_number.pos
            ) vars)
       with
       | Not_found -> Format.printf "Inexisting variable\n"
@@ -398,7 +411,8 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
       let maxi = ref (access_index 0) in
       for i = 0 to up do
         maxi := match !maxi, access_index i with
-          | None, _ | _, None -> None
+          | None, None -> None
+          | Some m, None| None, Some m -> Some m
           | Some m, Some v -> Some (max m v)
       done;
       begin match !maxi with
