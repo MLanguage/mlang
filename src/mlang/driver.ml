@@ -78,12 +78,12 @@ let driver
           program := commands::!program
         with
         | Errors.LexingError msg | Errors.ParsingError msg ->
-          Cli.error_print msg
+          Cli.error_print "%s" msg
         | Parser.Error -> begin
             Cli.error_print
-              (Printf.sprintf "Lexer error in file %s at position %s"
-                 (!Parse_utils.current_file)
-                 (Errors.print_lexer_position filebuf.lex_curr_p));
+              "Lexer error in file %s at position %a"
+              (!Parse_utils.current_file)
+              Errors.print_lexer_position filebuf.lex_curr_p;
             begin match input with
               | Some input -> close_in input
               | None -> ()
@@ -140,29 +140,29 @@ let driver
           if !Cli.output_file = "" then
             raise (Errors.ArgumentError "an output file must be defined with --output");
           Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
-          Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+          Cli.result_print "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file
         end else if String.lowercase_ascii !Cli.backend = "java" then begin
           Cli.debug_print "Compiling the program to Java...";
           if !Cli.output_file = "" then
             raise (Errors.ArgumentError "an output file must be defined with --output");
           Mvg_to_java.generate_java_program program !Cli.output_file !Cli.number_of_passes;
-          Cli.result_print (Printf.sprintf "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file)
+          Cli.result_print "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file
         end else
-          raise (Errors.ArgumentError (Printf.sprintf "unknown backend (%s)" !Cli.backend))
+          raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
       end
   with
   | Errors.TypeError e ->
-    Cli.error_print (Errors.format_typ_error e); Cmdliner.Term.exit_status (`Ok 2)
+    Cli.error_print "%a" Errors.format_typ_error e; Cmdliner.Term.exit_status (`Ok 2)
   | Errors.Unimplemented (msg) ->
-    Cli.error_print (Printf.sprintf "unimplemented (%s)"  msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
+    Cli.error_print "unimplemented (%s)" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
-    Cli.error_print (Printf.sprintf "Command line argument error: %s" msg); Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
+    Cli.error_print "Command line argument error: %s" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
   | Verifisc.Errors.UnsupportedByVerifisc msg ->
-    Cli.error_print (Printf.sprintf "Unsupported by Verifisc: %s" msg); Cmdliner.Term.exit_status (`Ok 3)
+    Cli.error_print "Unsupported by Verifisc: %s" msg; Cmdliner.Term.exit_status (`Ok 3)
   | Verifisc.Errors.VerifiscTypeError msg ->
-    Cli.error_print (Printf.sprintf "Verifisc typechecking error: %s" msg); Cmdliner.Term.exit_status (`Ok 4)
+    Cli.error_print "Verifisc typechecking error: %s" msg; Cmdliner.Term.exit_status (`Ok 4)
   | Verifisc.Errors.VerifiscRuntimeError msg ->
-    Cli.error_print (Printf.sprintf "Verifisc runtime error: %s" msg); Cmdliner.Term.exit_status (`Ok 5)
+    Cli.error_print "Verifisc runtime error: %s" msg; Cmdliner.Term.exit_status (`Ok 5)
 
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)

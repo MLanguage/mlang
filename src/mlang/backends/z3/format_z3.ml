@@ -17,13 +17,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 module Pos = Verifisc.Pos
 
-let format_Z3_encoding (t: Z3_encoding.repr) : string =
-  let first = match t.Z3_encoding.repr_kind with
-    | Z3_encoding.Real _ -> Format_mvg.format_typ Mvg.Real
-    | Z3_encoding.Boolean -> Format_mvg.format_typ Mvg.Boolean
-  in
-  let second = if t.Z3_encoding.is_table then "[X]" else "" in
-  first ^ second
+let format_Z3_encoding fmt (t: Z3_encoding.repr) =
+  Format.fprintf fmt "%s%s"
+    (match t.Z3_encoding.repr_kind with
+    | Z3_encoding.Real _ -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Real
+    | Z3_encoding.Boolean -> Format.asprintf "%a" Format_mvg.format_typ Mvg.Boolean)
+    (if t.Z3_encoding.is_table then "[X]" else "")
 
 let convert_to_signed (f:float) (bsize:int) =
   if f <= 2. ** (float_of_int (bsize - 1)) then f
@@ -35,7 +34,7 @@ let format_z3_program
   : string =
   match Z3.Solver.get_model s with
   | Some model ->
-    Cli.warning_print (Printf.sprintf "Z3 model: %s" (Z3.Model.to_string model));
+    Cli.warning_print "Z3 model: %s" (Z3.Model.to_string model);
     let l = Mvg.VariableMap.fold (fun var (e, typ) acc ->
         match e with
         | Z3_encoding.Regular e ->
@@ -51,7 +50,7 @@ let format_z3_program
                     )
                 end
               | None -> "could not evaluate variable" end,
-           format_Z3_encoding typ
+           Format.asprintf "%a" format_Z3_encoding typ
           )::acc
         | Z3_encoding.Table _ ->
           assert false (* not implemented yet *)
@@ -62,7 +61,7 @@ let format_z3_program
        ",\n"
        (List.map
           (fun (n, v, t) ->
-             Printf.sprintf
+             Format.asprintf
                "  \"%s\" : { \"value\" : \"%s\", \"type\": \"%s\" }"
                n
                v

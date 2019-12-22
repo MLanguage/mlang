@@ -153,4 +153,4 @@ rule token = parse
 | eof
   { EOF }
 | _
-  { raise (LexingError (lexer_error lexbuf)) }
+  { raise (LexingError (Format.asprintf "%a" lexer_error lexbuf)) }

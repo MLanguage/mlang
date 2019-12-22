@@ -25,7 +25,7 @@ let check (program: Mvg.program) : unit =
     method! visit_Literal _ l =
       match l with
       | Undefined ->
-        raise (Errors.TypeError (Typing ("undef still in " ^ (Pos.format_position @@ !Mvg.current_visitor_pos))))
+        Errors.raise_typ_error Typing "undef still in %a" Pos.format_position !Mvg.current_visitor_pos
       | _ -> ()
   end in
   v#visit_program () program

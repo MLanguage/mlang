@@ -92,7 +92,7 @@ let parse_table_index sloc (s: string) : Ast.table_index =
   | Failure _ ->
     begin try Ast.SymbolIndex (parse_variable sloc s) with
       | E.ParsingError _ ->
-        Printf.printf "s: %s, %b\n" s (String.equal s "X");
+        Format.printf "s: %s, %b\n" s (String.equal s "X");
         E.parser_error sloc "table index should be an integer"
     end
 

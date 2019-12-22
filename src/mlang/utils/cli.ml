@@ -280,12 +280,9 @@ let time_marker ()  =
   let old_time = !time in
   time := new_time;
   let delta = (new_time -. old_time) *. 1000. in
-  if delta > 100. then begin
+  if delta > 100. then
     ANSITerminal.printf [ANSITerminal.Bold; ANSITerminal.black]
-      "[TIME] ";
-    Printf.printf "%.0f ms\n"
-      delta
-  end
+      "[TIME] %.0f ms@\n" delta
 
 (** Prints [[DEBUG]] in purple on the terminal standard output as well as timing since last debug *)
 let debug_marker (f_time: bool) =
@@ -319,27 +316,33 @@ let clock_marker i =
 
 (** All the printers below print their argument after the correct marker *)
 
-let debug_print ?(endline="\n") (s: string) =
-  if !debug_flag then begin
-    debug_marker !display_time;
-    Printf.printf "%s%s" s endline;
-    flush stdout;
-    flush stdout
-  end
+let debug_print ?(endline="\n") kont =
+  if !debug_flag then
+    Format.kasprintf (fun str ->
+        Format.printf "%a%s%s@?"
+          (fun _ -> debug_marker)
+          !display_time
+          str endline) kont
+  else
+    Format.ifprintf Format.std_formatter kont
 
-let var_info_print (s: string) =
-  if !var_info_flag then begin
-    var_info_marker ();
-    Printf.printf "%s\n" s;
-    flush stdout;
-    flush stdout
-  end
 
-let error_print (s: string) =
-  error_marker ();
-  Printf.eprintf "%s\n" s;
-  flush stderr;
-  flush stderr
+
+let var_info_print kont =
+  if !var_info_flag then
+    Format.kasprintf (fun str ->
+        Format.printf "%a%s@?"
+          (fun _ -> var_info_marker) ()
+          str
+      ) kont
+  else
+    Format.ifprintf Format.std_formatter kont
+
+
+let error_print kont =
+  Format.kasprintf (fun str ->
+      Format.printf "%a%s@?"
+        (fun _ -> error_marker) () str) kont
 
 (**
    Returns two functions: the first one, [current_progress], has to be called during the progress
@@ -355,7 +358,7 @@ let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
       if !stop then Thread.exit ();
       clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
-      Printf.printf "%s" !msg;
+      Format.printf "%s" !msg;
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();
       Unix.sleepf 0.05;
@@ -363,28 +366,30 @@ let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
   in
   let _ = Thread.create timer () in
   ((fun current_progress_msg ->
-      msg := Printf.sprintf "%s: %s" task current_progress_msg;),
+      msg := Format.sprintf "%s: %s" task current_progress_msg;),
    fun finish_msg ->
      stop := true;
      debug_marker false;
-     Printf.printf "%s: %s" task finish_msg;
+     Format.printf "%s: %s" task finish_msg;
      ANSITerminal.erase ANSITerminal.Below;
      ANSITerminal.move_bol ();
-     Printf.printf "\n";
+     Format.printf "\n";
      time_marker ();
   )
 
-let warning_print (s: string) =
+let warning_print kont =
   if !warning_flag then
-    begin
-      warning_marker ();
-      Printf.printf "%s\n" s;
-      flush stdout;
-      flush stdout
-    end
+    Format.kasprintf (fun str ->
+        Format.printf "%a%s@?"
+          (fun _ -> warning_marker) ()
+          str
+      ) kont
+  else
+    Format.ifprintf Format.std_formatter kont
 
-let result_print (s: string) =
-  result_marker ();
-  Printf.printf "%s\n" s;
-  flush stdout;
-  flush stdout
+let result_print kont =
+  Format.kasprintf (fun str ->
+      Format.printf "%a%s@?"
+        (fun _ -> result_marker) ()
+        str
+    ) kont

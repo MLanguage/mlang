@@ -51,10 +51,9 @@ type rule_name = string Pos.marked list
 let rule_number (name : rule_name) : int =
   try int_of_string (Pos.unmark (List.hd (List.rev name))) with
   | _ ->
-    raise (Errors.TypeError (
-        Errors.Variable (Printf.sprintf "the rule %s doesn't have an execution number"
-                           (Pos.format_position (Pos.get_position (List.hd name))))
-      ))
+    Errors.raise_typ_error Errors.Variable
+      "the rule %a doesn't have an execution number"
+      Pos.format_position (Pos.get_position (List.hd name))
 
 (** Variables are just strings *)
 type variable_name = string
@@ -78,10 +77,9 @@ type verification_name = string Pos.marked list
 let verification_number (name : verification_name) : int =
   try int_of_string (Pos.unmark (List.hd (List.rev name))) with
   | _ ->
-    raise (Errors.TypeError (
-        Errors.Variable (Printf.sprintf "the rule %s doesn't have an execution number"
-                           (Pos.format_position (Pos.get_position (List.hd name))))
-      ))
+    Errors.raise_typ_error Errors.Variable
+      "the rule %a doesn't have an execution number"
+      Pos.format_position (Pos.get_position (List.hd name))
 
 (** Ununsed for now *)
 type error_name = string
