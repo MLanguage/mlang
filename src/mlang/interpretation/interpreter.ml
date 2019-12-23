@@ -21,7 +21,9 @@ let repl_debug = ref false
 let exit_on_rte = ref true
 
 let truncatef x = snd (modf x)
-let roundf x = snd (modf (x +. copysign 0.5 x))
+(* Careful : rounding in M is done by excess and not by default (sic). Which is why we add a tiny bit after 0.5 *)
+let roundf x =
+  snd (modf (x +. copysign 0.5000001 x))
 
 type var_literal =
   | SimpleVar of literal
