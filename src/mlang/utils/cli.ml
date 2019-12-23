@@ -341,7 +341,7 @@ let var_info_print kont =
 
 let error_print kont =
   Format.kasprintf (fun str ->
-      Format.printf "%a%s@?"
+      Format.eprintf "%a%s@?"
         (fun _ -> error_marker) ()
         str
     ) kont

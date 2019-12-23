@@ -73,14 +73,14 @@ let repl_debugguer
     (ctx: ctx )
     (p: Mvg.program) : unit
   =
-  Cli.warning_print "Starting interactive debugger. Please query the interpreter state for the values of variables. Exit with \"quit\".";
+  Cli.warning_print "Starting interactive debugger. Please query the interpreter state for the values of variables. Exit with \"quit\".@\n";
   let exit = ref false in
   while not !exit do
-    Format.printf "> ";
+    Format.printf "> @?";
     let query = read_line () in
     if query = "quit" then exit := true else
     if query = "explain" then begin
-      Format.printf ">> ";
+      Format.printf ">> @?";
       let query = read_line () in
       try
         let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
@@ -90,7 +90,7 @@ let repl_debugguer
                 var2.Variable.execution_number) vars
         in
         (List.iter (fun var ->
-             Format.printf "[%a %a] -> %a\n"
+             Format.printf "[%a %a] -> %a@\n"
                Format_mvg.format_execution_number_short var.Variable.execution_number
                Pos.format_position var.Variable.execution_number.pos
                (fun fmt () ->
@@ -101,7 +101,7 @@ let repl_debugguer
                     Format.fprintf fmt "unused definition") ()
            ) vars)
       with
-      | Not_found -> Format.printf "Inexisting variable\n"
+      | Not_found -> Format.printf "Inexisting variable@\n"
     end
     else try
         let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
@@ -113,18 +113,18 @@ let repl_debugguer
         (List.iter (fun var ->
              try begin
                let var_l =  Mvg.VariableMap.find var ctx.ctx_vars  in
-               Format.printf "[%a %a] -> %a\n"
+               Format.printf "[%a %a] -> %a@\n"
                  Format_mvg.format_execution_number_short var.Variable.execution_number
                  Pos.format_position var.Variable.execution_number.pos
                  format_var_literal_with_var (var, var_l)
              end with
              | Not_found ->
-               Format.printf "[%a %a] -> not computed\n"
+               Format.printf "[%a %a] -> not computed@\n"
                  Format_mvg.format_execution_number_short var.Variable.execution_number
                  Pos.format_position var.Variable.execution_number.pos
            ) vars)
       with
-      | Not_found -> Format.printf "Inexisting variable\n"
+      | Not_found -> Format.printf "Inexisting variable@\n"
   done
 
 type run_error =
@@ -149,7 +149,7 @@ let format_runtime_error fmt (e: run_error)= match e with
   | MissingInputValue s ->
     Format.fprintf fmt "Missing input value: %s" s
   | ConditionViolated (errors, condition, bindings) ->
-    Format.fprintf fmt "Verification condition failed: %a. Errors thrown:\n%a\nViolated condition:\n%a\nValues of the relevant variables at this point:\n%a"
+    Format.fprintf fmt "Verification condition failed: %a. Errors thrown:\n%a\nViolated condition:\n%a\nValues of the relevant variables at this point:\n%a@\n"
       Pos.format_position (Pos.get_position condition)
       (Format_ast.pp_print_list_endline (fun fmt err ->
            Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))) errors
@@ -434,7 +434,7 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
   | RuntimeError (e,ctx) -> begin
       if !exit_on_rte then
         begin
-          Cli.error_print "%a@?" format_runtime_error e;
+          Cli.error_print "%a" format_runtime_error e;
           flush_all ();
           flush_all ();
           if !repl_debug then repl_debugguer ctx p ;
@@ -469,7 +469,7 @@ let evaluate_program
                     | InputVar -> begin match VariableMap.find_opt var input_values with
                         | Some e -> SimpleVar e
                         | None ->
-                          Cli.error_print "%s" (Pos.unmark @@ var.name);
+                          Cli.error_print "%s@?" (Pos.unmark @@ var.name);
                           assert false (* should not happen *)
                       end
                   end with
@@ -574,7 +574,7 @@ let evaluate_program
   | RuntimeError (e,ctx) ->
     if !exit_on_rte then
       begin
-        Cli.error_print "%a" format_runtime_error e;
+        Cli.error_print "%a@?" format_runtime_error e;
         flush_all ();
         flush_all ();
         if !repl_debug then repl_debugguer ctx p ;
