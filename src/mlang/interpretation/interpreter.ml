@@ -176,8 +176,10 @@ let evaluate_array_index
             ), ctx
           ))
   in
-  if idx >= size || idx < 0 then
+  if idx >= size  then
     Undefined
+  else if idx < 0 then
+    Float 0.
   else
     Array.get values idx
 
@@ -257,22 +259,17 @@ let rec evaluate_expr (ctx: ctx) (p: program) (e: expression Pos.marked) : liter
         | (Ast.Sub, Undefined, Float i2)  -> Float (0.               -. i2)
         | (Ast.Sub, Undefined, Undefined) -> Undefined
 
+        | (Ast.Mul, _, Undefined)
+        | (Ast.Mul, Undefined, _)         -> Undefined
         | (Ast.Mul, Bool i1, Bool i2)     -> Float (float_of_bool i1 *. float_of_bool i2)
         | (Ast.Mul, Bool i1, Float i2)    -> Float (float_of_bool i1 *. i2)
-        | (Ast.Mul, Bool i1, Undefined)   -> Float (float_of_bool i1 *. 0.)
         | (Ast.Mul, Float i1, Bool i2)    -> Float (i1               *. float_of_bool i2)
         | (Ast.Mul, Float i1, Float i2)   -> Float (i1               *. i2)
-        | (Ast.Mul, Float i1, Undefined)  -> Float (i1               *. 0.)
-        | (Ast.Mul, Undefined, Bool i2)   -> Float (0.               *. float_of_bool i2)
-        | (Ast.Mul, Undefined, Float i2)  -> Float (0.               *. i2)
-        | (Ast.Mul, Undefined, Undefined) -> Undefined
 
-        | (Ast.Div, Bool false, _) -> Bool false
         | (Ast.Div, Undefined, _)
-        | (Ast.Div, Float 0., _) -> Float 0.
         | (Ast.Div, _, Undefined) -> Undefined (* yes... *)
-
         | (Ast.Div, _, l2) when is_zero l2  -> Undefined
+
         | (Ast.Div, Bool i1, Bool i2)     -> Float (float_of_bool i1 /. float_of_bool i2)
         | (Ast.Div, Bool i1, Float i2)    -> Float (float_of_bool i1 /. i2)
         | (Ast.Div, Float i1, Bool i2)    -> Float (i1               /. float_of_bool i2)
