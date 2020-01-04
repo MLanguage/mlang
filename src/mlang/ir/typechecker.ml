@@ -696,7 +696,7 @@ let typecheck (p: program) : typ_info * program =
                         (new_ctx, t)
                       with
                       | Typ.UnificationError (t1_msg, t2_msg) ->
-                        Errors.raise_typ_error Typing "different definitions of specific index of table variable %s declared %a have different indexes: %s and %s"
+                        Errors.raise_typ_error Typing "different definitions of specific index of table variable %s declared %a have different types: %s and %s"
                           (Pos.unmark var.Variable.name)
                           Pos.format_position (Pos.get_position var.Variable.name)
                           t1_msg
@@ -707,6 +707,12 @@ let typecheck (p: program) : typ_info * program =
                     Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
                   with
                   | Not_found -> t
+                  | Typ.UnificationError (t1_msg, t2_msg) ->
+                    Errors.raise_typ_error Typing "table variable %s declared %a with type %s is defined with type %s"
+                      (Pos.unmark var.Variable.name)
+                      Pos.format_position (Pos.get_position var.Variable.name)
+                      t2_msg
+                      t1_msg
                 in
                 let new_ctx =
                   { new_ctx with
