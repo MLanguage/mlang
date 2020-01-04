@@ -1375,7 +1375,7 @@ let get_conds
                 else
                   let dummy_var =
                     Mvg.Variable.new_var
-                      (Pos.same_pos_as (Format.sprintf "Verification condition %d" (Mvg.Variable.fresh_id ())) e)
+                      (Pos.same_pos_as (Format.sprintf "verification_condition_%d" (Mvg.Variable.fresh_id ())) e)
                       None
                       (Pos.same_pos_as (let () = Pos.format_position Format.str_formatter (Pos.get_position e) in Format.flush_str_formatter ()) e)
                       {
