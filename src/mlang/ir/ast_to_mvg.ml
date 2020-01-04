@@ -1061,7 +1061,9 @@ let translate_lvalue
 (** Date types are not supported *)
 let translate_value_typ (typ: Ast.value_typ Pos.marked option) : Mvg.typ option =
   match typ with
-  | Some (Ast.Boolean, _) -> Some Mvg.Boolean
+  | Some (Ast.Boolean, _) -> Some Mvg.Real
+  (* Indeed, the BOOLEEN annotations are useless because they feed it
+     to functions that expect reals *)
   | Some (Ast.Real, _) -> Some Mvg.Real
   | Some (_ , _) -> Some Mvg.Real
   | None -> None

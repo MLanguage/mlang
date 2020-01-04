@@ -68,7 +68,6 @@ struct
 
   let boolean (pos: infer_info) = (UF.create T.Boolean, pos)
   let real (pos: infer_info) = (UF.create T.Real, pos)
-  let integer_or_real (pos: infer_info) = (UF.create T.All, pos)
 
   let create_concrete (t: typ) (pos: infer_info) : t = match t with
     | Mvg.Real -> real pos
@@ -187,19 +186,30 @@ let rec typecheck_top_down
           Typ.format_typ t'
           Format_mvg.format_typ t
     end
-  | (Literal (Bool _), t)
-  | (Literal (Float 0.0), t)
-  | (Literal (Float 1.0), t)
-    ->
-    Typ.coerce
-      ((Typ.boolean (Pos.get_position e, Typ.Up)))
-      ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
-    ctx
+  | (Literal (Bool _), t) ->
+    begin try
+        Typ.coerce
+          ((Typ.boolean (Pos.get_position e, Typ.Up)))
+          ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
+        ctx
+      with
+      | Typ.UnificationError _ ->
+        Errors.raise_typ_error Typing "literal %a is a boolean but should be %a"
+          Pos.format_position (Pos.get_position e)
+          Format_mvg.format_typ t
+    end
   | (Literal (Float _), t) ->
-    Typ.coerce
-      ((Typ.real (Pos.get_position e, Typ.Up)))
-      ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
-    ctx
+    begin try
+        Typ.coerce
+          ((Typ.real (Pos.get_position e, Typ.Up)))
+          ((Typ.create_concrete t (Pos.get_position e, Typ.Down)));
+        ctx
+      with
+      | Typ.UnificationError _ ->
+        Errors.raise_typ_error Typing "literal %a is a float but should be %a"
+          Pos.format_position (Pos.get_position e)
+          Format_mvg.format_typ t
+    end
   | (Literal Undefined, _) ->
     (* Literal has all the types *)
     ctx
@@ -317,7 +327,7 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
     else
       let (ctx, t1) = typecheck_bottom_up ctx (List.hd args) in
       begin try
-          Typ.coerce t1 (Typ.integer_or_real (Pos.get_position (List.hd args), Typ.Down));
+          Typ.coerce t1 (Typ.real (Pos.get_position (List.hd args), Typ.Down));
           let (ctx, t1) = List.fold_left (fun (ctx, t1) arg ->
               let (ctx, t_arg) = typecheck_bottom_up ctx arg in
               begin try
@@ -346,7 +356,7 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.coerce t_arg (Typ.integer_or_real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
+          begin try Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
                 Format_mvg.format_expression (Pos.unmark arg)
@@ -364,7 +374,7 @@ and typecheck_func_args (f: func) (pos: Pos.position) :
       begin match args with
         | [arg] ->
           let (ctx, t_arg) = typecheck_bottom_up ctx arg in
-          begin try Typ.coerce t_arg (Typ.integer_or_real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
+          begin try Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down)); (ctx, t_arg) with
             | Typ.UnificationError (t_arg_msg,t2_msg) ->
               Errors.raise_typ_error Typing "function argument %a (%a) has type %s but should have type %s"
                 Format_mvg.format_expression (Pos.unmark arg)
@@ -456,7 +466,7 @@ and typecheck_bottom_up (ctx: ctx) (e: expression Pos.marked) : (ctx * Typ.t) =
     (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
   | Unop (Ast.Minus, e') ->
     let (ctx, t) = typecheck_bottom_up ctx e' in
-    begin try Typ.coerce t (Typ.integer_or_real (Pos.get_position e', Typ.Down)); (ctx, t) with
+    begin try Typ.coerce t (Typ.real (Pos.get_position e', Typ.Down)); (ctx, t) with
       | Typ.UnificationError (t1_msg, t2_msg) ->
         Errors.raise_typ_error Typing  "arguments of operator (%a) %a has type %s but should be of type %s"
           Format_ast.format_unop (Ast.Minus)

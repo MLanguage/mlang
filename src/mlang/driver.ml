@@ -160,10 +160,10 @@ let driver
       end
   with
   | Errors.TypeError e ->
-    Cli.error_print "%a" Errors.format_typ_error e; Cmdliner.Term.exit_status (`Ok 2)
+    Cli.error_print "%a\n" Errors.format_typ_error e; Cmdliner.Term.exit_status (`Ok 2)
   | Errors.Unimplemented (msg) ->
-    Cli.error_print "unimplemented (%s)" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
+    Cli.error_print "unimplemented (%s)\n" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
   | Errors.ArgumentError msg ->
-    Cli.error_print "Command line argument error: %s" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
+    Cli.error_print "Command line argument error: %s\n" msg; Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
 let main () =
   Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)
