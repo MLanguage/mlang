@@ -11,7 +11,7 @@ authors: ["Denis Merigoux" "Raphaël Monat"]
 bug-reports: "https://gitlab.inria.fr/verifisc/mlang/issues"
 homepage: "https://gitlab.inria.fr/verifisc/mlang"
 license: "GPLv3"
-version: "1.0.2"
+version: "1.0.3"
 dev-repo: "git+https://gitlab.inria.fr/verifisc/mlang.git"
 synopsis: "Compiler for DGFiP's M language"
 description: """
@@ -24,11 +24,11 @@ before translating it into various backend languages.
 depends: [
   "ocaml" {>= "4.07.0"}
   "dune" {build}
-  "ANSITerminal" {= "0.8.1"}
+  "ANSITerminal" {= "0.8.2"}
   "re" {= "1.9.0"}
   "ppx_deriving" {= "4.4"}
   "visitors" {>= "20190711"}
   "ocamlgraph" {= "1.8.8"}
   "z3" {= "4.8.6"}
-  "dune-build-info" {= "1.11.0"}
+  "dune-build-info" {= "2.0.1"}
 ]

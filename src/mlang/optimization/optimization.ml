@@ -61,24 +61,28 @@ let optimize
   let nb_removed = ref max_int in
   let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
   while !nb_removed > 0 do
+    let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
     current_progress
       (Format.asprintf
-         "performing partial evaluation..."
+         "%d variables, performing partial evaluation..." remaining_vars
       );
+    let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
     let new_program = Partial_evaluation.partially_evaluate !program  in
     current_progress
       (Format.asprintf
-         "performing global value numbering..."
+         "%d variables, performing global value numbering..." remaining_vars
       );
+    let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
     let new_program = Global_value_numbering.optimize new_program in
     current_progress
       (Format.asprintf
-         "performing partial evaluation..."
+         "%d variables, performing partial evaluation..." remaining_vars
       );
+    let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
     let new_program = Partial_evaluation.partially_evaluate new_program in
     current_progress
       (Format.asprintf
-         "removing unused variables..."
+         "%d variables, removing unused variables..." remaining_vars
       );
     let new_program = remove_unused_variables new_program in
     let new_nb_removed =
@@ -96,7 +100,7 @@ let optimize
   finish "completed!";
   let program = !program in
   Cli.debug_print
-    "Program variables count down to %d!"
+    "Optimziation resulted in number of variables down to %d!"
     (Mvg.VariableMap.cardinal program.program_vars);
   let dep_graph = Dependency.create_dependency_graph program in
   Dependency.print_dependency_graph !Cli.dep_graph_file dep_graph program;

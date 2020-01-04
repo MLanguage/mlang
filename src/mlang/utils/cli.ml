@@ -74,7 +74,7 @@ let backend =
     opt (some string) None &
     info ["backend"; "b"]
       ~docv:"BACKEND"
-      ~doc:"Backend selection: interpreter, python, java or z3"
+      ~doc:"Backend selection: interpreter, python, java, clojure or z3"
   )
 
 let function_spec =
@@ -351,7 +351,7 @@ let error_print kont =
    loop and the other one, [finish], has to be called at the end of the progressive task.
 *)
 let create_progress_bar (task: string) : (string -> unit) * (string -> unit) =
-  let step_ticks = 3 in
+  let step_ticks = 5 in
   let ticks = ref 0 in
   let msg = ref task in
   let stop = ref false in

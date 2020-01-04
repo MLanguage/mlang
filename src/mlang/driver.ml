@@ -116,10 +116,6 @@ let driver
       let program = if !Cli.optimize then Optimization.optimize program else program in
       (* Noundef.check program; *)
 
-
-      let program = if !Cli.optimize then Optimization.optimize program else program in
-      (* Noundef.check program; *)
-
       (* Mvg.VariableMap.iter (fun var (ty, bool) ->
        *     if Mvg.VariableMap.mem var program.program_vars then
        *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
@@ -141,19 +137,19 @@ let driver
           if !Cli.output_file = "" then
             raise (Errors.ArgumentError "an output file must be defined with --output");
           Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
-          Cli.result_print "Generated Python function from requested set of inputs and outputs, results written to %s" !Cli.output_file
+          Cli.result_print "Generated Python function from requested set of inputs and outputs, results written to %s\n" !Cli.output_file
         end else if String.lowercase_ascii !Cli.backend = "java" then begin
           Cli.debug_print "Compiling the program to Java...";
           if !Cli.output_file = "" then
             raise (Errors.ArgumentError "an output file must be defined with --output");
           Mvg_to_java.generate_java_program program !Cli.output_file !Cli.number_of_passes;
-          Cli.result_print "Generated Java function from requested set of inputs and outputs, results written to %s" !Cli.output_file
+          Cli.result_print "Generated Java function from requested set of inputs and outputs, results written to %s\n" !Cli.output_file
         end else if String.lowercase_ascii !Cli.backend = "clojure" then begin
           Cli.debug_print "Compiling the program to Clojure...";
           if !Cli.output_file = "" then
             raise (Errors.ArgumentError "an output file must be defined with --output");
           Mvg_to_clojure.generate_clj_program program !Cli.output_file !Cli.number_of_passes;
-          Cli.result_print "Generated Clojure function from requested set of inputs and outputs, results written to %s" !Cli.output_file
+          Cli.result_print "Generated Clojure function from requested set of inputs and outputs, results written to %s\n" !Cli.output_file
         end
         else
           raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))

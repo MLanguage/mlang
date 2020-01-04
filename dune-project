@@ -1,6 +1,6 @@
 (lang dune 1.10)
 (name mlang)
-(version 1.0.2)
+(version 1.0.3)
 (generate_opam_files true)
 
 (source (uri git+https://gitlab.inria.fr/verifisc/mlang.git))
@@ -23,12 +23,12 @@
  (depends
    (ocaml (>= 4.07.0))
    (dune (and :build ))
-   (ANSITerminal (= 0.8.1))
+   (ANSITerminal (= 0.8.2))
    (re (= 1.9.0))
    (ppx_deriving (= 4.4))
    (visitors (>= 20190711))
    (ocamlgraph (= 1.8.8))
    (z3 (= 4.8.6))
-   (dune-build-info (= 1.11.0))
+   (dune-build-info (= 2.0.1))
  )
 )
