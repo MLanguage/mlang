@@ -90,9 +90,9 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
   let arr = Sys.readdir test_dir in
   Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
-  Array.sort Pervasives.compare arr;
+  Array.sort compare arr;
   (* (fun f1 f2 ->
-   *   Pervasives.compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr; *)
+   *   compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr; *)
   Cli.warning_flag := false;
   Cli.display_time := false;
   let _, finish = Cli.create_progress_bar "Testing files" in
@@ -127,7 +127,7 @@ let check_all_tests (p:Mvg.program) (test_dir: string) =
   finish "done!";
   Cli.debug_print "%d successes, on: %s" (List.length s) (String.concat ", " s);
   Cli.debug_print "Failures:";
-  let f_l = List.sort (fun (_, i) (_, i') -> - Pervasives.compare (List.length i) (List.length i')) (VariableMap.bindings f) in
+  let f_l = List.sort (fun (_, i) (_, i') -> - compare (List.length i) (List.length i')) (VariableMap.bindings f) in
   List.iter
     (fun (var, infos) ->
        Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name) (List.length infos) (String.concat ", " (List.map (fun (n, _, _) -> n) infos))
