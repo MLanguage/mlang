@@ -1,118 +1,97 @@
-(*
-Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under the terms of the
+   GNU General Public License as published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+   General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*)
+   You should have received a copy of the GNU General Public License along with this program. If
+   not, see <https://www.gnu.org/licenses/>. *)
 
 open Mvg
 
 let undefined_class_prelude : string =
-  "\
-class Undefined:
-    def __init__(self):
-        pass
-
-    def __add__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __radd__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __sub__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __rsub__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __mul__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __rmul__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return rhs
-
-    def __truediv__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return 0.0
-
-    def __rtruediv__(self, lhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __lt__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __lte__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __gt__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __gte__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __eq__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-
-    def __neq__(self, rhs):
-        if isinstance(rhs, Undefined):
-            return Undefined()
-        else:
-            return Undefined()
-"
-
+  "class Undefined:\n\
+  \    def __init__(self):\n\
+  \        pass\n\n\
+  \    def __add__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __radd__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __sub__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __rsub__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __mul__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __rmul__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return rhs\n\n\
+  \    def __truediv__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return 0.0\n\n\
+  \    def __rtruediv__(self, lhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __lt__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __lte__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __gt__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __gte__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __eq__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n\n\
+  \    def __neq__(self, rhs):\n\
+  \        if isinstance(rhs, Undefined):\n\
+  \            return Undefined()\n\
+  \        else:\n\
+  \            return Undefined()\n"
 
 let none_value = "Undefined()"
 
-
-let generate_comp_op (op: Ast.comp_op) : string = match op with
+let generate_comp_op (op : Ast.comp_op) : string =
+  match op with
   | Ast.Gt -> ">"
   | Ast.Gte -> ">="
   | Ast.Lt -> "<"
@@ -120,7 +99,8 @@ let generate_comp_op (op: Ast.comp_op) : string = match op with
   | Ast.Eq -> "=="
   | Ast.Neq -> "!="
 
-let generate_binop (op: Ast.binop) : string = match op with
+let generate_binop (op : Ast.binop) : string =
+  match op with
   | Ast.And -> "and"
   | Ast.Or -> "or"
   | Ast.Add -> "+"
@@ -128,268 +108,228 @@ let generate_binop (op: Ast.binop) : string = match op with
   | Ast.Mul -> "*"
   | Ast.Div -> "/"
 
-let generate_unop (op: Ast.unop) : string = match op with
-  | Ast.Not -> "not"
-  | Ast.Minus -> "-"
+let generate_unop (op : Ast.unop) : string = match op with Ast.Not -> "not" | Ast.Minus -> "-"
 
-
-let generate_variable (var:Variable.t) : string =
+let generate_variable (var : Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
   let v =
-    if same_execution_number var.Variable.execution_number
+    if
+      same_execution_number var.Variable.execution_number
         (Ast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
-    then v else
-      Format.asprintf "%s_%d_%d" v
-        (var.Variable.execution_number.Mvg.rule_number)
-        (var.Variable.execution_number.Mvg.seq_number)
+    then v
+    else
+      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mvg.rule_number
+        var.Variable.execution_number.Mvg.seq_number
   in
-  if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then
-    "var_" ^ v
-  else
-    v
+  if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then "var_" ^ v else v
 
-let generate_name (v:Variable.t) : string =
+let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_typ (typ: typ) : string = match typ with
-  | Real -> "float"
-  | Boolean -> "bool"
+let generate_typ (typ : typ) : string = match typ with Real -> "float" | Boolean -> "bool"
 
-let autograd () : bool =
-  !Cli.backend = "autograd"
+let autograd () : bool = !Cli.backend = "autograd"
 
-let rec generate_python_expr (e: expression) (scc: unit VariableMap.t) : string = match e with
+let rec generate_python_expr (e : expression) (scc : unit VariableMap.t) : string =
+  match e with
   | Comparison (op, e1, e2) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
-  | Binop ((Ast.Div, _), e1, e2) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    begin match Pos.unmark e2 with
-      | _ ->
-        Format.asprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value
-    end
-  (*
-    This special case has been added, because otherwise huge sums would produce
-    too many parenthesis, causing the Python parser to crash
-  *)
-  | Binop ((Ast.Add, _), e1,
-           (Binop ((Ast.Add, _), e2,
-                   (Binop ((Ast.Add, _), e3,
-                           (Binop ((Ast.Add, _), e4,
-                                   (Binop ((Ast.Add, _), e5,
-                                           e6
-                                          ), _)
-                                  ), _)
-                          ), _)
-                  ), _)
-          ) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    let s3 = generate_python_expr (Pos.unmark e3) scc in
-    let s4 = generate_python_expr (Pos.unmark e4) scc in
-    let s5 = generate_python_expr (Pos.unmark e5) scc in
-    let s6 = generate_python_expr (Pos.unmark e6) scc in
-    Format.asprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
+  | Binop ((Ast.Div, _), e1, e2) -> (
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      match Pos.unmark e2 with
+      | _ -> Format.asprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value )
+  (* This special case has been added, because otherwise huge sums would produce too many
+     parenthesis, causing the Python parser to crash *)
+  | Binop
+      ( (Ast.Add, _),
+        e1,
+        ( Binop
+            ( (Ast.Add, _),
+              e2,
+              ( Binop
+                  ( (Ast.Add, _),
+                    e3,
+                    (Binop ((Ast.Add, _), e4, (Binop ((Ast.Add, _), e5, e6), _)), _) ),
+                _ ) ),
+          _ ) ) ->
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s3 = generate_python_expr (Pos.unmark e3) scc in
+      let s4 = generate_python_expr (Pos.unmark e4) scc in
+      let s5 = generate_python_expr (Pos.unmark e5) scc in
+      let s6 = generate_python_expr (Pos.unmark e6) scc in
+      Format.asprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
   | Binop (op, e1, e2) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    Format.asprintf "(%s %s %s)" s1 (generate_binop (Pos.unmark op)) s2
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      Format.asprintf "(%s %s %s)" s1 (generate_binop (Pos.unmark op)) s2
   | Unop (op, e) ->
-    let s = generate_python_expr (Pos.unmark e) scc in
-    Format.asprintf "(%s %s)" (generate_unop op) s
+      let s = generate_python_expr (Pos.unmark e) scc in
+      Format.asprintf "(%s %s)" (generate_unop op) s
   | Index (var, e) ->
-    let s = generate_python_expr (Pos.unmark e) scc in
-    Format.asprintf "%s[%s]" (generate_variable (Pos.unmark var)) s
+      let s = generate_python_expr (Pos.unmark e) scc in
+      Format.asprintf "%s[%s]" (generate_variable (Pos.unmark var)) s
   | Conditional (e1, e2, e3) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    let s3 = generate_python_expr (Pos.unmark e3) scc in
-    Format.asprintf "(%s if %s else %s)" s2 s1 s3
-  | FunctionCall (PresentFunc, [arg]) ->
-    let sarg = generate_python_expr (Pos.unmark arg) scc in
-    Format.asprintf "(%s != %s)" sarg none_value
-  | FunctionCall (NullFunc, [arg]) ->
-    let sarg = generate_python_expr (Pos.unmark arg) scc in
-    Format.asprintf "(%s == %s)" sarg none_value
-  | FunctionCall (ArrFunc, [arg]) ->
-    let sarg = generate_python_expr (Pos.unmark arg) scc in
-    if autograd () then
-      Format.asprintf "%s" sarg
-    else
-      Format.asprintf "round(%s)" sarg
-  | FunctionCall (InfFunc, [arg]) ->
-    let sarg = generate_python_expr (Pos.unmark arg) scc in
-    if autograd () then
-      Format.asprintf "%s" sarg
-    else
-      Format.asprintf "floor(%s)" sarg
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s3 = generate_python_expr (Pos.unmark e3) scc in
+      Format.asprintf "(%s if %s else %s)" s2 s1 s3
+  | FunctionCall (PresentFunc, [ arg ]) ->
+      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      Format.asprintf "(%s != %s)" sarg none_value
+  | FunctionCall (NullFunc, [ arg ]) ->
+      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      Format.asprintf "(%s == %s)" sarg none_value
+  | FunctionCall (ArrFunc, [ arg ]) ->
+      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "round(%s)" sarg
+  | FunctionCall (InfFunc, [ arg ]) ->
+      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Bool true) ->
-    if autograd () then "1.0" else "True"
-  | Literal (Bool false) ->
-    if autograd () then "0.0" else "False"
-  | Literal (Float f) ->
-    Format.asprintf "%f" f
-  | Literal Undefined ->
-    none_value
+  | Literal (Bool true) -> if autograd () then "1.0" else "True"
+  | Literal (Bool false) -> if autograd () then "0.0" else "False"
+  | Literal (Float f) -> Format.asprintf "%f" f
+  | Literal Undefined -> none_value
   | Var var ->
-    if VariableMap.mem var scc then
-      Format.asprintf "scc[\"%s\"]" (generate_variable var)
-    else
-      generate_variable var
+      if VariableMap.mem var scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
+      else generate_variable var
   | LocalVar lvar -> Format.asprintf "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-    let s1 = generate_python_expr (Pos.unmark e1) scc in
-    let s2 = generate_python_expr (Pos.unmark e2) scc in
-    Format.asprintf "(lambda v%d: %s)(%s)"  lvar.LocalVariable.id s2 s1
+      let s1 = generate_python_expr (Pos.unmark e1) scc in
+      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      Format.asprintf "(lambda v%d: %s)(%s)" lvar.LocalVariable.id s2 s1
 
-let generate_var_def (program : program) (var: Variable.t) (scc: unit VariableMap.t) (oc: Format.formatter) : unit =
+let generate_var_def (program : program) (var : Variable.t) (scc : unit VariableMap.t)
+    (oc : Format.formatter) : unit =
   let in_scc = VariableMap.cardinal scc > 1 in
   let extra_tab = if in_scc then "    " else "" in
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then begin
-      Format.fprintf oc "    %s# %s: %s\n"
-        extra_tab
-        (generate_name var)
+      Format.fprintf oc "    %s# %s: %s\n" extra_tab (generate_name var)
         (Pos.unmark var.Variable.descr);
       match data.var_definition with
       | SimpleVar e ->
-        Format.fprintf oc "    %s# Defined %a\n    %s%s = %s\n\n"
-          extra_tab
-          Pos.format_position (Pos.get_position e)
-          extra_tab
-          (if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
-          (generate_python_expr (Pos.unmark e) scc)
-      | TableVar (_, IndexTable es) -> begin
-          IndexMap.iter (fun i e ->
-              Format.fprintf oc "    %s# Defined %a\n    %s%s[%d] = %s\n"
-                extra_tab
-                Pos.format_position (Pos.get_position e)
-                extra_tab
-                (if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
+          Format.fprintf oc "    %s# Defined %a\n    %s%s = %s\n\n" extra_tab Pos.format_position
+            (Pos.get_position e) extra_tab
+            ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
+            else generate_variable var )
+            (generate_python_expr (Pos.unmark e) scc)
+      | TableVar (_, IndexTable es) ->
+          IndexMap.iter
+            (fun i e ->
+              Format.fprintf oc "    %s# Defined %a\n    %s%s[%d] = %s\n" extra_tab
+                Pos.format_position (Pos.get_position e) extra_tab
+                ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
+                else generate_variable var )
                 i
-                (generate_python_expr (Pos.unmark e) scc)
-            ) es;
+                (generate_python_expr (Pos.unmark e) scc))
+            es;
           Format.fprintf oc "\n"
-        end
       | TableVar (_, IndexGeneric e) ->
-        Format.fprintf oc "    %s# Defined %a\n    %s%s = lambda generic_index: %s\n\n"
-          extra_tab
-          Pos.format_position (Pos.get_position e)
-          extra_tab
-          (if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var) else generate_variable var)
-          (generate_python_expr (Pos.unmark e) scc)
-      | InputVar -> assert false (* should not happen *)
+          Format.fprintf oc "    %s# Defined %a\n    %s%s = lambda generic_index: %s\n\n" extra_tab
+            Pos.format_position (Pos.get_position e) extra_tab
+            ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
+            else generate_variable var )
+            (generate_python_expr (Pos.unmark e) scc)
+      | InputVar -> assert false
+      (* should not happen *)
     end
-  with
-  | Not_found ->
+  with Not_found ->
     let cond = VariableMap.find var program.program_conds in
     Format.fprintf oc
-      "    %s# Verification condition %a\n    %scond = %s\n    %sif cond:\n    %s    raise TypeError(\"Error triggered\\n%s\")\n\n"
-      extra_tab
-      Pos.format_position (Pos.get_position cond.cond_expr)
-      extra_tab
+      "    %s# Verification condition %a\n\
+      \    %scond = %s\n\
+      \    %sif cond:\n\
+      \    %s    raise TypeError(\"Error triggered\\n%s\")\n\n"
+      extra_tab Pos.format_position (Pos.get_position cond.cond_expr) extra_tab
       (generate_python_expr (Pos.unmark cond.cond_expr) scc)
-      extra_tab
-      extra_tab
+      extra_tab extra_tab
       (String.concat "\\n"
          (List.map
             (fun err ->
-               Format.asprintf "%s: %s"
-                 (Pos.unmark err.Error.name)
-                 (Pos.unmark err.Error.descr)
-            )
-            cond.cond_errors
-         )
-      )
+              Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
+            cond.cond_errors))
 
-let generate_python_program (program: program) (filename : string) (number_of_passes: int) : unit =
+let generate_python_program (program : program) (filename : string) (number_of_passes : int) : unit
+    =
   let _oc = open_out filename in
-  let oc =Format.formatter_of_out_channel _oc in
+  let oc = Format.formatter_of_out_channel _oc in
   let exec_order = Execution_order.get_execution_order program in
   let input_vars =
     List.map
       (fun (var, _) -> var)
       (List.filter
          (fun (_, data) -> data.var_io = Input)
-         (VariableMap.bindings program.program_vars)
-      )
+         (VariableMap.bindings program.program_vars))
   in
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
-  if autograd () then
-    Format.fprintf oc "import numpy as np\n\n"
-  else
-    Format.fprintf oc "from math import floor\n\n";
+  if autograd () then Format.fprintf oc "import numpy as np\n\n"
+  else Format.fprintf oc "from math import floor\n\n";
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
   Format.fprintf oc "local_variables = dict()\n\n\n";
   Format.fprintf oc "# The following keys must be present in the input:\n%s\n"
-    (String.concat
-       "\n"
+    (String.concat "\n"
        (List.map
           (fun var ->
-             Format.asprintf "# %s: %s"
-               (generate_name var)
-               (Pos.unmark var.Variable.descr)
-          )
-          input_vars
-       )
-    );
+            Format.asprintf "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr))
+          input_vars));
   Format.fprintf oc "def extracted(input_variables):\n\n";
   Format.fprintf oc "    # First we extract the input variables from the dictionnary:\n%s\n\n"
-    (String.concat "\n" (List.map (fun var ->
-         Format.asprintf "    %s = input_variables[\"%s\"]"
-           (generate_variable var)
-           (generate_name var)
-       ) input_vars
-       ));
-  List.iter (fun scc ->
+    (String.concat "\n"
+       (List.map
+          (fun var ->
+            Format.asprintf "    %s = input_variables[\"%s\"]" (generate_variable var)
+              (generate_name var))
+          input_vars));
+  List.iter
+    (fun scc ->
       let in_scc = VariableMap.cardinal scc > 1 in
       if in_scc then begin
         Format.fprintf oc "    scc = {}\n\n";
-        VariableMap.iter (fun var _ ->
-            Format.fprintf oc "    scc[\"%s\"] = %s\n"
-              (generate_variable var)
-              (none_value)
-          ) scc;
+        VariableMap.iter
+          (fun var _ ->
+            Format.fprintf oc "    scc[\"%s\"] = %s\n" (generate_variable var) none_value)
+          scc;
         Format.fprintf oc "\n    for _ in range(%d):\n" number_of_passes
       end;
-      VariableMap.iter (fun var _ ->
-          generate_var_def program var scc oc
-        ) scc;
+      VariableMap.iter (fun var _ -> generate_var_def program var scc oc) scc;
       if in_scc then begin
-        VariableMap.iter (fun var _ ->
-            Format.fprintf oc "    %s = scc[\"%s\"]\n"
-              (generate_variable var)
-              (generate_variable var)
-          ) scc;
+        VariableMap.iter
+          (fun var _ ->
+            Format.fprintf oc "    %s = scc[\"%s\"]\n" (generate_variable var)
+              (generate_variable var))
+          scc;
         Format.fprintf oc "\n"
-      end
-    ) exec_order;
+      end)
+    exec_order;
   let returned_variables =
-    List.map (fun (var, _) -> var ) (
-      List.filter
-        (fun (_, data) -> data.var_io = Output)
-        (VariableMap.bindings program.program_vars)
-    )
+    List.map
+      (fun (var, _) -> var)
+      (List.filter
+         (fun (_, data) -> data.var_io = Output)
+         (VariableMap.bindings program.program_vars))
   in
-  Format.fprintf oc "    # The following two lines help us keep all previously defined variable bindings\n    global local_variables\n    local_variables = locals()\n\n";
-  begin if List.length returned_variables = 1 then
-      Format.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
-    else begin
-      Format.fprintf oc "    out = {}\n";
-      List.iter (fun var ->
-          Format.fprintf oc "    out[\"%s\"] = %s\n"
-            (generate_variable var)
-            (generate_variable var)
-        ) returned_variables;
-      Format.fprintf oc "    return out\n"
-    end
+  Format.fprintf oc
+    "    # The following two lines help us keep all previously defined variable bindings\n\
+    \    global local_variables\n\
+    \    local_variables = locals()\n\n";
+  if List.length returned_variables = 1 then
+    Format.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
+  else begin
+    Format.fprintf oc "    out = {}\n";
+    List.iter
+      (fun var ->
+        Format.fprintf oc "    out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
+      returned_variables;
+    Format.fprintf oc "    return out\n"
   end;
   close_out _oc

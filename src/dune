@@ -2,7 +2,8 @@
  (name main)
  (package mlang)
  (public_name mlang)
- (ocamlopt_flags (-cclib -lstdc++))
+ (ocamlopt_flags
+  (-cclib -lstdc++))
  (libraries mlang)
- (preprocess (pps ppx_deriving.std visitors.ppx))
-)
+ (preprocess
+  (pps ppx_deriving.std visitors.ppx)))

@@ -2,14 +2,12 @@
 
 (library
  (public_name mlang)
- (ocamlopt_flags (-cclib -lstdc++))
- (libraries
-  ocamlgraph z3 re ANSITerminal parmap cmdliner dune-build-info
- )
- (preprocess (pps ppx_deriving.std visitors.ppx))
-)
+ (ocamlopt_flags
+  (-cclib -lstdc++))
+ (libraries ocamlgraph z3 re ANSITerminal parmap cmdliner dune-build-info)
+ (preprocess
+  (pps ppx_deriving.std visitors.ppx)))
 
 (documentation
-  (package mlang)
-  (mld_files ("index"))
-)
+ (package mlang)
+ (mld_files ("index")))

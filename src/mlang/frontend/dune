@@ -1,2 +1,4 @@
 (ocamllex lexer)
-(menhir (modules parser))
+
+(menhir
+ (modules parser))

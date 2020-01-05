@@ -1,3 +1,5 @@
-profile = compact
+profile = default
 margin = 100
 exp-grouping = preserve
+wrap-comments
+parse-docstrings
