@@ -31,7 +31,7 @@ open Mvg
 type scc_id = int
 
 module ExecutionGraph = Graph.Imperative.Digraph.ConcreteBidirectional(struct
-    type t = int (** these are the strongly connected components identifiers *)
+    type t = int (* these are the strongly connected components identifiers *)
     let hash v = v
     let compare v1 v2 = compare v1 v2
     let equal v1 v2 = v1 = v2

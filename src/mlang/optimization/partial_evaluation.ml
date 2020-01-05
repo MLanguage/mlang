@@ -183,7 +183,7 @@ let rec partial_evaluation (ctx: ctx) (p: program) (e: expression Pos.marked) : 
       end
   | Literal _ -> e
   | Var var when VariableMap.mem var ctx.ctx_current_scc ->
-    (**
+    (*
        When doing partial evaluation, we only consider what happens during the first evaluation pass.
        If we are querying a variable that is in the current SCC then its values during the first
        pass will always be undefined.

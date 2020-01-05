@@ -455,7 +455,7 @@ let evaluate_program
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
     let ctx = List.fold_left (fun (ctx : ctx) (scc: unit VariableMap.t) ->
-        (** We have to update the current scc value *)
+        (* We have to update the current scc value *)
         let ctx =
           { ctx with
             ctx_current_scc_values =
@@ -554,7 +554,7 @@ let evaluate_program
                      | _ -> assert false (* should not happen *)
                 ) scc ctx
             in
-            (** After a pass we have to update the current SCC values to what has just been computed *)
+            (* After a pass we have to update the current SCC values to what has just been computed *)
             { ctx with
               ctx_current_scc_values =
                 VariableMap.mapi
@@ -563,7 +563,7 @@ let evaluate_program
                   ) ctx.ctx_current_scc_values
             }
           )
-          (** For SCC of one variable no need to repeat multiple passes *)
+          (* For SCC of one variable no need to repeat multiple passes *)
           (if VariableMap.cardinal scc = 1 then 1 else number_of_passes)
       ) empty_ctx execution_order
     in ctx

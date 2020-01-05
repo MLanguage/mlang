@@ -1369,7 +1369,7 @@ let get_conds
                     | Some err -> err.Mvg.Error.typ = Ast.Information
                   ) errs
                 then
-                  (**
+                  (*
                      If all errors raised by this verification condition are informative, we don't
                      need it!
                   *)
