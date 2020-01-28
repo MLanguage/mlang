@@ -81,6 +81,8 @@ if you are interested.
 Please note that the copyright of this code is owned by Inria; by contributing,
 you disclaim all copyright interests in favor of Inria.
 
+Don't format to use `make format` before you commit to ensure a uniform style.
+
 ## Formal semantics
 
 The `formal_semantics` folder contains two separate formalizations for the core of the
