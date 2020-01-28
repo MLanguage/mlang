@@ -573,7 +573,14 @@ let typecheck (p : program) : typ_info * program =
             | SimpleVar e ->
                 let new_ctx, t = typecheck_bottom_up { ctx with ctx_is_generic_table = false } e in
                 let t =
-                  try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with Not_found -> t
+                  try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with
+                  | Not_found -> t
+                  | Typ.UnificationError (t1_msg, t2_msg) ->
+                      Errors.raise_typ_error Typing
+                        "variable %s declared %a should have type %s but is found to have type %s"
+                        (Pos.unmark var.Variable.name) Pos.format_position
+                        (Pos.get_position var.Variable.name)
+                        t2_msg t1_msg
                 in
                 let new_ctx =
                   { new_ctx with ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ }
@@ -586,8 +593,15 @@ let typecheck (p : program) : typ_info * program =
                       typecheck_bottom_up { ctx with ctx_is_generic_table = true } e
                     in
                     let t =
-                      try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ)
-                      with Not_found -> t
+                      try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with
+                      | Not_found -> t
+                      | Typ.UnificationError (t1_msg, t2_msg) ->
+                          Errors.raise_typ_error Typing
+                            "table variable %s declared %a should have type %s but is found to \
+                             have type %s"
+                            (Pos.unmark var.Variable.name) Pos.format_position
+                            (Pos.get_position var.Variable.name)
+                            t2_msg t1_msg
                     in
                     let new_ctx =
                       { new_ctx with ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ }
