@@ -85,9 +85,9 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
   let ctx, p = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
-  Cli.debug_print "Definition of REPDOMSOC5: %a" Format_mvg.format_variable_def (
-    VariableMap.find (List.hd (Pos.VarNameToID.find "REPDOMSOC5" p.program_idmap)) p.program_vars
-    ).var_definition;
+  Cli.debug_print "Definition of REPDOMSOC5: %a" Format_mvg.format_variable_def
+    (VariableMap.find (List.hd (Pos.VarNameToID.find "REPDOMSOC5" p.program_idmap)) p.program_vars)
+      .var_definition;
   try
     VariableMap.iter
       (fun _ cond ->
@@ -116,7 +116,8 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
       flush_all ();
       if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p;
       exit 1
-    end else raise (Interpreter.RuntimeError (e, ctx))
+    end
+    else raise (Interpreter.RuntimeError (e, ctx))
 
 let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir : string) =
   let arr = Sys.readdir test_dir in
