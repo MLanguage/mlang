@@ -153,7 +153,7 @@ let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir 
         (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
   in
   finish "done!";
-  Cli.debug_print "%d successes, on: %s" (List.length s) (String.concat ", " s);
+  Cli.debug_print "%d successes, on: %s" (List.length s) (String.concat ", " (List.sort compare s));
   Cli.debug_print "Failures:";
   let f_l =
     List.sort
@@ -164,5 +164,5 @@ let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir 
     (fun (var, infos) ->
       Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
         (List.length infos)
-        (String.concat ", " (List.map (fun (n, _, _) -> n) infos)))
+        (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
     f_l
