@@ -45,11 +45,16 @@ type ctx = {
   ctx_current_scc_values : var_literal VariableMap.t;
 }
 
-let empty_ctx (typing : Typechecker.typ_info) : ctx =
+let empty_ctx (p: program) (typing : Typechecker.typ_info) : ctx =
   {
     ctx_local_vars = LocalVariableMap.empty;
     ctx_typing = typing;
-    ctx_vars = VariableMap.empty;
+    ctx_vars = VariableMap.map (fun def ->
+      match def.var_definition with
+        | Mvg.SimpleVar _ | InputVar -> SimpleVar Undefined
+        | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
+
+      ) p.program_vars;
     ctx_generic_index = None;
     ctx_current_scc_values = VariableMap.empty;
   }
@@ -284,15 +289,20 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           (* First we look if the value used is inside the current SCC. If yes then we return the
              value for this pass *)
           match VariableMap.find var ctx.ctx_current_scc_values with
-          | SimpleVar l -> l (* should not happen *)
+          | SimpleVar l -> l
           | TableVar _ -> assert false
+          (* should not happen *)
         with (* Else it is a value that has been computed before in the SCC graph *)
         | Not_found -> (
           try
             match VariableMap.find var ctx.ctx_vars with
-            | SimpleVar l -> l (* should not happen *)
+            | SimpleVar l -> l
             | TableVar _ -> assert false
-          with Not_found -> assert false ) )
+            (* should not happen *)
+          with Not_found ->
+            Cli.error_print "Var not found (should not happen): %s %a\n"
+              (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e);
+            assert false ) )
     | GenericTableIndex -> (
         match ctx.ctx_generic_index with
         | None -> assert false (* should not happen *)
@@ -399,128 +409,184 @@ let rec repeati (init : 'a) (f : 'a -> 'a) (n : int) : 'a =
   if n = 0 then init else repeati (f init) f (n - 1)
 
 let evaluate_program (p : program) (typing : Typechecker.typ_info)
-    (input_values : literal VariableMap.t) (number_of_passes : int) : ctx =
+    (input_values : literal VariableMap.t) (number_of_passes : int) : ctx * program =
   try
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
-    let ctx =
+    let ctx, _ =
+      (* We evaluate the multiple passes of the program *)
       List.fold_left
-        (fun (ctx : ctx) (scc : unit VariableMap.t) ->
-          (* We have to update the current scc value *)
-          let ctx =
+        (fun (ctx, p) pass ->
+          Cli.debug_print "Pass with:";
+          VariableMap.iter
+            (fun var l ->
+              Cli.debug_print "%s = %a" (Pos.unmark var.Variable.name) Format_mvg.format_literal
+                (Pos.unmark l))
+            pass.exec_pass_set_variables;
+          (* We update p with the values set in the pass *)
+          let p : program =
             {
-              ctx with
-              ctx_current_scc_values =
-                VariableMap.mapi
-                  (fun var _ ->
-                    try
-                      match (VariableMap.find var p.program_vars).var_definition with
-                      | Mvg.SimpleVar _ -> SimpleVar Undefined
-                      | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
-                      | InputVar -> (
-                          match VariableMap.find_opt var input_values with
-                          | Some e -> SimpleVar e
-                          | None -> assert false (* should not happen *) )
-                    with Not_found -> (
-                      try
-                        let _ = VariableMap.find var p.program_conds in
-                        SimpleVar Undefined
-                      with Not_found -> assert false (* should not happen *) ))
-                  scc;
+              p with
+              program_vars =
+                VariableMap.fold
+                  (fun var init p_vars ->
+                    begin
+                      match VariableMap.find_opt var typing.table_info_var with
+                      | None ->
+                          Errors.raise_typ_error Variable
+                            "variable %s set in execution pass to value %a does not exist"
+                            (Pos.unmark var.Variable.name) Format_mvg.format_literal
+                            (Pos.unmark init)
+                      | Some true ->
+                          Errors.raise_typ_error Variable
+                            "variable %s set in execution pass to value %a is a table, which is \
+                             not supported"
+                            (Pos.unmark var.Variable.name) Format_mvg.format_literal
+                            (Pos.unmark init)
+                      | Some false -> ()
+                    end;
+                    VariableMap.add var
+                      {
+                        (VariableMap.find var p_vars) with
+                        var_definition =
+                          SimpleVar (Pos.same_pos_as (Literal (Pos.unmark init)) init);
+                      }
+                      p_vars)
+                  pass.exec_pass_set_variables p.program_vars;
             }
           in
-          (* Because variables can be defined circularly interpretation is repeated an arbitrary
-             number of times *)
-          repeati ctx
-            (fun (ctx : ctx) ->
+          (* For one pass we traverse each SCC in execution order *)
+          List.fold_left
+            (fun ((ctx, p) : ctx * program) (scc : unit VariableMap.t) ->
+              (* We have to update the current scc value *)
               let ctx =
-                VariableMap.fold
-                  (fun var _ (ctx : ctx) ->
-                    try
-                      match (VariableMap.find var p.program_vars).var_definition with
-                      | Mvg.SimpleVar e ->
-                          let l_e = evaluate_expr ctx p e Real in
-                          { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
-                      | Mvg.TableVar (size, es) ->
-                          (* Right now we suppose that the different indexes of table arrays don't
-                             depend on each other for computing. Otherwise, it would trigger a
-                             runtime Not_found error at interpretation. TODO: add a check for that
-                             at typechecking. *)
-                          {
-                            ctx with
-                            ctx_vars =
-                              VariableMap.add var
-                                (TableVar
-                                   ( size,
-                                     Array.init size (fun idx ->
-                                         match es with
-                                         | IndexGeneric e ->
-                                             evaluate_expr
-                                               { ctx with ctx_generic_index = Some idx }
-                                               p e Real
-                                         | IndexTable es ->
-                                             let e = IndexMap.find idx es in
-                                             evaluate_expr ctx p e Real) ))
-                                ctx.ctx_vars;
-                          }
-                      | Mvg.InputVar -> (
+                {
+                  ctx with
+                  ctx_current_scc_values =
+                    VariableMap.mapi
+                      (fun var _ ->
+                        try VariableMap.find var ctx.ctx_vars
+                        with Not_found -> (
                           try
-                            let l =
-                              evaluate_expr ctx p
-                                (Pos.same_pos_as
-                                   (Literal (VariableMap.find var input_values))
-                                   var.Variable.name)
-                                Real
-                            in
-                            { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
-                          with Not_found ->
-                            raise
-                              (RuntimeError
-                                 ( MissingInputValue
-                                     (Format.asprintf "%s (%s)"
-                                        (Pos.unmark var.Mvg.Variable.name)
-                                        (Pos.unmark var.Mvg.Variable.descr)),
-                                   ctx )) )
-                    with Not_found -> (
-                      let cond = VariableMap.find var p.program_conds in
-                      let l_cond = evaluate_expr ctx p cond.cond_expr Boolean in
-                      match l_cond with
-                      | Bool false | Undefined ->
-                          ctx (* error condition is not trigerred, we continue *)
-                      | Bool true ->
-                          (* the condition is triggered, we throw errors *)
-                          raise
-                            (RuntimeError
-                               ( ConditionViolated
-                                   ( cond.cond_errors,
-                                     cond.cond_expr,
-                                     List.rev
-                                     @@ List.fold_left
-                                          (fun acc var ->
-                                            (var, VariableMap.find var ctx.ctx_vars) :: acc)
-                                          []
-                                          (Dependency.DepGraph.pred dep_graph var) ),
-                                 ctx ))
-                      | _ -> assert false )
-                    (* should not happen *))
-                  scc ctx
+                            match (VariableMap.find var p.program_vars).var_definition with
+                            | Mvg.SimpleVar _ -> SimpleVar Undefined
+                            | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
+                            | InputVar -> (
+                                match VariableMap.find_opt var input_values with
+                                | Some e -> SimpleVar e
+                                | None -> assert false (* should not happen *) )
+                          with Not_found -> (
+                            try
+                              let _ = VariableMap.find var p.program_conds in
+                              SimpleVar Undefined
+                            with Not_found -> assert false (* should not happen *) ) ))
+                      scc;
+                }
               in
-              (* After a pass we have to update the current SCC values to what has just been
-                 computed *)
-              {
-                ctx with
-                ctx_current_scc_values =
-                  VariableMap.mapi
-                    (fun var _ ->
-                      try VariableMap.find var ctx.ctx_vars with Not_found -> SimpleVar Undefined
-                      (* this is for verification conditions variables *))
-                    ctx.ctx_current_scc_values;
-              })
-            (* For SCC of one variable no need to repeat multiple passes *)
-            (if VariableMap.cardinal scc = 1 then 1 else number_of_passes))
-        (empty_ctx typing) execution_order
+              (* Because variables can be defined circularly interpretation is repeated an arbitrary
+                 number of times *)
+              let ctx =
+                repeati ctx
+                  (fun (ctx : ctx) ->
+                    let ctx =
+                      VariableMap.fold
+                        (fun var _ (ctx : ctx) ->
+                          try
+                            match (VariableMap.find var p.program_vars).var_definition with
+                            | Mvg.SimpleVar e ->
+                                let l_e = evaluate_expr ctx p e Real in
+                                {
+                                  ctx with
+                                  ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars;
+                                }
+                            | Mvg.TableVar (size, es) ->
+                                (* Right now we suppose that the different indexes of table arrays
+                                   don't depend on each other for computing. Otherwise, it would
+                                   trigger a runtime Not_found error at interpretation. TODO: add a
+                                   check for that at typechecking. *)
+                                {
+                                  ctx with
+                                  ctx_vars =
+                                    VariableMap.add var
+                                      (TableVar
+                                         ( size,
+                                           Array.init size (fun idx ->
+                                               match es with
+                                               | IndexGeneric e ->
+                                                   evaluate_expr
+                                                     { ctx with ctx_generic_index = Some idx }
+                                                     p e Real
+                                               | IndexTable es ->
+                                                   let e = IndexMap.find idx es in
+                                                   evaluate_expr ctx p e Real) ))
+                                      ctx.ctx_vars;
+                                }
+                            | Mvg.InputVar -> (
+                                try
+                                  let l =
+                                    evaluate_expr ctx p
+                                      (Pos.same_pos_as
+                                         (Literal (VariableMap.find var input_values))
+                                         var.Variable.name)
+                                      Real
+                                  in
+                                  {
+                                    ctx with
+                                    ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars;
+                                  }
+                                with Not_found ->
+                                  raise
+                                    (RuntimeError
+                                       ( MissingInputValue
+                                           (Format.asprintf "%s (%s)"
+                                              (Pos.unmark var.Mvg.Variable.name)
+                                              (Pos.unmark var.Mvg.Variable.descr)),
+                                         ctx )) )
+                          with Not_found -> (
+                            let cond = VariableMap.find var p.program_conds in
+                            let l_cond = evaluate_expr ctx p cond.cond_expr Boolean in
+                            match l_cond with
+                            | Bool false | Undefined ->
+                                ctx (* error condition is not trigerred, we continue *)
+                            | Bool true ->
+                                (* the condition is triggered, we throw errors *)
+                                raise
+                                  (RuntimeError
+                                     ( ConditionViolated
+                                         ( cond.cond_errors,
+                                           cond.cond_expr,
+                                           List.rev
+                                           @@ List.fold_left
+                                                (fun acc var ->
+                                                  (var, VariableMap.find var ctx.ctx_vars) :: acc)
+                                                []
+                                                (Dependency.DepGraph.pred dep_graph var) ),
+                                       ctx ))
+                            | _ -> assert false )
+                          (* should not happen *))
+                        scc ctx
+                    in
+                    (* After a pass we have to update the current SCC values to what has just been
+                       computed *)
+                    {
+                      ctx with
+                      ctx_current_scc_values =
+                        VariableMap.mapi
+                          (fun var _ ->
+                            try VariableMap.find var ctx.ctx_vars
+                            with Not_found -> SimpleVar Undefined
+                            (* this is for verification conditions variables *))
+                          ctx.ctx_current_scc_values;
+                    })
+                  (* For SCC of one variable no need to repeat multiple passes *)
+                  (if VariableMap.cardinal scc = 1 then 1 else number_of_passes)
+              in
+              (ctx, p))
+            (ctx, p) execution_order)
+        (empty_ctx p typing, p)
+        p.program_exec_passes
     in
-    ctx
+    ctx, p
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
       Cli.error_print "%a@?" format_runtime_error e;

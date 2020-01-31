@@ -43,4 +43,6 @@ TSHALLOV = 1;
 
 condition: non;
 
+enchaineur: non;
+
 sortie: IRNET;

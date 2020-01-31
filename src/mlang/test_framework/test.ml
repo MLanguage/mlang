@@ -32,7 +32,7 @@ let parse_file (test_name : string) : test_file =
         Cmdliner.Term.exit_status (`Ok 2);
         None
     | Tparser.Error ->
-        Cli.error_print "Lexer error in file %s at position %a" test_name
+        Cli.error_print "Lexer error in file %s at position %a\n" test_name
           Errors.print_lexer_position filebuf.lex_curr_p;
         close_in input;
         Cmdliner.Term.exit_status (`Ok 2);
@@ -43,7 +43,8 @@ let parse_file (test_name : string) : test_file =
 let to_ast_literal (value : Tast.literal) : Ast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
-let to_mvg_function (program : Mvg.program) (t : test_file) : Interface.mvg_function =
+let to_mvg_function (program : Mvg.program) (t : test_file) :
+    Interface.mvg_function * condition_data VariableMap.t =
   let func_variable_inputs = VariableMap.empty in
   let func_constant_inputs =
     Interface.const_var_set_from_list program
@@ -67,17 +68,55 @@ let to_mvg_function (program : Mvg.program) (t : test_file) : Interface.mvg_func
              pos ))
          t.rp)
   in
-  { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
+  ( {
+      func_variable_inputs;
+      func_constant_inputs;
+      func_outputs;
+      func_conds = VariableMap.empty;
+      func_exec_passes = None;
+    },
+    func_conds )
 
 let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f = to_mvg_function p t in
+  let f, test_conds = to_mvg_function p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let _ = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
-  ()
+  let ctx, p = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
+  Cli.debug_print "Definition of REPDOMSOC5: %a" Format_mvg.format_variable_def (
+    VariableMap.find (List.hd (Pos.VarNameToID.find "REPDOMSOC5" p.program_idmap)) p.program_vars
+    ).var_definition;
+  try
+    VariableMap.iter
+      (fun _ cond ->
+        let result = Interpreter.evaluate_expr ctx p cond.cond_expr Boolean in
+        match result with
+        | Bool true ->
+            raise
+              (Interpreter.RuntimeError
+                 ( Interpreter.ConditionViolated
+                     ( cond.cond_errors,
+                       cond.cond_expr,
+                       [
+                         ( match Pos.unmark cond.cond_expr with
+                         | Unop (Ast.Not, (Comparison ((Ast.Eq, _), (Var var, _), (_, _)), _)) ->
+                             (var, VariableMap.find var ctx.ctx_vars)
+                         | _ -> assert false );
+                         (* should not happen *)
+                       ] ),
+                   ctx ))
+        | _ -> ())
+      test_conds
+  with Interpreter.RuntimeError (e, ctx) ->
+    if !Interpreter.exit_on_rte then begin
+      Cli.error_print "%a" Interpreter.format_runtime_error e;
+      flush_all ();
+      flush_all ();
+      if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p;
+      exit 1
+    end else raise (Interpreter.RuntimeError (e, ctx))
 
 let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir : string) =
   let arr = Sys.readdir test_dir in

@@ -21,4 +21,6 @@ PREM8_11 = 0;
 
 condition: non;
 
+enchaineur: non;
+
 sortie: IRNET;

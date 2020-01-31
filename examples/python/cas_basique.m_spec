@@ -6,4 +6,6 @@ V_0AM = 1;
 
 condition: non;
 
+enchaineur: non;
+
 sortie: IRNET;

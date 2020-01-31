@@ -13,4 +13,9 @@ CMAJ = 0; #Is it though ? COPETO causing penalities in LIMERO, PACSB
 
 condition: non;
 
+enchaineur:
+V_INDTEO = 0;
+enchaineur:
+V_INDTEO = 1;
+
 sortie: non;

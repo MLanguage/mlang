@@ -274,10 +274,13 @@ type idmap = Variable.t list Pos.VarNameToID.t
     keep a mapping between the two. A name is mapped to a list of variables because variables can be
     redefined in different rules *)
 
+type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
+
 type program = {
   program_vars : variable_data VariableMap.t;
   program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
+  program_exec_passes : exec_pass list;
 }
 
 (** {1 Helpers}*)

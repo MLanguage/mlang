@@ -21,6 +21,7 @@ type mvg_function = {
   func_constant_inputs : expression Pos.marked VariableMap.t;
   func_outputs : unit VariableMap.t;
   func_conds : condition_data VariableMap.t;
+  func_exec_passes : expression Pos.marked VariableMap.t list option;
 }
 
 let fit_function (p : program) (f : mvg_function) : program =
@@ -87,6 +88,26 @@ let fit_function (p : program) (f : mvg_function) : program =
             })
         p.program_vars;
     program_conds = VariableMap.union (fun _ _ _ -> assert false) p.program_conds f.func_conds;
+    program_exec_passes =
+      ( match f.func_exec_passes with
+      | None -> p.program_exec_passes
+      | Some passes ->
+          List.map
+            (fun pass ->
+              {
+                exec_pass_set_variables =
+                  VariableMap.mapi
+                    (fun var init_expr ->
+                      match Pos.unmark init_expr with
+                      | Literal (Float f) -> Pos.same_pos_as (Float f) init_expr
+                      | _ ->
+                          Errors.raise_typ_error Variable
+                            "chaining variable definition should be a real literal %s %a"
+                            (Pos.unmark var.Variable.name) Pos.format_position
+                            (Pos.get_position init_expr))
+                    pass;
+              })
+            passes );
   }
 
 let var_set_from_variable_name_list (p : program) (names : string Pos.marked list) :
@@ -214,6 +235,12 @@ let read_function_from_spec (p : program) : mvg_function =
       func_constant_inputs = const_var_set_from_list p func_spec.Ast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Ast.spec_outputs;
       func_conds = translate_cond p.program_idmap func_spec.Ast.spec_conditions;
+      func_exec_passes =
+        ( if func_spec.Ast.spec_exec_passes = [] then Some [ VariableMap.empty ]
+        else
+          Some
+            (List.map (fun pass -> const_var_set_from_list p pass) func_spec.Ast.spec_exec_passes)
+        );
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->
@@ -221,13 +248,13 @@ let read_function_from_spec (p : program) : mvg_function =
       close_in input;
       exit 1
   | Parser.Error ->
-      Cli.error_print "Lexer error in file %s at position %a" !Parse_utils.current_file
+      Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
         Errors.print_lexer_position filebuf.lex_curr_p;
       close_in input;
       exit 1
 
 let make_function_from_program (program : program) (typing : Typechecker.typ_info)
-    (number_of_passes : int) : literal VariableMap.t -> Interpreter.ctx =
+    (number_of_passes : int) : literal VariableMap.t -> Interpreter.ctx * program =
  fun input_values -> Interpreter.evaluate_program program typing input_values number_of_passes
 
 let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =

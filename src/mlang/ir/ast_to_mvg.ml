@@ -1335,4 +1335,9 @@ let translate (p : Ast.program) (application : string option) : Mvg.program =
   let var_data = get_var_data idmap var_decl_data int_const_vals p application in
   let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data idmap in
   let conds = get_conds error_decls idmap p application in
-  { Mvg.program_vars = var_data; Mvg.program_conds = conds; Mvg.program_idmap = idmap }
+  {
+    Mvg.program_vars = var_data;
+    Mvg.program_conds = conds;
+    Mvg.program_idmap = idmap;
+    Mvg.program_exec_passes = [];
+  }

@@ -506,21 +506,37 @@ spec_conds_list:
 | cond = expression SEMICOLON { [cond] }
 | cond = expression SEMICOLON others = spec_conds_list { cond::others }
 
+chaining_pass:
+| BASE SEMICOLON { [] }
+| const = const_input { [const] }
+| const = const_input rest = chaining_pass { const::rest }
+
+
+chaining_list:
+| NOT SEMICOLON { [] }
+| pass = chaining_pass { [pass] }
+| pass = chaining_pass CHAINING COLON rest = chaining_list { pass::rest }
+
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
   CONDITION COLON precs = spec_conds_list
-  OUTPUT COLON outputs = spec_output_list SEMICOLON { {
+  CHAINING COLON chainings = chaining_list
+  OUTPUT COLON outputs = spec_output_list SEMICOLON
+   { {
       spec_inputs = inputs;
       spec_consts = consts;
       spec_outputs = outputs;
       spec_conditions = precs;
+      spec_exec_passes = chainings;
    } }
+
 | EOF { {
     spec_inputs = [];
     spec_consts = [];
     spec_outputs = [];
     spec_conditions = [];
+    spec_exec_passes = [];
  } }
 
  literal_input:

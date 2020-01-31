@@ -235,7 +235,7 @@ let optimize (p : program) (typing : Typechecker.typ_info) : program =
                     raise
                       (Interpreter.RuntimeError
                          ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
-                           Interpreter.empty_ctx typing ))
+                           Interpreter.empty_ctx p typing ))
                 | new_cond_expr ->
                     ( {
                         p with

@@ -46,12 +46,12 @@ let empty_ctx (typing : Typechecker.typ_info) (var : Variable.t) (idx : int opti
     ctx_typing = typing;
   }
 
-let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked) :
+let rec partial_evaluation (ctx : ctx) (interp_ctx: Interpreter.ctx) (p : program) (e : expression Pos.marked) :
     expression Pos.marked =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let new_e1 = partial_evaluation ctx p e1 in
-      let new_e2 = partial_evaluation ctx p e2 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
+      let new_e2 = partial_evaluation ctx interp_ctx p e2 in
       Pos.same_pos_as
         begin
           match (Pos.unmark new_e1, Pos.unmark new_e2) with
@@ -65,7 +65,7 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
           | Literal _, Literal _ ->
               Mvg.Literal
                 (Interpreter.evaluate_expr
-                   (Interpreter.empty_ctx ctx.ctx_typing)
+                   interp_ctx
                    p
                    (Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e)
                    Boolean)
@@ -73,8 +73,8 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
         end
         e
   | Binop (op, e1, e2) ->
-      let new_e1 = partial_evaluation ctx p e1 in
-      let new_e2 = partial_evaluation ctx p e2 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
+      let new_e2 = partial_evaluation ctx interp_ctx p e2 in
       Pos.same_pos_as
         begin
           match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
@@ -107,7 +107,7 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
           | _, Literal _, Literal _ ->
               Mvg.Literal
                 (Interpreter.evaluate_expr
-                   (Interpreter.empty_ctx ctx.ctx_typing)
+                   interp_ctx
                    p
                    (Pos.same_pos_as (Binop (op, new_e1, new_e2)) e1)
                    (match Pos.unmark op with Ast.And | Ast.Or -> Boolean | _ -> Real))
@@ -118,14 +118,14 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
         end
         e
   | Unop (op, e1) ->
-      let new_e1 = partial_evaluation ctx p e1 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
       Pos.same_pos_as
         begin
           match Pos.unmark new_e1 with
           | Literal _ ->
               Mvg.Literal
                 (Interpreter.evaluate_expr
-                   (Interpreter.empty_ctx ctx.ctx_typing)
+                   interp_ctx
                    p
                    (Pos.same_pos_as (Unop (op, new_e1)) e1)
                    (match op with Not -> Boolean | Minus -> Real))
@@ -133,16 +133,16 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
         end
         e
   | Conditional (e1, e2, e3) -> (
-      let new_e1 = partial_evaluation ctx p e1 in
-      let new_e2 = partial_evaluation ctx p e2 in
-      let new_e3 = partial_evaluation ctx p e3 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
+      let new_e2 = partial_evaluation ctx interp_ctx p e2 in
+      let new_e3 = partial_evaluation ctx interp_ctx p e3 in
       match Pos.unmark new_e1 with
       | Literal (Bool true) -> new_e2
       | Literal (Bool false) -> new_e3
       | Literal Undefined -> Pos.same_pos_as (Literal Undefined) e
       | _ -> Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e )
   | Index (var, e1) -> (
-      let new_e1 = partial_evaluation ctx p e1 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
       if VariableMap.mem (Pos.unmark var) ctx.ctx_current_scc then
         Pos.same_pos_as (Literal Undefined) e
       else
@@ -163,7 +163,7 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
                       (Interpreter.RuntimeError
                          ( Interpreter.FloatIndex
                              (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
-                           Interpreter.empty_ctx ctx.ctx_typing ))
+                           interp_ctx ))
             in
             match (VariableMap.find (Pos.unmark var) p.program_vars).var_definition with
             | SimpleVar _ | InputVar -> assert false (* should not happen *)
@@ -209,7 +209,7 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
   | Error -> e
   | LocalLet (l1, b, (LocalVar l2, _)) when LocalVariable.compare l1 l2 = 0 -> b
   | LocalLet (lvar, e1, e2) -> (
-      let new_e1 = partial_evaluation ctx p e1 in
+      let new_e1 = partial_evaluation ctx interp_ctx p e1 in
       match Pos.unmark new_e1 with
       | Literal _ | Var _ ->
           let new_ctx =
@@ -219,21 +219,21 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
                 LocalVariableMap.add lvar (expr_to_partial (Pos.unmark new_e1)) ctx.ctx_local_vars;
             }
           in
-          let new_e2 = partial_evaluation new_ctx p e2 in
+          let new_e2 = partial_evaluation new_ctx interp_ctx p e2 in
           new_e2
       | _ -> (
-          let new_e2 = partial_evaluation ctx p e2 in
+          let new_e2 = partial_evaluation ctx interp_ctx p e2 in
           match Pos.unmark new_e2 with
           | Literal _ | Var _ -> new_e2
           | _ -> Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e ) )
   | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
-      let new_arg = partial_evaluation ctx p arg in
+      let new_arg = partial_evaluation ctx interp_ctx p arg in
       match Pos.unmark new_arg with
       | Literal _ ->
           Pos.same_pos_as
             (Mvg.Literal
                (Interpreter.evaluate_expr
-                  (Interpreter.empty_ctx ctx.ctx_typing)
+                  interp_ctx
                   p
                   (Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e)
                   Real))
@@ -241,11 +241,12 @@ let rec partial_evaluation (ctx : ctx) (p : program) (e : expression Pos.marked)
       | _ -> Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e )
   | FunctionCall (func, args) ->
       Pos.same_pos_as
-        (FunctionCall (func, List.map (fun arg -> partial_evaluation ctx p arg) args))
+        (FunctionCall (func, List.map (fun arg -> partial_evaluation ctx interp_ctx p arg) args))
         e
 
 let partially_evaluate (p : program) (typing : Typechecker.typ_info) : program =
   let exec_order = Execution_order.get_execution_order p in
+  let interp_ctx = Interpreter.empty_ctx p typing in
   List.fold_left
     (fun p scc ->
       VariableMap.fold
@@ -256,20 +257,20 @@ let partially_evaluate (p : program) (typing : Typechecker.typ_info) : program =
               match def.var_definition with
               | InputVar -> InputVar
               | SimpleVar e ->
-                  let e' = partial_evaluation (empty_ctx typing var None scc) p e in
+                  let e' = partial_evaluation (empty_ctx typing var None scc) interp_ctx p e in
                   SimpleVar e'
               | TableVar (size, def) -> (
                   match def with
                   | IndexGeneric e ->
                       TableVar
-                        (size, IndexGeneric (partial_evaluation (empty_ctx typing var None scc) p e))
+                        (size, IndexGeneric (partial_evaluation (empty_ctx typing var None scc) interp_ctx p e))
                   | IndexTable es ->
                       TableVar
                         ( size,
                           IndexTable
                             (IndexMap.mapi
                                (fun idx e ->
-                                 partial_evaluation (empty_ctx typing var (Some idx) scc) p e)
+                                 partial_evaluation (empty_ctx typing var (Some idx) scc) interp_ctx p e)
                                es) ) )
             in
             {
@@ -280,14 +281,14 @@ let partially_evaluate (p : program) (typing : Typechecker.typ_info) : program =
           with Not_found -> (
             try
               let cond = VariableMap.find var p.program_conds in
-              match partial_evaluation (empty_ctx typing var None scc) p cond.cond_expr with
+              match partial_evaluation (empty_ctx typing var None scc) interp_ctx p cond.cond_expr with
               | Literal (Bool false), _ | Literal Undefined, _ ->
                   { p with program_conds = VariableMap.remove var p.program_conds }
               | Literal (Bool true), _ ->
                   raise
                     (Interpreter.RuntimeError
                        ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
-                         Interpreter.empty_ctx typing ))
+                         interp_ctx))
               | new_cond_expr ->
                   {
                     p with

@@ -8,4 +8,6 @@ TSHALLOC = 0000.0;
 
 condition: non;
 
+enchaineur: non;
+
 sortie: IRNET;

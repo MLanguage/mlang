@@ -50,7 +50,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         with
         | Errors.LexingError msg | Errors.ParsingError msg -> Cli.error_print "%s" msg
         | Parser.Error ->
-            Cli.error_print "Lexer error in file %s at position %a" !Parse_utils.current_file
+            Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
               Errors.print_lexer_position filebuf.lex_curr_p;
             begin
               match input with
@@ -93,7 +93,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program typing !Cli.number_of_passes in
-        let results = f (Interface.read_inputs_from_stdin mvg_func) in
+        let results, _ = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program
       end
