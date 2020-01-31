@@ -90,13 +90,12 @@ end
 
 type ctx = {
   ctx_program : program;
-  ctx_var_typ : Typ.t VariableMap.t;
   ctx_local_var_typ : Typ.t LocalVariableMap.t;
   ctx_is_generic_table : bool;
 }
 
 type typ_info = {
-  typ_info_var : (Mvg.typ * bool) Mvg.VariableMap.t;
+  table_info_var : bool Mvg.VariableMap.t;
   (* the bool flag is_table *)
   typ_info_local_var : Mvg.typ Mvg.LocalVariableMap.t;
 }
@@ -174,31 +173,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) (t : typ) : c
   | Literal Undefined, _ ->
       (* Literal has all the types *)
       ctx
-  | Var var, t -> (
-      try
-        match (VariableMap.find var ctx.ctx_program.program_vars).var_typ with
-        | Some t' -> (
-            let t = Typ.create_concrete t (Pos.get_position e, Typ.Down) in
-            let t' = Typ.create_concrete t' (Pos.get_position e, Typ.Up) in
-            try
-              let t' = Typ.unify t t' in
-              { ctx with ctx_var_typ = VariableMap.add var t' ctx.ctx_var_typ }
-            with Typ.UnificationError (string_t, string_t') ->
-              Errors.raise_typ_error Typing
-                "variable %s used %a should be of type %s but has been declared of type %s"
-                (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e) string_t
-                string_t' )
-        | None -> (
-            let ctx, t' = typecheck_bottom_up ctx e in
-            try
-              let t' = Typ.unify t' (Typ.create_concrete t (Pos.get_position e, Typ.Down)) in
-              { ctx with ctx_var_typ = VariableMap.add var t' ctx.ctx_var_typ }
-            with Typ.UnificationError (t_msg, _) ->
-              Errors.raise_typ_error Typing "variable %s %a is of type %s but should be %a"
-                (Pos.unmark var.Variable.name) Pos.format_position
-                (Pos.get_position var.Variable.name)
-                t_msg Format_mvg.format_typ t )
-      with Not_found -> assert false (* should not happen *) )
+  | Var _, Real -> ctx (* All variables are real *)
   | LocalLet (local_var, e1, e2), t -> (
       let ctx, t1 = typecheck_bottom_up ctx e1 in
       let ctx =
@@ -228,7 +203,8 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) (t : typ) : c
       else
         Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
           Pos.format_position (Pos.get_position e)
-  | Index ((var, var_pos), e'), t -> (
+  | Index ((var, var_pos), e'), Real -> (
+      (* Tables are only tables of arrays *)
       let ctx = typecheck_top_down ctx e' Real in
       let var_data = VariableMap.find var ctx.ctx_program.program_vars in
       match var_data.Mvg.var_definition with
@@ -237,23 +213,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) (t : typ) : c
             "variable %s is accessed %a as a table but it is not defined as one %a"
             (Pos.unmark var.Variable.name) Pos.format_position var_pos Pos.format_position
             (Pos.get_position var.Variable.name)
-      | TableVar _ -> (
-          try
-            let var_typ = VariableMap.find var ctx.ctx_var_typ in
-            try
-              Typ.coerce var_typ (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-              ctx
-            with Typ.UnificationError (t_msg, _) ->
-              Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
-                Pos.format_position (Pos.get_position e) t_msg Format_mvg.format_typ t
-          with Not_found ->
-            {
-              ctx with
-              ctx_var_typ =
-                VariableMap.add var
-                  (Typ.create_concrete t (Pos.get_position e, Typ.Down))
-                  ctx.ctx_var_typ;
-            } ) )
+      | TableVar _ -> ctx )
   | _ ->
       Errors.raise_typ_error Typing "expression %a (%a) should be of type %a, but is of type %a"
         Format_mvg.format_expression (Pos.unmark e) Pos.format_position (Pos.get_position e)
@@ -356,12 +316,7 @@ and typecheck_func_args (f : func) (pos : Pos.position) :
 
 and typecheck_bottom_up (ctx : ctx) (e : expression Pos.marked) : ctx * Typ.t =
   match Pos.unmark e with
-  | Var var -> (
-      try (ctx, VariableMap.find var ctx.ctx_var_typ)
-      with Not_found ->
-        let t = Typ.create_variable (Pos.get_position e, Typ.Up) in
-        let ctx = { ctx with ctx_var_typ = VariableMap.add var t ctx.ctx_var_typ } in
-        (ctx, t) )
+  | Var _ -> (ctx, Typ.real (Pos.get_position e, Typ.Up))
   | Literal (Float _) -> (ctx, Typ.real (Pos.get_position e, Typ.Up))
   | Literal (Bool _) -> (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
   | Literal Undefined -> (ctx, Typ.create_variable (Pos.get_position e, Typ.Up))
@@ -418,12 +373,7 @@ and typecheck_bottom_up (ctx : ctx) (e : expression Pos.marked) : ctx * Typ.t =
             "variable %s is accessed %a as a table but it is not defined as one %a"
             (Pos.unmark var.Variable.name) Pos.format_position var_pos Pos.format_position
             (Pos.get_position var.Variable.name)
-      | TableVar _ -> (
-          try (ctx, VariableMap.find var ctx.ctx_var_typ)
-          with Not_found ->
-            let t = Typ.create_variable (Pos.get_position e', Typ.Up) in
-            let ctx = { ctx with ctx_var_typ = VariableMap.add var t ctx.ctx_var_typ } in
-            (ctx, t) ) )
+      | TableVar _ -> (ctx, Typ.real (Pos.get_position e', Typ.Up)) )
   | Conditional (e1, e2, e3) -> (
       let ctx, t1 = typecheck_bottom_up ctx e1 in
       try
@@ -513,190 +463,60 @@ let typecheck (p : program) : typ_info * program =
     Mvg.VariableMap.fold
       (fun var def (acc, ctx, p_vars) ->
         check_non_recursivity_of_variable_defs var def.var_definition;
-        match def.var_typ with
-        | Some t -> (
-            match def.var_definition with
-            | SimpleVar e ->
-                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e t in
-                (VariableMap.add var false acc, new_ctx, p_vars)
-            | TableVar (size, defs) -> (
-                match defs with
-                | IndexGeneric e ->
-                    let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e t in
-                    (VariableMap.add var true acc, new_ctx, p_vars)
-                | IndexTable es ->
-                    let new_ctx =
-                      IndexMap.fold
-                        (fun _ e ctx ->
-                          let new_ctx =
-                            typecheck_top_down { ctx with ctx_is_generic_table = false } e t
-                          in
-                          new_ctx)
-                        es ctx
-                    in
-                    let undefined_indexes =
-                      determine_def_complete_cover var size
-                        (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
-                    in
-                    if List.length undefined_indexes = 0 then
-                      (VariableMap.add var true acc, new_ctx, p_vars)
-                    else
-                      let previous_var_def =
-                        Ast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
-                          var.Variable.execution_number false
-                      in
-                      let new_es =
-                        List.fold_left
-                          (fun es undef_index ->
-                            Mvg.IndexMap.add undef_index
-                              (Pos.same_pos_as
-                                 (Mvg.Index
-                                    ( Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
-                                      Pos.same_pos_as
-                                        (Mvg.Literal (Float (float_of_int undef_index)))
-                                        var.Mvg.Variable.name ))
-                                 var.Mvg.Variable.name)
-                              es)
-                          es undefined_indexes
-                      in
-                      ( VariableMap.add var true acc,
-                        new_ctx,
-                        Mvg.VariableMap.add var
-                          {
-                            def with
-                            Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es);
-                          }
-                          p_vars ) )
-            | InputVar -> (VariableMap.add var false acc, ctx, p_vars) )
-        | None -> (
-            match def.var_definition with
-            | SimpleVar e ->
-                let new_ctx, t = typecheck_bottom_up { ctx with ctx_is_generic_table = false } e in
-                let t =
-                  try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with
-                  | Not_found -> t
-                  | Typ.UnificationError (t1_msg, t2_msg) ->
-                      Errors.raise_typ_error Typing
-                        "variable %s declared %a should have type %s but is found to have type %s"
-                        (Pos.unmark var.Variable.name) Pos.format_position
-                        (Pos.get_position var.Variable.name)
-                        t2_msg t1_msg
-                in
+        (* All top-level variables are og type Real *)
+        match def.var_definition with
+        | SimpleVar e ->
+            let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e Real in
+            (VariableMap.add var false acc, new_ctx, p_vars)
+        | TableVar (size, defs) -> (
+            match defs with
+            | IndexGeneric e ->
+                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e Real in
+                (VariableMap.add var true acc, new_ctx, p_vars)
+            | IndexTable es ->
                 let new_ctx =
-                  { new_ctx with ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ }
+                  IndexMap.fold
+                    (fun _ e ctx ->
+                      typecheck_top_down { ctx with ctx_is_generic_table = false } e Real)
+                    es ctx
                 in
-                (VariableMap.add var false acc, new_ctx, p_vars)
-            | TableVar (size, defs) -> (
-                match defs with
-                | IndexGeneric e ->
-                    let new_ctx, t =
-                      typecheck_bottom_up { ctx with ctx_is_generic_table = true } e
-                    in
-                    let t =
-                      try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with
-                      | Not_found -> t
-                      | Typ.UnificationError (t1_msg, t2_msg) ->
-                          Errors.raise_typ_error Typing
-                            "table variable %s declared %a should have type %s but is found to \
-                             have type %s"
-                            (Pos.unmark var.Variable.name) Pos.format_position
-                            (Pos.get_position var.Variable.name)
-                            t2_msg t1_msg
-                    in
-                    let new_ctx =
-                      { new_ctx with ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ }
-                    in
-                    (VariableMap.add var true acc, new_ctx, p_vars)
-                | IndexTable es ->
-                    let new_ctx, t =
-                      IndexMap.fold
-                        (fun _ e (ctx, old_t) ->
-                          let new_ctx, t =
-                            typecheck_bottom_up { ctx with ctx_is_generic_table = false } e
-                          in
-                          try
-                            let t = Typ.unify t old_t in
-                            let new_ctx =
-                              {
-                                new_ctx with
-                                ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ;
-                              }
-                            in
-                            (new_ctx, t)
-                          with Typ.UnificationError (t1_msg, t2_msg) ->
-                            Errors.raise_typ_error Typing
-                              "different definitions of specific index of table variable %s \
-                               declared %a have different types: %s and %s"
-                              (Pos.unmark var.Variable.name) Pos.format_position
-                              (Pos.get_position var.Variable.name)
-                              t1_msg t2_msg)
-                        es
-                        (ctx, Typ.create_variable (Pos.get_position var.Variable.name, Typ.Up))
-                    in
-                    let t =
-                      try Typ.unify t (Mvg.VariableMap.find var ctx.ctx_var_typ) with
-                      | Not_found -> t
-                      | Typ.UnificationError (t1_msg, t2_msg) ->
-                          Errors.raise_typ_error Typing
-                            "table variable %s declared %a with type %s is defined with type %s"
-                            (Pos.unmark var.Variable.name) Pos.format_position
-                            (Pos.get_position var.Variable.name)
-                            t2_msg t1_msg
-                    in
-                    let new_ctx =
-                      { new_ctx with ctx_var_typ = Mvg.VariableMap.add var t new_ctx.ctx_var_typ }
-                    in
-                    let undefined_indexes =
-                      determine_def_complete_cover var size
-                        (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
-                    in
-                    if List.length undefined_indexes = 0 then
-                      (VariableMap.add var true acc, new_ctx, p_vars)
-                    else
-                      let previous_var_def =
-                        Ast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
-                          var.Variable.execution_number false
-                      in
-                      let new_es =
-                        List.fold_left
-                          (fun es undef_index ->
-                            Mvg.IndexMap.add undef_index
-                              (Pos.same_pos_as
-                                 (Mvg.Index
-                                    ( Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
-                                      Pos.same_pos_as
-                                        (Mvg.Literal (Float (float_of_int undef_index)))
-                                        var.Mvg.Variable.name ))
-                                 var.Mvg.Variable.name)
-                              es)
-                          es undefined_indexes
-                      in
-                      ( VariableMap.add var true acc,
-                        new_ctx,
-                        Mvg.VariableMap.add var
-                          {
-                            def with
-                            Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es);
-                          }
-                          p_vars ) )
-            | InputVar ->
-                if VariableMap.mem var acc then (acc, ctx, p_vars)
-                else (VariableMap.add var false acc, ctx, p_vars) ))
+                let undefined_indexes =
+                  determine_def_complete_cover var size
+                    (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
+                in
+                if List.length undefined_indexes = 0 then
+                  (VariableMap.add var true acc, new_ctx, p_vars)
+                else
+                  let previous_var_def =
+                    Ast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
+                      var.Variable.execution_number false
+                  in
+                  let new_es =
+                    List.fold_left
+                      (fun es undef_index ->
+                        Mvg.IndexMap.add undef_index
+                          (Pos.same_pos_as
+                             (Mvg.Index
+                                ( Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
+                                  Pos.same_pos_as
+                                    (Mvg.Literal (Float (float_of_int undef_index)))
+                                    var.Mvg.Variable.name ))
+                             var.Mvg.Variable.name)
+                          es)
+                      es undefined_indexes
+                  in
+                  ( VariableMap.add var true acc,
+                    new_ctx,
+                    Mvg.VariableMap.add var
+                      { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es) }
+                      p_vars ) )
+        | InputVar ->
+            if VariableMap.mem var acc then (acc, ctx, p_vars)
+            else (VariableMap.add var false acc, ctx, p_vars))
       p.program_vars
       ( Mvg.VariableMap.empty,
         {
           ctx_program = p;
-          ctx_var_typ =
-            VariableMap.merge
-              (fun var _ def ->
-                match def with
-                | None -> assert false (* should not happen *)
-                | Some def -> (
-                    match def.var_typ with
-                    | Some t ->
-                        Some (Typ.create_concrete t (Pos.get_position var.Variable.name, Typ.Down))
-                    | None -> None ))
-              VariableMap.empty p.program_vars;
           ctx_local_var_typ = LocalVariableMap.empty;
           ctx_is_generic_table = false;
         },
@@ -704,21 +524,7 @@ let typecheck (p : program) : typ_info * program =
   in
   let ctx = typecheck_program_conds ctx p.program_conds in
   ( {
-      typ_info_var =
-        VariableMap.merge
-          (fun _ t is_table ->
-            match (t, is_table) with
-            | Some t, Some is_table -> Some (Typ.to_concrete t, is_table)
-            | None, Some _ ->
-                (* This case is needed because of declared but undefined and unused variables *)
-                None
-            | Some t, None ->
-                (* In this case, the variable is declared without type, used but never defined : we
-                   say it's not a table *)
-                Some (Typ.to_concrete t, false)
-            | _ -> assert false
-            (* should not happen *))
-          ctx.ctx_var_typ are_tables;
+      table_info_var = are_tables;
       typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
     },
     { p with program_vars = p_vars } )
