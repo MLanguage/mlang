@@ -46,25 +46,18 @@ let find_bitvec_repr (p : Mvg.program) (old_typing : Typechecker.typ_info) : rep
   in
   Execution_order.fold_on_vars
     (fun var new_typing ->
-      if Mvg.VariableMap.mem var old_typing.Typechecker.typ_info_var then
-        match Mvg.VariableMap.find var old_typing.Typechecker.typ_info_var with
-        | Mvg.Boolean, is_table ->
-            {
-              new_typing with
-              repr_info_var =
-                Mvg.VariableMap.add var { repr_kind = Boolean; is_table } new_typing.repr_info_var;
-            }
-        | Mvg.Real, is_table ->
-            let bitvec_order, new_typing =
-              (size, new_typing)
-              (* find_bitvec_order p var new_typing old_typing *)
-            in
-            {
-              new_typing with
-              repr_info_var =
-                Mvg.VariableMap.add var
-                  { repr_kind = Real bitvec_order; is_table }
-                  new_typing.repr_info_var;
-            }
+      if Mvg.VariableMap.mem var old_typing.Typechecker.table_info_var then
+        let is_table = Mvg.VariableMap.find var old_typing.Typechecker.table_info_var in
+        let bitvec_order, new_typing =
+          (size, new_typing)
+          (* find_bitvec_order p var new_typing old_typing *)
+        in
+        {
+          new_typing with
+          repr_info_var =
+            Mvg.VariableMap.add var
+              { repr_kind = Real bitvec_order; is_table }
+              new_typing.repr_info_var;
+        }
       else new_typing)
     p new_typing

@@ -73,13 +73,14 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
     if !Cli.run_all_tests <> None then
-      Test.check_all_tests program (match !Cli.run_all_tests with Some s -> s | _ -> assert false)
+      Test.check_all_tests program typing
+        (match !Cli.run_all_tests with Some s -> s | _ -> assert false)
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
-      Test.check_test program (match !Cli.run_test with Some s -> s | _ -> assert false)
+      Test.check_test program typing (match !Cli.run_test with Some s -> s | _ -> assert false)
     end
     else
-      let program = if !Cli.optimize then Optimization.optimize program else program in
+      let program = if !Cli.optimize then Optimization.optimize program typing else program in
 
       (* Noundef.check program; *)
 
@@ -91,7 +92,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Z3_driver.translate_and_launch_query program typing
       else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program !Cli.number_of_passes in
+        let f = Interface.make_function_from_program program typing !Cli.number_of_passes in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program

@@ -69,17 +69,17 @@ let to_mvg_function (program : Mvg.program) (t : test_file) : Interface.mvg_func
   in
   { func_variable_inputs; func_constant_inputs; func_outputs; func_conds }
 
-let check_test (p : Mvg.program) (test_name : string) =
+let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
   let f = to_mvg_function p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let _ = Interpreter.evaluate_program p VariableMap.empty !Cli.number_of_passes in
+  let _ = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
   ()
 
-let check_all_tests (p : Mvg.program) (test_dir : string) =
+let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir : string) =
   let arr = Sys.readdir test_dir in
   Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
@@ -92,7 +92,7 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
   let process name (successes, failures) =
     try
       Cli.debug_flag := false;
-      check_test p (test_dir ^ name);
+      check_test p typing (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
     with Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) -> (

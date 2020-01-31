@@ -172,7 +172,7 @@ let rec gvn_exp (e : expression Pos.marked) (data : data) :
               (Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e, data, expn) )
       | Some def -> (definition_to_expression def, data, expn) )
 
-let optimize (p : program) : program =
+let optimize (p : program) (typing : Typechecker.typ_info) : program =
   let exec_order = Execution_order.get_execution_order p in
   let data = empty_data in
   let p, _ =
@@ -235,7 +235,7 @@ let optimize (p : program) : program =
                     raise
                       (Interpreter.RuntimeError
                          ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
-                           Interpreter.empty_ctx ))
+                           Interpreter.empty_ctx typing ))
                 | new_cond_expr ->
                     ( {
                         p with
