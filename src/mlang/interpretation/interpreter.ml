@@ -45,16 +45,17 @@ type ctx = {
   ctx_current_scc_values : var_literal VariableMap.t;
 }
 
-let empty_ctx (p: program) (typing : Typechecker.typ_info) : ctx =
+let empty_ctx (p : program) (typing : Typechecker.typ_info) : ctx =
   {
     ctx_local_vars = LocalVariableMap.empty;
     ctx_typing = typing;
-    ctx_vars = VariableMap.map (fun def ->
-      match def.var_definition with
-        | Mvg.SimpleVar _ | InputVar -> SimpleVar Undefined
-        | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined)
-
-      ) p.program_vars;
+    ctx_vars =
+      VariableMap.map
+        (fun def ->
+          match def.var_definition with
+          | Mvg.SimpleVar _ | InputVar -> SimpleVar Undefined
+          | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined))
+        p.program_vars;
     ctx_generic_index = None;
     ctx_current_scc_values = VariableMap.empty;
   }
@@ -589,7 +590,7 @@ let evaluate_program (p : program) (typing : Typechecker.typ_info)
         (empty_ctx p typing, p)
         p.program_exec_passes
     in
-    ctx, p
+    (ctx, p)
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
       Cli.error_print "%a@?" format_runtime_error e;
