@@ -85,9 +85,30 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
   let ctx, p = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
+  let test_cond_list = VariableMap.bindings test_conds in
+  let execution_order_list : (Variable.t * int) list =
+    List.mapi
+      (fun i var -> (var, i))
+      (List.flatten
+         (List.map
+            (fun scc -> List.map (fun (var, _) -> var) (VariableMap.bindings scc))
+            (Execution_order.get_execution_order
+               (Interface.fit_function p { f with func_conds = test_conds }))))
+  in
+  let execution_order_map : int VariableMap.t =
+    List.fold_left
+      (fun acc (var, i) -> VariableMap.add var i acc)
+      VariableMap.empty execution_order_list
+  in
+  (* We sort the control variables according to execution order so that we are able to catch the
+     "first" mistakes first. *)
+  let exec_order_compare ((var1, _) : Variable.t * condition_data)
+      ((var2, _) : Variable.t * condition_data) : int =
+    compare (VariableMap.find var1 execution_order_map) (VariableMap.find var2 execution_order_map)
+  in
   try
-    VariableMap.iter
-      (fun _ cond ->
+    List.iter
+      (fun (_, cond) ->
         let result = Interpreter.evaluate_expr ctx p cond.cond_expr Boolean in
         match result with
         | Bool true ->
@@ -105,7 +126,7 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
                        ] ),
                    ctx ))
         | _ -> ())
-      test_conds
+      (List.sort exec_order_compare test_cond_list)
   with Interpreter.RuntimeError (e, ctx) ->
     if !Interpreter.exit_on_rte then begin
       Cli.error_print "%a" Interpreter.format_runtime_error e;
