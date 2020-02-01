@@ -9,7 +9,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 default: build
 
 deps:
-	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir cmdliner dune-build-info visitors parmap
+	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir cmdliner dune-build-info visitors parmap num
 
 build:
 	dune build
