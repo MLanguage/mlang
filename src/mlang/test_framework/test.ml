@@ -85,9 +85,6 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
   let ctx, p = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
-  Cli.debug_print "Definition of REPDOMSOC5: %a" Format_mvg.format_variable_def
-    (VariableMap.find (List.hd (Pos.VarNameToID.find "REPDOMSOC5" p.program_idmap)) p.program_vars)
-      .var_definition;
   try
     VariableMap.iter
       (fun _ cond ->

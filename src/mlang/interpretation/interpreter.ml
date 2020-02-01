@@ -369,9 +369,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
         let cast_to_int e =
           match e with
           | Float f when float_of_int (int_of_float f) = f -> Some (int_of_float f)
-          | Undefined ->
-              Cli.warning_print "cast from undefined to 0 in multimax computation";
-              Some 0
+          | Undefined -> Some 0
           | _ -> assert false
         in
         let pos = Pos.get_position arg2 in
@@ -417,12 +415,14 @@ let evaluate_program (p : program) (typing : Typechecker.typ_info)
       (* We evaluate the multiple passes of the program *)
       List.fold_left
         (fun (ctx, p) pass ->
-          Cli.debug_print "Pass with:";
-          VariableMap.iter
-            (fun var l ->
-              Cli.debug_print "%s = %a" (Pos.unmark var.Variable.name) Format_mvg.format_literal
-                (Pos.unmark l))
-            pass.exec_pass_set_variables;
+          Cli.debug_print "Starting computation pass with:";
+          if VariableMap.cardinal pass.exec_pass_set_variables > 0 then
+            VariableMap.iter
+              (fun var l ->
+                Cli.debug_print "%s = %a" (Pos.unmark var.Variable.name) Format_mvg.format_literal
+                  (Pos.unmark l))
+              pass.exec_pass_set_variables
+          else Cli.debug_print "No additional variables set";
           (* We update p with the values set in the pass *)
           let p : program =
             {
