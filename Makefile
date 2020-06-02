@@ -11,6 +11,7 @@ default: build
 deps:
 	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir \
 	cmdliner dune-build-info visitors parmap num ocamlformat
+	git submodule update --init --recursive
 
 format:
 	dune build @fmt --auto-promote
