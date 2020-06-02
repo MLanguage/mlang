@@ -30,5 +30,6 @@
    (ocamlgraph (= 1.8.8))
    (z3 (= 4.8.7))
    (dune-build-info (= 2.5.1))
+   (num (>= 1.3))
  )
 )
