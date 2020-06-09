@@ -47,6 +47,12 @@ rule token = parse
   { CONTROLESC }
 | "#RESULTATS-CORRECTIF"
   { RESULTATSC }
+| "#DATES"
+  { DATES }
+| "#AVIS_IR"
+  { AVISIR }
+| "#AVIS_CSG"
+  { AVISCSG }
 | "##"
   { ENDSHARP }
 | '-'? ['0' - '9']+ as i

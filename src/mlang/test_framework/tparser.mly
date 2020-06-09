@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token NOM FIP
 %token ENTREESP CONTROLESP RESULTATSP
 %token ENTREESC CONTROLESC RESULTATSC
+%token DATES AVISIR AVISCSG
 %token ENDSHARP
 
 %token EOF
@@ -52,6 +53,9 @@ test_file:
   cc = list(variable_and_value)
   RESULTATSC
   rc = list(variable_and_value)
+  DATES?
+  AVISIR?
+  AVISCSG?
   ENDSHARP { { nom; ep; cp; rp; ec; cc; rc } }
 | EOF { assert false }
 

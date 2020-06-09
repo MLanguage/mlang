@@ -38,7 +38,11 @@ let parse_file (test_name : string) : test_file =
         Cmdliner.Term.exit_status (`Ok 2);
         None
   in
-  match f with Some f -> f | None -> assert false
+  match f with
+  | Some f ->
+      close_in input;
+      f
+  | None -> assert false
 
 let to_ast_literal (value : Tast.literal) : Ast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
@@ -139,6 +143,10 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
 
 let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir : string) =
   let arr = Sys.readdir test_dir in
+  let arr =
+    Array.of_list
+    @@ List.filter (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x)) (Array.to_list arr)
+  in
   Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
@@ -148,21 +156,31 @@ let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir 
   Cli.display_time := false;
   let _, finish = Cli.create_progress_bar "Testing files" in
   let process name (successes, failures) =
+    (* Cli.debug_print "Processing %s..." name; *)
     try
       Cli.debug_flag := false;
       check_test p typing (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
-    with Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) -> (
-      Cli.debug_flag := true;
-      match (bindings, Pos.unmark expr) with
-      | ( [ (v, Interpreter.SimpleVar l1) ],
-          Unop (Not, (Comparison ((Ast.Eq, _), _, (Literal l2, _)), _)) ) ->
-          (* Cli.debug_print "Failure on %s, var = %s, got = %a, expected = %a" name varname
-             Format_mvg.format_literal l1 Format_mvg.format_literal l2; *)
-          let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
-      | _ -> assert false )
+    with
+    | Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) -> (
+        Cli.debug_flag := true;
+        match (bindings, Pos.unmark expr) with
+        | ( [ (v, Interpreter.SimpleVar l1) ],
+            Unop (Not, (Comparison ((Ast.Eq, _), _, (Literal l2, _)), _)) ) ->
+            (* Cli.debug_print "Failure on %s, var = %s, got = %a, expected = %a" name varname
+               Format_mvg.format_literal l1 Format_mvg.format_literal l2; *)
+            let errs_varname = try VariableMap.find v failures with Not_found -> [] in
+            (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
+        | _ ->
+            (* let errs_varname = try VariableMap.find (fst @@ List.hd bindings) failures with Not_found -> [] in
+             * (successes, VariableMap.add v ((name, snd @@ List.hd bindings, Undefined) :: erss_varname) failures) *)
+            Cli.error_print "Weird failure in %s, case not taken into account" name;
+            (successes, failures) )
+    | Errors.TypeError t ->
+        Cli.error_print "Type error in %s (%a), case not taken into account" name
+          Errors.format_typ_error t;
+        (successes, failures)
   in
   (* Cli.debug_print @@ Interpreter.format_runtime_error e in *)
   let s, f =

@@ -1,6 +1,7 @@
 SOURCE_DIR_2015=ir-calcul/sources2015m_4_6/
 SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
+SOURCE_DIR_2018=ir-calcul/sources2018m_6_3/
 
 SOURCE_FILES=$(shell find $(SOURCE_DIR_2017) -name "*.m")
 
