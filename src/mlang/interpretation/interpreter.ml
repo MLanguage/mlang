@@ -220,7 +220,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           | Ast.Mul, _, Undefined | Ast.Mul, Undefined, _ -> Undefined
           | Ast.Mul, Float i1, Float i2 -> Float (i1 *. i2)
           | Ast.Div, Undefined, _ | Ast.Div, _, Undefined -> Undefined (* yes... *)
-          | Ast.Div, _, l2 when is_zero l2 -> Undefined
+          | Ast.Div, _, l2 when is_zero l2 -> Float 0.
           | Ast.Div, Float i1, Float i2 -> Float (i1 /. i2)
           | Ast.And, Undefined, _
           | Ast.And, _, Undefined
@@ -341,7 +341,8 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           match new_arg with
           | Float x -> Float (truncatef x)
           | Bool x -> Float (float_of_bool x)
-          | Undefined -> Float 0.
+          | Undefined -> Undefined
+          (*Float 0.*)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
     | FunctionCall (PresentFunc, [ arg ]) ->
