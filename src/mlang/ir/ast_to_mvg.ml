@@ -354,7 +354,7 @@ let get_constants (p : Ast.program) :
                         Mvg.Variable.new_var marked_name None
                           (Pos.same_pos_as "constant" marked_name)
                           (dummy_exec_number (Pos.get_position marked_name))
-                          []
+                          ~attributes:[] ~is_income:false
                         (* a constant variable does not have attributes *)
                       in
                       let new_var_data =
@@ -425,7 +425,7 @@ let get_variables_decl (p : Ast.program) (vars : var_decl_data Mvg.VariableMap.t
                       let new_var =
                         Mvg.Variable.new_var cvar.Ast.comp_name None cvar.Ast.comp_description
                           (dummy_exec_number (Pos.get_position cvar.Ast.comp_name))
-                          cvar.comp_attributes
+                          ~attributes:cvar.comp_attributes ~is_income:false
                       in
                       let new_var_data =
                         {
@@ -470,7 +470,8 @@ let get_variables_decl (p : Ast.program) (vars : var_decl_data Mvg.VariableMap.t
                           (Some (Pos.unmark ivar.Ast.input_alias))
                           ivar.Ast.input_description
                           (dummy_exec_number (Pos.get_position ivar.Ast.input_name))
-                          ivar.input_attributes
+                          ~attributes:ivar.input_attributes
+                          ~is_income:(Pos.unmark ivar.input_subtyp = Ast.Income)
                         (* Input variables also have a low order *)
                       in
                       let new_var_data =
@@ -676,7 +677,9 @@ let get_var_redefinitions (p : Ast.program) (idmap : Mvg.idmap)
                              in
                              let new_var =
                                Mvg.Variable.new_var lvar.Mvg.Variable.name None
-                                 lvar.Mvg.Variable.descr exec_number lvar.Mvg.Variable.attributes
+                                 lvar.Mvg.Variable.descr exec_number
+                                 ~attributes:lvar.Mvg.Variable.attributes
+                                 ~is_income:lvar.Mvg.Variable.is_income
                              in
                              let new_idmap =
                                Pos.VarNameToID.add
@@ -724,7 +727,9 @@ let get_var_redefinitions (p : Ast.program) (idmap : Mvg.idmap)
                                in
                                let new_var =
                                  Mvg.Variable.new_var lvar.Mvg.Variable.name None
-                                   lvar.Mvg.Variable.descr exec_number lvar.Mvg.Variable.attributes
+                                   lvar.Mvg.Variable.descr exec_number
+                                   ~attributes:lvar.Mvg.Variable.attributes
+                                   ~is_income:lvar.Mvg.Variable.is_income
                                in
                                (Pos.unmark lvar.Mvg.Variable.name, new_var)
                              in
@@ -1300,7 +1305,7 @@ let get_conds (error_decls : Mvg.Error.t list) (idmap : Mvg.idmap) (p : Ast.prog
                           Mvg.seq_number = 0;
                           Mvg.pos = Pos.get_position verif_cond;
                         }
-                        []
+                        ~attributes:[] ~is_income:false
                     in
                     Mvg.VariableMap.add dummy_var
                       {
