@@ -15,7 +15,7 @@ deps:
 	git submodule update --init --recursive
 
 format:
-	dune build @fmt --auto-promote
+	dune build @fmt --auto-promote | true
 
 build: format
 	dune build

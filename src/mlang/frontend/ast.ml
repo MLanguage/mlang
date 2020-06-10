@@ -202,6 +202,7 @@ type computed_typ = Base | GivenBack
 type computed_variable = {
   comp_name : variable_name Pos.marked;
   comp_table : int Pos.marked option;  (** size of the table, [None] for non-table variables *)
+  comp_attributes : (input_variable_attribute Pos.marked * literal Pos.marked) list;
   comp_subtyp : computed_typ Pos.marked list;
   comp_typ : value_typ Pos.marked option;
   comp_description : string Pos.marked;

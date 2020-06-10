@@ -67,6 +67,7 @@ module Variable = struct
     alias : string option;  (** Input variable have an alias *)
     id : int;  (** Each variable has an unique ID *)
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
+    attributes : (Ast.input_variable_attribute Pos.marked * Ast.literal Pos.marked) list;
   }
 
   let counter : int ref = ref 0
@@ -77,8 +78,9 @@ module Variable = struct
     v
 
   let new_var (name : string Pos.marked) (alias : string option) (descr : string Pos.marked)
-      (execution_number : execution_number) : t =
-    { name; id = fresh_id (); descr; alias; execution_number }
+      (execution_number : execution_number)
+      (attributes : (Ast.input_variable_attribute Pos.marked * Ast.literal Pos.marked) list) : t =
+    { name; id = fresh_id (); descr; alias; execution_number; attributes }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end

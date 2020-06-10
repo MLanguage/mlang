@@ -21,6 +21,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  open Ast
  open Parse_utils
 
+ type comp_subtyp_or_attr =
+ | CompSubTyp of computed_typ Pos.marked
+ | Attr of input_variable_attribute Pos.marked * literal Pos.marked
+
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -117,8 +121,8 @@ computed_variable_descr:
 | descr = STRING { (parse_string descr, mk_position $sloc) }
 
 computed_attr_or_subtyp:
-| input_variable_attribute { None }
-| subtyp = computed_variable_subtype { Some subtyp }
+| attr = input_variable_attribute { let (x, y) = attr in Attr (x,y) }
+| subtyp = computed_variable_subtype { CompSubTyp subtyp }
 
 computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
@@ -127,8 +131,10 @@ computed_variable:
   { ComputedVar ({
     comp_name = (let (name, nloc) = name in (name, nloc));
     comp_table = size;
-    comp_subtyp = List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-        (List.filter (fun x -> x <> None) subtyp);
+    comp_attributes = List.map (fun x -> match x with Attr (x, y) -> (x, y) | _ -> assert false (* should not happen *))
+        (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
+    comp_subtyp = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
+        (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
     comp_description = descr;
     comp_typ = typ;
   }, mk_position $sloc) }
