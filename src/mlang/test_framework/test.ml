@@ -104,8 +104,8 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
   let ctx, p =
-    Interpreter.evaluate_program p typing input_file !Cli.number_of_passes
-    (* Repeating.compute_program p typing input_file !Cli.number_of_passes *)
+    (* Interpreter.evaluate_program p typing input_file !Cli.number_of_passes *)
+    Repeating.compute_program p typing input_file !Cli.number_of_passes
   in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =

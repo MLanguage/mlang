@@ -255,7 +255,7 @@ let read_function_from_spec (p : program) : mvg_function =
 
 let make_function_from_program (program : program) (typing : Typechecker.typ_info)
     (number_of_passes : int) : literal VariableMap.t -> Interpreter.ctx * program =
- fun input_values -> Interpreter.evaluate_program program typing input_values number_of_passes
+ fun input_values -> Repeating.compute_program program typing input_values number_of_passes
 
 let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
   Cli.result_print "Enter the input values of the program, followed by a semicolon:";

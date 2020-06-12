@@ -422,10 +422,22 @@ let get_variables_decl (p : Ast.program) (vars : var_decl_data Mvg.VariableMap.t
                         (Pos.get_position old_var.Mvg.Variable.name);
                       (vars, idmap, errors, out_list)
                     with Not_found ->
+                      let attrs =
+                        ( Pos.same_pos_as "calculee" cvar.Ast.comp_name,
+                          Pos.same_pos_as (Ast.Float 1.) cvar.Ast.comp_name )
+                        :: cvar.comp_attributes
+                      in
+                      let attrs =
+                        if List.exists (fun x -> Pos.unmark x = Ast.Base) cvar.Ast.comp_subtyp then
+                          ( Pos.same_pos_as "base" cvar.Ast.comp_name,
+                            Pos.same_pos_as (Ast.Float 1.) cvar.Ast.comp_name )
+                          :: attrs
+                        else attrs
+                      in
                       let new_var =
                         Mvg.Variable.new_var cvar.Ast.comp_name None cvar.Ast.comp_description
                           (dummy_exec_number (Pos.get_position cvar.Ast.comp_name))
-                          ~attributes:cvar.comp_attributes ~is_income:false
+                          ~attributes:attrs ~is_income:false
                       in
                       let new_var_data =
                         {
