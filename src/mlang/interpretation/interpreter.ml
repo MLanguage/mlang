@@ -407,7 +407,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
 let rec repeati (init : 'a) (f : 'a -> 'a) (n : int) : 'a =
   if n = 0 then init else repeati (f init) f (n - 1)
 
-let update_scc p input_values ctx scc =
+let update_ctx_scc p input_values ctx scc =
   (* Update the current scc values *)
   {
     ctx with
@@ -516,31 +516,33 @@ let evaluate_scc p input_values ctx scc dep_graph =
       (* should not happen *))
     scc ctx
 
+let evaluate_program_once dep_graph execution_order input_values number_of_passes (ctx, p) =
+  List.fold_left
+    (fun ((ctx, p) : ctx * program) (scc : unit VariableMap.t) ->
+      (* We have to update the current scc value *)
+      let ctx = update_ctx_scc p input_values ctx scc in
+      (* Because variables can be defined circularly interpretation is repeated an arbitrary number
+         of times *)
+      let ctx =
+        repeati ctx
+          (fun (ctx : ctx) ->
+            let ctx = evaluate_scc p input_values ctx scc dep_graph in
+            (* After a pass we have to update the current SCC values to what has just been computed *)
+            update_current_scc ctx)
+          (* For SCC of one variable no need to repeat multiple passes *)
+          (if VariableMap.cardinal scc = 1 then 1 else number_of_passes)
+      in
+      (ctx, p))
+    (ctx, p) execution_order
+
 let evaluate_program (p : program) (typing : Typechecker.typ_info)
     (input_values : literal VariableMap.t) (number_of_passes : int) : ctx * program =
   try
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
     let ctx, _ =
-      List.fold_left
-        (fun ((ctx, p) : ctx * program) (scc : unit VariableMap.t) ->
-          (* We have to update the current scc value *)
-          let ctx = update_scc p input_values ctx scc in
-          (* Because variables can be defined circularly interpretation is repeated an arbitrary
-             number of times *)
-          let ctx =
-            repeati ctx
-              (fun (ctx : ctx) ->
-                let ctx = evaluate_scc p input_values ctx scc dep_graph in
-                (* After a pass we have to update the current SCC values to what has just been
-                   computed *)
-                update_current_scc ctx)
-              (* For SCC of one variable no need to repeat multiple passes *)
-              (if VariableMap.cardinal scc = 1 then 1 else number_of_passes)
-          in
-          (ctx, p))
+      evaluate_program_once dep_graph execution_order input_values number_of_passes
         (empty_ctx p typing, p)
-        execution_order
     in
     (ctx, p)
   with RuntimeError (e, ctx) ->

@@ -47,17 +47,31 @@ let parse_file (test_name : string) : test_file =
 let to_ast_literal (value : Tast.literal) : Ast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
-let to_mvg_function (program : Mvg.program) (t : test_file) :
-    Interface.mvg_function * condition_data VariableMap.t =
-  let func_variable_inputs = VariableMap.empty in
-  let func_constant_inputs =
-    Interface.const_var_set_from_list program
-      (List.map
-         (fun (var, value, pos) ->
-           let mexpr : Ast.expression Pos.marked = (Literal (to_ast_literal value), pos) in
-           (var, mexpr))
-         t.ep)
+let find_var_of_name (p : Mvg.program) (name : string) : Variable.t =
+  try
+    List.hd
+      (List.sort
+         (fun v1 v2 -> compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+         (Pos.VarNameToID.find name p.program_idmap))
+  with Not_found ->
+    let name = find_var_name_by_alias p name in
+    List.hd
+      (List.sort
+         (fun v1 v2 -> compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+         (Pos.VarNameToID.find name p.program_idmap))
+
+let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
+    Interface.mvg_function * condition_data VariableMap.t * Mvg.literal VariableMap.t =
+  let func_variable_inputs, input_file =
+    List.fold_left
+      (fun (fv, in_f) (var, value, _) ->
+        let var = find_var_of_name program var in
+        let lit = match value with I i -> Float (float_of_int i) | F f -> Float f in
+        (VariableMap.add var () fv, VariableMap.add var lit in_f))
+      (VariableMap.empty, VariableMap.empty)
+      t.ep
   in
+  let func_constant_inputs = VariableMap.empty in
   let func_outputs = VariableMap.empty in
   (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
   (* some output variables are actually input, so we don't declare any for now *)
@@ -79,16 +93,20 @@ let to_mvg_function (program : Mvg.program) (t : test_file) :
       func_conds = VariableMap.empty;
       func_exec_passes = None;
     },
-    func_conds )
+    func_conds,
+    input_file )
 
 let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, test_conds = to_mvg_function p t in
+  let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let ctx, p = Interpreter.evaluate_program p typing VariableMap.empty !Cli.number_of_passes in
+  let ctx, p =
+    Interpreter.evaluate_program p typing input_file !Cli.number_of_passes
+    (* Repeating.compute_program p typing input_file !Cli.number_of_passes *)
+  in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
     List.mapi
