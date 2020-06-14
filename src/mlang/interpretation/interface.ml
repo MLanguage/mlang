@@ -82,7 +82,10 @@ let fit_function (p : program) (f : mvg_function) : program =
               var_io = Regular;
               var_definition =
                 ( match var_data.var_definition with
-                | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
+                | InputVar ->
+                    (* hum, I'm unhappy with that. SimpleVar (Pos.same_pos_as (Literal Undefined)
+                       var.Variable.name) *)
+                    InputVar
                 | SimpleVar old -> SimpleVar old
                 | TableVar (size, old) -> TableVar (size, old) );
             })
