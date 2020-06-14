@@ -36,9 +36,13 @@ let var_is_revenue_but_not_deposit (v : Variable.t) : bool =
     v.Mvg.Variable.attributes
   && v.Variable.is_income
 
+let is_undefined = function Undefined -> true | _ -> false
+
 (** Equivalent to AC_IsCalculAcptes in the DGFiP's logic *)
 let exists_deposit_defined_variables (input_values : literal VariableMap.t) : bool =
-  VariableMap.exists (fun v _ -> var_is_deposit v) input_values
+  VariableMap.exists
+    (fun v _ -> (not (var_is_deposit v)) && not (is_undefined (VariableMap.find v input_values)))
+    input_values
 
 (** Equivalent to AC_IsCalculAvFisc in the DGFiP's codebase *)
 let exists_taxbenefit_defined_variables (input_values : literal VariableMap.t) : bool =
@@ -146,7 +150,19 @@ let clear_ctx_var p (ctx : Interpreter.ctx) var =
 let partition_ctx choice_function (ctx : Interpreter.ctx) =
   let ctx_vars = ctx.ctx_vars in
   let ctx_vars_t, ctx_vars_f =
-    Mvg.VariableMap.partition (fun var _ -> choice_function var) ctx_vars
+    Mvg.VariableMap.fold
+      (fun var value (t, f) ->
+        let corresponding_undefined =
+          match value with
+          | Interpreter.SimpleVar _ -> Interpreter.SimpleVar Undefined
+          | Interpreter.TableVar (size, _) -> Interpreter.TableVar (size, Array.make size Undefined)
+        in
+        if choice_function var then
+          (VariableMap.add var value t, VariableMap.add var corresponding_undefined f)
+        else (VariableMap.add var corresponding_undefined t, VariableMap.add var value t))
+      ctx_vars
+      (VariableMap.empty, VariableMap.empty)
+    (* Mvg.VariableMap.partition (fun var _ -> choice_function var) ctx_vars *)
   in
   ({ ctx with ctx_vars = ctx_vars_t }, { ctx with ctx_vars = ctx_vars_f })
 
@@ -156,7 +172,7 @@ let merge_ctx (ctx1 : Interpreter.ctx) (ctx2 : Interpreter.ctx) =
   let ctx_vars =
     Mvg.VariableMap.merge
       (fun _ ov ov' ->
-        match (ov, ov') with Some v, None | None, Some v -> Some v | _ -> assert false)
+        match (ov, ov') with Some v, None | _, Some v -> Some v | _ -> assert false)
       ctx1_vars ctx2_vars
   in
   { ctx1 with ctx_vars }
@@ -184,22 +200,17 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
 
 (** Equivalent to AC_CalculeAvFiscal *)
 let compute_benefit deps exec_order inputs npasses p ctx =
-  let ctx_benefits, ctx_others = partition_ctx var_is_taxbenefit ctx in
+  Cli.debug_print "beginning compute_benefit@.";
+  let ctx, ctx_others = partition_ctx var_is_taxbenefit ctx in
   (* FIXME: unsure about the while *)
-  let ctx_others_to_undef =
-    {
-      ctx_others with
-      ctx_vars =
-        Mvg.VariableMap.map (fun _ -> Interpreter.SimpleVar Mvg.Undefined) ctx_others.ctx_vars;
-    }
-  in
-  let ctx = merge_ctx ctx_benefits ctx_others_to_undef in
   let besoincalcul = exists_taxbenefit_ceiled_variables inputs in
   let update_ctx = update_ctx_var p in
   let avantagefisc, ctx =
-    if besoincalcul then
+    if besoincalcul then (
+      let () = Cli.debug_print "besoin calcul avfisc@." in
       let ctx = update_ctx "V_INDTEO" 1. ctx |> update_ctx "V_CALCUL_NAPS" 1. in
       let ctx, _ = Interpreter.evaluate_program_once deps exec_order inputs npasses (ctx, p) in
+
       let ctx = update_ctx "V_CALCUL_NAPS" 0. ctx in
       (* next access fails... woops *)
       let avantagefisc = extract_value 0. (get_ctx_var p ctx "NAPSANSPENA") in
@@ -207,6 +218,9 @@ let compute_benefit deps exec_order inputs npasses p ctx =
       let ine = extract_value 0. (get_ctx_var p ctx "INE") in
       let ire = extract_value 0. (get_ctx_var p ctx "IRE") in
       let prem = extract_value 0. (get_ctx_var p ctx "PREM8_11") in
+      Cli.debug_print "NAPSANSPENA=%f@.IAD11=%f@.INE=%f@.IRE=%f@.PREM8_11=%f@." avantagefisc iad11
+        ine ire prem;
+      (* Interpreter.repl_debugguer ctx p; *)
       let ctx = reset_calculee ctx in
       let ctx = reset_base ctx in
       let ctx = update_ctx "PREM8_11" prem ctx in
@@ -214,13 +228,15 @@ let compute_benefit deps exec_order inputs npasses p ctx =
       let ctx = merge_ctx ctx ctx_others in
       ( avantagefisc,
         ctx |> update_ctx "V_IAD11TEO" iad11 |> update_ctx "V_IRETEO" ire
-        |> update_ctx "V_INETEO" ine )
+        |> update_ctx "V_INETEO" ine ) )
     else (0., ctx)
   in
+  Cli.debug_print "ending compute_benefit, avantages fiscaux = %f@." avantagefisc;
   (avantagefisc, ctx)
 
 (** Equivalent to AC_CalculAcomptes *)
 let compute_deposit deps exec_order inputs npasses p ctx =
+  Cli.debug_print "beginning compute_deposit@.";
   let update_ctx = update_ctx_var p in
   let ctx = ctx |> update_ctx "FLAG_ACO" 1. |> update_ctx "V_CALCUL_ACO" 1. in
   let ctx, _ = Interpreter.evaluate_program_once deps exec_order inputs npasses (ctx, p) in
@@ -229,13 +245,16 @@ let compute_deposit deps exec_order inputs npasses p ctx =
   let prem = extract_value 0. (get_ctx_var p ctx "PREM8_11") in
   let ctx = reset_calculee ctx in
   let ctx = reset_base ctx in
+  Cli.debug_print "ending compute_deposit@.";
   (acompte, update_ctx "PREM8_11" prem ctx)
 
 (** Equivalent to AC_CalculeAcomptesAvFisc *)
 let compute_deposit_with_benefit deps exec_order inputs npasses p ctx napsanpenareel =
+  Cli.debug_print "beginning compute_deposit_with_benefit@.";
   let update_ctx = update_ctx_var p in
   let ctx = update_ctx "FLAG_ACO" 1. ctx in
-  let _ (*unused?!*), ctx = compute_benefit deps exec_order inputs npasses p ctx in
+  let montantavtmp, ctx = compute_benefit deps exec_order inputs npasses p ctx in
+  Cli.debug_print "NAPTEO: %f@." montantavtmp;
   let ctx =
     update_ctx "V_INDTEO" 0. ctx
     |> update_ctx "V_NEGREEL" (if napsanpenareel > 0. then 0. else 1.)
@@ -249,6 +268,7 @@ let compute_deposit_with_benefit deps exec_order inputs npasses p ctx napsanpena
   let prem = extract_value 0. (get_ctx_var p ctx "PREM8_11") in
   let ctx = reset_calculee ctx in
   let ctx = update_ctx "V_ACO_MTAPPS" acompteps ctx |> update_ctx "PREM8_11" prem in
+  Cli.debug_print "ending compute_deposit_with_benefit@.";
   (acompte, ctx)
 
 (** Equivalent to IN_traite_double_liquidation3 in DGFiP's codebase *)
@@ -275,8 +295,10 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
         | _ -> (ctx, 0.)
       else (ctx, 0.)
     in
+    Cli.debug_print "Début du calcul des acomptes";
     let ctx, acompte, indice_aco =
-      if calcul_acomptes (* and p_IsCalculAcomptes? *) then
+      if calcul_acomptes && false (* according to the call?*)
+                                  (* and p_IsCalculAcomptes? *) then
         let ctx_deposit_only, ctx_others = partition_ctx var_is_deposit ctx in
         let acompte, ctx_deposit_only =
           if calcul_avfisc then
@@ -285,11 +307,12 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
           else compute_deposit deps exec_order inputs npasses p ctx_deposit_only
         in
         let indice_aco = if acompte >= 0. then 0. else 1. in
-        (merge_ctx ctx_others ctx_deposit_only, fabs acompte, indice_aco)
+        (merge_ctx ctx_deposit_only ctx_others, fabs acompte, indice_aco)
         (* FIXME: maybe we can merge ctx_deposit_only with ctx and that works? *)
         (* FIXME: l_besoincalculacptes = 0; lmontantreel = 0 *)
       else (ctx, -1., 1.)
     in
+    Cli.debug_print "Fin du calcul des acomptes@.Début du calcul de plafonnement@.";
     let ctx =
       if calcul_avfisc then
         let ctx =
@@ -302,6 +325,8 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
       else ctx
     in
     let ctx = update_ctx "8ZG" v_8ZG ctx in
+    Cli.debug_print "Valorisation de l'acompte %f, V_INDTEO=%f" acompte
+      (extract_value (-10.) (get_ctx_var p ctx "V_INDTEO"));
     let ctx =
       (* to check: conditional unecessary due to default values? *)
       if acompte > 0. then

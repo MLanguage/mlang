@@ -272,7 +272,10 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
             (* First we look if the value used is inside the current SCC. If yes then we return the
                value for this pass *)
             match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
-            | SimpleVar _ -> assert false (* should not happen *)
+            | SimpleVar s ->
+                Cli.error_print "Error on variable %a, found to be %a rather than a tablevar"
+                  Format_mvg.format_variable (Pos.unmark var) Format_mvg.format_literal s;
+                assert false (* should not happen *)
             | TableVar (size, values) ->
                 evaluate_array_index ctx new_e1 size values (Pos.get_position e1)
           with
@@ -285,25 +288,29 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
     | LocalVar lvar -> (
         try Pos.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars)
         with Not_found -> assert false (* should not happen*) )
-    | Var var -> (
-        try
-          (* First we look if the value used is inside the current SCC. If yes then we return the
-             value for this pass *)
-          match VariableMap.find var ctx.ctx_current_scc_values with
-          | SimpleVar l -> l
-          | TableVar _ -> assert false
-          (* should not happen *)
-        with (* Else it is a value that has been computed before in the SCC graph *)
-        | Not_found -> (
+    | Var var ->
+        let r =
           try
-            match VariableMap.find var ctx.ctx_vars with
+            (* First we look if the value used is inside the current SCC. If yes then we return the
+               value for this pass *)
+            match VariableMap.find var ctx.ctx_current_scc_values with
             | SimpleVar l -> l
             | TableVar _ -> assert false
             (* should not happen *)
-          with Not_found ->
-            Cli.error_print "Var not found (should not happen): %s %a\n"
-              (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e);
-            assert false ) )
+          with
+          (* Else it is a value that has been computed before in the SCC graph *)
+          | Not_found -> (
+            try
+              match VariableMap.find var ctx.ctx_vars with
+              | SimpleVar l -> l
+              | TableVar _ -> assert false
+              (* should not happen *)
+            with Not_found ->
+              Cli.error_print "Var not found (should not happen): %s %a\n"
+                (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e);
+              assert false )
+        in
+        r
     | GenericTableIndex -> (
         match ctx.ctx_generic_index with
         | None -> assert false (* should not happen *)
@@ -503,7 +510,10 @@ let evaluate_scc p input_values ctx scc dep_graph =
                   Real
               in
               { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
-            with Not_found -> report_missinginput ctx var )
+            with Not_found ->
+              if VariableMap.mem var ctx.ctx_vars then ctx
+              else report_missinginput ctx var
+            )
       with Not_found -> (
         let cond = VariableMap.find var p.program_conds in
         let l_cond = evaluate_expr ctx p cond.cond_expr Boolean in
@@ -537,6 +547,7 @@ let evaluate_program_once dep_graph execution_order input_values number_of_passe
 
 let evaluate_program (p : program) (typing : Typechecker.typ_info)
     (input_values : literal VariableMap.t) (number_of_passes : int) : ctx * program =
+  Cli.debug_print "evaluating program@.";
   try
     let dep_graph = Dependency.create_dependency_graph p in
     let execution_order = Execution_order.get_execution_order p in
