@@ -511,9 +511,7 @@ let evaluate_scc p input_values ctx scc dep_graph =
               in
               { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
             with Not_found ->
-              if VariableMap.mem var ctx.ctx_vars then ctx
-              else report_missinginput ctx var
-            )
+              if VariableMap.mem var ctx.ctx_vars then ctx else report_missinginput ctx var )
       with Not_found -> (
         let cond = VariableMap.find var p.program_conds in
         let l_cond = evaluate_expr ctx p cond.cond_expr Boolean in

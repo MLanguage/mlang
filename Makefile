@@ -3,7 +3,7 @@ SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=ir-calcul/sources2018m_6_3/
 
-SOURCE_FILES=$(shell find $(SOURCE_DIR_2017) -name "*.m")
+SOURCE_FILES=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 

@@ -103,7 +103,9 @@ let find_var_by_name p name =
     let vars =
       Pos.VarNameToID.find name p.Mvg.program_idmap
       |> List.sort (fun v1 v2 ->
-             compare_execution_number v1.Variable.execution_number v2.Variable.execution_number)
+             -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
+             (* here the minus sign is to have the "meaningful" execution numbers first, and the
+                declarative execution number last *))
     in
     List.hd vars
   with Not_found -> (
