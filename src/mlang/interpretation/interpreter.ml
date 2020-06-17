@@ -273,7 +273,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
                value for this pass *)
             match VariableMap.find (Pos.unmark var) ctx.ctx_current_scc_values with
             | SimpleVar s ->
-                Cli.error_print "Error on variable %a, found to be %a rather than a tablevar"
+                Cli.error_print "Error on variable %a, found to be %a rather than a tablevar\n"
                   Format_mvg.format_variable (Pos.unmark var) Format_mvg.format_literal s;
                 assert false (* should not happen *)
             | TableVar (size, values) ->

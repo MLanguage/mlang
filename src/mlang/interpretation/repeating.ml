@@ -204,6 +204,11 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
 let compute_benefit deps exec_order inputs npasses p ctx =
   Cli.debug_print "beginning compute_benefit@.";
   let ctx, ctx_others = partition_ctx var_is_taxbenefit ctx in
+  let inputs =
+    Mvg.VariableMap.mapi
+      (fun var input_val -> if var_is_taxbenefit var then Undefined else input_val)
+      inputs
+  in
   (* FIXME: unsure about the while *)
   let besoincalcul = exists_taxbenefit_ceiled_variables inputs in
   let update_ctx = update_ctx_var p in
@@ -212,7 +217,6 @@ let compute_benefit deps exec_order inputs npasses p ctx =
       let () = Cli.debug_print "besoin calcul avfisc@." in
       let ctx = update_ctx "V_INDTEO" 1. ctx |> update_ctx "V_CALCUL_NAPS" 1. in
       let ctx, _ = Interpreter.evaluate_program_once deps exec_order inputs npasses (ctx, p) in
-
       let ctx = update_ctx "V_CALCUL_NAPS" 0. ctx in
       (* next access fails... woops *)
       let avantagefisc = extract_value 0. (get_ctx_var p ctx "NAPSANSPENA") in
@@ -302,6 +306,11 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
       if calcul_acomptes && false (* according to the call?*)
                                   (* and p_IsCalculAcomptes? *) then
         let ctx_deposit_only, ctx_others = partition_ctx var_is_deposit ctx in
+        let inputs =
+          Mvg.VariableMap.mapi
+            (fun var input_val -> if var_is_deposit var then input_val else Undefined)
+            inputs
+        in
         let acompte, ctx_deposit_only =
           if calcul_avfisc then
             compute_deposit_with_benefit deps exec_order inputs npasses p ctx_deposit_only 0.
