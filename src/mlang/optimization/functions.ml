@@ -78,66 +78,10 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
              Pos.same_pos_as (Literal (Float 1.0)) e,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall (MinFunc, args) ->
-      Pos.same_pos_as
-        (List.fold_left
-           (fun acc arg ->
-             if acc = Error then Pos.unmark (expand_functions_expr arg)
-             else
-               let new_arg = expand_functions_expr arg in
-               let new_arg_var = LocalVariable.new_var () in
-               let acc_var = LocalVariable.new_var () in
-               LocalLet
-                 ( acc_var,
-                   Pos.same_pos_as acc e,
-                   Pos.same_pos_as
-                     (LocalLet
-                        ( new_arg_var,
-                          new_arg,
-                          Pos.same_pos_as
-                            (Conditional
-                               ( Pos.same_pos_as
-                                   (Comparison
-                                      ( Pos.same_pos_as Ast.Lt e,
-                                        Pos.same_pos_as (LocalVar new_arg_var) e,
-                                        Pos.same_pos_as (LocalVar acc_var) e ))
-                                   e,
-                                 Pos.same_pos_as (LocalVar new_arg_var) e,
-                                 Pos.same_pos_as (LocalVar acc_var) e ))
-                            e ))
-                     e ))
-           Error args)
-        e
-  | FunctionCall (MaxFunc, args) ->
-      Pos.same_pos_as
-        (List.fold_left
-           (fun acc arg ->
-             if acc = Error then Pos.unmark (expand_functions_expr arg)
-             else
-               let new_arg = expand_functions_expr arg in
-               let new_arg_var = LocalVariable.new_var () in
-               let acc_var = LocalVariable.new_var () in
-               LocalLet
-                 ( acc_var,
-                   Pos.same_pos_as acc e,
-                   Pos.same_pos_as
-                     (LocalLet
-                        ( new_arg_var,
-                          new_arg,
-                          Pos.same_pos_as
-                            (Conditional
-                               ( Pos.same_pos_as
-                                   (Comparison
-                                      ( Pos.same_pos_as Ast.Gt e,
-                                        Pos.same_pos_as (LocalVar new_arg_var) e,
-                                        Pos.same_pos_as (LocalVar acc_var) e ))
-                                   e,
-                                 Pos.same_pos_as (LocalVar new_arg_var) e,
-                                 Pos.same_pos_as (LocalVar acc_var) e ))
-                            e ))
-                     e ))
-           Error args)
-        e
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
+      let earg1 = expand_functions_expr arg1 in
+      let earg2 = expand_functions_expr arg2 in
+      Pos.same_pos_as (FunctionCall (f, [ earg1; earg2 ])) e
   | FunctionCall (AbsFunc, [ arg ]) ->
       let arg_var = LocalVariable.new_var () in
       Pos.same_pos_as

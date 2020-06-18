@@ -357,6 +357,16 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           match evaluate_expr ctx p arg Real with Undefined -> Bool false | _ -> Bool true
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
+    | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
+        let floatf = match f with MinFunc -> min | MaxFunc -> max | _ -> assert false in
+        let mini =
+          match (evaluate_expr ctx p arg1 Real, evaluate_expr ctx p arg2 Real) with
+          | Undefined, vr -> vr
+          | vl, Undefined -> vl
+          | Float fl, Float fr -> Float (floatf fl fr)
+          | _ -> assert false
+        in
+        evaluate_expr ctx p (Pos.same_pos_as (Literal mini) e) Real
     | FunctionCall (Multimax, [ arg1; arg2 ]) ->
         let up =
           match evaluate_expr ctx p arg1 Real with
