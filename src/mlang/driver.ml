@@ -18,9 +18,9 @@ open Lexer
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
     (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
     (function_spec : string) (output : string option) (number_of_passes : int)
-    (real_precision : int) (run_all_tests : string option) (run_test : string option) =
+    (real_precision : int) (run_all_tests : string option) (run_test : string option) (year : int) =
   Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles optimize
-    backend function_spec output number_of_passes real_precision run_all_tests run_test;
+    backend function_spec output number_of_passes real_precision run_all_tests run_test year;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in

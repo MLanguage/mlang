@@ -109,11 +109,13 @@ let run_test =
     & opt (some file) None
     & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
 
+let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year of the M program")
+
 let mlang_t f =
   Term.(
     const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
     $ backend $ function_spec $ output $ number_of_passes $ real_precision $ run_all_tests
-    $ run_test)
+    $ run_test $ year)
 
 let info =
   let doc =
@@ -200,11 +202,13 @@ let run_all_tests : string option ref = ref None
 
 let run_test : string option ref = ref None
 
+let year : int ref = ref 2018
+
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
     (backend_ : string) (function_spec_ : string) (output_ : string option)
     (number_of_passes_ : int) (real_precision_ : int) (run_all_tests_ : string option)
-    (run_test_ : string option) =
+    (run_test_ : string option) (year_ : int) =
   source_files := files_;
   application := application_;
   debug_flag := debug_;
@@ -223,7 +227,8 @@ let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bo
          else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_)));
   number_of_passes := number_of_passes_;
   run_all_tests := run_all_tests_;
-  run_test := run_test_
+  run_test := run_test_;
+  year := year_
 
 (**{1 Terminal formatting}*)
 
