@@ -204,9 +204,6 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
 let compute_benefit deps exec_order inputs npasses p ctx =
   Cli.debug_print "beginning compute_benefit@.";
   let ctx, ctx_others = partition_ctx var_is_taxbenefit ctx in
-  Cli.debug_print "FLAG_BAREM: ctx: %f, ctx_others: %f"
-    (extract_value (-1.) (get_ctx_var p ctx "FLAG_BAREM"))
-    (extract_value (-1.) (get_ctx_var p ctx_others "FLAG_BAREM"));
   let inputs =
     Mvg.VariableMap.mapi
       (fun var input_val -> if var_is_taxbenefit var then Undefined else input_val)
@@ -409,7 +406,6 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
               update_ctx "V_BARIRTOTAL" f ctx
           | _ -> ctx
         in
-        Interpreter.repl_debugguer ctx p;
         (update_ctx "FLAG_BAREM" 0. ctx, p)
       else (ctx, p)
     in
