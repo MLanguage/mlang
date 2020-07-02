@@ -567,15 +567,23 @@ let evaluate_program_once dep_graph execution_order input_values number_of_passe
       (ctx, p))
     (ctx, p) execution_order
 
-let evaluate_program (p : program) (typing : Typechecker.typ_info)
+type evaluation_utilities = {
+  utilities_typing : Typechecker.typ_info;
+  utilities_dep_graph : Dependency.DepGraph.t;
+  utilities_execution_order : Execution_order.execution_order;
+}
+
+let evaluate_program (p : program) (utils : evaluation_utilities)
     (input_values : literal VariableMap.t) (number_of_passes : int) : ctx * program =
-  Cli.debug_print "evaluating program@.";
+  Cli.debug_print "evaluating program with V_IAD11TEO = %a@." Format_mvg.format_literal
+    ( match VariableMap.find_opt (find_var_by_name p "V_IAD11TEO") input_values with
+    | Some v -> v
+    | None -> Undefined );
   try
-    let dep_graph = Dependency.create_dependency_graph p in
-    let execution_order = Execution_order.get_execution_order p in
     let ctx, _ =
-      evaluate_program_once dep_graph execution_order input_values number_of_passes
-        (empty_ctx p typing, p)
+      evaluate_program_once utils.utilities_dep_graph utils.utilities_execution_order input_values
+        number_of_passes
+        (empty_ctx p utils.utilities_typing, p)
     in
     (ctx, p)
   with RuntimeError (e, ctx) ->

@@ -300,3 +300,24 @@ let find_var_name_by_alias (p : program) (alias : string) : string =
       p.program_vars None
   in
   match v with Some v -> v | None -> Errors.raise_typ_error Variable "alias not found (%s)" alias
+
+let find_var_by_name (p : program) (name : string) : Variable.t =
+  try
+    let vars =
+      Pos.VarNameToID.find name p.program_idmap
+      |> List.sort (fun v1 v2 ->
+             -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
+             (* here the minus sign is to have the "meaningful" execution numbers first, and the
+                declarative execution number last *))
+    in
+    List.hd vars
+  with Not_found -> (
+    try
+      let name = find_var_name_by_alias p name in
+      List.hd
+        (List.sort
+           (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
+           (Pos.VarNameToID.find name p.program_idmap))
+    with Not_found ->
+      Cli.debug_print "not found: %s@." name;
+      raise Not_found )
