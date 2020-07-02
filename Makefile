@@ -35,6 +35,22 @@ tests: build
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 
+
+tests2017: build
+	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --backend interpreter \
+		--function_spec tests.m_spec --number_of_passes 5\
+		--run_all_tests=tests_2017/ --year=2017 \
+		$(shell find $(SOURCE_DIR_2017) -name "*.m")
+
+test2017: build
+	dune exec src/main.exe -- --application iliad \
+	 	--display_time --debug --backend interpreter\
+		--function_spec tests.m_spec --number_of_passes 5\
+		--run_test=$(TEST_FILE) --year=2017 \
+		$(shell find $(SOURCE_DIR_2017) -name "*.m")
+
+
 doc:
 	dune build @doc
 	ln -s _build/default/_doc/_html/index.html doc.html
