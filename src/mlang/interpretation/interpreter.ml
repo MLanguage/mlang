@@ -173,7 +173,7 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
 let eval_debug = ref false
 
 let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t : typ) : literal =
-  if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark e);
+  (* if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark e); *)
   try
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -294,7 +294,8 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
             (* First we look if the value used is inside the current SCC. If yes then we return the
                value for this pass *)
             match VariableMap.find var ctx.ctx_current_scc_values with
-            | SimpleVar l -> l
+            | SimpleVar l ->
+               l
             | TableVar _ -> assert false
             (* should not happen *)
           with
@@ -339,7 +340,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           match new_arg with
           | Float x -> Float (roundf x)
           | Bool x -> Float (float_of_bool x)
-          | Undefined -> Float 0.
+          | Undefined -> Undefined (*nope:Float 0.*)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
     | FunctionCall (InfFunc, [ arg ]) ->
@@ -514,12 +515,20 @@ let report_missinginput ctx var =
          ctx ))
 
 let evaluate_scc p input_values ctx scc dep_graph =
+  (* if VariableMap.exists (fun var _ -> Pos.unmark var.Variable.name = "REV4HT") scc then
+   *   (
+   *     eval_debug := true;
+   *     Cli.debug_print "scc = %a" (Mvg.VariableMap.map_printer Format_mvg.format_variable (fun _ () -> ())) scc
+   *   ); *)
+  let r =
   VariableMap.fold
     (fun var _ (ctx : ctx) ->
       try
         match (VariableMap.find var p.program_vars).var_definition with
         | Mvg.SimpleVar e ->
-            let l_e = evaluate_expr ctx p e Real in
+           let l_e = evaluate_expr ctx p e Real in
+           (* if !eval_debug then
+            *   Cli.debug_print "%a ~> %a" Format_mvg.format_variable var Format_mvg.format_literal l_e; *)
             { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
         | Mvg.TableVar (size, es) ->
             (* Right now we suppose that the different indexes of table arrays don't depend on each
@@ -546,7 +555,9 @@ let evaluate_scc p input_values ctx scc dep_graph =
             report_violatedcondition cond var ctx dep_graph
         | _ -> assert false )
       (* should not happen *))
-    scc ctx
+    scc ctx in
+  (* eval_debug := false; *)
+  r
 
 let evaluate_program_once dep_graph execution_order input_values number_of_passes (ctx, p) =
   List.fold_left
