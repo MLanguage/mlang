@@ -1050,7 +1050,10 @@ let get_var_data (idmap : Mvg.idmap) (var_decl_data : var_decl_data Mvg.Variable
   let out =
     List.fold_left
       (fun var_data source_file ->
-        current_progress (Pos.get_position (List.hd source_file)).Pos.pos_filename;
+        begin
+          try current_progress (Pos.get_position (List.hd source_file)).Pos.pos_filename
+          with _ -> ()
+        end;
         List.fold_left
           (fun var_data source_file_item ->
             match Pos.unmark source_file_item with
@@ -1337,6 +1340,18 @@ let get_conds (error_decls : Mvg.Error.t list) (idmap : Mvg.idmap) (p : Ast.prog
         conds source_file)
     Mvg.VariableMap.empty p
 
+let remove_corrective_rules (p : Ast.program) : Ast.program =
+  List.map
+    (fun source_file ->
+      List.filter
+        (fun source_file_item ->
+          match Pos.unmark source_file_item with
+          | Ast.Rule rule ->
+              not (List.exists (fun part -> Pos.unmark part = "corrective") rule.rule_name)
+          | _ -> true)
+        source_file)
+    p
+
 (** Main translation function from the M AST to the M Variable Graph. This function performs 6
     linear passes on the input code:
 
@@ -1351,6 +1366,7 @@ let get_conds (error_decls : Mvg.Error.t list) (idmap : Mvg.idmap) (p : Ast.prog
       all variables declarations;
     - [get_errors_conds] parses the verification conditions definitions. *)
 let translate (p : Ast.program) (application : string option) : Mvg.program =
+  let p = remove_corrective_rules p in
   let var_decl_data, idmap, int_const_vals = get_constants p in
   let var_decl_data, error_decls, idmap = get_variables_decl p var_decl_data idmap in
   let idmap = get_var_redefinitions p idmap int_const_vals application in
