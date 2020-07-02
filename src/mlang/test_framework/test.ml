@@ -96,17 +96,14 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
     func_conds,
     input_file )
 
-let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : string) =
+let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
   let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let ctx, p =
-    (* Interpreter.evaluate_program p typing input_file !Cli.number_of_passes *)
-    Repeating.compute_program p typing input_file !Cli.number_of_passes
-  in
+  let ctx = Repeating.compute_program p utils input_file !Cli.number_of_passes in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
     List.mapi
@@ -159,7 +156,8 @@ let check_test (p : Mvg.program) (typing : Typechecker.typ_info) (test_name : st
     end
     else raise (Interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir : string) =
+let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (test_dir : string)
+    =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -177,7 +175,7 @@ let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir 
     (* Cli.debug_print "Processing %s..." name; *)
     try
       Cli.debug_flag := false;
-      check_test p typing (test_dir ^ name);
+      check_test p utils (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
     with
@@ -193,10 +191,10 @@ let check_all_tests (p : Mvg.program) (typing : Typechecker.typ_info) (test_dir 
         | _ ->
             (* let errs_varname = try VariableMap.find (fst @@ List.hd bindings) failures with Not_found -> [] in
              * (successes, VariableMap.add v ((name, snd @@ List.hd bindings, Undefined) :: erss_varname) failures) *)
-            Cli.error_print "Weird failure in %s, case not taken into account" name;
+            Cli.error_print "Weird failure in %s, case not taken into account@." name;
             (successes, failures) )
     | Errors.TypeError t ->
-        Cli.error_print "Type error in %s (%a), case not taken into account" name
+        Cli.error_print "Type error in %s (%a), case not taken into account@." name
           Errors.format_typ_error t;
         (successes, failures)
   in

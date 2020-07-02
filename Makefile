@@ -3,7 +3,7 @@ SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=ir-calcul/sources2018m_6_3/
 
-SOURCE_FILES=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_FILES=$(shell find $SOURCE_DIR_2018 -name "*.m")
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 
@@ -17,21 +17,21 @@ deps:
 format:
 	dune build @fmt --auto-promote | true
 
-build: format
+build: #format
 	dune build
 
 # use: TEST_FILE=bla make test
 test: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec --number_of_passes 5\
+		--function_spec tests.m_spec --number_of_passes 1\
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec --number_of_passes 5\
+		--function_spec tests.m_spec --number_of_passes 1\
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 

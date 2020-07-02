@@ -72,28 +72,31 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
+    let utils : Interpreter.evaluation_utilities =
+      {
+        Interpreter.utilities_typing = typing;
+        Interpreter.utilities_dep_graph = dep_graph;
+        Interpreter.utilities_execution_order = Execution_order.get_execution_order program;
+      }
+    in
     if !Cli.run_all_tests <> None then
-      Test.check_all_tests program typing
-        (match !Cli.run_all_tests with Some s -> s | _ -> assert false)
+      let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
+      Test.check_all_tests program utils tests
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
-      Test.check_test program typing (match !Cli.run_test with Some s -> s | _ -> assert false)
+      let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
+      Test.check_test program utils test
     end
     else
       let program = if !Cli.optimize then Optimization.optimize program typing else program in
 
       (* Noundef.check program; *)
-
-      (* Mvg.VariableMap.iter (fun var (ty, bool) ->
-       *     if Mvg.VariableMap.mem var program.program_vars then
-       *       Cli.debug_print (Format.sprintf "%s -> %s\n" (Pos.unmark var.name) (Mvg.show_typ ty)))
-       *   typing.Typechecker.typ_info_var; *)
       if String.lowercase_ascii !Cli.backend = "z3" then
         Z3_driver.translate_and_launch_query program typing
       else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program typing !Cli.number_of_passes in
-        let results, _ = f (Interface.read_inputs_from_stdin mvg_func) in
+        let f = Interface.make_function_from_program program utils !Cli.number_of_passes in
+        let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program
       end
