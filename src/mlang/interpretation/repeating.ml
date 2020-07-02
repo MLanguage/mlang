@@ -138,6 +138,13 @@ let get_ctx_var p (ctx : Interpreter.ctx) (var : string) : Interpreter.var_liter
     Cli.debug_print "get_ctx_var %a failed@." Format_mvg.format_variable var;
     raise Not_found
 
+let get_input_var p inputs var : Interpreter.var_literal =
+  let var = find_var_by_name p var in
+  try SimpleVar (Mvg.VariableMap.find var inputs)
+  with Not_found ->
+    (* different than usual *)
+    SimpleVar Undefined
+
 (** Equivalent to IRDATA_efface *)
 let clear_ctx_var p (ctx : Interpreter.ctx) var =
   let var = find_var_by_name p var in
@@ -353,6 +360,79 @@ let compute_program (p : program) (t : Typechecker.typ_info) (inputs : literal V
     let exec_order = Execution_order.get_execution_order p in
     let update_ctx = update_ctx_var p in
     let ctx = Interpreter.empty_ctx p t in
+    (* FIXME: or in inputs? *)
+    let montant3WA = get_input_var p inputs "PVSURSI" in
+    let montant3WB = get_input_var p inputs "PVIMPOS" in
+    let montantRWB = get_input_var p inputs "CODRWB" in
+    let ctx, p =
+      match (montant3WB, montantRWB) with
+      | SimpleVar Undefined, SimpleVar Undefined -> (ctx, p)
+      | _ ->
+          let ctx = ctx |> update_ctx "FLAG_EXIT" 1. |> update_ctx "FLAG_3WBNEG" 0. in
+          let ctx, p = compute_double_liquidation3 deps exec_order inputs npasses p ctx in
+          let ctx =
+            match get_ctx_var p ctx "NAPTIR" with
+            | SimpleVar (Float l_Montant) ->
+                let ctx =
+                  if l_Montant < 0. then
+                    ctx |> update_ctx "NAPTIR" (-.l_Montant) |> update_ctx "FLAG_3WBNEG" 1.
+                  else ctx
+                in
+                update_ctx "V_NAPTIR3WB" (fabs l_Montant) ctx
+            | SimpleVar Undefined -> ctx
+            | _ -> assert false
+          in
+          let ctx =
+            if !Cli.year >= 2017 then
+              match get_ctx_var p ctx "IHAUTREVT" with
+              | SimpleVar (Float f) -> update_ctx "V_CHR3WB" f ctx
+              | _ -> ctx
+            else ctx
+          in
+          let ctx =
+            if !Cli.year >= 2018 then
+              match get_ctx_var p ctx "ID11" with
+              | SimpleVar (Float f) -> update_ctx "V_ID113WB" f ctx
+              | _ -> ctx
+            else ctx
+          in
+          (update_ctx "FLAG_EXIT" 0. ctx, p)
+    in
+    let montantRWA = get_ctx_var p ctx "CODRWA" in (* or get_input_var ?*)
+    let ctx, p =
+      match (montant3WA, montantRWA) with
+      | SimpleVar Undefined, SimpleVar Undefined -> (ctx, p)
+      | _ ->
+          let ctx = ctx |> update_ctx "FLAG_3WANEG" 0. |> update_ctx "FLAG_EXIT" 2. in
+          let ctx, p = compute_double_liquidation3 deps exec_order inputs npasses p ctx in
+          let ctx =
+            match get_ctx_var p ctx "NAPTIR" with
+            | SimpleVar (Float l_Montant) ->
+                let ctx =
+                  if l_Montant < 0. then
+                    ctx |> update_ctx "NAPTIR" (-.l_Montant) |> update_ctx "FLAG_3WANEG" 1.
+                  else ctx
+                in
+                update_ctx "V_NAPTIR3WA" (fabs l_Montant) ctx
+            | SimpleVar Undefined -> ctx
+            | _ -> assert false
+          in
+          let ctx =
+            if !Cli.year >= 2017 then
+              match get_ctx_var p ctx "IHAUTREVT" with
+              | SimpleVar (Float f) -> update_ctx "V_CHR3WA" f ctx
+              | _ -> ctx
+            else ctx
+          in
+          let ctx =
+            if !Cli.year >= 2018 then
+              match get_ctx_var p ctx "ID11" with
+              | SimpleVar (Float f) -> update_ctx "V_ID113WA" f ctx
+              | _ -> ctx
+            else ctx
+          in
+          (update_ctx "FLAG_EXIT" 0. ctx, p)
+    in
     let ctx, p =
       if !Cli.year >= 2018 then
         let ctx = update_ctx "FLAG_BAREM" 1.0 ctx in
