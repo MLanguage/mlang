@@ -20,7 +20,5 @@ type test_file = {
   ep : var_values;
   cp : var_values;
   rp : var_values;
-  ec : var_values;
-  cc : var_values;
-  rc : var_values;
+  corr : (var_values * var_values * var_values) option;
 }

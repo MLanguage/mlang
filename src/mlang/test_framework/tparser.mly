@@ -47,17 +47,21 @@ test_file:
   cp = list(variable_and_value)
   RESULTATSP
   rp = list(variable_and_value)
+  corr = correctif?
+  DATES?
+  AVISIR?
+  AVISCSG?
+  ENDSHARP { { nom; ep; cp; rp; corr } }
+| EOF { assert false }
+
+correctif:
   ENTREESC
   ec = list(variable_and_value)
   CONTROLESC
   cc = list(variable_and_value)
   RESULTATSC
-  rc = list(variable_and_value)
-  DATES?
-  AVISIR?
-  AVISCSG?
-  ENDSHARP { { nom; ep; cp; rp; ec; cc; rc } }
-| EOF { assert false }
+  rc = list(variable_and_value) { (ec, cc, rc) }
+
 
 name:
 | n = NAME { n }
