@@ -21,59 +21,13 @@
     the previous outputs as inputs for all the varaibles in the SCC. *)
 
 open Mvg
+module ExecutionOrder = Graph.Topological.Make (Dependency.DepGraph)
 
-type scc_id = int
-
-module ExecutionGraph = Graph.Imperative.Digraph.ConcreteBidirectional (struct
-  type t = int (* these are the strongly connected components identifiers *)
-
-  let hash v = v
-
-  let compare v1 v2 = compare v1 v2
-
-  let equal v1 v2 = v1 = v2
-end)
-
-type execution_scc_graph = {
-  execution_scc_graph : ExecutionGraph.t;
-  execution_scc_graph_contents : unit VariableMap.t array;
-}
-
-let create_execution_scc_graph (p : Mvg.program) : execution_scc_graph =
-  let dep_graph = Dependency.create_dependency_graph p in
-  let nb_scc, scc_assignment = Dependency.SCC.scc dep_graph in
-  let interp_order =
-    {
-      execution_scc_graph = ExecutionGraph.create ();
-      execution_scc_graph_contents = Array.make nb_scc VariableMap.empty;
-    }
-  in
-  Dependency.DepGraph.iter_vertex
-    (fun var ->
-      let succs_var = Dependency.DepGraph.succ dep_graph var in
-      let var_scc = scc_assignment var in
-      interp_order.execution_scc_graph_contents.(var_scc) <-
-        VariableMap.add var () interp_order.execution_scc_graph_contents.(var_scc);
-      List.iter
-        (fun succ ->
-          ExecutionGraph.add_edge interp_order.execution_scc_graph var_scc (scc_assignment succ))
-        succs_var)
-    dep_graph;
-  interp_order
-
-module ExecutionOrder = Graph.Topological.Make (ExecutionGraph)
-
-type execution_order = unit VariableMap.t list
+type execution_order = Variable.t list
 (** Each map is the set of variables defined circularly in this strongly connected component *)
 
-let get_execution_order (p : Mvg.program) : execution_order =
-  let execution_graph = create_execution_scc_graph p in
-  List.rev
-    (ExecutionOrder.fold
-       (fun scc_id exec_order ->
-         let new_scc = execution_graph.execution_scc_graph_contents.(scc_id) in
-         new_scc :: exec_order)
-       execution_graph.execution_scc_graph [])
+let get_execution_order (dep_graph : Dependency.DepGraph.t) : execution_order =
+  List.rev (ExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph [])
 
 (** This custom visitor uses [get_execution_order] to visit all the expressions in the program in
     the correct order. *)
@@ -83,24 +37,22 @@ class ['self] program_iter =
 
     inherit [_] condition_data_iter [@@warning "-7"]
 
-    method visit_program env this =
-      let exec_order = get_execution_order this in
+    method visit_program env (this : Mvg.program) =
+      let dep_graph = Dependency.create_dependency_graph this in
+      let exec_order = get_execution_order dep_graph in
       List.iter
-        (fun scc ->
-          VariableMap.iter
-            (fun var () ->
-              try
-                let data = VariableMap.find var this.program_vars in
-                self#visit_variable_data env data
-              with Not_found -> (
-                try
-                  let cond = VariableMap.find var this.program_conds in
-                  self#visit_condition_data env cond
-                with Not_found -> assert false ))
-            scc)
+        (fun var ->
+          try
+            let data = VariableMap.find var this.program_vars in
+            self#visit_variable_data env data
+          with Not_found -> (
+            try
+              let cond = VariableMap.find var this.program_conds in
+              self#visit_condition_data env cond
+            with Not_found -> assert false ))
         exec_order
   end
 
-let fold_on_vars (f : Variable.t -> 'a -> 'a) (p : Mvg.program) (init : 'a) : 'a =
-  let exec_order = get_execution_order p in
-  List.fold_left (fun acc scc -> Mvg.VariableMap.fold (fun v () a -> f v a) scc acc) init exec_order
+let fold_on_vars (f : Variable.t -> 'a -> 'a) (dep_graph : Dependency.DepGraph.t) (init : 'a) : 'a =
+  let exec_order = get_execution_order dep_graph in
+  List.fold_left (fun acc v -> f v acc) init exec_order

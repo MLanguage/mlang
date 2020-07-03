@@ -172,82 +172,77 @@ let rec gvn_exp (e : expression Pos.marked) (data : data) :
               (Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e, data, expn) )
       | Some def -> (definition_to_expression def, data, expn) )
 
-let optimize (p : program) (typing : Typechecker.typ_info) : program =
-  let exec_order = Execution_order.get_execution_order p in
+let optimize (p : program) (dep_graph : Dependency.DepGraph.t) : program =
+  let exec_order = Execution_order.get_execution_order dep_graph in
   let data = empty_data in
   let p, _ =
     List.fold_left
-      (fun (p, data) scc ->
-        VariableMap.fold
-          (fun var _ (p, data) ->
-            try
-              let def = VariableMap.find var p.program_vars in
-              let new_def, data =
-                match def.var_definition with
-                | InputVar -> (InputVar, data)
-                | SimpleVar e ->
-                    let new_e, data, expn = gvn_exp e data in
-                    let data =
-                      {
-                        data with
-                        definitions =
-                          ValueNumberMap.update expn
-                            (fun def ->
-                              match def with
-                              | None -> Some (DefVar (Pos.same_pos_as var e))
-                              | Some _ -> def
-                              (* we always keep the old definition ! *))
-                            data.definitions;
-                      }
+      (fun (p, data) var ->
+        try
+          let def = VariableMap.find var p.program_vars in
+          let new_def, data =
+            match def.var_definition with
+            | InputVar -> (InputVar, data)
+            | SimpleVar e ->
+                let new_e, data, expn = gvn_exp e data in
+                let data =
+                  {
+                    data with
+                    definitions =
+                      ValueNumberMap.update expn
+                        (fun def ->
+                          match def with
+                          | None -> Some (DefVar (Pos.same_pos_as var e))
+                          | Some _ -> def
+                          (* we always keep the old definition ! *))
+                        data.definitions;
+                  }
+                in
+                (SimpleVar new_e, data)
+            | TableVar (size, def) -> (
+                match def with
+                | IndexGeneric e ->
+                    let new_e, data, _ = gvn_exp e data in
+                    (TableVar (size, IndexGeneric new_e), data)
+                | IndexTable es ->
+                    let new_es, data =
+                      IndexMap.fold
+                        (fun idx e (es, data) ->
+                          let new_e, data, _ = gvn_exp e data in
+                          (IndexMap.add idx new_e es, data))
+                        es (IndexMap.empty, data)
                     in
-                    (SimpleVar new_e, data)
-                | TableVar (size, def) -> (
-                    match def with
-                    | IndexGeneric e ->
-                        let new_e, data, _ = gvn_exp e data in
-                        (TableVar (size, IndexGeneric new_e), data)
-                    | IndexTable es ->
-                        let new_es, data =
-                          IndexMap.fold
-                            (fun idx e (es, data) ->
-                              let new_e, data, _ = gvn_exp e data in
-                              (IndexMap.add idx new_e es, data))
-                            es (IndexMap.empty, data)
-                        in
-                        (TableVar (size, IndexTable new_es), data) )
-              in
-              ( {
-                  p with
-                  program_vars =
-                    VariableMap.add var { def with var_definition = new_def } p.program_vars;
-                },
-                data )
-            with Not_found -> (
-              try
-                let cond = VariableMap.find var p.program_conds in
-                match
-                  let e, _, _ = gvn_exp cond.cond_expr data in
-                  e
-                with
-                | Literal (Float 0.), _ | Literal Undefined, _ ->
-                    ({ p with program_conds = VariableMap.remove var p.program_conds }, data)
-                | Literal (Float _), _ ->
-                    raise
-                      (Interpreter.RuntimeError
-                         ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
-                           Interpreter.empty_ctx p typing ))
-                | new_cond_expr ->
-                    ( {
-                        p with
-                        program_conds =
-                          VariableMap.add var
-                            { cond with cond_expr = new_cond_expr }
-                            p.program_conds;
-                      },
-                      data )
-              with Not_found -> assert false )
-            (* should not happen *))
-          scc (p, data))
+                    (TableVar (size, IndexTable new_es), data) )
+          in
+          ( {
+              p with
+              program_vars =
+                VariableMap.add var { def with var_definition = new_def } p.program_vars;
+            },
+            data )
+        with Not_found -> (
+          try
+            let cond = VariableMap.find var p.program_conds in
+            match
+              let e, _, _ = gvn_exp cond.cond_expr data in
+              e
+            with
+            | Literal (Float 0.), _ | Literal Undefined, _ ->
+                ({ p with program_conds = VariableMap.remove var p.program_conds }, data)
+            | Literal (Float _), _ ->
+                raise
+                  (Interpreter.RuntimeError
+                     ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
+                       Interpreter.empty_ctx p ))
+            | new_cond_expr ->
+                ( {
+                    p with
+                    program_conds =
+                      VariableMap.add var { cond with cond_expr = new_cond_expr } p.program_conds;
+                  },
+                  data )
+          with Not_found -> assert false )
+        (* should not happen *))
       (p, data) exec_order
   in
   p

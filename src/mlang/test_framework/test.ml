@@ -103,16 +103,12 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
   let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let ctx = Repeating.compute_program p utils input_file !Cli.number_of_passes in
+  let ctx = Repeating.compute_program p utils input_file in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
     List.mapi
       (fun i var -> (var, i))
-      (List.flatten
-         (List.map
-            (fun scc -> List.map (fun (var, _) -> var) (VariableMap.bindings scc))
-            (Execution_order.get_execution_order
-               (Interface.fit_function p { f with func_conds = test_conds }))))
+      (Execution_order.get_execution_order utils.utilities_dep_graph)
   in
   let execution_order_map : int VariableMap.t =
     List.fold_left
@@ -123,7 +119,11 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
      "first" mistakes first. *)
   let exec_order_compare ((var1, _) : Variable.t * condition_data)
       ((var2, _) : Variable.t * condition_data) : int =
-    compare (VariableMap.find var1 execution_order_map) (VariableMap.find var2 execution_order_map)
+    try
+      let pos1 = VariableMap.find var1 execution_order_map in
+      let pos2 = VariableMap.find var2 execution_order_map in
+      compare pos1 pos2
+    with Not_found -> 0
   in
   try
     List.iter
@@ -191,7 +191,10 @@ let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities)
         | _ ->
             (* let errs_varname = try VariableMap.find (fst @@ List.hd bindings) failures with Not_found -> [] in
              * (successes, VariableMap.add v ((name, snd @@ List.hd bindings, Undefined) :: erss_varname) failures) *)
-            Cli.error_print "Test %s incorrect (error%s %a raised)@." name (if List.length err > 1 then "s" else "") (Format.pp_print_list Format.pp_print_string) (List.map (fun x -> Pos.unmark x.Error.name) err);
+            Cli.error_print "Test %s incorrect (error%s %a raised)@." name
+              (if List.length err > 1 then "s" else "")
+              (Format.pp_print_list Format.pp_print_string)
+              (List.map (fun x -> Pos.unmark x.Error.name) err);
             (successes, failures) )
     | Errors.TypeError t ->
         Cli.error_print "Type error in %s (%a), case not taken into account@." name

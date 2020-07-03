@@ -32,19 +32,10 @@ type ctx = {
   ctx_local_vars : partial_expr LocalVariableMap.t;
   ctx_inside_table_index : int option;
   ctx_inside_var : Variable.t;
-  ctx_current_scc : unit VariableMap.t;
-  ctx_typing : Typechecker.typ_info;
 }
 
-let empty_ctx (typing : Typechecker.typ_info) (var : Variable.t) (idx : int option)
-    (scc : unit VariableMap.t) =
-  {
-    ctx_local_vars = LocalVariableMap.empty;
-    ctx_inside_table_index = idx;
-    ctx_inside_var = var;
-    ctx_current_scc = scc;
-    ctx_typing = typing;
-  }
+let empty_ctx (var : Variable.t) (idx : int option) =
+  { ctx_local_vars = LocalVariableMap.empty; ctx_inside_table_index = idx; ctx_inside_var = var }
 
 let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : program)
     (e : expression Pos.marked) : expression Pos.marked =
@@ -132,57 +123,49 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
       | _ -> Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e )
   | Index (var, e1) -> (
       let new_e1 = partial_evaluation ctx interp_ctx p e1 in
-      if VariableMap.mem (Pos.unmark var) ctx.ctx_current_scc then
-        Pos.same_pos_as (Literal Undefined) e
-      else
-        match Pos.unmark new_e1 with
-        | Literal Undefined -> Pos.same_pos_as (Literal Undefined) e
-        | Literal l -> (
-            let idx =
-              match l with
-              | Undefined -> assert false (* should not happen *)
-              | Float f ->
-                  if
-                    let fraction, _ = modf f in
-                    fraction = 0.
-                  then int_of_float f
-                  else
-                    raise
-                      (Interpreter.RuntimeError
-                         ( Interpreter.FloatIndex
-                             (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
-                           interp_ctx ))
-            in
-            match (VariableMap.find (Pos.unmark var) p.program_vars).var_definition with
-            | SimpleVar _ | InputVar -> assert false (* should not happen *)
-            | TableVar (size, IndexGeneric e') -> (
-                if idx >= size || idx < 0 then Pos.same_pos_as (Literal Undefined) e
+      match Pos.unmark new_e1 with
+      | Literal Undefined -> Pos.same_pos_as (Literal Undefined) e
+      | Literal l -> (
+          let idx =
+            match l with
+            | Undefined -> assert false (* should not happen *)
+            | Float f ->
+                if
+                  let fraction, _ = modf f in
+                  fraction = 0.
+                then int_of_float f
                 else
-                  match Pos.unmark e' with
-                  | Literal _ | Var _ -> e'
-                  | _ -> Pos.same_pos_as (Index (var, new_e1)) e )
-            | TableVar (size, IndexTable es') -> (
-                if idx >= size || idx < 0 then Pos.same_pos_as (Literal Undefined) e
-                else
-                  match Pos.unmark (IndexMap.find idx es') with
-                  | Literal _ | Var _ -> IndexMap.find idx es'
-                  | Index (inner_var, (Literal (Float inner_idx), _))
-                  (* If the current index depends on the value of a greater index of the same table
-                     we return undefined *)
-                    when Pos.unmark inner_var = ctx.ctx_inside_var
-                         &&
-                         match ctx.ctx_inside_table_index with
-                         | Some i when i >= int_of_float inner_idx -> true
-                         | _ -> false ->
-                      Pos.same_pos_as (Literal Undefined) (IndexMap.find idx es')
-                  | _ -> Pos.same_pos_as (Index (var, new_e1)) e ) )
-        | _ -> Pos.same_pos_as (Index (var, new_e1)) e )
+                  raise
+                    (Interpreter.RuntimeError
+                       ( Interpreter.FloatIndex
+                           (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
+                         interp_ctx ))
+          in
+          match (VariableMap.find (Pos.unmark var) p.program_vars).var_definition with
+          | SimpleVar _ | InputVar -> assert false (* should not happen *)
+          | TableVar (size, IndexGeneric e') -> (
+              if idx >= size || idx < 0 then Pos.same_pos_as (Literal Undefined) e
+              else
+                match Pos.unmark e' with
+                | Literal _ | Var _ -> e'
+                | _ -> Pos.same_pos_as (Index (var, new_e1)) e )
+          | TableVar (size, IndexTable es') -> (
+              if idx >= size || idx < 0 then Pos.same_pos_as (Literal Undefined) e
+              else
+                match Pos.unmark (IndexMap.find idx es') with
+                | Literal _ | Var _ -> IndexMap.find idx es'
+                | Index (inner_var, (Literal (Float inner_idx), _))
+                (* If the current index depends on the value of a greater index of the same table we
+                   return undefined *)
+                  when Pos.unmark inner_var = ctx.ctx_inside_var
+                       &&
+                       match ctx.ctx_inside_table_index with
+                       | Some i when i >= int_of_float inner_idx -> true
+                       | _ -> false ->
+                    Pos.same_pos_as (Literal Undefined) (IndexMap.find idx es')
+                | _ -> Pos.same_pos_as (Index (var, new_e1)) e ) )
+      | _ -> Pos.same_pos_as (Index (var, new_e1)) e )
   | Literal _ -> e
-  | Var var when VariableMap.mem var ctx.ctx_current_scc ->
-      (* When doing partial evaluation, we only consider what happens during the first evaluation
-         pass. If we are querying a variable that is in the current SCC then its values during the
-         first pass will always be undefined. *)
-      Pos.same_pos_as (Literal Undefined) e
   | Var var -> (
       match
         try (VariableMap.find var p.program_vars).var_definition with Not_found -> assert false
@@ -229,64 +212,53 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
         (FunctionCall (func, List.map (fun arg -> partial_evaluation ctx interp_ctx p arg) args))
         e
 
-let partially_evaluate (p : program) (typing : Typechecker.typ_info) : program =
-  let exec_order = Execution_order.get_execution_order p in
-  let interp_ctx = Interpreter.empty_ctx p typing in
+let partially_evaluate (p : program) (dep_graph : Dependency.DepGraph.t) : program =
+  let exec_order = Execution_order.get_execution_order dep_graph in
+  let interp_ctx = Interpreter.empty_ctx p in
   List.fold_left
-    (fun p scc ->
-      VariableMap.fold
-        (fun var _ p ->
-          try
-            let def = VariableMap.find var p.program_vars in
-            let new_def =
-              match def.var_definition with
-              | InputVar -> InputVar
-              | SimpleVar e ->
-                  let e' = partial_evaluation (empty_ctx typing var None scc) interp_ctx p e in
-                  SimpleVar e'
-              | TableVar (size, def) -> (
-                  match def with
-                  | IndexGeneric e ->
-                      TableVar
-                        ( size,
-                          IndexGeneric
-                            (partial_evaluation (empty_ctx typing var None scc) interp_ctx p e) )
-                  | IndexTable es ->
-                      TableVar
-                        ( size,
-                          IndexTable
-                            (IndexMap.mapi
-                               (fun idx e ->
-                                 partial_evaluation
-                                   (empty_ctx typing var (Some idx) scc)
-                                   interp_ctx p e)
-                               es) ) )
-            in
-            {
-              p with
-              program_vars =
-                VariableMap.add var { def with var_definition = new_def } p.program_vars;
-            }
-          with Not_found -> (
-            try
-              let cond = VariableMap.find var p.program_conds in
-              match
-                partial_evaluation (empty_ctx typing var None scc) interp_ctx p cond.cond_expr
-              with
-              | Literal (Float 0.), _ | Literal Undefined, _ ->
-                  { p with program_conds = VariableMap.remove var p.program_conds }
-              | Literal (Float _), _ ->
-                  raise
-                    (Interpreter.RuntimeError
-                       ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
-                         interp_ctx ))
-              | new_cond_expr ->
-                  {
-                    p with
-                    program_conds =
-                      VariableMap.add var { cond with cond_expr = new_cond_expr } p.program_conds;
-                  }
-            with Not_found -> assert false )
-          (* should not happen *))
-        scc p)
+    (fun p var ->
+      try
+        let def = VariableMap.find var p.program_vars in
+        let new_def =
+          match def.var_definition with
+          | InputVar -> InputVar
+          | SimpleVar e ->
+              let e' = partial_evaluation (empty_ctx var None) interp_ctx p e in
+              SimpleVar e'
+          | TableVar (size, def) -> (
+              match def with
+              | IndexGeneric e ->
+                  TableVar
+                    (size, IndexGeneric (partial_evaluation (empty_ctx var None) interp_ctx p e))
+              | IndexTable es ->
+                  TableVar
+                    ( size,
+                      IndexTable
+                        (IndexMap.mapi
+                           (fun idx e ->
+                             partial_evaluation (empty_ctx var (Some idx)) interp_ctx p e)
+                           es) ) )
+        in
+        {
+          p with
+          program_vars = VariableMap.add var { def with var_definition = new_def } p.program_vars;
+        }
+      with Not_found -> (
+        try
+          let cond = VariableMap.find var p.program_conds in
+          match partial_evaluation (empty_ctx var None) interp_ctx p cond.cond_expr with
+          | Literal (Float 0.), _ | Literal Undefined, _ ->
+              { p with program_conds = VariableMap.remove var p.program_conds }
+          | Literal (Float _), _ ->
+              raise
+                (Interpreter.RuntimeError
+                   (Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []), interp_ctx))
+          | new_cond_expr ->
+              {
+                p with
+                program_conds =
+                  VariableMap.add var { cond with cond_expr = new_cond_expr } p.program_conds;
+              }
+        with Not_found -> assert false )
+      (* should not happen *))
     p exec_order

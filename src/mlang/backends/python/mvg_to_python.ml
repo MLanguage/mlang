@@ -131,15 +131,15 @@ let generate_typ (typ : typ) : string = match typ with Real -> "float"
 
 let autograd () : bool = !Cli.backend = "autograd"
 
-let rec generate_python_expr (e : expression) (scc : unit VariableMap.t) : string =
+let rec generate_python_expr (e : expression) : string =
   match e with
   | Comparison (op, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
   | Binop ((Ast.Div, _), e1, e2) -> (
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
       match Pos.unmark e2 with
       | _ -> Format.asprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value )
   (* This special case has been added, because otherwise huge sums would produce too many
@@ -156,111 +156,97 @@ let rec generate_python_expr (e : expression) (scc : unit VariableMap.t) : strin
                     (Binop ((Ast.Add, _), e4, (Binop ((Ast.Add, _), e5, e6), _)), _) ),
                 _ ) ),
           _ ) ) ->
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
-      let s3 = generate_python_expr (Pos.unmark e3) scc in
-      let s4 = generate_python_expr (Pos.unmark e4) scc in
-      let s5 = generate_python_expr (Pos.unmark e5) scc in
-      let s6 = generate_python_expr (Pos.unmark e6) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      let s3 = generate_python_expr (Pos.unmark e3) in
+      let s4 = generate_python_expr (Pos.unmark e4) in
+      let s5 = generate_python_expr (Pos.unmark e5) in
+      let s6 = generate_python_expr (Pos.unmark e6) in
       Format.asprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
   | Binop (op, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(%s %s %s)" s1 (generate_binop (Pos.unmark op)) s2
   | Unop (op, e) ->
-      let s = generate_python_expr (Pos.unmark e) scc in
+      let s = generate_python_expr (Pos.unmark e) in
       Format.asprintf "(%s %s)" (generate_unop op) s
   | Index (var, e) ->
-      let s = generate_python_expr (Pos.unmark e) scc in
+      let s = generate_python_expr (Pos.unmark e) in
       Format.asprintf "%s[%s]" (generate_variable (Pos.unmark var)) s
   | Conditional (e1, e2, e3) ->
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
-      let s3 = generate_python_expr (Pos.unmark e3) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      let s3 = generate_python_expr (Pos.unmark e3) in
       Format.asprintf "(%s if %s else %s)" s2 s1 s3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      let sarg = generate_python_expr (Pos.unmark arg) in
       Format.asprintf "(%s != %s)" sarg none_value
   | FunctionCall (NullFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      let sarg = generate_python_expr (Pos.unmark arg) in
       Format.asprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      let sarg = generate_python_expr (Pos.unmark arg) in
       if autograd () then Format.asprintf "%s" sarg else Format.asprintf "round(%s)" sarg
   | FunctionCall (InfFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) scc in
+      let sarg = generate_python_expr (Pos.unmark arg) in
       if autograd () then Format.asprintf "%s" sarg else Format.asprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.asprintf "%f" f
   | Literal Undefined -> none_value
-  | Var var ->
-      if VariableMap.mem var scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
-      else generate_variable var
+  | Var var -> generate_variable var
   | LocalVar lvar -> Format.asprintf "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) scc in
-      let s2 = generate_python_expr (Pos.unmark e2) scc in
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(lambda v%d: %s)(%s)" lvar.LocalVariable.id s2 s1
 
-let generate_var_def (program : program) (var : Variable.t) (scc : unit VariableMap.t)
-    (oc : Format.formatter) : unit =
-  let in_scc = VariableMap.cardinal scc > 1 in
-  let extra_tab = if in_scc then "    " else "" in
+let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatter) : unit =
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then begin
-      Format.fprintf oc "    %s# %s: %s\n" extra_tab (generate_name var)
-        (Pos.unmark var.Variable.descr);
+      Format.fprintf oc "    # %s: %s\n" (generate_name var) (Pos.unmark var.Variable.descr);
       match data.var_definition with
       | SimpleVar e ->
-          Format.fprintf oc "    %s# Defined %a\n    %s%s = %s\n\n" extra_tab Pos.format_position
-            (Pos.get_position e) extra_tab
-            ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
-            else generate_variable var )
-            (generate_python_expr (Pos.unmark e) scc)
+          Format.fprintf oc "    # Defined %a\n    %s = %s\n\n" Pos.format_position
+            (Pos.get_position e) (generate_variable var)
+            (generate_python_expr (Pos.unmark e))
       | TableVar (_, IndexTable es) ->
           IndexMap.iter
             (fun i e ->
-              Format.fprintf oc "    %s# Defined %a\n    %s%s[%d] = %s\n" extra_tab
-                Pos.format_position (Pos.get_position e) extra_tab
-                ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
-                else generate_variable var )
-                i
-                (generate_python_expr (Pos.unmark e) scc))
+              Format.fprintf oc "    # Defined %a\n    %s[%d] = %s\n" Pos.format_position
+                (Pos.get_position e) (generate_variable var) i
+                (generate_python_expr (Pos.unmark e)))
             es;
           Format.fprintf oc "\n"
       | TableVar (_, IndexGeneric e) ->
-          Format.fprintf oc "    %s# Defined %a\n    %s%s = lambda generic_index: %s\n\n" extra_tab
-            Pos.format_position (Pos.get_position e) extra_tab
-            ( if in_scc then Format.asprintf "scc[\"%s\"]" (generate_variable var)
-            else generate_variable var )
-            (generate_python_expr (Pos.unmark e) scc)
+          Format.fprintf oc "    # Defined %a\n    %s = lambda generic_index: %s\n\n"
+            Pos.format_position (Pos.get_position e) (generate_variable var)
+            (generate_python_expr (Pos.unmark e))
       | InputVar -> assert false
       (* should not happen *)
     end
   with Not_found ->
     let cond = VariableMap.find var program.program_conds in
     Format.fprintf oc
-      "    %s# Verification condition %a\n\
-      \    %scond = %s\n\
-      \    %sif cond:\n\
-      \    %s    raise TypeError(\"Error triggered\\n%s\")\n\n"
-      extra_tab Pos.format_position (Pos.get_position cond.cond_expr) extra_tab
-      (generate_python_expr (Pos.unmark cond.cond_expr) scc)
-      extra_tab extra_tab
+      "    # Verification condition %a\n\
+      \    cond = %s\n\
+      \    if cond:\n\
+      \        raise TypeError(\"Error triggered\\n%s\")\n\n"
+      Pos.format_position (Pos.get_position cond.cond_expr)
+      (generate_python_expr (Pos.unmark cond.cond_expr))
       (String.concat "\\n"
          (List.map
             (fun err ->
               Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
             cond.cond_errors))
 
-let generate_python_program (program : program) (filename : string) (number_of_passes : int) : unit
-    =
+let generate_python_program (program : program) (dep_graph : Dependency.DepGraph.t)
+    (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let exec_order = Execution_order.get_execution_order program in
+  let exec_order = Execution_order.get_execution_order dep_graph in
   let input_vars =
     List.map
       (fun (var, _) -> var)
@@ -288,27 +274,7 @@ let generate_python_program (program : program) (filename : string) (number_of_p
             Format.asprintf "    %s = input_variables[\"%s\"]" (generate_variable var)
               (generate_name var))
           input_vars));
-  List.iter
-    (fun scc ->
-      let in_scc = VariableMap.cardinal scc > 1 in
-      if in_scc then begin
-        Format.fprintf oc "    scc = {}\n\n";
-        VariableMap.iter
-          (fun var _ ->
-            Format.fprintf oc "    scc[\"%s\"] = %s\n" (generate_variable var) none_value)
-          scc;
-        Format.fprintf oc "\n    for _ in range(%d):\n" number_of_passes
-      end;
-      VariableMap.iter (fun var _ -> generate_var_def program var scc oc) scc;
-      if in_scc then begin
-        VariableMap.iter
-          (fun var _ ->
-            Format.fprintf oc "    %s = scc[\"%s\"]\n" (generate_variable var)
-              (generate_variable var))
-          scc;
-        Format.fprintf oc "\n"
-      end)
-    exec_order;
+  List.iter (fun var -> generate_var_def program var oc) exec_order;
   let returned_variables =
     List.map
       (fun (var, _) -> var)

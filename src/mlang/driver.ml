@@ -17,10 +17,10 @@ open Lexer
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
     (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
-    (function_spec : string) (output : string option) (number_of_passes : int)
-    (real_precision : int) (run_all_tests : string option) (run_test : string option) (year : int) =
+    (function_spec : string) (output : string option) (real_precision : int)
+    (run_all_tests : string option) (run_test : string option) (year : int) =
   Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles optimize
-    backend function_spec output number_of_passes real_precision run_all_tests run_test year;
+    backend function_spec output real_precision run_all_tests run_test year;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in
@@ -68,15 +68,14 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Expanding function definitions...";
     let program = Functions.expand_functions program in
     Cli.debug_print "Typechecking...";
-    let typing, program = Typechecker.typecheck program in
+    let program = Typechecker.typecheck program in
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
     let utils : Interpreter.evaluation_utilities =
       {
-        Interpreter.utilities_typing = typing;
         Interpreter.utilities_dep_graph = dep_graph;
-        Interpreter.utilities_execution_order = Execution_order.get_execution_order program;
+        Interpreter.utilities_execution_order = Execution_order.get_execution_order dep_graph;
       }
     in
     if !Cli.run_all_tests <> None then
@@ -88,12 +87,12 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       Test.check_test program utils test
     end
     else
-      let program = if !Cli.optimize then Optimization.optimize program typing else program in
-
+      let program = if !Cli.optimize then Optimization.optimize program dep_graph else program in
+      let dep_graph = Dependency.create_dependency_graph program in
       (* Noundef.check program; *)
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program utils !Cli.number_of_passes in
+        let f = Interface.make_function_from_program program utils in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program
@@ -105,7 +104,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program !Cli.output_file !Cli.number_of_passes;
+        Mvg_to_python.generate_python_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Python function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -114,7 +113,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Java...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_java.generate_java_program program !Cli.output_file !Cli.number_of_passes;
+        Mvg_to_java.generate_java_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Java function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -123,7 +122,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Clojure...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_clojure.generate_clj_program program !Cli.output_file !Cli.number_of_passes;
+        Mvg_to_clojure.generate_clj_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Clojure function from requested set of inputs and outputs, results written to \
            %s\n"

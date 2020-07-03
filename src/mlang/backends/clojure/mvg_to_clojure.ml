@@ -50,27 +50,27 @@ let generate_binop (op : Ast.binop) : string =
 
 (* Since there is no way to have inline let bindings, we have to collect all local variables
    created... *)
-let rec generate_clj_expr (e : expression Pos.marked) (scc : unit VariableMap.t) : string =
+let rec generate_clj_expr (e : expression Pos.marked) : string =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let s1 = generate_clj_expr e1 scc in
-      let s2 = generate_clj_expr e2 scc in
+      let s1 = generate_clj_expr e1 in
+      let s2 = generate_clj_expr e2 in
       Format.asprintf "%s (%s) (%s)" (generate_comp_op (Pos.unmark op)) s1 s2
   | Binop (op, e1, e2) ->
-      let s1 = generate_clj_expr e1 scc in
-      let s2 = generate_clj_expr e2 scc in
+      let s1 = generate_clj_expr e1 in
+      let s2 = generate_clj_expr e2 in
       Format.asprintf "%s (%s) (%s)" (generate_binop (Pos.unmark op)) s1 s2
   | Unop (Ast.Minus, e) ->
-      let s = generate_clj_expr e scc in
+      let s = generate_clj_expr e in
       Format.asprintf "minus_mvalue (%s)" s
   | Unop (Ast.Not, e) ->
-      let s = generate_clj_expr e scc in
+      let s = generate_clj_expr e in
       Format.asprintf "not_mvalue (%s)" s
   | Index _ -> assert false (* unimplemented *)
   | Conditional (((LocalVar _, _) as e1), e2, e3) ->
-      let s1 = generate_clj_expr e1 scc in
-      let s2 = generate_clj_expr e2 scc in
-      let s3 = generate_clj_expr e3 scc in
+      let s1 = generate_clj_expr e1 in
+      let s2 = generate_clj_expr e2 in
+      let s3 = generate_clj_expr e3 in
       Format.asprintf "if (get (%s) \"is_undef\") (undef nil) (if (get (%s) \"b\") (%s) (%s))" s1 s1
         s2 s3
   | Conditional (e1, e2, e3) ->
@@ -81,18 +81,18 @@ let rec generate_clj_expr (e : expression Pos.marked) (scc : unit VariableMap.t)
              (v1, e1, Pos.same_pos_as (Conditional (Pos.same_pos_as (LocalVar v1) e1, e2, e3)) e))
           e
       in
-      generate_clj_expr new_e scc
+      generate_clj_expr new_e
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let sarg = generate_clj_expr arg scc in
+      let sarg = generate_clj_expr arg in
       Format.asprintf "present_mvalue (%s)" sarg
   | FunctionCall (NullFunc, [ arg ]) ->
-      let sarg = generate_clj_expr arg scc in
+      let sarg = generate_clj_expr arg in
       Format.asprintf "null_mvalue (%s)" sarg
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let sarg = generate_clj_expr arg scc in
+      let sarg = generate_clj_expr arg in
       Format.asprintf "round_mvalue (%s)" sarg
   | FunctionCall (InfFunc, [ arg ]) ->
-      let sarg = generate_clj_expr arg scc in
+      let sarg = generate_clj_expr arg in
       Format.asprintf "floor_mvalue (%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float 0.0) -> "zero nil"
@@ -103,20 +103,19 @@ let rec generate_clj_expr (e : expression Pos.marked) (scc : unit VariableMap.t)
   | GenericTableIndex -> assert false (* unimplemented *)
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      let s1 = generate_clj_expr e1 scc in
-      let s2 = generate_clj_expr e2 scc in
+      let s1 = generate_clj_expr e1 in
+      let s2 = generate_clj_expr e2 in
       let v = Format.asprintf "v%d" lvar.LocalVariable.id in
       Format.asprintf "let [%s (%s)] (%s)" v s1 s2
 
-let generate_var_def (program : program) (var : Variable.t) (scc : unit VariableMap.t)
-    (oc : Format.formatter) : unit =
+let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatter) : unit =
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then
       match data.var_definition with
       | SimpleVar e ->
           Format.fprintf oc "; Defined %a\n" Pos.format_position (Pos.get_position e);
-          let s = generate_clj_expr e scc in
+          let s = generate_clj_expr e in
           Format.fprintf oc "(defn %s [values] (\n    assoc values \"%s\" (%s)\n"
             (generate_variable var) (generate_variable var) s;
           Format.fprintf oc "))\n\n"
@@ -128,7 +127,7 @@ let generate_var_def (program : program) (var : Variable.t) (scc : unit Variable
         (generate_variable var) (generate_variable var) (generate_name var)
   with Not_found ->
     let cond = VariableMap.find var program.program_conds in
-    let s = generate_clj_expr cond.cond_expr scc in
+    let s = generate_clj_expr cond.cond_expr in
     let fresh = LocalVariable.new_var () in
     let cond_name = Format.asprintf "cond%d" fresh.LocalVariable.id in
     Format.fprintf oc
@@ -146,10 +145,11 @@ let generate_var_def (program : program) (var : Variable.t) (scc : unit Variable
               Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
             cond.cond_errors))
 
-let generate_clj_program (program : program) (filename : string) (_ : int) : unit =
+let generate_clj_program (program : program) (dep_graph : Dependency.DepGraph.t) (filename : string)
+    : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let exec_order = Execution_order.get_execution_order program in
+  let exec_order = Execution_order.get_execution_order dep_graph in
   Format.fprintf oc "; %s\n\n" Prelude.message;
   let output_vars =
     List.map
@@ -198,20 +198,12 @@ let generate_clj_program (program : program) (filename : string) (_ : int) : uni
      (mk_bool (> (get v1 \"v\") (get v2 \"v\")))))\n\n\
      (defn gte_mvalue [v1 v2] (if (or (get v1 \"is_undef\") (get v2 \"is_undef\")) (undef nil) \
      (mk_bool (>= (get v1 \"v\") (get v2 \"v\")))))\n\n";
-  List.iter
-    (fun scc ->
-      let in_scc = VariableMap.cardinal scc > 1 in
-      if in_scc then assert false (* unimplemented *);
-      VariableMap.iter (fun var _ -> generate_var_def program var scc oc) scc)
-    exec_order;
+  List.iter (fun var -> generate_var_def program var oc) exec_order;
   Format.fprintf oc
     "(defn compute_ir [values_0] (let [\n%s\n] (\n    ; Main tax computation.\n    %s\n)))"
     (String.concat "\n"
        (List.mapi
-          (fun i scc ->
-            let in_scc = VariableMap.cardinal scc > 1 in
-            if in_scc then assert false (* unimplemented *);
-            let var, _ = VariableMap.choose scc in
+          (fun i (var : Mvg.Variable.t) ->
             Format.asprintf "    values_%d (%s values_%d)\n" (i + 1) (generate_variable var) i)
           exec_order))
     begin

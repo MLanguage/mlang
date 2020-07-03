@@ -50,28 +50,27 @@ let generate_binop (op : Ast.binop) : string =
 
 (* Since there is no way to have inline let bindings, we have to collect all local variables
    created... *)
-let rec generate_java_expr (e : expression Pos.marked) (scc : unit VariableMap.t) :
-    string * string list =
+let rec generate_java_expr (e : expression Pos.marked) : string * string list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let s1, ls1 = generate_java_expr e1 scc in
-      let s2, ls2 = generate_java_expr e2 scc in
+      let s1, ls1 = generate_java_expr e1 in
+      let s2, ls2 = generate_java_expr e2 in
       (Format.asprintf "%s.%s(%s)" s1 (generate_comp_op (Pos.unmark op)) s2, ls1 @ ls2)
   | Binop (op, e1, e2) ->
-      let s1, ls1 = generate_java_expr e1 scc in
-      let s2, ls2 = generate_java_expr e2 scc in
+      let s1, ls1 = generate_java_expr e1 in
+      let s2, ls2 = generate_java_expr e2 in
       (Format.asprintf "%s.%s(%s)" s1 (generate_binop (Pos.unmark op)) s2, ls1 @ ls2)
   | Unop (Ast.Minus, e) ->
-      let s, ls = generate_java_expr e scc in
+      let s, ls = generate_java_expr e in
       (Format.asprintf "%s.minus()" s, ls)
   | Unop (Ast.Not, e) ->
-      let s, ls = generate_java_expr e scc in
+      let s, ls = generate_java_expr e in
       (Format.asprintf "%s.not()" s, ls)
   | Index _ -> assert false (* unimplemented *)
   | Conditional (((LocalVar _, _) as e1), e2, e3) ->
-      let s1, ls1 = generate_java_expr e1 scc in
-      let s2, ls2 = generate_java_expr e2 scc in
-      let s3, ls3 = generate_java_expr e3 scc in
+      let s1, ls1 = generate_java_expr e1 in
+      let s2, ls2 = generate_java_expr e2 in
+      let s3, ls3 = generate_java_expr e3 in
       let v = LocalVariable.new_var () in
       let s_def =
         Format.asprintf "(%s.is_undefined() ? new MValue() : (%s.get_bool_value() ? %s : %s))" s1 s1
@@ -88,18 +87,18 @@ let rec generate_java_expr (e : expression Pos.marked) (scc : unit VariableMap.t
              (v1, e1, Pos.same_pos_as (Conditional (Pos.same_pos_as (LocalVar v1) e1, e2, e3)) e))
           e
       in
-      generate_java_expr new_e scc
+      generate_java_expr new_e
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let sarg, lsarg = generate_java_expr arg scc in
+      let sarg, lsarg = generate_java_expr arg in
       (Format.asprintf "new MValue(!%s.is_undefined())" sarg, lsarg)
   | FunctionCall (NullFunc, [ arg ]) ->
-      let sarg, lsarg = generate_java_expr arg scc in
+      let sarg, lsarg = generate_java_expr arg in
       (Format.asprintf "new MValue(%s.is_undefined())" sarg, lsarg)
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let sarg, lsarg = generate_java_expr arg scc in
+      let sarg, lsarg = generate_java_expr arg in
       (Format.asprintf "%s.round()" sarg, lsarg)
   | FunctionCall (InfFunc, [ arg ]) ->
-      let sarg, lsarg = generate_java_expr arg scc in
+      let sarg, lsarg = generate_java_expr arg in
       (Format.asprintf "%s.floor()" sarg, lsarg)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "new MValue(%f)" f, [])
@@ -109,12 +108,11 @@ let rec generate_java_expr (e : expression Pos.marked) (scc : unit VariableMap.t
   | GenericTableIndex -> assert false (* unimplemented *)
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      let s1, ls1 = generate_java_expr e1 scc in
-      let s2, ls2 = generate_java_expr e2 scc in
+      let s1, ls1 = generate_java_expr e1 in
+      let s2, ls2 = generate_java_expr e2 in
       (s2, ls1 @ [ Format.asprintf "        MValue v%d = %s;" lvar.LocalVariable.id s1 ] @ ls2)
 
-let generate_var_def (program : program) (var : Variable.t) (scc : unit VariableMap.t)
-    (oc : Format.formatter) : unit =
+let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatter) : unit =
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then begin
@@ -122,7 +120,7 @@ let generate_var_def (program : program) (var : Variable.t) (scc : unit Variable
       match data.var_definition with
       | SimpleVar e ->
           Format.fprintf oc "    // Defined %a\n" Pos.format_position (Pos.get_position e);
-          let s, ls = generate_java_expr e scc in
+          let s, ls = generate_java_expr e in
           Format.fprintf oc "    void compute_%s() {\n" (generate_variable var);
           List.iter (fun s -> Format.fprintf oc "%s\n" s) ls;
           Format.fprintf oc "        this.%s = %s;\n" (generate_variable var) s;
@@ -133,8 +131,7 @@ let generate_var_def (program : program) (var : Variable.t) (scc : unit Variable
     end
   with Not_found -> ()
 
-let generate_var_call (program : program) (var : Variable.t) (scc : unit VariableMap.t)
-    (oc : Format.formatter) : unit =
+let generate_var_call (program : program) (var : Variable.t) (oc : Format.formatter) : unit =
   try
     let data = VariableMap.find var program.program_vars in
     if data.var_io = Regular || data.var_io = Output then
@@ -145,7 +142,7 @@ let generate_var_call (program : program) (var : Variable.t) (scc : unit Variabl
     (* should not happen *)
   with Not_found ->
     let cond = VariableMap.find var program.program_conds in
-    let s, ls = generate_java_expr cond.cond_expr scc in
+    let s, ls = generate_java_expr cond.cond_expr in
     let fresh = LocalVariable.new_var () in
     let cond_name = Format.asprintf "cond%d" fresh.LocalVariable.id in
     List.iter (fun s -> Format.fprintf oc "%s\n" s) ls;
@@ -162,10 +159,11 @@ let generate_var_call (program : program) (var : Variable.t) (scc : unit Variabl
               Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
             cond.cond_errors))
 
-let generate_java_program (program : program) (filename : string) (_ : int) : unit =
+let generate_java_program (program : program) (dep_graph : Dependency.DepGraph.t)
+    (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let exec_order = Execution_order.get_execution_order program in
+  let exec_order = Execution_order.get_execution_order dep_graph in
   let all_vars =
     List.rev (List.map (fun (var, _) -> var) (VariableMap.bindings program.program_vars))
   in
@@ -340,22 +338,12 @@ let generate_java_program (program : program) (filename : string) (_ : int) : un
             Format.asprintf "       this.%s = input_values.get(\"%s\");" (generate_variable var)
               (generate_name var))
           input_vars));
-  List.iter
-    (fun scc ->
-      let in_scc = VariableMap.cardinal scc > 1 in
-      if in_scc then assert false (* unimplemented *);
-      VariableMap.iter (fun var _ -> generate_var_def program var scc oc) scc)
-    exec_order;
+  List.iter (fun var -> generate_var_def program var oc) exec_order;
   Format.fprintf oc
     "\n\
     \    // Main tax computation. Call before any output getter.\n\
     \    public void compute() throws MError {\n";
-  List.iter
-    (fun scc ->
-      let in_scc = VariableMap.cardinal scc > 1 in
-      if in_scc then assert false (* unimplemented *);
-      VariableMap.iter (fun var _ -> generate_var_call program var scc oc) scc)
-    exec_order;
+  List.iter (fun var -> generate_var_call program var oc) exec_order;
   Format.fprintf oc "    }\n\n";
   Format.fprintf oc "%s"
     (String.concat "\n    "

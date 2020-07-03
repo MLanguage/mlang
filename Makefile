@@ -3,14 +3,14 @@ SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=ir-calcul/sources2018m_6_7/
 
-SOURCE_FILES=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_FILES=$(shell find $SOURCE_DIR_2018 -name "*.m")
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
 
 default: build
 
 deps:
-	opam install ppx_deriving ANSITerminal re ocamlgraph z3 dune menhir \
+	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
 	cmdliner dune-build-info visitors parmap num ocamlformat
 	git submodule update --init --recursive
 
@@ -24,14 +24,14 @@ build: #format
 test: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec --number_of_passes 1\
+		--function_spec tests.m_spec\
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec --number_of_passes 1\
+		--function_spec tests.m_spec\
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 
@@ -39,14 +39,14 @@ tests: build
 tests2017: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec --number_of_passes 5\
+		--function_spec tests.m_spec\
 		--run_all_tests=tests_2017/ --year=2017 \
 		$(shell find $(SOURCE_DIR_2017) -name "*.m")
 
 test2017: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec --number_of_passes 5\
+		--function_spec tests.m_spec\
 		--run_test=$(TEST_FILE) --year=2017 \
 		$(shell find $(SOURCE_DIR_2017) -name "*.m")
 

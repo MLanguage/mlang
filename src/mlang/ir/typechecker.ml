@@ -18,8 +18,6 @@ open Mvg
 
 type ctx = { ctx_program : program; ctx_is_generic_table : bool }
 
-type typ_info = { table_info_var : bool Mvg.VariableMap.t (* the bool flag is_table *) }
-
 let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
   match Pos.unmark e with
   | Comparison (_, e1, e2) ->
@@ -177,8 +175,8 @@ let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_de
   match def with SimpleVar e -> check_non_recursivity_expr e var | TableVar _ | InputVar -> ()
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
-let typecheck (p : program) : typ_info * program =
-  let are_tables, ctx, p_vars =
+let typecheck (p : program) : program =
+  let _are_tables, ctx, p_vars =
     Mvg.VariableMap.fold
       (fun var def (acc, ctx, p_vars) ->
         check_non_recursivity_of_variable_defs var def.var_definition;
@@ -235,4 +233,4 @@ let typecheck (p : program) : typ_info * program =
       (Mvg.VariableMap.empty, { ctx_program = p; ctx_is_generic_table = false }, p.program_vars)
   in
   let _ = typecheck_program_conds ctx p.program_conds in
-  ({ table_info_var = are_tables }, { p with program_vars = p_vars })
+  { p with program_vars = p_vars }

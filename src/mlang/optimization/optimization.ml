@@ -40,29 +40,31 @@ let remove_unused_variables (program : Mvg.program) : Mvg.program =
 
 (** Right now, the interpretation model for variables defined circularly is not properly defined. We
     have to repeat partial evaluation until all the undefined loops have been reduced. *)
-let optimize (program : Mvg.program) (typing : Typechecker.typ_info) : Mvg.program =
+let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.program =
   Cli.debug_print "Optimizing program with %d variables..."
     (Mvg.VariableMap.cardinal program.program_vars);
   (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
+  let dep_graph = ref dep_graph in
   let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
   while !nb_removed > 0 do
     let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
     current_progress
       (Format.asprintf "%d variables, performing partial evaluation..." remaining_vars);
     let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
-    let new_program = Partial_evaluation.partially_evaluate !program typing in
+    let new_program = Partial_evaluation.partially_evaluate !program !dep_graph in
     current_progress
       (Format.asprintf "%d variables, performing global value numbering..." remaining_vars);
     let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
-    let new_program = Global_value_numbering.optimize new_program typing in
+    let new_program = Global_value_numbering.optimize new_program !dep_graph in
     current_progress
       (Format.asprintf "%d variables, performing partial evaluation..." remaining_vars);
     let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
-    let new_program = Partial_evaluation.partially_evaluate new_program typing in
+    let new_program = Partial_evaluation.partially_evaluate new_program !dep_graph in
     current_progress (Format.asprintf "%d variables, removing unused variables..." remaining_vars);
     let new_program = remove_unused_variables new_program in
+    dep_graph := Dependency.create_dependency_graph new_program;
     let new_nb_removed =
       Mvg.VariableMap.cardinal !program.program_vars
       - Mvg.VariableMap.cardinal new_program.program_vars

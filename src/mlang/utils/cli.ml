@@ -58,7 +58,7 @@ let backend =
     required
     & opt (some string) None
     & info [ "backend"; "b" ] ~docv:"BACKEND"
-        ~doc:"Backend selection: interpreter, python, java, clojure or z3")
+        ~doc:"Backend selection: interpreter, python, java, clojure")
 
 let function_spec =
   Arg.(
@@ -78,15 +78,6 @@ let output =
         ~doc:
           "$(i, OUTPUT) is the file that will contain the extracted function (for compiler \
            backends)")
-
-let number_of_passes =
-  Arg.(
-    value & opt int 1
-    & info [ "number_of_passes"; "n" ] ~docv:"PASSES"
-        ~doc:
-          "M programs can contain variables defined circularly. In this case, the value computed \
-           by the program depends on an arbitrary number of execution passes that you provide with \
-           $(i,PASSES)")
 
 let real_precision =
   Arg.(
@@ -114,8 +105,7 @@ let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year 
 let mlang_t f =
   Term.(
     const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ output $ number_of_passes $ real_precision $ run_all_tests
-    $ run_test $ year)
+    $ backend $ function_spec $ output $ real_precision $ run_all_tests $ run_test $ year)
 
 let info =
   let doc =
@@ -192,8 +182,6 @@ let output_file = ref ""
 
 let function_spec = ref ""
 
-let number_of_passes = ref 1
-
 let real_precision = ref 100
 
 let backend = ref "python"
@@ -206,9 +194,8 @@ let year : int ref = ref 2018
 
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string) (output_ : string option)
-    (number_of_passes_ : int) (real_precision_ : int) (run_all_tests_ : string option)
-    (run_test_ : string option) (year_ : int) =
+    (backend_ : string) (function_spec_ : string) (output_ : string option) (real_precision_ : int)
+    (run_all_tests_ : string option) (run_test_ : string option) (year_ : int) =
   source_files := files_;
   application := application_;
   debug_flag := debug_;
@@ -223,9 +210,8 @@ let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bo
      match output_ with
      | Some o -> o
      | None ->
-         if backend_ = "interpreter" || backend_ = "z3" then ""
+         if backend_ = "interpreter" then ""
          else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_)));
-  number_of_passes := number_of_passes_;
   run_all_tests := run_all_tests_;
   run_test := run_test_;
   year := year_
