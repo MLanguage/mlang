@@ -1,17 +1,7 @@
 saisie: non;
 
 const:
-PREM8_11 = 0;
-# FLAG_PVRO seems to be used in RASAA, RASAJ, RASAB, RASAI, RASAD, RASAE, RASAF, RASAL, RASAG, ASDIRDD, ASDIRCY, PASCQ, ASDIRDI, PASCS, ASDIRCA, ASDIRCM, ASDIRCL, ASDIRAL, PASB, ASDIRBN, RAPATE, BINET, DASTRE, GOLE, BOCHON, MEMBERT, BOTAGE, TOGAN, to compute IAVIM correctly
-FLAG_PVRO = 0;
-# FLAG_ACO = 2;
-# V_ACO_MTAP = 30241;
-# it seems PASCS needs FLAG_ACO = 2;
-# But PACSQ needs FLAG_ACO set to something else /o\
-V_IND_TRAIT = 4; # pour le calcul primitif de l'impot, cf in.c, sur desc_V_IND_TRAIT
-#MOISAN = 052017;
-#CMAJ = 0; #Is it though ? COPETO causing penalities in LIMERO, PACSB
-#
+V_IND_TRAIT = 4;;
 
 condition: non;
 
