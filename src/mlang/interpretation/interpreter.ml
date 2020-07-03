@@ -480,7 +480,7 @@ let report_missinginput ctx var =
               (Pos.unmark var.Mvg.Variable.descr)),
          ctx ))
 
-let evaluate_scc p input_values ctx scc dep_graph =
+let evaluate_scc p input_values ctx scc _ =
   (* if VariableMap.exists (fun var _ -> Pos.unmark var.Variable.name = "REV4HT") scc then
    *   (
    *     eval_debug := true;
@@ -513,14 +513,16 @@ let evaluate_scc p input_values ctx scc dep_graph =
                 { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
               with Not_found ->
                 if VariableMap.mem var ctx.ctx_vars then ctx else report_missinginput ctx var )
-        with Not_found -> (
-          let cond = VariableMap.find var p.program_conds in
-          let l_cond = evaluate_expr ctx p cond.cond_expr in
-          match l_cond with
-          | Float 0. | Undefined -> ctx (* error condition is not trigerred, we continue *)
-          | Float _ ->
-              (* the condition is triggered, we throw errors *)
-              report_violatedcondition cond var ctx dep_graph )
+        with Not_found ->
+          ctx
+          (*   (
+           * let cond = VariableMap.find var p.program_conds in
+           * let l_cond = evaluate_expr ctx p cond.cond_expr in
+           * match l_cond with
+           * | Float 0. | Undefined -> ctx (\* error condition is not trigerred, we continue *\)
+           * | Float _ ->
+           *     (\* the condition is triggered, we throw errors *\)
+           *     report_violatedcondition cond var ctx dep_graph ) *)
         (* should not happen *))
       scc ctx
   in
@@ -574,3 +576,13 @@ let evaluate_program (p : program) (utils : evaluation_utilities)
       exit 1
     end
     else raise (RuntimeError (e, ctx))
+
+let check_verif_conds (p: program) (utils: evaluation_utilities) (ctx: ctx) : unit =
+  let conds = p.program_conds in
+  Mvg.VariableMap.iter (fun var cond ->
+      match evaluate_expr ctx p cond.cond_expr with
+      | Float f when f = 1. ->
+                  report_violatedcondition cond var ctx utils.utilities_dep_graph
+      | _ -> ()
+    )
+    conds

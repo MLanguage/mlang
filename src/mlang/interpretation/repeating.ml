@@ -435,4 +435,5 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
 
 let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) (npasses : int) : Interpreter.ctx =
-  fst @@ compute_double_liquidation_exit_taxe p utils inputs npasses
+  let ctx = fst @@ compute_double_liquidation_exit_taxe p utils inputs npasses in
+  Interpreter.check_verif_conds p utils ctx; ctx
