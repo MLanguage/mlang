@@ -525,7 +525,7 @@ chaining_list:
 
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
-  CONST COLON consts = spec_const_list
+  CONST COLON consts = spec_const_list SEMICOLON
   CONDITION COLON precs = spec_conds_list
   CHAINING COLON chainings = chaining_list
   OUTPUT COLON outputs = spec_output_list SEMICOLON
