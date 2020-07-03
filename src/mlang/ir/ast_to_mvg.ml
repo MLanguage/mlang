@@ -845,7 +845,7 @@ let rec translate_expression (ctx : translating_context) (f : Ast.expression Pos
               Pos.same_pos_as
                 (Mvg.Binop (Pos.same_pos_as Ast.Or f, Pos.same_pos_as equal_test f, or_chain))
                 f)
-            (Pos.same_pos_as (Mvg.Literal (Mvg.Bool false)) f)
+            (Pos.same_pos_as (Mvg.Literal Mvg.false_literal) f)
             values
         in
         let or_chain =
@@ -908,7 +908,7 @@ let rec translate_expression (ctx : translating_context) (f : Ast.expression Pos
         List.fold_left
           (fun acc loop_expr ->
             Mvg.Binop (Pos.same_pos_as Ast.Or e, Pos.same_pos_as acc e, loop_expr))
-          (Mvg.Literal (Mvg.Bool false)) loop_exprs )
+          (Mvg.Literal Mvg.false_literal) loop_exprs )
     f
 
 (** Mutually recursive with {!val: translate_expression} *)

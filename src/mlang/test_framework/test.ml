@@ -128,9 +128,9 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
   try
     List.iter
       (fun (_, cond) ->
-        let result = Interpreter.evaluate_expr ctx p cond.cond_expr Boolean in
+        let result = Interpreter.evaluate_expr ctx p cond.cond_expr in
         match result with
-        | Bool true ->
+        | Float f when f <> 0. ->
             raise
               (Interpreter.RuntimeError
                  ( Interpreter.ConditionViolated

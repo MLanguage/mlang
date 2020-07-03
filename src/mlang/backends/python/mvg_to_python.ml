@@ -127,7 +127,7 @@ let generate_variable (var : Variable.t) : string =
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_typ (typ : typ) : string = match typ with Real -> "float" | Boolean -> "bool"
+let generate_typ (typ : typ) : string = match typ with Real -> "float"
 
 let autograd () : bool = !Cli.backend = "autograd"
 
@@ -191,8 +191,6 @@ let rec generate_python_expr (e : expression) (scc : unit VariableMap.t) : strin
       let sarg = generate_python_expr (Pos.unmark arg) scc in
       if autograd () then Format.asprintf "%s" sarg else Format.asprintf "floor(%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Bool true) -> if autograd () then "1.0" else "True"
-  | Literal (Bool false) -> if autograd () then "0.0" else "False"
   | Literal (Float f) -> Format.asprintf "%f" f
   | Literal Undefined -> none_value
   | Var var ->

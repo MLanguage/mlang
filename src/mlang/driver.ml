@@ -91,9 +91,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       let program = if !Cli.optimize then Optimization.optimize program typing else program in
 
       (* Noundef.check program; *)
-      if String.lowercase_ascii !Cli.backend = "z3" then
-        Z3_driver.translate_and_launch_query program typing
-      else if String.lowercase_ascii !Cli.backend = "interpreter" then begin
+      if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let f = Interface.make_function_from_program program utils !Cli.number_of_passes in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
