@@ -159,7 +159,7 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
 let compute_benefit (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) (npasses : int) : float * literal VariableMap.t =
   Cli.debug_print "beginning compute_benefit@.";
-  let besoincalcul = exists_taxbenefit_ceiled_variables inputs in
+  let besoincalcul = (VariableMap.cardinal (all_deposit_defined_variables inputs) > 0) || exists_taxbenefit_ceiled_variables inputs in
   let inputs, inputs_other = partition_inputs var_is_taxbenefit inputs in
   let update_inputs = update_inputs_var p in
   let avantagefisc, inputs =
@@ -292,11 +292,9 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
   Cli.debug_print "program evaluation done!@.";
   (ctx, inputs)
 
-(* FIXME: implement double_liquidation_pvro too? *)
 
 (** Equivalent to IN_traite_double_exit_taxe in DGFiP's codebase *)
-let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
-    (inputs : literal VariableMap.t) (npasses : int) : Interpreter.ctx =
+let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evaluation_utilities) (inputs: literal VariableMap.t) (npasses: int) : Interpreter.ctx * literal VariableMap.t =
   let update_inputs = update_inputs_var p in
   let montant3WA = get_input_var p inputs "PVSURSI" in
   let montant3WB = get_input_var p inputs "PVIMPOS" in
@@ -424,5 +422,29 @@ let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
       (update_inputs "FLAG_BAREM" 0. inputs, p)
     else (inputs, p)
   in
-  let ctx, _inputs = compute_double_liquidation3 p utils inputs npasses in
-  ctx
+  compute_double_liquidation3 p utils inputs npasses
+
+(* (\* FIXME: FIETTE: issue on RBG1 *\)
+ * let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluation_utilities)
+ *       (inputs : literal VariableMap.t) (npasses : int) : Interpreter.ctx * literal VariableMap.t =
+ *   let update_inputs = update_inputs_var p in
+ *   let inputs = match get_input_var p inputs "COD3WG" with
+ *     | SimpleVar Undefined -> inputs
+ *     | _ ->
+ *        let inputs = update_inputs "FLAG_PVRO" 1. inputs in
+ *        let ctx, inputs = compute_double_liquidation_exit_taxe p utils inputs npasses in
+ *        match get_ctx_var p ctx "IAD11" with
+ *        | SimpleVar Undefined -> inputs
+ *        | SimpleVar (Float f) ->
+ *           Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
+ *           Interpreter.repl_debugguer ctx p;
+ *           update_inputs "V_IPVRO" f inputs
+ *        | _ -> assert false
+ *   in
+ *   let inputs = update_inputs "FLAG_PVRO" 0. inputs in
+ *   compute_double_liquidation_exit_taxe p utils inputs npasses *)
+
+
+let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
+    (inputs : literal VariableMap.t) (npasses : int) : Interpreter.ctx =
+  fst @@ compute_double_liquidation_exit_taxe p utils inputs npasses
