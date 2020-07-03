@@ -179,7 +179,7 @@ let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities)
       Cli.debug_flag := true;
       (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
     with
-    | Interpreter.RuntimeError (ConditionViolated (_, expr, bindings), _) -> (
+    | Interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
         Cli.debug_flag := true;
         match (bindings, Pos.unmark expr) with
         | ( [ (v, Interpreter.SimpleVar l1) ],
@@ -191,7 +191,7 @@ let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities)
         | _ ->
             (* let errs_varname = try VariableMap.find (fst @@ List.hd bindings) failures with Not_found -> [] in
              * (successes, VariableMap.add v ((name, snd @@ List.hd bindings, Undefined) :: erss_varname) failures) *)
-            Cli.error_print "Weird failure in %s, case not taken into account@." name;
+            Cli.error_print "Test %s incorrect (error%s %a raised)@." name (if List.length err > 1 then "s" else "") (Format.pp_print_list Format.pp_print_string) (List.map (fun x -> Pos.unmark x.Error.name) err);
             (successes, failures) )
     | Errors.TypeError t ->
         Cli.error_print "Type error in %s (%a), case not taken into account@." name
