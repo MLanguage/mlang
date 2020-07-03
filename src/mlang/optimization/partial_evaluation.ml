@@ -65,8 +65,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           | Literal _, Literal _ ->
               Mvg.Literal
                 (Interpreter.evaluate_expr interp_ctx p
-                   (Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e)
-                   Boolean)
+                   (Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e))
           | _ -> Comparison (op, new_e1, new_e2)
         end
         e
@@ -82,31 +81,29 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           | Ast.Or, _, Literal Undefined
           | Ast.Div, _, Literal Undefined ->
               Literal Undefined
-          | Ast.Or, Literal (Bool true), _ | Ast.Or, _, Literal (Bool true) -> Literal (Bool true)
-          | Ast.And, Literal (Bool false), _ | Ast.And, _, Literal (Bool false) ->
-              Literal (Bool false)
-          | Ast.And, Literal (Bool true), e'
-          | Ast.And, e', Literal (Bool true)
-          | Ast.Or, Literal (Bool false), e'
-          | Ast.Or, e', Literal (Bool false)
-          | Ast.Add, Literal (Float 0. | Bool false | Undefined), e'
-          | Ast.Add, e', Literal (Float 0. | Bool false | Undefined)
-          | Ast.Mul, Literal (Float 1. | Bool true), e'
-          | Ast.Mul, e', Literal (Float 1. | Bool true)
-          | Ast.Div, e', Literal (Float 1. | Bool true)
-          | Ast.Sub, e', Literal (Float 0. | Bool false | Undefined) ->
+          | Ast.Or, Literal (Float f), _ when f != 0. -> Literal true_literal
+          | Ast.Or, _, Literal (Float f) when f != 0. -> Literal true_literal
+          | Ast.And, Literal (Float 0.), _ | Ast.And, _, Literal (Float 0.) -> Literal false_literal
+          | Ast.And, Literal (Float f), e' when f != 0. -> e'
+          | Ast.And, e', Literal (Float f) when f != 0. -> e'
+          | Ast.Or, Literal (Float 0.), e'
+          | Ast.Or, e', Literal (Float 0.)
+          | Ast.Add, Literal (Float 0. | Undefined), e'
+          | Ast.Add, e', Literal (Float 0. | Undefined)
+          | Ast.Mul, Literal (Float 1.), e'
+          | Ast.Mul, e', Literal (Float 1.)
+          | Ast.Div, e', Literal (Float 1.)
+          | Ast.Sub, e', Literal (Float 0. | Undefined) ->
               e'
-          | Ast.Sub, Literal (Float 0. | Bool false | Undefined), e' ->
-              Unop (Minus, Pos.same_pos_as e' e)
-          | Ast.Mul, Literal (Float 0. | Bool false | Undefined), _
-          | Ast.Mul, _, Literal (Float 0. | Bool false | Undefined)
-          | Ast.Div, Literal (Float 0. | Bool false | Undefined), _ ->
+          | Ast.Sub, Literal (Float 0. | Undefined), e' -> Unop (Minus, Pos.same_pos_as e' e)
+          | Ast.Mul, Literal (Float 0. | Undefined), _
+          | Ast.Mul, _, Literal (Float 0. | Undefined)
+          | Ast.Div, Literal (Float 0. | Undefined), _ ->
               Mvg.Literal (Mvg.Float 0.)
           | _, Literal _, Literal _ ->
               Mvg.Literal
                 (Interpreter.evaluate_expr interp_ctx p
-                   (Pos.same_pos_as (Binop (op, new_e1, new_e2)) e1)
-                   (match Pos.unmark op with Ast.And | Ast.Or -> Boolean | _ -> Real))
+                   (Pos.same_pos_as (Binop (op, new_e1, new_e2)) e1))
           | Ast.Add, _, Literal (Float f) when f < 0. ->
               Binop (Pos.same_pos_as Ast.Sub op, e1, Pos.same_pos_as (Literal (Float (-.f))) e2)
           | Ast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Ast.Sub op, e1, e2')
@@ -120,9 +117,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           match Pos.unmark new_e1 with
           | Literal _ ->
               Mvg.Literal
-                (Interpreter.evaluate_expr interp_ctx p
-                   (Pos.same_pos_as (Unop (op, new_e1)) e1)
-                   (match op with Not -> Boolean | Minus -> Real))
+                (Interpreter.evaluate_expr interp_ctx p (Pos.same_pos_as (Unop (op, new_e1)) e1))
           | _ -> Unop (op, new_e1)
         end
         e
@@ -131,8 +126,8 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
       let new_e2 = partial_evaluation ctx interp_ctx p e2 in
       let new_e3 = partial_evaluation ctx interp_ctx p e3 in
       match Pos.unmark new_e1 with
-      | Literal (Bool true) -> new_e2
-      | Literal (Bool false) -> new_e3
+      | Literal (Float 0.) -> new_e3
+      | Literal (Float _) -> new_e2
       | Literal Undefined -> Pos.same_pos_as (Literal Undefined) e
       | _ -> Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e )
   | Index (var, e1) -> (
@@ -145,7 +140,6 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
         | Literal l -> (
             let idx =
               match l with
-              | Bool b -> Interpreter.int_of_bool b
               | Undefined -> assert false (* should not happen *)
               | Float f ->
                   if
@@ -227,8 +221,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           Pos.same_pos_as
             (Mvg.Literal
                (Interpreter.evaluate_expr interp_ctx p
-                  (Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e)
-                  Real))
+                  (Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e)))
             e
       | _ -> Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e )
   | FunctionCall (func, args) ->
@@ -280,9 +273,9 @@ let partially_evaluate (p : program) (typing : Typechecker.typ_info) : program =
               match
                 partial_evaluation (empty_ctx typing var None scc) interp_ctx p cond.cond_expr
               with
-              | Literal (Bool false), _ | Literal Undefined, _ ->
+              | Literal (Float 0.), _ | Literal Undefined, _ ->
                   { p with program_conds = VariableMap.remove var p.program_conds }
-              | Literal (Bool true), _ ->
+              | Literal (Float _), _ ->
                   raise
                     (Interpreter.RuntimeError
                        ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),

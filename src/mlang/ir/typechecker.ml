@@ -11,201 +11,57 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(** This modules defines M's static semantic. The typechecking is done with a standard
-    bidirectionnal algorithm featuring unification. There are only four types : undefined, boolean ,
-    integer and real. The unification is done according to strict order between those types, as
-    almost all operators are polymorphic. *)
+(** This modules defines M's static semantic. There is only one type: float. The typechecking is
+    mostly about differentiating table from non-tables variables *)
 
 open Mvg
 
-(** This module defines the internal representation of type variables during the typechecking. *)
-module Typ = struct
-  (** [Up] corresponds to type inference, [Down] to type checking *)
-  type direction = Up | Down
+type ctx = { ctx_program : program; ctx_is_generic_table : bool }
 
-  type infer_info = Pos.position * direction
-  (** Used to display nice error messages for type errors *)
+type typ_info = { table_info_var : bool Mvg.VariableMap.t (* the bool flag is_table *) }
 
-  (** Only 4 different types in [T]. There is a strict order on those types. *)
-  module T = struct
-    type t = Real | Boolean | All [@@deriving eq, ord]
-  end
-
-  module UF = Union_find.Make (T)
-
-  type t = UF.t * infer_info
-
-  exception UnificationError of string * string
-
-  let format_typ fmt (t : t) =
-    Format.fprintf fmt "%s (%s %a)"
-      ( match UF.find (fst t) with
-      | T.Real -> "real"
-      | T.Boolean -> "boolean"
-      | T.All -> "unconstrained" )
-      (match snd (snd t) with Up -> "inferred" | Down -> "constrained")
-      Pos.format_position
-      (fst (snd t))
-
-  let create_variable (pos : infer_info) : t = (UF.create T.All, pos)
-
-  let to_concrete (t : t) : typ =
-    match UF.find (fst t) with
-    | T.Real -> Mvg.Real
-    | T.Boolean -> Mvg.Boolean
-    | T.All -> Mvg.Boolean
-
-  let boolean (pos : infer_info) = (UF.create T.Boolean, pos)
-
-  let real (pos : infer_info) = (UF.create T.Real, pos)
-
-  let create_concrete (t : typ) (pos : infer_info) : t =
-    match t with Mvg.Real -> real pos | Mvg.Boolean -> boolean pos
-
-  let is_lattice_transition (t1 : t) (t2 : t) : bool =
-    match (UF.find (fst t1), UF.find (fst t2)) with
-    | T.All, (T.Real | T.Boolean) | T.Boolean, T.Real -> true
-    | t1, t2 when t1 = t2 -> true
-    | _ -> false
-
-  let coerce (t : t) (coerce : t) : unit =
-    if UF.find (fst coerce) = T.All || is_lattice_transition t coerce then ()
-    else
-      raise
-        (UnificationError (Format.asprintf "%a" format_typ t, Format.asprintf "%a" format_typ coerce))
-
-  let unify (t1 : t) (t2 : t) : t =
-    if is_lattice_transition t1 t2 then begin
-      UF.union (fst t1) (fst t2);
-      t2
-    end
-    else if is_lattice_transition t2 t1 then begin
-      UF.union (fst t1) (fst t2);
-      t1
-    end
-    else
-      raise
-        (UnificationError (Format.asprintf "%a" format_typ t1, Format.asprintf "%a" format_typ t2))
-end
-
-type ctx = {
-  ctx_program : program;
-  ctx_local_var_typ : Typ.t LocalVariableMap.t;
-  ctx_is_generic_table : bool;
-}
-
-type typ_info = {
-  table_info_var : bool Mvg.VariableMap.t;
-  (* the bool flag is_table *)
-  typ_info_local_var : Mvg.typ Mvg.LocalVariableMap.t;
-}
-
-let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) (t : typ) : ctx =
-  match (Pos.unmark e, t) with
-  | Comparison (_, e1, e2), Boolean -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      let ctx, t2 = typecheck_bottom_up ctx e2 in
-      try
-        ignore (Typ.unify t1 t2);
-        ctx
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing
-          "expression %a (%a) of type %a has not the same type than expression %a of type %a"
-          Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-          Typ.format_typ t1 Pos.format_position (Pos.get_position e2) Typ.format_typ t2 )
-  | Binop (((Ast.And | Ast.Or), _), e1, e2), Boolean
-  | Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2), Real ->
-      let ctx = typecheck_top_down ctx e1 t in
-      let ctx = typecheck_top_down ctx e2 t in
+let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
+  match Pos.unmark e with
+  | Comparison (_, e1, e2) ->
+      let ctx = typecheck_top_down ctx e1 in
+      let ctx = typecheck_top_down ctx e2 in
       ctx
-  | Unop (Ast.Not, e), Boolean | Unop (Ast.Minus, e), Real ->
-      let ctx = typecheck_top_down ctx e t in
+  | Binop (((Ast.And | Ast.Or), _), e1, e2)
+  | Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2) ->
+      let ctx = typecheck_top_down ctx e1 in
+      let ctx = typecheck_top_down ctx e2 in
       ctx
-  | Conditional (e1, e2, e3), t -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      try
-        Typ.coerce t1 (Typ.boolean (Pos.get_position e1, Typ.Down));
-        let ctx, t2 = typecheck_bottom_up ctx e2 in
-        let ctx, t3 = typecheck_bottom_up ctx e3 in
-        try
-          let t' = Typ.unify t2 t3 in
-          Typ.coerce t' (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-          ctx
-        with Typ.UnificationError _ ->
-          Errors.raise_typ_error Typing
-            "expression %a (%a) of type %a has not the same type than expression %a of type %a, \
-             and both should be of type %a"
-            Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-            Typ.format_typ t1 Pos.format_position (Pos.get_position e2) Typ.format_typ t2
-            Format_mvg.format_typ t
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing "expression %a (%a) of type %a should be of type boolean"
-          Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-          Typ.format_typ t1 )
-  | FunctionCall (func, args), t -> (
+  | Unop (Ast.Not, e) | Unop (Ast.Minus, e) ->
+      let ctx = typecheck_top_down ctx e in
+      ctx
+  | Conditional (e1, e2, e3) ->
+      let ctx = typecheck_top_down ctx e1 in
+      let ctx = typecheck_top_down ctx e2 in
+      let ctx = typecheck_top_down ctx e3 in
+      ctx
+  | FunctionCall (func, args) ->
       let typechecker = typecheck_func_args func (Pos.get_position e) in
-      let ctx, t' = typechecker ctx args in
-      try
-        Typ.coerce t' (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-        ctx
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing "function call to %a (%a) return type is %a but should be %a"
-          Format_mvg.format_func func Pos.format_position (Pos.get_position e) Typ.format_typ t'
-          Format_mvg.format_typ t )
-  | Literal (Bool _), t -> (
-      try
-        Typ.coerce
-          (Typ.boolean (Pos.get_position e, Typ.Up))
-          (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-        ctx
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing "literal %a is a boolean but should be %a" Pos.format_position
-          (Pos.get_position e) Format_mvg.format_typ t )
-  | Literal (Float _), t -> (
-      try
-        Typ.coerce
-          (Typ.real (Pos.get_position e, Typ.Up))
-          (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-        ctx
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing "literal %a is a float but should be %a" Pos.format_position
-          (Pos.get_position e) Format_mvg.format_typ t )
-  | Literal Undefined, _ ->
+      let ctx = typechecker ctx args in
+      ctx
+  | Literal (Float _) -> ctx
+  | Literal Undefined ->
       (* Literal has all the types *)
       ctx
-  | Var _, Real -> ctx (* All variables are real *)
-  | LocalLet (local_var, e1, e2), t -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      let ctx =
-        { ctx with ctx_local_var_typ = LocalVariableMap.add local_var t1 ctx.ctx_local_var_typ }
-      in
-      let ctx, t2 = typecheck_bottom_up ctx e2 in
-      try
-        Typ.coerce t2 (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-        ctx
-      with Typ.UnificationError (t2_msg, _) ->
-        Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
-          Pos.format_position (Pos.get_position e) t2_msg Format_mvg.format_typ t )
-  | Error, _ -> ctx
-  | LocalVar local_var, t -> (
-      let t' =
-        try LocalVariableMap.find local_var ctx.ctx_local_var_typ with Not_found -> assert false
-        (* should not happen *)
-      in
-      try
-        Typ.coerce t' (Typ.create_concrete t (Pos.get_position e, Typ.Down));
-        ctx
-      with Typ.UnificationError (t_msg, _) ->
-        Errors.raise_typ_error Typing "expression %a has type %s but should be %a"
-          Pos.format_position (Pos.get_position e) t_msg Format_mvg.format_typ t )
-  | GenericTableIndex, Real ->
+  | Var _ -> ctx (* All variables are real *)
+  | LocalLet (_local_var, e1, e2) ->
+      let ctx = typecheck_top_down ctx e1 in
+      let ctx = typecheck_top_down ctx e2 in
+      ctx
+  | Error -> ctx
+  | LocalVar _ -> ctx
+  | GenericTableIndex ->
       if ctx.ctx_is_generic_table then ctx
       else
         Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
           Pos.format_position (Pos.get_position e)
-  | Index ((var, var_pos), e'), Real -> (
+  | Index ((var, var_pos), e') -> (
       (* Tables are only tables of arrays *)
-      let ctx = typecheck_top_down ctx e' Real in
+      let ctx = typecheck_top_down ctx e' in
       let var_data = VariableMap.find var ctx.ctx_program.program_vars in
       match var_data.Mvg.var_definition with
       | SimpleVar _ | InputVar ->
@@ -214,60 +70,31 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) (t : typ) : c
             (Pos.unmark var.Variable.name) Pos.format_position var_pos Pos.format_position
             (Pos.get_position var.Variable.name)
       | TableVar _ -> ctx )
-  | _ ->
-      Errors.raise_typ_error Typing "expression %a (%a) should be of type %a, but is of type %a"
-        Format_mvg.format_expression (Pos.unmark e) Pos.format_position (Pos.get_position e)
-        Format_mvg.format_typ t Typ.format_typ
-        (snd @@ typecheck_bottom_up ctx e)
 
 and typecheck_func_args (f : func) (pos : Pos.position) :
-    ctx -> Mvg.expression Pos.marked list -> ctx * Typ.t =
+    ctx -> Mvg.expression Pos.marked list -> ctx =
   match f with
-  | SumFunc | MinFunc | MaxFunc -> (
+  | SumFunc | MinFunc | MaxFunc ->
       fun ctx args ->
         if List.length args = 0 then
           Errors.raise_typ_error Typing "sum function must be called %a with at least one argument"
             Pos.format_position pos
         else
-          let ctx, t1 = typecheck_bottom_up ctx (List.hd args) in
-          try
-            Typ.coerce t1 (Typ.real (Pos.get_position (List.hd args), Typ.Down));
-            let ctx, t1 =
-              List.fold_left
-                (fun (ctx, t1) arg ->
-                  let ctx, t_arg = typecheck_bottom_up ctx arg in
-                  try
-                    let t1 = Typ.unify t_arg t1 in
-                    (ctx, t1)
-                  with Typ.UnificationError (t_arg_msg, t2_msg) ->
-                    Errors.raise_typ_error Typing
-                      "function argument %a (%a) has type %s but should have type %s"
-                      Format_mvg.format_expression (Pos.unmark arg) Pos.format_position
-                      (Pos.get_position arg) t_arg_msg t2_msg)
-                (ctx, t1) args
-            in
-            (ctx, t1)
-          with Typ.UnificationError (t_arg_msg, t2_msg) ->
-            Errors.raise_typ_error Typing
-              "function argument %a (%a) has type %s but should have type %s"
-              Format_mvg.format_expression
-              (Pos.unmark (List.hd args))
-              Pos.format_position
-              (Pos.get_position (List.hd args))
-              t_arg_msg t2_msg )
+          let ctx = typecheck_top_down ctx (List.hd args) in
+          let ctx =
+            List.fold_left
+              (fun ctx arg ->
+                let ctx = typecheck_top_down ctx arg in
+                ctx)
+              ctx args
+          in
+          ctx
   | AbsFunc -> (
       fun ctx args ->
         match args with
-        | [ arg ] -> (
-            let ctx, t_arg = typecheck_bottom_up ctx arg in
-            try
-              Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down));
-              (ctx, t_arg)
-            with Typ.UnificationError (t_arg_msg, t2_msg) ->
-              Errors.raise_typ_error Typing
-                "function argument %a (%a) has type %s but should have type %s"
-                Format_mvg.format_expression (Pos.unmark arg) Pos.format_position
-                (Pos.get_position arg) t_arg_msg t2_msg )
+        | [ arg ] ->
+            let ctx = typecheck_top_down ctx arg in
+            ctx
         | _ ->
             Errors.raise_typ_error Typing "function abs %a should have only one argument"
               Pos.format_position pos )
@@ -275,32 +102,18 @@ and typecheck_func_args (f : func) (pos : Pos.position) :
       fun (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
             ctx args ->
         match args with
-        | [ arg ] -> (
-            let ctx, t_arg = typecheck_bottom_up ctx arg in
-            try
-              Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down));
-              (ctx, t_arg)
-            with Typ.UnificationError (t_arg_msg, t2_msg) ->
-              Errors.raise_typ_error Typing
-                "function argument %a (%a) has type %s but should have type %s"
-                Format_mvg.format_expression (Pos.unmark arg) Pos.format_position
-                (Pos.get_position arg) t_arg_msg t2_msg )
+        | [ arg ] ->
+            let ctx = typecheck_top_down ctx arg in
+            ctx
         | _ ->
             Errors.raise_typ_error Typing "function %a should have only one argument"
               Pos.format_position pos )
   | ArrFunc | InfFunc -> (
       fun ctx args ->
         match args with
-        | [ arg ] -> (
-            let ctx, t_arg = typecheck_bottom_up ctx arg in
-            try
-              Typ.coerce t_arg (Typ.real (Pos.get_position arg, Typ.Down));
-              (ctx, Typ.real (pos, Typ.Down))
-            with Typ.UnificationError (t_arg_msg, t2_msg) ->
-              Errors.raise_typ_error Typing
-                "function argument %a (%a) has type %s but should have type %s"
-                Format_mvg.format_expression (Pos.unmark arg) Pos.format_position
-                (Pos.get_position arg) t_arg_msg t2_msg )
+        | [ arg ] ->
+            let ctx = typecheck_top_down ctx arg in
+            ctx
         | _ ->
             Errors.raise_typ_error Typing "function %a should have only one argument"
               Pos.format_position pos )
@@ -308,105 +121,11 @@ and typecheck_func_args (f : func) (pos : Pos.position) :
       fun ctx args ->
         match args with
         | [ bound; table ] ->
-            let ctx = typecheck_top_down ctx bound Real in
-            typecheck_bottom_up ctx table
+            let ctx = typecheck_top_down ctx bound in
+            typecheck_top_down ctx table
         | _ ->
             Errors.raise_typ_error Typing "function %a should have two arguments"
               Pos.format_position pos )
-
-and typecheck_bottom_up (ctx : ctx) (e : expression Pos.marked) : ctx * Typ.t =
-  match Pos.unmark e with
-  | Var _ -> (ctx, Typ.real (Pos.get_position e, Typ.Up))
-  | Literal (Float _) -> (ctx, Typ.real (Pos.get_position e, Typ.Up))
-  | Literal (Bool _) -> (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
-  | Literal Undefined -> (ctx, Typ.create_variable (Pos.get_position e, Typ.Up))
-  | Binop ((Ast.And, _ | Ast.Or, _), e1, e2) ->
-      let ctx = typecheck_top_down ctx e1 Boolean in
-      let ctx = typecheck_top_down ctx e2 Boolean in
-      (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
-  | Binop (((Ast.Add, _ | Ast.Sub, _ | Ast.Mul, _ | Ast.Div, _) as op), e1, e2) -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      let ctx, t2 = typecheck_bottom_up ctx e2 in
-      try
-        let t' = Typ.unify t1 t2 in
-        (ctx, t')
-      with Typ.UnificationError (t1_msg, t2_msg) ->
-        Errors.raise_typ_error Typing
-          "arguments of operator (%a) %a have to be of the same type but instead are of type %s \
-           and %s"
-          Format_ast.format_binop (Pos.unmark op) Pos.format_position (Pos.get_position op) t1_msg
-          t2_msg )
-  | Comparison (_, e1, e2) -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      let ctx, t2 = typecheck_bottom_up ctx e2 in
-      try
-        ignore (Typ.unify t1 t2);
-        (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing
-          "expression %a (%a) of type %a has not the same type than expression %a of type %a"
-          Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-          Typ.format_typ t1 Pos.format_position (Pos.get_position e2) Typ.format_typ t2 )
-  | Unop (Ast.Not, e) ->
-      let ctx = typecheck_top_down ctx e Boolean in
-      (ctx, Typ.boolean (Pos.get_position e, Typ.Up))
-  | Unop (Ast.Minus, e') -> (
-      let ctx, t = typecheck_bottom_up ctx e' in
-      try
-        Typ.coerce t (Typ.real (Pos.get_position e', Typ.Down));
-        (ctx, t)
-      with Typ.UnificationError (t1_msg, t2_msg) ->
-        Errors.raise_typ_error Typing
-          "arguments of operator (%a) %a has type %s but should be of type %s"
-          Format_ast.format_unop Ast.Minus Pos.format_position (Pos.get_position e) t1_msg t2_msg )
-  | GenericTableIndex ->
-      if ctx.ctx_is_generic_table then (ctx, Typ.real (Pos.get_position e, Typ.Up))
-      else
-        Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
-          Pos.format_position (Pos.get_position e)
-  | Index ((var, var_pos), e') -> (
-      let ctx = typecheck_top_down ctx e' Real in
-      let var_data = VariableMap.find var ctx.ctx_program.program_vars in
-      match var_data.Mvg.var_definition with
-      | SimpleVar _ | InputVar ->
-          Errors.raise_typ_error Typing
-            "variable %s is accessed %a as a table but it is not defined as one %a"
-            (Pos.unmark var.Variable.name) Pos.format_position var_pos Pos.format_position
-            (Pos.get_position var.Variable.name)
-      | TableVar _ -> (ctx, Typ.real (Pos.get_position e', Typ.Up)) )
-  | Conditional (e1, e2, e3) -> (
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      try
-        Typ.coerce t1 (Typ.boolean (Pos.get_position e1, Typ.Down));
-        let ctx, t2 = typecheck_bottom_up ctx e2 in
-        let ctx, t3 = typecheck_bottom_up ctx e3 in
-        try
-          let t' = Typ.unify t2 t3 in
-          (ctx, t')
-        with Typ.UnificationError _ ->
-          Errors.raise_typ_error Typing
-            "expression %a (%a) of type %a has not the same type than expression %a of type %a"
-            Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-            Typ.format_typ t1 Pos.format_position (Pos.get_position e2) Typ.format_typ t2
-      with Typ.UnificationError _ ->
-        Errors.raise_typ_error Typing "expression %a (%a) of type %a should be of type boolean"
-          Format_mvg.format_expression (Pos.unmark e1) Pos.format_position (Pos.get_position e1)
-          Typ.format_typ t1 )
-  | FunctionCall (func, args) ->
-      let typechecker = typecheck_func_args func (Pos.get_position e) in
-      let ctx, t' = typechecker ctx args in
-      (ctx, t')
-  | Error -> (ctx, Typ.create_variable (Pos.get_position e, Typ.Up))
-  | LocalVar local_var -> (
-      try (ctx, LocalVariableMap.find local_var ctx.ctx_local_var_typ)
-      with Not_found -> assert false (* should not happen *) )
-  | LocalLet (local_var, e1, e2) ->
-      let ctx, t1 = typecheck_bottom_up ctx e1 in
-      let ctx =
-        { ctx with ctx_local_var_typ = LocalVariableMap.add local_var t1 ctx.ctx_local_var_typ }
-      in
-      let ctx, t2 = typecheck_bottom_up ctx e2 in
-      (ctx, t2)
 
 let determine_def_complete_cover (table_var : Mvg.Variable.t) (size : int)
     (defs : (int * Pos.position) list) : int list =
@@ -428,7 +147,7 @@ let determine_def_complete_cover (table_var : Mvg.Variable.t) (size : int)
   List.sort compare !undefined
 
 let typecheck_program_conds (ctx : ctx) (conds : condition_data VariableMap.t) : ctx =
-  VariableMap.fold (fun _ cond ctx -> typecheck_top_down ctx cond.cond_expr Mvg.Boolean) conds ctx
+  VariableMap.fold (fun _ cond ctx -> typecheck_top_down ctx cond.cond_expr) conds ctx
 
 let rec check_non_recursivity_expr (e : expression Pos.marked) (lvar : Variable.t) : unit =
   match Pos.unmark e with
@@ -466,18 +185,17 @@ let typecheck (p : program) : typ_info * program =
         (* All top-level variables are og type Real *)
         match def.var_definition with
         | SimpleVar e ->
-            let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e Real in
+            let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e in
             (VariableMap.add var false acc, new_ctx, p_vars)
         | TableVar (size, defs) -> (
             match defs with
             | IndexGeneric e ->
-                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e Real in
+                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e in
                 (VariableMap.add var true acc, new_ctx, p_vars)
             | IndexTable es ->
                 let new_ctx =
                   IndexMap.fold
-                    (fun _ e ctx ->
-                      typecheck_top_down { ctx with ctx_is_generic_table = false } e Real)
+                    (fun _ e ctx -> typecheck_top_down { ctx with ctx_is_generic_table = false } e)
                     es ctx
                 in
                 let undefined_indexes =
@@ -514,17 +232,7 @@ let typecheck (p : program) : typ_info * program =
             if VariableMap.mem var acc then (acc, ctx, p_vars)
             else (VariableMap.add var false acc, ctx, p_vars))
       p.program_vars
-      ( Mvg.VariableMap.empty,
-        {
-          ctx_program = p;
-          ctx_local_var_typ = LocalVariableMap.empty;
-          ctx_is_generic_table = false;
-        },
-        p.program_vars )
+      (Mvg.VariableMap.empty, { ctx_program = p; ctx_is_generic_table = false }, p.program_vars)
   in
-  let ctx = typecheck_program_conds ctx p.program_conds in
-  ( {
-      table_info_var = are_tables;
-      typ_info_local_var = LocalVariableMap.map (fun t -> Typ.to_concrete t) ctx.ctx_local_var_typ;
-    },
-    { p with program_vars = p_vars } )
+  let _ = typecheck_program_conds ctx p.program_conds in
+  ({ table_info_var = are_tables }, { p with program_vars = p_vars })

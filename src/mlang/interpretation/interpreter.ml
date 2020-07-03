@@ -62,9 +62,12 @@ let empty_ctx (p : program) (typing : Typechecker.typ_info) : ctx =
 
 let int_of_bool (b : bool) = if b then 1 else 0
 
-let float_of_bool (b : bool) = if b then 1. else 0.
 
-let is_zero (l : literal) : bool = match l with Bool false | Float 0. -> true | _ -> false
+let is_zero (l : literal) : bool = match l with Float 0. -> true | _ -> false
+
+
+let float_of_bool (b : bool) = if b then 1. else 0.
+let bool_of_float (f : float) : bool = not (f = 0.)
 
 let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
   Cli.warning_print
@@ -159,7 +162,6 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
     (pos : Pos.position) : literal =
   let idx =
     match index with
-    | Bool b -> int_of_bool b
     | Undefined -> assert false (* should not happen *)
     | Float f ->
         if
@@ -172,41 +174,34 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
 
 let eval_debug = ref false
 
-let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t : typ) : literal =
-  (* if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark e); *)
+let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) : literal =
+  (* if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark
+     e); *)
   try
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
-        let new_e1 = evaluate_expr ctx p e1 Real in
-        let new_e2 = evaluate_expr ctx p e2 Real in
+        let new_e1 = evaluate_expr ctx p e1 in
+        let new_e2 = evaluate_expr ctx p e2 in
         let l =
           match (Pos.unmark op, new_e1, new_e2) with
-          | Ast.Gt, Float i1, Bool i2 -> Bool (i1 > float_of_bool i2)
-          | Ast.Gt, Float i1, Float i2 -> Bool (i1 > i2)
+          | Ast.Gt, Float i1, Float i2 -> Float (float_of_bool (i1 > i2))
           | Ast.Gt, _, Undefined | Ast.Gt, Undefined, _ -> Undefined
-          | Ast.Gte, Float i1, Bool i2 -> Bool (i1 >= float_of_bool i2)
-          | Ast.Gte, Float i1, Float i2 -> Bool (i1 >= i2)
+          | Ast.Gte, Float i1, Float i2 -> Float (float_of_bool (i1 >= i2))
           | Ast.Gte, _, Undefined | Ast.Gte, Undefined, _ -> Undefined
-          | Ast.Lt, Float i1, Bool i2 -> Bool (i1 < float_of_bool i2)
-          | Ast.Lt, Float i1, Float i2 -> Bool (i1 < i2)
+          | Ast.Lt, Float i1, Float i2 -> Float (float_of_bool (i1 < i2))
           | Ast.Lt, _, Undefined | Ast.Lt, Undefined, _ -> Undefined
-          | Ast.Lte, Float i1, Bool i2 -> Bool (i1 <= float_of_bool i2)
-          | Ast.Lte, Float i1, Float i2 -> Bool (i1 <= i2)
+          | Ast.Lte, Float i1, Float i2 -> Float (float_of_bool (i1 <= i2))
           | Ast.Lte, _, Undefined | Ast.Lte, Undefined, _ -> Undefined
-          | Ast.Eq, Float i1, Bool i2 -> Bool (i1 = float_of_bool i2)
-          | Ast.Eq, Float i1, Float i2 -> Bool (i1 = i2)
+          | Ast.Eq, Float i1, Float i2 -> Float (float_of_bool (i1 = i2))
           | Ast.Eq, _, Undefined | Ast.Eq, Undefined, _ -> Undefined
-          | Ast.Neq, Float i1, Bool i2 -> Bool (i1 <> float_of_bool i2)
-          | Ast.Neq, Float i1, Float i2 -> Bool (i1 <> i2)
+          | Ast.Neq, Float i1, Float i2 -> Float (float_of_bool (i1 <> i2))
           | Ast.Neq, _, Undefined | Ast.Neq, Undefined, _ -> Undefined
-          | _ -> assert false
           (* should not happen *)
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) t
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | Binop (op, e1, e2) ->
-        let t_under = match Pos.unmark op with Ast.And | Ast.Or -> Boolean | _ -> Real in
-        let new_e1 = evaluate_expr ctx p e1 t_under in
-        let new_e2 = evaluate_expr ctx p e2 t_under in
+        let new_e1 = evaluate_expr ctx p e1 in
+        let new_e2 = evaluate_expr ctx p e2 in
         let l =
           match (Pos.unmark op, new_e1, new_e2) with
           | Ast.Add, Float i1, Float i2 -> Float (i1 +. i2)
@@ -227,45 +222,33 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           | Ast.Or, Undefined, _
           | Ast.Or, _, Undefined ->
               Undefined
-          | Ast.And, Bool i1, Bool i2 -> Bool (i1 && i2)
-          | Ast.Or, Bool i1, Bool i2 -> Bool (i1 || i2)
-          | _ -> assert false
-          (* should not happen *)
+          | Ast.And, Float i1, Float i2 ->
+              Float (float_of_bool (bool_of_float i1 && bool_of_float i2))
+          | Ast.Or, Float i1, Float i2 ->
+              Float (float_of_bool (bool_of_float i1 || bool_of_float i2))
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) t
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | Unop (op, e1) ->
-        let new_e1 = evaluate_expr ctx p e1 t in
+        let new_e1 = evaluate_expr ctx p e1 in
         let l =
           match (op, new_e1) with
-          | Ast.Not, Bool b1 -> Bool (not b1)
+          | Ast.Not, Float b1 -> Float (float_of_bool (not (bool_of_float b1)))
           | Ast.Minus, Float f1 -> Float (-.f1)
           | Ast.Not, Undefined -> Undefined
           | Ast.Minus, Undefined -> Float 0.
-          | _ -> assert false
           (* should not happen *)
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) t
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | Conditional (e1, e2, e3) -> (
-        let new_e1 = evaluate_expr ctx p e1 Boolean in
+        let new_e1 = evaluate_expr ctx p e1 in
         match new_e1 with
-        | Bool true -> evaluate_expr ctx p e2 t
-        | Bool false -> evaluate_expr ctx p e3 t
+        | Float 0. -> evaluate_expr ctx p e3
+        | Float _ -> evaluate_expr ctx p e2 (* the float is not zero *)
         | Undefined -> Undefined
-        | _ -> assert false
         (* should not happen *) )
-    | Literal l -> (
-        match (l, t) with
-        | Float _, Real | Bool _, Boolean -> l
-        | Bool b, Real ->
-            (* the subtyping relation fits here! *)
-            if b then Float 1. else Float 0.
-        | Undefined, _ -> Undefined
-        | _ ->
-            Cli.error_print "Interpreting literal %a %a with type %a\n" Format_mvg.format_literal l
-              Pos.format_position (Pos.get_position e) Format_mvg.format_typ t;
-            assert false (* should not happen *) )
+    | Literal l -> l
     | Index (var, e1) -> (
-        let new_e1 = evaluate_expr ctx p e1 Real in
+        let new_e1 = evaluate_expr ctx p e1 in
         if new_e1 = Undefined then Undefined
         else
           try
@@ -294,8 +277,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
             (* First we look if the value used is inside the current SCC. If yes then we return the
                value for this pass *)
             match VariableMap.find var ctx.ctx_current_scc_values with
-            | SimpleVar l ->
-               l
+            | SimpleVar l -> l
             | TableVar _ -> assert false
             (* should not happen *)
           with
@@ -321,9 +303,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           (RuntimeError
              (ErrorValue (Format.asprintf "%a" Pos.format_position (Pos.get_position e)), ctx))
     | LocalLet (lvar, e1, e2) ->
-        let new_e1 =
-          evaluate_expr ctx p e1 (LocalVariableMap.find lvar ctx.ctx_typing.typ_info_local_var)
-        in
+        let new_e1 = evaluate_expr ctx p e1 in
         let new_e2 =
           evaluate_expr
             {
@@ -331,60 +311,47 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
               ctx_local_vars =
                 LocalVariableMap.add lvar (Pos.same_pos_as new_e1 e1) ctx.ctx_local_vars;
             }
-            p e2 t
+            p e2
         in
         new_e2
     | FunctionCall (ArrFunc, [ arg ]) ->
-        let new_arg = evaluate_expr ctx p arg Real in
+        let new_arg = evaluate_expr ctx p arg in
         let l =
-          match new_arg with
-          | Float x -> Float (roundf x)
-          | Bool x -> Float (float_of_bool x)
-          | Undefined -> Undefined (*nope:Float 0.*)
+          match new_arg with Float x -> Float (roundf x) | Undefined -> Undefined
+          (*nope:Float 0.*)
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | FunctionCall (InfFunc, [ arg ]) ->
-        let new_arg = evaluate_expr ctx p arg Real in
+        let new_arg = evaluate_expr ctx p arg in
         let l =
-          match new_arg with
-          | Float x -> Float (truncatef x)
-          | Bool x -> Float (float_of_bool x)
-          | Undefined -> Undefined
+          match new_arg with Float x -> Float (truncatef x) | Undefined -> Undefined
           (*Float 0.*)
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | FunctionCall (PresentFunc, [ arg ]) ->
         let l =
-          match evaluate_expr ctx p arg Real with Undefined -> Bool false | _ -> Bool true
+          match evaluate_expr ctx p arg with Undefined -> false_literal | _ -> true_literal
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | FunctionCall (MinFunc, [ arg1; arg2 ]) ->
         let mini =
-          match (evaluate_expr ctx p arg1 Real, evaluate_expr ctx p arg2 Real) with
+          match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
           | Undefined, Float f | Float f, Undefined -> Float (min 0. f)
           | Undefined, Undefined -> Float 0.
           | Float fl, Float fr -> Float (min fl fr)
-          | Float f, Bool b | Bool b, Float f ->
-              let fb = if b then 1. else 0. in
-              Float (min f fb)
-          | Bool bl, Bool br -> Float (if bl || br then 1. else 0.)
-          | Undefined, Bool b | Bool b, Undefined -> Float (if b then 1. else 0.)
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal mini) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal mini) e)
     | FunctionCall (MaxFunc, [ arg1; arg2 ]) ->
         let maxi =
-          match (evaluate_expr ctx p arg1 Real, evaluate_expr ctx p arg2 Real) with
+          match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
           | Undefined, Undefined -> Float 0.
           | Undefined, Float f | Float f, Undefined -> Float (max 0. f)
-          | Undefined, vr -> vr
-          | vl, Undefined -> vl
           | Float fl, Float fr -> Float (max fl fr)
-          | _ -> assert false
         in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal maxi) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal maxi) e)
     | FunctionCall (Multimax, [ arg1; arg2 ]) ->
         let up =
-          match evaluate_expr ctx p arg1 Real with
+          match evaluate_expr ctx p arg1 with
           | Float f when float_of_int (int_of_float f) = f -> int_of_float f
           | e ->
               raise
@@ -410,15 +377,15 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) (t :
           cast_to_int
           @@ evaluate_expr ctx p
                (Index ((var_arg2, pos), (Literal (Float (float_of_int i)), pos)), pos)
-               Real
         in
+
         let maxi = ref (access_index 0) in
         for i = 0 to up do
           maxi := max !maxi (access_index i)
         done;
         let l = match !maxi with None -> Undefined | Some f -> Float (float_of_int f) in
         (* let l = match !maxi with None -> Undefined | Some v -> Float (float_of_int v) in *)
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e) Real
+        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | FunctionCall (func, _) ->
         raise
           (RuntimeError
@@ -484,11 +451,10 @@ let add_tablevar p ctx var (size, es) =
            ( size,
              Array.init size (fun idx ->
                  match es with
-                 | IndexGeneric e ->
-                     evaluate_expr { ctx with ctx_generic_index = Some idx } p e Real
+                 | IndexGeneric e -> evaluate_expr { ctx with ctx_generic_index = Some idx } p e
                  | IndexTable es ->
                      let e = IndexMap.find idx es in
-                     evaluate_expr ctx p e Real) ))
+                     evaluate_expr ctx p e) ))
         ctx.ctx_vars;
   }
 
@@ -521,41 +487,43 @@ let evaluate_scc p input_values ctx scc dep_graph =
    *     Cli.debug_print "scc = %a" (Mvg.VariableMap.map_printer Format_mvg.format_variable (fun _ () -> ())) scc
    *   ); *)
   let r =
-  VariableMap.fold
-    (fun var _ (ctx : ctx) ->
-      try
-        match (VariableMap.find var p.program_vars).var_definition with
-        | Mvg.SimpleVar e ->
-           let l_e = evaluate_expr ctx p e Real in
-           (* if !eval_debug then
-            *   Cli.debug_print "%a ~> %a" Format_mvg.format_variable var Format_mvg.format_literal l_e; *)
-            { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
-        | Mvg.TableVar (size, es) ->
-            (* Right now we suppose that the different indexes of table arrays don't depend on each
-               other for computing. Otherwise, it would trigger a runtime Not_found error at
-               interpretation. TODO: add a check for that at typechecking. *)
-            add_tablevar p ctx var (size, es)
-        | Mvg.InputVar -> (
-            try
-              let l =
-                evaluate_expr ctx p
-                  (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)
-                  Real
-              in
-              { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
-            with Not_found ->
-              if VariableMap.mem var ctx.ctx_vars then ctx else report_missinginput ctx var )
-      with Not_found -> (
-        let cond = VariableMap.find var p.program_conds in
-        let l_cond = evaluate_expr ctx p cond.cond_expr Boolean in
-        match l_cond with
-        | Bool false | Undefined -> ctx (* error condition is not trigerred, we continue *)
-        | Bool true ->
-            (* the condition is triggered, we throw errors *)
-            report_violatedcondition cond var ctx dep_graph
-        | _ -> assert false )
-      (* should not happen *))
-    scc ctx in
+    VariableMap.fold
+      (fun var _ (ctx : ctx) ->
+        try
+          match (VariableMap.find var p.program_vars).var_definition with
+          | Mvg.SimpleVar e ->
+              let l_e = evaluate_expr ctx p e in
+              (* if !eval_debug then
+               *   Cli.debug_print "%a ~> %a" Format_mvg.format_variable var Format_mvg.format_literal l_e; *)
+              { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
+          | Mvg.TableVar (size, es) ->
+              (* Right now we suppose that the different indexes of table arrays don't depend on
+                 each other for computing. Otherwise, it would trigger a runtime Not_found error at
+                 interpretation. TODO: add a check for that at typechecking. *)
+              add_tablevar p ctx var (size, es)
+          | Mvg.InputVar -> (
+              try
+                let l =
+                  evaluate_expr ctx p
+                    (Pos.same_pos_as
+                       (Literal (VariableMap.find var input_values))
+                       var.Variable.name)
+                in
+
+                { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
+              with Not_found ->
+                if VariableMap.mem var ctx.ctx_vars then ctx else report_missinginput ctx var )
+        with Not_found -> (
+          let cond = VariableMap.find var p.program_conds in
+          let l_cond = evaluate_expr ctx p cond.cond_expr in
+          match l_cond with
+          | Float 0. | Undefined -> ctx (* error condition is not trigerred, we continue *)
+          | Float _ ->
+              (* the condition is triggered, we throw errors *)
+              report_violatedcondition cond var ctx dep_graph )
+        (* should not happen *))
+      scc ctx
+  in
   (* eval_debug := false; *)
   r
 

@@ -95,8 +95,6 @@ let rec generate_clj_expr (e : expression Pos.marked) (scc : unit VariableMap.t)
       let sarg = generate_clj_expr arg scc in
       Format.asprintf "floor_mvalue (%s)" sarg
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Bool true) -> "mtrue nil"
-  | Literal (Bool false) -> "mfalse nil"
   | Literal (Float 0.0) -> "zero nil"
   | Literal (Float f) -> Format.asprintf "mk_value %f" f
   | Literal Undefined -> "undef nil"

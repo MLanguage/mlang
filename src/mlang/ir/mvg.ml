@@ -106,10 +106,14 @@ module LocalVariable = struct
 end
 
 (** Type of MVG values *)
-type typ = Real | Boolean
+type typ = Real
 [@@deriving visitors { variety = "iter"; nude = true; polymorphic = true; name = "typ_iter" }]
 
-type literal = Float of float | Bool of bool | Undefined [@@deriving eq]
+type literal = Float of float | Undefined [@@deriving eq]
+
+let false_literal = Float 0.
+
+let true_literal = Float 1.
 
 (** MVg only supports a restricted set of functions *)
 type func =

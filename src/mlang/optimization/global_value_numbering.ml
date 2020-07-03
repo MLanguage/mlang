@@ -229,9 +229,9 @@ let optimize (p : program) (typing : Typechecker.typ_info) : program =
                   let e, _, _ = gvn_exp cond.cond_expr data in
                   e
                 with
-                | Literal (Bool false), _ | Literal Undefined, _ ->
+                | Literal (Float 0.), _ | Literal Undefined, _ ->
                     ({ p with program_conds = VariableMap.remove var p.program_conds }, data)
-                | Literal (Bool true), _ ->
+                | Literal (Float _), _ ->
                     raise
                       (Interpreter.RuntimeError
                          ( Interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),

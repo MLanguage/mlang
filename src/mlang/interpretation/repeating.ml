@@ -121,9 +121,8 @@ let get_ctx_var p (ctx : Interpreter.ctx) (var : string) : Interpreter.var_liter
 let get_input_var p inputs var : Interpreter.var_literal =
   let var = find_var_by_name p var in
   try SimpleVar (Mvg.VariableMap.find var inputs)
-  with Not_found ->
-    (* different than usual *)
-    SimpleVar Undefined
+  with Not_found -> (* different than usual *)
+                    SimpleVar Undefined
 
 (** Equivalent to IRDATA_efface *)
 let clear_inputs_var (p : program) (inputs : literal VariableMap.t) (var : string) :
@@ -150,10 +149,7 @@ let merge_inputs (modified : literal VariableMap.t) (others : literal VariableMa
 let fabs x = if x >= 0. then x else -.x
 
 let extract_value (default : float) (v : Interpreter.var_literal) =
-  match v with
-  | SimpleVar (Mvg.Float f) -> f
-  | SimpleVar (Mvg.Bool b) -> if b then 1. else 0.
-  | _ -> default
+  match v with SimpleVar (Mvg.Float f) -> f | _ -> default
 
 (** Equivalent to AC_CalculeAvFiscal *)
 let compute_benefit (p : program) (utils : Interpreter.evaluation_utilities)
@@ -243,7 +239,6 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
       match get_inputs_var p "8ZG" inputs with
       (* FIXME: check that NULL is indéfini the get_var_irdate. Check TYPE_REVENU too *)
       | Mvg.Float f -> (clear_inputs_var p inputs "8ZG", f)
-      | Mvg.Bool b -> (clear_inputs_var p inputs "8ZG", if b then 1. else 0.)
       | _ -> (inputs, 0.)
     else (inputs, 0.)
   in
@@ -278,10 +273,7 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
   in
   let inputs = update_inputs "8ZG" v_8ZG inputs in
   Cli.debug_print "Valorisation de l'acompte %f, V_INDTEO=%f" acompte
-    ( match get_inputs_var p "V_INDTEO" inputs with
-    | Float f -> f
-    | Undefined -> 0.
-    | _ -> assert false (* should not happen *) );
+    (match get_inputs_var p "V_INDTEO" inputs with Float f -> f | Undefined -> 0.);
   let inputs =
     (* to check: conditional unecessary due to default values? *)
     if acompte > 0. then
@@ -300,79 +292,80 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
   let montant3WB = get_input_var p inputs "PVIMPOS" in
   let montantRWB = get_input_var p inputs "CODRWB" in
   let inputs, p =
-      match (montant3WB, montantRWB) with
-      | SimpleVar Undefined, SimpleVar Undefined -> (inputs, p)
-      | _ ->
-          let inputs= inputs |> update_inputs "FLAG_EXIT" 1. |> update_inputs "FLAG_3WBNEG" 0. in
-          let ctx, inputs = compute_double_liquidation3 p utils inputs npasses in
-          let inputs =
-            match get_ctx_var p ctx "NAPTIR" with
-            | SimpleVar (Float l_Montant) ->
-                let inputs =
-                  if l_Montant < 0. then
-                    update_inputs "FLAG_3WBNEG" 1. inputs (* FIXME: NAPTIR? *)
-                  else inputs
-                in
-                update_inputs "V_NAPTIR3WB" (fabs l_Montant) inputs
-            | SimpleVar Undefined -> inputs
-            | _ -> assert false
-          in
-          let inputs =
-            if !Cli.year >= 2017 then
-              match get_ctx_var p ctx "IHAUTREVT" with
-              | SimpleVar (Float f) -> update_inputs "V_CHR3WB" f inputs
-              | _ -> inputs
-            else inputs
-          in
-          let inputs =
-            if !Cli.year >= 2018 then
-              match get_ctx_var p ctx "ID11" with
-              | SimpleVar (Float f) -> update_inputs "V_ID113WB" f inputs
-              | _ -> inputs
-            else inputs
-          in
-          (update_inputs "FLAG_EXIT" 0. inputs, p) in
-    let montantRWA = get_input_var p inputs "CODRWA" in (* or get_ctx_var ?!*)
-    let inputs, p =
-      match montant3WA, montantRWA with
-      | SimpleVar Undefined, SimpleVar Undefined -> inputs, p
-      | _ ->
-          let inputs = inputs |> update_inputs "FLAG_3WANEG" 0. |> update_inputs "FLAG_EXIT" 2. in
-          let ctx, inputs = compute_double_liquidation3 p utils inputs npasses in
-          let inputs =
-            match get_ctx_var p ctx "NAPTIR" with
-            | SimpleVar (Float l_Montant) ->
-                let inputs =
-                  if l_Montant < 0. then (* FIXME: NAPTIR? *)
-                    update_inputs "FLAG_3WANEG" 1. inputs
-                  else inputs
-                in
-                update_inputs "V_NAPTIR3WA" (fabs l_Montant) inputs
-            | SimpleVar Undefined -> inputs
-            | _ -> assert false
-          in
-          let inputs =
-            if !Cli.year >= 2017 then
-              match get_ctx_var p ctx "IHAUTREVT" with
-              | SimpleVar (Float f) -> update_inputs "V_CHR3WA" f inputs
-              | _ -> inputs
-            else inputs
-          in
-          let inputs =
-            if !Cli.year >= 2018 then
-              match get_ctx_var p ctx "ID11" with
-              | SimpleVar (Float f) -> update_inputs "V_ID113WA" f inputs
-              | _ -> inputs
-            else inputs
-          in
-          (update_inputs "FLAG_EXIT" 0. inputs, p) in
+    match (montant3WB, montantRWB) with
+    | SimpleVar Undefined, SimpleVar Undefined -> (inputs, p)
+    | _ ->
+        let inputs = inputs |> update_inputs "FLAG_EXIT" 1. |> update_inputs "FLAG_3WBNEG" 0. in
+        let ctx, inputs = compute_double_liquidation3 p utils inputs npasses in
+        let inputs =
+          match get_ctx_var p ctx "NAPTIR" with
+          | SimpleVar (Float l_Montant) ->
+              let inputs =
+                if l_Montant < 0. then update_inputs "FLAG_3WBNEG" 1. inputs (* FIXME: NAPTIR? *)
+                else inputs
+              in
+              update_inputs "V_NAPTIR3WB" (fabs l_Montant) inputs
+          | SimpleVar Undefined -> inputs
+          | _ -> assert false
+        in
+        let inputs =
+          if !Cli.year >= 2017 then
+            match get_ctx_var p ctx "IHAUTREVT" with
+            | SimpleVar (Float f) -> update_inputs "V_CHR3WB" f inputs
+            | _ -> inputs
+          else inputs
+        in
+        let inputs =
+          if !Cli.year >= 2018 then
+            match get_ctx_var p ctx "ID11" with
+            | SimpleVar (Float f) -> update_inputs "V_ID113WB" f inputs
+            | _ -> inputs
+          else inputs
+        in
+        (update_inputs "FLAG_EXIT" 0. inputs, p)
+  in
+  let montantRWA = get_input_var p inputs "CODRWA" in
+  (* or get_ctx_var ?!*)
+  let inputs, p =
+    match (montant3WA, montantRWA) with
+    | SimpleVar Undefined, SimpleVar Undefined -> (inputs, p)
+    | _ ->
+        let inputs = inputs |> update_inputs "FLAG_3WANEG" 0. |> update_inputs "FLAG_EXIT" 2. in
+        let ctx, inputs = compute_double_liquidation3 p utils inputs npasses in
+        let inputs =
+          match get_ctx_var p ctx "NAPTIR" with
+          | SimpleVar (Float l_Montant) ->
+              let inputs =
+                if l_Montant < 0. then (* FIXME: NAPTIR? *)
+                  update_inputs "FLAG_3WANEG" 1. inputs
+                else inputs
+              in
+              update_inputs "V_NAPTIR3WA" (fabs l_Montant) inputs
+          | SimpleVar Undefined -> inputs
+          | _ -> assert false
+        in
+        let inputs =
+          if !Cli.year >= 2017 then
+            match get_ctx_var p ctx "IHAUTREVT" with
+            | SimpleVar (Float f) -> update_inputs "V_CHR3WA" f inputs
+            | _ -> inputs
+          else inputs
+        in
+        let inputs =
+          if !Cli.year >= 2018 then
+            match get_ctx_var p ctx "ID11" with
+            | SimpleVar (Float f) -> update_inputs "V_ID113WA" f inputs
+            | _ -> inputs
+          else inputs
+        in
+        (update_inputs "FLAG_EXIT" 0. inputs, p)
+  in
   let inputs, p =
     if !Cli.year >= 2018 then
       let inputs = update_inputs "FLAG_BAREM" 1.0 inputs in
       let ctx, inputs = compute_double_liquidation3 p utils inputs npasses in
       let inputs =
         match get_ctx_var p ctx "RASTXFOYER" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
             update_inputs "V_BARTXFOYER" f inputs
@@ -380,7 +373,6 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
       in
       let inputs =
         match get_ctx_var p ctx "RASTXDEC1" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, RASTXDEC1 = %f@." f;
             update_inputs "V_BARTXDEC1" f inputs
@@ -388,7 +380,6 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
       in
       let inputs =
         match get_ctx_var p ctx "RASTXDEC2" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, RASTXDEC2 = %f@." f;
             update_inputs "V_BARTXDEC2" f inputs
@@ -396,7 +387,6 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
       in
       let inputs =
         match get_ctx_var p ctx "INDTAZ" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, INDTAZ = %f@." f;
             update_inputs "V_BARINDTAZ" f inputs
@@ -404,7 +394,6 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
       in
       let inputs =
         match get_ctx_var p ctx "IITAZIR" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, IITAZIR = %f@." f;
             let flag, f = if f < 0. then (1., -.f) else (0., f) in
@@ -413,7 +402,6 @@ let compute_double_liquidation_exit_taxe (p: program) (utils : Interpreter.evalu
       in
       let inputs =
         match get_ctx_var p ctx "IRTOTAL" with
-        | SimpleVar (Bool _) -> assert false
         | SimpleVar (Float f) ->
             Cli.debug_print "double liquidation exit taxe, IRTOTAL = %f@." f;
             update_inputs "V_BARIRTOTAL" f inputs

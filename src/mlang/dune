@@ -4,7 +4,8 @@
  (public_name mlang)
  (ocamlopt_flags
   (-cclib -lstdc++))
- (libraries ocamlgraph z3 re ANSITerminal parmap cmdliner dune-build-info num)
+ (libraries ocamlgraph re ANSITerminal parmap cmdliner threads
+   dune-build-info num)
  (preprocess
   (pps ppx_deriving.std visitors.ppx)))
 

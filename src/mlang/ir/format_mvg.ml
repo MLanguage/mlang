@@ -24,8 +24,7 @@ let format_execution_number_short fmt (exec_number : execution_number) =
   if exec_number.rule_number = -1 then Format.fprintf fmt "declaration"
   else Format.fprintf fmt "%d#%d" exec_number.rule_number exec_number.seq_number
 
-let format_typ fmt (t : typ) =
-  Format.pp_print_string fmt (match t with Real -> "real" | Boolean -> "boolean")
+let format_typ fmt (t : typ) = Format.pp_print_string fmt (match t with Real -> "real")
 
 let format_io fmt (io : io) =
   Format.pp_print_string fmt
@@ -48,11 +47,7 @@ let format_func fmt (f : func) =
     | Supzero -> "supzero" )
 
 let format_literal fmt (l : literal) =
-  Format.pp_print_string fmt
-    ( match l with
-    | Float f -> string_of_float f
-    | Bool b -> string_of_bool b
-    | Undefined -> "indéfini" )
+  Format.pp_print_string fmt (match l with Float f -> string_of_float f | Undefined -> "indéfini")
 
 let rec format_expression fmt (e : expression) =
   match e with

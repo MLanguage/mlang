@@ -102,8 +102,6 @@ let rec generate_java_expr (e : expression Pos.marked) (scc : unit VariableMap.t
       let sarg, lsarg = generate_java_expr arg scc in
       (Format.asprintf "%s.floor()" sarg, lsarg)
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Bool true) -> ("true", [])
-  | Literal (Bool false) -> ("false", [])
   | Literal (Float f) -> (Format.asprintf "new MValue(%f)" f, [])
   | Literal Undefined -> ("new MValue()", [])
   | Var var -> ("this." ^ generate_variable var, [])
