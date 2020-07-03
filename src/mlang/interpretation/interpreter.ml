@@ -415,7 +415,7 @@ let report_missinginput (ctx : ctx) (var : Variable.t) : 'a =
          ctx ))
 
 let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx : ctx)
-    (_dep_graph : Dependency.DepGraph.t) (var : Variable.t) =
+      (_dep_graph : Dependency.DepGraph.t) (var : Variable.t) =
   try
     match (VariableMap.find var p.program_vars).var_definition with
     | Mvg.SimpleVar e ->

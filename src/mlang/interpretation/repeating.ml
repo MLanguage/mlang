@@ -369,8 +369,8 @@ let compute_double_liquidation_exit_taxe (p : program) (utils : Interpreter.eval
       let inputs =
         match get_ctx_var p ctx "RASTXFOYER" with
         | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
-            update_inputs "V_BARTXFOYER" f inputs
+           Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
+           update_inputs "V_BARTXFOYER" f inputs
         | _ -> inputs
       in
       let inputs =
@@ -414,28 +414,26 @@ let compute_double_liquidation_exit_taxe (p : program) (utils : Interpreter.eval
   in
   compute_double_liquidation3 p utils inputs
 
-(* (\* FIXME: FIETTE: issue on RBG1 *\)
- * let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluation_utilities)
- *       (inputs : literal VariableMap.t) (npasses : int) : Interpreter.ctx * literal VariableMap.t =
- *   let update_inputs = update_inputs_var p in
- *   let inputs = match get_input_var p inputs "COD3WG" with
- *     | SimpleVar Undefined -> inputs
- *     | _ ->
- *        let inputs = update_inputs "FLAG_PVRO" 1. inputs in
- *        let ctx, inputs = compute_double_liquidation_exit_taxe p utils inputs npasses in
- *        match get_ctx_var p ctx "IAD11" with
- *        | SimpleVar Undefined -> inputs
- *        | SimpleVar (Float f) ->
- *           Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
- *           Interpreter.repl_debugguer ctx p;
- *           update_inputs "V_IPVRO" f inputs
- *        | _ -> assert false
- *   in
- *   let inputs = update_inputs "FLAG_PVRO" 0. inputs in
- *   compute_double_liquidation_exit_taxe p utils inputs npasses *)
+let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluation_utilities)
+      (inputs : literal VariableMap.t) : Interpreter.ctx * literal VariableMap.t =
+  let update_inputs = update_inputs_var p in
+  let inputs = match get_input_var p inputs "COD3WG" with
+    | SimpleVar Undefined -> inputs
+    | _ ->
+       let inputs = update_inputs "FLAG_PVRO" 1. inputs in
+       let ctx, inputs = compute_double_liquidation_exit_taxe p utils inputs in
+       match get_ctx_var p ctx "IAD11" with
+       | SimpleVar Undefined -> inputs
+       | SimpleVar (Float f) ->
+          Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
+          update_inputs "V_IPVRO" f inputs
+       | _ -> assert false
+  in
+  let inputs = update_inputs "FLAG_PVRO" 0. inputs in
+  compute_double_liquidation_exit_taxe p utils inputs
 
 let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) : Interpreter.ctx =
-  let ctx = fst @@ compute_double_liquidation_exit_taxe p utils inputs in
+  let ctx = fst @@ compute_double_liquidation_pvro p utils inputs in
   Interpreter.check_verif_conds p utils ctx;
   ctx
