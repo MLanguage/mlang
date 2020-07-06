@@ -165,7 +165,7 @@ let compute_benefit (p : program) (utils : Interpreter.evaluation_utilities)
     if besoincalcul then begin
       let () = Cli.debug_print "besoin calcul avfisc@." in
       let inputs = inputs |> update_inputs "V_INDTEO" 1. |> update_inputs "V_CALCUL_NAPS" 1. in
-      let ctx = Interpreter.evaluate_program p utils inputs in
+      let ctx = Interpreter.evaluate_program p utils inputs false in
       let inputs = update_inputs "V_CALCUL_NAPS" 0. inputs in
       let avantagefisc = extract_value 0. (get_ctx_var p ctx "NAPSANSPENA") in
       let iad11 = extract_value 0. (get_ctx_var p ctx "IAD11") in
@@ -193,7 +193,7 @@ let compute_deposit (p : program) (utils : Interpreter.evaluation_utilities)
   Cli.debug_print "beginning compute_deposit@.";
   let update_inputs = update_inputs_var p in
   let inputs = inputs |> update_inputs "FLAG_ACO" 1. |> update_inputs "V_CALCUL_ACO" 1. in
-  let ctx = Interpreter.evaluate_program p utils inputs in
+  let ctx = Interpreter.evaluate_program p utils inputs false in
   let inputs = inputs |> update_inputs "V_CALCUL_ACO" 0. |> update_inputs "FLAG_ACO" 2. in
   let acompte = extract_value 0. (get_ctx_var p ctx "MTAP") in
   let prem = extract_value 0. (get_ctx_var p ctx "PREM8_11") in
@@ -214,7 +214,7 @@ let compute_deposit_with_benefit (p : program) (utils : Interpreter.evaluation_u
     |> update_inputs "V_NAPREEL" (fabs napsanpenareel)
     |> update_inputs "V_CALCUL_ACO" 1.0
   in
-  let ctx = Interpreter.evaluate_program p utils inputs in
+  let ctx = Interpreter.evaluate_program p utils inputs false in
   let inputs = inputs |> update_inputs "V_CALCUL_ACO" 0. |> update_inputs "FLAG_ACO" 2. in
   let acompte = extract_value 0. (get_ctx_var p ctx "MTAP") in
   let acompteps = extract_value 0. (get_ctx_var p ctx "MTAPPS") in
@@ -282,7 +282,7 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
       inputs |> update_inputs "V_ACO_MTAP" acompte |> update_inputs "V_NEGACO" indice_aco
     else inputs |> update_inputs "V_ACO_MTAP" 0. |> update_inputs "V_NEGACO" 0.
   in
-  let ctx = Interpreter.evaluate_program p utils inputs in
+  let ctx = Interpreter.evaluate_program p utils inputs false in
   Cli.debug_print "program evaluation done!@.";
   (ctx, inputs)
 
@@ -435,6 +435,7 @@ let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluatio
 
 let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) : Interpreter.ctx =
-  let ctx = fst @@ compute_double_liquidation_pvro p utils inputs in
-  Interpreter.check_verif_conds p utils ctx;
+  let _, inputs = compute_double_liquidation_pvro p utils inputs in
+  (* in a last pass, we also check the verification conditions *)
+  let ctx = Interpreter.evaluate_program p utils inputs true in
   ctx

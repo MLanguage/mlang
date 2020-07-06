@@ -404,7 +404,7 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
          ctx ))
 
 let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx : ctx)
-    (_dep_graph : Dependency.DepGraph.t) (var : Variable.t) =
+    (dep_graph : Dependency.DepGraph.t) (var : Variable.t) (check_verif_conds : bool) =
   try
     match (VariableMap.find var p.program_vars).var_definition with
     | Mvg.SimpleVar e ->
@@ -424,7 +424,16 @@ let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx 
           { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
         with Not_found ->
           { ctx with ctx_vars = VariableMap.add var (SimpleVar Undefined) ctx.ctx_vars } )
-  with Not_found -> ctx
+  with Not_found ->
+    if check_verif_conds then
+      match VariableMap.find_opt var p.program_conds with
+      | Some cond -> (
+          (* checking condition variables is only done at the end *)
+          match evaluate_expr ctx p cond.cond_expr with
+          | Float f when f = 1. -> report_violatedcondition cond var ctx dep_graph
+          | _ -> ctx )
+      | None -> assert false (* should not happen *)
+    else ctx
 
 type evaluation_utilities = {
   utilities_dep_graph : Dependency.DepGraph.t;
@@ -432,10 +441,12 @@ type evaluation_utilities = {
 }
 
 let evaluate_program_fold (p : program) (utils : evaluation_utilities)
-    (input_values : literal VariableMap.t) =
+    (input_values : literal VariableMap.t) (check_verif_conds : bool) =
   List.fold_left
     (fun ctx var ->
-      let ctx = evaluate_variable p input_values ctx utils.utilities_dep_graph var in
+      let ctx =
+        evaluate_variable p input_values ctx utils.utilities_dep_graph var check_verif_conds
+      in
       ctx)
     (empty_ctx p) utils.utilities_execution_order
 
@@ -468,10 +479,10 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
     input_values p
 
 let evaluate_program (p : program) (utils : evaluation_utilities)
-    (input_values : literal VariableMap.t) : ctx =
+    (input_values : literal VariableMap.t) (check_verif_conds : bool) : ctx =
   let p = replace_undefined_with_input_variables p input_values in
   try
-    let ctx = evaluate_program_fold p utils input_values in
+    let ctx = evaluate_program_fold p utils input_values check_verif_conds in
     ctx
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
@@ -482,12 +493,3 @@ let evaluate_program (p : program) (utils : evaluation_utilities)
       exit 1
     end
     else raise (RuntimeError (e, ctx))
-
-let check_verif_conds (p : program) (utils : evaluation_utilities) (ctx : ctx) : unit =
-  let conds = p.program_conds in
-  Mvg.VariableMap.iter
-    (fun var cond ->
-      match evaluate_expr ctx p cond.cond_expr with
-      | Float f when f = 1. -> report_violatedcondition cond var ctx utils.utilities_dep_graph
-      | _ -> ())
-    conds
