@@ -207,6 +207,17 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
                   (Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e)))
             e
       | _ -> Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e )
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) -> (
+      let new_arg1 = partial_evaluation ctx interp_ctx p arg1 in
+      let new_arg2 = partial_evaluation ctx interp_ctx p arg2 in
+      match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
+      | Literal _, Literal _ ->
+          Pos.same_pos_as
+            (Mvg.Literal
+               (Interpreter.evaluate_expr interp_ctx p
+                  (Pos.same_pos_as (FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
+            e
+      | _ -> Pos.same_pos_as (FunctionCall (f, [ new_arg1; new_arg2 ])) e )
   | FunctionCall (func, args) ->
       Pos.same_pos_as
         (FunctionCall (func, List.map (fun arg -> partial_evaluation ctx interp_ctx p arg) args))

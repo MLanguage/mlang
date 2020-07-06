@@ -362,10 +362,6 @@ let rec generate_python_expr (e : expression) : string =
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "m_min(%s, %s)" s1 s2
-  | FunctionCall (Multimax, [ e1; e2 ]) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "m_multimax(%s, %s)" s1 s2
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.asprintf "%f" f
   | Literal Undefined -> none_value
