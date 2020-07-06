@@ -1,7 +1,7 @@
 saisie: non;
 
 const:
-V_IND_TRAIT = 4;;
+V_IND_TRAIT = 4;
 
 condition: non;
 
