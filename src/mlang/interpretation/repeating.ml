@@ -369,8 +369,8 @@ let compute_double_liquidation_exit_taxe (p : program) (utils : Interpreter.eval
       let inputs =
         match get_ctx_var p ctx "RASTXFOYER" with
         | SimpleVar (Float f) ->
-           Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
-           update_inputs "V_BARTXFOYER" f inputs
+            Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
+            update_inputs "V_BARTXFOYER" f inputs
         | _ -> inputs
       in
       let inputs =
@@ -415,19 +415,20 @@ let compute_double_liquidation_exit_taxe (p : program) (utils : Interpreter.eval
   compute_double_liquidation3 p utils inputs
 
 let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluation_utilities)
-      (inputs : literal VariableMap.t) : Interpreter.ctx * literal VariableMap.t =
+    (inputs : literal VariableMap.t) : Interpreter.ctx * literal VariableMap.t =
   let update_inputs = update_inputs_var p in
-  let inputs = match get_input_var p inputs "COD3WG" with
+  let inputs =
+    match get_input_var p inputs "COD3WG" with
     | SimpleVar Undefined -> inputs
-    | _ ->
-       let inputs = update_inputs "FLAG_PVRO" 1. inputs in
-       let ctx, inputs = compute_double_liquidation_exit_taxe p utils inputs in
-       match get_ctx_var p ctx "IAD11" with
-       | SimpleVar Undefined -> inputs
-       | SimpleVar (Float f) ->
-          Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
-          update_inputs "V_IPVRO" f inputs
-       | _ -> assert false
+    | _ -> (
+        let inputs = update_inputs "FLAG_PVRO" 1. inputs in
+        let ctx, inputs = compute_double_liquidation_exit_taxe p utils inputs in
+        match get_ctx_var p ctx "IAD11" with
+        | SimpleVar Undefined -> inputs
+        | SimpleVar (Float f) ->
+            Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
+            update_inputs "V_IPVRO" f inputs
+        | _ -> assert false )
   in
   let inputs = update_inputs "FLAG_PVRO" 0. inputs in
   compute_double_liquidation_exit_taxe p utils inputs

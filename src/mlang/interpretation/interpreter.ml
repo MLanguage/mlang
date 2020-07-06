@@ -125,7 +125,7 @@ type run_error =
   | UndefinedValue of string
   | FloatIndex of string
   | IndexOutOfBounds of string
-  | MissingInputValue of string
+  | UnknownInputVariable of string
   | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
 
 exception RuntimeError of run_error * ctx
@@ -136,7 +136,7 @@ let format_runtime_error fmt (e : run_error) =
   | ErrorValue s -> Format.fprintf fmt "Error value at runtime: %s" s
   | FloatIndex s -> Format.fprintf fmt "Index is not an integer: %s" s
   | IndexOutOfBounds s -> Format.fprintf fmt "Index out of bounds: %s" s
-  | MissingInputValue s -> Format.fprintf fmt "Missing input value: %s" s
+  | UnknownInputVariable s -> Format.fprintf fmt "Unknown input variable: %s" s
   | ConditionViolated (errors, condition, bindings) ->
       Format.fprintf fmt
         "Verification condition failed: %a. Errors thrown:\n\
@@ -170,8 +170,6 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
 let eval_debug = ref false
 
 let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) : literal =
-  (* if !eval_debug then Cli.debug_print "evaluate_expr %a" Format_mvg.format_expression (Pos.unmark
-     e); *)
   try
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -405,23 +403,12 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
                   (Dependency.DepGraph.pred dep_graph var) ),
          ctx ))
 
-let report_missinginput (ctx : ctx) (var : Variable.t) : 'a =
-  raise
-    (RuntimeError
-       ( MissingInputValue
-           (Format.asprintf "%s (%s)"
-              (Pos.unmark var.Mvg.Variable.name)
-              (Pos.unmark var.Mvg.Variable.descr)),
-         ctx ))
-
 let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx : ctx)
-      (_dep_graph : Dependency.DepGraph.t) (var : Variable.t) =
+    (_dep_graph : Dependency.DepGraph.t) (var : Variable.t) =
   try
     match (VariableMap.find var p.program_vars).var_definition with
     | Mvg.SimpleVar e ->
         let l_e = evaluate_expr ctx p e in
-        (* if !eval_debug then
-         *   Cli.debug_print "%a ~> %a" Format_mvg.format_variable var Format_mvg.format_literal l_e; *)
         { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
     | Mvg.TableVar (size, es) ->
         (* Right now we suppose that the different indexes of table arrays don't depend on each
@@ -434,18 +421,10 @@ let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx 
             evaluate_expr ctx p
               (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)
           in
-
           { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
         with Not_found ->
-          if VariableMap.mem var ctx.ctx_vars then ctx else report_missinginput ctx var )
+            { ctx with ctx_vars = VariableMap.add var (SimpleVar Undefined) ctx.ctx_vars } )
   with Not_found -> ctx
-
-(* let cond = VariableMap.find var p.program_conds in let l_cond = evaluate_expr ctx p
-   cond.cond_expr in match l_cond with | Float 0. | Undefined -> ctx (* error condition is not
-   trigerred, we continue *) | Float _ -> (* the condition is triggered, we throw errors *)
-   report_violatedcondition cond var ctx dep_graph *)
-
-(* should not happen *)
 
 type evaluation_utilities = {
   utilities_dep_graph : Dependency.DepGraph.t;
@@ -460,12 +439,31 @@ let evaluate_program_fold (p : program) (utils : evaluation_utilities)
       ctx)
     (empty_ctx p) utils.utilities_execution_order
 
+(* During evaluation, variables that have an I/O property set to InputVariable have a value that is
+   read directly from the input map. However, one can pass inside the input map a value for a
+   variable whose I/O type was not properly set to InputVariable. This function is precisely for
+   these cases, it set the I/O flag properly for execution. Not that such a change to the program
+   does not require to recompute the dependency graph and the execution order. *)
+let replace_undefined_with_input_variables (p : program) (input_values : literal VariableMap.t) :
+    program =
+  VariableMap.fold
+    (fun var _ p ->
+      try
+        let old_var_data = VariableMap.find var p.program_vars in
+        { p with program_vars = VariableMap.add var { old_var_data with var_definition = InputVar; var_io = Input }  p.program_vars }
+      with Not_found ->
+        raise
+          (RuntimeError
+             ( UnknownInputVariable
+                 (Format.asprintf "%s (%s)"
+                    (Pos.unmark var.Mvg.Variable.name)
+                    (Pos.unmark var.Mvg.Variable.descr)),
+               empty_ctx p )))
+    input_values p
+
 let evaluate_program (p : program) (utils : evaluation_utilities)
     (input_values : literal VariableMap.t) : ctx =
-  Cli.debug_print "evaluating program with V_IAD11TEO = %a@." Format_mvg.format_literal
-    ( match VariableMap.find_opt (find_var_by_name p "V_IAD11TEO") input_values with
-    | Some v -> v
-    | None -> Undefined );
+  let p = replace_undefined_with_input_variables p input_values in
   try
     let ctx = evaluate_program_fold p utils input_values in
     ctx
