@@ -423,7 +423,7 @@ let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx 
           in
           { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
         with Not_found ->
-            { ctx with ctx_vars = VariableMap.add var (SimpleVar Undefined) ctx.ctx_vars } )
+          { ctx with ctx_vars = VariableMap.add var (SimpleVar Undefined) ctx.ctx_vars } )
   with Not_found -> ctx
 
 type evaluation_utilities = {
@@ -450,7 +450,13 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
     (fun var _ p ->
       try
         let old_var_data = VariableMap.find var p.program_vars in
-        { p with program_vars = VariableMap.add var { old_var_data with var_definition = InputVar; var_io = Input }  p.program_vars }
+        {
+          p with
+          program_vars =
+            VariableMap.add var
+              { old_var_data with var_definition = InputVar; var_io = Input }
+              p.program_vars;
+        }
       with Not_found ->
         raise
           (RuntimeError

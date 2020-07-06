@@ -79,11 +79,31 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
     Interface.translate_cond program.program_idmap
       (List.map
          (fun (var, value, pos) ->
-           ( Ast.Comparison
-               ( (Eq, pos),
-                 (Literal (Variable (Normal var)), pos),
-                 (Literal (to_ast_literal value), pos) ),
-             pos ))
+           (* we allow a difference of 1 between the control value and the result because of
+              rounding errors *)
+           let first_exp =
+             ( Ast.Comparison
+                 ( (Lte, pos),
+                   ( Ast.Binop
+                       ( (Ast.Sub, pos),
+                         (Literal (Variable (Normal var)), pos),
+                         (Literal (to_ast_literal value), pos) ),
+                     pos ),
+                   (Literal (Float 1.), pos) ),
+               pos )
+           in
+           let second_exp =
+             ( Ast.Comparison
+                 ( (Gte, pos),
+                   ( Ast.Binop
+                       ( (Ast.Sub, pos),
+                         (Literal (Variable (Normal var)), pos),
+                         (Literal (to_ast_literal value), pos) ),
+                     pos ),
+                   (Literal (Float (-1.)), pos) ),
+               pos )
+           in
+           (Ast.Binop ((Ast.And, pos), first_exp, second_exp), pos))
          t.rp)
   in
   ( {
@@ -138,7 +158,17 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
                        cond.cond_expr,
                        [
                          ( match Pos.unmark cond.cond_expr with
-                         | Unop (Ast.Not, (Comparison ((Ast.Eq, _), (Var var, _), (_, _)), _)) ->
+                         | Unop
+                             ( Ast.Not,
+                               ( Mvg.Binop
+                                   ( (Ast.And, _),
+                                     ( Comparison
+                                         ( (Ast.Lte, _),
+                                           (Mvg.Binop ((Ast.Sub, _), (Var var, _), _), _),
+                                           (_, _) ),
+                                       _ ),
+                                     _ ),
+                                 _ ) ) ->
                              (var, VariableMap.find var ctx.ctx_vars)
                          | _ -> assert false );
                          (* should not happen *)
