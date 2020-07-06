@@ -72,11 +72,11 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           | Ast.Or, _, Literal Undefined
           | Ast.Div, _, Literal Undefined ->
               Literal Undefined
-          | Ast.Or, Literal (Float f), _ when f != 0. -> Literal true_literal
-          | Ast.Or, _, Literal (Float f) when f != 0. -> Literal true_literal
+          | Ast.Or, Literal (Float f), _ when f <> 0. -> Literal true_literal
+          | Ast.Or, _, Literal (Float f) when f <> 0. -> Literal true_literal
           | Ast.And, Literal (Float 0.), _ | Ast.And, _, Literal (Float 0.) -> Literal false_literal
-          | Ast.And, Literal (Float f), e' when f != 0. -> e'
-          | Ast.And, e', Literal (Float f) when f != 0. -> e'
+          | Ast.And, Literal (Float f), e' when f <> 0. -> e'
+          | Ast.And, e', Literal (Float f) when f <> 0. -> e'
           | Ast.Or, Literal (Float 0.), e'
           | Ast.Or, e', Literal (Float 0.)
           | Ast.Add, Literal (Float 0. | Undefined), e'
@@ -259,6 +259,5 @@ let partially_evaluate (p : program) (dep_graph : Dependency.DepGraph.t) : progr
                 program_conds =
                   VariableMap.add var { cond with cond_expr = new_cond_expr } p.program_conds;
               }
-        with Not_found -> assert false )
-      (* should not happen *))
+        with Not_found -> assert false (* should not happen *) ))
     p exec_order
