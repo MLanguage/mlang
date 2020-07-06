@@ -153,7 +153,99 @@ let rec generate_python_expr (e : expression) : string =
               ( Binop
                   ( (Ast.Add, _),
                     e3,
-                    (Binop ((Ast.Add, _), e4, (Binop ((Ast.Add, _), e5, e6), _)), _) ),
+                    ( Binop
+                        ( (Ast.Add, _),
+                          e4,
+                          ( Binop
+                              ( (Ast.Add, _),
+                                e5,
+                                ( Binop
+                                    ( (Ast.Add, _),
+                                      e6,
+                                      ( Binop
+                                          ( (Ast.Add, _),
+                                            e7,
+                                            ( Binop
+                                                ( (Ast.Add, _),
+                                                  e8,
+                                                  ( Binop
+                                                      ( (Ast.Add, _),
+                                                        e9,
+                                                        ( Binop
+                                                            ( (Ast.Add, _),
+                                                              e10,
+                                                              ( Binop
+                                                                  ( (Ast.Add, _),
+                                                                    e11,
+                                                                    ( Binop
+                                                                        ( (Ast.Add, _),
+                                                                          e12,
+                                                                          ( Binop
+                                                                              ( (Ast.Add, _),
+                                                                                e13,
+                                                                                ( Binop
+                                                                                    ( (Ast.Add, _),
+                                                                                      e14,
+                                                                                      ( Binop
+                                                                                          ( ( Ast.Add,
+                                                                                              _ ),
+                                                                                            e15,
+                                                                                            ( Binop
+                                                                                                ( ( Ast
+                                                                                                    .Add,
+                                                                                                    _
+                                                                                                  ),
+                                                                                                  e16,
+                                                                                                  ( Binop
+                                                                                                    (
+                                                                                                    (
+                                                                                                    Ast
+                                                                                                    .Add,
+                                                                                                    _
+                                                                                                    ),
+                                                                                                    e17,
+                                                                                                    (
+                                                                                                    Binop
+                                                                                                    (
+                                                                                                    (
+                                                                                                    Ast
+                                                                                                    .Add,
+                                                                                                    _
+                                                                                                    ),
+                                                                                                    e18,
+                                                                                                    (
+                                                                                                    Binop
+                                                                                                    (
+                                                                                                    (
+                                                                                                    Ast
+                                                                                                    .Add,
+                                                                                                    _
+                                                                                                    ),
+                                                                                                    e19,
+                                                                                                    e20
+                                                                                                    ),
+                                                                                                    _
+                                                                                                    )
+                                                                                                    ),
+                                                                                                    _
+                                                                                                    )
+                                                                                                    ),
+                                                                                                    _
+                                                                                                  )
+                                                                                                ),
+                                                                                              _ ) ),
+                                                                                        _ ) ),
+                                                                                  _ ) ),
+                                                                            _ ) ),
+                                                                      _ ) ),
+                                                                _ ) ),
+                                                          _ ) ),
+                                                    _ ) ),
+                                              _ ) ),
+                                        _ ) ),
+                                  _ ) ),
+                            _ ) ),
+                      _ ) ),
                 _ ) ),
           _ ) ) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
@@ -162,7 +254,79 @@ let rec generate_python_expr (e : expression) : string =
       let s4 = generate_python_expr (Pos.unmark e4) in
       let s5 = generate_python_expr (Pos.unmark e5) in
       let s6 = generate_python_expr (Pos.unmark e6) in
-      Format.asprintf "(%s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6
+      let s7 = generate_python_expr (Pos.unmark e7) in
+      let s8 = generate_python_expr (Pos.unmark e8) in
+      let s9 = generate_python_expr (Pos.unmark e9) in
+      let s10 = generate_python_expr (Pos.unmark e10) in
+      let s11 = generate_python_expr (Pos.unmark e11) in
+      let s12 = generate_python_expr (Pos.unmark e12) in
+      let s13 = generate_python_expr (Pos.unmark e13) in
+      let s14 = generate_python_expr (Pos.unmark e14) in
+      let s15 = generate_python_expr (Pos.unmark e15) in
+      let s16 = generate_python_expr (Pos.unmark e16) in
+      let s17 = generate_python_expr (Pos.unmark e17) in
+      let s18 = generate_python_expr (Pos.unmark e18) in
+      let s19 = generate_python_expr (Pos.unmark e19) in
+      let s20 = generate_python_expr (Pos.unmark e20) in
+      Format.asprintf
+        "(%s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s \
+         + %s + %s)"
+        s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20
+  | Binop
+      ( (Ast.Add, _),
+        e1,
+        ( Binop
+            ( (Ast.Add, _),
+              e2,
+              ( Binop
+                  ( (Ast.Add, _),
+                    e3,
+                    ( Binop
+                        ( (Ast.Add, _),
+                          e4,
+                          ( Binop
+                              ( (Ast.Add, _),
+                                e5,
+                                ( Binop
+                                    ( (Ast.Add, _),
+                                      e6,
+                                      ( Binop
+                                          ( (Ast.Add, _),
+                                            e7,
+                                            ( Binop
+                                                ( (Ast.Add, _),
+                                                  e8,
+                                                  (Binop ((Ast.Add, _), e9, e10), _) ),
+                                              _ ) ),
+                                        _ ) ),
+                                  _ ) ),
+                            _ ) ),
+                      _ ) ),
+                _ ) ),
+          _ ) ) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      let s3 = generate_python_expr (Pos.unmark e3) in
+      let s4 = generate_python_expr (Pos.unmark e4) in
+      let s5 = generate_python_expr (Pos.unmark e5) in
+      let s6 = generate_python_expr (Pos.unmark e6) in
+      let s7 = generate_python_expr (Pos.unmark e7) in
+      let s8 = generate_python_expr (Pos.unmark e8) in
+      let s9 = generate_python_expr (Pos.unmark e9) in
+      let s10 = generate_python_expr (Pos.unmark e10) in
+      Format.asprintf "(%s + %s + %s + %s + %s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6 s7 s8 s9
+        s10
+  | Binop
+      ( (Ast.Add, _),
+        e1,
+        ( Binop ((Ast.Add, _), e2, (Binop ((Ast.Add, _), e3, (Binop ((Ast.Add, _), e4, e5), _)), _)),
+          _ ) ) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      let s3 = generate_python_expr (Pos.unmark e3) in
+      let s4 = generate_python_expr (Pos.unmark e4) in
+      let s5 = generate_python_expr (Pos.unmark e5) in
+      Format.asprintf "(%s + %s + %s + %s + %s)" s1 s2 s3 s4 s5
   | Binop (op, e1, e2) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
@@ -190,6 +354,18 @@ let rec generate_python_expr (e : expression) : string =
   | FunctionCall (InfFunc, [ arg ]) ->
       let sarg = generate_python_expr (Pos.unmark arg) in
       if autograd () then Format.asprintf "%s" sarg else Format.asprintf "floor(%s)" sarg
+  | FunctionCall (MaxFunc, [ e1; e2 ]) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      Format.asprintf "m_max(%s, %s)" s1 s2
+  | FunctionCall (MinFunc, [ e1; e2 ]) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      Format.asprintf "m_min(%s, %s)" s1 s2
+  | FunctionCall (Multimax, [ e1; e2 ]) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      Format.asprintf "m_multimax(%s, %s)" s1 s2
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.asprintf "%f" f
   | Literal Undefined -> none_value
