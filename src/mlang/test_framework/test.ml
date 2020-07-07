@@ -115,6 +115,36 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
     func_conds,
     input_file )
 
+let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
+    (test_conds : condition_data VariableMap.t) : Interpreter.interpretable_program =
+  let outputs =
+    VariableMap.fold
+      (fun _ test_cond acc ->
+        let vars_used_by_test =
+          Dependency.get_used_variables test_cond.cond_expr VariableMap.empty
+        in
+        VariableMap.fold
+          (fun used_var _ acc -> VariableMap.add used_var () acc)
+          vars_used_by_test acc)
+      test_conds VariableMap.empty
+  in
+  let program =
+    {
+      p.ip_program with
+      program_vars =
+        VariableMap.mapi
+          (fun var data ->
+            if VariableMap.mem var outputs then
+              match data.Mvg.var_io with
+              | Input
+              | Output -> data
+              | Regular -> { data with var_io = Output }
+            else data)
+          p.ip_program.program_vars;
+    }
+  in
+  { p with ip_program = program }
+
 let check_test (p : Mvg.program) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
@@ -130,6 +160,7 @@ let check_test (p : Mvg.program) (test_name : string) =
       ip_utils = { utilities_dep_graph = dep_graph; utilities_execution_order = exec_order };
     }
   in
+  let p = add_test_conds_usage_to_outputs p test_conds in
   let ctx = Repeating.compute_program p input_file in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
@@ -239,7 +270,7 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
         (successes, failures)
   in
   let s, f =
-    Parmap.parfold process (Parmap.A arr) ([], VariableMap.empty)
+    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty)
       (fun (old_s, old_f) (new_s, new_f) ->
         (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
   in

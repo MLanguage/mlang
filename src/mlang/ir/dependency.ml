@@ -26,28 +26,34 @@ module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional (struct
 end)
 
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
-let rec add_usages (lvar : Mvg.Variable.t) (e : Mvg.expression Pos.marked) (acc : DepGraph.t) :
+let rec get_used_variables (e : Mvg.expression Pos.marked) (acc : unit Mvg.VariableMap.t) :
+    unit Mvg.VariableMap.t =
+  match Pos.unmark e with
+  | Mvg.Comparison (_, e1, e2) | Mvg.Binop (_, e1, e2) | Mvg.LocalLet (_, e1, e2) ->
+      let acc = get_used_variables e1 acc in
+      let acc = get_used_variables e2 acc in
+      acc
+  | Mvg.Unop (_, e) -> get_used_variables e acc
+  | Mvg.Index ((var, _), e) ->
+      let acc = Mvg.VariableMap.add var () acc in
+      let acc = get_used_variables e acc in
+      acc
+  | Mvg.Conditional (e1, e2, e3) ->
+      let acc = get_used_variables e1 acc in
+      let acc = get_used_variables e2 acc in
+      let acc = get_used_variables e3 acc in
+      acc
+  | Mvg.FunctionCall (_, args) ->
+      List.fold_left (fun acc arg -> get_used_variables arg acc) acc args
+  | Mvg.LocalVar _ | Mvg.Literal _ | Mvg.GenericTableIndex | Mvg.Error -> acc
+  | Mvg.Var var -> Mvg.VariableMap.add var () acc
+
+let add_usages (lvar : Mvg.Variable.t) (e : Mvg.expression Pos.marked) (acc : DepGraph.t) :
     DepGraph.t =
   let acc = DepGraph.add_vertex acc lvar in
   let add_edge acc var lvar = DepGraph.add_edge acc var lvar in
-  match Pos.unmark e with
-  | Mvg.Comparison (_, e1, e2) | Mvg.Binop (_, e1, e2) | Mvg.LocalLet (_, e1, e2) ->
-      let acc = add_usages lvar e1 acc in
-      let acc = add_usages lvar e2 acc in
-      acc
-  | Mvg.Unop (_, e) -> add_usages lvar e acc
-  | Mvg.Index ((var, _), e) ->
-      let acc = add_edge acc var lvar in
-      let acc = add_usages lvar e acc in
-      acc
-  | Mvg.Conditional (e1, e2, e3) ->
-      let acc = add_usages lvar e1 acc in
-      let acc = add_usages lvar e2 acc in
-      let acc = add_usages lvar e3 acc in
-      acc
-  | Mvg.FunctionCall (_, args) -> List.fold_left (fun acc arg -> add_usages lvar arg acc) acc args
-  | Mvg.LocalVar _ | Mvg.Literal _ | Mvg.GenericTableIndex | Mvg.Error -> acc
-  | Mvg.Var var -> add_edge acc var lvar
+  let usages = get_used_variables e Mvg.VariableMap.empty in
+  Mvg.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
 
 (** The dependency graph also includes nodes for the conditions to be checked at execution *)
 let create_dependency_graph (p : Mvg.program) : DepGraph.t =

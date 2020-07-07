@@ -121,9 +121,9 @@ let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
 
 type run_error =
   | ErrorValue of string
-  | UndefinedValue of string
   | FloatIndex of string
   | IndexOutOfBounds of string
+  | IncorrectOutputVariable of string
   | UnknownInputVariable of string
   | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
 
@@ -131,11 +131,11 @@ exception RuntimeError of run_error * ctx
 
 let format_runtime_error fmt (e : run_error) =
   match e with
-  | UndefinedValue s -> Format.fprintf fmt "Undefined value at runtime: %s" s
   | ErrorValue s -> Format.fprintf fmt "Error value at runtime: %s" s
   | FloatIndex s -> Format.fprintf fmt "Index is not an integer: %s" s
   | IndexOutOfBounds s -> Format.fprintf fmt "Index out of bounds: %s" s
   | UnknownInputVariable s -> Format.fprintf fmt "Unknown input variable: %s" s
+  | IncorrectOutputVariable s -> Format.fprintf fmt "Incorrect output variable: %s" s
   | ConditionViolated (errors, condition, bindings) ->
       Format.fprintf fmt
         "Verification condition failed: %a. Errors thrown:\n\
@@ -441,15 +441,46 @@ type evaluation_utilities = {
 
 type interpretable_program = { ip_program : Mvg.program; ip_utils : evaluation_utilities }
 
+(* a crucial optimization before beginning: we can stop evaluation when we we know there are no more
+   output variables to be computed *)
+let shrink_execution_order_to_fit_outputs (exec_order : Execution_order.execution_order)
+    (p : program) (check_verif_conds : bool) : Execution_order.execution_order =
+  let output_found = ref false in
+  let new_exec_order =
+    List.fold_right
+      (fun var acc ->
+        if !output_found then var :: acc
+        else
+          try
+            match (VariableMap.find var p.program_vars).var_io with
+            | Output ->
+                output_found := true;
+                var :: acc
+            | Input | Regular -> acc
+          with Not_found -> (
+            try
+              if check_verif_conds && VariableMap.mem var p.program_conds then begin
+                output_found := true;
+                var :: acc
+              end
+              else acc
+            with Not_found -> assert false ) (*should not happen *))
+      exec_order []
+  in
+  new_exec_order
+
 let evaluate_program_fold (p : program) (utils : evaluation_utilities)
     (input_values : literal VariableMap.t) (check_verif_conds : bool) =
+  let optimized_exec_order =
+    shrink_execution_order_to_fit_outputs utils.utilities_execution_order p check_verif_conds
+  in
   List.fold_left
     (fun ctx var ->
       let ctx =
         evaluate_variable p input_values ctx utils.utilities_dep_graph var check_verif_conds
       in
       ctx)
-    (empty_ctx p) utils.utilities_execution_order
+    (empty_ctx p) optimized_exec_order
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
    read directly from the input map. However, one can pass inside the input map a value for a
