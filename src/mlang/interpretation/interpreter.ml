@@ -440,6 +440,11 @@ type evaluation_utilities = {
   utilities_execution_order : Execution_order.execution_order;
 }
 
+type interpretable_program = {
+  ip_program: Mvg.program;
+  ip_utils: evaluation_utilities;
+}
+
 let evaluate_program_fold (p : program) (utils : evaluation_utilities)
     (input_values : literal VariableMap.t) (check_verif_conds : bool) =
   List.fold_left
@@ -478,11 +483,11 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                empty_ctx p )))
     input_values p
 
-let evaluate_program (p : program) (utils : evaluation_utilities)
+let evaluate_program (ip : interpretable_program)
     (input_values : literal VariableMap.t) (check_verif_conds : bool) : ctx =
-  let p = replace_undefined_with_input_variables p input_values in
+  let p = replace_undefined_with_input_variables ip.ip_program input_values in
   try
-    let ctx = evaluate_program_fold p utils input_values check_verif_conds in
+    let ctx = evaluate_program_fold p ip.ip_utils input_values check_verif_conds in
     ctx
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin

@@ -24,6 +24,7 @@ type mvg_function = {
   func_exec_passes : expression Pos.marked VariableMap.t list option;
 }
 
+
 let fit_function (p : program) (f : mvg_function) : program =
   {
     p with
@@ -253,9 +254,9 @@ let read_function_from_spec (p : program) : mvg_function =
       close_in input;
       exit 1
 
-let make_function_from_program (program : program) (utils : Interpreter.evaluation_utilities) :
+let make_function_from_program (program : Interpreter.interpretable_program) :
     literal VariableMap.t -> Interpreter.ctx =
- fun input_values -> Repeating.compute_program program utils input_values
+ fun input_values -> Repeating.compute_program program input_values
 
 let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
   Cli.result_print "Enter the input values of the program, followed by a semicolon:";

@@ -116,19 +116,22 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
     func_conds,
     input_file )
 
-let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (test_name : string) =
+let check_test (p : Mvg.program) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
   let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let ctx = Repeating.compute_program p utils input_file in
+  let dep_graph = Dependency.create_dependency_graph p in
+  let exec_order = Execution_order.get_execution_order dep_graph in
+  let p = { Interpreter.ip_program = p; ip_utils = { utilities_dep_graph = dep_graph; utilities_execution_order = exec_order }} in
+  let ctx = Repeating.compute_program p input_file in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
     List.mapi
       (fun i var -> (var, i))
-      (Execution_order.get_execution_order utils.utilities_dep_graph)
+      (Execution_order.get_execution_order p.ip_utils.utilities_dep_graph)
   in
   let execution_order_map : int VariableMap.t =
     List.fold_left
@@ -148,7 +151,7 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
   try
     List.iter
       (fun (_, cond) ->
-        let result = Interpreter.evaluate_expr ctx p cond.cond_expr in
+        let result = Interpreter.evaluate_expr ctx p.ip_program cond.cond_expr in
         match result with
         | Float f when f <> 0. ->
             raise
@@ -181,12 +184,12 @@ let check_test (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (tes
       Cli.error_print "%a" Interpreter.format_runtime_error e;
       flush_all ();
       flush_all ();
-      if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p;
+      if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p.ip_program;
       exit 1
     end
     else raise (Interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities) (test_dir : string)
+let check_all_tests (p : Mvg.program) (test_dir : string)
     =
   let arr = Sys.readdir test_dir in
   let arr =
@@ -205,7 +208,7 @@ let check_all_tests (p : Mvg.program) (utils : Interpreter.evaluation_utilities)
     (* Cli.debug_print "Processing %s..." name; *)
     try
       Cli.debug_flag := false;
-      check_test p utils (test_dir ^ name);
+      check_test p (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
     with

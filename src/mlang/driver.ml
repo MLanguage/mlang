@@ -80,11 +80,11 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     in
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test.check_all_tests program utils tests
+      Test.check_all_tests program tests
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test.check_test program utils test
+      Test.check_test program test
     end
     else
       let program = if !Cli.optimize then Optimization.optimize program dep_graph else program in
@@ -92,10 +92,11 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       (* Noundef.check program; *)
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let f = Interface.make_function_from_program program utils in
+        let program = { Interpreter.ip_program = program; ip_utils = utils} in
+        let f = Interface.make_function_from_program program in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
-        Interpreter.repl_debugguer results program
+        Interpreter.repl_debugguer results program.ip_program
       end
       else if
         String.lowercase_ascii !Cli.backend = "python"
