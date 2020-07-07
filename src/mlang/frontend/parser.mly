@@ -502,7 +502,7 @@ const_input:
 | var = SYMBOL EQUALS expr = expression SEMICOLON { (parse_variable_name $sloc var, expr) }
 
 spec_const_list:
-| NOT { [] }
+| NOT SEMICOLON { [] }
 | const = const_input { [const] }
 | const = const_input rest = spec_const_list { const::rest }
 
@@ -525,7 +525,7 @@ chaining_list:
 
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
-  CONST COLON consts = spec_const_list SEMICOLON
+  CONST COLON consts = spec_const_list
   CONDITION COLON precs = spec_conds_list
   CHAINING COLON chainings = chaining_list
   OUTPUT COLON outputs = spec_output_list SEMICOLON
