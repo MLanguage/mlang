@@ -223,6 +223,18 @@ let compute_deposit_with_benefit (p : program) (utils : Interpreter.evaluation_u
   Cli.debug_print "ending compute_deposit_with_benefit@.";
   (acompte, inputs)
 
+(** Equivalent to IN_Article1731bis in DGFIP's codebase *)
+let compute_article1731bis (p: program) (inputs: literal VariableMap.t) : literal VariableMap.t =
+  let update_inputs = update_inputs_var p in
+  let inputs = update_inputs "ART1731BIS" 0. inputs in
+  match get_input_var p inputs "CMAJ" (* ok since input? wrt to get_ctx_var *) with
+  | SimpleVar Undefined -> inputs
+  | SimpleVar (Float f) ->
+     if f == 8. || f == 11. then
+       inputs |> update_inputs "ART1731BIS" 1. |> update_inputs "PREM8_11" 1.
+     else inputs
+  | _ -> assert false
+
 (** Equivalent to IN_traite_double_liquidation3 in DGFiP's codebase *)
 let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) : Interpreter.ctx * literal VariableMap.t =
@@ -232,6 +244,7 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
     |> update_inputs "V_AVFISCOPBIS" 0. |> update_inputs "V_DIFTEOREEL" 0.
     |> update_inputs "PREM8_11" 0.
   in
+  let inputs = compute_article1731bis p inputs in
   (* do we need to perform "acomptes" computation? *)
   let calcul_acomptes = exists_deposit_defined_variables inputs in
   (* do we need to perform "avantages fiscal" computation? *)
@@ -260,6 +273,8 @@ let compute_double_liquidation3 (p : program) (utils : Interpreter.evaluation_ut
       (* FIXME: l_besoincalculacptes = 0; lmontantreel = 0 *)
     else (inputs, -1., 1.)
   in
+  Cli.debug_print "PREM8_11 = %f" (extract_value (-1.) (get_input_var p inputs "PREM8_11"));
+
   Cli.debug_print "Fin du calcul des acomptes@.Début du calcul de plafonnement@.";
   let inputs =
     if calcul_avfisc then
@@ -414,6 +429,7 @@ let compute_double_liquidation_exit_taxe (p : program) (utils : Interpreter.eval
   in
   compute_double_liquidation3 p utils inputs
 
+(** Equivalent to IN_traite_double_liquidation_pvro in DGFiP's codebase *)
 let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluation_utilities)
       (inputs : literal VariableMap.t) : Interpreter.ctx * literal VariableMap.t =
   let update_inputs = update_inputs_var p in
@@ -431,6 +447,7 @@ let compute_double_liquidation_pvro (p : program) (utils : Interpreter.evaluatio
   in
   let inputs = update_inputs "FLAG_PVRO" 0. inputs in
   compute_double_liquidation_exit_taxe p utils inputs
+
 
 let compute_program (p : program) (utils : Interpreter.evaluation_utilities)
     (inputs : literal VariableMap.t) : Interpreter.ctx =
