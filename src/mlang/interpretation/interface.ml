@@ -214,20 +214,24 @@ let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_da
   Ast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ] None
 
 let read_function_from_spec (p : program) : mvg_function =
-  if !Cli.function_spec = "" then
-    raise
-      (Errors.ArgumentError "Function specification file is not specified using --function_spec");
-  let input = open_in !Cli.function_spec in
+  let spec_file =
+    match !Cli.function_spec with
+    | None ->
+        raise
+          (Errors.ArgumentError "Function specification file is not specified using --function_spec")
+    | Some f -> f
+  in
+  let input = open_in spec_file in
   let filebuf = Lexing.from_channel input in
-  Cli.debug_print "Parsing %s" !Cli.function_spec;
+  Cli.debug_print "Parsing %s" spec_file;
   let filebuf =
     {
       filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename !Cli.function_spec };
+      lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename spec_file };
     }
   in
   try
-    Parse_utils.current_file := !Cli.function_spec;
+    Parse_utils.current_file := spec_file;
     let func_spec = Parser.function_spec token filebuf in
     close_in input;
     {

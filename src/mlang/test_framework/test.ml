@@ -203,31 +203,32 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
   Interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
-  (* (fun f1 f2 ->
-   *   compare (Unix.stat (test_dir ^ f1)).st_size (Unix.stat (test_dir ^ f2)).st_size) arr; *)
   Cli.warning_flag := false;
   Cli.display_time := false;
   let _, finish = Cli.create_progress_bar "Testing files" in
   let process name (successes, failures) =
-    (* Cli.debug_print "Processing %s..." name; *)
     try
       Cli.debug_flag := false;
       check_test p (test_dir ^ name);
       Cli.debug_flag := true;
-      (name :: successes, failures) (* Cli.debug_print "Success on %s" name *)
+      (name :: successes, failures)
     with
     | Interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
         Cli.debug_flag := true;
         match (bindings, Pos.unmark expr) with
         | ( [ (v, Interpreter.SimpleVar l1) ],
-            Unop (Not, (Comparison ((Ast.Eq, _), _, (Literal l2, _)), _)) ) ->
-            (* Cli.debug_print "Failure on %s, var = %s, got = %a, expected = %a" name varname
-               Format_mvg.format_literal l1 Format_mvg.format_literal l2; *)
+            Unop
+              ( Ast.Not,
+                ( Mvg.Binop
+                    ( (Ast.And, _),
+                      ( Comparison
+                          ((Ast.Lte, _), (Mvg.Binop ((Ast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+                        _ ),
+                      _ ),
+                  _ ) ) ) ->
             let errs_varname = try VariableMap.find v failures with Not_found -> [] in
             (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
         | _ ->
-            (* let errs_varname = try VariableMap.find (fst @@ List.hd bindings) failures with Not_found -> [] in
-             * (successes, VariableMap.add v ((name, snd @@ List.hd bindings, Undefined) :: erss_varname) failures) *)
             Cli.error_print "Test %s incorrect (error%s %a raised)@." name
               (if List.length err > 1 then "s" else "")
               (Format.pp_print_list Format.pp_print_string)
@@ -238,9 +239,8 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
           Errors.format_typ_error t;
         (successes, failures)
   in
-  (* Cli.debug_print @@ Interpreter.format_runtime_error e in *)
   let s, f =
-    Parmap.parfold ~chunksize:10 process (Parmap.A arr) ([], VariableMap.empty)
+    Parmap.parfold ~chunksize:1 process (Parmap.A arr) ([], VariableMap.empty)
       (fun (old_s, old_f) (new_s, new_f) ->
         (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
   in
@@ -252,9 +252,11 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
       (fun (_, i) (_, i') -> -compare (List.length i) (List.length i'))
       (VariableMap.bindings f)
   in
-  List.iter
-    (fun (var, infos) ->
-      Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
-        (List.length infos)
-        (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
-    f_l
+  if List.length f_l = 0 then Cli.debug_print "No failures!"
+  else
+    List.iter
+      (fun (var, infos) ->
+        Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
+          (List.length infos)
+          (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
+      f_l

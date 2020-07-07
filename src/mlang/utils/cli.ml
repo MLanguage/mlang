@@ -62,7 +62,7 @@ let backend =
 
 let function_spec =
   Arg.(
-    required
+    value
     & opt (some file) None
     & info [ "function_spec"; "f" ] ~docv:"SPEC"
         ~doc:
@@ -180,7 +180,7 @@ let optimize = ref false
 
 let output_file = ref ""
 
-let function_spec = ref ""
+let function_spec = ref None
 
 let real_precision = ref 100
 
@@ -194,8 +194,9 @@ let year : int ref = ref 2018
 
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string) (output_ : string option) (real_precision_ : int)
-    (run_all_tests_ : string option) (run_test_ : string option) (year_ : int) =
+    (backend_ : string) (function_spec_ : string option) (output_ : string option)
+    (real_precision_ : int) (run_all_tests_ : string option) (run_test_ : string option)
+    (year_ : int) =
   source_files := files_;
   application := application_;
   debug_flag := debug_;
