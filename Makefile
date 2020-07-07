@@ -23,7 +23,7 @@ build: #format
 # use: TEST_FILE=bla make test
 test: build
 	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter\\
+	 	--display_time --debug --backend interpreter \
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 

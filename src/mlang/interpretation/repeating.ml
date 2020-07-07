@@ -143,7 +143,7 @@ let merge_inputs (modified : literal VariableMap.t) (others : literal VariableMa
       | None, Some v2 -> Some v2
       | None, None -> None
       | Some v1, Some _v2 -> Some v1
-      (* should not happen *))
+    )
     modified others
 
 let fabs x = if x >= 0. then x else -.x
@@ -270,8 +270,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
       in
       let indice_aco = if acompte >= 0. then 0. else 1. in
       (merge_inputs inputs inputs_other, fabs acompte, indice_aco)
-      (* FIXME: maybe we can merge ctx_deposit_only with ctx and that works? *)
-      (* FIXME: l_besoincalculacptes = 0; lmontantreel = 0 *)
     else (inputs, -1., 1.)
   in
   Cli.debug_print "PREM8_11 = %f"

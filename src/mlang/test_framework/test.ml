@@ -73,7 +73,6 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
   in
   let func_constant_inputs = VariableMap.empty in
   let func_outputs = VariableMap.empty in
-  (* Interface.var_set_from_variable_name_list program (List.map fst t.rp) in *)
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
     Interface.translate_cond program.program_idmap
@@ -240,23 +239,28 @@ let check_all_tests (p : Mvg.program) (test_dir : string) =
         (successes, failures)
   in
   let s, f =
-    Parmap.parfold ~chunksize:1 process (Parmap.A arr) ([], VariableMap.empty)
+    Parmap.parfold process (Parmap.A arr) ([], VariableMap.empty)
       (fun (old_s, old_f) (new_s, new_f) ->
         (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
   in
   finish "done!";
-  Cli.debug_print "%d successes, on: %s" (List.length s) (String.concat ", " (List.sort compare s));
-  Cli.debug_print "Failures:";
+  Cli.warning_flag := true;
+  Cli.display_time := true;
+  Cli.result_print "Test results: %d successes in files: %s@." (List.length s)
+    (String.concat ", " (List.sort compare s));
+
   let f_l =
     List.sort
       (fun (_, i) (_, i') -> -compare (List.length i) (List.length i'))
       (VariableMap.bindings f)
   in
-  if List.length f_l = 0 then Cli.debug_print "No failures!"
-  else
+  if List.length f_l = 0 then Cli.result_print "No failures!@."
+  else begin
+    Cli.warning_print "Failures:@.";
     List.iter
       (fun (var, infos) ->
-        Cli.debug_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
+        Cli.error_print "\t%s, %d errors in files %s@." (Pos.unmark var.Variable.name)
           (List.length infos)
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
+  end
