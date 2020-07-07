@@ -125,7 +125,12 @@ let check_test (p : Mvg.program) (test_name : string) =
   let p = Interface.fit_function p f in
   let dep_graph = Dependency.create_dependency_graph p in
   let exec_order = Execution_order.get_execution_order dep_graph in
-  let p = { Interpreter.ip_program = p; ip_utils = { utilities_dep_graph = dep_graph; utilities_execution_order = exec_order }} in
+  let p =
+    {
+      Interpreter.ip_program = p;
+      ip_utils = { utilities_dep_graph = dep_graph; utilities_execution_order = exec_order };
+    }
+  in
   let ctx = Repeating.compute_program p input_file in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
@@ -189,8 +194,7 @@ let check_test (p : Mvg.program) (test_name : string) =
     end
     else raise (Interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mvg.program) (test_dir : string)
-    =
+let check_all_tests (p : Mvg.program) (test_dir : string) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list

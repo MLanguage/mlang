@@ -24,7 +24,6 @@ type mvg_function = {
   func_exec_passes : expression Pos.marked VariableMap.t list option;
 }
 
-
 let fit_function (p : program) (f : mvg_function) : program =
   {
     p with

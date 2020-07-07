@@ -62,9 +62,6 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     finish "completed!";
     let application = if !Cli.application = "" then None else Some !Cli.application in
     let program = Ast_to_mvg.translate !program application in
-    Cli.debug_print "Extracting the desired function from the whole program...";
-    let mvg_func = Interface.read_function_from_spec program in
-    let program = Interface.fit_function program mvg_func in
     Cli.debug_print "Expanding function definitions...";
     let program = Functions.expand_functions program in
     Cli.debug_print "Typechecking...";
@@ -72,12 +69,6 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
-    let utils : Interpreter.evaluation_utilities =
-      {
-        Interpreter.utilities_dep_graph = dep_graph;
-        Interpreter.utilities_execution_order = Execution_order.get_execution_order dep_graph;
-      }
-    in
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
       Test.check_all_tests program tests
@@ -86,13 +77,25 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
       Test.check_test program test
     end
-    else
+    else begin
+      Cli.debug_print "Extracting the desired function from the whole program...";
+      let mvg_func = Interface.read_function_from_spec program in
+      let program = Interface.fit_function program mvg_func in
       let program = if !Cli.optimize then Optimization.optimize program dep_graph else program in
       let dep_graph = Dependency.create_dependency_graph program in
-      (* Noundef.check program; *)
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let program = { Interpreter.ip_program = program; ip_utils = utils} in
+        let program =
+          {
+            Interpreter.ip_program = program;
+            ip_utils =
+              {
+                Interpreter.utilities_dep_graph = dep_graph;
+                Interpreter.utilities_execution_order =
+                  Execution_order.get_execution_order dep_graph;
+              };
+          }
+        in
         let f = Interface.make_function_from_program program in
         let results = f (Interface.read_inputs_from_stdin mvg_func) in
         Interface.print_output mvg_func results;
@@ -130,6 +133,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
           !Cli.output_file
       end
       else raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
+    end
   with
   | Errors.TypeError e ->
       Cli.error_print "%a\n" Errors.format_typ_error e;

@@ -152,8 +152,8 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
   match v with SimpleVar (Mvg.Float f) -> f | _ -> default
 
 (** Equivalent to AC_CalculeAvFiscal *)
-let compute_benefit (p : Interpreter.interpretable_program)
-    (inputs : literal VariableMap.t) : float * literal VariableMap.t =
+let compute_benefit (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t) :
+    float * literal VariableMap.t =
   Cli.debug_print "beginning compute_benefit@.";
   let besoincalcul =
     VariableMap.cardinal (all_deposit_defined_variables inputs) > 0
@@ -188,8 +188,8 @@ let compute_benefit (p : Interpreter.interpretable_program)
   (avantagefisc, inputs)
 
 (** Equivalent to AC_CalculAcomptes *)
-let compute_deposit (p : Interpreter.interpretable_program)
-    (inputs : literal VariableMap.t) : float * literal VariableMap.t =
+let compute_deposit (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t) :
+    float * literal VariableMap.t =
   Cli.debug_print "beginning compute_deposit@.";
   let update_inputs = update_inputs_var p.ip_program in
   let inputs = inputs |> update_inputs "FLAG_ACO" 1. |> update_inputs "V_CALCUL_ACO" 1. in
@@ -224,15 +224,16 @@ let compute_deposit_with_benefit (p : Interpreter.interpretable_program)
   (acompte, inputs)
 
 (** Equivalent to IN_Article1731bis in DGFIP's codebase *)
-let compute_article1731bis (p: Interpreter.interpretable_program) (inputs: literal VariableMap.t) : literal VariableMap.t =
+let compute_article1731bis (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t)
+    : literal VariableMap.t =
   let update_inputs = update_inputs_var p.ip_program in
   let inputs = update_inputs "ART1731BIS" 0. inputs in
   match get_input_var p.ip_program inputs "CMAJ" (* ok since input? wrt to get_ctx_var *) with
   | SimpleVar Undefined -> inputs
   | SimpleVar (Float f) ->
-     if f == 8. || f == 11. then
-       inputs |> update_inputs "ART1731BIS" 1. |> update_inputs "PREM8_11" 1.
-     else inputs
+      if f == 8. || f == 11. then
+        inputs |> update_inputs "ART1731BIS" 1. |> update_inputs "PREM8_11" 1.
+      else inputs
   | _ -> assert false
 
 (** Equivalent to IN_traite_double_liquidation3 in DGFiP's codebase *)
@@ -273,7 +274,8 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
       (* FIXME: l_besoincalculacptes = 0; lmontantreel = 0 *)
     else (inputs, -1., 1.)
   in
-  Cli.debug_print "PREM8_11 = %f" (extract_value (-1.) (get_input_var p.ip_program inputs "PREM8_11"));
+  Cli.debug_print "PREM8_11 = %f"
+    (extract_value (-1.) (get_input_var p.ip_program inputs "PREM8_11"));
 
   Cli.debug_print "Fin du calcul des acomptes@.Début du calcul de plafonnement@.";
   let inputs =
@@ -449,9 +451,10 @@ let compute_double_liquidation_pvro (p : Interpreter.interpretable_program)
   let inputs = update_inputs "FLAG_PVRO" 0. inputs in
   compute_double_liquidation_exit_taxe p inputs
 
-
-let compute_program (p : Interpreter.interpretable_program)
-    (inputs : literal VariableMap.t) : Interpreter.ctx =
+let compute_program (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t) :
+    Interpreter.ctx =
+  (* in primitive mode, V_IND_TRAIT is set to 4 (5 in corrective mode) *)
+  let inputs = update_inputs_var p.ip_program "V_IND_TRAIT" 4. inputs in
   let _, inputs = compute_double_liquidation_pvro p inputs in
   (* in a last pass, we also check the verification conditions *)
   let ctx = Interpreter.evaluate_program p inputs true in

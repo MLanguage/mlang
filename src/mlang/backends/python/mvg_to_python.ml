@@ -197,26 +197,26 @@ let rec generate_python_expr (e : expression) : string =
                                                                                                   ),
                                                                                                   e16,
                                                                                                   ( Binop
-                                                                                                    (
-                                                                                                    (
+                                                                                                    ( 
+                                                                                                    ( 
                                                                                                     Ast
                                                                                                     .Add,
                                                                                                     _
                                                                                                     ),
                                                                                                     e17,
-                                                                                                    (
+                                                                                                    ( 
                                                                                                     Binop
-                                                                                                    (
-                                                                                                    (
+                                                                                                    ( 
+                                                                                                    ( 
                                                                                                     Ast
                                                                                                     .Add,
                                                                                                     _
                                                                                                     ),
                                                                                                     e18,
-                                                                                                    (
+                                                                                                    ( 
                                                                                                     Binop
-                                                                                                    (
-                                                                                                    (
+                                                                                                    ( 
+                                                                                                    ( 
                                                                                                     Ast
                                                                                                     .Add,
                                                                                                     _
