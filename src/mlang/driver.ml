@@ -75,7 +75,8 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test.check_test program test
+      Test.check_test program test;
+      Cli.result_print "Test passed!@."
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
