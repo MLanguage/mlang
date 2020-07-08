@@ -490,6 +490,6 @@ let compute_program (p : Interpreter.interpretable_program) (inputs : literal Va
   (* in primitive mode, V_IND_TRAIT is set to 4 (5 in corrective mode) *)
   let inputs = update_inputs_var p.ip_program "V_IND_TRAIT" 4. inputs in
   (* in a first pass, we check the verification conditions *)
-  let _ = Interpreter.evaluate_program p inputs true in
+  let _ = Interpreter.evaluate_program (reset_and_add_outputs p []) inputs true in
   let ctx, _ = compute_double_liquidation_pvro p inputs in
   ctx

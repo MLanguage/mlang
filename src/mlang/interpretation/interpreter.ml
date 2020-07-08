@@ -17,7 +17,8 @@ let repl_debug = ref false
 
 let exit_on_rte = ref true
 
-let truncatef x = snd (modf x)
+(* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
+let truncatef x = snd (modf (x +. 0.000001))
 
 (* Careful : rounding in M is done with this arbitrary behavior *)
 let roundf x = snd (modf (x +. copysign 0.50005 x))

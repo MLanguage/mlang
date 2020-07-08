@@ -78,8 +78,7 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
     Interface.translate_cond program.program_idmap
       (List.map
          (fun (var, value, pos) ->
-           (* we allow a difference of 1 between the control value and the result because of
-              rounding errors *)
+           (* we allow a difference of 0 between the control value and the result *)
            let first_exp =
              ( Ast.Comparison
                  ( (Lte, pos),
@@ -88,7 +87,7 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float 1.), pos) ),
+                   (Literal (Float 0.), pos) ),
                pos )
            in
            let second_exp =
@@ -99,7 +98,7 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float (-1.)), pos) ),
+                   (Literal (Float 0.), pos) ),
                pos )
            in
            (Ast.Binop ((Ast.And, pos), first_exp, second_exp), pos))
@@ -136,8 +135,7 @@ let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
           (fun var data ->
             if VariableMap.mem var outputs then
               match data.Mvg.var_io with
-              | Input
-              | Output -> data
+              | Input | Output -> data
               | Regular -> { data with var_io = Output }
             else data)
           p.ip_program.program_vars;
