@@ -120,12 +120,6 @@ let exists_taxbenefit_ceiled_variables (input_values : literal VariableMap.t) : 
 let all_deposit_defined_variables (input_values : literal VariableMap.t) : unit VariableMap.t =
   VariableMap.map (fun _ -> ()) (VariableMap.filter (fun v _ -> var_is_deposit v) input_values)
 
-(** Equivalent to AC_GetCodesAcompte in the DGFiP's logic *)
-let all_revenues_defined_not_deposit (input_values : literal VariableMap.t) : unit VariableMap.t =
-  VariableMap.map
-    (fun _ -> ())
-    (VariableMap.filter (fun v _ -> var_is_revenue_but_not_deposit v) input_values)
-
 (** Equivalent to IRDATA_range *)
 let update_inputs_var (p : program) (var : string) (value : float) (inputs : literal VariableMap.t)
     : literal VariableMap.t =
@@ -278,7 +272,10 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
   in
   let inputs = compute_article1731bis p inputs in
   (* do we need to perform "acomptes" computation? *)
+  (* Equivalent to AC_GetCodesAcompte in the DGFiP's logic *)
+  let inputs, inputs_acompte = partition_inputs var_is_revenue_but_not_deposit inputs in
   let calcul_acomptes = exists_deposit_defined_variables inputs in
+  let inputs = merge_inputs inputs inputs_acompte in
   (* do we need to perform "avantages fiscal" computation? *)
   let calcul_avfisc = exists_taxbenefit_defined_variables inputs in
   let inputs, v_8ZG =
@@ -492,7 +489,7 @@ let compute_program (p : Interpreter.interpretable_program) (inputs : literal Va
     Interpreter.ctx =
   (* in primitive mode, V_IND_TRAIT is set to 4 (5 in corrective mode) *)
   let inputs = update_inputs_var p.ip_program "V_IND_TRAIT" 4. inputs in
-  let _, inputs = compute_double_liquidation_pvro p inputs in
-  (* in a last pass, we also check the verification conditions *)
-  let ctx = Interpreter.evaluate_program p inputs true in
+  (* in a first pass, we check the verification conditions *)
+  let _ = Interpreter.evaluate_program p inputs true in
+  let ctx, _ = compute_double_liquidation_pvro p inputs in
   ctx
