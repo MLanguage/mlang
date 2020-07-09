@@ -211,7 +211,7 @@ let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_da
         verif_conditions = verif_conds;
       }
   in
-  Ast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ] None
+  Ast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
 
 let read_function_from_spec (p : program) : mvg_function =
   let spec_file =
@@ -262,10 +262,10 @@ let make_function_from_program (program : Interpreter.interpretable_program) :
  fun input_values -> Repeating.compute_program program input_values
 
 let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
-  Cli.result_print "Enter the input values of the program, followed by a semicolon:";
+  Cli.result_print "Enter the input values of the program, followed by a semicolon:@.";
   VariableMap.mapi
     (fun var _ ->
-      Format.printf "%s (%s) = "
+      Format.printf "%s (%s) = @?"
         (match var.Variable.alias with Some s -> s | None -> Pos.unmark var.Variable.name)
         (Pos.unmark var.Variable.descr);
       let value = read_line () in
@@ -281,7 +281,7 @@ let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
           Cli.error_print "%s" msg;
           exit 1
       | Parser.Error ->
-          Cli.error_print "Lexer error in input!";
+          Cli.error_print "Lexer error in input!@.";
           exit 1)
     f.func_variable_inputs
 
@@ -289,5 +289,5 @@ let print_output (f : mvg_function) (results : Interpreter.ctx) : unit =
   VariableMap.iter
     (fun var value ->
       if VariableMap.mem var f.func_outputs then
-        Cli.result_print "%a" Interpreter.format_var_literal_with_var (var, value))
+        Cli.result_print "%a@." Interpreter.format_var_literal_with_var (var, value))
     results.ctx_vars

@@ -389,10 +389,8 @@ let get_constants (p : Ast.program) :
   in
   (vars, idmap, int_const_vals)
 
-let belongs_to_app (r : Ast.application Pos.marked list) (application : string option) : bool =
-  match application with
-  | None -> true
-  | Some application -> List.exists (fun app -> Pos.unmark app = application) r
+let belongs_to_iliad_app (r : Ast.application Pos.marked list) : bool =
+  List.exists (fun app -> Pos.unmark app = "iliad") r
 
 (** Retrieves variable declaration data. Done in a separate pass because wen don't want to deal with
     sorting the dependencies between files or inside files. *)
@@ -652,7 +650,7 @@ and instantiate_generic_variables_parameters_aux (idmap : Mvg.idmap)
 (** Linear pass that fills [idmap] with all the variable assignments along with their execution
     number. *)
 let get_var_redefinitions (p : Ast.program) (idmap : Mvg.idmap)
-    (int_const_vals : int Mvg.VariableMap.t) (application : string option) : Mvg.idmap =
+    (int_const_vals : int Mvg.VariableMap.t) : Mvg.idmap =
   let idmap =
     List.fold_left
       (fun (idmap : Mvg.idmap) source_file ->
@@ -661,7 +659,7 @@ let get_var_redefinitions (p : Ast.program) (idmap : Mvg.idmap)
             match Pos.unmark source_file_item with
             | Ast.Rule r ->
                 let rule_number = Ast.rule_number r.Ast.rule_name in
-                if not (belongs_to_app r.Ast.rule_applications application) then idmap
+                if not (belongs_to_iliad_app r.Ast.rule_applications) then idmap
                 else
                   fst
                     (List.fold_left
@@ -1044,8 +1042,8 @@ let add_var_def (var_data : Mvg.variable_data Mvg.VariableMap.t) (var_lvalue : M
     the variables being defined (with the execution number corresponding to the place where it is
     defined) and whose values are the expressions corresponding to the definitions. *)
 let get_var_data (idmap : Mvg.idmap) (var_decl_data : var_decl_data Mvg.VariableMap.t)
-    (int_const_vals : int Mvg.VariableMap.t) (p : Ast.program) (application : string option) :
-    Mvg.variable_data Mvg.VariableMap.t =
+    (int_const_vals : int Mvg.VariableMap.t) (p : Ast.program) : Mvg.variable_data Mvg.VariableMap.t
+    =
   let current_progress, finish = Cli.create_progress_bar "Translating to core language" in
   let out =
     List.fold_left
@@ -1059,7 +1057,7 @@ let get_var_data (idmap : Mvg.idmap) (var_decl_data : var_decl_data Mvg.Variable
             match Pos.unmark source_file_item with
             | Ast.Rule r ->
                 let rule_number = Ast.rule_number r.Ast.rule_name in
-                if not (belongs_to_app r.Ast.rule_applications application) then var_data
+                if not (belongs_to_iliad_app r.Ast.rule_applications) then var_data
                 else
                   fst
                     (List.fold_left
@@ -1247,14 +1245,14 @@ let add_dummy_definition_for_variable_declaration (var_data : Mvg.variable_data 
     var_decl_data var_data
 
 (** Returns a map whose keys are dummy variables and whose values are the verification conditions. *)
-let get_conds (error_decls : Mvg.Error.t list) (idmap : Mvg.idmap) (p : Ast.program)
-    (application : Ast.application option) : Mvg.condition_data Mvg.VariableMap.t =
+let get_conds (error_decls : Mvg.Error.t list) (idmap : Mvg.idmap) (p : Ast.program) :
+    Mvg.condition_data Mvg.VariableMap.t =
   List.fold_left
     (fun conds source_file ->
       List.fold_left
         (fun conds source_file_item ->
           match Pos.unmark source_file_item with
-          | Ast.Verification verif when belongs_to_app verif.Ast.verif_applications application ->
+          | Ast.Verification verif when belongs_to_iliad_app verif.Ast.verif_applications ->
               let rule_number = Ast.verification_number verif.verif_name in
               List.fold_left
                 (fun conds verif_cond ->
@@ -1367,14 +1365,14 @@ let remove_corrective_rules (p : Ast.program) : Ast.program =
     - [add_dummy_definition_for_variable_declaration] adds [Undefined] definitions placeholder for
       all variables declarations;
     - [get_errors_conds] parses the verification conditions definitions. *)
-let translate (p : Ast.program) (application : string option) : Mvg.program =
+let translate (p : Ast.program) : Mvg.program =
   let p = remove_corrective_rules p in
   let var_decl_data, idmap, int_const_vals = get_constants p in
   let var_decl_data, error_decls, idmap = get_variables_decl p var_decl_data idmap in
-  let idmap = get_var_redefinitions p idmap int_const_vals application in
-  let var_data = get_var_data idmap var_decl_data int_const_vals p application in
+  let idmap = get_var_redefinitions p idmap int_const_vals in
+  let var_data = get_var_data idmap var_decl_data int_const_vals p in
   let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data idmap in
-  let conds = get_conds error_decls idmap p application in
+  let conds = get_conds error_decls idmap p in
   {
     Mvg.program_vars = var_data;
     Mvg.program_conds = conds;

@@ -134,11 +134,7 @@ let get_inputs_var (p : program) (var : string) (inputs : literal VariableMap.t)
 (** Equivalent to IRDATA_get_var_irdata *)
 let get_ctx_var p (ctx : Interpreter.ctx) (var : string) : Interpreter.var_literal =
   let var = find_var_by_name p var in
-  (* FIXME: if not found, check somewhere else? *)
-  try Mvg.VariableMap.find var ctx.ctx_vars
-  with Not_found ->
-    Cli.debug_print "get_ctx_var %a failed@." Format_mvg.format_variable var;
-    raise Not_found
+  Mvg.VariableMap.find var ctx.ctx_vars
 
 let get_input_var p inputs var : Interpreter.var_literal =
   let var = find_var_by_name p var in
@@ -175,7 +171,6 @@ let extract_value (default : float) (v : Interpreter.var_literal) =
 (** Equivalent to AC_CalculeAvFiscal *)
 let compute_benefit (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t) :
     float * literal VariableMap.t =
-  Cli.debug_print "beginning compute_benefit@.";
   let besoincalcul =
     VariableMap.cardinal (all_deposit_defined_variables inputs) > 0
     || exists_taxbenefit_ceiled_variables inputs
@@ -183,8 +178,7 @@ let compute_benefit (p : Interpreter.interpretable_program) (inputs : literal Va
   let inputs, inputs_other = partition_inputs var_is_taxbenefit inputs in
   let update_inputs = update_inputs_var p.ip_program in
   let avantagefisc, inputs =
-    if besoincalcul then begin
-      let () = Cli.debug_print "besoin calcul avfisc@." in
+    if besoincalcul then
       let inputs = inputs |> update_inputs "V_INDTEO" 1. |> update_inputs "V_CALCUL_NAPS" 1. in
       let p = reset_and_add_outputs p [ "NAPSANSPENA"; "IAD11"; "INE"; "IRE"; "PREM8_11" ] in
       let ctx = Interpreter.evaluate_program p inputs false in
@@ -194,8 +188,6 @@ let compute_benefit (p : Interpreter.interpretable_program) (inputs : literal Va
       let ine = extract_value 0. (get_ctx_var p.ip_program ctx "INE") in
       let ire = extract_value 0. (get_ctx_var p.ip_program ctx "IRE") in
       let prem = extract_value 0. (get_ctx_var p.ip_program ctx "PREM8_11") in
-      Cli.debug_print "NAPSANSPENA=%f@.IAD11=%f@.INE=%f@.IRE=%f@.PREM8_11=%f@." avantagefisc iad11
-        ine ire prem;
       let inputs = update_inputs "PREM8_11" prem inputs in
       let inputs = merge_inputs inputs inputs_other in
       let inputs =
@@ -203,16 +195,13 @@ let compute_benefit (p : Interpreter.interpretable_program) (inputs : literal Va
         |> update_inputs "V_INETEO" ine
       in
       (avantagefisc, inputs)
-    end
     else (0., merge_inputs inputs inputs_other)
   in
-  Cli.debug_print "ending compute_benefit, avantages fiscaux = %f@." avantagefisc;
   (avantagefisc, inputs)
 
 (** Equivalent to AC_CalculAcomptes *)
 let compute_deposit (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t) :
     float * literal VariableMap.t =
-  Cli.debug_print "beginning compute_deposit@.";
   let update_inputs = update_inputs_var p.ip_program in
   let inputs = inputs |> update_inputs "FLAG_ACO" 1. |> update_inputs "V_CALCUL_ACO" 1. in
   let p = reset_and_add_outputs p [ "MTAP"; "PREM8_11" ] in
@@ -220,17 +209,14 @@ let compute_deposit (p : Interpreter.interpretable_program) (inputs : literal Va
   let inputs = inputs |> update_inputs "V_CALCUL_ACO" 0. |> update_inputs "FLAG_ACO" 2. in
   let acompte = extract_value 0. (get_ctx_var p.ip_program ctx "MTAP") in
   let prem = extract_value 0. (get_ctx_var p.ip_program ctx "PREM8_11") in
-  Cli.debug_print "ending compute_deposit@.";
   (acompte, update_inputs "PREM8_11" prem inputs)
 
 (** Equivalent to AC_CalculeAcomptesAvFisc *)
 let compute_deposit_with_benefit (p : Interpreter.interpretable_program)
     (inputs : literal VariableMap.t) (napsanpenareel : float) : float * literal VariableMap.t =
-  Cli.debug_print "beginning compute_deposit_with_benefit@.";
   let update_inputs = update_inputs_var p.ip_program in
   let inputs = update_inputs "FLAG_ACO" 1. inputs in
-  let montantavtmp, inputs = compute_benefit p inputs in
-  Cli.debug_print "NAPTEO: %f@." montantavtmp;
+  let _, inputs = compute_benefit p inputs in
   let inputs =
     inputs |> update_inputs "V_INDTEO" 0.
     |> update_inputs "V_NEGREEL" (if napsanpenareel > 0. then 0. else 1.)
@@ -244,7 +230,6 @@ let compute_deposit_with_benefit (p : Interpreter.interpretable_program)
   let acompteps = extract_value 0. (get_ctx_var p.ip_program ctx "MTAPPS") in
   let prem = extract_value 0. (get_ctx_var p.ip_program ctx "PREM8_11") in
   let inputs = inputs |> update_inputs "V_ACO_MTAPPS" acompteps |> update_inputs "PREM8_11" prem in
-  Cli.debug_print "ending compute_deposit_with_benefit@.";
   (acompte, inputs)
 
 (** Equivalent to IN_Article1731bis in DGFIP's codebase *)
@@ -286,7 +271,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
       | _ -> (inputs, 0.)
     else (inputs, 0.)
   in
-  Cli.debug_print "Début du calcul des acomptes";
   let inputs, acompte, indice_aco =
     if calcul_acomptes && false (* according to the call?*)
                                 (* and p_IsCalculAcomptes? *) then
@@ -300,10 +284,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
       (merge_inputs inputs inputs_other, fabs acompte, indice_aco)
     else (inputs, -1., 1.)
   in
-  Cli.debug_print "PREM8_11 = %f"
-    (extract_value (-1.) (get_input_var p.ip_program inputs "PREM8_11"));
-
-  Cli.debug_print "Fin du calcul des acomptes@.Début du calcul de plafonnement@.";
   let inputs =
     if calcul_avfisc then
       let inputs =
@@ -317,8 +297,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
     else inputs
   in
   let inputs = update_inputs "8ZG" v_8ZG inputs in
-  Cli.debug_print "Valorisation de l'acompte %f, V_INDTEO=%f" acompte
-    (match get_inputs_var p.ip_program "V_INDTEO" inputs with Float f -> f | Undefined -> 0.);
   let inputs =
     (* to check: conditional unecessary due to default values? *)
     if acompte > 0. then
@@ -419,45 +397,34 @@ let compute_double_liquidation_exit_taxe (p : Interpreter.interpretable_program)
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "RASTXFOYER" with
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, RASTXFOYER = %f@." f;
-            update_inputs "V_BARTXFOYER" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_BARTXFOYER" f inputs
         | _ -> inputs
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "RASTXDEC1" with
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, RASTXDEC1 = %f@." f;
-            update_inputs "V_BARTXDEC1" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_BARTXDEC1" f inputs
         | _ -> inputs
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "RASTXDEC2" with
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, RASTXDEC2 = %f@." f;
-            update_inputs "V_BARTXDEC2" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_BARTXDEC2" f inputs
         | _ -> inputs
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "INDTAZ" with
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, INDTAZ = %f@." f;
-            update_inputs "V_BARINDTAZ" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_BARINDTAZ" f inputs
         | _ -> inputs
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "IITAZIR" with
         | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, IITAZIR = %f@." f;
             let flag, f = if f < 0. then (1., -.f) else (0., f) in
             inputs |> update_inputs "FLAG_BARIITANEG" flag |> update_inputs "V_BARIITAZIR" f
         | _ -> inputs
       in
       let inputs =
         match get_ctx_var p.ip_program ctx "IRTOTAL" with
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation exit taxe, IRTOTAL = %f@." f;
-            update_inputs "V_BARIRTOTAL" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_BARIRTOTAL" f inputs
         | _ -> inputs
       in
       (update_inputs "FLAG_BAREM" 0. inputs, p)
@@ -477,9 +444,7 @@ let compute_double_liquidation_pvro (p : Interpreter.interpretable_program)
         let ctx, inputs = compute_double_liquidation_exit_taxe p inputs (Some [ "IAD11" ]) in
         match get_ctx_var p.ip_program ctx "IAD11" with
         | SimpleVar Undefined -> inputs
-        | SimpleVar (Float f) ->
-            Cli.debug_print "double liquidation pvro : IAD11 = %f" f;
-            update_inputs "V_IPVRO" f inputs
+        | SimpleVar (Float f) -> update_inputs "V_IPVRO" f inputs
         | _ -> assert false )
   in
   let inputs = update_inputs "FLAG_PVRO" 0. inputs in

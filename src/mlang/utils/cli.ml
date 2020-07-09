@@ -23,12 +23,6 @@ open Cmdliner
 
 let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
-let application =
-  Arg.(
-    value & opt string "iliad"
-    & info [ "application"; "a" ] ~docv:"APPLICATION"
-        ~doc:"Name of the M application to select rules from : iliad, batch, bareme...")
-
 let debug = Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
 let display_time =
@@ -104,8 +98,8 @@ let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year 
 
 let mlang_t f =
   Term.(
-    const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ output $ real_precision $ run_all_tests $ run_test $ year)
+    const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize $ backend
+    $ function_spec $ output $ real_precision $ run_all_tests $ run_test $ year)
 
 let info =
   let doc =
@@ -169,9 +163,6 @@ let warning_flag = ref true
 (** Dump circular definitions of variables *)
 let print_cycles_flag = ref false
 
-(** Name of application to consider (drops all the rules not corresponding to it) *)
-let application = ref ""
-
 (** Displays timing information *)
 let display_time = ref false
 
@@ -192,13 +183,11 @@ let run_test : string option ref = ref None
 
 let year : int ref = ref 2018
 
-let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
-    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string option) (output_ : string option)
-    (real_precision_ : int) (run_all_tests_ : string option) (run_test_ : string option)
-    (year_ : int) =
+let set_all_arg_refs (files_ : string list) (debug_ : bool) (display_time_ : bool)
+    (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool) (backend_ : string)
+    (function_spec_ : string option) (output_ : string option) (real_precision_ : int)
+    (run_all_tests_ : string option) (run_test_ : string option) (year_ : int) =
   source_files := files_;
-  application := application_;
   debug_flag := debug_;
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;

@@ -15,12 +15,12 @@ open Lexing
 open Lexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
-let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
-    (function_spec : string option) (output : string option) (real_precision : int)
-    (run_all_tests : string option) (run_test : string option) (year : int) =
-  Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles optimize
-    backend function_spec output real_precision run_all_tests run_test year;
+let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
+    (print_cycles : bool) (optimize : bool) (backend : string) (function_spec : string option)
+    (output : string option) (real_precision : int) (run_all_tests : string option)
+    (run_test : string option) (year : int) =
+  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles optimize backend
+    function_spec output real_precision run_all_tests run_test year;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in
@@ -60,8 +60,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
             Cmdliner.Term.exit_status (`Ok 2))
       !Cli.source_files;
     finish "completed!";
-    let application = if !Cli.application = "" then None else Some !Cli.application in
-    let program = Ast_to_mvg.translate !program application in
+    let program = Ast_to_mvg.translate !program in
     Cli.debug_print "Expanding function definitions...";
     let program = Functions.expand_functions program in
     Cli.debug_print "Typechecking...";

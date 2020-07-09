@@ -22,32 +22,21 @@ build: #format
 
 # use: TEST_FILE=bla make test
 test: build
-	dune exec src/main.exe -- --application iliad \
+	dune exec src/main.exe -- \
 	 	--display_time --debug --backend interpreter \
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build
-	dune exec src/main.exe -- --application iliad \
+	dune exec src/main.exe -- \
 	 	--display_time --debug --backend interpreter \
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 
-
-tests2017: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec\
-		--run_all_tests=tests_2017/ --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
-test2017: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec\
-		--run_test=$(TEST_FILE) --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
+interpreter:
+	dune exec src/main.exe -- --function_spec interpreter.m_spec \
+	 --display_time --debug --backend interpreter \
+	 $(SOURCE_FILES)
 
 doc:
 	dune build @doc
