@@ -69,20 +69,6 @@ let create_dependency_graph (p : Mvg.program) : DepGraph.t =
             | Mvg.IndexTable es -> Mvg.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc ))
       p.program_vars DepGraph.empty
   in
-  (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
-  let g =
-    DepGraph.fold_vertex
-      (fun (var : Mvg.Variable.t) (g : DepGraph.t) ->
-        match Mvg.VariableMap.find_opt var p.program_vars with
-        | None -> g
-        | Some data ->
-            if data.Mvg.var_io = Mvg.Output then
-              DepGraph.fold_succ
-                (fun (succ : Mvg.Variable.t) (g : DepGraph.t) -> DepGraph.remove_edge g var succ)
-                g var g
-            else g)
-      g g
-  in
   Mvg.VariableMap.fold
     (fun cond_var cond acc -> add_usages cond_var cond.Mvg.cond_expr acc)
     p.program_conds g

@@ -81,7 +81,6 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Interface.read_function_from_spec program in
       let program = Interface.fit_function program mvg_func in
-      let program = if !Cli.optimize then Optimization.optimize program dep_graph else program in
       let dep_graph = Dependency.create_dependency_graph program in
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";

@@ -109,7 +109,6 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
       func_constant_inputs;
       func_outputs;
       func_conds = VariableMap.empty;
-      func_exec_passes = None;
     },
     func_conds,
     input_file )

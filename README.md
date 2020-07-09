@@ -32,12 +32,17 @@ You can then use `make build` to build the compiler.
 
 ## Usage
 
-As of July 2020, the only reliable feature of the M compiler that consistently produces results similar to the DGFiP's computation
-is the interpreter for the 2018 tax campaign sources. To use it, simply launch
+As of July 2020, the only reliable feature of the M compiler that consistently
+produces results similar to the DGFiP's computation is the interpreter for the
+2018 tax campaign sources. To use it, simply launch
 
 ```
 make interpreter
 ```
+
+Please read the `interpreter.m_spec` for a walk-through of what happens in this example. You can
+compare what happens on the [official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm) by entering the exact amounts of the case in the right income codes.
+Everything should be the same.
 
 The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec`
 file, in the `const` section. If you put a variable in the `saisie` section, you will then be

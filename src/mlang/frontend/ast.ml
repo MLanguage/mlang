@@ -265,7 +265,6 @@ type function_spec = {
   spec_consts : (variable_name * expression Pos.marked) list;
   spec_outputs : variable_name Pos.marked list;
   spec_conditions : expression Pos.marked list;
-  spec_exec_passes : (variable_name * expression Pos.marked) list list;
 }
 
 (** {1 Helper functions} *)
