@@ -1,11 +1,14 @@
-saisie: 0CF, 1AJ, 1BS, 1AO;
+saisie: non;
 
 const:
 V_ANREV = 2018;
 V_0AM = 1;
+0CF = 1;
+1AJ = 40000;
+1BS = 25000;
+1AO = 5000;
 condition: non;
 
 enchaineur: non;
 
-sortie: IAN;
-# Output should be 5753
+sortie: IAN, NBPT, REVKIRE, BCSG, BRDS, TXMOYIMP, IINET, RRRBG, RNI, IDRS3, IAVIM, CIMR;

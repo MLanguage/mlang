@@ -39,13 +39,19 @@ is the interpreter for the 2018 tax campaign sources. To use it, simply launch
 make interpreter
 ```
 
-You will then be prompted to input income values corresponding to DGFiP's income declaration boxes. Please refer to the DGFiP's
-simulator for the meaning of the variables.
+The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec`
+file, in the `const` section. If you put a variable in the `saisie` section, you will then be
+prompted to input it at interpretation time. You can also change which variables you want the
+interpreter to output in the `sortie` section.
+
+Please refer to the DGFiP's simulator for the meaning of the variables. Important variables are:
+
+* `0AC` and `0AM`, which should be set to 1 for respectively single or married;
+* `1AJ` and `1BJ`, salaried income for individuals number 1 and 2;
+* `0CF`, the number of dependent persons (children);
+* ...
 
 After the evaluation, an interactive prompt let you examine the values of other variables.
-
-The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec` file. You can also change
-which variables you want the interpreter to output.
 
 ## Documentation
 
@@ -58,10 +64,13 @@ To browse the documentation, just open the file `doc.html` with your browser.
 
 ## Known Limitations
 
-The code released by the DGFiP is not complete as of September 2019. Indeed,
+The code published by the DGFiP on their [Framagit repo](https://framagit.org/dgfip/ir-calcul)
+is not complete as of July 2020. Indeed,
 in order to correctly compute the amount of taxes for a fiscal household, the DGFiP
 executes the M program several times, each time changing the values of some variables
 to enable or disable parts of the computation.
+
+However, the authors of Mlang have signed a convention with the DGFiP in order to come and
 
 The DGFiP has not published the details of this iterative computation. Hence,
 until they do, the amounts of taxes computed by Mlang-generated programs are usually
