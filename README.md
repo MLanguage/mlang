@@ -3,7 +3,7 @@
 [![CI](https://gitlab.inria.fr/verifisc/mlang/badges/master/pipeline.svg)](https://gitlab.inria.fr/verifisc/mlang/-/commits/master)
 
 The M language has been invented by the French Direction Générale des Finances
-Publiques, equivalent to the IRS, to transcribe the tax code into machine-readable
+Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
 of the syntax and the semantics of M, from the [codebase](https://framagit.org/dgfip/ir-calcul)
@@ -11,48 +11,41 @@ released by the DGFiP.
 
 ## Disclaimer
 
-There is currently no guarantee of any kind about the correctness of the code
-produced by the Mlang compiler, or by the results produced by the interpreter of
-Mlang. However, authors are in contact with DGFiP to try and validate the
-semantics of M implemented in Mlang.
+The results obtained by compiling the DGFiP M sources with this compiler are not endorsed by the
+DGFiP. Official simulators are available on the [DGFiP's website](https://www.impots.gouv.fr/portail/simulateurs). This project
 
 ## Installation
 
 Mlang is implemented in OCaml. To manage dependencies,
 [install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
-of OCaml that is at least 4.0.7. Then, you can install Mlang's dependencies using
+of OCaml that is at least 4.09.1. Then, you can install Mlang's dependencies using
 
     make deps
 
-Warning: the Z3 opam package takes a very long time to install (10 minutes).
 Next, fetch the source code dependencies of Mlang with
 
     git submodule update --init --recursive
 
 This will fetch the M source code released by the DGFiP.
 
-You can then use `dune build` to build all source files, and other dune commands.
-
-If you want to install the `mlang` executable and the opam packages, use
-
-    chmod +x install.h && ./install.sh
+You can then use `make build` to build the compiler.
 
 ## Usage
 
-If the `mlang` executable is install, you can consult its man page with
+As of July 2020, the only reliable feature of the M compiler that consistently produces results similar to the DGFiP's computation
+is the interpreter for the 2018 tax campaign sources. To use it, simply launch
 
-    mlang --help
+```
+make interpreter
+```
 
-The `examples` folder  contains several examples of invocation of the `mlang` executable,
-catagorized by the backend used. For instance, if you want to
-compile all the source code files released by the DGFiP for the year 2017,
-and produce a Python module equivalent to the official simplified simulator available
-[published by the DGFiP](https://www3.impots.gouv.fr/simulateur/calcul_impot/2018/simplifie/index.htm),
-go to the `examples/python` folder and use
+You will then be prompted to input income values corresponding to DGFiP's income declaration boxes. Please refer to the DGFiP's
+simulator for the meaning of the variables.
 
-        make simulateur_simplifie_2018
+After the evaluation, an interactive prompt let you examine the values of other variables.
 
-Mlang should generate a file named `ir_2018.py` containing the generated Python code.
+The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec` file. You can also change
+which variables you want the interpreter to output.
 
 ## Documentation
 
