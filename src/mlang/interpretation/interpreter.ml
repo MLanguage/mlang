@@ -365,9 +365,7 @@ let rec evaluate_expr (ctx : ctx) (p : program) (e : expression Pos.marked) : li
                ctx ))
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
-      Cli.error_print "%a" format_runtime_error e;
-      flush_all ();
-      flush_all ();
+      Cli.error_print "%a@." format_runtime_error e;
       if !repl_debug then repl_debugguer ctx p;
       exit 1
     end
@@ -519,9 +517,7 @@ let evaluate_program (ip : interpretable_program) (input_values : literal Variab
     ctx
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
-      Cli.error_print "%a@?" format_runtime_error e;
-      flush_all ();
-      flush_all ();
+      Cli.error_print "%a@." format_runtime_error e;
       if !repl_debug then repl_debugguer ctx p;
       exit 1
     end

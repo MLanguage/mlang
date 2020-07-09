@@ -410,23 +410,6 @@ let compute_double_liquidation_exit_taxe (p : Interpreter.interpretable_program)
         | SimpleVar (Float f) -> update_inputs "V_BARTXDEC2" f inputs
         | _ -> inputs
       in
-      let inputs =
-        match get_ctx_var p.ip_program ctx "INDTAZ" with
-        | SimpleVar (Float f) -> update_inputs "V_BARINDTAZ" f inputs
-        | _ -> inputs
-      in
-      let inputs =
-        match get_ctx_var p.ip_program ctx "IITAZIR" with
-        | SimpleVar (Float f) ->
-            let flag, f = if f < 0. then (1., -.f) else (0., f) in
-            inputs |> update_inputs "FLAG_BARIITANEG" flag |> update_inputs "V_BARIITAZIR" f
-        | _ -> inputs
-      in
-      let inputs =
-        match get_ctx_var p.ip_program ctx "IRTOTAL" with
-        | SimpleVar (Float f) -> update_inputs "V_BARIRTOTAL" f inputs
-        | _ -> inputs
-      in
       (update_inputs "FLAG_BAREM" 0. inputs, p)
     else (inputs, p)
   in

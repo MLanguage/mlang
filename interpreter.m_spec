@@ -1,9 +1,8 @@
-saisie: 0CF, 1AJ, 1BJ;
+saisie: 0CF, 1AJ, 1BS, 1AO;
 
 const:
 V_ANREV = 2018;
 V_0AM = 1;
-
 condition: non;
 
 enchaineur: non;

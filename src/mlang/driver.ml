@@ -97,9 +97,14 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
           }
         in
         let f = Interface.make_function_from_program program in
-        let results = f (Interface.read_inputs_from_stdin mvg_func) in
-        Interface.print_output mvg_func results;
-        Interpreter.repl_debugguer results program.ip_program
+        try
+          let results = f (Interface.read_inputs_from_stdin mvg_func) in
+          Interface.print_output mvg_func results;
+          Interpreter.repl_debugguer results program.ip_program
+        with Interpreter.RuntimeError (e, ctx) ->
+          Cli.error_print "%a@." Interpreter.format_runtime_error e;
+          Interpreter.repl_debugguer ctx program.ip_program;
+          exit 1
       end
       else if
         String.lowercase_ascii !Cli.backend = "python"

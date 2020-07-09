@@ -270,5 +270,7 @@ let partially_evaluate (p : program) (dep_graph : Dependency.DepGraph.t) : progr
                 program_conds =
                   VariableMap.add var { cond with cond_expr = new_cond_expr } p.program_conds;
               }
-        with Not_found -> assert false (* should not happen *) ))
+        with Not_found ->
+          Cli.error_print "Variable not found: %a@." Format_mvg.format_variable var;
+          assert false (* should not happen *) ))
     p exec_order

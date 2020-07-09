@@ -68,6 +68,7 @@ let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.p
         current_progress
           (Format.asprintf "%d variables, performing partial evaluation..." remaining_vars);
         let new_program = Partial_evaluation.partially_evaluate new_program !dep_graph in
+        dep_graph := Dependency.create_dependency_graph new_program;
         let new_nb_removed =
           Mvg.VariableMap.cardinal !program.program_vars
           - Mvg.VariableMap.cardinal new_program.program_vars
@@ -79,9 +80,7 @@ let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.p
         nb_removed := new_nb_removed
       done
     with Interpreter.RuntimeError (e, ctx) ->
-      Cli.error_print "%a" Interpreter.format_runtime_error e;
-      flush_all ();
-      flush_all ();
+      Cli.error_print "%a@." Interpreter.format_runtime_error e;
       finish "error";
       Interpreter.repl_debugguer ctx !program;
       exit 1 );

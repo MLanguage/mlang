@@ -214,9 +214,7 @@ let check_test (p : Mvg.program) (test_name : string) =
       (List.sort exec_order_compare test_cond_list)
   with Interpreter.RuntimeError (e, ctx) ->
     if !Interpreter.exit_on_rte then begin
-      Cli.error_print "%a" Interpreter.format_runtime_error e;
-      flush_all ();
-      flush_all ();
+      Cli.error_print "%a@." Interpreter.format_runtime_error e;
       if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p.ip_program;
       exit 1
     end
