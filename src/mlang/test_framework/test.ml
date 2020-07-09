@@ -104,12 +104,7 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
            (Ast.Binop ((Ast.And, pos), first_exp, second_exp), pos))
          t.rp)
   in
-  ( {
-      func_variable_inputs;
-      func_constant_inputs;
-      func_outputs;
-      func_conds = VariableMap.empty;
-    },
+  ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds = VariableMap.empty },
     func_conds,
     input_file )
 

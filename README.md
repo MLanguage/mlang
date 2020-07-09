@@ -76,28 +76,30 @@ executes the M program several times, each time changing the values of some vari
 to enable or disable parts of the computation.
 
 However, the authors of Mlang have signed a convention with the DGFiP in order to come and
-
-The DGFiP has not published the details of this iterative computation. Hence,
-until they do, the amounts of taxes computed by Mlang-generated programs are usually
-false (except on very simple situations).
+have a look at the legacy system. They managed to pull and integrate in Mlang all the logic that
+was missing for computing the income tax correctly.
 
 ## Contributors
 
 The project accepts pull requests. There is currently no formalized contribution
 guide or centralized discussion place about the project. Please email the authors
-if you are interested.
+if you are interested:
+
+  denis DOT merigoux AT inria DOT fr
+  raphael DOT monat AT lip6 DOT fr
 
 Please note that the copyright of this code is owned by Inria; by contributing,
 you disclaim all copyright interests in favor of Inria.
 
-Don't format to use `make format` before you commit to ensure a uniform style.
+Don't forget format to use `make format` before you commit to ensure a uniform style.
 
 ## Formal semantics
 
 The `formal_semantics` folder contains two separate formalizations for the core of the
 M language, that roughly corresponds to the `Mvg` internal representation in Mlang.
 The reference formalization is the Coq one, in file `semantique.v`. The F* formalization
-is a proof of concept.
+is a proof of concept. See [the research paper](https://hal.inria.fr/hal-02320347) for
+more details.
 
 ## License
 
