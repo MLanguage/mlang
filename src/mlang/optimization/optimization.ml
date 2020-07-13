@@ -23,7 +23,7 @@ let remove_unused_variables (program : Mvg.program) : Mvg.program =
       let _ = Mvg.VariableMap.find var program.program_conds in
       true
   in
-  let is_necessary_to_output = Dependency.OutputToInputReachability.analyze is_output g in
+  let is_necessary_to_output = Dependency.reachability_analysis g is_output in
   let program =
     {
       program with

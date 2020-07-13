@@ -225,4 +225,22 @@ module OutputToInputReachability =
       let analyze _ x = x
     end)
 
+let reachability_analysis (g : DepGraph.t) (is_output : Mvg.Variable.t -> bool) :
+    Mvg.Variable.t -> bool =
+  let g =
+    (* Because of a weird behavior of ocamlgraph documented here
+       https://github.com/backtracking/ocamlgraph/issues/85, wee have to manually remove all edges
+       going out of output variables before launching the reachability analysis that uses fixpoint
+       computation. *)
+    DepGraph.fold_vertex
+      (fun (var : Mvg.Variable.t) (g : DepGraph.t) ->
+        if is_output var then
+          DepGraph.fold_succ
+            (fun (succ : Mvg.Variable.t) (g : DepGraph.t) -> DepGraph.remove_edge g var succ)
+            g var g
+        else g)
+      g g
+  in
+  OutputToInputReachability.analyze is_output g
+
 module TopologicalOrder = Graph.Topological.Make (DepGraph)
