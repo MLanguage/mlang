@@ -22,3 +22,6 @@ let process (ompp_file: string option) (_: Mvg.program) : Cst.program option =
         | Errors.ParsingError e ->
          let () = Cli.error_print "Parsing Error %s" e in
          None
+
+
+let cst_to_ast (_c: Cst.program) (_p: Mvg.program) : Mpp_ast.mpp_program = failwith "ni"

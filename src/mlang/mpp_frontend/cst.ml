@@ -1,18 +1,8 @@
 type var = string
-  (* | Local of string (\* lowercase variable used only to define something locally *\)
-   * | Mbased of string (\* variables defined in the M codebase *\) *)
 
 type compute_name = string
 
 type callable = string
-  (* | Program (\* M codebase *\)
-   * | MppFunction of compute_name
-   * | Present
-   * | Abs
-   * | Cast (\* cast undefined to 0, identity function otherwise *\)
-   * | DepositDefinedVariables
-   * | ExistsTaxbenefitCeiledVariables
-   * | ExistsTaxbenefitDefinedVariables *)
 
 type filter = VarIsTaxBenefit
 

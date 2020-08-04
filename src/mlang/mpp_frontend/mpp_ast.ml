@@ -1,0 +1,45 @@
+type scope = Input | Output
+
+type scoped_var =
+  | Local of string (* lowercase variable used only to define something locally *)
+  | Mbased of Mvg.Variable.t * scope (* variables defined in the M codebase *)
+
+type mpp_compute_name = string
+
+type mpp_callable =
+  | Program (* M codebase *)
+  | MppFunction of mpp_compute_name
+  | Present
+  | Abs
+  | Cast (* cast undefined to 0, identity function otherwise *)
+  | DepositDefinedVariables
+  | ExistsTaxbenefitCeiledVariables
+  | ExistsTaxbenefitDefinedVariables
+
+type mpp_filter = VarIsTaxBenefit
+
+type unop = Minus
+
+type binop = Cst.binop
+
+type mpp_expr =
+  | Constant of int
+  | Variable of scoped_var
+  | Unop of unop * mpp_expr
+  | Call of mpp_callable * mpp_expr list
+  | Binop of mpp_expr * binop * mpp_expr
+
+type mpp_stmt =
+  | Assign of scoped_var * mpp_expr
+  | Conditional of mpp_expr * mpp_stmt list * mpp_stmt list
+  | Delete of scoped_var
+  | Expr of mpp_expr
+  | Partition of mpp_filter * mpp_stmt list
+
+type mpp_compute = {
+    name: mpp_compute_name;
+    args: scoped_var list;
+    body: mpp_stmt list
+  }
+
+type mpp_program = mpp_compute list
