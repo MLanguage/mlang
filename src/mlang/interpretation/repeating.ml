@@ -223,30 +223,6 @@ let compute_deposit (p : Interpreter.interpretable_program) (inputs : literal Va
   Cli.debug_print "ending compute_deposit@.";
   (acompte, update_inputs "PREM8_11" prem inputs)
 
-(** Equivalent to AC_CalculeAcomptesAvFisc *)
-let compute_deposit_with_benefit (p : Interpreter.interpretable_program)
-    (inputs : literal VariableMap.t) (napsanpenareel : float) : float * literal VariableMap.t =
-  Cli.debug_print "beginning compute_deposit_with_benefit@.";
-  let update_inputs = update_inputs_var p.ip_program in
-  let inputs = update_inputs "FLAG_ACO" 1. inputs in
-  let montantavtmp, inputs = compute_benefit p inputs in
-  Cli.debug_print "NAPTEO: %f@." montantavtmp;
-  let inputs =
-    inputs |> update_inputs "V_INDTEO" 0.
-    |> update_inputs "V_NEGREEL" (if napsanpenareel > 0. then 0. else 1.)
-    |> update_inputs "V_NAPREEL" (fabs napsanpenareel)
-    |> update_inputs "V_CALCUL_ACO" 1.0
-  in
-  let p = reset_and_add_outputs p [ "MTAP"; "MTAPPS"; "PREM8_11" ] in
-  let ctx = Interpreter.evaluate_program p inputs false in
-  let inputs = inputs |> update_inputs "V_CALCUL_ACO" 0. |> update_inputs "FLAG_ACO" 2. in
-  let acompte = extract_value 0. (get_ctx_var p.ip_program ctx "MTAP") in
-  let acompteps = extract_value 0. (get_ctx_var p.ip_program ctx "MTAPPS") in
-  let prem = extract_value 0. (get_ctx_var p.ip_program ctx "PREM8_11") in
-  let inputs = inputs |> update_inputs "V_ACO_MTAPPS" acompteps |> update_inputs "PREM8_11" prem in
-  Cli.debug_print "ending compute_deposit_with_benefit@.";
-  (acompte, inputs)
-
 (** Equivalent to IN_Article1731bis in DGFIP's codebase *)
 let compute_article1731bis (p : Interpreter.interpretable_program) (inputs : literal VariableMap.t)
     : literal VariableMap.t =
@@ -274,7 +250,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
   (* do we need to perform "acomptes" computation? *)
   (* Equivalent to AC_GetCodesAcompte in the DGFiP's logic *)
   let inputs, inputs_acompte = partition_inputs var_is_revenue_but_not_deposit inputs in
-  let calcul_acomptes = exists_deposit_defined_variables inputs in
   let inputs = merge_inputs inputs inputs_acompte in
   (* do we need to perform "avantages fiscal" computation? *)
   let calcul_avfisc = exists_taxbenefit_defined_variables inputs in
@@ -287,19 +262,6 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
     else (inputs, 0.)
   in
   Cli.debug_print "Début du calcul des acomptes";
-  let inputs, acompte, indice_aco =
-    if calcul_acomptes && false (* according to the call?*)
-                                (* and p_IsCalculAcomptes? *) then
-      let inputs, inputs_other = partition_inputs var_is_deposit inputs in
-      let acompte, inputs =
-        if calcul_avfisc then compute_deposit_with_benefit p inputs 0.
-          (* FIXME: optimize since last param seems to always be 0 *)
-        else compute_deposit p inputs
-      in
-      let indice_aco = if acompte >= 0. then 0. else 1. in
-      (merge_inputs inputs inputs_other, fabs acompte, indice_aco)
-    else (inputs, -1., 1.)
-  in
   Cli.debug_print "PREM8_11 = %f"
     (extract_value (-1.) (get_input_var p.ip_program inputs "PREM8_11"));
 
@@ -317,13 +279,10 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
     else inputs
   in
   let inputs = update_inputs "8ZG" v_8ZG inputs in
-  Cli.debug_print "Valorisation de l'acompte %f, V_INDTEO=%f" acompte
+  Cli.debug_print "Valorisation de l'acompte V_INDTEO=%f"
     (match get_inputs_var p.ip_program "V_INDTEO" inputs with Float f -> f | Undefined -> 0.);
   let inputs =
-    (* to check: conditional unecessary due to default values? *)
-    if acompte > 0. then
-      inputs |> update_inputs "V_ACO_MTAP" acompte |> update_inputs "V_NEGACO" indice_aco
-    else inputs |> update_inputs "V_ACO_MTAP" 0. |> update_inputs "V_NEGACO" 0.
+    inputs |> update_inputs "V_ACO_MTAP" 0. |> update_inputs "V_NEGACO" 0.
   in
   let p = match outputs with None -> p | Some outputs -> reset_and_add_outputs p outputs in
   let ctx = Interpreter.evaluate_program p inputs false in
