@@ -70,6 +70,15 @@ let function_spec =
            inputs, outputs and constant values. This information will be used to select the \
            relevant computational rules from the M code corpus.")
 
+let mpp_file =
+  Arg.(
+    value
+    & opt (some file) None
+    & info [ "mpp_file" ] ~docv:"SPEC"
+        ~doc:
+          "M++ preprocessor file (extension .mpp)")
+
+
 let output =
   Arg.(
     value
@@ -105,7 +114,7 @@ let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year 
 let mlang_t f =
   Term.(
     const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ output $ real_precision $ run_all_tests $ run_test $ year)
+    $ backend $ function_spec $ mpp_file $ output $ real_precision $ run_all_tests $ run_test $ year)
 
 let info =
   let doc =
@@ -182,6 +191,8 @@ let output_file = ref ""
 
 let function_spec = ref None
 
+let mpp_file = ref None
+
 let real_precision = ref 100
 
 let backend = ref "python"
@@ -194,7 +205,7 @@ let year : int ref = ref 2018
 
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string option) (output_ : string option)
+    (backend_ : string) (function_spec_ : string option) (mpp_file_: string option) (output_ : string option)
     (real_precision_ : int) (run_all_tests_ : string option) (run_test_ : string option)
     (year_ : int) =
   source_files := files_;
@@ -206,6 +217,7 @@ let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bo
   optimize := optimize_;
   backend := backend_;
   function_spec := function_spec_;
+  mpp_file := mpp_file_;
   real_precision := real_precision_;
   (output_file :=
      match output_ with

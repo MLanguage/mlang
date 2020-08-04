@@ -17,10 +17,10 @@ open Lexer
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
     (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
-    (function_spec : string option) (output : string option) (real_precision : int)
+    (function_spec : string option) (mpp_file : string option) (output : string option) (real_precision : int)
     (run_all_tests : string option) (run_test : string option) (year : int) =
   Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles optimize
-    backend function_spec output real_precision run_all_tests run_test year;
+    backend function_spec mpp_file output real_precision run_all_tests run_test year;
   try
     Cli.debug_print "Reading files...";
     let program = ref [] in
@@ -79,6 +79,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       Cli.result_print "Test passed!@."
     end
     else begin
+      let _ = Mpp_frontend.process mpp_file program in
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Interface.read_function_from_spec program in
       let program = Interface.fit_function program mvg_func in
