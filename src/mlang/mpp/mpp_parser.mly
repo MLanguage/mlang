@@ -1,6 +1,5 @@
 (* FIXME: add locations *)
 %{
-    open Errors
     open Cst
 %}
 
@@ -33,14 +32,10 @@ stmt:
 | var = IDENT EQ e = expr NEWLINE { Assign(var, e) }
 | DELETE var = IDENT NEWLINE { Delete var }
 | var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN NEWLINE
-                              { Expr(Call(var, List.map (fun x -> Variable x) args)) }
+                              { Expr(Call(var, args)) }
 | IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f) }
 | IF b = expr COLON t = new_block { Conditional(b, t, []) }
-| PARTITION var = IDENT COLON b = new_block {
-                                      if var = "var_is_taxbenefit" then
-                                        Partition(VarIsTaxBenefit, b)
-                                      else
-                                        raise (ParsingError (Format.asprintf "unknown filter %s" var))}
+| PARTITION var = IDENT COLON b = new_block { Partition(var, b) }
 ;
 
 new_block:
@@ -63,6 +58,6 @@ expr:
 | var = IDENT { Variable var }
 | MINUS e = expr { Unop(Minus, e) }
 | var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN
-                              { Call(var, List.map (fun x -> Variable x) args) }
+                              { Call(var, args) }
 | e1 = expr b = binop e2 = expr { Binop(e1, b, e2) }
 ;

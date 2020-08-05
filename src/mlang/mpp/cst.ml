@@ -4,7 +4,7 @@ type compute_name = string
 
 type callable = string
 
-type filter = VarIsTaxBenefit
+type filter = string
 
 type unop = Minus
 
@@ -14,7 +14,7 @@ type expr =
   | Constant of int
   | Variable of var
   | Unop of unop * expr
-  | Call of callable * expr list
+  | Call of callable * var list
   | Binop of expr * binop * expr
 
 type stmt =

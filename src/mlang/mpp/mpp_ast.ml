@@ -1,4 +1,6 @@
-type scope = Input | Output
+type scope =
+  | Input (* is this suppposed to be read/written in the future inputs? *)
+  | Output (* is this supposed to be read from a previous computation *)
 
 type scoped_var =
   | Local of string (* lowercase variable used only to define something locally *)
@@ -13,8 +15,8 @@ type mpp_callable =
   | Abs
   | Cast (* cast undefined to 0, identity function otherwise *)
   | DepositDefinedVariables
-  | ExistsTaxbenefitCeiledVariables
-  | ExistsTaxbenefitDefinedVariables
+  | TaxbenefitCeiledVariables
+  | TaxbenefitDefinedVariables
 
 type mpp_filter = VarIsTaxBenefit
 
@@ -26,7 +28,7 @@ type mpp_expr =
   | Constant of int
   | Variable of scoped_var
   | Unop of unop * mpp_expr
-  | Call of mpp_callable * mpp_expr list
+  | Call of mpp_callable * scoped_var list
   | Binop of mpp_expr * binop * mpp_expr
 
 type mpp_stmt =
