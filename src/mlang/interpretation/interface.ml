@@ -186,7 +186,7 @@ let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_da
     Ast.Verification
       {
         verif_name = [ ("000", Pos.no_pos) ];
-        verif_applications = [];
+        verif_applications = [("iliad", Pos.no_pos)];
         verif_conditions = verif_conds;
       }
   in
