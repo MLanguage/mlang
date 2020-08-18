@@ -47,7 +47,7 @@ PSOL = 210;
 # exceptional income is taxed
 CIMR = 5411;
 # Reference taxable income for 2018
-REVKIRE = 6800;
+REVKIRE = 65800;
 
 
 # The list of variables we want to output
