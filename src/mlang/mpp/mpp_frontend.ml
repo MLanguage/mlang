@@ -22,7 +22,7 @@ let to_mpp_callable cname translated_names =
          else raise (Errors.ParsingError (Format.asprintf "unknown callable %s" x))
 
 let rec to_mpp_expr p translated_names scope (e: Cst.expr) : mpp_expr * Cst.var list =
-  match e with
+  let e', scope = match Pos.unmark e with
   | Constant i ->
      Constant i, scope
   | Variable v ->
@@ -39,7 +39,8 @@ let rec to_mpp_expr p translated_names scope (e: Cst.expr) : mpp_expr * Cst.var 
      Binop(
          fst @@ to_mpp_expr p translated_names scope e1,
          b,
-         fst @@ to_mpp_expr p translated_names scope e2), scope
+         fst @@ to_mpp_expr p translated_names scope e2), scope in
+  Pos.same_pos_as e' e, scope
 
 let to_mpp_filter f =
   if f = "var_is_taxbenefit" then
@@ -48,26 +49,28 @@ let to_mpp_filter f =
     raise (Errors.ParsingError (Format.asprintf "unknown filter %s" f))
 
 let rec to_mpp_stmt p translated_names scope (stmt: Cst.stmt) : mpp_stmt * Cst.var list =
-  match stmt with
-  | Assign(v, e) ->
-     Assign(
-         to_scoped_var p v,
-         fst @@ to_mpp_expr p translated_names scope e), scope
-  | Conditional(b, t, f) ->
-     Conditional(
-         fst @@ to_mpp_expr p translated_names scope b,
-         to_mpp_stmts p translated_names ~scope:scope t,
-         to_mpp_stmts p translated_names ~scope:scope f), scope
-  | Delete v ->
-     Delete (to_scoped_var p v), scope
-  | Expr e ->
-     let e', scope = to_mpp_expr p translated_names scope e in
-     Expr e', scope
-  | Partition (f, body) ->
-     Partition(
-         to_mpp_filter f,
-         to_mpp_stmts p translated_names ~scope:scope body), scope
-
+  let stmt', scope =
+    match Pos.unmark stmt with
+    | Assign(v, e) ->
+       Assign(
+           to_scoped_var p v,
+           fst @@ to_mpp_expr p translated_names scope e), scope
+    | Conditional(b, t, f) ->
+       Conditional(
+           fst @@ to_mpp_expr p translated_names scope b,
+           to_mpp_stmts p translated_names ~scope:scope t,
+           to_mpp_stmts p translated_names ~scope:scope f), scope
+    | Delete v ->
+       Delete (to_scoped_var p v), scope
+    | Expr e ->
+       let e', scope = to_mpp_expr p translated_names scope e in
+       Expr e', scope
+    | Partition (f, body) ->
+       Partition(
+           to_mpp_filter f,
+           to_mpp_stmts p translated_names ~scope:scope body), scope
+  in
+  Pos.same_pos_as stmt' stmt, scope
 
 and to_mpp_stmts p translated_names ?(scope=[]) (stmts: Cst.stmt list) : mpp_stmt list =
   List.rev @@ fst @@ List.fold_left

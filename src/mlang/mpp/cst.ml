@@ -10,14 +10,16 @@ type unop = Minus
 
 type binop = And | Or | Gt | Gte | Lt | Lte | Eq | Neq
 
-type expr =
+type expr = expr_kind Pos.marked
+and expr_kind =
   | Constant of int
   | Variable of var
   | Unop of unop * expr
   | Call of callable * var list
   | Binop of expr * binop * expr
 
-type stmt =
+type stmt = stmt_kind Pos.marked
+and stmt_kind =
   | Assign of var * expr
   | Conditional of expr * stmt list * stmt list
   | Delete of var

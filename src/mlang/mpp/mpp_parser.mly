@@ -1,6 +1,9 @@
 (* FIXME: add locations *)
 %{
-    open Cst
+  open Cst
+
+  let mk_position loc = { Pos.pos_filename = (fst loc).Lexing.pos_fname;
+                          Pos.pos_loc = loc }
 %}
 
 %token <string> IDENT
@@ -29,13 +32,13 @@ compute_functions:
 ;
 
 stmt:
-| var = IDENT EQ e = expr NEWLINE { Assign(var, e) }
-| DELETE var = IDENT NEWLINE { Delete var }
+| var = IDENT EQ e = expr NEWLINE { Assign(var, e), mk_position $sloc }
+| DELETE var = IDENT NEWLINE { Delete var, mk_position $sloc }
 | var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN NEWLINE
-                              { Expr(Call(var, args)) }
-| IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f) }
-| IF b = expr COLON t = new_block { Conditional(b, t, []) }
-| PARTITION var = IDENT COLON b = new_block { Partition(var, b) }
+                              { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
+| IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f), mk_position $sloc }
+| IF b = expr COLON t = new_block { Conditional(b, t, []), mk_position $sloc }
+| PARTITION var = IDENT COLON b = new_block { Partition(var, b), mk_position $sloc }
 ;
 
 new_block:
@@ -54,10 +57,10 @@ binop:
 ;
 
 expr:
-| i = INT { Constant i }
-| var = IDENT { Variable var }
-| MINUS e = expr { Unop(Minus, e) }
+| i = INT { Constant i, mk_position $sloc }
+| var = IDENT { Variable var, mk_position $sloc }
+| MINUS e = expr { Unop(Minus, e), mk_position $sloc }
 | var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN
-                              { Call(var, args) }
-| e1 = expr b = binop e2 = expr { Binop(e1, b, e2) }
+                              { Call(var, args), mk_position $sloc }
+| e1 = expr b = binop e2 = expr { Binop(e1, b, e2), mk_position $sloc }
 ;

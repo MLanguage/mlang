@@ -24,19 +24,21 @@ type unop = Minus
 
 type binop = Cst.binop
 
-type mpp_expr =
-  | Constant of int
-  | Variable of scoped_var
-  | Unop of unop * mpp_expr
-  | Call of mpp_callable * scoped_var list
-  | Binop of mpp_expr * binop * mpp_expr
+type mpp_expr = mpp_expr_kind Pos.marked
+and mpp_expr_kind =
+   | Constant of int
+   | Variable of scoped_var
+   | Unop of unop * mpp_expr
+   | Call of mpp_callable * scoped_var list
+   | Binop of mpp_expr * binop * mpp_expr
 
-type mpp_stmt =
-  | Assign of scoped_var * mpp_expr
-  | Conditional of mpp_expr * mpp_stmt list * mpp_stmt list
-  | Delete of scoped_var
-  | Expr of mpp_expr
-  | Partition of mpp_filter * mpp_stmt list
+type mpp_stmt = mpp_stmt_kind Pos.marked
+and mpp_stmt_kind =
+   | Assign of scoped_var * mpp_expr
+   | Conditional of mpp_expr * mpp_stmt list * mpp_stmt list
+   | Delete of scoped_var
+   | Expr of mpp_expr
+   | Partition of mpp_filter * mpp_stmt list
 
 type mpp_compute = {
     name: mpp_compute_name;
