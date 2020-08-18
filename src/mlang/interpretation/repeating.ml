@@ -281,9 +281,7 @@ let compute_double_liquidation3 (p : Interpreter.interpretable_program)
   let inputs = update_inputs "8ZG" v_8ZG inputs in
   Cli.debug_print "Valorisation de l'acompte V_INDTEO=%f"
     (match get_inputs_var p.ip_program "V_INDTEO" inputs with Float f -> f | Undefined -> 0.);
-  let inputs =
-    inputs |> update_inputs "V_ACO_MTAP" 0. |> update_inputs "V_NEGACO" 0.
-  in
+  let inputs = inputs |> update_inputs "V_ACO_MTAP" 0. |> update_inputs "V_NEGACO" 0. in
   let p = match outputs with None -> p | Some outputs -> reset_and_add_outputs p outputs in
   let ctx = Interpreter.evaluate_program p inputs false in
   (ctx, inputs)
