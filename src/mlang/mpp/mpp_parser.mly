@@ -10,12 +10,13 @@
 %token <int> INT
 %token EOF INDENT NEWLINE DEDENT
 %token LT GT LE GE
-%token EQUAL NEQ AND OR EQ LPAREN RPAREN
+%token EQUAL NEQ  EQ LPAREN RPAREN
+%token AND OR
 %token IF ELSE DELETE PARTITION COLON COMMA MINUS
 
 %left OR
 %left AND
-%nonassoc LT GT LE GE EQUAL NEQ
+%left LT GT LE GE EQUAL NEQ
 %nonassoc MINUS
 
 %start <Cst.program> file
@@ -45,7 +46,7 @@ new_block:
 | NEWLINE INDENT stmt+ DEDENT { $3 }
 ;
 
-binop:
+%inline binop:
 | LT { Lt }
 | GT { Gt }
 | LE { Lte }
