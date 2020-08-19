@@ -24,12 +24,14 @@ build: #format
 test: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
+		--mpp-file=2018.mpp \
 		--run_test=$(TEST_FILE) \
 		$(SOURCE_FILES)
 
 tests: build
 	dune exec src/main.exe -- --application iliad \
 	 	--display_time --debug --backend interpreter \
+		--mpp-file=2018.mpp \
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 

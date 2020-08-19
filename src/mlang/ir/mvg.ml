@@ -291,6 +291,17 @@ type program = {
   program_exec_passes : exec_pass list;
 }
 
+type stmt = stmt_kind Pos.marked
+and stmt_kind =
+  | SAssign of Variable.t * variable_data
+  | SConditional of expression * stmt list * stmt list
+
+type new_program = {
+    statements : stmt list;
+    conds : condition_data VariableMap.t;
+    idmap : idmap
+}
+
 (** {1 Helpers}*)
 
 (** Throws an error in case of alias not found *)

@@ -88,16 +88,18 @@ let format_variable_def fmt (def : variable_def) =
   | TableVar (_, IndexTable defs) ->
       IndexMap.map_printer (Format_ast.pp_unmark format_expression) fmt defs
 
+let format_variable_data fmt (def: variable_data) =
+  Format.fprintf fmt "type %a, io %a:\n%a"
+    (fun fmt () ->
+      match def.var_typ with None -> Format.fprintf fmt "unknown" | Some t -> format_typ fmt t)
+    () format_io def.var_io format_variable_def def.var_definition
+
 let format_program_vars fmt (p : variable_data VariableMap.t) =
   VariableMap.map_printer
     (fun fmt var ->
       Format.fprintf fmt "Variable %s%s" (Pos.unmark var.Variable.name)
         (match var.Variable.alias with Some x -> " (alias " ^ x ^ ")" | None -> ""))
-    (fun fmt def ->
-      Format.fprintf fmt "type %a, io %a:\n%a"
-        (fun fmt () ->
-          match def.var_typ with None -> Format.fprintf fmt "unknown" | Some t -> format_typ fmt t)
-        () format_io def.var_io format_variable_def def.var_definition)
+    format_variable_data
     fmt p
 
 let format_error fmt (e : Error.t) =
@@ -123,3 +125,17 @@ let format_variable fmt (v : Variable.t) =
 let format_io fmt (io : io) =
   Format.pp_print_string fmt
     (match io with Input -> "input" | Output -> "output" | Regular -> "regular")
+
+let rec format_stmt fmt (stmt: stmt) =
+  match Pos.unmark stmt with
+  | SAssign(v, vdata) ->
+     Format.fprintf fmt "%s = %a" (Pos.unmark v.Variable.name) format_variable_def vdata.var_definition
+  | SConditional(cond, t, []) ->
+     Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" format_expression cond format_stmts t
+  | SConditional(cond, t, f) ->
+     Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n" format_expression cond format_stmts t format_stmts f
+
+and format_stmts fmt stmts  = Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
+
+let format_new_program fmt (p: new_program) =
+  Format.fprintf fmt "%a" (*"\n\n%a"*) format_stmts p.statements (*format_program_conds p.conds*)
