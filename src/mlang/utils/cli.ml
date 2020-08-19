@@ -74,10 +74,7 @@ let mpp_file =
   Arg.(
     value
     & opt (some file) None
-    & info [ "mpp_file" ] ~docv:"SPEC"
-        ~doc:
-          "M++ preprocessor file (extension .mpp)")
-
+    & info [ "mpp_file" ] ~docv:"SPEC" ~doc:"M++ preprocessor file (extension .mpp)")
 
 let output =
   Arg.(
@@ -205,9 +202,9 @@ let year : int ref = ref 2018
 
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string option) (mpp_file_: string option) (output_ : string option)
-    (real_precision_ : int) (run_all_tests_ : string option) (run_test_ : string option)
-    (year_ : int) =
+    (backend_ : string) (function_spec_ : string option) (mpp_file_ : string option)
+    (output_ : string option) (real_precision_ : int) (run_all_tests_ : string option)
+    (run_test_ : string option) (year_ : int) =
   source_files := files_;
   application := application_;
   debug_flag := debug_;
