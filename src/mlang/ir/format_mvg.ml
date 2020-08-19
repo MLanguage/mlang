@@ -138,4 +138,4 @@ let rec format_stmt fmt (stmt: stmt) =
 and format_stmts fmt stmts  = Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
 let format_new_program fmt (p: new_program) =
-  Format.fprintf fmt "%a" (*"\n\n%a"*) format_stmts p.statements (*format_program_conds p.conds*)
+  Format.fprintf fmt "%a\n\n%a" format_stmts p.statements format_program_conds p.conds

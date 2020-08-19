@@ -69,17 +69,18 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Checking for circular variable definitions...";
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
+    let mpp = Option.get @@ Mpp_frontend.process mpp_file program in
+    Cli.debug_print "Parsed mpp file:@\n%a" Mpp_format.format_program mpp;
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test.check_all_tests program tests
+      Test.check_all_tests program mpp tests
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test.check_test program test;
+      Test.check_test program mpp test;
       Cli.result_print "Test passed!@."
     end
     else begin
-      let _ = Mpp_frontend.process mpp_file program in
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Interface.read_function_from_spec program in
       let program = Interface.fit_function program mvg_func in
