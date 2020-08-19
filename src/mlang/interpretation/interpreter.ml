@@ -541,31 +541,16 @@ let evaluate_expr_new (p : new_program) ctx vdef : var_literal =
                   evaluate_expr ctx p e) )
   | Mvg.InputVar -> assert false
 
-(* SimpleVar (evaluate_expr ctx p
- *   (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)) *)
-
 let rec evaluate_stmt (p : new_program) ctx stmt =
   match Pos.unmark stmt with
   | SAssign (var, vdata) ->
-      (* if Pos.unmark var.Variable.name = "FLAG_EXIT" then
-       *   Cli.debug_print "[%a] %a" Pos.format_position (Pos.get_position stmt) Format_mvg.format_stmt stmt; *)
       let res = evaluate_expr_new p ctx vdata.var_definition in
-      (* let () =
-       *     match res with
-       *   | SimpleVar l -> Cli.debug_print "~> %a" Format_mvg.format_literal l
-       *   | _ -> () in *)
       { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
   | SConditional (b, t, f) -> (
       match evaluate_expr_new p ctx (SimpleVar (b, Pos.no_pos)) with
-      | SimpleVar (Float 0.) ->
-          (* Cli.debug_print "if(%a) ~> false@\n" Format_mvg.format_expression b; *)
-          evaluate_stmts p ctx f
-      | SimpleVar (Float _) ->
-          (* Cli.debug_print "if(%a) ~> true@\n" Format_mvg.format_expression b; *)
-          evaluate_stmts p ctx t
-      | SimpleVar Undefined ->
-          (* Cli.debug_print "if(%a) ~> undefined@\n" Format_mvg.format_expression b; *)
-          ctx
+      | SimpleVar (Float 0.) -> evaluate_stmts p ctx f
+      | SimpleVar (Float _) -> evaluate_stmts p ctx t
+      | SimpleVar Undefined -> ctx
       | _ -> assert false )
 
 and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts

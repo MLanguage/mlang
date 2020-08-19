@@ -52,6 +52,7 @@ let cond_DepositDefinedVariables = generate_input_condition Repeating.var_is_dep
 let cond_TaxbenefitDefinedVariables = generate_input_condition Repeating.var_is_taxbenefit
 
 let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) pos =
+  (* commented aliases do not exist in the 2018 version *)
   let aliases_list =
     [
       "7QK";
@@ -93,17 +94,11 @@ let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) pos =
   generate_input_condition (fun v -> Mvg.VariableMap.mem v supp_avfisc) p pos
 
 let rec translate_mpp_function mpp_program m_program compute_decl args ctx =
-  (* Cli.debug_print "Translating function %s" compute_decl.Mpp_ast.name; *)
-  let r =
-    List.fold_left
-      (fun (ctx, stmts) stmt ->
-        let ctx, stmt' = translate_mpp_stmt mpp_program m_program args ctx stmt in
-        (ctx, stmts @ stmt'))
-      (ctx, []) compute_decl.Mpp_ast.body
-  in
-  (* Cli.debug_print "Finished translating function %s" compute_decl.Mpp_ast.name; *)
-  (* Cli.debug_print "[%s]~> %a@." compute_decl.Mpp_ast.name Format_mvg.format_stmts r; *)
-  r
+  List.fold_left
+    (fun (ctx, stmts) stmt ->
+      let ctx, stmt' = translate_mpp_stmt mpp_program m_program args ctx stmt in
+      (ctx, stmts @ stmt'))
+    (ctx, []) compute_decl.Mpp_ast.body
 
 and translate_mpp_expr p (ctx : translation_ctx) expr =
   let pos = Pos.get_position expr in
@@ -246,10 +241,6 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
              (function Mpp_ast.Mbased (s, _) -> Pos.unmark s.Mvg.Variable.name | Local l -> l)
              real_args)
       in
-      (* Cli.debug_print "Variables used as inputs during call at %a: %a" Pos.format_position pos
-         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt (v, ()) ->
-         Format.fprintf fmt "%s" (Pos.unmark v.Mvg.Variable.name))) (Mvg.VariableMap.bindings
-         ctx.variables_used_as_inputs); *)
       let m_program =
         {
           m_program with
@@ -264,8 +255,6 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
           Interpreter.shrink_execution_order_to_fit_outputs
             m_program.ip_utils.utilities_execution_order m_program.ip_program false
       in
-      (* Cli.debug_print "|m_program| = %d, |exec_order| = %d" (Mvg.VariableMap.cardinal
-         m_program.ip_program.program_vars) (List.length exec_order); *)
       let inlined_program =
         list_map_opt
           (fun var ->
@@ -280,9 +269,6 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
             with Not_found -> None)
           exec_order
       in
-      (* Cli.debug_print "inlined call at %a (real_args=%a) with %d assignments@."
-         Pos.format_position pos (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",
-         ") Mpp_format.format_scoped_var) real_args (List.length inlined_program); *)
       (ctx, inlined_program)
   | Mpp_ast.Partition (filter, body) ->
       let func_of_filter =
@@ -293,9 +279,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       in
       let ctx, body = translate_mpp_stmts mpp_program m_program func_args ctx body in
       (ctx, partition_pre @ body @ partition_post)
-  | _ ->
-      Cli.error_print "translate_mpp_stmt %a: case not handled yet" Mpp_format.format_stmt stmt;
-      assert false
+  | _ -> assert false
 
 and translate_mpp_stmts mpp_program m_program func_args ctx stmts =
   List.fold_left
@@ -311,16 +295,10 @@ and generate_partition mpp_program m_program func_args (filter : Mvg.Variable.t 
       (fun var _ acc -> if filter var then var :: acc else acc)
       m_program.ip_program.program_vars []
   in
-  (* FIXME: we can take only the INPUT VARIABLES. Same for exists_ceiled/defined...functions *)
   let ctx, mpp_pre, mpp_post =
     List.fold_left
       (fun (ctx, stmts_pre, stmts_post) var ->
         let shadow_var_name = "_" ^ Pos.unmark var.Mvg.Variable.name in
-        (* let shadow_var = Mvg.Variable.new_var (shadow_var_name, pos) None ("partitioning", pos)
-           {rule_number=(-1); seq_number=(-1); pos=pos} ~attributes:var.Mvg.Variable.attributes
-           ~is_income:var.Mvg.Variable.is_income in *)
-        (* let ctx = {ctx with new_variables=StringMap.add shadow_var_name shadow_var
-           ctx.new_variables} in *)
         let open Mpp_ast in
         let shadow_var = Local shadow_var_name in
         let var = Mbased (var, Output) in

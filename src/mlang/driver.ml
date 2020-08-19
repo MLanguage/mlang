@@ -70,7 +70,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     let dep_graph = Dependency.create_dependency_graph program in
     ignore (Dependency.check_for_cycle dep_graph program true);
     let mpp = Option.get @@ Mpp_frontend.process mpp_file program in
-    Cli.debug_print "Parsed mpp file:@\n%a" Mpp_format.format_program mpp;
+    Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
       Test.check_all_tests program mpp tests
