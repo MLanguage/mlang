@@ -408,7 +408,7 @@ let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx 
   try
     match (VariableMap.find var p.program_vars).var_definition with
     | Mvg.SimpleVar e ->
-       let l_e = evaluate_expr ctx p e in
+        let l_e = evaluate_expr ctx p e in
         { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
     | Mvg.TableVar (size, es) ->
         (* Right now we suppose that the different indexes of table arrays don't depend on each
@@ -527,60 +527,60 @@ let evaluate_program (ip : interpretable_program) (input_values : literal Variab
     end
     else raise (RuntimeError (e, ctx))
 
-
-let evaluate_expr_new (p: new_program) ctx vdef : var_literal =
+let evaluate_expr_new (p : new_program) ctx vdef : var_literal =
   match vdef with
-  | Mvg.SimpleVar e ->
-     SimpleVar (evaluate_expr ctx p e)
+  | Mvg.SimpleVar e -> SimpleVar (evaluate_expr ctx p e)
   | Mvg.TableVar (size, es) ->
-     TableVar
-       ( size,
-         Array.init size (fun idx ->
-             match es with
-             | IndexGeneric e -> evaluate_expr { ctx with ctx_generic_index = Some idx } p e
-             | IndexTable es ->
-                let e = IndexMap.find idx es in
-                evaluate_expr ctx p e)
-       )
-  | Mvg.InputVar ->
-     assert false
-     (* SimpleVar (evaluate_expr ctx p
-      *   (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)) *)
+      TableVar
+        ( size,
+          Array.init size (fun idx ->
+              match es with
+              | IndexGeneric e -> evaluate_expr { ctx with ctx_generic_index = Some idx } p e
+              | IndexTable es ->
+                  let e = IndexMap.find idx es in
+                  evaluate_expr ctx p e) )
+  | Mvg.InputVar -> assert false
 
+(* SimpleVar (evaluate_expr ctx p
+ *   (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)) *)
 
-
-let rec evaluate_stmt (p: new_program) ctx stmt =
+let rec evaluate_stmt (p : new_program) ctx stmt =
   match Pos.unmark stmt with
   | SAssign (var, vdata) ->
-     (* if Pos.unmark var.Variable.name = "FLAG_EXIT" then
-      *   Cli.debug_print "[%a] %a" Pos.format_position (Pos.get_position stmt) Format_mvg.format_stmt stmt; *)
-     let res = evaluate_expr_new p ctx vdata.var_definition in
-     (* let () =
-      *     match res with
-      *   | SimpleVar l -> Cli.debug_print "~> %a" Format_mvg.format_literal l
-      *   | _ -> () in *)
-     { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
-  | SConditional (b, t, f) ->
-     begin match evaluate_expr_new p ctx (SimpleVar (b, Pos.no_pos)) with
-     | SimpleVar (Float 0.) ->
-        (* Cli.debug_print "if(%a) ~> false@\n" Format_mvg.format_expression b; *)
-        evaluate_stmts p ctx f
-     | SimpleVar (Float _) ->
-        (* Cli.debug_print "if(%a) ~> true@\n" Format_mvg.format_expression b; *)
-        evaluate_stmts p ctx t
-     | SimpleVar Undefined ->
-        (* Cli.debug_print "if(%a) ~> undefined@\n" Format_mvg.format_expression b; *)
-        ctx
-     | _ -> assert false
-     end
+      (* if Pos.unmark var.Variable.name = "FLAG_EXIT" then
+       *   Cli.debug_print "[%a] %a" Pos.format_position (Pos.get_position stmt) Format_mvg.format_stmt stmt; *)
+      let res = evaluate_expr_new p ctx vdata.var_definition in
+      (* let () =
+       *     match res with
+       *   | SimpleVar l -> Cli.debug_print "~> %a" Format_mvg.format_literal l
+       *   | _ -> () in *)
+      { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
+  | SConditional (b, t, f) -> (
+      match evaluate_expr_new p ctx (SimpleVar (b, Pos.no_pos)) with
+      | SimpleVar (Float 0.) ->
+          (* Cli.debug_print "if(%a) ~> false@\n" Format_mvg.format_expression b; *)
+          evaluate_stmts p ctx f
+      | SimpleVar (Float _) ->
+          (* Cli.debug_print "if(%a) ~> true@\n" Format_mvg.format_expression b; *)
+          evaluate_stmts p ctx t
+      | SimpleVar Undefined ->
+          (* Cli.debug_print "if(%a) ~> undefined@\n" Format_mvg.format_expression b; *)
+          ctx
+      | _ -> assert false )
 
-and evaluate_stmts p ctx stmts =
-  List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
+and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
 
-let evaluate_new_program (p: Mvg.new_program) (inputs: literal VariableMap.t) (ctx: ctx): ctx =
-  let ctx = { ctx with ctx_vars = VariableMap.fold (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars) inputs ctx.ctx_vars } in
-  try
-    evaluate_stmts p ctx p.statements
+let evaluate_new_program (p : Mvg.new_program) (inputs : literal VariableMap.t) (ctx : ctx) : ctx =
+  let ctx =
+    {
+      ctx with
+      ctx_vars =
+        VariableMap.fold
+          (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
+          inputs ctx.ctx_vars;
+    }
+  in
+  try evaluate_stmts p ctx p.statements
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then begin
       Cli.error_print "%a@?" format_runtime_error e;

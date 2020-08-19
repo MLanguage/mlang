@@ -80,7 +80,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       Test.check_test program mpp test;
       Cli.result_print "Test passed!@."
     end
-    else
+    else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Interface.read_function_from_spec program in
       let program = Interface.fit_function program mvg_func in
@@ -136,6 +136,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
           !Cli.output_file
       end
       else raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
+    end
   with
   | Errors.TypeError e ->
       Cli.error_print "%a\n" Errors.format_typ_error e;

@@ -160,8 +160,12 @@ let check_test (p : Mvg.program) mpp (test_name : string) =
   in
   let p = add_test_conds_usage_to_outputs p test_conds in
   let combined_program = Mpp_ast_to_mvg.create_combined_program p mpp in
-  (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mvg.format_new_program combined_program; *)
-  let ctx = Interpreter.evaluate_new_program combined_program input_file (Interpreter.empty_ctx p.ip_program) in
+  (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mvg.format_new_program
+     combined_program; *)
+  let ctx =
+    Interpreter.evaluate_new_program combined_program input_file
+      (Interpreter.empty_ctx p.ip_program)
+  in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
     List.mapi
@@ -270,7 +274,7 @@ let check_all_tests (p : Mvg.program) mpp (test_dir : string) =
         (successes, failures)
   in
   let s, f =
-    Parmap.parfold ~chunksize:5  process (Parmap.A arr) ([], VariableMap.empty)
+    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty)
       (fun (old_s, old_f) (new_s, new_f) ->
         (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
   in
