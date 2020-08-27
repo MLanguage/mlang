@@ -47,6 +47,11 @@ let rec format_expression (fmt : formatter) (expr : mpp_expr_kind Pos.marked) : 
 let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
   match Pos.unmark stmt with
   | Assign (sv, e) -> fprintf fmt "%a = %a" format_scoped_var sv format_expression e
+  | Conditional (cond, t, []) ->
+      fprintf fmt "if(%a):@\n@[<h 2>  %a@]" format_expression cond format_stmts t
+  | Conditional (cond, t, f) ->
+      fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]" format_expression cond format_stmts
+        t format_stmts f
   | Delete sv -> fprintf fmt "del %a" format_scoped_var sv
   | Expr e -> format_expression fmt e
   | Partition (f, body) ->

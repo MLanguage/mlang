@@ -226,6 +226,22 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
                  } ))
             stmt;
         ] )
+  | Mpp_ast.Conditional (e, t, f) ->
+      let e' = translate_mpp_expr m_program ctx e in
+      let ctx1, rt' = translate_mpp_stmts mpp_program m_program func_args ctx t in
+      let ctx2, rf' =
+        translate_mpp_stmts mpp_program m_program func_args
+          { ctx with new_variables = ctx1.new_variables }
+          f
+      in
+      ( {
+          ctx2 with
+          variables_used_as_inputs =
+            Mvg.VariableMap.union
+              (fun _ _ _ -> Some ())
+              ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
+        },
+        [ Pos.same_pos_as (Mvg.SConditional (e', rt', rf')) stmt ] )
   | Mpp_ast.Delete (Mbased (var, _)) ->
       ( ctx,
         [

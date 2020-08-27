@@ -55,7 +55,12 @@ let rec to_mpp_stmt (p : Mvg.program) (translated_names : string list)
     match Pos.unmark stmt with
     | Assign (v, e) ->
         (Assign (to_scoped_var p v, fst @@ to_mpp_expr p translated_names scope e), scope)
-    | Conditional (_b, _t, _f) -> assert false
+    | Conditional (b, t, f) ->
+        ( Conditional
+            ( fst @@ to_mpp_expr p translated_names scope b,
+              to_mpp_stmts p translated_names ~scope t,
+              to_mpp_stmts p translated_names ~scope f ),
+          scope )
     | Delete v -> (Delete (to_scoped_var p v), scope)
     | Expr e ->
         let e', scope = to_mpp_expr p translated_names scope e in

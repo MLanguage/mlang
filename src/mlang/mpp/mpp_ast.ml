@@ -42,6 +42,7 @@ type mpp_stmt = mpp_stmt_kind Pos.marked
 
 and mpp_stmt_kind =
   | Assign of scoped_var * mpp_expr
+  | Conditional of mpp_expr * mpp_stmt list * mpp_stmt list
   | Delete of scoped_var
   | Expr of mpp_expr
   | Partition of mpp_filter * mpp_stmt list
