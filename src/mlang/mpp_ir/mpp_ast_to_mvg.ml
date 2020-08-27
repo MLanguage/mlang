@@ -133,7 +133,7 @@ let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : str
 
 let rec translate_mpp_function (mpp_program : Mpp_ast.mpp_compute list)
     (m_program : Interpreter.interpretable_program) (compute_decl : Mpp_ast.mpp_compute)
-    (args : Mpp_ast.scoped_var list) (ctx : translation_ctx) : translation_ctx * Mvg.stmt list =
+    (args : Mpp_ast.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
       let ctx, stmt' = translate_mpp_stmt mpp_program m_program args ctx stmt in
@@ -182,7 +182,7 @@ and translate_mpp_expr (p : Interpreter.interpretable_program) (ctx : translatio
   | _ -> assert false
 
 and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_program) func_args
-    (ctx : translation_ctx) stmt : translation_ctx * Mvg.stmt list =
+    (ctx : translation_ctx) stmt : translation_ctx * Bir.stmt list =
   let pos = Pos.get_position stmt in
   match Pos.unmark stmt with
   | Mpp_ast.Assign (Local l, expr) ->
@@ -201,7 +201,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       ( ctx,
         [
           Pos.same_pos_as
-            (Mvg.SAssign
+            (Bir.SAssign
                ( new_l,
                  {
                    var_definition = SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -217,7 +217,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
         },
         [
           Pos.same_pos_as
-            (Mvg.SAssign
+            (Bir.SAssign
                ( var,
                  {
                    var_definition = SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -241,12 +241,12 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
               (fun _ _ _ -> Some ())
               ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
         },
-        [ Pos.same_pos_as (Mvg.SConditional (e', rt', rf')) stmt ] )
+        [ Pos.same_pos_as (Bir.SConditional (e', rt', rf')) stmt ] )
   | Mpp_ast.Delete (Mbased (var, _)) ->
       ( ctx,
         [
           Pos.same_pos_as
-            (Mvg.SAssign
+            (Bir.SAssign
                ( var,
                  {
                    var_definition = SimpleVar (Mvg.Literal Undefined, pos);
@@ -260,7 +260,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       ( ctx,
         [
           Pos.same_pos_as
-            (Mvg.SAssign
+            (Bir.SAssign
                ( var,
                  {
                    var_definition = SimpleVar (Mvg.Literal Undefined, pos);
@@ -301,7 +301,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
               in
               match vdef.var_definition with
               | InputVar -> None
-              | _ -> Some (Mvg.SAssign (var, vdef), var.Mvg.Variable.execution_number.pos)
+              | _ -> Some (Bir.SAssign (var, vdef), var.Mvg.Variable.execution_number.pos)
             with Not_found -> None)
           exec_order
       in
@@ -317,7 +317,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
 
 and translate_mpp_stmts (mpp_program : Mpp_ast.mpp_compute list)
     (m_program : Interpreter.interpretable_program) (func_args : Mpp_ast.scoped_var list)
-    (ctx : translation_ctx) (stmts : Mpp_ast.mpp_stmt list) : translation_ctx * Mvg.stmt list =
+    (ctx : translation_ctx) (stmts : Mpp_ast.mpp_stmt list) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
       let ctx, stmt = translate_mpp_stmt mpp_program m_program func_args ctx stmt in
@@ -325,7 +325,7 @@ and translate_mpp_stmts (mpp_program : Mpp_ast.mpp_compute list)
     (ctx, []) stmts
 
 and generate_partition mpp_program m_program func_args (filter : Mvg.Variable.t -> bool)
-    (pos : Pos.t) (ctx : translation_ctx) : translation_ctx * Mvg.stmt list * Mvg.stmt list =
+    (pos : Pos.t) (ctx : translation_ctx) : translation_ctx * Bir.stmt list * Bir.stmt list =
   let vars_to_move =
     Mvg.VariableMap.fold
       (fun var _ acc -> if filter var then var :: acc else acc)
@@ -349,7 +349,7 @@ and generate_partition mpp_program m_program func_args (filter : Mvg.Variable.t 
   (ctx, pre, post)
 
 let create_combined_program (m_program : Interpreter.interpretable_program)
-    (mpp_program : Mpp_ast.mpp_program) : Mvg.new_program =
+    (mpp_program : Mpp_ast.mpp_program) : Bir.program =
   let mpp_program = List.rev mpp_program in
   {
     statements =

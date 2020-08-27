@@ -163,8 +163,7 @@ let check_test (p : Mvg.program) mpp (test_name : string) =
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mvg.format_new_program
      combined_program; *)
   let ctx =
-    Interpreter.evaluate_new_program combined_program input_file
-      (Interpreter.empty_ctx p.ip_program)
+    Interpreter.evaluate_program combined_program input_file (Interpreter.empty_ctx p.ip_program)
   in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =

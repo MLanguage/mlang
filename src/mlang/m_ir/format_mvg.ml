@@ -124,19 +124,3 @@ let format_variable fmt (v : Variable.t) =
 let format_io fmt (io : io) =
   Format.pp_print_string fmt
     (match io with Input -> "input" | Output -> "output" | Regular -> "regular")
-
-let rec format_stmt fmt (stmt : stmt) =
-  match Pos.unmark stmt with
-  | SAssign (v, vdata) ->
-      Format.fprintf fmt "%s = %a" (Pos.unmark v.Variable.name) format_variable_def
-        vdata.var_definition
-  | SConditional (cond, t, []) ->
-      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" format_expression cond format_stmts t
-  | SConditional (cond, t, f) ->
-      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n" format_expression cond
-        format_stmts t format_stmts f
-
-and format_stmts fmt stmts = Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
-
-let format_new_program fmt (p : new_program) =
-  Format.fprintf fmt "%a\n\n%a" format_stmts p.statements format_program_conds p.conds

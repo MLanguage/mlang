@@ -403,54 +403,12 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
                   (Dependency.DepGraph.pred dep_graph var) ),
          ctx ))
 
-let evaluate_variable (p : program) (input_values : literal VariableMap.t) (ctx : ctx)
-    (dep_graph : Dependency.DepGraph.t) (var : Variable.t) (check_verif_conds : bool) =
-  try
-    match (VariableMap.find var p.program_vars).var_definition with
-    | Mvg.SimpleVar e ->
-        let l_e = evaluate_expr ctx p e in
-        { ctx with ctx_vars = VariableMap.add var (SimpleVar l_e) ctx.ctx_vars }
-    | Mvg.TableVar (size, es) ->
-        (* Right now we suppose that the different indexes of table arrays don't depend on each
-           other for computing. Otherwise, it would trigger a runtime Not_found error at
-           interpretation. TODO: add a check for that at typechecking. *)
-        add_tablevar p ctx var (size, es)
-    | Mvg.InputVar -> (
-        try
-          let l =
-            evaluate_expr ctx p
-              (Pos.same_pos_as (Literal (VariableMap.find var input_values)) var.Variable.name)
-          in
-          { ctx with ctx_vars = VariableMap.add var (SimpleVar l) ctx.ctx_vars }
-        with Not_found ->
-          { ctx with ctx_vars = VariableMap.add var (SimpleVar Undefined) ctx.ctx_vars } )
-  with Not_found ->
-    if check_verif_conds then
-      match VariableMap.find_opt var p.program_conds with
-      | Some cond -> (
-          (* checking condition variables is only done at the end *)
-          match evaluate_expr ctx p cond.cond_expr with
-          | Float f when f = 1. -> report_violatedcondition cond var ctx dep_graph
-          | _ -> ctx )
-      | None -> assert false (* should not happen *)
-    else ctx
-
 type evaluation_utilities = {
   utilities_dep_graph : Dependency.DepGraph.t;
   utilities_execution_order : Execution_order.execution_order;
 }
 
 type interpretable_program = { ip_program : Mvg.program; ip_utils : evaluation_utilities }
-
-let evaluate_program_fold (p : program) (utils : evaluation_utilities)
-    (input_values : literal VariableMap.t) (check_verif_conds : bool) =
-  List.fold_left
-    (fun ctx var ->
-      let ctx =
-        evaluate_variable p input_values ctx utils.utilities_dep_graph var check_verif_conds
-      in
-      ctx)
-    (empty_ctx p) utils.utilities_execution_order
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
    read directly from the input map. However, one can pass inside the input map a value for a
@@ -480,23 +438,7 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                empty_ctx p )))
     input_values p
 
-let evaluate_program (ip : interpretable_program) (input_values : literal VariableMap.t)
-    (check_verif_conds : bool) : ctx =
-  let p = replace_undefined_with_input_variables ip.ip_program input_values in
-  try
-    let ctx = evaluate_program_fold p ip.ip_utils input_values check_verif_conds in
-    ctx
-  with RuntimeError (e, ctx) ->
-    if !exit_on_rte then begin
-      Cli.error_print "%a@?" format_runtime_error e;
-      flush_all ();
-      flush_all ();
-      if !repl_debug then repl_debugguer ctx p;
-      exit 1
-    end
-    else raise (RuntimeError (e, ctx))
-
-let evaluate_expr_new (p : new_program) ctx vdef : var_literal =
+let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
   match vdef with
   | Mvg.SimpleVar e -> SimpleVar (evaluate_expr ctx p e)
   | Mvg.TableVar (size, es) ->
@@ -510,13 +452,13 @@ let evaluate_expr_new (p : new_program) ctx vdef : var_literal =
                   evaluate_expr ctx p e) )
   | Mvg.InputVar -> assert false
 
-let rec evaluate_stmt (p : new_program) ctx stmt =
+let rec evaluate_stmt (p : Bir.program) ctx stmt =
   match Pos.unmark stmt with
-  | SAssign (var, vdata) ->
-      let res = evaluate_expr_new p ctx vdata.var_definition in
+  | Bir.SAssign (var, vdata) ->
+      let res = evaluate_variable p ctx vdata.var_definition in
       { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
-  | SConditional (b, t, f) -> (
-      match evaluate_expr_new p ctx (SimpleVar (b, Pos.no_pos)) with
+  | Bir.SConditional (b, t, f) -> (
+      match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
       | SimpleVar (Float 0.) -> evaluate_stmts p ctx f
       | SimpleVar (Float _) -> evaluate_stmts p ctx t
       | SimpleVar Undefined -> ctx
@@ -524,7 +466,7 @@ let rec evaluate_stmt (p : new_program) ctx stmt =
 
 and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
 
-let evaluate_new_program (p : Mvg.new_program) (inputs : literal VariableMap.t) (ctx : ctx) : ctx =
+let evaluate_program (p : Bir.program) (inputs : literal VariableMap.t) (ctx : ctx) : ctx =
   let ctx =
     {
       ctx with
