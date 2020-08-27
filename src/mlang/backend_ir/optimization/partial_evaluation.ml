@@ -14,7 +14,7 @@
 (** Partial evaluation mostly relies on the {!module: Verifisc.Interpreter} module ; however it also
     include peehole optimizations that must be checked for compatibility with M's semantics. *)
 
-open Mvg
+open Mir
 
 type partial_expr = PartialLiteral of literal | PartialVar of Variable.t
 
@@ -48,13 +48,13 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
           match (Pos.unmark new_e1, Pos.unmark new_e2) with
           | Literal Undefined, _ | _, Literal Undefined -> Literal Undefined
           | Conditional (b, (Literal (Float 1.), _), (Literal (Float 0.), _)), Literal (Float 1.)
-            when Pos.unmark op = Ast.Eq ->
+            when Pos.unmark op = Mast.Eq ->
               Pos.unmark b
-          | (FunctionCall (Mvg.PresentFunc, _) as fc), Literal (Float 1.)
-            when Pos.unmark op = Ast.Neq ->
-              Unop (Ast.Not, Pos.same_pos_as fc new_e1)
+          | (FunctionCall (Mir.PresentFunc, _) as fc), Literal (Float 1.)
+            when Pos.unmark op = Mast.Neq ->
+              Unop (Mast.Not, Pos.same_pos_as fc new_e1)
           | Literal _, Literal _ ->
-              Mvg.Literal
+              Mir.Literal
                 (Interpreter.evaluate_expr interp_ctx p
                    (Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e))
           | _ -> Comparison (op, new_e1, new_e2)
@@ -66,38 +66,39 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
       Pos.same_pos_as
         begin
           match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
-          | Ast.And, Literal Undefined, _
-          | Ast.And, _, Literal Undefined
-          | Ast.Or, Literal Undefined, _
-          | Ast.Or, _, Literal Undefined
-          | Ast.Div, _, Literal Undefined ->
+          | Mast.And, Literal Undefined, _
+          | Mast.And, _, Literal Undefined
+          | Mast.Or, Literal Undefined, _
+          | Mast.Or, _, Literal Undefined
+          | Mast.Div, _, Literal Undefined ->
               Literal Undefined
-          | Ast.Or, Literal (Float f), _ when f <> 0. -> Literal true_literal
-          | Ast.Or, _, Literal (Float f) when f <> 0. -> Literal true_literal
-          | Ast.And, Literal (Float 0.), _ | Ast.And, _, Literal (Float 0.) -> Literal false_literal
-          | Ast.And, Literal (Float f), e' when f <> 0. -> e'
-          | Ast.And, e', Literal (Float f) when f <> 0. -> e'
-          | Ast.Or, Literal (Float 0.), e'
-          | Ast.Or, e', Literal (Float 0.)
-          | Ast.Add, Literal (Float 0. | Undefined), e'
-          | Ast.Add, e', Literal (Float 0. | Undefined)
-          | Ast.Mul, Literal (Float 1.), e'
-          | Ast.Mul, e', Literal (Float 1.)
-          | Ast.Div, e', Literal (Float 1.)
-          | Ast.Sub, e', Literal (Float 0. | Undefined) ->
+          | Mast.Or, Literal (Float f), _ when f <> 0. -> Literal true_literal
+          | Mast.Or, _, Literal (Float f) when f <> 0. -> Literal true_literal
+          | Mast.And, Literal (Float 0.), _ | Mast.And, _, Literal (Float 0.) ->
+              Literal false_literal
+          | Mast.And, Literal (Float f), e' when f <> 0. -> e'
+          | Mast.And, e', Literal (Float f) when f <> 0. -> e'
+          | Mast.Or, Literal (Float 0.), e'
+          | Mast.Or, e', Literal (Float 0.)
+          | Mast.Add, Literal (Float 0. | Undefined), e'
+          | Mast.Add, e', Literal (Float 0. | Undefined)
+          | Mast.Mul, Literal (Float 1.), e'
+          | Mast.Mul, e', Literal (Float 1.)
+          | Mast.Div, e', Literal (Float 1.)
+          | Mast.Sub, e', Literal (Float 0. | Undefined) ->
               e'
-          | Ast.Sub, Literal (Float 0. | Undefined), e' -> Unop (Minus, Pos.same_pos_as e' e)
-          | Ast.Mul, Literal (Float 0. | Undefined), _
-          | Ast.Mul, _, Literal (Float 0. | Undefined)
-          | Ast.Div, Literal (Float 0. | Undefined), _ ->
-              Mvg.Literal (Mvg.Float 0.)
+          | Mast.Sub, Literal (Float 0. | Undefined), e' -> Unop (Minus, Pos.same_pos_as e' e)
+          | Mast.Mul, Literal (Float 0. | Undefined), _
+          | Mast.Mul, _, Literal (Float 0. | Undefined)
+          | Mast.Div, Literal (Float 0. | Undefined), _ ->
+              Mir.Literal (Mir.Float 0.)
           | _, Literal _, Literal _ ->
-              Mvg.Literal
+              Mir.Literal
                 (Interpreter.evaluate_expr interp_ctx p
                    (Pos.same_pos_as (Binop (op, new_e1, new_e2)) e1))
-          | Ast.Add, _, Literal (Float f) when f < 0. ->
-              Binop (Pos.same_pos_as Ast.Sub op, e1, Pos.same_pos_as (Literal (Float (-.f))) e2)
-          | Ast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Ast.Sub op, e1, e2')
+          | Mast.Add, _, Literal (Float f) when f < 0. ->
+              Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Literal (Float (-.f))) e2)
+          | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, e1, e2')
           | _ -> Binop (op, new_e1, new_e2)
         end
         e
@@ -107,7 +108,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
         begin
           match Pos.unmark new_e1 with
           | Literal _ ->
-              Mvg.Literal
+              Mir.Literal
                 (Interpreter.evaluate_expr interp_ctx p (Pos.same_pos_as (Unop (op, new_e1)) e1))
           | _ -> Unop (op, new_e1)
         end
@@ -202,7 +203,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
       match Pos.unmark new_arg with
       | Literal _ ->
           Pos.same_pos_as
-            (Mvg.Literal
+            (Mir.Literal
                (Interpreter.evaluate_expr interp_ctx p
                   (Pos.same_pos_as (FunctionCall (f, [ new_arg ])) e)))
             e
@@ -213,7 +214,7 @@ let rec partial_evaluation (ctx : ctx) (interp_ctx : Interpreter.ctx) (p : progr
       match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
       | Literal _, Literal _ ->
           Pos.same_pos_as
-            (Mvg.Literal
+            (Mir.Literal
                (Interpreter.evaluate_expr interp_ctx p
                   (Pos.same_pos_as (FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
             e

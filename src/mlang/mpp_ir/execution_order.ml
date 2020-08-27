@@ -20,7 +20,7 @@
     more than one variable, then the computation is done in multiple passes, each new pass taking
     the previous outputs as inputs for all the varaibles in the SCC. *)
 
-open Mvg
+open Mir
 module ExecutionOrder = Graph.Topological.Make (Dependency.DepGraph)
 
 type execution_order = Variable.t list
@@ -37,7 +37,7 @@ class ['self] program_iter =
 
     inherit [_] condition_data_iter [@@warning "-7"]
 
-    method visit_program env (this : Mvg.program) =
+    method visit_program env (this : Mir.program) =
       let dep_graph = Dependency.create_dependency_graph this in
       let exec_order = get_execution_order dep_graph in
       List.iter

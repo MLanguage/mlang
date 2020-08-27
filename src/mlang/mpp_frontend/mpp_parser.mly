@@ -1,6 +1,6 @@
 (* FIXME: add locations *)
 %{
-  open Cst
+  open Mpp_ast
 
   let mk_position loc = { Pos.pos_filename = (fst loc).Lexing.pos_fname;
                           Pos.pos_loc = loc }
@@ -19,7 +19,7 @@
 %left LT GT LE GE EQUAL NEQ
 %nonassoc MINUS
 
-%start <Cst.program> file
+%start <Mpp_ast.program> file
 
 %%
 

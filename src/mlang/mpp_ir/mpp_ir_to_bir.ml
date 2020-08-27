@@ -9,17 +9,17 @@ module StringMap = Map.Make (struct
 end)
 
 type translation_ctx = {
-  new_variables : Mvg.Variable.t StringMap.t;
-  variables_used_as_inputs : unit Mvg.VariableMap.t;
+  new_variables : Mir.Variable.t StringMap.t;
+  variables_used_as_inputs : unit Mir.VariableMap.t;
 }
 
 let emtpy_translation_ctx : translation_ctx =
-  { new_variables = StringMap.empty; variables_used_as_inputs = Mvg.VariableMap.empty }
+  { new_variables = StringMap.empty; variables_used_as_inputs = Mir.VariableMap.empty }
 
-let translate_to_binop (b : Cst.binop) : Ast.binop =
+let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
   match b with And -> And | Or -> Or | _ -> assert false
 
-let translate_to_compop (b : Cst.binop) : Ast.comp_op =
+let translate_to_compop (b : Mpp_ast.binop) : Mast.comp_op =
   match b with
   | Gt -> Gt
   | Gte -> Gte
@@ -35,33 +35,33 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
   | hd :: tl -> (
       match f hd with None -> list_map_opt f tl | Some fhd -> fhd :: list_map_opt f tl )
 
-let generate_input_condition (crit : Mvg.Variable.t -> bool) (p : Interpreter.interpretable_program)
+let generate_input_condition (crit : Mir.Variable.t -> bool) (p : Interpreter.interpretable_program)
     (pos : Pos.t) =
   let variables_to_check =
-    Mvg.VariableMap.filter (fun var _ -> crit var) p.ip_program.program_vars
+    Mir.VariableMap.filter (fun var _ -> crit var) p.ip_program.program_vars
   in
-  let mk_call_present x = (Mvg.FunctionCall (PresentFunc, [ (Mvg.Var x, pos) ]), pos) in
-  let mk_or e1 e2 = (Mvg.Binop ((Or, pos), e1, e2), pos) in
-  let mk_false = (Mvg.Literal (Float 0.), pos) in
-  Mvg.VariableMap.fold
+  let mk_call_present x = (Mir.FunctionCall (PresentFunc, [ (Mir.Var x, pos) ]), pos) in
+  let mk_or e1 e2 = (Mir.Binop ((Or, pos), e1, e2), pos) in
+  let mk_false = (Mir.Literal (Float 0.), pos) in
+  Mir.VariableMap.fold
     (fun var _ acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_is_ (attr : string) (v : Mvg.Variable.t) : bool =
+let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
-    (fun ((attr_name, _), (attr_value, _)) -> attr_name = attr && attr_value = Ast.Float 1.)
-    v.Mvg.Variable.attributes
+    (fun ((attr_name, _), (attr_value, _)) -> attr_name = attr && attr_value = Mast.Float 1.)
+    v.Mir.Variable.attributes
 
 let cond_DepositDefinedVariables :
-    Interpreter.interpretable_program -> Pos.t -> Mvg.expression Pos.marked =
+    Interpreter.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
   generate_input_condition (var_is_ "acompte")
 
 let cond_TaxbenefitDefinedVariables :
-    Interpreter.interpretable_program -> Pos.t -> Mvg.expression Pos.marked =
+    Interpreter.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
   generate_input_condition (var_is_ "avfisc")
 
 let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) (pos : Pos.t) :
-    Mvg.expression Pos.marked =
+    Mir.expression Pos.marked =
   (* commented aliases do not exist in the 2018 version *)
   let aliases_list =
     [
@@ -98,32 +98,32 @@ let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) (pos 
   in
   let supp_avfisc =
     List.fold_left
-      (fun vmap var -> Mvg.VariableMap.add (Mvg.find_var_by_name p.ip_program var) () vmap)
-      Mvg.VariableMap.empty aliases_list
+      (fun vmap var -> Mir.VariableMap.add (Mir.find_var_by_name p.ip_program var) () vmap)
+      Mir.VariableMap.empty aliases_list
   in
-  generate_input_condition (fun v -> Mvg.VariableMap.mem v supp_avfisc) p pos
+  generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
 
 let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : string list) :
     Interpreter.interpretable_program =
-  let outputs = List.map (fun out -> Mvg.find_var_by_name p.ip_program out) outputs in
+  let outputs = List.map (fun out -> Mir.find_var_by_name p.ip_program out) outputs in
   let program =
     {
       p.ip_program with
       program_vars =
-        Mvg.VariableMap.mapi
+        Mir.VariableMap.mapi
           (fun var data ->
             if List.mem var outputs then
-              match data.Mvg.var_io with
+              match data.Mir.var_io with
               | Input ->
                   raise
                     (Interpreter.RuntimeError
                        ( Interpreter.IncorrectOutputVariable
-                           (Format.asprintf "%a is an input" Format_mvg.format_variable var),
+                           (Format.asprintf "%a is an input" Format_mir.format_variable var),
                          Interpreter.empty_ctx p.ip_program ))
               | Output -> data
               | Regular -> { data with var_io = Output }
             else
-              match data.Mvg.var_io with
+              match data.Mir.var_io with
               | Input | Regular -> data
               | Output -> { data with var_io = Regular })
           p.ip_program.program_vars;
@@ -131,51 +131,51 @@ let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : str
   in
   { p with ip_program = program }
 
-let rec translate_mpp_function (mpp_program : Mpp_ast.mpp_compute list)
-    (m_program : Interpreter.interpretable_program) (compute_decl : Mpp_ast.mpp_compute)
-    (args : Mpp_ast.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
+let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
+    (m_program : Interpreter.interpretable_program) (compute_decl : Mpp_ir.mpp_compute)
+    (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
       let ctx, stmt' = translate_mpp_stmt mpp_program m_program args ctx stmt in
       (ctx, stmts @ stmt'))
-    (ctx, []) compute_decl.Mpp_ast.body
+    (ctx, []) compute_decl.Mpp_ir.body
 
 and translate_mpp_expr (p : Interpreter.interpretable_program) (ctx : translation_ctx)
-    (expr : Mpp_ast.mpp_expr_kind Pos.marked) : Mvg.expression =
+    (expr : Mpp_ir.mpp_expr_kind Pos.marked) : Mir.expression =
   let pos = Pos.get_position expr in
   match Pos.unmark expr with
-  | Mpp_ast.Constant i -> Mvg.Literal (Float (float_of_int i))
+  | Mpp_ir.Constant i -> Mir.Literal (Float (float_of_int i))
   | Variable (Mbased (var, _)) -> Var var
   | Variable (Local l) -> (
       try Var (StringMap.find l ctx.new_variables)
       with Not_found ->
         Cli.error_print "Local Variable %s not found in ctx" l;
         assert false )
-  | Unop (Minus, e) -> Mvg.Unop (Ast.Minus, (translate_mpp_expr p ctx e, pos))
+  | Unop (Minus, e) -> Mir.Unop (Mast.Minus, (translate_mpp_expr p ctx e, pos))
   | Binop (e1, ((And | Or) as b), e2) ->
-      Mvg.Binop
+      Mir.Binop
         ( (translate_to_binop b, pos),
           (translate_mpp_expr p ctx e1, pos),
           (translate_mpp_expr p ctx e2, pos) )
   | Binop (e1, b, e2) ->
-      Mvg.Comparison
+      Mir.Comparison
         ( (translate_to_compop b, pos),
           (translate_mpp_expr p ctx e1, pos),
           (translate_mpp_expr p ctx e2, pos) )
   | Call (Present, [ l ]) ->
       Pos.unmark @@ Functions.expand_functions_expr
-      @@ ( Mvg.FunctionCall
-             (PresentFunc, [ (translate_mpp_expr p ctx (Mpp_ast.Variable l, pos), pos) ]),
+      @@ ( Mir.FunctionCall
+             (PresentFunc, [ (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos) ]),
            pos )
   | Call (Abs, [ l ]) ->
       Pos.unmark @@ Functions.expand_functions_expr
-      @@ ( Mvg.FunctionCall (AbsFunc, [ (translate_mpp_expr p ctx (Mpp_ast.Variable l, pos), pos) ]),
+      @@ ( Mir.FunctionCall (AbsFunc, [ (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos) ]),
            pos )
   | Call (Cast, [ l ]) ->
-      Mvg.Binop
-        ( (Ast.Add, pos),
-          (translate_mpp_expr p ctx (Mpp_ast.Variable l, pos), pos),
-          (Mvg.Literal (Float 0.), pos) )
+      Mir.Binop
+        ( (Mast.Add, pos),
+          (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos),
+          (Mir.Literal (Float 0.), pos) )
   | Call (DepositDefinedVariables, []) -> Pos.unmark @@ cond_DepositDefinedVariables p pos
   | Call (TaxbenefitCeiledVariables, []) -> Pos.unmark @@ cond_TaxbenefitCeiledVariables p pos
   | Call (TaxbenefitDefinedVariables, []) -> Pos.unmark @@ cond_TaxbenefitDefinedVariables p pos
@@ -185,13 +185,13 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
     (ctx : translation_ctx) stmt : translation_ctx * Bir.stmt list =
   let pos = Pos.get_position stmt in
   match Pos.unmark stmt with
-  | Mpp_ast.Assign (Local l, expr) ->
+  | Mpp_ir.Assign (Local l, expr) ->
       let ctx, new_l =
         match StringMap.find_opt l ctx.new_variables with
         | None ->
             let new_l =
-              Mvg.Variable.new_var (l, pos) None ("", pos)
-                ({ rule_number = -1; seq_number = -1; pos } : Mvg.execution_number)
+              Mir.Variable.new_var (l, pos) None ("", pos)
+                ({ rule_number = -1; seq_number = -1; pos } : Mir.execution_number)
                 ~attributes:[] ~is_income:false
             in
             let ctx = { ctx with new_variables = StringMap.add l new_l ctx.new_variables } in
@@ -210,10 +210,10 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
                  } ))
             stmt;
         ] )
-  | Mpp_ast.Assign (Mbased (var, _), expr) ->
+  | Mpp_ir.Assign (Mbased (var, _), expr) ->
       ( {
           ctx with
-          variables_used_as_inputs = Mvg.VariableMap.add var () ctx.variables_used_as_inputs;
+          variables_used_as_inputs = Mir.VariableMap.add var () ctx.variables_used_as_inputs;
         },
         [
           Pos.same_pos_as
@@ -222,11 +222,11 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
                  {
                    var_definition = SimpleVar (translate_mpp_expr m_program ctx expr, pos);
                    var_typ = None;
-                   var_io = (Mvg.VariableMap.find var m_program.ip_program.program_vars).var_io;
+                   var_io = (Mir.VariableMap.find var m_program.ip_program.program_vars).var_io;
                  } ))
             stmt;
         ] )
-  | Mpp_ast.Conditional (e, t, f) ->
+  | Mpp_ir.Conditional (e, t, f) ->
       let e' = translate_mpp_expr m_program ctx e in
       let ctx1, rt' = translate_mpp_stmts mpp_program m_program func_args ctx t in
       let ctx2, rf' =
@@ -237,25 +237,25 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       ( {
           ctx2 with
           variables_used_as_inputs =
-            Mvg.VariableMap.union
+            Mir.VariableMap.union
               (fun _ _ _ -> Some ())
               ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
         },
         [ Pos.same_pos_as (Bir.SConditional (e', rt', rf')) stmt ] )
-  | Mpp_ast.Delete (Mbased (var, _)) ->
+  | Mpp_ir.Delete (Mbased (var, _)) ->
       ( ctx,
         [
           Pos.same_pos_as
             (Bir.SAssign
                ( var,
                  {
-                   var_definition = SimpleVar (Mvg.Literal Undefined, pos);
+                   var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
-                   var_io = (Mvg.VariableMap.find var m_program.ip_program.program_vars).var_io;
+                   var_io = (Mir.VariableMap.find var m_program.ip_program.program_vars).var_io;
                  } ))
             stmt;
         ] )
-  | Mpp_ast.Delete (Local l) ->
+  | Mpp_ir.Delete (Local l) ->
       let var = StringMap.find l ctx.new_variables in
       ( ctx,
         [
@@ -263,23 +263,23 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
             (Bir.SAssign
                ( var,
                  {
-                   var_definition = SimpleVar (Mvg.Literal Undefined, pos);
+                   var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
                    var_io = Regular;
                  } ))
             stmt;
         ] )
-  | Mpp_ast.Expr (Call (MppFunction f, args), _) ->
-      let real_args = match args with [ Mpp_ast.Local "outputs" ] -> func_args | _ -> args in
+  | Mpp_ir.Expr (Call (MppFunction f, args), _) ->
+      let real_args = match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args in
       translate_mpp_function mpp_program m_program
-        (List.find (fun decl -> decl.Mpp_ast.name = f) mpp_program)
+        (List.find (fun decl -> decl.Mpp_ir.name = f) mpp_program)
         real_args ctx
-  | Mpp_ast.Expr (Call (Program, args), _) ->
-      let real_args = match args with [ Mpp_ast.Local "outputs" ] -> func_args | _ -> args in
+  | Mpp_ir.Expr (Call (Program, args), _) ->
+      let real_args = match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args in
       let m_program =
         reset_and_add_outputs m_program
           (List.map
-             (function Mpp_ast.Mbased (s, _) -> Pos.unmark s.Mvg.Variable.name | Local l -> l)
+             (function Mpp_ir.Mbased (s, _) -> Pos.unmark s.Mir.Variable.name | Local l -> l)
              real_args)
       in
       let m_program =
@@ -287,7 +287,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
           m_program with
           ip_program =
             Interpreter.replace_undefined_with_input_variables m_program.ip_program
-              (Mvg.VariableMap.map (fun () -> Mvg.Undefined) ctx.variables_used_as_inputs);
+              (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
       let exec_order = m_program.ip_utils.utilities_execution_order in
@@ -296,18 +296,18 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
           (fun var ->
             try
               let vdef =
-                Mvg.VariableMap.find var m_program.ip_program.program_vars
+                Mir.VariableMap.find var m_program.ip_program.program_vars
                 (* should be a verification condition *)
               in
               match vdef.var_definition with
               | InputVar -> None
-              | _ -> Some (Bir.SAssign (var, vdef), var.Mvg.Variable.execution_number.pos)
+              | _ -> Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
             with Not_found -> None)
           exec_order
       in
       (ctx, inlined_program)
-  | Mpp_ast.Partition (filter, body) ->
-      let func_of_filter = match filter with Mpp_ast.VarIsTaxBenefit -> var_is_ "avfisc" in
+  | Mpp_ir.Partition (filter, body) ->
+      let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
       let ctx, partition_pre, partition_post =
         generate_partition mpp_program m_program func_args func_of_filter pos ctx
       in
@@ -315,27 +315,27 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       (ctx, partition_pre @ body @ partition_post)
   | _ -> assert false
 
-and translate_mpp_stmts (mpp_program : Mpp_ast.mpp_compute list)
-    (m_program : Interpreter.interpretable_program) (func_args : Mpp_ast.scoped_var list)
-    (ctx : translation_ctx) (stmts : Mpp_ast.mpp_stmt list) : translation_ctx * Bir.stmt list =
+and translate_mpp_stmts (mpp_program : Mpp_ir.mpp_compute list)
+    (m_program : Interpreter.interpretable_program) (func_args : Mpp_ir.scoped_var list)
+    (ctx : translation_ctx) (stmts : Mpp_ir.mpp_stmt list) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
       let ctx, stmt = translate_mpp_stmt mpp_program m_program func_args ctx stmt in
       (ctx, stmts @ stmt))
     (ctx, []) stmts
 
-and generate_partition mpp_program m_program func_args (filter : Mvg.Variable.t -> bool)
+and generate_partition mpp_program m_program func_args (filter : Mir.Variable.t -> bool)
     (pos : Pos.t) (ctx : translation_ctx) : translation_ctx * Bir.stmt list * Bir.stmt list =
   let vars_to_move =
-    Mvg.VariableMap.fold
+    Mir.VariableMap.fold
       (fun var _ acc -> if filter var then var :: acc else acc)
       m_program.ip_program.program_vars []
   in
   let ctx, mpp_pre, mpp_post =
     List.fold_left
       (fun (ctx, stmts_pre, stmts_post) var ->
-        let shadow_var_name = "_" ^ Pos.unmark var.Mvg.Variable.name in
-        let open Mpp_ast in
+        let shadow_var_name = "_" ^ Pos.unmark var.Mir.Variable.name in
+        let open Mpp_ir in
         let shadow_var = Local shadow_var_name in
         let var = Mbased (var, Output) in
         ( ctx,
@@ -349,7 +349,7 @@ and generate_partition mpp_program m_program func_args (filter : Mvg.Variable.t 
   (ctx, pre, post)
 
 let create_combined_program (m_program : Interpreter.interpretable_program)
-    (mpp_program : Mpp_ast.mpp_program) : Bir.program =
+    (mpp_program : Mpp_ir.mpp_program) : Bir.program =
   let mpp_program = List.rev mpp_program in
   {
     statements =

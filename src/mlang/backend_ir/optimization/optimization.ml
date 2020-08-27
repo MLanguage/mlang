@@ -15,22 +15,22 @@
     variables as input, most of them are undefined all the time. *)
 
 (** Unused variables are determined by areachability analysis from the outputs *)
-let remove_unused_variables (program : Mvg.program) : Mvg.program =
+let remove_unused_variables (program : Mir.program) : Mir.program =
   let g = Dependency.create_dependency_graph program in
   let is_output var =
-    try (Mvg.VariableMap.find var program.program_vars).Mvg.var_io = Mvg.Output
+    try (Mir.VariableMap.find var program.program_vars).Mir.var_io = Mir.Output
     with Not_found ->
-      let _ = Mvg.VariableMap.find var program.program_conds in
+      let _ = Mir.VariableMap.find var program.program_conds in
       true
   in
   let is_necessary_to_output = Dependency.OutputToInputReachability.analyze is_output g in
   let program =
     {
       program with
-      Mvg.program_vars =
-        Mvg.VariableMap.filter (fun var _ -> is_necessary_to_output var) program.program_vars;
-      Mvg.program_conds =
-        Mvg.VariableMap.filter
+      Mir.program_vars =
+        Mir.VariableMap.filter (fun var _ -> is_necessary_to_output var) program.program_vars;
+      Mir.program_conds =
+        Mir.VariableMap.filter
           (fun var _ ->
             List.for_all (fun used -> is_necessary_to_output used) (Dependency.DepGraph.pred g var))
           program.program_conds;
@@ -40,9 +40,9 @@ let remove_unused_variables (program : Mvg.program) : Mvg.program =
 
 (** Right now, the interpretation model for variables defined circularly is not properly defined. We
     have to repeat partial evaluation until all the undefined loops have been reduced. *)
-let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.program =
+let optimize (program : Mir.program) (dep_graph : Dependency.DepGraph.t) : Mir.program =
   Cli.debug_print "Optimizing program with %d variables..."
-    (Mvg.VariableMap.cardinal program.program_vars);
+    (Mir.VariableMap.cardinal program.program_vars);
   (* TODO: fix when cycles interpretation is correct *)
   let program = ref program in
   let nb_removed = ref max_int in
@@ -50,31 +50,31 @@ let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.p
   let current_progress, finish = Cli.create_progress_bar "Optimizing program" in
   ( try
       while !nb_removed > 0 do
-        let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
+        let remaining_vars = Mir.VariableMap.cardinal !program.program_vars in
         current_progress
           (Format.asprintf "%d variables, performing partial evaluation..." remaining_vars);
-        let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
+        let remaining_vars = Mir.VariableMap.cardinal !program.program_vars in
         let new_program = Partial_evaluation.partially_evaluate !program !dep_graph in
         current_progress
           (Format.asprintf "%d variables, performing global value numbering..." remaining_vars);
-        let remaining_vars = Mvg.VariableMap.cardinal new_program.program_vars in
+        let remaining_vars = Mir.VariableMap.cardinal new_program.program_vars in
         dep_graph := Dependency.create_dependency_graph new_program;
         current_progress
           (Format.asprintf "%d variables, removing unused variables..." remaining_vars);
         let new_program = remove_unused_variables new_program in
         dep_graph := Dependency.create_dependency_graph new_program;
-        let remaining_vars = Mvg.VariableMap.cardinal !program.program_vars in
+        let remaining_vars = Mir.VariableMap.cardinal !program.program_vars in
         let new_program = Global_value_numbering.optimize new_program !dep_graph in
         current_progress
           (Format.asprintf "%d variables, performing partial evaluation..." remaining_vars);
         let new_program = Partial_evaluation.partially_evaluate new_program !dep_graph in
         let new_nb_removed =
-          Mvg.VariableMap.cardinal !program.program_vars
-          - Mvg.VariableMap.cardinal new_program.program_vars
+          Mir.VariableMap.cardinal !program.program_vars
+          - Mir.VariableMap.cardinal new_program.program_vars
         in
         current_progress
           (Format.asprintf "removing %d unused variables out of %d..." new_nb_removed
-             (Mvg.VariableMap.cardinal !program.program_vars));
+             (Mir.VariableMap.cardinal !program.program_vars));
         program := new_program;
         nb_removed := new_nb_removed
       done
@@ -88,7 +88,7 @@ let optimize (program : Mvg.program) (dep_graph : Dependency.DepGraph.t) : Mvg.p
   finish "completed!";
   let program = !program in
   Cli.debug_print "Optimziation resulted in number of variables down to %d!"
-    (Mvg.VariableMap.cardinal program.program_vars);
+    (Mir.VariableMap.cardinal program.program_vars);
   let dep_graph = Dependency.create_dependency_graph program in
   Dependency.print_dependency_graph !Cli.dep_graph_file dep_graph program;
   program

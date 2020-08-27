@@ -1,8 +1,8 @@
 open Format
-open Mpp_ast
+open Mpp_ir
 
 let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
-  fprintf fmt "%s" (match sv with Local s -> s | Mbased (v, _) -> Pos.unmark v.Mvg.Variable.name)
+  fprintf fmt "%s" (match sv with Local s -> s | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
@@ -16,7 +16,7 @@ let format_callable (fmt : formatter) (f : mpp_callable) =
     | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
     | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables" )
 
-let format_binop (fmt : formatter) (b : Cst.binop) : unit =
+let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
   fprintf fmt "%s"
     ( match b with
     | And -> "and"

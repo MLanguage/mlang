@@ -22,7 +22,7 @@ let mk_position sloc = { Pos.pos_filename = !current_file; Pos.pos_loc = sloc }
 (** {1 Frontend variable names}*)
 
 (** Checks whether the string is entirely capitalized *)
-let parse_variable_name sloc (s : string) : Ast.variable_name =
+let parse_variable_name sloc (s : string) : Mast.variable_name =
   if not (String.equal (String.uppercase_ascii s) s) then
     E.parser_error sloc "invalid variable name"
   else s
@@ -37,7 +37,7 @@ let dup_exists l =
   dup_consecutive (List.sort sort_on_third l)
 
 (** Parse variable with parameters, parameters have to be lowercase letters *)
-let parse_variable_generic_name sloc (s : string) : Ast.variable_generic_name =
+let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
   let parameters = ref [] in
   for i = String.length s - 1 downto 0 do
     let p = s.[i] in
@@ -50,41 +50,41 @@ let parse_variable_generic_name sloc (s : string) : Ast.variable_generic_name =
   done;
   if dup_exists !parameters then
     E.parser_error sloc "variable parameters should have distinct names";
-  { Ast.parameters = !parameters; Ast.base = s }
+  { Mast.parameters = !parameters; Mast.base = s }
 
 (** Checks whether the variable contains parameters *)
 let parse_variable sloc (s : string) =
-  try Ast.Normal (parse_variable_name sloc s)
+  try Mast.Normal (parse_variable_name sloc s)
   with E.ParsingError _ -> (
-    try Ast.Generic (parse_variable_generic_name sloc s)
+    try Mast.Generic (parse_variable_generic_name sloc s)
     with E.ParsingError _ -> E.parser_error sloc "invalid variable name" )
 
 (** A parsed variable can be a regular variable or an integer literal *)
-type parse_val = ParseVar of Ast.variable | ParseInt of int
+type parse_val = ParseVar of Mast.variable | ParseInt of int
 
 let parse_variable_or_int sloc (s : string) : parse_val =
   try ParseInt (int_of_string s)
   with Failure _ -> (
-    try ParseVar (Ast.Normal (parse_variable_name sloc s))
+    try ParseVar (Mast.Normal (parse_variable_name sloc s))
     with E.ParsingError _ -> (
-      try ParseVar (Ast.Generic (parse_variable_generic_name sloc s))
+      try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
       with E.ParsingError _ -> E.parser_error sloc "invalid variable name" ) )
 
 (** Table index can be integer or [X], the generic table index variable *)
-let parse_table_index sloc (s : string) : Ast.table_index =
-  try Ast.LiteralIndex (int_of_string s)
+let parse_table_index sloc (s : string) : Mast.table_index =
+  try Mast.LiteralIndex (int_of_string s)
   with Failure _ -> (
-    try Ast.SymbolIndex (parse_variable sloc s)
+    try Mast.SymbolIndex (parse_variable sloc s)
     with E.ParsingError _ ->
       Format.printf "s: %s, %b\n" s (String.equal s "X");
       E.parser_error sloc "table index should be an integer" )
 
 (**{1 Literal parsing}*)
 
-let parse_literal sloc (s : string) : Ast.literal =
-  try Ast.Float (float_of_string s) with Failure _ -> Ast.Variable (parse_variable sloc s)
+let parse_literal sloc (s : string) : Mast.literal =
+  try Mast.Float (float_of_string s) with Failure _ -> Mast.Variable (parse_variable sloc s)
 
-let parse_func_name _ (s : string) : Ast.func_name = s
+let parse_func_name _ (s : string) : Mast.func_name = s
 
 let parse_int sloc (s : string) : int =
   try int_of_string s with Failure _ -> E.parser_error sloc "should be an integer"

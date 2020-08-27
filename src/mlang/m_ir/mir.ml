@@ -67,7 +67,7 @@ module Variable = struct
     alias : string option;  (** Input variable have an alias *)
     id : int;  (** Each variable has an unique ID *)
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
-    attributes : (Ast.input_variable_attribute Pos.marked * Ast.literal Pos.marked) list;
+    attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
   }
 
@@ -80,7 +80,7 @@ module Variable = struct
 
   let new_var (name : string Pos.marked) (alias : string option) (descr : string Pos.marked)
       (execution_number : execution_number)
-      ~(attributes : (Ast.input_variable_attribute Pos.marked * Ast.literal Pos.marked) list)
+      ~(attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list)
       ~(is_income : bool) : t =
     { name; id = fresh_id (); descr; alias; execution_number; attributes; is_income }
 
@@ -149,9 +149,9 @@ class ['self] marked_iter =
   end
 
 type expression =
-  | Unop of (Ast.unop[@opaque]) * expression Pos.marked
-  | Comparison of (Ast.comp_op[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
-  | Binop of (Ast.binop[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
+  | Unop of (Mast.unop[@opaque]) * expression Pos.marked
+  | Comparison of (Mast.comp_op[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
+  | Binop of (Mast.binop[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
   | Index of (Variable.t[@opaque]) Pos.marked * expression Pos.marked
   | Conditional of expression Pos.marked * expression Pos.marked * expression Pos.marked
   | FunctionCall of (func[@opaque]) * expression Pos.marked list
@@ -250,7 +250,7 @@ module Error = struct
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
-    typ : Ast.error_typ;
+    typ : Mast.error_typ;
   }
 
   let counter : int ref = ref 0
@@ -260,8 +260,8 @@ module Error = struct
     counter := !counter + 1;
     v
 
-  let new_error (name : string Pos.marked) (descr : string Pos.marked) (error_typ : Ast.error_typ) :
-      t =
+  let new_error (name : string Pos.marked) (descr : string Pos.marked) (error_typ : Mast.error_typ)
+      : t =
     { name; id = fresh_id (); descr; typ = error_typ }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
@@ -278,7 +278,7 @@ type condition_data = { cond_expr : expression Pos.marked; cond_errors : (Error.
     }]
 
 type idmap = Variable.t list Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type: Mvg.Variable.t}, so we need to
+(** We translate string variables into first-class unique {!type: Mir.Variable.t}, so we need to
     keep a mapping between the two. A name is mapped to a list of variables because variables can be
     redefined in different rules *)
 

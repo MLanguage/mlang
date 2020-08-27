@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 module ValueNumber = struct
   type t = int
@@ -30,9 +30,9 @@ module ValueNumberMap = Map.Make (ValueNumber)
 
 module NumberExp = struct
   type t =
-    | Comparison of Ast.comp_op * ValueNumber.t * ValueNumber.t
-    | Binop of Ast.binop * ValueNumber.t * ValueNumber.t
-    | Unop of Ast.unop * ValueNumber.t
+    | Comparison of Mast.comp_op * ValueNumber.t * ValueNumber.t
+    | Binop of Mast.binop * ValueNumber.t * ValueNumber.t
+    | Unop of Mast.unop * ValueNumber.t
     | Index of Variable.t * ValueNumber.t
     | Conditional of ValueNumber.t * ValueNumber.t * ValueNumber.t
     | FunctionCall of func * ValueNumber.t list

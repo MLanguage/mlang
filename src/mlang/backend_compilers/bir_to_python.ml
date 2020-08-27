@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 let undefined_class_prelude : string =
   "class Undefined:\n\
@@ -90,25 +90,25 @@ let undefined_class_prelude : string =
 
 let none_value = "Undefined()"
 
-let generate_comp_op (op : Ast.comp_op) : string =
+let generate_comp_op (op : Mast.comp_op) : string =
   match op with
-  | Ast.Gt -> ">"
-  | Ast.Gte -> ">="
-  | Ast.Lt -> "<"
-  | Ast.Lte -> "<="
-  | Ast.Eq -> "=="
-  | Ast.Neq -> "!="
+  | Mast.Gt -> ">"
+  | Mast.Gte -> ">="
+  | Mast.Lt -> "<"
+  | Mast.Lte -> "<="
+  | Mast.Eq -> "=="
+  | Mast.Neq -> "!="
 
-let generate_binop (op : Ast.binop) : string =
+let generate_binop (op : Mast.binop) : string =
   match op with
-  | Ast.And -> "and"
-  | Ast.Or -> "or"
-  | Ast.Add -> "+"
-  | Ast.Sub -> "-"
-  | Ast.Mul -> "*"
-  | Ast.Div -> "/"
+  | Mast.And -> "and"
+  | Mast.Or -> "or"
+  | Mast.Add -> "+"
+  | Mast.Sub -> "-"
+  | Mast.Mul -> "*"
+  | Mast.Div -> "/"
 
-let generate_unop (op : Ast.unop) : string = match op with Ast.Not -> "not" | Ast.Minus -> "-"
+let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "not" | Mast.Minus -> "-"
 
 let generate_variable (var : Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
@@ -116,11 +116,11 @@ let generate_variable (var : Variable.t) : string =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Ast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mvg.rule_number
-        var.Variable.execution_number.Mvg.seq_number
+      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
+        var.Variable.execution_number.Mir.seq_number
   in
   if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then "var_" ^ v else v
 
@@ -137,7 +137,7 @@ let rec generate_python_expr (e : expression) : string =
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
-  | Binop ((Ast.Div, _), e1, e2) -> (
+  | Binop ((Mast.Div, _), e1, e2) -> (
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
       match Pos.unmark e2 with
@@ -145,53 +145,54 @@ let rec generate_python_expr (e : expression) : string =
   (* This special case has been added, because otherwise huge sums would produce too many
      parenthesis, causing the Python parser to crash *)
   | Binop
-      ( (Ast.Add, _),
+      ( (Mast.Add, _),
         e1,
         ( Binop
-            ( (Ast.Add, _),
+            ( (Mast.Add, _),
               e2,
               ( Binop
-                  ( (Ast.Add, _),
+                  ( (Mast.Add, _),
                     e3,
                     ( Binop
-                        ( (Ast.Add, _),
+                        ( (Mast.Add, _),
                           e4,
                           ( Binop
-                              ( (Ast.Add, _),
+                              ( (Mast.Add, _),
                                 e5,
                                 ( Binop
-                                    ( (Ast.Add, _),
+                                    ( (Mast.Add, _),
                                       e6,
                                       ( Binop
-                                          ( (Ast.Add, _),
+                                          ( (Mast.Add, _),
                                             e7,
                                             ( Binop
-                                                ( (Ast.Add, _),
+                                                ( (Mast.Add, _),
                                                   e8,
                                                   ( Binop
-                                                      ( (Ast.Add, _),
+                                                      ( (Mast.Add, _),
                                                         e9,
                                                         ( Binop
-                                                            ( (Ast.Add, _),
+                                                            ( (Mast.Add, _),
                                                               e10,
                                                               ( Binop
-                                                                  ( (Ast.Add, _),
+                                                                  ( (Mast.Add, _),
                                                                     e11,
                                                                     ( Binop
-                                                                        ( (Ast.Add, _),
+                                                                        ( (Mast.Add, _),
                                                                           e12,
                                                                           ( Binop
-                                                                              ( (Ast.Add, _),
+                                                                              ( (Mast.Add, _),
                                                                                 e13,
                                                                                 ( Binop
-                                                                                    ( (Ast.Add, _),
+                                                                                    ( (Mast.Add, _),
                                                                                       e14,
                                                                                       ( Binop
-                                                                                          ( ( Ast.Add,
+                                                                                          ( ( Mast
+                                                                                              .Add,
                                                                                               _ ),
                                                                                             e15,
                                                                                             ( Binop
-                                                                                                ( ( Ast
+                                                                                                ( ( Mast
                                                                                                     .Add,
                                                                                                     _
                                                                                                   ),
@@ -199,7 +200,7 @@ let rec generate_python_expr (e : expression) : string =
                                                                                                   ( Binop
                                                                                                     ( 
                                                                                                     ( 
-                                                                                                    Ast
+                                                                                                    Mast
                                                                                                     .Add,
                                                                                                     _
                                                                                                     ),
@@ -208,7 +209,7 @@ let rec generate_python_expr (e : expression) : string =
                                                                                                     Binop
                                                                                                     ( 
                                                                                                     ( 
-                                                                                                    Ast
+                                                                                                    Mast
                                                                                                     .Add,
                                                                                                     _
                                                                                                     ),
@@ -217,7 +218,7 @@ let rec generate_python_expr (e : expression) : string =
                                                                                                     Binop
                                                                                                     ( 
                                                                                                     ( 
-                                                                                                    Ast
+                                                                                                    Mast
                                                                                                     .Add,
                                                                                                     _
                                                                                                     ),
@@ -273,30 +274,30 @@ let rec generate_python_expr (e : expression) : string =
          + %s + %s)"
         s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20
   | Binop
-      ( (Ast.Add, _),
+      ( (Mast.Add, _),
         e1,
         ( Binop
-            ( (Ast.Add, _),
+            ( (Mast.Add, _),
               e2,
               ( Binop
-                  ( (Ast.Add, _),
+                  ( (Mast.Add, _),
                     e3,
                     ( Binop
-                        ( (Ast.Add, _),
+                        ( (Mast.Add, _),
                           e4,
                           ( Binop
-                              ( (Ast.Add, _),
+                              ( (Mast.Add, _),
                                 e5,
                                 ( Binop
-                                    ( (Ast.Add, _),
+                                    ( (Mast.Add, _),
                                       e6,
                                       ( Binop
-                                          ( (Ast.Add, _),
+                                          ( (Mast.Add, _),
                                             e7,
                                             ( Binop
-                                                ( (Ast.Add, _),
+                                                ( (Mast.Add, _),
                                                   e8,
-                                                  (Binop ((Ast.Add, _), e9, e10), _) ),
+                                                  (Binop ((Mast.Add, _), e9, e10), _) ),
                                               _ ) ),
                                         _ ) ),
                                   _ ) ),
@@ -317,9 +318,10 @@ let rec generate_python_expr (e : expression) : string =
       Format.asprintf "(%s + %s + %s + %s + %s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6 s7 s8 s9
         s10
   | Binop
-      ( (Ast.Add, _),
+      ( (Mast.Add, _),
         e1,
-        ( Binop ((Ast.Add, _), e2, (Binop ((Ast.Add, _), e3, (Binop ((Ast.Add, _), e4, e5), _)), _)),
+        ( Binop
+            ((Mast.Add, _), e2, (Binop ((Mast.Add, _), e3, (Binop ((Mast.Add, _), e4, e5), _)), _)),
           _ ) ) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in

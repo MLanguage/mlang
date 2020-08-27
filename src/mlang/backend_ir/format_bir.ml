@@ -17,16 +17,16 @@ open Bir
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdata) ->
-      Format.fprintf fmt "%s = %a" (Pos.unmark v.Mvg.Variable.name) Format_mvg.format_variable_def
+      Format.fprintf fmt "%s = %a" (Pos.unmark v.Mir.Variable.name) Format_mir.format_variable_def
         vdata.var_definition
   | SConditional (cond, t, []) ->
-      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" Format_mvg.format_expression cond format_stmts
+      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" Format_mir.format_expression cond format_stmts
         t
   | SConditional (cond, t, f) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
-        Format_mvg.format_expression cond format_stmts t format_stmts f
+        Format_mir.format_expression cond format_stmts t format_stmts f
 
 and format_stmts fmt stmts = Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
 let format_new_program fmt (p : program) =
-  Format.fprintf fmt "%a\n\n%a" format_stmts p.statements Format_mvg.format_program_conds p.conds
+  Format.fprintf fmt "%a\n\n%a" format_stmts p.statements Format_mir.format_program_conds p.conds

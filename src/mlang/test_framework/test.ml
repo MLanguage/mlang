@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 open Tast
 
 let parse_file (test_name : string) : test_file =
@@ -44,24 +44,24 @@ let parse_file (test_name : string) : test_file =
       f
   | None -> assert false
 
-let to_ast_literal (value : Tast.literal) : Ast.literal =
+let to_ast_literal (value : Tast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
-let find_var_of_name (p : Mvg.program) (name : string) : Variable.t =
+let find_var_of_name (p : Mir.program) (name : string) : Variable.t =
   try
     List.hd
       (List.sort
-         (fun v1 v2 -> compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+         (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
   with Not_found ->
     let name = find_var_name_by_alias p name in
     List.hd
       (List.sort
-         (fun v1 v2 -> compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+         (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
-    Interface.mvg_function * condition_data VariableMap.t * Mvg.literal VariableMap.t =
+let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
+    Interface.mvg_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, _) ->
@@ -80,10 +80,10 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
          (fun (var, value, pos) ->
            (* we allow a difference of 0 between the control value and the result *)
            let first_exp =
-             ( Ast.Comparison
+             ( Mast.Comparison
                  ( (Lte, pos),
-                   ( Ast.Binop
-                       ( (Ast.Sub, pos),
+                   ( Mast.Binop
+                       ( (Mast.Sub, pos),
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
@@ -91,17 +91,17 @@ let to_mvg_function_and_inputs (program : Mvg.program) (t : test_file) :
                pos )
            in
            let second_exp =
-             ( Ast.Comparison
+             ( Mast.Comparison
                  ( (Gte, pos),
-                   ( Ast.Binop
-                       ( (Ast.Sub, pos),
+                   ( Mast.Binop
+                       ( (Mast.Sub, pos),
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
                    (Literal (Float 0.), pos) ),
                pos )
            in
-           (Ast.Binop ((Ast.And, pos), first_exp, second_exp), pos))
+           (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
          t.rp)
   in
   ( {
@@ -134,7 +134,7 @@ let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
         VariableMap.mapi
           (fun var data ->
             if VariableMap.mem var outputs then
-              match data.Mvg.var_io with
+              match data.Mir.var_io with
               | Input | Output -> data
               | Regular -> { data with var_io = Output }
             else data)
@@ -143,7 +143,7 @@ let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
   in
   { p with ip_program = program }
 
-let check_test (p : Mvg.program) mpp (test_name : string) =
+let check_test (p : Mir.program) mpp (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -159,8 +159,8 @@ let check_test (p : Mvg.program) mpp (test_name : string) =
     }
   in
   let p = add_test_conds_usage_to_outputs p test_conds in
-  let combined_program = Mpp_ast_to_mvg.create_combined_program p mpp in
-  (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mvg.format_new_program
+  let combined_program = Mpp_ir_to_bir.create_combined_program p mpp in
+  (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mir.format_new_program
      combined_program; *)
   let ctx =
     Interpreter.evaluate_program combined_program input_file (Interpreter.empty_ctx p.ip_program)
@@ -200,12 +200,12 @@ let check_test (p : Mvg.program) mpp (test_name : string) =
                        [
                          ( match Pos.unmark cond.cond_expr with
                          | Unop
-                             ( Ast.Not,
-                               ( Mvg.Binop
-                                   ( (Ast.And, _),
+                             ( Mast.Not,
+                               ( Mir.Binop
+                                   ( (Mast.And, _),
                                      ( Comparison
-                                         ( (Ast.Lte, _),
-                                           (Mvg.Binop ((Ast.Sub, _), (Var var, _), _), _),
+                                         ( (Mast.Lte, _),
+                                           (Mir.Binop ((Mast.Sub, _), (Var var, _), _), _),
                                            (_, _) ),
                                        _ ),
                                      _ ),
@@ -227,7 +227,7 @@ let check_test (p : Mvg.program) mpp (test_name : string) =
     end
     else raise (Interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mvg.program) mpp (test_dir : string) =
+let check_all_tests (p : Mir.program) mpp (test_dir : string) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -251,11 +251,11 @@ let check_all_tests (p : Mvg.program) mpp (test_dir : string) =
         match (bindings, Pos.unmark expr) with
         | ( [ (v, Interpreter.SimpleVar l1) ],
             Unop
-              ( Ast.Not,
-                ( Mvg.Binop
-                    ( (Ast.And, _),
+              ( Mast.Not,
+                ( Mir.Binop
+                    ( (Mast.And, _),
                       ( Comparison
-                          ((Ast.Lte, _), (Mvg.Binop ((Ast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+                          ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
                         _ ),
                       _ ),
                   _ ) ) ) ->

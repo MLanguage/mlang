@@ -8,17 +8,17 @@ intermediate representations going fro mthe source code to the target backend.
 First, the source code is parsed according to the Menhir grammar specified in
 {!module: Mlang.Parser}. The grammar is not exactly LR(1) so we rely on {!module: Mlang.Parse_utils}
 to backtrack, especially on symbol parsing. The target intermediate representation
-is {!module: Mlang.Ast}, which is very close to the concrete syntax and can be
-printed using {!module: Mlang.Format_ast}.
+is {!module: Mlang.Mast}, which is very close to the concrete syntax and can be
+printed using {!module: Mlang.Format_mast}.
 
-{!modules: Mlang.Ast Mlang.Format_ast Mlang.Parser Mlang.Parse_utils }
+{!modules: Mlang.Mast Mlang.Format_mast Mlang.Parser Mlang.Parse_utils }
 
 {1 M Variable Graph}
 
 The M language has a lot of weird syntactic sugars and constructs linked to its
-usage inside multiple DGFiP applications. {!module: Mlang.Ast_to_mvg } extracts from the
+usage inside multiple DGFiP applications. {!module: Mlang.Mast_to_mvg } extracts from the
 AST the computational core corresponding to a DGFiP application into the M Variable
-Graph ({!module: Mlang.Mvg}), which consists basically of a flat map of all the definitions of
+Graph ({!module: Mlang.Mir}), which consists basically of a flat map of all the definitions of
 the variables used in the application. The type system of M is very primitive,
 and basically all programs typecheck ; however {!module: Mlang.Typechecker} provides
 a bidirectional typechecking algorithm with lattice-based unificiation (with {!module: Mlang.Union_find})
@@ -28,7 +28,7 @@ At this point, the {!module: Mlang.Dependency} modules interprets the MVG as a f
 graph and computes various reachability and cycle analysis in order to determine
 the computational flow inside the program.
 
-{!modules: Mlang.Mvg Mlang.Ast_to_mvg Mlang.Format_mvg Mlang.Typechecker Mlang.Union_find Mlang.Dependency }
+{!modules: Mlang.Mir Mlang.Mast_to_mvg Mlang.Format_mir Mlang.Typechecker Mlang.Union_find Mlang.Dependency }
 
 {1 Optimizations }
 
@@ -50,7 +50,7 @@ on top of an existing M program.
 
 Work in progress.
 
-{!modules: Mlang.Z3_encoding Mlang.Format_z3 Mlang.Mvg_to_z3}
+{!modules: Mlang.Z3_encoding Mlang.Format_z3 Mlang.Bir_to_z3}
 
 {1 Utils }
 

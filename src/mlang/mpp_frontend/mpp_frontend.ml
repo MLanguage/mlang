@@ -1,11 +1,11 @@
 (* FIXME: scope is only to know variables stored in ctx by previous computation. We don't check that
    local variables read have been defined previously *)
-open Mpp_ast
+open Mpp_ir
 
-let to_scoped_var ?(scope = Input) (p : Mvg.program) (var : Cst.var) : scoped_var =
+let to_scoped_var ?(scope = Input) (p : Mir.program) (var : Mpp_ast.var) : scoped_var =
   if String.uppercase_ascii var = var then
     (* we have an MBased variable *)
-    Mbased (Mvg.find_var_by_name p var, scope)
+    Mbased (Mir.find_var_by_name p var, scope)
   else Local var
 
 let to_mpp_callable (cname : string) (translated_names : string list) : mpp_callable =
@@ -21,8 +21,8 @@ let to_mpp_callable (cname : string) (translated_names : string list) : mpp_call
       if List.mem x translated_names then MppFunction x
       else raise (Errors.ParsingError (Format.asprintf "unknown callable %s" x))
 
-let rec to_mpp_expr (p : Mvg.program) (translated_names : mpp_compute_name list)
-    (scope : mpp_compute_name list) (e : Cst.expr) : mpp_expr * Cst.var list =
+let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
+    (scope : mpp_compute_name list) (e : Mpp_ast.expr) : mpp_expr * Mpp_ast.var list =
   let e', scope =
     match Pos.unmark e with
     | Constant i -> (Constant i, scope)
@@ -49,8 +49,8 @@ let to_mpp_filter (f : string) : mpp_filter =
   if f = "var_is_taxbenefit" then VarIsTaxBenefit
   else raise (Errors.ParsingError (Format.asprintf "unknown filter %s" f))
 
-let rec to_mpp_stmt (p : Mvg.program) (translated_names : string list)
-    (scope : mpp_compute_name list) (stmt : Cst.stmt) : mpp_stmt * Cst.var list =
+let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
+    (scope : mpp_compute_name list) (stmt : Mpp_ast.stmt) : mpp_stmt * Mpp_ast.var list =
   let stmt', scope =
     match Pos.unmark stmt with
     | Assign (v, e) ->
@@ -70,8 +70,8 @@ let rec to_mpp_stmt (p : Mvg.program) (translated_names : string list)
   in
   (Pos.same_pos_as stmt' stmt, scope)
 
-and to_mpp_stmts (p : Mvg.program) (translated_names : mpp_compute_name list)
-    ?(scope : mpp_compute_name list = []) (stmts : Cst.stmt list) : mpp_stmt list =
+and to_mpp_stmts (p : Mir.program) (translated_names : mpp_compute_name list)
+    ?(scope : mpp_compute_name list = []) (stmts : Mpp_ast.stmt list) : mpp_stmt list =
   List.rev @@ fst
   @@ List.fold_left
        (fun (translated_stmts, scope) cstmt ->
@@ -79,21 +79,21 @@ and to_mpp_stmts (p : Mvg.program) (translated_names : mpp_compute_name list)
          (stmt :: translated_stmts, scope))
        ([], scope) stmts
 
-let cdef_to_adef (p : Mvg.program) (translated_names : mpp_compute_name list) (cdef : Cst.compute) :
-    Mpp_ast.mpp_compute =
-  let name = cdef.Cst.name in
+let cdef_to_adef (p : Mir.program) (translated_names : mpp_compute_name list)
+    (cdef : Mpp_ast.compute) : Mpp_ir.mpp_compute =
+  let name = cdef.Mpp_ast.name in
   assert (not @@ List.mem name translated_names);
   { name; args = []; (* FIXME *)
                      body = to_mpp_stmts p translated_names cdef.body }
 
-let cst_to_ast (c : Cst.program) (p : Mvg.program) : Mpp_ast.mpp_program =
+let cst_to_ast (c : Mpp_ast.program) (p : Mir.program) : Mpp_ir.mpp_program =
   List.rev @@ fst
   @@ List.fold_left
        (fun (mpp_acc, translated_names) cdef ->
-         (cdef_to_adef p translated_names cdef :: mpp_acc, cdef.Cst.name :: translated_names))
+         (cdef_to_adef p translated_names cdef :: mpp_acc, cdef.Mpp_ast.name :: translated_names))
        ([], []) c
 
-let process (ompp_file : string option) (p : Mvg.program) : mpp_program option =
+let process (ompp_file : string option) (p : Mir.program) : mpp_program option =
   match ompp_file with
   | None -> None
   | Some mpp_file -> (

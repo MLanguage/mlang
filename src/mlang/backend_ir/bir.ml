@@ -15,11 +15,11 @@
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Mvg.Variable.t * Mvg.variable_data
-  | SConditional of Mvg.expression * stmt list * stmt list
+  | SAssign of Mir.Variable.t * Mir.variable_data
+  | SConditional of Mir.expression * stmt list * stmt list
 
 type program = {
   statements : stmt list;
-  conds : Mvg.condition_data Mvg.VariableMap.t;
-  idmap : Mvg.idmap;
+  conds : Mir.condition_data Mir.VariableMap.t;
+  idmap : Mir.idmap;
 }

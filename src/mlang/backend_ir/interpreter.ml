@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 let repl_debug = ref false
 
@@ -29,12 +29,12 @@ let format_var_literal_with_var fmt ((var, vl) : Variable.t * var_literal) =
   match vl with
   | SimpleVar value ->
       Format.fprintf fmt "%s (%s): %a" (Pos.unmark var.Variable.name)
-        (Pos.unmark var.Variable.descr) Format_mvg.format_literal value
+        (Pos.unmark var.Variable.descr) Format_mir.format_literal value
   | TableVar (size, values) ->
       Format.fprintf fmt "%s (%s): Table (%d values)@\n" (Pos.unmark var.Variable.name)
         (Pos.unmark var.Variable.descr) size;
       List.iteri
-        (fun idx value -> Format.fprintf fmt "| %d -> %a\n" idx Format_mvg.format_literal value)
+        (fun idx value -> Format.fprintf fmt "| %d -> %a\n" idx Format_mir.format_literal value)
         (Array.to_list values)
 
 type ctx = {
@@ -50,8 +50,8 @@ let empty_ctx (p : program) : ctx =
       VariableMap.map
         (fun def ->
           match def.var_definition with
-          | Mvg.SimpleVar _ | InputVar -> SimpleVar Undefined
-          | Mvg.TableVar (size, _) -> TableVar (size, Array.make size Undefined))
+          | Mir.SimpleVar _ | InputVar -> SimpleVar Undefined
+          | Mir.TableVar (size, _) -> TableVar (size, Array.make size Undefined))
         p.program_vars;
     ctx_generic_index = None;
   }
@@ -64,7 +64,7 @@ let float_of_bool (b : bool) = if b then 1. else 0.
 
 let bool_of_float (f : float) : bool = not (f = 0.)
 
-let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
+let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
   Cli.warning_print
     "Starting interactive debugger. Please query the interpreter state for the values of \
      variables. Exit with \"quit\".@\n";
@@ -77,7 +77,7 @@ let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
       Format.printf ">> @?";
       let query = read_line () in
       try
-        let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
+        let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
         let vars =
           List.sort
             (fun var1 var2 ->
@@ -86,12 +86,12 @@ let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
         in
         List.iter
           (fun var ->
-            Format.printf "[%a %a] -> %a@\n" Format_mvg.format_execution_number_short
+            Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
               var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
               (fun fmt () ->
                 try
-                  Format_mvg.format_variable_def fmt
-                    (VariableMap.find var p.program_vars).Mvg.var_definition
+                  Format_mir.format_variable_def fmt
+                    (VariableMap.find var p.program_vars).Mir.var_definition
                 with Not_found -> Format.fprintf fmt "unused definition")
               ())
           vars
@@ -99,7 +99,7 @@ let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
     end
     else
       try
-        let vars = Pos.VarNameToID.find query p.Mvg.program_idmap in
+        let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
         let vars =
           List.sort
             (fun var1 var2 ->
@@ -109,12 +109,12 @@ let repl_debugguer (ctx : ctx) (p : Mvg.program) : unit =
         List.iter
           (fun var ->
             try
-              let var_l = Mvg.VariableMap.find var ctx.ctx_vars in
-              Format.printf "[%a %a] -> %a@\n" Format_mvg.format_execution_number_short
+              let var_l = Mir.VariableMap.find var ctx.ctx_vars in
+              Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
                 var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
                 format_var_literal_with_var (var, var_l)
             with Not_found ->
-              Format.printf "[%a %a] -> not computed@\n" Format_mvg.format_execution_number_short
+              Format.printf "[%a %a] -> not computed@\n" Format_mir.format_execution_number_short
                 var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos)
           vars
       with Not_found -> Format.printf "Inexisting variable@\n"
@@ -146,11 +146,11 @@ let format_runtime_error fmt (e : run_error) =
          Values of the relevant variables at this point:\n\
          %a@\n"
         Pos.format_position (Pos.get_position condition)
-        (Format_ast.pp_print_list_endline (fun fmt err ->
+        (Format_mast.pp_print_list_endline (fun fmt err ->
              Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
                (Pos.unmark err.Error.descr)))
-        errors Format_mvg.format_expression (Pos.unmark condition)
-        (Format_ast.pp_print_list_endline format_var_literal_with_var)
+        errors Format_mir.format_expression (Pos.unmark condition)
+        (Format_mast.pp_print_list_endline format_var_literal_with_var)
         bindings
 
 let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : literal array)
@@ -177,18 +177,18 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
         let new_e2 = evaluate_expr ctx p e2 in
         let l =
           match (Pos.unmark op, new_e1, new_e2) with
-          | Ast.Gt, Float i1, Float i2 -> Float (float_of_bool (i1 > i2))
-          | Ast.Gt, _, Undefined | Ast.Gt, Undefined, _ -> Undefined
-          | Ast.Gte, Float i1, Float i2 -> Float (float_of_bool (i1 >= i2))
-          | Ast.Gte, _, Undefined | Ast.Gte, Undefined, _ -> Undefined
-          | Ast.Lt, Float i1, Float i2 -> Float (float_of_bool (i1 < i2))
-          | Ast.Lt, _, Undefined | Ast.Lt, Undefined, _ -> Undefined
-          | Ast.Lte, Float i1, Float i2 -> Float (float_of_bool (i1 <= i2))
-          | Ast.Lte, _, Undefined | Ast.Lte, Undefined, _ -> Undefined
-          | Ast.Eq, Float i1, Float i2 -> Float (float_of_bool (i1 = i2))
-          | Ast.Eq, _, Undefined | Ast.Eq, Undefined, _ -> Undefined
-          | Ast.Neq, Float i1, Float i2 -> Float (float_of_bool (i1 <> i2))
-          | Ast.Neq, _, Undefined | Ast.Neq, Undefined, _ -> Undefined
+          | Mast.Gt, Float i1, Float i2 -> Float (float_of_bool (i1 > i2))
+          | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
+          | Mast.Gte, Float i1, Float i2 -> Float (float_of_bool (i1 >= i2))
+          | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
+          | Mast.Lt, Float i1, Float i2 -> Float (float_of_bool (i1 < i2))
+          | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
+          | Mast.Lte, Float i1, Float i2 -> Float (float_of_bool (i1 <= i2))
+          | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
+          | Mast.Eq, Float i1, Float i2 -> Float (float_of_bool (i1 = i2))
+          | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
+          | Mast.Neq, Float i1, Float i2 -> Float (float_of_bool (i1 <> i2))
+          | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
           (* should not happen *)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
@@ -197,27 +197,27 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
         let new_e2 = evaluate_expr ctx p e2 in
         let l =
           match (Pos.unmark op, new_e1, new_e2) with
-          | Ast.Add, Float i1, Float i2 -> Float (i1 +. i2)
-          | Ast.Add, Float i1, Undefined -> Float (i1 +. 0.)
-          | Ast.Add, Undefined, Float i2 -> Float (0. +. i2)
-          | Ast.Add, Undefined, Undefined -> Undefined
-          | Ast.Sub, Float i1, Float i2 -> Float (i1 -. i2)
-          | Ast.Sub, Float i1, Undefined -> Float (i1 -. 0.)
-          | Ast.Sub, Undefined, Float i2 -> Float (0. -. i2)
-          | Ast.Sub, Undefined, Undefined -> Undefined
-          | Ast.Mul, _, Undefined | Ast.Mul, Undefined, _ -> Undefined
-          | Ast.Mul, Float i1, Float i2 -> Float (i1 *. i2)
-          | Ast.Div, Undefined, _ | Ast.Div, _, Undefined -> Undefined (* yes... *)
-          | Ast.Div, _, l2 when is_zero l2 -> Float 0.
-          | Ast.Div, Float i1, Float i2 -> Float (i1 /. i2)
-          | Ast.And, Undefined, _
-          | Ast.And, _, Undefined
-          | Ast.Or, Undefined, _
-          | Ast.Or, _, Undefined ->
+          | Mast.Add, Float i1, Float i2 -> Float (i1 +. i2)
+          | Mast.Add, Float i1, Undefined -> Float (i1 +. 0.)
+          | Mast.Add, Undefined, Float i2 -> Float (0. +. i2)
+          | Mast.Add, Undefined, Undefined -> Undefined
+          | Mast.Sub, Float i1, Float i2 -> Float (i1 -. i2)
+          | Mast.Sub, Float i1, Undefined -> Float (i1 -. 0.)
+          | Mast.Sub, Undefined, Float i2 -> Float (0. -. i2)
+          | Mast.Sub, Undefined, Undefined -> Undefined
+          | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
+          | Mast.Mul, Float i1, Float i2 -> Float (i1 *. i2)
+          | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
+          | Mast.Div, _, l2 when is_zero l2 -> Float 0.
+          | Mast.Div, Float i1, Float i2 -> Float (i1 /. i2)
+          | Mast.And, Undefined, _
+          | Mast.And, _, Undefined
+          | Mast.Or, Undefined, _
+          | Mast.Or, _, Undefined ->
               Undefined
-          | Ast.And, Float i1, Float i2 ->
+          | Mast.And, Float i1, Float i2 ->
               Float (float_of_bool (bool_of_float i1 && bool_of_float i2))
-          | Ast.Or, Float i1, Float i2 ->
+          | Mast.Or, Float i1, Float i2 ->
               Float (float_of_bool (bool_of_float i1 || bool_of_float i2))
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
@@ -225,10 +225,10 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
         let new_e1 = evaluate_expr ctx p e1 in
         let l =
           match (op, new_e1) with
-          | Ast.Not, Float b1 -> Float (float_of_bool (not (bool_of_float b1)))
-          | Ast.Minus, Float f1 -> Float (-.f1)
-          | Ast.Not, Undefined -> Undefined
-          | Ast.Minus, Undefined -> Float 0.
+          | Mast.Not, Float b1 -> Float (float_of_bool (not (bool_of_float b1)))
+          | Mast.Minus, Float f1 -> Float (-.f1)
+          | Mast.Not, Undefined -> Undefined
+          | Mast.Minus, Undefined -> Float 0.
           (* should not happen *)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
@@ -328,7 +328,7 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
                 (RuntimeError
                    ( ErrorValue
                        (Format.asprintf "evaluation of %a should be an integer, not %a"
-                          Format_mvg.format_expression (Pos.unmark arg1) Format_mvg.format_literal
+                          Format_mir.format_expression (Pos.unmark arg1) Format_mir.format_literal
                           e),
                      ctx ))
         in
@@ -360,7 +360,7 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
         raise
           (RuntimeError
              ( ErrorValue
-                 (Format.asprintf "the function %a %a has not been expanded" Format_mvg.format_func
+                 (Format.asprintf "the function %a %a has not been expanded" Format_mir.format_func
                     func Pos.format_position (Pos.get_position e)),
                ctx ))
   with RuntimeError (e, ctx) ->
@@ -408,7 +408,7 @@ type evaluation_utilities = {
   utilities_execution_order : Execution_order.execution_order;
 }
 
-type interpretable_program = { ip_program : Mvg.program; ip_utils : evaluation_utilities }
+type interpretable_program = { ip_program : Mir.program; ip_utils : evaluation_utilities }
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
    read directly from the input map. However, one can pass inside the input map a value for a
@@ -433,15 +433,15 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
           (RuntimeError
              ( UnknownInputVariable
                  (Format.asprintf "%s (%s)"
-                    (Pos.unmark var.Mvg.Variable.name)
-                    (Pos.unmark var.Mvg.Variable.descr)),
+                    (Pos.unmark var.Mir.Variable.name)
+                    (Pos.unmark var.Mir.Variable.descr)),
                empty_ctx p )))
     input_values p
 
 let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
   match vdef with
-  | Mvg.SimpleVar e -> SimpleVar (evaluate_expr ctx p e)
-  | Mvg.TableVar (size, es) ->
+  | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p e)
+  | Mir.TableVar (size, es) ->
       TableVar
         ( size,
           Array.init size (fun idx ->
@@ -450,7 +450,7 @@ let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
               | IndexTable es ->
                   let e = IndexMap.find idx es in
                   evaluate_expr ctx p e) )
-  | Mvg.InputVar -> assert false
+  | Mir.InputVar -> assert false
 
 let rec evaluate_stmt (p : Bir.program) ctx stmt =
   match Pos.unmark stmt with

@@ -14,7 +14,7 @@
 (** Most functions are just syntactic sugar for operations expressible with the rest of the
     language, so we expand these. *)
 
-open Mvg
+open Mir
 
 let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marked =
   match Pos.unmark e with
@@ -51,7 +51,8 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
         (List.fold_left
            (fun acc arg ->
              if acc = Error then Pos.unmark (expand_functions_expr arg)
-             else Binop (Pos.same_pos_as Ast.Add e, Pos.same_pos_as acc e, expand_functions_expr arg))
+             else
+               Binop (Pos.same_pos_as Mast.Add e, Pos.same_pos_as acc e, expand_functions_expr arg))
            Error args)
         e
   | FunctionCall (GtzFunc, [ arg ]) ->
@@ -59,7 +60,7 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
         (Conditional
            ( Pos.same_pos_as
                (Comparison
-                  ( Pos.same_pos_as Ast.Gt e,
+                  ( Pos.same_pos_as Mast.Gt e,
                     expand_functions_expr arg,
                     Pos.same_pos_as (Literal (Float 0.0)) e ))
                e,
@@ -71,7 +72,7 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
         (Conditional
            ( Pos.same_pos_as
                (Comparison
-                  ( Pos.same_pos_as Ast.Gte e,
+                  ( Pos.same_pos_as Mast.Gte e,
                     expand_functions_expr arg,
                     Pos.same_pos_as (Literal (Float 0.0)) e ))
                e,
@@ -92,11 +93,11 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
                (Conditional
                   ( Pos.same_pos_as
                       (Comparison
-                         ( Pos.same_pos_as Ast.Lt e,
+                         ( Pos.same_pos_as Mast.Lt e,
                            Pos.same_pos_as (LocalVar arg_var) e,
                            Pos.same_pos_as (Literal (Float 0.0)) e ))
                       e,
-                    Pos.same_pos_as (Unop (Ast.Minus, Pos.same_pos_as (LocalVar arg_var) e)) e,
+                    Pos.same_pos_as (Unop (Mast.Minus, Pos.same_pos_as (LocalVar arg_var) e)) e,
                     Pos.same_pos_as (LocalVar arg_var) e ))
                e ))
         e
@@ -105,7 +106,7 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
         (Conditional
            ( Pos.same_pos_as
                (Comparison
-                  ( Pos.same_pos_as Ast.Eq e,
+                  ( Pos.same_pos_as Mast.Eq e,
                     expand_functions_expr arg,
                     Pos.same_pos_as (Literal (Float 0.0)) e ))
                e,

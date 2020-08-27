@@ -16,78 +16,78 @@
 (** Each node corresponds to a variable, each edge to a variable use. The edges in the graph go from
     output to inputs. *)
 module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional (struct
-  type t = Mvg.Variable.t
+  type t = Mir.Variable.t
 
-  let hash v = v.Mvg.Variable.id
+  let hash v = v.Mir.Variable.id
 
-  let compare v1 v2 = compare v1.Mvg.Variable.id v2.Mvg.Variable.id
+  let compare v1 v2 = compare v1.Mir.Variable.id v2.Mir.Variable.id
 
-  let equal v1 v2 = v1.Mvg.Variable.id = v2.Mvg.Variable.id
+  let equal v1 v2 = v1.Mir.Variable.id = v2.Mir.Variable.id
 end)
 
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
-let rec get_used_variables (e : Mvg.expression Pos.marked) (acc : unit Mvg.VariableMap.t) :
-    unit Mvg.VariableMap.t =
+let rec get_used_variables (e : Mir.expression Pos.marked) (acc : unit Mir.VariableMap.t) :
+    unit Mir.VariableMap.t =
   match Pos.unmark e with
-  | Mvg.Comparison (_, e1, e2) | Mvg.Binop (_, e1, e2) | Mvg.LocalLet (_, e1, e2) ->
+  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2) ->
       let acc = get_used_variables e1 acc in
       let acc = get_used_variables e2 acc in
       acc
-  | Mvg.Unop (_, e) -> get_used_variables e acc
-  | Mvg.Index ((var, _), e) ->
-      let acc = Mvg.VariableMap.add var () acc in
+  | Mir.Unop (_, e) -> get_used_variables e acc
+  | Mir.Index ((var, _), e) ->
+      let acc = Mir.VariableMap.add var () acc in
       let acc = get_used_variables e acc in
       acc
-  | Mvg.Conditional (e1, e2, e3) ->
+  | Mir.Conditional (e1, e2, e3) ->
       let acc = get_used_variables e1 acc in
       let acc = get_used_variables e2 acc in
       let acc = get_used_variables e3 acc in
       acc
-  | Mvg.FunctionCall (_, args) ->
+  | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> get_used_variables arg acc) acc args
-  | Mvg.LocalVar _ | Mvg.Literal _ | Mvg.GenericTableIndex | Mvg.Error -> acc
-  | Mvg.Var var -> Mvg.VariableMap.add var () acc
+  | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
+  | Mir.Var var -> Mir.VariableMap.add var () acc
 
-let add_usages (lvar : Mvg.Variable.t) (e : Mvg.expression Pos.marked) (acc : DepGraph.t) :
+let add_usages (lvar : Mir.Variable.t) (e : Mir.expression Pos.marked) (acc : DepGraph.t) :
     DepGraph.t =
   let acc = DepGraph.add_vertex acc lvar in
   let add_edge acc var lvar = DepGraph.add_edge acc var lvar in
-  let usages = get_used_variables e Mvg.VariableMap.empty in
-  Mvg.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
+  let usages = get_used_variables e Mir.VariableMap.empty in
+  Mir.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
 
 (** The dependency graph also includes nodes for the conditions to be checked at execution *)
-let create_dependency_graph (p : Mvg.program) : DepGraph.t =
+let create_dependency_graph (p : Mir.program) : DepGraph.t =
   let g =
-    Mvg.VariableMap.fold
+    Mir.VariableMap.fold
       (fun var def acc ->
-        match def.Mvg.var_definition with
-        | Mvg.InputVar -> DepGraph.add_vertex acc var
-        | Mvg.SimpleVar e -> add_usages var e acc
-        | Mvg.TableVar (_, def) -> (
+        match def.Mir.var_definition with
+        | Mir.InputVar -> DepGraph.add_vertex acc var
+        | Mir.SimpleVar e -> add_usages var e acc
+        | Mir.TableVar (_, def) -> (
             match def with
-            | Mvg.IndexGeneric e -> add_usages var e acc
-            | Mvg.IndexTable es -> Mvg.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc ))
+            | Mir.IndexGeneric e -> add_usages var e acc
+            | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc ))
       p.program_vars DepGraph.empty
   in
   (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
   let g =
     DepGraph.fold_vertex
-      (fun (var : Mvg.Variable.t) (g : DepGraph.t) ->
-        match Mvg.VariableMap.find_opt var p.program_vars with
+      (fun (var : Mir.Variable.t) (g : DepGraph.t) ->
+        match Mir.VariableMap.find_opt var p.program_vars with
         | None -> g
         | Some data ->
-            if data.Mvg.var_io = Mvg.Output then
+            if data.Mir.var_io = Mir.Output then
               DepGraph.fold_succ
-                (fun (succ : Mvg.Variable.t) (g : DepGraph.t) -> DepGraph.remove_edge g var succ)
+                (fun (succ : Mir.Variable.t) (g : DepGraph.t) -> DepGraph.remove_edge g var succ)
                 g var g
             else g)
       g g
   in
-  Mvg.VariableMap.fold
-    (fun cond_var cond acc -> add_usages cond_var cond.Mvg.cond_expr acc)
+  Mir.VariableMap.fold
+    (fun cond_var cond acc -> add_usages cond_var cond.Mir.cond_expr acc)
     p.program_conds g
 
-let program_when_printing : Mvg.program option ref = ref None
+let program_when_printing : Mir.program option ref = ref None
 
 (** The graph is output in the Dot format *)
 module Dot = Graph.Graphviz.Dot (struct
@@ -109,9 +109,9 @@ module Dot = Graph.Graphviz.Dot (struct
         let regular_color = 0x8585ad in
         let text_color = 0xf2f2f2 in
         try
-          let var_data = Mvg.VariableMap.find v p.program_vars in
-          match var_data.Mvg.var_io with
-          | Mvg.Input ->
+          let var_data = Mir.VariableMap.find v p.program_vars in
+          match var_data.Mir.var_io with
+          | Mir.Input ->
               [
                 `Fillcolor input_color;
                 `Shape `Box;
@@ -119,44 +119,44 @@ module Dot = Graph.Graphviz.Dot (struct
                 `Fontcolor text_color;
                 `Label
                   (Format.asprintf "%s\n%s"
-                     ( match v.Mvg.Variable.alias with
+                     ( match v.Mir.Variable.alias with
                      | Some s -> s
-                     | None -> Pos.unmark v.Mvg.Variable.name )
-                     (Pos.unmark v.Mvg.Variable.descr));
+                     | None -> Pos.unmark v.Mir.Variable.name )
+                     (Pos.unmark v.Mir.Variable.descr));
               ]
-          | Mvg.Regular ->
+          | Mir.Regular ->
               [
                 `Fillcolor regular_color;
                 `Style `Filled;
                 `Shape `Box;
                 `Fontcolor text_color;
                 `Label
-                  (Format.asprintf "%s\n%s" (Pos.unmark v.Mvg.Variable.name)
-                     (Pos.unmark v.Mvg.Variable.descr));
+                  (Format.asprintf "%s\n%s" (Pos.unmark v.Mir.Variable.name)
+                     (Pos.unmark v.Mir.Variable.descr));
               ]
-          | Mvg.Output ->
+          | Mir.Output ->
               [
                 `Fillcolor output_color;
                 `Shape `Box;
                 `Style `Filled;
                 `Fontcolor text_color;
                 `Label
-                  (Format.asprintf "%s\n%s" (Pos.unmark v.Mvg.Variable.name)
-                     (Pos.unmark v.Mvg.Variable.descr));
+                  (Format.asprintf "%s\n%s" (Pos.unmark v.Mir.Variable.name)
+                     (Pos.unmark v.Mir.Variable.descr));
               ]
         with Not_found ->
-          let _ = Mvg.VariableMap.find v p.program_conds in
+          let _ = Mir.VariableMap.find v p.program_conds in
           [
             `Fillcolor cond_color;
             `Shape `Box;
             `Style `Filled;
             `Fontcolor text_color;
             `Label
-              (Format.asprintf "%s\n%s" (Pos.unmark v.Mvg.Variable.name)
-                 (Pos.unmark v.Mvg.Variable.descr));
+              (Format.asprintf "%s\n%s" (Pos.unmark v.Mir.Variable.name)
+                 (Pos.unmark v.Mir.Variable.descr));
           ] )
 
-  let vertex_name v = "\"" ^ Pos.unmark v.Mvg.Variable.name ^ "\""
+  let vertex_name v = "\"" ^ Pos.unmark v.Mir.Variable.name ^ "\""
 
   let default_vertex_attributes _ = []
 
@@ -165,7 +165,7 @@ end)
 
 module DepgGraphOper = Graph.Oper.P (DepGraph)
 
-let print_dependency_graph (filename : string) (graph : DepGraph.t) (p : Mvg.program) : unit =
+let print_dependency_graph (filename : string) (graph : DepGraph.t) (p : Mir.program) : unit =
   let file = open_out_bin filename in
   (* let graph = DepgGraphOper.transitive_reduction graph in *)
   program_when_printing := Some p;
@@ -178,7 +178,7 @@ module SCC = Graph.Components.Make (DepGraph)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
 (** Outputs [true] and a warning in case of cycles. *)
-let check_for_cycle (g : DepGraph.t) (p : Mvg.program) (print_debug : bool) : bool =
+let check_for_cycle (g : DepGraph.t) (p : Mir.program) (print_debug : bool) : bool =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
   if List.length sccs < DepGraph.nb_vertex g then begin
@@ -203,7 +203,7 @@ let check_for_cycle (g : DepGraph.t) (p : Mvg.program) (print_debug : bool) : bo
             Format.asprintf
               "The following variables are defined circularly: %s\n\
                The dependency graph of this circular definition has been written to %s"
-              (String.concat " <-> " (List.map (fun var -> Pos.unmark var.Mvg.Variable.name) scc))
+              (String.concat " <-> " (List.map (fun var -> Pos.unmark var.Mir.Variable.name) scc))
               filename
             :: !cycles_strings)
         sccs;

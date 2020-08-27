@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 let generate_variable (var : Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
@@ -19,34 +19,34 @@ let generate_variable (var : Variable.t) : string =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Ast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mvg.rule_number
-        var.Variable.execution_number.Mvg.seq_number
+      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
+        var.Variable.execution_number.Mir.seq_number
   in
   if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then "var_" ^ v else v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_comp_op (op : Ast.comp_op) : string =
+let generate_comp_op (op : Mast.comp_op) : string =
   match op with
-  | Ast.Gt -> "gt_mvalue"
-  | Ast.Gte -> "gte_mvalue"
-  | Ast.Lt -> "lt_mvalue"
-  | Ast.Lte -> "lte_mvalue"
-  | Ast.Eq -> "eq_mvalue"
-  | Ast.Neq -> "neq_mvalue"
+  | Mast.Gt -> "gt_mvalue"
+  | Mast.Gte -> "gte_mvalue"
+  | Mast.Lt -> "lt_mvalue"
+  | Mast.Lte -> "lte_mvalue"
+  | Mast.Eq -> "eq_mvalue"
+  | Mast.Neq -> "neq_mvalue"
 
-let generate_binop (op : Ast.binop) : string =
+let generate_binop (op : Mast.binop) : string =
   match op with
-  | Ast.And -> "and_mvalue"
-  | Ast.Or -> "or_mvalue"
-  | Ast.Add -> "add_mvalue"
-  | Ast.Sub -> "sub_mvalue"
-  | Ast.Mul -> "mul_mvalue"
-  | Ast.Div -> "div_mvalue"
+  | Mast.And -> "and_mvalue"
+  | Mast.Or -> "or_mvalue"
+  | Mast.Add -> "add_mvalue"
+  | Mast.Sub -> "sub_mvalue"
+  | Mast.Mul -> "mul_mvalue"
+  | Mast.Div -> "div_mvalue"
 
 (* Since there is no way to have inline let bindings, we have to collect all local variables
    created... *)
@@ -60,10 +60,10 @@ let rec generate_clj_expr (e : expression Pos.marked) : string =
       let s1 = generate_clj_expr e1 in
       let s2 = generate_clj_expr e2 in
       Format.asprintf "%s (%s) (%s)" (generate_binop (Pos.unmark op)) s1 s2
-  | Unop (Ast.Minus, e) ->
+  | Unop (Mast.Minus, e) ->
       let s = generate_clj_expr e in
       Format.asprintf "minus_mvalue (%s)" s
-  | Unop (Ast.Not, e) ->
+  | Unop (Mast.Not, e) ->
       let s = generate_clj_expr e in
       Format.asprintf "not_mvalue (%s)" s
   | Index _ -> assert false (* unimplemented *)
@@ -203,7 +203,7 @@ let generate_clj_program (program : program) (dep_graph : Dependency.DepGraph.t)
     "(defn compute_ir [values_0] (let [\n%s\n] (\n    ; Main tax computation.\n    %s\n)))"
     (String.concat "\n"
        (List.mapi
-          (fun i (var : Mvg.Variable.t) ->
+          (fun i (var : Mir.Variable.t) ->
             Format.asprintf "    values_%d (%s values_%d)\n" (i + 1) (generate_variable var) i)
           exec_order))
     begin

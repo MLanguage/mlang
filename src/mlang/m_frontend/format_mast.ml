@@ -13,7 +13,7 @@
 
 (** AST pretty printer *)
 
-open Ast
+open Mast
 
 let pp_print_list_comma eldisplay fmt l =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") eldisplay fmt l

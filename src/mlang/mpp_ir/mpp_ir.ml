@@ -7,7 +7,7 @@ type scope =
 
 type scoped_var =
   | Local of string (* lowercase variable used only to define something locally *)
-  | Mbased of Mvg.Variable.t * scope
+  | Mbased of Mir.Variable.t * scope
 
 (* variables defined in the M codebase *)
 
@@ -27,7 +27,7 @@ type mpp_filter = VarIsTaxBenefit
 
 type unop = Minus
 
-type binop = Cst.binop
+type binop = Mpp_ast.binop
 
 type mpp_expr = mpp_expr_kind Pos.marked
 

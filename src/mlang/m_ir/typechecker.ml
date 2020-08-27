@@ -14,7 +14,7 @@
 (** This modules defines M's static semantic. There is only one type: float. The typechecking is
     mostly about differentiating table from non-tables variables *)
 
-open Mvg
+open Mir
 
 type ctx = { ctx_program : program; ctx_is_generic_table : bool }
 
@@ -24,12 +24,12 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
       let ctx = typecheck_top_down ctx e1 in
       let ctx = typecheck_top_down ctx e2 in
       ctx
-  | Binop (((Ast.And | Ast.Or), _), e1, e2)
-  | Binop (((Ast.Add | Ast.Sub | Ast.Mul | Ast.Div), _), e1, e2) ->
+  | Binop (((Mast.And | Mast.Or), _), e1, e2)
+  | Binop (((Mast.Add | Mast.Sub | Mast.Mul | Mast.Div), _), e1, e2) ->
       let ctx = typecheck_top_down ctx e1 in
       let ctx = typecheck_top_down ctx e2 in
       ctx
-  | Unop (Ast.Not, e) | Unop (Ast.Minus, e) ->
+  | Unop (Mast.Not, e) | Unop (Mast.Minus, e) ->
       let ctx = typecheck_top_down ctx e in
       ctx
   | Conditional (e1, e2, e3) ->
@@ -61,7 +61,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
       (* Tables are only tables of arrays *)
       let ctx = typecheck_top_down ctx e' in
       let var_data = VariableMap.find var ctx.ctx_program.program_vars in
-      match var_data.Mvg.var_definition with
+      match var_data.Mir.var_definition with
       | SimpleVar _ | InputVar ->
           Errors.raise_typ_error Typing
             "variable %s is accessed %a as a table but it is not defined as one %a"
@@ -69,7 +69,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
             (Pos.get_position var.Variable.name)
       | TableVar _ -> ctx )
 
-and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mvg.expression Pos.marked list -> ctx =
+and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.marked list -> ctx =
   match f with
   | SumFunc | MinFunc | MaxFunc ->
       fun ctx args ->
@@ -114,7 +114,7 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mvg.expression Pos.mar
         | _ ->
             Errors.raise_typ_error Typing "function %a should have only one argument"
               Pos.format_position pos )
-  | Mvg.Multimax -> (
+  | Mir.Multimax -> (
       fun ctx args ->
         match args with
         | [ bound; table ] ->
@@ -124,7 +124,7 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mvg.expression Pos.mar
             Errors.raise_typ_error Typing "function %a should have two arguments"
               Pos.format_position pos )
 
-let determine_def_complete_cover (table_var : Mvg.Variable.t) (size : int)
+let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (defs : (int * Pos.t) list) : int list =
   (* Return all undefined indexes *)
   let defs_array = Array.make size false in
@@ -176,7 +176,7 @@ let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_de
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p : program) : program =
   let _are_tables, ctx, p_vars =
-    Mvg.VariableMap.fold
+    Mir.VariableMap.fold
       (fun var def (acc, ctx, p_vars) ->
         check_non_recursivity_of_variable_defs var def.var_definition;
         (* All top-level variables are og type Real *)
@@ -203,33 +203,33 @@ let typecheck (p : program) : program =
                   (VariableMap.add var true acc, new_ctx, p_vars)
                 else
                   let previous_var_def =
-                    Ast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
+                    Mast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
                       var.Variable.execution_number false
                   in
                   let new_es =
                     List.fold_left
                       (fun es undef_index ->
-                        Mvg.IndexMap.add undef_index
+                        Mir.IndexMap.add undef_index
                           (Pos.same_pos_as
-                             (Mvg.Index
-                                ( Pos.same_pos_as previous_var_def var.Mvg.Variable.name,
+                             (Mir.Index
+                                ( Pos.same_pos_as previous_var_def var.Mir.Variable.name,
                                   Pos.same_pos_as
-                                    (Mvg.Literal (Float (float_of_int undef_index)))
-                                    var.Mvg.Variable.name ))
-                             var.Mvg.Variable.name)
+                                    (Mir.Literal (Float (float_of_int undef_index)))
+                                    var.Mir.Variable.name ))
+                             var.Mir.Variable.name)
                           es)
                       es undefined_indexes
                   in
                   ( VariableMap.add var true acc,
                     new_ctx,
-                    Mvg.VariableMap.add var
-                      { def with Mvg.var_definition = Mvg.TableVar (size, Mvg.IndexTable new_es) }
+                    Mir.VariableMap.add var
+                      { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) }
                       p_vars ) )
         | InputVar ->
             if VariableMap.mem var acc then (acc, ctx, p_vars)
             else (VariableMap.add var false acc, ctx, p_vars))
       p.program_vars
-      (Mvg.VariableMap.empty, { ctx_program = p; ctx_is_generic_table = false }, p.program_vars)
+      (Mir.VariableMap.empty, { ctx_program = p; ctx_is_generic_table = false }, p.program_vars)
   in
   let _ = typecheck_program_conds ctx p.program_conds in
   { p with program_vars = p_vars }

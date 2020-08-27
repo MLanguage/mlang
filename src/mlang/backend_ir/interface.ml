@@ -12,9 +12,9 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 open Lexing
-open Lexer
+open Mlexer
 
 type mvg_function = {
   func_variable_inputs : unit VariableMap.t;
@@ -119,7 +119,7 @@ let var_set_from_variable_name_list (p : program) (names : string Pos.marked lis
         with Errors.TypeError _ -> Pos.unmark alias
       in
       let var =
-        try Ast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.program_idmap)
+        try Mast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.program_idmap)
         with Not_found ->
           Errors.raise_typ_error Variable "unknown variable %s %a" name Pos.format_position
             (Pos.get_position alias)
@@ -135,8 +135,8 @@ let check_const_expression_is_really_const (e : expression Pos.marked) : unit =
         "Constant input defined in function specification file is not a constant expression (%a)"
         Pos.format_position (Pos.get_position e)
 
-let const_var_set_from_list (p : program) (names : (string * Ast.expression Pos.marked) list) :
-    Mvg.expression Pos.marked VariableMap.t =
+let const_var_set_from_list (p : program) (names : (string * Mast.expression Pos.marked) list) :
+    Mir.expression Pos.marked VariableMap.t =
   List.fold_left
     (fun acc (name, e) ->
       let var =
@@ -144,7 +144,7 @@ let const_var_set_from_list (p : program) (names : (string * Ast.expression Pos.
           List.hd
             (List.sort
                (fun v1 v2 ->
-                 compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+                 compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
                (Pos.VarNameToID.find name p.program_idmap))
         with Not_found -> (
           try
@@ -152,20 +152,20 @@ let const_var_set_from_list (p : program) (names : (string * Ast.expression Pos.
             List.hd
               (List.sort
                  (fun v1 v2 ->
-                   compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+                   compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
                  (Pos.VarNameToID.find name p.program_idmap))
           with Errors.TypeError (Errors.Variable, _) ->
             Errors.raise_typ_error Variable "Unknown variable %s (%a)" name Pos.format_position
               (Pos.get_position e) )
       in
       let new_e =
-        Ast_to_mvg.translate_expression
+        Mast_to_mvg.translate_expression
           {
             table_definition = false;
             idmap = p.program_idmap;
             lc = None;
             int_const_values = VariableMap.empty;
-            exec_number = Ast_to_mvg.dummy_exec_number Pos.no_pos;
+            exec_number = Mast_to_mvg.dummy_exec_number Pos.no_pos;
             current_lvalue = name;
           }
           e
@@ -174,8 +174,8 @@ let const_var_set_from_list (p : program) (names : (string * Ast.expression Pos.
       VariableMap.add var new_e acc)
     VariableMap.empty names
 
-let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_data VariableMap.t =
-  let check_boolean (mexpr : Ast.expression Pos.marked) =
+let translate_cond idmap (conds : Mast.expression Pos.marked list) : condition_data VariableMap.t =
+  let check_boolean (mexpr : Mast.expression Pos.marked) =
     match Pos.unmark mexpr with
     | Binop (((And | Or), _), _, _) -> true
     | Comparison (_, _, _) -> true
@@ -184,34 +184,34 @@ let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_da
     (* TODO: check Literal Variable ? *)
     | _ -> false
   in
-  let mk_neg (mexpr : Ast.expression Pos.marked) =
-    Pos.same_pos_as (Ast.Unop (Ast.Not, mexpr)) mexpr
+  let mk_neg (mexpr : Mast.expression Pos.marked) =
+    Pos.same_pos_as (Mast.Unop (Mast.Not, mexpr)) mexpr
   in
   let test_error =
-    Mvg.Error.new_error ("-1", Pos.no_pos) ("Condition error in tests", Pos.no_pos) Ast.Anomaly
+    Mir.Error.new_error ("-1", Pos.no_pos) ("Condition error in tests", Pos.no_pos) Mast.Anomaly
   in
   let verif_conds =
     List.fold_left
       (fun acc cond ->
         if not (check_boolean cond) then
           Errors.raise_typ_error Typing "in spec: cond %a should have type bool"
-            Format_ast.format_expression (Pos.unmark cond)
+            Format_mast.format_expression (Pos.unmark cond)
         else
           Pos.same_pos_as
-            { Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
+            { Mast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
             cond
           :: acc)
       [] conds
   in
   let program =
-    Ast.Verification
+    Mast.Verification
       {
         verif_name = [ ("000", Pos.no_pos) ];
         verif_applications = [];
         verif_conditions = verif_conds;
       }
   in
-  Ast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ] None
+  Mast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ] None
 
 let read_function_from_spec (p : program) : mvg_function =
   let spec_file =
@@ -232,18 +232,18 @@ let read_function_from_spec (p : program) : mvg_function =
   in
   try
     Parse_utils.current_file := spec_file;
-    let func_spec = Parser.function_spec token filebuf in
+    let func_spec = Mparser.function_spec token filebuf in
     close_in input;
     {
-      func_variable_inputs = var_set_from_variable_name_list p func_spec.Ast.spec_inputs;
-      func_constant_inputs = const_var_set_from_list p func_spec.Ast.spec_consts;
-      func_outputs = var_set_from_variable_name_list p func_spec.Ast.spec_outputs;
-      func_conds = translate_cond p.program_idmap func_spec.Ast.spec_conditions;
+      func_variable_inputs = var_set_from_variable_name_list p func_spec.Mast.spec_inputs;
+      func_constant_inputs = const_var_set_from_list p func_spec.Mast.spec_consts;
+      func_outputs = var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
+      func_conds = translate_cond p.program_idmap func_spec.Mast.spec_conditions;
       func_exec_passes =
-        ( if func_spec.Ast.spec_exec_passes = [] then Some [ VariableMap.empty ]
+        ( if func_spec.Mast.spec_exec_passes = [] then Some [ VariableMap.empty ]
         else
           Some
-            (List.map (fun pass -> const_var_set_from_list p pass) func_spec.Ast.spec_exec_passes)
+            (List.map (fun pass -> const_var_set_from_list p pass) func_spec.Mast.spec_exec_passes)
         );
     }
   with
@@ -251,7 +251,7 @@ let read_function_from_spec (p : program) : mvg_function =
       Cli.error_print "%s" msg;
       close_in input;
       exit 1
-  | Parser.Error ->
+  | Mparser.Error ->
       Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
         Errors.print_lexer_position filebuf.lex_curr_p;
       close_in input;
@@ -273,16 +273,16 @@ let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
       let value = read_line () in
       Parse_utils.current_file := "standard input";
       try
-        let value_ast = Parser.literal_input token (Lexing.from_string value) in
+        let value_ast = Mparser.literal_input token (Lexing.from_string value) in
         match value_ast with
-        | Ast.Float f -> Mvg.Float f
-        | Ast.Variable _ ->
+        | Mast.Float f -> Mir.Float f
+        | Mast.Variable _ ->
             Errors.raise_typ_error Variable "Function input must be a numeric constant"
       with
       | Errors.LexingError msg | Errors.ParsingError msg ->
           Cli.error_print "%s" msg;
           exit 1
-      | Parser.Error ->
+      | Mparser.Error ->
           Cli.error_print "Lexer error in input!";
           exit 1)
     f.func_variable_inputs

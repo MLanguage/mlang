@@ -88,7 +88,7 @@ Don't format to use `make format` before you commit to ensure a uniform style.
 ## Formal semantics
 
 The `formal_semantics` folder contains two separate formalizations for the core of the
-M language, that roughly corresponds to the `Mvg` internal representation in Mlang.
+M language, that roughly corresponds to the `Mir` internal representation in Mlang.
 The reference formalization is the Coq one, in file `semantique.v`. The F* formalization
 is a proof of concept.
 

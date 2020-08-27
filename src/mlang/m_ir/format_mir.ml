@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 let format_execution_number fmt (exec_number : execution_number) =
   if exec_number.rule_number = -1 then
@@ -52,18 +52,18 @@ let format_literal fmt (l : literal) =
 let rec format_expression fmt (e : expression) =
   match e with
   | Comparison ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1 Format_ast.format_comp_op op
+      Format.fprintf fmt "(%a %a %a)" format_expression e1 Format_mast.format_comp_op op
         format_expression e2
   | Binop ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1 Format_ast.format_binop op
+      Format.fprintf fmt "(%a %a %a)" format_expression e1 Format_mast.format_binop op
         format_expression e2
-  | Unop (op, (e, _)) -> Format.fprintf fmt "%a %a" Format_ast.format_unop op format_expression e
+  | Unop (op, (e, _)) -> Format.fprintf fmt "%a %a" Format_mast.format_unop op format_expression e
   | Conditional ((e1, _), (e2, _), (e3, _)) ->
       Format.fprintf fmt "(si %a alors %a sinon %a)" format_expression e1 format_expression e2
         format_expression e3
   | FunctionCall (f, args) ->
       Format.fprintf fmt "%a(%a)" format_func f
-        (Format_ast.pp_print_list_comma (Format_ast.pp_unmark format_expression))
+        (Format_mast.pp_print_list_comma (Format_mast.pp_unmark format_expression))
         args
   | Literal lit -> format_literal fmt lit
   | Var var ->
@@ -86,7 +86,7 @@ let format_variable_def fmt (def : variable_def) =
   | InputVar -> Format.fprintf fmt "[User input]@\n"
   | TableVar (_, IndexGeneric e) -> Format.fprintf fmt "X -> %a@\n" format_expression (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
-      IndexMap.map_printer (Format_ast.pp_unmark format_expression) fmt defs
+      IndexMap.map_printer (Format_mast.pp_unmark format_expression) fmt defs
 
 let format_variable_data fmt (def : variable_data) =
   Format.fprintf fmt "type %a, io %a:\n%a"
@@ -106,11 +106,11 @@ let format_error fmt (e : Error.t) =
 
 let format_precondition fmt (precond : condition_data) =
   Format.fprintf fmt "Précondition : %a\nSinon %a" format_expression (Pos.unmark precond.cond_expr)
-    (Format_ast.pp_print_list_comma format_error)
+    (Format_mast.pp_print_list_comma format_error)
     precond.cond_errors
 
 let format_program_conds fmt (conds : condition_data VariableMap.t) =
-  Format_ast.pp_print_list_endline
+  Format_mast.pp_print_list_endline
     (fun fmt (_, cond) -> format_precondition fmt cond)
     fmt (VariableMap.bindings conds)
 

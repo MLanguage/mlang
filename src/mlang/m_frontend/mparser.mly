@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
 %{
- open Ast
+ open Mast
  open Parse_utils
 
  type comp_subtyp_or_attr =
@@ -48,9 +48,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token EOF
 
-%type<Ast.source_file> source_file
-%type<Ast.function_spec> function_spec
-%type<Ast.literal> literal_input
+%type<Mast.source_file> source_file
+%type<Mast.function_spec> function_spec
+%type<Mast.literal> literal_input
 
 %nonassoc SEMICOLON
 %left OR AND

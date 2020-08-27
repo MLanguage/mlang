@@ -12,7 +12,7 @@
    not, see <https://www.gnu.org/licenses/>. *)
 
 open Lexing
-open Lexer
+open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
@@ -45,11 +45,11 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         in
         try
           Parse_utils.current_file := source_file;
-          let commands = Parser.source_file token filebuf in
+          let commands = Mparser.source_file token filebuf in
           program := commands :: !program
         with
         | Errors.LexingError msg | Errors.ParsingError msg -> Cli.error_print "%s" msg
-        | Parser.Error ->
+        | Mparser.Error ->
             Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
               Errors.print_lexer_position filebuf.lex_curr_p;
             begin
@@ -61,7 +61,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       !Cli.source_files;
     finish "completed!";
     let application = if !Cli.application = "" then None else Some !Cli.application in
-    let program = Ast_to_mvg.translate !program application in
+    let program = Mast_to_mvg.translate !program application in
     Cli.debug_print "Expanding function definitions...";
     let program = Functions.expand_functions program in
     Cli.debug_print "Typechecking...";
@@ -111,7 +111,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program dep_graph !Cli.output_file;
+        Bir_to_python.generate_python_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Python function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -120,7 +120,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Java...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_java.generate_java_program program dep_graph !Cli.output_file;
+        Bir_to_java.generate_java_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Java function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -129,7 +129,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Clojure...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_clojure.generate_clj_program program dep_graph !Cli.output_file;
+        Bir_to_clojure.generate_clj_program program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Clojure function from requested set of inputs and outputs, results written to \
            %s\n"

@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-open Mvg
+open Mir
 
 let generate_variable (var : Variable.t) : string =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
@@ -19,34 +19,34 @@ let generate_variable (var : Variable.t) : string =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Ast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mvg.rule_number
-        var.Variable.execution_number.Mvg.seq_number
+      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
+        var.Variable.execution_number.Mir.seq_number
   in
   if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then "var_" ^ v else v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_comp_op (op : Ast.comp_op) : string =
+let generate_comp_op (op : Mast.comp_op) : string =
   match op with
-  | Ast.Gt -> "gt"
-  | Ast.Gte -> "gte"
-  | Ast.Lt -> "lt"
-  | Ast.Lte -> "lte"
-  | Ast.Eq -> "eq"
-  | Ast.Neq -> "neq"
+  | Mast.Gt -> "gt"
+  | Mast.Gte -> "gte"
+  | Mast.Lt -> "lt"
+  | Mast.Lte -> "lte"
+  | Mast.Eq -> "eq"
+  | Mast.Neq -> "neq"
 
-let generate_binop (op : Ast.binop) : string =
+let generate_binop (op : Mast.binop) : string =
   match op with
-  | Ast.And -> "and"
-  | Ast.Or -> "or"
-  | Ast.Add -> "add"
-  | Ast.Sub -> "sub"
-  | Ast.Mul -> "mul"
-  | Ast.Div -> "div"
+  | Mast.And -> "and"
+  | Mast.Or -> "or"
+  | Mast.Add -> "add"
+  | Mast.Sub -> "sub"
+  | Mast.Mul -> "mul"
+  | Mast.Div -> "div"
 
 (* Since there is no way to have inline let bindings, we have to collect all local variables
    created... *)
@@ -60,10 +60,10 @@ let rec generate_java_expr (e : expression Pos.marked) : string * string list =
       let s1, ls1 = generate_java_expr e1 in
       let s2, ls2 = generate_java_expr e2 in
       (Format.asprintf "%s.%s(%s)" s1 (generate_binop (Pos.unmark op)) s2, ls1 @ ls2)
-  | Unop (Ast.Minus, e) ->
+  | Unop (Mast.Minus, e) ->
       let s, ls = generate_java_expr e in
       (Format.asprintf "%s.minus()" s, ls)
-  | Unop (Ast.Not, e) ->
+  | Unop (Mast.Not, e) ->
       let s, ls = generate_java_expr e in
       (Format.asprintf "%s.not()" s, ls)
   | Index _ -> assert false (* unimplemented *)
