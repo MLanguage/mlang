@@ -69,8 +69,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
             (Pos.get_position var.Variable.name)
       | TableVar _ -> ctx )
 
-and typecheck_func_args (f : func) (pos : Pos.position) :
-    ctx -> Mvg.expression Pos.marked list -> ctx =
+and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mvg.expression Pos.marked list -> ctx =
   match f with
   | SumFunc | MinFunc | MaxFunc ->
       fun ctx args ->
@@ -126,7 +125,7 @@ and typecheck_func_args (f : func) (pos : Pos.position) :
               Pos.format_position pos )
 
 let determine_def_complete_cover (table_var : Mvg.Variable.t) (size : int)
-    (defs : (int * Pos.position) list) : int list =
+    (defs : (int * Pos.t) list) : int list =
   (* Return all undefined indexes *)
   let defs_array = Array.make size false in
   List.iter

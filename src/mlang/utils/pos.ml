@@ -12,29 +12,29 @@
 
 (** {1 Source code position} *)
 
-type position = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
+type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
 (** A position in the source code is a file, as well as begin and end location of the form col:line *)
 
-let format_position fmt (pos : position) =
+let format_position fmt (pos : t) =
   let s, e = pos.pos_loc in
   Format.fprintf fmt "in file %s, from %d:%d to %d:%d" pos.pos_filename s.Lexing.pos_lnum
     (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
     e.Lexing.pos_lnum
     (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
-type 'a marked = 'a * position
-(** Everything related to the source code should keep its position stored, to improve error messages *)
+type 'a marked = 'a * t
+(** Everything related to the source code should keep its t stored, to improve error messages *)
 
-(** Placeholder position *)
-let no_pos : position =
+(** Placeholder t *)
+let no_pos : t =
   let zero_pos =
     { Lexing.pos_fname = ""; Lexing.pos_lnum = 0; Lexing.pos_cnum = 0; Lexing.pos_bol = 0 }
   in
-  { pos_filename = "unknown position"; pos_loc = (zero_pos, zero_pos) }
+  { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
 let unmark ((x, _) : 'a marked) : 'a = x
 
-let get_position ((_, x) : 'a marked) : position = x
+let get_position ((_, x) : 'a marked) : t = x
 
 let map_under_mark (f : 'a -> 'b) ((x, y) : 'a marked) : 'b marked = (f x, y)
 

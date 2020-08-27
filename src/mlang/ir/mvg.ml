@@ -21,7 +21,7 @@
 type execution_number = {
   rule_number : int;  (** Written in the name of the rule or verification condition *)
   seq_number : int;  (** Index in the sequence of the definitions in the rule *)
-  pos : Pos.position;
+  pos : Pos.t;
 }
 (** To determine in which order execute the different variable assigment we have to record their
     position in the graph. *)
@@ -137,7 +137,7 @@ type func =
     Because translating to MVG requires a lot of unrolling and expansion, we introduce a [LocalLet]
     construct to avoid code duplication. *)
 
-let current_visitor_pos : Pos.position ref = ref Pos.no_pos
+let current_visitor_pos : Pos.t ref = ref Pos.no_pos
 
 (** Custom visitor for the [Pos.marked] type *)
 class ['self] marked_iter =

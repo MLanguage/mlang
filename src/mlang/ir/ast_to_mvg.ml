@@ -29,7 +29,7 @@ type var_decl_data = {
   var_decl_is_table : int option;
   var_decl_descr : string option;
   var_decl_io : io_status;
-  var_pos : Pos.position;
+  var_pos : Pos.t;
 }
 (** Intermediate container for variable declaration info *)
 
@@ -111,13 +111,13 @@ type translating_context = {
 (** This context will be passed along during the translation *)
 
 (** Dummy execution number used for variable declarations *)
-let dummy_exec_number (pos : Pos.position) : Mvg.execution_number =
+let dummy_exec_number (pos : Pos.t) : Mvg.execution_number =
   { Mvg.rule_number = -1; Mvg.seq_number = 0; pos }
 
 (** When entering a loop, you are provided with a new loop context that you have to integrate to the
     general context with this function. The [position] argument is used to print an error message in
     case of the same loop parameters used in nested loops. *)
-let merge_loop_ctx (ctx : translating_context) (new_lc : loop_context) (pos : Pos.position) :
+let merge_loop_ctx (ctx : translating_context) (new_lc : loop_context) (pos : Pos.t) :
     translating_context =
   match ctx.lc with
   | None -> { ctx with lc = Some new_lc }
@@ -580,15 +580,15 @@ let rec translate_variable (idmap : Mvg.idmap) (exec_number : Mvg.execution_numb
 (** The following function deal with the "trying all cases" pragma *)
 and instantiate_generic_variables_parameters (idmap : Mvg.idmap)
     (exec_number : Mvg.execution_number) (table_definition : bool) (lc : loop_context option)
-    (gen_name : Ast.variable_generic_name) (current_lvalue : Ast.variable_name) (pos : Pos.position)
+    (gen_name : Ast.variable_generic_name) (current_lvalue : Ast.variable_name) (pos : Pos.t)
     (lax : bool) : Mvg.expression Pos.marked =
   instantiate_generic_variables_parameters_aux idmap exec_number table_definition lc
     gen_name.Ast.base current_lvalue ZPNone pos lax
 
 and instantiate_generic_variables_parameters_aux (idmap : Mvg.idmap)
     (exec_number : Mvg.execution_number) (table_definition : bool) (lc : loop_context option)
-    (var_name : string) (current_lvalue : Ast.variable_name) (pad_zero : zero_padding)
-    (pos : Pos.position) (lax : bool) : Mvg.expression Pos.marked =
+    (var_name : string) (current_lvalue : Ast.variable_name) (pad_zero : zero_padding) (pos : Pos.t)
+    (lax : bool) : Mvg.expression Pos.marked =
   try
     match
       ParamsMap.choose_opt

@@ -21,7 +21,8 @@ let to_mpp_callable (cname : string) (translated_names : string list) : mpp_call
       if List.mem x translated_names then MppFunction x
       else raise (Errors.ParsingError (Format.asprintf "unknown callable %s" x))
 
-let rec to_mpp_expr p translated_names scope (e : Cst.expr) : mpp_expr * Cst.var list =
+let rec to_mpp_expr (p : Mvg.program) (translated_names : mpp_compute_name list)
+    (scope : mpp_compute_name list) (e : Cst.expr) : mpp_expr * Cst.var list =
   let e', scope =
     match Pos.unmark e with
     | Constant i -> (Constant i, scope)
@@ -54,12 +55,7 @@ let rec to_mpp_stmt (p : Mvg.program) (translated_names : string list)
     match Pos.unmark stmt with
     | Assign (v, e) ->
         (Assign (to_scoped_var p v, fst @@ to_mpp_expr p translated_names scope e), scope)
-    | Conditional (b, t, f) ->
-        ( Conditional
-            ( fst @@ to_mpp_expr p translated_names scope b,
-              to_mpp_stmts p translated_names ~scope t,
-              to_mpp_stmts p translated_names ~scope f ),
-          scope )
+    | Conditional (_b, _t, _f) -> assert false
     | Delete v -> (Delete (to_scoped_var p v), scope)
     | Expr e ->
         let e', scope = to_mpp_expr p translated_names scope e in

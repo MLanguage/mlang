@@ -13,7 +13,7 @@
 
 type literal = I of int | F of float
 
-type var_values = (string * literal * Pos.position) list
+type var_values = (string * literal * Pos.t) list
 
 type test_file = {
   nom : string;

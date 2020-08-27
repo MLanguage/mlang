@@ -30,148 +30,148 @@ let fit_function (p : program) (f : mvg_function) : program =
     program_vars =
       VariableMap.mapi
         (fun var var_data ->
-           if VariableMap.mem var f.func_variable_inputs then
-             {
-               var_data with
-               var_io = Input;
-               var_definition =
-                 ( match var_data.var_definition with
-                   | InputVar | SimpleVar _ -> InputVar
-                   | TableVar _ ->
-                     Errors.raise_typ_error Variable
-                       "Defining a variable input for a table variable (%s, %a) is not supported"
-                       (Pos.unmark var.Variable.name) Pos.format_position
-                       (Pos.get_position var.Variable.name) );
-             }
-           else if VariableMap.mem var f.func_constant_inputs then
-             {
-               var_data with
-               var_io = Regular;
-               var_definition =
-                 ( match var_data.var_definition with
-                   | SimpleVar _ -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                   | InputVar -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                   | TableVar _ ->
-                     Errors.raise_typ_error Variable
-                       "Defining a constant input for a table variable (%s, %a) is not supported"
-                       (Pos.unmark var.Variable.name) Pos.format_position
-                       (Pos.get_position var.Variable.name) );
-             }
-           else if VariableMap.mem var f.func_outputs then
-             {
-               var_data with
-               var_io = Output;
-               var_definition =
-                 ( match var_data.var_definition with
-                   | SimpleVar old_e -> SimpleVar old_e
-                   | InputVar ->
-                     Errors.raise_typ_error Variable
-                       "Defining an output for a input variable (%s, %a) who is not defined is not \
-                        supported"
-                       (Pos.unmark var.Variable.name) Pos.format_position
-                       (Pos.get_position var.Variable.name)
-                   | TableVar _ ->
-                     Errors.raise_typ_error Variable
-                       "Defining an output for a table variable (%s, %a) is not supported"
-                       (Pos.unmark var.Variable.name) Pos.format_position
-                       (Pos.get_position var.Variable.name) );
-             }
-           else
-             {
-               var_data with
-               var_io = Regular;
-               var_definition =
-                 ( match var_data.var_definition with
-                   | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
-                   | SimpleVar old -> SimpleVar old
-                   | TableVar (size, old) -> TableVar (size, old) );
-             })
+          if VariableMap.mem var f.func_variable_inputs then
+            {
+              var_data with
+              var_io = Input;
+              var_definition =
+                ( match var_data.var_definition with
+                | InputVar | SimpleVar _ -> InputVar
+                | TableVar _ ->
+                    Errors.raise_typ_error Variable
+                      "Defining a variable input for a table variable (%s, %a) is not supported"
+                      (Pos.unmark var.Variable.name) Pos.format_position
+                      (Pos.get_position var.Variable.name) );
+            }
+          else if VariableMap.mem var f.func_constant_inputs then
+            {
+              var_data with
+              var_io = Regular;
+              var_definition =
+                ( match var_data.var_definition with
+                | SimpleVar _ -> SimpleVar (VariableMap.find var f.func_constant_inputs)
+                | InputVar -> SimpleVar (VariableMap.find var f.func_constant_inputs)
+                | TableVar _ ->
+                    Errors.raise_typ_error Variable
+                      "Defining a constant input for a table variable (%s, %a) is not supported"
+                      (Pos.unmark var.Variable.name) Pos.format_position
+                      (Pos.get_position var.Variable.name) );
+            }
+          else if VariableMap.mem var f.func_outputs then
+            {
+              var_data with
+              var_io = Output;
+              var_definition =
+                ( match var_data.var_definition with
+                | SimpleVar old_e -> SimpleVar old_e
+                | InputVar ->
+                    Errors.raise_typ_error Variable
+                      "Defining an output for a input variable (%s, %a) who is not defined is not \
+                       supported"
+                      (Pos.unmark var.Variable.name) Pos.format_position
+                      (Pos.get_position var.Variable.name)
+                | TableVar _ ->
+                    Errors.raise_typ_error Variable
+                      "Defining an output for a table variable (%s, %a) is not supported"
+                      (Pos.unmark var.Variable.name) Pos.format_position
+                      (Pos.get_position var.Variable.name) );
+            }
+          else
+            {
+              var_data with
+              var_io = Regular;
+              var_definition =
+                ( match var_data.var_definition with
+                | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
+                | SimpleVar old -> SimpleVar old
+                | TableVar (size, old) -> TableVar (size, old) );
+            })
         p.program_vars;
     program_conds = VariableMap.union (fun _ _ _ -> assert false) p.program_conds f.func_conds;
     program_exec_passes =
       ( match f.func_exec_passes with
-        | None -> p.program_exec_passes
-        | Some passes ->
+      | None -> p.program_exec_passes
+      | Some passes ->
           List.map
             (fun pass ->
-               {
-                 exec_pass_set_variables =
-                   VariableMap.mapi
-                     (fun var init_expr ->
-                        match Pos.unmark init_expr with
-                        | Literal (Float f) -> Pos.same_pos_as (Float f) init_expr
-                        | _ ->
+              {
+                exec_pass_set_variables =
+                  VariableMap.mapi
+                    (fun var init_expr ->
+                      match Pos.unmark init_expr with
+                      | Literal (Float f) -> Pos.same_pos_as (Float f) init_expr
+                      | _ ->
                           Errors.raise_typ_error Variable
                             "chaining variable definition should be a real literal %s %a"
                             (Pos.unmark var.Variable.name) Pos.format_position
                             (Pos.get_position init_expr))
-                     pass;
-               })
+                    pass;
+              })
             passes );
   }
 
 let var_set_from_variable_name_list (p : program) (names : string Pos.marked list) :
-  unit VariableMap.t =
+    unit VariableMap.t =
   List.fold_left
     (fun acc alias ->
-       let name =
-         try find_var_name_by_alias p (Pos.unmark alias)
-         with Errors.TypeError _ -> Pos.unmark alias
-       in
-       let var =
-         try Ast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.program_idmap)
-         with Not_found ->
-           Errors.raise_typ_error Variable "unknown variable %s %a" name Pos.format_position
-             (Pos.get_position alias)
-       in
-       VariableMap.add var () acc)
+      let name =
+        try find_var_name_by_alias p (Pos.unmark alias)
+        with Errors.TypeError _ -> Pos.unmark alias
+      in
+      let var =
+        try Ast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.program_idmap)
+        with Not_found ->
+          Errors.raise_typ_error Variable "unknown variable %s %a" name Pos.format_position
+            (Pos.get_position alias)
+      in
+      VariableMap.add var () acc)
     VariableMap.empty names
 
 let check_const_expression_is_really_const (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Literal _ -> ()
   | _ ->
-    Errors.raise_typ_error Variable
-      "Constant input defined in function specification file is not a constant expression (%a)"
-      Pos.format_position (Pos.get_position e)
+      Errors.raise_typ_error Variable
+        "Constant input defined in function specification file is not a constant expression (%a)"
+        Pos.format_position (Pos.get_position e)
 
 let const_var_set_from_list (p : program) (names : (string * Ast.expression Pos.marked) list) :
-  Mvg.expression Pos.marked VariableMap.t =
+    Mvg.expression Pos.marked VariableMap.t =
   List.fold_left
     (fun acc (name, e) ->
-       let var =
-         try
-           List.hd
-             (List.sort
-                (fun v1 v2 ->
+      let var =
+        try
+          List.hd
+            (List.sort
+               (fun v1 v2 ->
+                 compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
+               (Pos.VarNameToID.find name p.program_idmap))
+        with Not_found -> (
+          try
+            let name = find_var_name_by_alias p name in
+            List.hd
+              (List.sort
+                 (fun v1 v2 ->
                    compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
-                (Pos.VarNameToID.find name p.program_idmap))
-         with Not_found -> (
-             try
-               let name = find_var_name_by_alias p name in
-               List.hd
-                 (List.sort
-                    (fun v1 v2 ->
-                       compare v1.Mvg.Variable.execution_number v2.Mvg.Variable.execution_number)
-                    (Pos.VarNameToID.find name p.program_idmap))
-             with Errors.TypeError (Errors.Variable, _) ->
-               Errors.raise_typ_error Variable "Unknown variable %s (%a)" name Pos.format_position
-                 (Pos.get_position e) )
-       in
-       let new_e =
-         Ast_to_mvg.translate_expression
-           {
-             table_definition = false;
-             idmap = p.program_idmap;
-             lc = None;
-             int_const_values = VariableMap.empty;
-             exec_number = Ast_to_mvg.dummy_exec_number Pos.no_pos;
-             current_lvalue = name;
-           }
-           e
-       in
-       check_const_expression_is_really_const new_e;
-       VariableMap.add var new_e acc)
+                 (Pos.VarNameToID.find name p.program_idmap))
+          with Errors.TypeError (Errors.Variable, _) ->
+            Errors.raise_typ_error Variable "Unknown variable %s (%a)" name Pos.format_position
+              (Pos.get_position e) )
+      in
+      let new_e =
+        Ast_to_mvg.translate_expression
+          {
+            table_definition = false;
+            idmap = p.program_idmap;
+            lc = None;
+            int_const_values = VariableMap.empty;
+            exec_number = Ast_to_mvg.dummy_exec_number Pos.no_pos;
+            current_lvalue = name;
+          }
+          e
+      in
+      check_const_expression_is_really_const new_e;
+      VariableMap.add var new_e acc)
     VariableMap.empty names
 
 let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_data VariableMap.t =
@@ -193,14 +193,14 @@ let translate_cond idmap (conds : Ast.expression Pos.marked list) : condition_da
   let verif_conds =
     List.fold_left
       (fun acc cond ->
-         if not (check_boolean cond) then
-           Errors.raise_typ_error Typing "in spec: cond %a should have type bool"
-             Format_ast.format_expression (Pos.unmark cond)
-         else
-           Pos.same_pos_as
-             { Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
-             cond
-           :: acc)
+        if not (check_boolean cond) then
+          Errors.raise_typ_error Typing "in spec: cond %a should have type bool"
+            Format_ast.format_expression (Pos.unmark cond)
+        else
+          Pos.same_pos_as
+            { Ast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
+            cond
+          :: acc)
       [] conds
   in
   let program =
@@ -217,8 +217,8 @@ let read_function_from_spec (p : program) : mvg_function =
   let spec_file =
     match !Cli.function_spec with
     | None ->
-      raise
-        (Errors.ArgumentError "Function specification file is not specified using --function_spec")
+        raise
+          (Errors.ArgumentError "Function specification file is not specified using --function_spec")
     | Some f -> f
   in
   let input = open_in spec_file in
@@ -241,53 +241,55 @@ let read_function_from_spec (p : program) : mvg_function =
       func_conds = translate_cond p.program_idmap func_spec.Ast.spec_conditions;
       func_exec_passes =
         ( if func_spec.Ast.spec_exec_passes = [] then Some [ VariableMap.empty ]
-          else
-            Some
-              (List.map (fun pass -> const_var_set_from_list p pass) func_spec.Ast.spec_exec_passes)
+        else
+          Some
+            (List.map (fun pass -> const_var_set_from_list p pass) func_spec.Ast.spec_exec_passes)
         );
     }
   with
   | Errors.LexingError msg | Errors.ParsingError msg ->
-    Cli.error_print "%s" msg;
-    close_in input;
-    exit 1
+      Cli.error_print "%s" msg;
+      close_in input;
+      exit 1
   | Parser.Error ->
-    Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
-      Errors.print_lexer_position filebuf.lex_curr_p;
-    close_in input;
-    exit 1
+      Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
+        Errors.print_lexer_position filebuf.lex_curr_p;
+      close_in input;
+      exit 1
 
 let make_function_from_program (_program : Interpreter.interpretable_program) :
-  literal VariableMap.t -> Interpreter.ctx =
-  fun _ -> assert false (* TODO: reimplement *)
+    literal VariableMap.t -> Interpreter.ctx =
+ fun _ -> assert false
+
+(* TODO: reimplement *)
 
 let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
   Cli.result_print "Enter the input values of the program, followed by a semicolon:";
   VariableMap.mapi
     (fun var _ ->
-       Format.printf "%s (%s) = "
-         (match var.Variable.alias with Some s -> s | None -> Pos.unmark var.Variable.name)
-         (Pos.unmark var.Variable.descr);
-       let value = read_line () in
-       Parse_utils.current_file := "standard input";
-       try
-         let value_ast = Parser.literal_input token (Lexing.from_string value) in
-         match value_ast with
-         | Ast.Float f -> Mvg.Float f
-         | Ast.Variable _ ->
-           Errors.raise_typ_error Variable "Function input must be a numeric constant"
-       with
-       | Errors.LexingError msg | Errors.ParsingError msg ->
-         Cli.error_print "%s" msg;
-         exit 1
-       | Parser.Error ->
-         Cli.error_print "Lexer error in input!";
-         exit 1)
+      Format.printf "%s (%s) = "
+        (match var.Variable.alias with Some s -> s | None -> Pos.unmark var.Variable.name)
+        (Pos.unmark var.Variable.descr);
+      let value = read_line () in
+      Parse_utils.current_file := "standard input";
+      try
+        let value_ast = Parser.literal_input token (Lexing.from_string value) in
+        match value_ast with
+        | Ast.Float f -> Mvg.Float f
+        | Ast.Variable _ ->
+            Errors.raise_typ_error Variable "Function input must be a numeric constant"
+      with
+      | Errors.LexingError msg | Errors.ParsingError msg ->
+          Cli.error_print "%s" msg;
+          exit 1
+      | Parser.Error ->
+          Cli.error_print "Lexer error in input!";
+          exit 1)
     f.func_variable_inputs
 
 let print_output (f : mvg_function) (results : Interpreter.ctx) : unit =
   VariableMap.iter
     (fun var value ->
-       if VariableMap.mem var f.func_outputs then
-         Cli.result_print "%a" Interpreter.format_var_literal_with_var (var, value))
+      if VariableMap.mem var f.func_outputs then
+        Cli.result_print "%a" Interpreter.format_var_literal_with_var (var, value))
     results.ctx_vars
