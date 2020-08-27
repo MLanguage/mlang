@@ -286,10 +286,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
       }
     in
     let exec_order =
-      if real_args = [] then m_program.ip_utils.utilities_execution_order
-      else
-        Interpreter.shrink_execution_order_to_fit_outputs
-          m_program.ip_utils.utilities_execution_order m_program.ip_program false
+      m_program.ip_utils.utilities_execution_order
     in
     let inlined_program =
       list_map_opt
