@@ -174,7 +174,7 @@ let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_de
   match def with SimpleVar e -> check_non_recursivity_expr e var | TableVar _ | InputVar -> ()
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
-let typecheck (p : program) : program =
+let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
   let _are_tables, ctx, p_vars =
     Mir.VariableMap.fold
       (fun var def (acc, ctx, p_vars) ->
@@ -203,7 +203,7 @@ let typecheck (p : program) : program =
                   (VariableMap.add var true acc, new_ctx, p_vars)
                 else
                   let previous_var_def =
-                    Mast_to_mvg.get_var_from_name p.program_idmap var.Variable.name
+                    Mast_to_mvg.get_var_from_name p.program.program_idmap var.Variable.name
                       var.Variable.execution_number false
                   in
                   let new_es =
@@ -228,11 +228,14 @@ let typecheck (p : program) : program =
         | InputVar ->
             if VariableMap.mem var acc then (acc, ctx, p_vars)
             else (VariableMap.add var false acc, ctx, p_vars))
-      p.program_vars
-      (Mir.VariableMap.empty, { ctx_program = p; ctx_is_generic_table = false }, p.program_vars)
+      p.program.program_vars
+      ( Mir.VariableMap.empty,
+        { ctx_program = p.program; ctx_is_generic_table = false },
+        p.program.program_vars )
   in
-  let _ = typecheck_program_conds ctx p.program_conds in
-  { p with program_vars = p_vars }
+  let _ = typecheck_program_conds ctx p.program.program_conds in
+  (* the typechecking modifications do not change the dependency graph *)
+  { p with program = { p.program with program_vars = p_vars } }
 
 (* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
@@ -358,32 +361,37 @@ let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marke
       Pos.same_pos_as (FunctionCall (InfFunc, [ expand_functions_expr arg ])) e
   | _ -> e
 
-let expand_functions (p : program) : program =
+let expand_functions (p : Mir_interface.full_program) : Mir_interface.full_program =
   {
+    (* this expansion does not modify the dependency graph *)
     p with
-    program_vars =
-      VariableMap.map
-        (fun def ->
-          match def.var_definition with
-          | InputVar -> def
-          | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
-          | TableVar (size, defg) -> (
-              match defg with
-              | IndexGeneric e ->
-                  {
-                    def with
-                    var_definition = TableVar (size, IndexGeneric (expand_functions_expr e));
-                  }
-              | IndexTable es ->
-                  {
-                    def with
-                    var_definition =
-                      TableVar
-                        (size, IndexTable (IndexMap.map (fun e -> expand_functions_expr e) es));
-                  } ))
-        p.program_vars;
-    program_conds =
-      VariableMap.map
-        (fun cond -> { cond with cond_expr = expand_functions_expr cond.cond_expr })
-        p.program_conds;
+    program =
+      {
+        p.program with
+        program_vars =
+          VariableMap.map
+            (fun def ->
+              match def.var_definition with
+              | InputVar -> def
+              | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
+              | TableVar (size, defg) -> (
+                  match defg with
+                  | IndexGeneric e ->
+                      {
+                        def with
+                        var_definition = TableVar (size, IndexGeneric (expand_functions_expr e));
+                      }
+                  | IndexTable es ->
+                      {
+                        def with
+                        var_definition =
+                          TableVar
+                            (size, IndexTable (IndexMap.map (fun e -> expand_functions_expr e) es));
+                      } ))
+            p.program.program_vars;
+        program_conds =
+          VariableMap.map
+            (fun cond -> { cond with cond_expr = expand_functions_expr cond.cond_expr })
+            p.program.program_conds;
+      };
   }

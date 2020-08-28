@@ -23,7 +23,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     backend function_spec mpp_file output real_precision run_all_tests run_test year;
   try
     Cli.debug_print "Reading files...";
-    let program = ref [] in
+    let m_program = ref [] in
     if List.length !Cli.source_files = 0 then
       raise (Errors.ArgumentError "please provide at least one M source file");
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
@@ -46,7 +46,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         try
           Parse_utils.current_file := source_file;
           let commands = Mparser.source_file token filebuf in
-          program := commands :: !program
+          m_program := commands :: !m_program
         with
         | Errors.LexingError msg | Errors.ParsingError msg -> Cli.error_print "%s" msg
         | Mparser.Error ->
@@ -61,46 +61,48 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       !Cli.source_files;
     finish "completed!";
     let application = if !Cli.application = "" then None else Some !Cli.application in
-    let program = Mast_to_mvg.translate !program application in
+    let m_program = Mast_to_mvg.translate !m_program application in
+    let full_m_program = Mir_interface.to_full_program m_program in
     Cli.debug_print "Expanding function definitions...";
-    let program = Mir_typechecker.expand_functions program in
+    let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
-    let program = Mir_typechecker.typecheck program in
+    let full_m_program = Mir_typechecker.typecheck full_m_program in
     Cli.debug_print "Checking for circular variable definitions...";
-    let dep_graph = Mir_dependency_graph.create_dependency_graph program in
-    ignore (Mir_dependency_graph.check_for_cycle dep_graph program true);
-    let mpp = Option.get @@ Mpp_frontend.process mpp_file program in
+    ignore
+      (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
+    let m_program = full_m_program.program in
+    let mpp = Option.get @@ Mpp_frontend.process mpp_file m_program in
     Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests program mpp tests
+      Test_interpreter.check_all_tests m_program mpp tests
     else if !Cli.run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test_interpreter.check_test program mpp test;
+      Test_interpreter.check_test m_program mpp test;
       Cli.result_print "Test passed!@."
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let mvg_func = Mir_interface.read_function_from_spec program in
-      let program = Mir_interface.fit_function program mvg_func in
-      let program =
-        if !Cli.optimize then program (* todo: reinstate optimizations *) else program
+      let mvg_func = Mir_interface.read_function_from_spec m_program in
+      let m_program = Mir_interface.fit_function m_program mvg_func in
+      let m_program =
+        if !Cli.optimize then m_program (* todo: reinstate optimizations *) else m_program
       in
-      let dep_graph = Mir_dependency_graph.create_dependency_graph program in
+      let dep_graph = Mir_dependency_graph.create_dependency_graph m_program in
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let program =
+        let m_full_program =
           {
-            Mir_interface.program;
+            Mir_interface.program = m_program;
             Mir_interface.dep_graph;
             Mir_interface.execution_order = Mir_dependency_graph.get_execution_order dep_graph;
           }
         in
-        let f = Mir_interface.make_function_from_program program in
+        let f = Mir_interface.make_function_from_program m_full_program in
         let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
         Mir_interface.print_output mvg_func results;
-        Bir_interpreter.repl_debugguer results program.program
+        Bir_interpreter.repl_debugguer results m_full_program.program
       end
       else if
         String.lowercase_ascii !Cli.backend = "python"
@@ -109,7 +111,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_python.generate_python_program program dep_graph !Cli.output_file;
+        Bir_to_python.generate_python_program m_program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Python function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -118,7 +120,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Java...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_java.generate_java_program program dep_graph !Cli.output_file;
+        Bir_to_java.generate_java_program m_program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Java function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -127,7 +129,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Clojure...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_clojure.generate_clj_program program dep_graph !Cli.output_file;
+        Bir_to_clojure.generate_clj_program m_program dep_graph !Cli.output_file;
         Cli.result_print
           "Generated Clojure function from requested set of inputs and outputs, results written to \
            %s\n"

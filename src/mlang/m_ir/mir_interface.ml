@@ -263,6 +263,10 @@ type full_program = {
   program : Mir.program;
 }
 
+let to_full_program (program : program) : full_program =
+  let dep_graph = Mir_dependency_graph.create_dependency_graph program in
+  { program; dep_graph; execution_order = Mir_dependency_graph.get_execution_order dep_graph }
+
 let make_function_from_program (_program : full_program) :
     literal VariableMap.t -> Bir_interpreter.ctx =
  fun _ -> assert false
