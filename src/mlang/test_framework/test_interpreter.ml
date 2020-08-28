@@ -114,8 +114,8 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
     func_conds,
     input_file )
 
-let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
-    (test_conds : condition_data VariableMap.t) : Interpreter.interpretable_program =
+let add_test_conds_usage_to_outputs (p : Mir_interface.interpretable_program)
+    (test_conds : condition_data VariableMap.t) : Mir_interface.interpretable_program =
   let outputs =
     VariableMap.fold
       (fun _ test_cond acc ->
@@ -154,7 +154,7 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
   let p =
     {
-      Interpreter.ip_program = p;
+      Mir_interface.ip_program = p;
       ip_utils = { utilities_dep_graph = dep_graph; utilities_execution_order = exec_order };
     }
   in
@@ -163,7 +163,8 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mir.format_new_program
      combined_program; *)
   let ctx =
-    Interpreter.evaluate_program combined_program input_file (Interpreter.empty_ctx p.ip_program)
+    Bir_interpreter.evaluate_program combined_program input_file
+      (Bir_interpreter.empty_ctx p.ip_program)
   in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
@@ -189,12 +190,12 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   try
     List.iter
       (fun (_, cond) ->
-        let result = Interpreter.evaluate_expr ctx p.ip_program cond.cond_expr in
+        let result = Bir_interpreter.evaluate_expr ctx p.ip_program cond.cond_expr in
         match result with
         | Float f when f <> 0. ->
             raise
-              (Interpreter.RuntimeError
-                 ( Interpreter.ConditionViolated
+              (Bir_interpreter.RuntimeError
+                 ( Bir_interpreter.ConditionViolated
                      ( cond.cond_errors,
                        cond.cond_expr,
                        [
@@ -217,15 +218,15 @@ let check_test (p : Mir.program) mpp (test_name : string) =
                    ctx ))
         | _ -> ())
       (List.sort exec_order_compare test_cond_list)
-  with Interpreter.RuntimeError (e, ctx) ->
-    if !Interpreter.exit_on_rte then begin
-      Cli.error_print "%a" Interpreter.format_runtime_error e;
+  with Bir_interpreter.RuntimeError (e, ctx) ->
+    if !Bir_interpreter.exit_on_rte then begin
+      Cli.error_print "%a" Bir_interpreter.format_runtime_error e;
       flush_all ();
       flush_all ();
-      if !Interpreter.repl_debug then Interpreter.repl_debugguer ctx p.ip_program;
+      if !Bir_interpreter.repl_debug then Bir_interpreter.repl_debugguer ctx p.ip_program;
       exit 1
     end
-    else raise (Interpreter.RuntimeError (e, ctx))
+    else raise (Bir_interpreter.RuntimeError (e, ctx))
 
 let check_all_tests (p : Mir.program) mpp (test_dir : string) =
   let arr = Sys.readdir test_dir in
@@ -233,7 +234,7 @@ let check_all_tests (p : Mir.program) mpp (test_dir : string) =
     Array.of_list
     @@ List.filter (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x)) (Array.to_list arr)
   in
-  Interpreter.exit_on_rte := false;
+  Bir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
   Cli.warning_flag := false;
@@ -246,10 +247,10 @@ let check_all_tests (p : Mir.program) mpp (test_dir : string) =
       Cli.debug_flag := true;
       (name :: successes, failures)
     with
-    | Interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
+    | Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
         Cli.debug_flag := true;
         match (bindings, Pos.unmark expr) with
-        | ( [ (v, Interpreter.SimpleVar l1) ],
+        | ( [ (v, Bir_interpreter.SimpleVar l1) ],
             Unop
               ( Mast.Not,
                 ( Mir.Binop

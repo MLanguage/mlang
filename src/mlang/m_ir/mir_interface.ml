@@ -257,8 +257,15 @@ let read_function_from_spec (p : program) : mvg_function =
       close_in input;
       exit 1
 
-let make_function_from_program (_program : Interpreter.interpretable_program) :
-    literal VariableMap.t -> Interpreter.ctx =
+type evaluation_utilities = {
+  utilities_dep_graph : Mir_dependency_graph.G.t;
+  utilities_execution_order : Mir_dependency_graph.execution_order;
+}
+
+type interpretable_program = { ip_program : Mir.program; ip_utils : evaluation_utilities }
+
+let make_function_from_program (_program : interpretable_program) :
+    literal VariableMap.t -> Bir_interpreter.ctx =
  fun _ -> assert false
 
 (* TODO: reimplement *)
@@ -287,9 +294,9 @@ let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
           exit 1)
     f.func_variable_inputs
 
-let print_output (f : mvg_function) (results : Interpreter.ctx) : unit =
+let print_output (f : mvg_function) (results : Bir_interpreter.ctx) : unit =
   VariableMap.iter
     (fun var value ->
       if VariableMap.mem var f.func_outputs then
-        Cli.result_print "%a" Interpreter.format_var_literal_with_var (var, value))
+        Cli.result_print "%a" Bir_interpreter.format_var_literal_with_var (var, value))
     results.ctx_vars

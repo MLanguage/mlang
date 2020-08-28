@@ -35,8 +35,8 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
   | hd :: tl -> (
       match f hd with None -> list_map_opt f tl | Some fhd -> fhd :: list_map_opt f tl )
 
-let generate_input_condition (crit : Mir.Variable.t -> bool) (p : Interpreter.interpretable_program)
-    (pos : Pos.t) =
+let generate_input_condition (crit : Mir.Variable.t -> bool)
+    (p : Mir_interface.interpretable_program) (pos : Pos.t) =
   let variables_to_check =
     Mir.VariableMap.filter (fun var _ -> crit var) p.ip_program.program_vars
   in
@@ -53,14 +53,14 @@ let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
     v.Mir.Variable.attributes
 
 let cond_DepositDefinedVariables :
-    Interpreter.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
+    Mir_interface.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
   generate_input_condition (var_is_ "acompte")
 
 let cond_TaxbenefitDefinedVariables :
-    Interpreter.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
+    Mir_interface.interpretable_program -> Pos.t -> Mir.expression Pos.marked =
   generate_input_condition (var_is_ "avfisc")
 
-let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) (pos : Pos.t) :
+let cond_TaxbenefitCeiledVariables (p : Mir_interface.interpretable_program) (pos : Pos.t) :
     Mir.expression Pos.marked =
   (* commented aliases do not exist in the 2018 version *)
   let aliases_list =
@@ -103,8 +103,8 @@ let cond_TaxbenefitCeiledVariables (p : Interpreter.interpretable_program) (pos 
   in
   generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
 
-let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : string list) :
-    Interpreter.interpretable_program =
+let reset_and_add_outputs (p : Mir_interface.interpretable_program) (outputs : string list) :
+    Mir_interface.interpretable_program =
   let outputs = List.map (fun out -> Mir.find_var_by_name p.ip_program out) outputs in
   let program =
     {
@@ -116,10 +116,10 @@ let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : str
               match data.Mir.var_io with
               | Input ->
                   raise
-                    (Interpreter.RuntimeError
-                       ( Interpreter.IncorrectOutputVariable
+                    (Bir_interpreter.RuntimeError
+                       ( Bir_interpreter.IncorrectOutputVariable
                            (Format.asprintf "%a is an input" Format_mir.format_variable var),
-                         Interpreter.empty_ctx p.ip_program ))
+                         Bir_interpreter.empty_ctx p.ip_program ))
               | Output -> data
               | Regular -> { data with var_io = Output }
             else
@@ -132,7 +132,7 @@ let reset_and_add_outputs (p : Interpreter.interpretable_program) (outputs : str
   { p with ip_program = program }
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
-    (m_program : Interpreter.interpretable_program) (compute_decl : Mpp_ir.mpp_compute)
+    (m_program : Mir_interface.interpretable_program) (compute_decl : Mpp_ir.mpp_compute)
     (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
@@ -140,7 +140,7 @@ let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
       (ctx, stmts @ stmt'))
     (ctx, []) compute_decl.Mpp_ir.body
 
-and translate_mpp_expr (p : Interpreter.interpretable_program) (ctx : translation_ctx)
+and translate_mpp_expr (p : Mir_interface.interpretable_program) (ctx : translation_ctx)
     (expr : Mpp_ir.mpp_expr_kind Pos.marked) : Mir.expression =
   let pos = Pos.get_position expr in
   match Pos.unmark expr with
@@ -181,8 +181,9 @@ and translate_mpp_expr (p : Interpreter.interpretable_program) (ctx : translatio
   | Call (TaxbenefitDefinedVariables, []) -> Pos.unmark @@ cond_TaxbenefitDefinedVariables p pos
   | _ -> assert false
 
-and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_program) func_args
-    (ctx : translation_ctx) stmt : translation_ctx * Bir.stmt list =
+and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
+    (m_program : Mir_interface.interpretable_program) (func_args : Mpp_ir.scoped_var list)
+    (ctx : translation_ctx) (stmt : Mpp_ir.mpp_stmt) : translation_ctx * Bir.stmt list =
   let pos = Pos.get_position stmt in
   match Pos.unmark stmt with
   | Mpp_ir.Assign (Local l, expr) ->
@@ -286,7 +287,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
         {
           m_program with
           ip_program =
-            Interpreter.replace_undefined_with_input_variables m_program.ip_program
+            Bir_interpreter.replace_undefined_with_input_variables m_program.ip_program
               (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
@@ -316,7 +317,7 @@ and translate_mpp_stmt mpp_program (m_program : Interpreter.interpretable_progra
   | _ -> assert false
 
 and translate_mpp_stmts (mpp_program : Mpp_ir.mpp_compute list)
-    (m_program : Interpreter.interpretable_program) (func_args : Mpp_ir.scoped_var list)
+    (m_program : Mir_interface.interpretable_program) (func_args : Mpp_ir.scoped_var list)
     (ctx : translation_ctx) (stmts : Mpp_ir.mpp_stmt list) : translation_ctx * Bir.stmt list =
   List.fold_left
     (fun (ctx, stmts) stmt ->
@@ -348,7 +349,7 @@ and generate_partition mpp_program m_program func_args (filter : Mir.Variable.t 
   let ctx, post = translate_mpp_stmts mpp_program m_program func_args ctx mpp_post in
   (ctx, pre, post)
 
-let create_combined_program (m_program : Interpreter.interpretable_program)
+let create_combined_program (m_program : Mir_interface.interpretable_program)
     (mpp_program : Mpp_ir.mpp_program) : Bir.program =
   let mpp_program = List.rev mpp_program in
   {

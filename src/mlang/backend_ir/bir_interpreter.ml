@@ -403,13 +403,6 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
                   (Mir_dependency_graph.G.pred dep_graph var) ),
          ctx ))
 
-type evaluation_utilities = {
-  utilities_dep_graph : Mir_dependency_graph.G.t;
-  utilities_execution_order : Mir_dependency_graph.execution_order;
-}
-
-type interpretable_program = { ip_program : Mir.program; ip_utils : evaluation_utilities }
-
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
    read directly from the input map. However, one can pass inside the input map a value for a
    variable whose I/O type was not properly set to InputVariable. This function is precisely for
