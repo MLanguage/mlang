@@ -15,7 +15,7 @@
 
 (** Each node corresponds to a variable, each edge to a variable use. The edges in the graph go from
     output to inputs. *)
-module DepGraph = Graph.Persistent.Digraph.ConcreteBidirectional (struct
+module G = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   type t = Mir.Variable.t
 
   let hash v = v.Mir.Variable.id
@@ -48,37 +48,36 @@ let rec get_used_variables (e : Mir.expression Pos.marked) (acc : unit Mir.Varia
   | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
   | Mir.Var var -> Mir.VariableMap.add var () acc
 
-let add_usages (lvar : Mir.Variable.t) (e : Mir.expression Pos.marked) (acc : DepGraph.t) :
-    DepGraph.t =
-  let acc = DepGraph.add_vertex acc lvar in
-  let add_edge acc var lvar = DepGraph.add_edge acc var lvar in
+let add_usages (lvar : Mir.Variable.t) (e : Mir.expression Pos.marked) (acc : G.t) : G.t =
+  let acc = G.add_vertex acc lvar in
+  let add_edge acc var lvar = G.add_edge acc var lvar in
   let usages = get_used_variables e Mir.VariableMap.empty in
   Mir.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
 
 (** The dependency graph also includes nodes for the conditions to be checked at execution *)
-let create_dependency_graph (p : Mir.program) : DepGraph.t =
+let create_dependency_graph (p : Mir.program) : G.t =
   let g =
     Mir.VariableMap.fold
       (fun var def acc ->
         match def.Mir.var_definition with
-        | Mir.InputVar -> DepGraph.add_vertex acc var
+        | Mir.InputVar -> G.add_vertex acc var
         | Mir.SimpleVar e -> add_usages var e acc
         | Mir.TableVar (_, def) -> (
             match def with
             | Mir.IndexGeneric e -> add_usages var e acc
             | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc ))
-      p.program_vars DepGraph.empty
+      p.program_vars G.empty
   in
   (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
   let g =
-    DepGraph.fold_vertex
-      (fun (var : Mir.Variable.t) (g : DepGraph.t) ->
+    G.fold_vertex
+      (fun (var : Mir.Variable.t) (g : G.t) ->
         match Mir.VariableMap.find_opt var p.program_vars with
         | None -> g
         | Some data ->
             if data.Mir.var_io = Mir.Output then
-              DepGraph.fold_succ
-                (fun (succ : Mir.Variable.t) (g : DepGraph.t) -> DepGraph.remove_edge g var succ)
+              G.fold_succ
+                (fun (succ : Mir.Variable.t) (g : G.t) -> G.remove_edge g var succ)
                 g var g
             else g)
       g g
@@ -91,7 +90,7 @@ let program_when_printing : Mir.program option ref = ref None
 
 (** The graph is output in the Dot format *)
 module Dot = Graph.Graphviz.Dot (struct
-  include DepGraph (* use the graph module from above *)
+  include G (* use the graph module from above *)
 
   let edge_attributes _ = [ `Color 0xffa366 ]
 
@@ -163,25 +162,25 @@ module Dot = Graph.Graphviz.Dot (struct
   let graph_attributes _ = [ `Bgcolor 0x00001a ]
 end)
 
-module DepgGraphOper = Graph.Oper.P (DepGraph)
+module GOper = Graph.Oper.P (G)
 
-let print_dependency_graph (filename : string) (graph : DepGraph.t) (p : Mir.program) : unit =
+let print_dependency_graph (filename : string) (graph : G.t) (p : Mir.program) : unit =
   let file = open_out_bin filename in
   (* let graph = DepgGraphOper.transitive_reduction graph in *)
   program_when_printing := Some p;
   Cli.debug_print "Writing variables dependency graph to %s (%d variables)" filename
-    (DepGraph.nb_vertex graph);
+    (G.nb_vertex graph);
   if !Cli.debug_flag then Dot.output_graph file graph;
   close_out file
 
-module SCC = Graph.Components.Make (DepGraph)
+module SCC = Graph.Components.Make (G)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
 (** Outputs [true] and a warning in case of cycles. *)
-let check_for_cycle (g : DepGraph.t) (p : Mir.program) (print_debug : bool) : bool =
+let check_for_cycle (g : G.t) (p : Mir.program) (print_debug : bool) : bool =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
-  if List.length sccs < DepGraph.nb_vertex g then begin
+  if List.length sccs < G.nb_vertex g then begin
     let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
     let cycles_strings = ref [] in
     let dir = "variable_cycles" in
@@ -192,9 +191,9 @@ let check_for_cycle (g : DepGraph.t) (p : Mir.program) (print_debug : bool) : bo
       List.iteri
         (fun i scc ->
           let new_g =
-            DepGraph.fold_vertex
+            G.fold_vertex
               (fun vertex new_g ->
-                if List.mem vertex scc then new_g else DepGraph.remove_vertex new_g vertex)
+                if List.mem vertex scc then new_g else G.remove_vertex new_g vertex)
               g g
           in
           let filename = Format.asprintf "%s/strongly_connected_component_%d.dot" dir i in
@@ -220,13 +219,13 @@ let check_for_cycle (g : DepGraph.t) (p : Mir.program) (print_debug : bool) : bo
 
 module OutputToInputReachability =
   Graph.Fixpoint.Make
-    (DepGraph)
+    (G)
     (struct
-      type vertex = DepGraph.E.vertex
+      type vertex = G.E.vertex
 
-      type edge = DepGraph.E.t
+      type edge = G.E.t
 
-      type g = DepGraph.t
+      type g = G.t
 
       type data = bool
 
@@ -239,4 +238,39 @@ module OutputToInputReachability =
       let analyze _ x = x
     end)
 
-module TopologicalOrder = Graph.Topological.Make (DepGraph)
+module TopologicalOrder = Graph.Topological.Make (G)
+module ExecutionOrder = Graph.Topological.Make (G)
+
+type execution_order = Mir.Variable.t list
+(** Each map is the set of variables defined circularly in this strongly connected component *)
+
+let get_execution_order (dep_graph : G.t) : execution_order =
+  List.rev (ExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph [])
+
+(** This custom visitor uses [get_execution_order] to visit all the expressions in the program in
+    the correct order. *)
+class ['self] program_iter =
+  object (self : 'self)
+    inherit [_] Mir.variable_data_iter
+
+    inherit [_] Mir.condition_data_iter [@@warning "-7"]
+
+    method visit_program env (this : Mir.program) =
+      let dep_graph = create_dependency_graph this in
+      let exec_order = get_execution_order dep_graph in
+      List.iter
+        (fun var ->
+          try
+            let data = Mir.VariableMap.find var this.program_vars in
+            self#visit_variable_data env data
+          with Not_found -> (
+            try
+              let cond = Mir.VariableMap.find var this.program_conds in
+              self#visit_condition_data env cond
+            with Not_found -> assert false ))
+        exec_order
+  end
+
+let fold_on_vars (f : Mir.Variable.t -> 'a -> 'a) (dep_graph : G.t) (init : 'a) : 'a =
+  let exec_order = get_execution_order dep_graph in
+  List.fold_left (fun acc v -> f v acc) init exec_order

@@ -120,7 +120,7 @@ let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
     VariableMap.fold
       (fun _ test_cond acc ->
         let vars_used_by_test =
-          Dependency.get_used_variables test_cond.cond_expr VariableMap.empty
+          M_dependency_graph.get_used_variables test_cond.cond_expr VariableMap.empty
         in
         VariableMap.fold
           (fun used_var _ acc -> VariableMap.add used_var () acc)
@@ -150,8 +150,8 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
   let p = Interface.fit_function p f in
-  let dep_graph = Dependency.create_dependency_graph p in
-  let exec_order = Execution_order.get_execution_order dep_graph in
+  let dep_graph = M_dependency_graph.create_dependency_graph p in
+  let exec_order = M_dependency_graph.get_execution_order dep_graph in
   let p =
     {
       Interpreter.ip_program = p;
@@ -169,7 +169,7 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   let execution_order_list : (Variable.t * int) list =
     List.mapi
       (fun i var -> (var, i))
-      (Execution_order.get_execution_order p.ip_utils.utilities_dep_graph)
+      (M_dependency_graph.get_execution_order p.ip_utils.utilities_dep_graph)
   in
   let execution_order_map : int VariableMap.t =
     List.fold_left

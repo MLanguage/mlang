@@ -145,11 +145,11 @@ let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatt
               Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
             cond.cond_errors))
 
-let generate_clj_program (program : program) (dep_graph : Dependency.DepGraph.t) (filename : string)
-    : unit =
+let generate_clj_program (program : program) (dep_graph : M_dependency_graph.G.t)
+    (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let exec_order = Execution_order.get_execution_order dep_graph in
+  let exec_order = M_dependency_graph.get_execution_order dep_graph in
   Format.fprintf oc "; %s\n\n" Prelude.message;
   let output_vars =
     List.map

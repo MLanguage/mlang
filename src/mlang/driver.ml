@@ -63,12 +63,12 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     let application = if !Cli.application = "" then None else Some !Cli.application in
     let program = Mast_to_mvg.translate !program application in
     Cli.debug_print "Expanding function definitions...";
-    let program = Functions.expand_functions program in
+    let program = Typechecker.expand_functions program in
     Cli.debug_print "Typechecking...";
     let program = Typechecker.typecheck program in
     Cli.debug_print "Checking for circular variable definitions...";
-    let dep_graph = Dependency.create_dependency_graph program in
-    ignore (Dependency.check_for_cycle dep_graph program true);
+    let dep_graph = M_dependency_graph.create_dependency_graph program in
+    ignore (M_dependency_graph.check_for_cycle dep_graph program true);
     let mpp = Option.get @@ Mpp_frontend.process mpp_file program in
     Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
@@ -84,8 +84,10 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Interface.read_function_from_spec program in
       let program = Interface.fit_function program mvg_func in
-      let program = if !Cli.optimize then Optimization.optimize program dep_graph else program in
-      let dep_graph = Dependency.create_dependency_graph program in
+      let program =
+        if !Cli.optimize then program (* todo: reinstate optimizations *) else program
+      in
+      let dep_graph = M_dependency_graph.create_dependency_graph program in
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let program =
@@ -95,7 +97,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
               {
                 Interpreter.utilities_dep_graph = dep_graph;
                 Interpreter.utilities_execution_order =
-                  Execution_order.get_execution_order dep_graph;
+                  M_dependency_graph.get_execution_order dep_graph;
               };
           }
         in
