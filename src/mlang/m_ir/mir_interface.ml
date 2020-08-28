@@ -257,14 +257,13 @@ let read_function_from_spec (p : program) : mvg_function =
       close_in input;
       exit 1
 
-type evaluation_utilities = {
-  utilities_dep_graph : Mir_dependency_graph.G.t;
-  utilities_execution_order : Mir_dependency_graph.execution_order;
+type full_program = {
+  dep_graph : Mir_dependency_graph.G.t;
+  execution_order : Mir_dependency_graph.execution_order;
+  program : Mir.program;
 }
 
-type interpretable_program = { ip_program : Mir.program; ip_utils : evaluation_utilities }
-
-let make_function_from_program (_program : interpretable_program) :
+let make_function_from_program (_program : full_program) :
     literal VariableMap.t -> Bir_interpreter.ctx =
  fun _ -> assert false
 

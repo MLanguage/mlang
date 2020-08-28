@@ -92,19 +92,15 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Interpreting the program...";
         let program =
           {
-            Mir_interface.ip_program = program;
-            ip_utils =
-              {
-                Mir_interface.utilities_dep_graph = dep_graph;
-                Mir_interface.utilities_execution_order =
-                  Mir_dependency_graph.get_execution_order dep_graph;
-              };
+            Mir_interface.program;
+            Mir_interface.dep_graph;
+            Mir_interface.execution_order = Mir_dependency_graph.get_execution_order dep_graph;
           }
         in
         let f = Mir_interface.make_function_from_program program in
         let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
         Mir_interface.print_output mvg_func results;
-        Bir_interpreter.repl_debugguer results program.ip_program
+        Bir_interpreter.repl_debugguer results program.program
       end
       else if
         String.lowercase_ascii !Cli.backend = "python"
