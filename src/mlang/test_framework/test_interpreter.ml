@@ -12,7 +12,7 @@
    not, see <https://www.gnu.org/licenses/>. *)
 
 open Mir
-open Tast
+open Test_ast
 
 let parse_file (test_name : string) : test_file =
   Parse_utils.current_file := test_name;
@@ -25,13 +25,13 @@ let parse_file (test_name : string) : test_file =
     }
   in
   let f =
-    try Some (Tparser.test_file Tlexer.token filebuf) with
+    try Some (Test_parser.test_file Test_lexer.token filebuf) with
     | Errors.LexingError msg | Errors.ParsingError msg ->
         close_in input;
         Cli.error_print "%s" msg;
         Cmdliner.Term.exit_status (`Ok 2);
         None
-    | Tparser.Error ->
+    | Test_parser.Error ->
         Cli.error_print "Lexer error in file %s at position %a\n" test_name
           Errors.print_lexer_position filebuf.lex_curr_p;
         close_in input;
@@ -44,7 +44,7 @@ let parse_file (test_name : string) : test_file =
       f
   | None -> assert false
 
-let to_ast_literal (value : Tast.literal) : Mast.literal =
+let to_ast_literal (value : Test_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
 let find_var_of_name (p : Mir.program) (name : string) : Variable.t =
@@ -61,7 +61,7 @@ let find_var_of_name (p : Mir.program) (name : string) : Variable.t =
          (Pos.VarNameToID.find name p.program_idmap))
 
 let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
-    Interface.mvg_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
+    Mir_interface.mvg_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, _) ->
@@ -75,7 +75,7 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
   let func_outputs = VariableMap.empty in
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    Interface.translate_cond program.program_idmap
+    Mir_interface.translate_cond program.program_idmap
       (List.map
          (fun (var, value, pos) ->
            (* we allow a difference of 0 between the control value and the result *)
@@ -120,7 +120,7 @@ let add_test_conds_usage_to_outputs (p : Interpreter.interpretable_program)
     VariableMap.fold
       (fun _ test_cond acc ->
         let vars_used_by_test =
-          M_dependency_graph.get_used_variables test_cond.cond_expr VariableMap.empty
+          Mir_dependency_graph.get_used_variables test_cond.cond_expr VariableMap.empty
         in
         VariableMap.fold
           (fun used_var _ acc -> VariableMap.add used_var () acc)
@@ -149,9 +149,9 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   Cli.debug_print "Running test %s..." t.nom;
   let f, test_conds, input_file = to_mvg_function_and_inputs p t in
   Cli.debug_print "Executing program";
-  let p = Interface.fit_function p f in
-  let dep_graph = M_dependency_graph.create_dependency_graph p in
-  let exec_order = M_dependency_graph.get_execution_order dep_graph in
+  let p = Mir_interface.fit_function p f in
+  let dep_graph = Mir_dependency_graph.create_dependency_graph p in
+  let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
   let p =
     {
       Interpreter.ip_program = p;
@@ -169,7 +169,7 @@ let check_test (p : Mir.program) mpp (test_name : string) =
   let execution_order_list : (Variable.t * int) list =
     List.mapi
       (fun i var -> (var, i))
-      (M_dependency_graph.get_execution_order p.ip_utils.utilities_dep_graph)
+      (Mir_dependency_graph.get_execution_order p.ip_utils.utilities_dep_graph)
   in
   let execution_order_map : int VariableMap.t =
     List.fold_left

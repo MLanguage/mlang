@@ -163,12 +163,12 @@ and translate_mpp_expr (p : Interpreter.interpretable_program) (ctx : translatio
           (translate_mpp_expr p ctx e1, pos),
           (translate_mpp_expr p ctx e2, pos) )
   | Call (Present, [ l ]) ->
-      Pos.unmark @@ Typechecker.expand_functions_expr
+      Pos.unmark @@ Mir_typechecker.expand_functions_expr
       @@ ( Mir.FunctionCall
              (PresentFunc, [ (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos) ]),
            pos )
   | Call (Abs, [ l ]) ->
-      Pos.unmark @@ Typechecker.expand_functions_expr
+      Pos.unmark @@ Mir_typechecker.expand_functions_expr
       @@ ( Mir.FunctionCall (AbsFunc, [ (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos) ]),
            pos )
   | Call (Cast, [ l ]) ->

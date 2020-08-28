@@ -20,7 +20,7 @@ usage inside multiple DGFiP applications. {!module: Mlang.Mast_to_mvg } extracts
 AST the computational core corresponding to a DGFiP application into the M Variable
 Graph ({!module: Mlang.Mir}), which consists basically of a flat map of all the definitions of
 the variables used in the application. The type system of M is very primitive,
-and basically all programs typecheck ; however {!module: Mlang.Typechecker} provides
+and basically all programs typecheck ; however {!module: Mlang.Mir_typechecker} provides
 a bidirectional typechecking algorithm with lattice-based unificiation (with {!module: Mlang.Union_find})
 to infer missing variable types.
 
@@ -28,7 +28,7 @@ At this point, the {!module: Mlang.Dependency} modules interprets the MVG as a f
 graph and computes various reachability and cycle analysis in order to determine
 the computational flow inside the program.
 
-{!modules: Mlang.Mir Mlang.Mast_to_mvg Mlang.Format_mir Mlang.Typechecker Mlang.Union_find Mlang.Dependency }
+{!modules: Mlang.Mir Mlang.Mast_to_mvg Mlang.Format_mir Mlang.Mir_typechecker Mlang.Union_find Mlang.Dependency }
 
 {1 Optimizations }
 
@@ -41,10 +41,10 @@ expands all the functions used in the program to basic arithmetic operators, whi
 {1 Interpreter}
 
 {!module: Mlang.Interpreter} contains the dynamic semantics of the M language.
-{!module: Mlang.Interface } allows the user to specify its own inputs and outputs
+{!module: Mlang.Mir_interface } allows the user to specify its own inputs and outputs
 on top of an existing M program.
 
-{!modules: Mlang.Interpreter Mlang.Interface }
+{!modules: Mlang.Interpreter Mlang.Mir_interface }
 
 {1 Translation to Z3 }
 

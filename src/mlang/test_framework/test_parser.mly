@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-%{ open Tast
+%{ open Test_ast
    open Parse_utils %}
 
 %token<string> SYMBOL NAME INTEGER FLOAT
@@ -30,7 +30,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token EOF
 
-%type<Tast.test_file> test_file
+%type<Test_ast.test_file> test_file
 
 %start test_file
 

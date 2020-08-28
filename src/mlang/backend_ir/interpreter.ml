@@ -390,7 +390,7 @@ let add_tablevar (p : program) (ctx : ctx) (var : Variable.t) ((size, es) : int 
   }
 
 let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : ctx)
-    (dep_graph : M_dependency_graph.G.t) : 'a =
+    (dep_graph : Mir_dependency_graph.G.t) : 'a =
   raise
     (RuntimeError
        ( ConditionViolated
@@ -400,12 +400,12 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
              @@ List.fold_left
                   (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
                   []
-                  (M_dependency_graph.G.pred dep_graph var) ),
+                  (Mir_dependency_graph.G.pred dep_graph var) ),
          ctx ))
 
 type evaluation_utilities = {
-  utilities_dep_graph : M_dependency_graph.G.t;
-  utilities_execution_order : M_dependency_graph.execution_order;
+  utilities_dep_graph : Mir_dependency_graph.G.t;
+  utilities_execution_order : Mir_dependency_graph.execution_order;
 }
 
 type interpretable_program = { ip_program : Mir.program; ip_utils : evaluation_utilities }

@@ -63,31 +63,31 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     let application = if !Cli.application = "" then None else Some !Cli.application in
     let program = Mast_to_mvg.translate !program application in
     Cli.debug_print "Expanding function definitions...";
-    let program = Typechecker.expand_functions program in
+    let program = Mir_typechecker.expand_functions program in
     Cli.debug_print "Typechecking...";
-    let program = Typechecker.typecheck program in
+    let program = Mir_typechecker.typecheck program in
     Cli.debug_print "Checking for circular variable definitions...";
-    let dep_graph = M_dependency_graph.create_dependency_graph program in
-    ignore (M_dependency_graph.check_for_cycle dep_graph program true);
+    let dep_graph = Mir_dependency_graph.create_dependency_graph program in
+    ignore (Mir_dependency_graph.check_for_cycle dep_graph program true);
     let mpp = Option.get @@ Mpp_frontend.process mpp_file program in
     Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test.check_all_tests program mpp tests
+      Test_interpreter.check_all_tests program mpp tests
     else if !Cli.run_test <> None then begin
       Interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test.check_test program mpp test;
+      Test_interpreter.check_test program mpp test;
       Cli.result_print "Test passed!@."
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let mvg_func = Interface.read_function_from_spec program in
-      let program = Interface.fit_function program mvg_func in
+      let mvg_func = Mir_interface.read_function_from_spec program in
+      let program = Mir_interface.fit_function program mvg_func in
       let program =
         if !Cli.optimize then program (* todo: reinstate optimizations *) else program
       in
-      let dep_graph = M_dependency_graph.create_dependency_graph program in
+      let dep_graph = Mir_dependency_graph.create_dependency_graph program in
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let program =
@@ -97,13 +97,13 @@ let driver (files : string list) (application : string) (debug : bool) (display_
               {
                 Interpreter.utilities_dep_graph = dep_graph;
                 Interpreter.utilities_execution_order =
-                  M_dependency_graph.get_execution_order dep_graph;
+                  Mir_dependency_graph.get_execution_order dep_graph;
               };
           }
         in
-        let f = Interface.make_function_from_program program in
-        let results = f (Interface.read_inputs_from_stdin mvg_func) in
-        Interface.print_output mvg_func results;
+        let f = Mir_interface.make_function_from_program program in
+        let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
+        Mir_interface.print_output mvg_func results;
         Interpreter.repl_debugguer results program.ip_program
       end
       else if
