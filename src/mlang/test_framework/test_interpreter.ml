@@ -143,22 +143,14 @@ let add_test_conds_usage_to_outputs (p : Mir_interface.full_program)
   in
   { p with program }
 
-let check_test (p : Mir.program) mpp (test_name : string) =
+let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, test_conds, input_file = to_mvg_function_and_inputs p t in
+  let f, test_conds, input_file = to_mvg_function_and_inputs p.program t in
   Cli.debug_print "Executing program";
-  let p = Mir_interface.fit_function p f in
-  let dep_graph = Mir_dependency_graph.create_dependency_graph p in
-  let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
-  let p =
-    {
-      Mir_interface.program = p;
-      Mir_interface.dep_graph;
-      Mir_interface.execution_order = exec_order;
-    }
-  in
+  let p = Mir_interface.fit_function p.program f in
+  let p = Mir_interface.to_full_program p in
   let p = add_test_conds_usage_to_outputs p test_conds in
   let combined_program = Mpp_ir_to_bir.create_combined_program p mpp in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mir.format_new_program
@@ -227,7 +219,7 @@ let check_test (p : Mir.program) mpp (test_name : string) =
     end
     else raise (Bir_interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mir.program) mpp (test_dir : string) =
+let check_all_tests (p : Mir_interface.full_program) mpp (test_dir : string) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list

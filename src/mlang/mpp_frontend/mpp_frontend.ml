@@ -93,7 +93,7 @@ let cst_to_ast (c : Mpp_ast.program) (p : Mir.program) : Mpp_ir.mpp_program =
          (cdef_to_adef p translated_names cdef :: mpp_acc, cdef.Mpp_ast.name :: translated_names))
        ([], []) c
 
-let process (ompp_file : string option) (p : Mir.program) : mpp_program option =
+let process (ompp_file : string option) (p : Mir_interface.full_program) : mpp_program option =
   match ompp_file with
   | None -> None
   | Some mpp_file -> (
@@ -104,7 +104,7 @@ let process (ompp_file : string option) (p : Mir.program) : mpp_program option =
       try
         let cst = Mpp_parser.file Mpp_lexer.next_token buf in
         close_in f;
-        Some (cst_to_ast cst p)
+        Some (cst_to_ast cst p.program)
       with
       | Mpp_parser.Error ->
           let b = Lexing.lexeme_start_p buf in

@@ -70,39 +70,31 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Checking for circular variable definitions...";
     ignore
       (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
-    let m_program = full_m_program.program in
-    let mpp = Option.get @@ Mpp_frontend.process mpp_file m_program in
+    let mpp = Option.get @@ Mpp_frontend.process mpp_file full_m_program in
     Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests m_program mpp tests
+      Test_interpreter.check_all_tests full_m_program mpp tests
     else if !Cli.run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test_interpreter.check_test m_program mpp test;
+      Test_interpreter.check_test full_m_program mpp test;
       Cli.result_print "Test passed!@."
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let mvg_func = Mir_interface.read_function_from_spec m_program in
+      let mvg_func = Mir_interface.read_function_from_spec full_m_program.program in
       let m_program = Mir_interface.fit_function m_program mvg_func in
-      let m_program =
-        if !Cli.optimize then m_program (* todo: reinstate optimizations *) else m_program
+      let full_m_program = Mir_interface.to_full_program m_program in
+      let full_m_program =
+        if !Cli.optimize then full_m_program (* todo: reinstate optimizations *) else full_m_program
       in
-      let dep_graph = Mir_dependency_graph.create_dependency_graph m_program in
       if String.lowercase_ascii !Cli.backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
-        let m_full_program =
-          {
-            Mir_interface.program = m_program;
-            Mir_interface.dep_graph;
-            Mir_interface.execution_order = Mir_dependency_graph.get_execution_order dep_graph;
-          }
-        in
-        let f = Mir_interface.make_function_from_program m_full_program in
+        let f = Mir_interface.make_function_from_program full_m_program in
         let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
         Mir_interface.print_output mvg_func results;
-        Bir_interpreter.repl_debugguer results m_full_program.program
+        Bir_interpreter.repl_debugguer results full_m_program.program
       end
       else if
         String.lowercase_ascii !Cli.backend = "python"
@@ -111,7 +103,8 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_python.generate_python_program m_program dep_graph !Cli.output_file;
+        Bir_to_python.generate_python_program full_m_program.program full_m_program.dep_graph
+          !Cli.output_file;
         Cli.result_print
           "Generated Python function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -120,7 +113,8 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Java...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_java.generate_java_program m_program dep_graph !Cli.output_file;
+        Bir_to_java.generate_java_program full_m_program.program full_m_program.dep_graph
+          !Cli.output_file;
         Cli.result_print
           "Generated Java function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file
@@ -129,7 +123,8 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Clojure...";
         if !Cli.output_file = "" then
           raise (Errors.ArgumentError "an output file must be defined with --output");
-        Bir_to_clojure.generate_clj_program m_program dep_graph !Cli.output_file;
+        Bir_to_clojure.generate_clj_program full_m_program.program full_m_program.dep_graph
+          !Cli.output_file;
         Cli.result_print
           "Generated Clojure function from requested set of inputs and outputs, results written to \
            %s\n"
