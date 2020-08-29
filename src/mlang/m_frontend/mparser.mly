@@ -498,8 +498,11 @@ spec_output_list:
 | outputs = separated_nonempty_list(COMMA, marked_symbol)
   { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) outputs  }
 
+const_symbol:
+| s = SYMBOL { (s, mk_position $sloc) }
+
 const_input:
-| var = SYMBOL EQUALS expr = expression SEMICOLON { (parse_variable_name $sloc var, expr) }
+| var = const_symbol EQUALS expr = expression SEMICOLON { ((parse_variable_name $sloc (fst var), snd var), expr) }
 
 spec_const_list:
 | NOT SEMICOLON { [] }
@@ -512,29 +515,16 @@ spec_conds_list:
 | cond = expression SEMICOLON { [cond] }
 | cond = expression SEMICOLON others = spec_conds_list { cond::others }
 
-chaining_pass:
-| BASE SEMICOLON { [] }
-| const = const_input { [const] }
-| const = const_input rest = chaining_pass { const::rest }
-
-
-chaining_list:
-| NOT SEMICOLON { [] }
-| pass = chaining_pass { [pass] }
-| pass = chaining_pass CHAINING COLON rest = chaining_list { pass::rest }
-
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
   CONDITION COLON precs = spec_conds_list
-  CHAINING COLON chainings = chaining_list
   OUTPUT COLON outputs = spec_output_list SEMICOLON
    { {
       spec_inputs = inputs;
       spec_consts = consts;
       spec_outputs = outputs;
       spec_conditions = precs;
-      spec_exec_passes = chainings;
    } }
 
 | EOF { {
@@ -542,7 +532,6 @@ function_spec:
     spec_consts = [];
     spec_outputs = [];
     spec_conditions = [];
-    spec_exec_passes = [];
  } }
 
  literal_input:

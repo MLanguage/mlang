@@ -3,11 +3,11 @@
 open Mpp_ir
 
 let to_scoped_var ?(scope = Input) (p : Mir.program) (var : Mpp_ast.var Pos.marked) : scoped_var =
-  let var = Pos.unmark var in
-  if String.uppercase_ascii var = var then
+  let var_s = Pos.unmark var in
+  if String.uppercase_ascii var_s = var_s then
     (* we have an MBased variable *)
     Mbased (Mir.find_var_by_name p var, scope)
-  else Local var
+  else Local var_s
 
 let to_mpp_callable (cname : string Pos.marked) (translated_names : string list) : mpp_callable =
   match Pos.unmark cname with

@@ -35,12 +35,12 @@ let parse_file (test_name : string) : test_file =
 let to_ast_literal (value : Test_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
-let find_var_of_name (p : Mir.program) (name : string) : Variable.t =
+let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
   try
     List.hd
       (List.sort
          (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
-         (Pos.VarNameToID.find name p.program_idmap))
+         (Pos.VarNameToID.find (Pos.unmark name) p.program_idmap))
   with Not_found ->
     let name = find_var_name_by_alias p name in
     List.hd
@@ -52,8 +52,8 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
     Mir_interface.mvg_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
-      (fun (fv, in_f) (var, value, _) ->
-        let var = find_var_of_name program var in
+      (fun (fv, in_f) (var, value, pos) ->
+        let var = find_var_of_name program (var, pos) in
         let lit = match value with I i -> Float (float_of_int i) | F f -> Float f in
         (VariableMap.add var () fv, VariableMap.add var lit in_f))
       (VariableMap.empty, VariableMap.empty)
@@ -92,13 +92,7 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
          t.rp)
   in
-  ( {
-      func_variable_inputs;
-      func_constant_inputs;
-      func_outputs;
-      func_conds = VariableMap.empty;
-      func_exec_passes = None;
-    },
+  ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds = VariableMap.empty },
     func_conds,
     input_file )
 
@@ -225,32 +219,27 @@ let check_all_tests (p : Mir_interface.full_program) mpp (test_dir : string) =
       check_test p mpp (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures)
-    with
-    | Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
-        Cli.debug_flag := true;
-        match (bindings, Pos.unmark expr) with
-        | ( [ (v, Bir_interpreter.SimpleVar l1) ],
-            Unop
-              ( Mast.Not,
-                ( Mir.Binop
-                    ( (Mast.And, _),
-                      ( Comparison
-                          ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
-                        _ ),
+    with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
+      Cli.debug_flag := true;
+      match (bindings, Pos.unmark expr) with
+      | ( [ (v, Bir_interpreter.SimpleVar l1) ],
+          Unop
+            ( Mast.Not,
+              ( Mir.Binop
+                  ( (Mast.And, _),
+                    ( Comparison
+                        ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
                       _ ),
-                  _ ) ) ) ->
-            let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-            (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
-        | _ ->
-            Cli.error_print "Test %s incorrect (error%s %a raised)@." name
-              (if List.length err > 1 then "s" else "")
-              (Format.pp_print_list Format.pp_print_string)
-              (List.map (fun x -> Pos.unmark x.Error.name) err);
-            (successes, failures) )
-    | Errors.TypeError t ->
-        Cli.error_print "Type error in %s (%a), case not taken into account@." name
-          Errors.format_typ_error t;
-        (successes, failures)
+                    _ ),
+                _ ) ) ) ->
+          let errs_varname = try VariableMap.find v failures with Not_found -> [] in
+          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
+      | _ ->
+          Cli.error_print "Test %s incorrect (error%s %a raised)@." name
+            (if List.length err > 1 then "s" else "")
+            (Format.pp_print_list Format.pp_print_string)
+            (List.map (fun x -> Pos.unmark x.Error.name) err);
+          (successes, failures) )
   in
   let s, f =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty)

@@ -127,9 +127,9 @@ let merge_loop_ctx (ctx : translating_context) (new_lc : loop_context) (pos : Po
           (fun param old_val new_val ->
             match (old_val, new_val) with
             | Some _, Some _ ->
-                Errors.raise_typ_error Errors.LoopParam
-                  "Same loop parameter %c used in two nested loop contexts, %a" param
-                  Pos.format_position pos
+                Errors.raise_spanned_error
+                  (Format.asprintf "Same loop parameter %c used in two nested loop contexts" param)
+                  pos
             | Some v, None | None, Some v -> Some v
             | None, None -> assert false
             (* should not happen *))
@@ -176,8 +176,9 @@ let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
            Mir.is_candidate_valid var.Mir.Variable.execution_number exec_number using_var_in_def)
          same_name)
   with Not_found ->
-    Errors.raise_typ_error Errors.Variable "variable %s used %a, has not been declared"
-      (Pos.unmark name) Pos.format_position (Pos.get_position name)
+    Errors.raise_spanned_error
+      (Format.asprintf "variable %s has not been declared" (Pos.unmark name))
+      (Pos.get_position name)
 
 (** Same but also take into account variables defined in the same execution unit *)
 let get_var_from_name_lax (d : Mir.Variable.t list Pos.VarNameToID.t)
@@ -192,8 +193,9 @@ let get_var_from_name_lax (d : Mir.Variable.t list Pos.VarNameToID.t)
            || Mir.same_execution_number var.Mir.Variable.execution_number exec_number)
          same_name)
   with Not_found ->
-    Errors.raise_typ_error Errors.Variable "variable %s used %a, has not been declared"
-      (Pos.unmark name) Pos.format_position (Pos.get_position name)
+    Errors.raise_spanned_error
+      (Format.asprintf "variable %s has not been declared" (Pos.unmark name))
+      (Pos.get_position name)
 
 (**{1 Translation}*)
 
@@ -213,9 +215,10 @@ let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
           (get_var_from_name ctx.idmap (Pos.same_pos_as name l) ctx.exec_number using_var_in_def)
           ctx.int_const_values
       with Not_found ->
-        Errors.raise_typ_error Errors.Variable
-          "variable %s used %a, is not an integer constant and cannot be used here"
-          (Mast.get_variable_name v) Pos.format_position (Pos.get_position l) )
+        Errors.raise_spanned_error
+          (Format.asprintf "variable %s is not an integer constant and cannot be used here"
+             (Mast.get_variable_name v))
+          (Pos.get_position l) )
   | Mast.Float f -> int_of_float f
 
 (** This function is the workhorse of loop unrolling : it takes a loop prefix containing the set of
@@ -572,8 +575,9 @@ let rec translate_variable (idmap : Mir.idmap) (exec_number : Mir.execution_numb
       else
         match lc with
         | None ->
-            Errors.raise_typ_error Errors.LoopParam
+            Errors.raise_spanned_error
               "variable contains loop parameters but is not used inside a loop context"
+              (Pos.get_position var)
         | Some _ ->
             instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name
               current_lvalue (Pos.get_position var) lax )
@@ -595,8 +599,8 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
       ParamsMap.choose_opt
         ( match lc with
         | None ->
-            Errors.raise_typ_error Errors.LoopParam
-              "variable contains loop parameters but is not used inside a loop context"
+            Errors.raise_spanned_error
+              "variable contains loop parameters but is not used inside a loop context" pos
         | Some lc -> lc )
     with
     | None ->
@@ -632,16 +636,16 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
              (ParamsMap.remove param
                 ( match lc with
                 | None ->
-                    Errors.raise_typ_error Errors.LoopParam
-                      "variable contains loop parameters but is not used inside a loop context"
+                    Errors.raise_spanned_error
+                      "variable contains loop parameters but is not used inside a loop context" pos
                 | Some lc -> lc )))
           new_var_name current_lvalue pad_zero pos lax
   with
   | err
   when match lc with
        | None ->
-           Errors.raise_typ_error Errors.LoopParam
-             "variable contains loop parameters but is not used inside a loop context"
+           Errors.raise_spanned_error
+             "variable contains loop parameters but is not used inside a loop context" pos
        | Some lc -> ParamsMap.cardinal lc > 0
   ->
     let new_pad_zero =
@@ -791,8 +795,7 @@ let translate_function_name (f_name : string Pos.marked) =
   | "multimax" -> Mir.Multimax
   | "supzero" -> Mir.Supzero
   | x ->
-      Errors.raise_typ_error Errors.Function "unknown function %s %a" x Pos.format_position
-        (Pos.get_position f_name)
+      Errors.raise_spanned_error (Format.asprintf "unknown function %s" x) (Pos.get_position f_name)
 
 (** Main translation function for expressions *)
 let rec translate_expression (ctx : translating_context) (f : Mast.expression Pos.marked) :
@@ -821,8 +824,7 @@ let rec translate_expression (ctx : translating_context) (f : Mast.expression Po
                         Pos.same_pos_as (Mir.Literal (Mir.Float (Pos.unmark i))) i )
                 | Mast.Interval (bn, en) ->
                     if Pos.unmark bn > Pos.unmark en then
-                      Errors.raise_typ_error Errors.Numeric "wrong interval bounds %a"
-                        Pos.format_position (Pos.get_position bn)
+                      Errors.raise_spanned_error "wrong interval bounds" (Pos.get_position bn)
                     else
                       Mir.Binop
                         ( Pos.same_pos_as Mast.And bn,
@@ -1032,11 +1034,15 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t) (var_lvalue : M
                     Mir.var_io = io;
                   } )
           | None ->
-              Errors.raise_typ_error Errors.Variable
-                "variable %s is defined %a as a table but has been declared %a as a non-table"
-                (Pos.unmark var_lvalue.Mir.Variable.name)
-                Pos.format_position (Pos.get_position var_expr) Pos.format_position
-                (Mir.VariableMap.find var_lvalue var_decl_data).var_pos
+              Errors.raise_multispanned_error
+                (Format.asprintf
+                   "variable %s is defined as a table but has been declared as a non-table"
+                   (Pos.unmark var_lvalue.Mir.Variable.name))
+                [
+                  (Some "variable definition", Pos.get_position var_expr);
+                  ( Some "variable declaration",
+                    (Mir.VariableMap.find var_lvalue var_decl_data).var_pos );
+                ]
       with Not_found ->
         assert false
         (* should not happen *)
@@ -1050,14 +1056,9 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t) (var_lvalue : M
 let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.VariableMap.t)
     (int_const_vals : int Mir.VariableMap.t) (p : Mast.program) (application : string option) :
     Mir.variable_data Mir.VariableMap.t =
-  let current_progress, finish = Cli.create_progress_bar "Translating to core language" in
   let out =
     List.fold_left
       (fun var_data source_file ->
-        begin
-          try current_progress (Pos.get_position (List.hd source_file)).Pos.pos_filename
-          with _ -> ()
-        end;
         List.fold_left
           (fun var_data source_file_item ->
             match Pos.unmark source_file_item with
@@ -1143,9 +1144,10 @@ let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.Variable
                      (Mir.Literal
                         ( match Pos.unmark lit with
                         | Mast.Variable var ->
-                            Errors.raise_typ_error Errors.Variable
-                              "const variable %a declared %a cannot be defined as another variable"
-                              Format_mast.format_variable var Pos.format_position
+                            Errors.raise_spanned_error
+                              (Format.asprintf
+                                 "const variable %a cannot be defined by using another variable"
+                                 Format_mast.format_variable var)
                               (Pos.get_position source_file_item)
                         | Mast.Float f -> Mir.Float f ))
                      lit)
@@ -1171,7 +1173,6 @@ let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.Variable
           var_data source_file)
       Mir.VariableMap.empty (List.rev p)
   in
-  finish "completed!";
   out
 
 (** At this point [var_data] contains the definition data for all the times a variable is defined.

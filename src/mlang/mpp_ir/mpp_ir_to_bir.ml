@@ -97,11 +97,12 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
   let supp_avfisc =
     List.fold_left
       (fun vmap var -> Mir.VariableMap.add (Mir.find_var_by_name p.program var) () vmap)
-      Mir.VariableMap.empty aliases_list
+      Mir.VariableMap.empty
+      (List.map (fun x -> (x, Pos.no_pos)) aliases_list)
   in
   generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
 
-let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string list) :
+let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos.marked list) :
     Mir_interface.full_program =
   let outputs = List.map (fun out -> Mir.find_var_by_name p.program out) outputs in
   let program =
@@ -278,7 +279,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       let m_program =
         reset_and_add_outputs m_program
           (List.map
-             (function Mpp_ir.Mbased (s, _) -> Pos.unmark s.Mir.Variable.name | Local l -> l)
+             (function Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name | Local l -> (l, Pos.no_pos))
              real_args)
       in
       let m_program =

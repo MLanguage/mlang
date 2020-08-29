@@ -37,8 +37,7 @@ type rule_name = string Pos.marked list
 let rule_number (name : rule_name) : int =
   try int_of_string (Pos.unmark (List.hd (List.rev name)))
   with _ ->
-    Errors.raise_typ_error Errors.Variable "the rule %a doesn't have an execution number"
-      Pos.format_position
+    Errors.raise_spanned_error "this rule doesn't have an execution number"
       (Pos.get_position (List.hd name))
 
 type variable_name = string
@@ -56,8 +55,7 @@ type verification_name = string Pos.marked list
 let verification_number (name : verification_name) : int =
   try int_of_string (Pos.unmark (List.hd (List.rev name)))
   with _ ->
-    Errors.raise_typ_error Errors.Variable "the rule %a doesn't have an execution number"
-      Pos.format_position
+    Errors.raise_spanned_error "this rule doesn't have an execution number"
       (Pos.get_position (List.hd name))
 
 type error_name = string
@@ -262,10 +260,9 @@ type program = source_file list
 
 type function_spec = {
   spec_inputs : variable_name Pos.marked list;
-  spec_consts : (variable_name * expression Pos.marked) list;
+  spec_consts : (variable_name Pos.marked * expression Pos.marked) list;
   spec_outputs : variable_name Pos.marked list;
   spec_conditions : expression Pos.marked list;
-  spec_exec_passes : (variable_name * expression Pos.marked) list list;
 }
 
 (** {1 Helper functions} *)

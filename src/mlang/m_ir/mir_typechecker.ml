@@ -55,18 +55,21 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
   | GenericTableIndex ->
       if ctx.ctx_is_generic_table then ctx
       else
-        Errors.raise_typ_error Variable "Generic table index appears outside of table %a"
-          Pos.format_position (Pos.get_position e)
+        Errors.raise_spanned_error "Generic table index appears outside of table"
+          (Pos.get_position e)
   | Index ((var, var_pos), e') -> (
       (* Tables are only tables of arrays *)
       let ctx = typecheck_top_down ctx e' in
       let var_data = VariableMap.find var ctx.ctx_program.program_vars in
       match var_data.Mir.var_definition with
       | SimpleVar _ | InputVar ->
-          Errors.raise_typ_error Typing
-            "variable %s is accessed %a as a table but it is not defined as one %a"
-            (Pos.unmark var.Variable.name) Pos.format_position var_pos Pos.format_position
-            (Pos.get_position var.Variable.name)
+          Errors.raise_multispanned_error
+            (Format.asprintf "variable %s is accessed as a table but it is not defined as one"
+               (Pos.unmark var.Variable.name))
+            [
+              (Some "variable access", var_pos);
+              (Some "variable definition", Pos.get_position var.Variable.name);
+            ]
       | TableVar _ -> ctx )
 
 and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.marked list -> ctx =
@@ -74,8 +77,7 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.mar
   | SumFunc | MinFunc | MaxFunc ->
       fun ctx args ->
         if List.length args = 0 then
-          Errors.raise_typ_error Typing "sum function must be called %a with at least one argument"
-            Pos.format_position pos
+          Errors.raise_spanned_error "sum function must be called with at least one argument" pos
         else
           let ctx = typecheck_top_down ctx (List.hd args) in
           let ctx =
@@ -92,9 +94,7 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.mar
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ ->
-            Errors.raise_typ_error Typing "function abs %a should have only one argument"
-              Pos.format_position pos )
+        | _ -> Errors.raise_spanned_error "function abs should have only one argument" pos )
   | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero -> (
       fun (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
             ctx args ->
@@ -102,27 +102,21 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.mar
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ ->
-            Errors.raise_typ_error Typing "function %a should have only one argument"
-              Pos.format_position pos )
+        | _ -> Errors.raise_spanned_error "function should have only one argument" pos )
   | ArrFunc | InfFunc -> (
       fun ctx args ->
         match args with
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ ->
-            Errors.raise_typ_error Typing "function %a should have only one argument"
-              Pos.format_position pos )
+        | _ -> Errors.raise_spanned_error "function should have only one argument" pos )
   | Mir.Multimax -> (
       fun ctx args ->
         match args with
         | [ bound; table ] ->
             let ctx = typecheck_top_down ctx bound in
             typecheck_top_down ctx table
-        | _ ->
-            Errors.raise_typ_error Typing "function %a should have two arguments"
-              Pos.format_position pos )
+        | _ -> Errors.raise_spanned_error "function %a should have two arguments" pos )
 
 let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (defs : (int * Pos.t) list) : int list =
@@ -132,12 +126,15 @@ let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (fun (def, def_pos) ->
       try defs_array.(def) <- true
       with Invalid_argument _ ->
-        Errors.raise_typ_error Variable
-          "the definitions of index %d %a, from table %s of size %d declared %a is out of bounds"
-          def Pos.format_position def_pos
-          (Pos.unmark table_var.Variable.name)
-          size Pos.format_position
-          (Pos.get_position table_var.Variable.name))
+        Errors.raise_multispanned_error
+          (Format.asprintf "the definition of index %d, from table %s of size %d is out of bounds"
+             def
+             (Pos.unmark table_var.Variable.name)
+             size)
+          [
+            (Some "index definition", def_pos);
+            (Some "variable declaration", Pos.get_position table_var.Variable.name);
+          ])
     defs;
   let undefined = ref [] in
   Array.iteri (fun index defined -> if not defined then undefined := index :: !undefined) defs_array;
@@ -165,9 +162,10 @@ let rec check_non_recursivity_expr (e : expression Pos.marked) (lvar : Variable.
   | Literal _ | LocalVar _ | GenericTableIndex | Error -> ()
   | Var var ->
       if var = lvar then
-        Errors.raise_typ_error Variable
-          "You cannot refer to the variable %s since you are defining it (%a)"
-          (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e)
+        Errors.raise_spanned_error
+          (Format.asprintf "you cannot refer to the variable %s since you are defining it"
+             (Pos.unmark var.Variable.name))
+          (Pos.get_position e)
       else ()
 
 let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_def) : unit =

@@ -36,25 +36,6 @@ let raise_error (msg : string) : 'a = raise (StructuredError (msg, []))
 
 (**{1 Typechecking}*)
 
-type typ_error_kind = Variable | Numeric | Function | LoopParam | Typing | Inlining
-
-type typ_error = typ_error_kind * string
-
-exception TypeError of typ_error
-
-let raise_typ_error kind msg = Format.kasprintf (fun str -> raise (TypeError (kind, str))) msg
-
-let format_typ_error fmt ((k, s) : typ_error) =
-  Format.fprintf fmt "%s error: %s"
-    ( match k with
-    | Variable -> "Variable"
-    | Numeric -> "Numeric"
-    | Function -> "Function"
-    | LoopParam -> "Loop parameter"
-    | Typing -> "Typing"
-    | Inlining -> "Inlining" )
-    s
-
 exception Unimplemented of string
 
 (**{1 Others}*)

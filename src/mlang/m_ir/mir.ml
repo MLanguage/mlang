@@ -294,21 +294,24 @@ type program = {
 (** {1 Helpers}*)
 
 (** Throws an error in case of alias not found *)
-let find_var_name_by_alias (p : program) (alias : string) : string =
+let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   let v =
     VariableMap.fold
       (fun v _ acc ->
         match (acc, v.Variable.alias) with
         | Some _, _ | None, None -> acc
-        | None, Some v_alias -> if v_alias = alias then Some (Pos.unmark v.Variable.name) else None)
+        | None, Some v_alias ->
+            if v_alias = Pos.unmark alias then Some (Pos.unmark v.Variable.name) else None)
       p.program_vars None
   in
-  match v with Some v -> v | None -> Errors.raise_typ_error Variable "alias not found (%s)" alias
+  match v with
+  | Some v -> v
+  | None -> Errors.raise_spanned_error "alias not found" (Pos.get_position alias)
 
-let find_var_by_name (p : program) (name : string) : Variable.t =
+let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try
     let vars =
-      Pos.VarNameToID.find name p.program_idmap
+      Pos.VarNameToID.find (Pos.unmark name) p.program_idmap
       |> List.sort (fun v1 v2 ->
              -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
              (* here the minus sign is to have the "meaningful" execution numbers first, and the
@@ -322,6 +325,4 @@ let find_var_by_name (p : program) (name : string) : Variable.t =
         (List.sort
            (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
            (Pos.VarNameToID.find name p.program_idmap))
-    with Not_found ->
-      Cli.debug_print "not found: %s@." name;
-      raise Not_found )
+    with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name) )

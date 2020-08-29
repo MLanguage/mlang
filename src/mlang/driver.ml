@@ -54,9 +54,9 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       !Cli.source_files;
     finish "completed!";
     let application = if !Cli.application = "" then None else Some !Cli.application in
+    Cli.debug_print "Elaborating...";
     let m_program = Mast_to_mvg.translate !m_program application in
     let full_m_program = Mir_interface.to_full_program m_program in
-    Cli.debug_print "Expanding function definitions...";
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
@@ -129,9 +129,6 @@ let driver (files : string list) (application : string) (debug : bool) (display_
   | Errors.StructuredError (msg, pos) ->
       Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);
       exit (-1)
-  | Errors.TypeError e ->
-      Cli.error_print "%a\n" Errors.format_typ_error e;
-      Cmdliner.Term.exit_status (`Ok 2)
   | Errors.Unimplemented msg ->
       Cli.error_print "unimplemented (%s)\n" msg;
       Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
