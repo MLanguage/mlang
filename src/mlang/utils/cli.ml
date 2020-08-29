@@ -219,14 +219,34 @@ let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bo
   (output_file :=
      match output_ with
      | Some o -> o
-     | None ->
-         if backend_ = "interpreter" then ""
-         else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_)));
+     | None -> if backend_ = "interpreter" then "" else assert false);
+  (* else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))); *)
   run_all_tests := run_all_tests_;
   run_test := run_test_;
   year := year_
 
 (**{1 Terminal formatting}*)
+
+let concat_with_line_depending_prefix_and_suffix (prefix : int -> string) (suffix : int -> string)
+    (ss : string list) =
+  match ss with
+  | hd :: rest ->
+      let out, _ =
+        List.fold_left
+          (fun (acc, i) s ->
+            ((acc ^ prefix i ^ s ^ if i = List.length ss - 1 then "" else suffix i), i + 1))
+          ((prefix 0 ^ hd ^ if 0 = List.length ss - 1 then "" else suffix 0), 1)
+          rest
+      in
+      out
+  | [] -> prefix 0
+
+(** The int argument of the prefix corresponds to the line number, starting at 0 *)
+let add_prefix_to_each_line (s : string) (prefix : int -> string) =
+  concat_with_line_depending_prefix_and_suffix
+    (fun i -> prefix i)
+    (fun _ -> "\n")
+    (String.split_on_char '\n' s)
 
 (**{2 Markers}*)
 
@@ -244,6 +264,10 @@ let time_marker () =
   let delta = (new_time -. old_time) *. 1000. in
   if delta > 100. then
     ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.black ] "[TIME] %.0f ms\n" delta
+
+let format_with_style (styles : ANSITerminal.style list) (str : ('a, unit, string) format) =
+  if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
+  else Printf.sprintf str
 
 (** Prints [\[DEBUG\]] in purple on the terminal standard output as well as timing since last debug *)
 let debug_marker (f_time : bool) =
@@ -308,6 +332,7 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
       clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
       Format.printf "%s" !msg;
+      flush_all ();
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();
       Unix.sleepf 0.05

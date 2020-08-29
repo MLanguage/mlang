@@ -11,11 +11,30 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+exception StructuredError of (string * (string option * Pos.t) list)
+
+let format_structured_error fmt ((msg, pos) : string * (string option * Pos.t) list) =
+  Format.fprintf fmt "%s%s%s" msg
+    (if List.length pos = 0 then "" else "\n\n")
+    (String.concat "\n\n"
+       (List.map
+          (fun (msg, pos) ->
+            Printf.sprintf "%s%s"
+              (match msg with None -> "" | Some msg -> msg ^ "\n")
+              (Pos.retrieve_loc_text pos))
+          pos))
+
+let raise_spanned_error (msg : string) ?(span_msg : string option) (span : Pos.t) : 'a =
+  raise (StructuredError (msg, [ (span_msg, span) ]))
+
+let raise_multispanned_error (msg : string) (spans : (string option * Pos.t) list) =
+  raise (StructuredError (msg, spans))
+
+let raise_error (msg : string) : 'a = raise (StructuredError (msg, []))
+
 (** Error formatting and helper functions *)
 
 (**{1 Frontend}*)
-
-exception ParsingError of string
 
 exception LexingError of string
 
@@ -25,12 +44,6 @@ let print_lexer_position fmt (pos : Lexing.position) =
 let lexer_error fmt lexbuf =
   Format.fprintf fmt "Incorrect character (%s) at position %a in file %s\n" (Lexing.lexeme lexbuf)
     print_lexer_position lexbuf.Lexing.lex_curr_p lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
-
-let parser_error (sloc_start, sloc_end) (msg : string) =
-  raise
-    (ParsingError
-       (Format.asprintf "Frontend error: %s (file %s, %a to %a)" msg sloc_start.Lexing.pos_fname
-          print_lexer_position sloc_start print_lexer_position sloc_end))
 
 (**{1 Typechecking}*)
 

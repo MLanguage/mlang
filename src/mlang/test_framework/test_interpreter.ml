@@ -26,7 +26,10 @@ let parse_file (test_name : string) : test_file =
   in
   let f =
     try Some (Test_parser.test_file Test_lexer.token filebuf) with
-    | Errors.LexingError msg | Errors.ParsingError msg ->
+    | Errors.StructuredError e ->
+        close_in input;
+        raise (Errors.StructuredError e)
+    | Errors.LexingError msg ->
         close_in input;
         Cli.error_print "%s" msg;
         Cmdliner.Term.exit_status (`Ok 2);

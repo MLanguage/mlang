@@ -32,10 +32,13 @@ compute_functions:
 | name = IDENT LPAREN RPAREN COLON body = new_block { {name; args= []; body} }
 ;
 
+ident:
+| i = IDENT { (i, mk_position $sloc) }
+
 stmt:
 | var = IDENT EQ e = expr NEWLINE { Assign(var, e), mk_position $sloc }
 | DELETE var = IDENT NEWLINE { Delete var, mk_position $sloc }
-| var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN NEWLINE
+| var = ident LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
                               { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f), mk_position $sloc }
 | IF b = expr COLON t = new_block { Conditional(b, t, []), mk_position $sloc }
@@ -61,7 +64,7 @@ expr:
 | i = INT { Constant i, mk_position $sloc }
 | var = IDENT { Variable var, mk_position $sloc }
 | MINUS e = expr { Unop(Minus, e), mk_position $sloc }
-| var = IDENT LPAREN args = separated_list(COMMA, IDENT) RPAREN
+| var = ident LPAREN args = separated_list(COMMA, ident) RPAREN
                               { Call(var, args), mk_position $sloc }
 | e1 = expr b = binop e2 = expr { Binop(e1, b, e2), mk_position $sloc }
 ;

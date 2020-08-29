@@ -24,7 +24,7 @@ let mk_position sloc = { Pos.pos_filename = !current_file; Pos.pos_loc = sloc }
 (** Checks whether the string is entirely capitalized *)
 let parse_variable_name sloc (s : string) : Mast.variable_name =
   if not (String.equal (String.uppercase_ascii s) s) then
-    E.parser_error sloc "invalid variable name"
+    E.raise_spanned_error "invalid variable name" (mk_position sloc)
   else s
 
 (** Checks for duplicate generic parameters *)
@@ -49,15 +49,15 @@ let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
     else parameters := p :: !parameters
   done;
   if dup_exists !parameters then
-    E.parser_error sloc "variable parameters should have distinct names";
+    E.raise_spanned_error "variable parameters should have distinct names" (mk_position sloc);
   { Mast.parameters = !parameters; Mast.base = s }
 
 (** Checks whether the variable contains parameters *)
 let parse_variable sloc (s : string) =
   try Mast.Normal (parse_variable_name sloc s)
-  with E.ParsingError _ -> (
+  with E.StructuredError _ -> (
     try Mast.Generic (parse_variable_generic_name sloc s)
-    with E.ParsingError _ -> E.parser_error sloc "invalid variable name" )
+    with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc) )
 
 (** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Mast.variable | ParseInt of int
@@ -66,18 +66,17 @@ let parse_variable_or_int sloc (s : string) : parse_val =
   try ParseInt (int_of_string s)
   with Failure _ -> (
     try ParseVar (Mast.Normal (parse_variable_name sloc s))
-    with E.ParsingError _ -> (
+    with E.StructuredError _ -> (
       try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
-      with E.ParsingError _ -> E.parser_error sloc "invalid variable name" ) )
+      with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc) ) )
 
 (** Table index can be integer or [X], the generic table index variable *)
 let parse_table_index sloc (s : string) : Mast.table_index =
   try Mast.LiteralIndex (int_of_string s)
   with Failure _ -> (
     try Mast.SymbolIndex (parse_variable sloc s)
-    with E.ParsingError _ ->
-      Format.printf "s: %s, %b\n" s (String.equal s "X");
-      E.parser_error sloc "table index should be an integer" )
+    with E.StructuredError _ ->
+      E.raise_spanned_error "table index should be an integer" (mk_position sloc) )
 
 (**{1 Literal parsing}*)
 
@@ -87,7 +86,8 @@ let parse_literal sloc (s : string) : Mast.literal =
 let parse_func_name _ (s : string) : Mast.func_name = s
 
 let parse_int sloc (s : string) : int =
-  try int_of_string s with Failure _ -> E.parser_error sloc "should be an integer"
+  try int_of_string s
+  with Failure _ -> E.raise_spanned_error "should be an integer" (mk_position sloc)
 
 let parse_string (s : string) : string =
   (* we remove the quotes *)

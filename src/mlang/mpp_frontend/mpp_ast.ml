@@ -16,7 +16,7 @@ and expr_kind =
   | Constant of int
   | Variable of var
   | Unop of unop * expr
-  | Call of callable * var list
+  | Call of callable Pos.marked * var Pos.marked list
   | Binop of expr * binop * expr
 
 type stmt = stmt_kind Pos.marked

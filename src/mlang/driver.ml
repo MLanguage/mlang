@@ -48,7 +48,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
           let commands = Mparser.source_file token filebuf in
           m_program := commands :: !m_program
         with
-        | Errors.LexingError msg | Errors.ParsingError msg -> Cli.error_print "%s" msg
+        | Errors.LexingError msg -> Cli.error_print "%s" msg
         | Mparser.Error ->
             Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
               Errors.print_lexer_position filebuf.lex_curr_p;
@@ -133,6 +133,9 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       else raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
     end
   with
+  | Errors.StructuredError (msg, pos) ->
+      Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);
+      exit (-1)
   | Errors.TypeError e ->
       Cli.error_print "%a\n" Errors.format_typ_error e;
       Cmdliner.Term.exit_status (`Ok 2)

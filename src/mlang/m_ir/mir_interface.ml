@@ -247,7 +247,10 @@ let read_function_from_spec (p : program) : mvg_function =
         );
     }
   with
-  | Errors.LexingError msg | Errors.ParsingError msg ->
+  | Errors.StructuredError e ->
+      close_in input;
+      raise (Errors.StructuredError e)
+  | Errors.LexingError msg ->
       Cli.error_print "%s" msg;
       close_in input;
       exit 1
@@ -289,7 +292,7 @@ let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
         | Mast.Variable _ ->
             Errors.raise_typ_error Variable "Function input must be a numeric constant"
       with
-      | Errors.LexingError msg | Errors.ParsingError msg ->
+      | Errors.LexingError msg ->
           Cli.error_print "%s" msg;
           exit 1
       | Mparser.Error ->

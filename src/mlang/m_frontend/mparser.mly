@@ -173,7 +173,7 @@ input_variable:
           (List.filter (fun x -> x <> None) subtyp)
       in
       if List.length subtyp > 1 then
-        Errors.parser_error $sloc "multiple subtypes for an input variable"
+        Errors.raise_spanned_error "multiple subtypes for an input variable" (mk_position $sloc)
       else
         List.hd subtyp
     end;
