@@ -38,26 +38,19 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         in
         current_progress source_file;
         let filebuf =
-          {
-            filebuf with
-            lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename source_file };
-          }
+          { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } }
         in
         try
-          Parse_utils.current_file := source_file;
           let commands = Mparser.source_file token filebuf in
           m_program := commands :: !m_program
-        with
-        | Errors.LexingError msg -> Cli.error_print "%s" msg
-        | Mparser.Error ->
-            Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
-              Errors.print_lexer_position filebuf.lex_curr_p;
-            begin
-              match input with
-              | Some input -> close_in input
-              | None -> ()
-            end;
-            Cmdliner.Term.exit_status (`Ok 2))
+        with Mparser.Error ->
+          begin
+            match input with
+            | Some input -> close_in input
+            | None -> ()
+          end;
+          Errors.raise_spanned_error "M syntax error"
+            (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
     let application = if !Cli.application = "" then None else Some !Cli.application in
@@ -79,7 +72,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       Bir_interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
       Test_interpreter.check_test full_m_program mpp test;
-      Cli.result_print "Test passed!@."
+      Cli.result_print "Test passed!"
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";

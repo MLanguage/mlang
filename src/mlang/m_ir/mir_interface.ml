@@ -231,7 +231,6 @@ let read_function_from_spec (p : program) : mvg_function =
     }
   in
   try
-    Parse_utils.current_file := spec_file;
     let func_spec = Mparser.function_spec token filebuf in
     close_in input;
     {
@@ -250,13 +249,8 @@ let read_function_from_spec (p : program) : mvg_function =
   | Errors.StructuredError e ->
       close_in input;
       raise (Errors.StructuredError e)
-  | Errors.LexingError msg ->
-      Cli.error_print "%s" msg;
-      close_in input;
-      exit 1
   | Mparser.Error ->
-      Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
-        Errors.print_lexer_position filebuf.lex_curr_p;
+      Cli.error_print "Lexer error\n";
       close_in input;
       exit 1
 
@@ -284,20 +278,15 @@ let read_inputs_from_stdin (f : mvg_function) : literal VariableMap.t =
         (match var.Variable.alias with Some s -> s | None -> Pos.unmark var.Variable.name)
         (Pos.unmark var.Variable.descr);
       let value = read_line () in
-      Parse_utils.current_file := "standard input";
       try
         let value_ast = Mparser.literal_input token (Lexing.from_string value) in
         match value_ast with
         | Mast.Float f -> Mir.Float f
         | Mast.Variable _ ->
             Errors.raise_typ_error Variable "Function input must be a numeric constant"
-      with
-      | Errors.LexingError msg ->
-          Cli.error_print "%s" msg;
-          exit 1
-      | Mparser.Error ->
-          Cli.error_print "Lexer error in input!";
-          exit 1)
+      with Mparser.Error ->
+        Cli.error_print "Lexer error in input!";
+        exit 1)
     f.func_variable_inputs
 
 let print_output (f : mvg_function) (results : Bir_interpreter.ctx) : unit =

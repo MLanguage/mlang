@@ -1,39 +1,19 @@
 {
   open Lexing
   open Mpp_parser
-  open Errors
-
-  (* let stack =
-   *   let r = Stack.create () in
-   *   let () = Stack.push 0 r in
-   *   r *)
 
   let stack = ref [0]
-  let rec unindent n = match !stack with
+  let rec unindent n sloc = match !stack with
     | m :: _ when m = n -> []
-    | m :: st when m > n -> stack := st; DEDENT :: unindent n
-    | _ -> raise (LexingError "incorrect indentation")
+    | m :: st when m > n -> stack := st; DEDENT :: unindent n sloc
+    | _ -> Errors.raise_spanned_error "incorrect indentation" sloc
 
-    (* let rec unindent n =
-     * let m = Stack.top stack in
-     * if m = n then []
-     * else if m > n then
-     *   let _ = Stack.pop stack in
-     *   DEDENT :: unindent n
-     * else raise (LexingError "incorrect indentation") *)
-
-  let update n =
+  let update n sloc =
     match !stack with
     | m :: _ when m < n ->
        stack := n :: !stack;
        [NEWLINE; INDENT]
-    | _ -> NEWLINE :: unindent n
-    (* let m = Stack.top stack in
-     * if m < n then
-     *   let () = Stack.push n stack in
-     *   [NEWLINE; INDENT]
-     * else
-     *   NEWLINE :: unindent n *)
+    | _ -> NEWLINE :: unindent n sloc
 }
 
 let space = ' ' | '\t'
@@ -43,7 +23,7 @@ let integer = ['0'-'9']+
 
 rule next_tokens = parse
     | (space | comment)+ { next_tokens lexbuf }
-    | '\n' { new_line lexbuf; update (indentation lexbuf) }
+    | '\n' { new_line lexbuf; update (indentation lexbuf) (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
     | "<"                       { [LT] }
     | ">"                       { [GT] }
     | "<="                      { [LE] }
@@ -66,7 +46,7 @@ rule next_tokens = parse
     | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
                                 { [IDENT s] }
     | eof                       { [EOF] }
-    | _                         { raise (LexingError (Format.asprintf "%a" lexer_error lexbuf)) }
+    | _                         { Errors.raise_spanned_error "M++ lexing error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
 
 and indentation = parse
     | (space | comment)* '\n'   { new_line lexbuf; indentation lexbuf }

@@ -79,7 +79,7 @@ let retrieve_loc_text (pos : t) : string =
     let oc =
       try open_in filename
       with Sys_error _ ->
-        Cli.error_print "File not found : \"%s\"" filename;
+        Cli.error_print "File not found for displaying position : \"%s\"" filename;
         exit (-1)
     in
     let input_line_opt () : string option = try Some (input_line oc) with End_of_file -> None in

@@ -15,7 +15,6 @@ open Mir
 open Test_ast
 
 let parse_file (test_name : string) : test_file =
-  Parse_utils.current_file := test_name;
   let input = open_in test_name in
   let filebuf = Lexing.from_channel input in
   let filebuf =
@@ -25,27 +24,13 @@ let parse_file (test_name : string) : test_file =
     }
   in
   let f =
-    try Some (Test_parser.test_file Test_lexer.token filebuf) with
-    | Errors.StructuredError e ->
-        close_in input;
-        raise (Errors.StructuredError e)
-    | Errors.LexingError msg ->
-        close_in input;
-        Cli.error_print "%s" msg;
-        Cmdliner.Term.exit_status (`Ok 2);
-        None
-    | Test_parser.Error ->
-        Cli.error_print "Lexer error in file %s at position %a\n" test_name
-          Errors.print_lexer_position filebuf.lex_curr_p;
-        close_in input;
-        Cmdliner.Term.exit_status (`Ok 2);
-        None
-  in
-  match f with
-  | Some f ->
+    try Test_parser.test_file Test_lexer.token filebuf
+    with Errors.StructuredError e ->
       close_in input;
-      f
-  | None -> assert false
+      raise (Errors.StructuredError e)
+  in
+  close_in input;
+  f
 
 let to_ast_literal (value : Test_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f

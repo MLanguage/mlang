@@ -18,7 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 {
   open Lexing
   open Mparser
-  open Errors
 }
 rule token = parse
 | [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)
@@ -152,4 +151,4 @@ rule token = parse
 | eof
   { EOF }
 | _
-  { raise (LexingError (Format.asprintf "%a" lexer_error lexbuf)) }
+  { Errors.raise_spanned_error "M lexer error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }

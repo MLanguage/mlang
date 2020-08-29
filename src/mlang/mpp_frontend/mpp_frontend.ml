@@ -118,15 +118,11 @@ let process (ompp_file : string option) (p : Mir_interface.full_program) : mpp_p
         let cst = Mpp_parser.file Mpp_lexer.next_token buf in
         close_in f;
         Some (cst_to_ast cst p.program)
-      with
-      | Mpp_parser.Error ->
-          let b = Lexing.lexeme_start_p buf in
-          let e = Lexing.lexeme_end_p buf in
-          let l = b.pos_lnum in
-          let fc = b.pos_cnum - b.pos_bol + 1 in
-          let lc = e.pos_cnum - b.pos_bol + 1 in
-          let () = Cli.error_print "File \"%s\", line %d, characters %d-%d:\n@." mpp_file l fc lc in
-          None
-      | Errors.LexingError e ->
-          let () = Cli.error_print "Parsing Error %s" e in
-          None )
+      with Mpp_parser.Error ->
+        let b = Lexing.lexeme_start_p buf in
+        let e = Lexing.lexeme_end_p buf in
+        let l = b.pos_lnum in
+        let fc = b.pos_cnum - b.pos_bol + 1 in
+        let lc = e.pos_cnum - b.pos_bol + 1 in
+        let () = Cli.error_print "File \"%s\", line %d, characters %d-%d:\n@." mpp_file l fc lc in
+        None )

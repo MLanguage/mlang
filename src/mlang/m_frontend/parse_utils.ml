@@ -15,9 +15,7 @@ module E = Errors
 
 (** Helpers for parsing *)
 
-let current_file : string ref = ref ""
-
-let mk_position sloc = { Pos.pos_filename = !current_file; Pos.pos_loc = sloc }
+let mk_position sloc = { Pos.pos_filename = (fst sloc).Lexing.pos_fname; Pos.pos_loc = sloc }
 
 (** {1 Frontend variable names}*)
 

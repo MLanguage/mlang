@@ -34,17 +34,6 @@ let raise_error (msg : string) : 'a = raise (StructuredError (msg, []))
 
 (** Error formatting and helper functions *)
 
-(**{1 Frontend}*)
-
-exception LexingError of string
-
-let print_lexer_position fmt (pos : Lexing.position) =
-  Format.fprintf fmt "%d:%d" pos.Lexing.pos_lnum (pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
-
-let lexer_error fmt lexbuf =
-  Format.fprintf fmt "Incorrect character (%s) at position %a in file %s\n" (Lexing.lexeme lexbuf)
-    print_lexer_position lexbuf.Lexing.lex_curr_p lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
-
 (**{1 Typechecking}*)
 
 type typ_error_kind = Variable | Numeric | Function | LoopParam | Typing | Inlining

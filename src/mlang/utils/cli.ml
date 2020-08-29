@@ -305,6 +305,7 @@ let clock_marker i =
 (** All the printers below print their argument after the correct marker *)
 
 let debug_print ?(endline = "\n") kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !debug_flag then
     Format.kasprintf
       (fun str -> Format.printf "%a%s%s@?" (fun _ -> debug_marker) !display_time str endline)
@@ -312,12 +313,14 @@ let debug_print ?(endline = "\n") kont =
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !var_info_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> var_info_marker) () str) kont
+    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str) kont
   else Format.ifprintf Format.std_formatter kont
 
 let error_print kont =
-  Format.kasprintf (fun str -> Format.eprintf "%a%s@?" (fun _ -> error_marker) () str) kont
+  ANSITerminal.erase ANSITerminal.Eol;
+  Format.kasprintf (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str) kont
 
 (** Returns two functions: the first one, [current_progress], has to be called during the progress
     loop and the other one, [finish], has to be called at the end of the progressive task. *)
@@ -350,9 +353,11 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
       time_marker () )
 
 let warning_print kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !warning_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> warning_marker) () str) kont
+    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str) kont
   else Format.ifprintf Format.std_formatter kont
 
 let result_print kont =
-  Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> result_marker) () str) kont
+  ANSITerminal.erase ANSITerminal.Eol;
+  Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str) kont

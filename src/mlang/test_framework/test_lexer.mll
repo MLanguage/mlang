@@ -19,7 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 {
 open Lexing
 open Test_parser
-open Errors
 }
 
 rule token = parse
@@ -66,4 +65,4 @@ rule token = parse
 | eof
   { EOF }
 | _
-  { raise (LexingError (Format.asprintf "%a" lexer_error lexbuf)) }
+  {  Errors.raise_spanned_error "Test file lexer error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
