@@ -389,8 +389,7 @@ let add_tablevar (p : program) (ctx : ctx) (var : Variable.t) ((size, es) : int 
         ctx.ctx_vars;
   }
 
-let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : ctx)
-    (dep_graph : Mir_dependency_graph.G.t) : 'a =
+let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
   raise
     (RuntimeError
        ( ConditionViolated
@@ -400,7 +399,11 @@ let report_violatedcondition (cond : condition_data) (var : Variable.t) (ctx : c
              @@ List.fold_left
                   (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
                   []
-                  (Mir_dependency_graph.G.pred dep_graph var) ),
+                  (List.map
+                     (fun (x, _) -> x)
+                     (Mir.VariableMap.bindings
+                        (Mir_dependency_graph.get_used_variables cond.cond_expr
+                           Mir.VariableMap.empty))) ),
          ctx ))
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
@@ -456,6 +459,10 @@ let rec evaluate_stmt (p : Bir.program) ctx stmt =
       | SimpleVar (Float _) -> evaluate_stmts p ctx t
       | SimpleVar Undefined -> ctx
       | _ -> assert false )
+  | Bir.SVerif data -> (
+      match evaluate_expr ctx p data.cond_expr with
+      | Float f when f = 1. -> report_violatedcondition data ctx
+      | _ -> ctx )
 
 and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
 

@@ -17,9 +17,6 @@ type stmt = stmt_kind Pos.marked
 and stmt_kind =
   | SAssign of Mir.Variable.t * Mir.variable_data
   | SConditional of Mir.expression * stmt list * stmt list
+  | SVerif of Mir.condition_data
 
-type program = {
-  statements : stmt list;
-  conds : Mir.condition_data Mir.VariableMap.t;
-  idmap : Mir.idmap;
-}
+type program = { statements : stmt list; idmap : Mir.idmap }
