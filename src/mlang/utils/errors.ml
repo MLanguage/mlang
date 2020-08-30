@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-exception StructuredError of (string * (string option * Pos.t) list)
+exception StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 
 let format_structured_error fmt ((msg, pos) : string * (string option * Pos.t) list) =
   Format.fprintf fmt "%s%s%s" msg
@@ -25,21 +25,13 @@ let format_structured_error fmt ((msg, pos) : string * (string option * Pos.t) l
           pos))
 
 let raise_spanned_error (msg : string) ?(span_msg : string option) (span : Pos.t) : 'a =
-  raise (StructuredError (msg, [ (span_msg, span) ]))
+  raise (StructuredError (msg, [ (span_msg, span) ], None))
 
 let raise_multispanned_error (msg : string) (spans : (string option * Pos.t) list) =
-  raise (StructuredError (msg, spans))
+  raise (StructuredError (msg, spans, None))
 
-let raise_error (msg : string) : 'a = raise (StructuredError (msg, []))
+let raise_error (msg : string) : 'a = raise (StructuredError (msg, [], None))
 
-(** Error formatting and helper functions *)
-
-(**{1 Typechecking}*)
-
-exception Unimplemented of string
-
-(**{1 Others}*)
-
-exception ArgumentError of string
-
-exception TestError of string
+let raise_spanned_error_with_continuation (msg : string) ?(span_msg : string option) (span : Pos.t)
+    (kont : unit -> unit) : 'a =
+  raise (StructuredError (msg, [ (span_msg, span) ], Some kont))

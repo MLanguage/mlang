@@ -130,28 +130,32 @@ type run_error =
 
 exception RuntimeError of run_error * ctx
 
-let format_runtime_error fmt (e : run_error) =
+let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : program) =
   match e with
-  | ErrorValue s -> Format.fprintf fmt "Error value at runtime: %s" s
-  | FloatIndex s -> Format.fprintf fmt "Index is not an integer: %s" s
-  | IndexOutOfBounds s -> Format.fprintf fmt "Index out of bounds: %s" s
-  | UnknownInputVariable s -> Format.fprintf fmt "Unknown input variable: %s" s
-  | IncorrectOutputVariable s -> Format.fprintf fmt "Incorrect output variable: %s" s
+  | ErrorValue s -> Errors.raise_error (Format.asprintf "Error value at runtime: %s" s)
+  | FloatIndex s -> Errors.raise_error (Format.asprintf "Index is not an integer: %s" s)
+  | IndexOutOfBounds s -> Errors.raise_error (Format.asprintf "Index out of bounds: %s" s)
+  | UnknownInputVariable s -> Errors.raise_error (Format.asprintf "Unknown input variable: %s" s)
+  | IncorrectOutputVariable s ->
+      Errors.raise_error (Format.asprintf "Incorrect output variable: %s" s)
   | ConditionViolated (errors, condition, bindings) ->
-      Format.fprintf fmt
-        "Verification condition failed: %a. Errors thrown:\n\
-         %a\n\
-         Violated condition:\n\
-         %a\n\
-         Values of the relevant variables at this point:\n\
-         %a@\n"
-        Pos.format_position (Pos.get_position condition)
-        (Format_mast.pp_print_list_endline (fun fmt err ->
-             Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
-               (Pos.unmark err.Error.descr)))
-        errors Format_mir.format_expression (Pos.unmark condition)
-        (Format_mast.pp_print_list_endline format_var_literal_with_var)
-        bindings
+      Errors.raise_spanned_error_with_continuation
+        (Format.asprintf
+           "Verification condition failed! Errors thrown:\n\
+           \  * %a\n\
+            Violated condition:\n\
+           \  * %a\n\
+            Values of the relevant variables at this point:\n\
+            %a"
+           (Format_mast.pp_print_list_endline (fun fmt err ->
+                Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
+                  (Pos.unmark err.Error.descr)))
+           errors Format_mir.format_expression (Pos.unmark condition)
+           (Format_mast.pp_print_list_endline (fun fmt v ->
+                Format.fprintf fmt "  * %a" format_var_literal_with_var v))
+           bindings)
+        (Pos.get_position condition)
+        (fun _ -> repl_debugguer ctx p)
 
 let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : literal array)
     (pos : Pos.t) : literal =
@@ -169,7 +173,7 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
 
 let eval_debug = ref false
 
-let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
+let rec evaluate_expr (ctx : ctx) (p : Bir.program) (e : expression Pos.marked) : literal =
   try
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -364,30 +368,8 @@ let rec evaluate_expr (ctx : ctx) p (e : expression Pos.marked) : literal =
                     func Pos.format_position (Pos.get_position e)),
                ctx ))
   with RuntimeError (e, ctx) ->
-    if !exit_on_rte then begin
-      Cli.error_print "%a" format_runtime_error e;
-      flush_all ();
-      flush_all ();
-      (* if !repl_debug then repl_debugguer ctx p; *)
-      exit 1
-    end
+    if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
     else raise (RuntimeError (e, ctx))
-
-let add_tablevar (p : program) (ctx : ctx) (var : Variable.t) ((size, es) : int * index_def) : ctx =
-  {
-    ctx with
-    ctx_vars =
-      VariableMap.add var
-        (TableVar
-           ( size,
-             Array.init size (fun idx ->
-                 match es with
-                 | IndexGeneric e -> evaluate_expr { ctx with ctx_generic_index = Some idx } p e
-                 | IndexTable es ->
-                     let e = IndexMap.find idx es in
-                     evaluate_expr ctx p e) ))
-        ctx.ctx_vars;
-  }
 
 let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
   raise
@@ -478,10 +460,5 @@ let evaluate_program (p : Bir.program) (inputs : literal VariableMap.t) (ctx : c
   in
   try evaluate_stmts p ctx p.statements
   with RuntimeError (e, ctx) ->
-    if !exit_on_rte then begin
-      Cli.error_print "%a@?" format_runtime_error e;
-      flush_all ();
-      flush_all ();
-      exit 1
-    end
+    if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
     else raise (RuntimeError (e, ctx))

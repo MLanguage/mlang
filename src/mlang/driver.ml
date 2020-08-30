@@ -25,7 +25,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Reading files...";
     let m_program = ref [] in
     if List.length !Cli.source_files = 0 then
-      raise (Errors.ArgumentError "please provide at least one M source file");
+      Errors.raise_error "please provide at least one M source file";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     List.iter
       (fun source_file ->
@@ -95,7 +95,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       then begin
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
+          Errors.raise_error "an output file must be defined with --output";
         Bir_to_python.generate_python_program full_m_program.program full_m_program.dep_graph
           !Cli.output_file;
         Cli.result_print
@@ -105,7 +105,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       else if String.lowercase_ascii !Cli.backend = "java" then begin
         Cli.debug_print "Compiling the program to Java...";
         if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
+          Errors.raise_error "an output file must be defined with --output";
         Bir_to_java.generate_java_program full_m_program.program full_m_program.dep_graph
           !Cli.output_file;
         Cli.result_print
@@ -115,7 +115,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       else if String.lowercase_ascii !Cli.backend = "clojure" then begin
         Cli.debug_print "Compiling the program to Clojure...";
         if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
+          Errors.raise_error "an output file must be defined with --output";
         Bir_to_clojure.generate_clj_program full_m_program.program full_m_program.dep_graph
           !Cli.output_file;
         Cli.result_print
@@ -123,17 +123,11 @@ let driver (files : string list) (application : string) (debug : bool) (display_
            %s\n"
           !Cli.output_file
       end
-      else raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
+      else Errors.raise_error (Format.asprintf "unknown backend %s" !Cli.backend)
     end
-  with
-  | Errors.StructuredError (msg, pos) ->
-      Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);
-      exit (-1)
-  | Errors.Unimplemented msg ->
-      Cli.error_print "unimplemented (%s)\n" msg;
-      Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
-  | Errors.ArgumentError msg ->
-      Cli.error_print "Command line argument error: %s\n" msg;
-      Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
+  with Errors.StructuredError (msg, pos, kont) ->
+    Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);
+    (match kont with None -> () | Some kont -> kont ());
+    exit (-1)
 
 let main () = Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)

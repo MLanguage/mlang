@@ -19,4 +19,4 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
 
-type program = { statements : stmt list; idmap : Mir.idmap }
+type program = { statements : stmt list; idmap : Mir.idmap; mir_program : Mir.program }

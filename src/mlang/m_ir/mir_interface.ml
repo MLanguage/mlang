@@ -200,19 +200,13 @@ let read_function_from_spec (p : program) : mvg_function =
   let spec_file =
     match !Cli.function_spec with
     | None ->
-        raise
-          (Errors.ArgumentError "Function specification file is not specified using --function_spec")
+        Errors.raise_error "function specification file is not specified using --function_spec"
     | Some f -> f
   in
   let input = open_in spec_file in
   let filebuf = Lexing.from_channel input in
   Cli.debug_print "Parsing %s" spec_file;
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename spec_file };
-    }
-  in
+  let filebuf = { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = spec_file } } in
   try
     let func_spec = Mparser.function_spec token filebuf in
     close_in input;

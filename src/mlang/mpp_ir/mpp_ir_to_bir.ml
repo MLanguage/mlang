@@ -370,4 +370,5 @@ let create_combined_program (m_program : Mir_interface.full_program)
          computed *)
       @ generate_verif_conds m_program.execution_order m_program.program.program_conds;
     idmap = m_program.program.program_idmap;
+    mir_program = m_program.program;
   }

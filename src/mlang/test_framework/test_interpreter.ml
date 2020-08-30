@@ -17,12 +17,7 @@ open Test_ast
 let parse_file (test_name : string) : test_file =
   let input = open_in test_name in
   let filebuf = Lexing.from_channel input in
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename test_name };
-    }
-  in
+  let filebuf = { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name } } in
   let f =
     try Test_parser.test_file Test_lexer.token filebuf
     with Errors.StructuredError e ->
@@ -163,7 +158,7 @@ let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test
   try
     List.iter
       (fun (_, cond) ->
-        let result = Bir_interpreter.evaluate_expr ctx p.program cond.cond_expr in
+        let result = Bir_interpreter.evaluate_expr ctx combined_program cond.cond_expr in
         match result with
         | Float f when f <> 0. ->
             raise
@@ -192,13 +187,8 @@ let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test
         | _ -> ())
       (List.sort exec_order_compare test_cond_list)
   with Bir_interpreter.RuntimeError (e, ctx) ->
-    if !Bir_interpreter.exit_on_rte then begin
-      Cli.error_print "%a" Bir_interpreter.format_runtime_error e;
-      flush_all ();
-      flush_all ();
-      if !Bir_interpreter.repl_debug then Bir_interpreter.repl_debugguer ctx p.program;
-      exit 1
-    end
+    if !Bir_interpreter.exit_on_rte then
+      Bir_interpreter.raise_runtime_as_structured e ctx combined_program.mir_program
     else raise (Bir_interpreter.RuntimeError (e, ctx))
 
 let check_all_tests (p : Mir_interface.full_program) mpp (test_dir : string) =
