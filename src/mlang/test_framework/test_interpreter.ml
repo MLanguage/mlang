@@ -128,7 +128,6 @@ let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test
   Cli.debug_print "Executing program";
   let p = Mir_interface.fit_function p.program f in
   let p = Mir_interface.to_full_program p in
-  let p = add_test_conds_usage_to_outputs p test_conds in
   let combined_program = Mpp_ir_to_bir.create_combined_program p mpp in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_mir.format_new_program
      combined_program; *)
