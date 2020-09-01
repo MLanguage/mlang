@@ -23,75 +23,6 @@ type mvg_function = {
   func_conds : condition_data VariableMap.t;
 }
 
-let fit_function (p : program) (f : mvg_function) : program =
-  {
-    p with
-    program_vars =
-      VariableMap.mapi
-        (fun var var_data ->
-          if VariableMap.mem var f.func_variable_inputs then
-            {
-              var_data with
-              var_io = Input;
-              var_definition =
-                ( match var_data.var_definition with
-                | InputVar | SimpleVar _ -> InputVar
-                | TableVar _ ->
-                    Errors.raise_spanned_error
-                      (Format.asprintf
-                         "Defining a variable input for a table variable %s is not supported"
-                         (Pos.unmark var.Variable.name))
-                      (Pos.get_position var.Variable.name) );
-            }
-          else if VariableMap.mem var f.func_constant_inputs then
-            {
-              var_data with
-              var_io = Regular;
-              var_definition =
-                ( match var_data.var_definition with
-                | SimpleVar _ -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                | InputVar -> SimpleVar (VariableMap.find var f.func_constant_inputs)
-                | TableVar _ ->
-                    Errors.raise_spanned_error
-                      (Format.asprintf
-                         "Defining a constant input for a table variable %s is not supported"
-                         (Pos.unmark var.Variable.name))
-                      (Pos.get_position var.Variable.name) );
-            }
-          else if VariableMap.mem var f.func_outputs then
-            {
-              var_data with
-              var_io = Output;
-              var_definition =
-                ( match var_data.var_definition with
-                | SimpleVar old_e -> SimpleVar old_e
-                | InputVar ->
-                    Errors.raise_spanned_error
-                      (Format.asprintf
-                         "Defining an output for a input variable %s who is not defined is not \
-                          supported"
-                         (Pos.unmark var.Variable.name))
-                      (Pos.get_position var.Variable.name)
-                | TableVar _ ->
-                    Errors.raise_spanned_error
-                      (Format.asprintf "Defining an output for a table variable %s is not supported"
-                         (Pos.unmark var.Variable.name))
-                      (Pos.get_position var.Variable.name) );
-            }
-          else
-            {
-              var_data with
-              var_io = Regular;
-              var_definition =
-                ( match var_data.var_definition with
-                | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
-                | SimpleVar old -> SimpleVar old
-                | TableVar (size, old) -> TableVar (size, old) );
-            })
-        p.program_vars;
-    program_conds = VariableMap.union (fun _ _ _ -> assert false) p.program_conds f.func_conds;
-  }
-
 let reset_all_outputs (p : program) : program =
   {
     p with
@@ -126,39 +57,6 @@ let reset_all_outputs (p : program) : program =
               })
         p.program_vars;
   }
-
-let fit_function_to_combined_program (p : Bir.program) (conds : condition_data VariableMap.t) :
-    Bir.program =
-  (* because evaluate_program redefines everything each time, we have to make sure that the
-     redefinitions of our constant inputs are removed from the main list of statements *)
-  let new_stmts =
-    List.filter_map
-      (fun stmt ->
-        match Pos.unmark stmt with
-        | Bir.SAssign (var, var_data) -> (
-            let new_var_data =
-              {
-                var_data with
-                var_io = Regular;
-                var_definition =
-                  ( match var_data.var_definition with
-                  | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
-                  | SimpleVar old -> SimpleVar old
-                  | TableVar (size, old) -> TableVar (size, old) );
-              }
-            in
-            match new_var_data.var_definition with
-            | InputVar -> None
-            | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt) )
-        | _ -> Some stmt)
-      p.Bir.statements
-  in
-  let conditions_stmts =
-    VariableMap.fold
-      (fun _ cond stmts -> (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
-      conds []
-  in
-  { p with Bir.statements = new_stmts @ conditions_stmts }
 
 let var_set_from_variable_name_list (p : program) (names : string Pos.marked list) :
     unit VariableMap.t =

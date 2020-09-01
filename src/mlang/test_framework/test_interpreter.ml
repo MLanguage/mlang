@@ -91,56 +91,56 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
     func_conds,
     input_file )
 
-let add_test_conds_usage_to_outputs (p : Mir_interface.full_program)
-    (test_conds : condition_data VariableMap.t) : Mir_interface.full_program =
-  let outputs =
+let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data VariableMap.t) :
+    Bir.program =
+  (* because evaluate_program redefines everything each time, we have to make sure that the
+     redefinitions of our constant inputs are removed from the main list of statements *)
+  let new_stmts =
+    List.filter_map
+      (fun stmt ->
+        match Pos.unmark stmt with
+        | Bir.SAssign (var, var_data) -> (
+            let new_var_data =
+              {
+                var_data with
+                var_io = Regular;
+                var_definition =
+                  ( match var_data.var_definition with
+                  | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
+                  | SimpleVar old -> SimpleVar old
+                  | TableVar (size, old) -> TableVar (size, old) );
+              }
+            in
+            match new_var_data.var_definition with
+            | InputVar -> None
+            | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt) )
+        | _ -> Some stmt)
+      p.Bir.statements
+  in
+  let conditions_stmts =
     VariableMap.fold
-      (fun _ test_cond acc ->
-        let vars_used_by_test =
-          Mir_dependency_graph.get_used_variables test_cond.cond_expr VariableMap.empty
-        in
-        VariableMap.fold
-          (fun used_var _ acc -> VariableMap.add used_var () acc)
-          vars_used_by_test acc)
-      test_conds VariableMap.empty
+      (fun _ cond stmts -> (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
+      conds []
   in
-  let program =
-    {
-      p.program with
-      program_vars =
-        VariableMap.mapi
-          (fun var data ->
-            if VariableMap.mem var outputs then
-              match data.Mir.var_io with
-              | Input | Output -> data
-              | Regular -> { data with var_io = Output }
-            else data)
-          p.program.program_vars;
-    }
-  in
-  { p with program }
+  { p with Bir.statements = new_stmts @ conditions_stmts }
 
-let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test_name : string) =
+let check_test (combined_program : Bir.program) (exec_order : Mir_dependency_graph.execution_order)
+    (test_name : string) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, test_conds, input_file = to_mvg_function_and_inputs p.program t in
+  let f, test_conds, input_file = to_mvg_function_and_inputs combined_program.mir_program t in
   Cli.debug_print "Executing program";
-  let p = Mir_interface.reset_all_outputs p.program in
-  let p = Mir_interface.to_full_program p in
-  let combined_program = Mpp_ir_to_bir.create_combined_program p mpp in
-  let combined_program =
-    Mir_interface.fit_function_to_combined_program combined_program f.func_conds
-  in
+  let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_bir.format_program
      combined_program; *)
   let ctx =
     Bir_interpreter.evaluate_program combined_program input_file
-      (Bir_interpreter.empty_ctx p.program)
+      (Bir_interpreter.empty_ctx combined_program.mir_program)
   in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =
-    List.mapi (fun i var -> (var, i)) (Mir_dependency_graph.get_execution_order p.dep_graph)
+    List.mapi (fun i var -> (var, i)) exec_order
   in
   let execution_order_map : int VariableMap.t =
     List.fold_left
@@ -193,7 +193,8 @@ let check_test (p : Mir_interface.full_program) (mpp : Mpp_ir.mpp_program) (test
       Bir_interpreter.raise_runtime_as_structured e ctx combined_program.mir_program
     else raise (Bir_interpreter.RuntimeError (e, ctx))
 
-let check_all_tests (p : Mir_interface.full_program) mpp (test_dir : string) =
+let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.execution_order)
+    (test_dir : string) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -208,7 +209,7 @@ let check_all_tests (p : Mir_interface.full_program) mpp (test_dir : string) =
   let process name (successes, failures) =
     try
       Cli.debug_flag := false;
-      check_test p mpp (test_dir ^ name);
+      check_test p exec_order (test_dir ^ name);
       Cli.debug_flag := true;
       (name :: successes, failures)
     with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (

@@ -64,21 +64,23 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     ignore
       (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
     let mpp = Option.get @@ Mpp_frontend.process mpp_file full_m_program in
+    let m_program = Mir_interface.reset_all_outputs full_m_program.program in
+    let full_m_program = Mir_interface.to_full_program m_program in
+    Cli.debug_print "Creating combined program suitable for execution...";
+    let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp in
     Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
     if !Cli.run_all_tests <> None then
       let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests full_m_program mpp tests
+      Test_interpreter.check_all_tests combined_program full_m_program.execution_order tests
     else if !Cli.run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test_interpreter.check_test full_m_program mpp test;
+      Test_interpreter.check_test combined_program full_m_program.execution_order test;
       Cli.result_print "Test passed!"
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
       let mvg_func = Mir_interface.read_function_from_spec full_m_program.program in
-      let m_program = Mir_interface.fit_function m_program mvg_func in
-      let full_m_program = Mir_interface.to_full_program m_program in
       let full_m_program =
         if !Cli.optimize then full_m_program (* todo: reinstate optimizations *) else full_m_program
       in
