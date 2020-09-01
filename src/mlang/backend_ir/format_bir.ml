@@ -34,4 +34,4 @@ let rec format_stmt fmt (stmt : stmt) =
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
-let format_new_program fmt (p : program) = Format.fprintf fmt "%a" format_stmts p.statements
+let format_program fmt (p : program) = Format.fprintf fmt "%a" format_stmts p.statements
