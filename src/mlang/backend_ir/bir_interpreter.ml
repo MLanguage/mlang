@@ -263,9 +263,9 @@ let rec evaluate_expr (ctx : ctx) (p : Bir.program) (e : expression Pos.marked) 
             | TableVar _ -> assert false
             (* should not happen *)
           with Not_found ->
-            Cli.error_print "Var not found (should not happen): %s %a\n"
-              (Pos.unmark var.Variable.name) Pos.format_position (Pos.get_position e);
-            assert false
+            Errors.raise_spanned_error
+              ("Var not found (should not happen): " ^ Pos.unmark var.Variable.name)
+              (Pos.get_position e)
         in
         r
     | GenericTableIndex -> (

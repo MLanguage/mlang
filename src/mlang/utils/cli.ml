@@ -49,10 +49,6 @@ let print_cycles =
   in
   Arg.(value & flag & info [ "print_cycles"; "c" ] ~doc)
 
-let optimize =
-  Arg.(
-    value & flag & info [ "optimize"; "O" ] ~doc:"Enables the optimizations passes on the M program")
-
 let backend =
   Arg.(
     required
@@ -99,8 +95,8 @@ let run_test =
 
 let mlang_t f =
   Term.(
-    const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test)
+    const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ backend
+    $ function_spec $ mpp_file $ output $ run_all_tests $ run_test)
 
 let info =
   let doc =

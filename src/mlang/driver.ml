@@ -16,7 +16,7 @@ open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
+    (dep_graph_file : string) (print_cycles : bool) (backend : string)
     (function_spec : string option) (mpp_file : string option) (_output : string option)
     (run_all_tests : string option) (run_test : string option) =
   Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles;
@@ -90,14 +90,9 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       in
       Cli.debug_print "Combined program has %d instructions"
         (Bir.count_instructions combined_program);
-      let _combined_program =
-        if optimize then begin
-          Cli.debug_print "After optimization, the combined program has %d instructions"
-            (Bir.count_instructions combined_program);
-          combined_program (* todo: reinstate optimizations *)
-        end
-        else combined_program
-      in
+      let combined_program = Bir_optimizations.dead_code_elimination combined_program in
+      Cli.debug_print "After dead code removal, the combined program has %d instructions"
+        (Bir.count_instructions combined_program);
       if String.lowercase_ascii backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
         let inputs = Bir_interface.read_inputs_from_stdin function_spec in
