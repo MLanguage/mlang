@@ -85,15 +85,6 @@ let output =
           "$(i, OUTPUT) is the file that will contain the extracted function (for compiler \
            backends)")
 
-let real_precision =
-  Arg.(
-    value & opt int 100
-    & info [ "real_precision"; "p" ] ~docv:"PRECISION"
-        ~doc:
-          "Z3 only deals with integer arithmetic, while M supports floating point values. This \
-           parameter lets you choose the level of precision you want for Z3 computations, which is \
-           equal to 1/$(i, PRECISION).")
-
 let run_all_tests =
   Arg.(
     value
@@ -106,12 +97,10 @@ let run_test =
     & opt (some file) None
     & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
 
-let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year of the M program")
-
 let mlang_t f =
   Term.(
     const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ mpp_file $ output $ real_precision $ run_all_tests $ run_test $ year)
+    $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test)
 
 let info =
   let doc =
@@ -181,49 +170,14 @@ let application = ref ""
 (** Displays timing information *)
 let display_time = ref false
 
-(** Run the optimisations on the M variable graph *)
-let optimize = ref false
-
-let output_file = ref ""
-
-let function_spec = ref None
-
-let mpp_file = ref None
-
-let real_precision = ref 100
-
-let backend = ref "python"
-
-let run_all_tests : string option ref = ref None
-
-let run_test : string option ref = ref None
-
-let year : int ref = ref 2018
-
 let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
-    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string option) (mpp_file_ : string option)
-    (output_ : string option) (real_precision_ : int) (run_all_tests_ : string option)
-    (run_test_ : string option) (year_ : int) =
+    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) =
   source_files := files_;
   application := application_;
   debug_flag := debug_;
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
-  print_cycles_flag := print_cycles_;
-  optimize := optimize_;
-  backend := backend_;
-  function_spec := function_spec_;
-  mpp_file := mpp_file_;
-  real_precision := real_precision_;
-  (output_file :=
-     match output_ with
-     | Some o -> o
-     | None -> if backend_ = "interpreter" then "" else assert false);
-  (* else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))); *)
-  run_all_tests := run_all_tests_;
-  run_test := run_test_;
-  year := year_
+  print_cycles_flag := print_cycles_
 
 (**{1 Terminal formatting}*)
 

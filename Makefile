@@ -33,21 +33,12 @@ tests: build
 		--run_all_tests=tests/ \
 		$(SOURCE_FILES)
 
-
-tests2017: build
+interpreter:
 	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec\
-		--run_all_tests=tests_2017/ --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
-test2017: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec\
-		--run_test=$(TEST_FILE) --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
+		--function_spec interpreter.m_spec \
+		--mpp_file=2018.mpp \
+    	--display_time --debug --backend interpreter \
+    	$(SOURCE_FILES)
 
 doc:
 	dune build @doc

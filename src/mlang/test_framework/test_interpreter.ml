@@ -43,12 +43,12 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
          (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
-    Mir_interface.mvg_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
+let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
+    Bir_interface.bir_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
-        let var = find_var_of_name program (var, pos) in
+        let var = find_var_of_name program.mir_program (var, pos) in
         let lit = match value with I i -> Float (float_of_int i) | F f -> Float f in
         (VariableMap.add var () fv, VariableMap.add var lit in_f))
       (VariableMap.empty, VariableMap.empty)
@@ -58,7 +58,7 @@ let to_mvg_function_and_inputs (program : Mir.program) (t : test_file) :
   let func_outputs = VariableMap.empty in
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    Mir_interface.translate_cond program.program_idmap
+    Bir_interface.translate_cond program.idmap
       (List.map
          (fun (var, value, pos) ->
            (* we allow a difference of 0 between the control value and the result *)
@@ -129,7 +129,7 @@ let check_test (combined_program : Bir.program) (exec_order : Mir_dependency_gra
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, test_conds, input_file = to_mvg_function_and_inputs combined_program.mir_program t in
+  let f, test_conds, input_file = to_mvg_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
   let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_bir.format_program

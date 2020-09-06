@@ -1,0 +1,65 @@
+# This test case corresponds to a fictional housegold with diversified
+# sources of income
+
+# We predefine all the incomes, none are defined at evaluation time.
+saisie: non;
+
+const:
+# The household is a married couple
+V_0AM = 1;
+# They have one dependent child
+0CF = 1;
+# The first individual earns an annual salary of 40000 € (net)
+1AJ = 40000;
+# On this 40000 € salary, 10000 € are exceptional (only for 2018)
+1AX = 10000;
+# The second individual earns an annual pension of 25000 €
+1BS = 25000;
+# The first individual also earns an annual 5000 € alimony
+1AO = 5000;
+# The couple owns a secondary residence that they started to rent on a popular temporary
+# location website
+4BE = 4000;
+# Since they only started this year, this income is exceptional
+4XD = 4000;
+
+# These are the expected values of tax-related variables
+condition:
+# Base income tax
+IAN = 6593;
+# Total tax (income tax + social contributions)
+IINET = 1664;
+# Final income tax
+IRNET = 1182;
+# Total of social constributions (CSG + CRDS + Social and solidarity contribution)
+NAPCR = 482;
+# Mean tax rate
+TXMOYIMP = 1.72;
+# Number of parts for the family quotient
+NBPT = 2.5;
+# Generalized Social Contribution
+CSG = 258;
+# Contribution to the Reduction of the Social Debt (CRDS)
+RDSN = 14;
+# Social and solidarity contribution
+PSOL = 210;
+# Special tax credit because 2018 was the transition to witholding taxation, only
+# exceptional income is taxed
+CIMR = 5411;
+# Reference taxable income for 2018
+REVKIRE = 65800;
+
+
+# The list of variables we want to output
+sortie:
+IAN,
+NBPT,
+REVKIRE,
+TXMOYIMP,
+IINET,
+CIMR,
+CSG,
+RDSN,
+PSOL,
+NAPCR,
+IRNET;

@@ -19,4 +19,20 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
 
-type program = { statements : stmt list; idmap : Mir.idmap; mir_program : Mir.program }
+type program = {
+  statements : stmt list;
+  idmap : Mir.idmap;
+  mir_program : Mir.program;
+  outputs : unit Mir.VariableMap.t;
+}
+
+let count_instructions (p : program) : int =
+  let rec cond_instr_blocks (stmts : stmt list) : int =
+    List.fold_left
+      (fun acc stmt ->
+        match Pos.unmark stmt with
+        | SAssign _ | SVerif _ -> acc + 1
+        | SConditional (_, s1, s2) -> acc + cond_instr_blocks s1 + cond_instr_blocks s2)
+      0 stmts
+  in
+  cond_instr_blocks p.statements

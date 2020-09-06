@@ -129,7 +129,9 @@ let generate_name (v : Variable.t) : string =
 
 let generate_typ (typ : typ) : string = match typ with Real -> "float"
 
-let autograd () : bool = !Cli.backend = "autograd"
+let autograd_ref = ref false
+
+let autograd () : bool = !autograd_ref
 
 let rec generate_python_expr (e : expression) : string =
   match e with

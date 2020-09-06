@@ -16,13 +16,12 @@ open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (backend : string)
-    (function_spec : string option) (mpp_file : string option) (output : string option)
-    (real_precision : int) (run_all_tests : string option) (run_test : string option) (year : int) =
-  Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles optimize
-    backend function_spec mpp_file output real_precision run_all_tests run_test year;
+    (dep_graph_file : string) (print_cycles : bool) (optimize : bool) (_backend : string)
+    (function_spec : string option) (mpp_file : string option) (_output : string option)
+    (run_all_tests : string option) (run_test : string option) =
+  Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles;
   try
-    Cli.debug_print "Reading files...";
+    Cli.debug_print "Reading M files...";
     let m_program = ref [] in
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
@@ -68,64 +67,52 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     let full_m_program = Mir_interface.to_full_program m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp in
-    Cli.debug_print "Parsed mpp file %s" (Option.get mpp_file);
-    if !Cli.run_all_tests <> None then
-      let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
+    Cli.debug_print "Combined programs has %d instructions"
+      (Bir.count_instructions combined_program);
+    if run_all_tests <> None then
+      let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
       Test_interpreter.check_all_tests combined_program full_m_program.execution_order tests
-    else if !Cli.run_test <> None then begin
+    else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
-      let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
+      let test : string = match run_test with Some s -> s | _ -> assert false in
       Test_interpreter.check_test combined_program full_m_program.execution_order test;
       Cli.result_print "Test passed!"
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let mvg_func = Mir_interface.read_function_from_spec full_m_program.program in
-      let full_m_program =
-        if !Cli.optimize then full_m_program (* todo: reinstate optimizations *) else full_m_program
+      let spec_file =
+        match function_spec with
+        | None ->
+            Errors.raise_error "function specification file is not specified using --function_spec"
+        | Some f -> f
       in
-      if String.lowercase_ascii !Cli.backend = "interpreter" then begin
-        Cli.debug_print "Interpreting the program...";
-        let f = Mir_interface.make_function_from_program full_m_program in
-        let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
-        Mir_interface.print_output mvg_func results;
-        Bir_interpreter.repl_debugguer results full_m_program.program
-      end
-      else if
-        String.lowercase_ascii !Cli.backend = "python"
-        || String.lowercase_ascii !Cli.backend = "autograd"
-      then begin
-        Cli.debug_print "Compiling the program to Python...";
-        if !Cli.output_file = "" then
-          Errors.raise_error "an output file must be defined with --output";
-        Bir_to_python.generate_python_program full_m_program.program full_m_program.dep_graph
-          !Cli.output_file;
-        Cli.result_print
-          "Generated Python function from requested set of inputs and outputs, results written to %s\n"
-          !Cli.output_file
-      end
-      else if String.lowercase_ascii !Cli.backend = "java" then begin
-        Cli.debug_print "Compiling the program to Java...";
-        if !Cli.output_file = "" then
-          Errors.raise_error "an output file must be defined with --output";
-        Bir_to_java.generate_java_program full_m_program.program full_m_program.dep_graph
-          !Cli.output_file;
-        Cli.result_print
-          "Generated Java function from requested set of inputs and outputs, results written to %s\n"
-          !Cli.output_file
-      end
-      else if String.lowercase_ascii !Cli.backend = "clojure" then begin
-        Cli.debug_print "Compiling the program to Clojure...";
-        if !Cli.output_file = "" then
-          Errors.raise_error "an output file must be defined with --output";
-        Bir_to_clojure.generate_clj_program full_m_program.program full_m_program.dep_graph
-          !Cli.output_file;
-        Cli.result_print
-          "Generated Clojure function from requested set of inputs and outputs, results written to \
-           %s\n"
-          !Cli.output_file
-      end
-      else Errors.raise_error (Format.asprintf "unknown backend %s" !Cli.backend)
+      let _function_spec = Bir_interface.read_function_from_spec combined_program spec_file in
+      let _full_m_program =
+        if optimize then full_m_program (* todo: reinstate optimizations *) else full_m_program
+      in
+      (* if String.lowercase_ascii !Cli.backend = "interpreter" then begin Cli.debug_print
+         "Interpreting the program..."; let f = Mir_interface.make_function_from_program
+         full_m_program in let results = f (Mir_interface.read_inputs_from_stdin mvg_func) in
+         Mir_interface.print_output mvg_func results; Bir_interpreter.repl_debugguer results
+         full_m_program.program end else if String.lowercase_ascii !Cli.backend = "python" ||
+         String.lowercase_ascii !Cli.backend = "autograd" then begin Cli.debug_print "Compiling the
+         program to Python..."; if !Cli.output_file = "" then Errors.raise_error "an output file
+         must be defined with --output"; Bir_to_python.generate_python_program
+         full_m_program.program full_m_program.dep_graph !Cli.output_file; Cli.result_print
+         "Generated Python function from requested set of inputs and outputs, results written to
+         %s\n" !Cli.output_file end else if String.lowercase_ascii !Cli.backend = "java" then begin
+         Cli.debug_print "Compiling the program to Java..."; if !Cli.output_file = "" then
+         Errors.raise_error "an output file must be defined with --output";
+         Bir_to_java.generate_java_program full_m_program.program full_m_program.dep_graph
+         !Cli.output_file; Cli.result_print "Generated Java function from requested set of inputs
+         and outputs, results written to %s\n" !Cli.output_file end else if String.lowercase_ascii
+         !Cli.backend = "clojure" then begin Cli.debug_print "Compiling the program to Clojure...";
+         if !Cli.output_file = "" then Errors.raise_error "an output file must be defined with
+         --output"; Bir_to_clojure.generate_clj_program full_m_program.program
+         full_m_program.dep_graph !Cli.output_file; Cli.result_print "Generated Clojure function
+         from requested set of inputs and outputs, results written to \ %s\n" !Cli.output_file end
+         else Errors.raise_error (Format.asprintf "unknown backend %s" !Cli.backend) *)
+      assert false
     end
   with Errors.StructuredError (msg, pos, kont) ->
     Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);

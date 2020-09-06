@@ -110,7 +110,7 @@ let process (ompp_file : string option) (p : Mir_interface.full_program) : mpp_p
   match ompp_file with
   | None -> None
   | Some mpp_file -> (
-      Cli.debug_print "Reading m++ file %s" mpp_file;
+      Cli.debug_print "Parsing m++ file %s" mpp_file;
       let f = open_in mpp_file in
       let buf = Lexing.from_channel f in
       buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = mpp_file };
