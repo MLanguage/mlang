@@ -150,10 +150,10 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_functio
 
 let read_inputs_from_stdin (f : bir_function) : Mir.literal Mir.VariableMap.t =
   if Mir.VariableMap.cardinal f.func_variable_inputs > 0 then
-    Cli.result_print "Enter the input values of the program, followed by a semicolon:";
+    Cli.result_print "Enter the input values of the program:";
   Mir.VariableMap.mapi
     (fun var _ ->
-      Format.printf "%s (%s) = "
+      Format.printf "%s (%s) = @?"
         (match var.Mir.Variable.alias with Some s -> s | None -> Pos.unmark var.Mir.Variable.name)
         (Pos.unmark var.Mir.Variable.descr);
       let value = read_line () in
@@ -162,9 +162,7 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Mir.VariableMap.t =
         match value_ast with
         | Mast.Float f -> Mir.Float f
         | Mast.Variable _ -> Errors.raise_error "input must be a numeric constant"
-      with Mparser.Error ->
-        Cli.error_print "Lexer error in input!";
-        exit 1)
+      with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
 let print_output (f : bir_function) (results : Bir_interpreter.ctx) : unit =

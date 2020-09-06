@@ -535,4 +535,4 @@ function_spec:
  } }
 
  literal_input:
- | l = factor_literal SEMICOLON { l }
+ | l = factor_literal { l }
