@@ -106,23 +106,15 @@ let cst_to_ast (c : Mpp_ast.program) (p : Mir.program) : Mpp_ir.mpp_program =
          (cdef_to_adef p translated_names cdef :: mpp_acc, cdef.Mpp_ast.name :: translated_names))
        ([], []) c
 
-let process (ompp_file : string option) (p : Mir_interface.full_program) : mpp_program option =
-  match ompp_file with
-  | None -> None
-  | Some mpp_file -> (
-      Cli.debug_print "Reading m++ file %s" mpp_file;
-      let f = open_in mpp_file in
-      let buf = Lexing.from_channel f in
-      buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = mpp_file };
-      try
-        let cst = Mpp_parser.file Mpp_lexer.next_token buf in
-        close_in f;
-        Some (cst_to_ast cst p.program)
-      with Mpp_parser.Error ->
-        let b = Lexing.lexeme_start_p buf in
-        let e = Lexing.lexeme_end_p buf in
-        let l = b.pos_lnum in
-        let fc = b.pos_cnum - b.pos_bol + 1 in
-        let lc = e.pos_cnum - b.pos_bol + 1 in
-        let () = Cli.error_print "File \"%s\", line %d, characters %d-%d:\n@." mpp_file l fc lc in
-        None )
+let process (mpp_file : string) (p : Mir_interface.full_program) : mpp_program =
+  Cli.debug_print "Parsing m++ file %s" mpp_file;
+  let f = open_in mpp_file in
+  let buf = Lexing.from_channel f in
+  buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = mpp_file };
+  try
+    let cst = Mpp_parser.file Mpp_lexer.next_token buf in
+    close_in f;
+    cst_to_ast cst p.program
+  with Mpp_parser.Error ->
+    Errors.raise_spanned_error "M++ syntax error"
+      (Parse_utils.mk_position (buf.lex_start_p, buf.lex_curr_p))

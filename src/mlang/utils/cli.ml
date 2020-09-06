@@ -23,12 +23,6 @@ open Cmdliner
 
 let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
-let application =
-  Arg.(
-    value & opt string "iliad"
-    & info [ "application"; "a" ] ~docv:"APPLICATION"
-        ~doc:"Name of the M application to select rules from : iliad, batch, bareme...")
-
 let debug = Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
 let display_time =
@@ -49,13 +43,9 @@ let print_cycles =
   in
   Arg.(value & flag & info [ "print_cycles"; "c" ] ~doc)
 
-let optimize =
-  Arg.(
-    value & flag & info [ "optimize"; "O" ] ~doc:"Enables the optimizations passes on the M program")
-
 let backend =
   Arg.(
-    required
+    value
     & opt (some string) None
     & info [ "backend"; "b" ] ~docv:"BACKEND"
         ~doc:"Backend selection: interpreter, python, java, clojure")
@@ -72,9 +62,15 @@ let function_spec =
 
 let mpp_file =
   Arg.(
-    value
+    required
     & opt (some file) None
-    & info [ "mpp_file" ] ~docv:"SPEC" ~doc:"M++ preprocessor file (extension .mpp)")
+    & info [ "mpp_file" ] ~docv:"MPP_FILE" ~doc:"M++ preprocessor file (extension .mpp)")
+
+let mpp_function =
+  Arg.(
+    required
+    & opt (some string) None
+    & info [ "mpp_function" ] ~docv:"MPP_FUNCTION" ~doc:"M++ file main function")
 
 let output =
   Arg.(
@@ -84,15 +80,6 @@ let output =
         ~doc:
           "$(i, OUTPUT) is the file that will contain the extracted function (for compiler \
            backends)")
-
-let real_precision =
-  Arg.(
-    value & opt int 100
-    & info [ "real_precision"; "p" ] ~docv:"PRECISION"
-        ~doc:
-          "Z3 only deals with integer arithmetic, while M supports floating point values. This \
-           parameter lets you choose the level of precision you want for Z3 computations, which is \
-           equal to 1/$(i, PRECISION).")
 
 let run_all_tests =
   Arg.(
@@ -106,12 +93,10 @@ let run_test =
     & opt (some file) None
     & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
 
-let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year of the M program")
-
 let mlang_t f =
   Term.(
-    const f $ files $ application $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize
-    $ backend $ function_spec $ mpp_file $ output $ real_precision $ run_all_tests $ run_test $ year)
+    const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
+    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function)
 
 let info =
   let doc =
@@ -175,55 +160,16 @@ let warning_flag = ref true
 (** Dump circular definitions of variables *)
 let print_cycles_flag = ref false
 
-(** Name of application to consider (drops all the rules not corresponding to it) *)
-let application = ref ""
-
 (** Displays timing information *)
 let display_time = ref false
 
-(** Run the optimisations on the M variable graph *)
-let optimize = ref false
-
-let output_file = ref ""
-
-let function_spec = ref None
-
-let mpp_file = ref None
-
-let real_precision = ref 100
-
-let backend = ref "python"
-
-let run_all_tests : string option ref = ref None
-
-let run_test : string option ref = ref None
-
-let year : int ref = ref 2018
-
-let set_all_arg_refs (files_ : string list) (application_ : string) (debug_ : bool)
-    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool)
-    (backend_ : string) (function_spec_ : string option) (mpp_file_ : string option)
-    (output_ : string option) (real_precision_ : int) (run_all_tests_ : string option)
-    (run_test_ : string option) (year_ : int) =
+let set_all_arg_refs (files_ : string list) (debug_ : bool) (display_time_ : bool)
+    (dep_graph_file_ : string) (print_cycles_ : bool) =
   source_files := files_;
-  application := application_;
   debug_flag := debug_;
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
-  print_cycles_flag := print_cycles_;
-  optimize := optimize_;
-  backend := backend_;
-  function_spec := function_spec_;
-  mpp_file := mpp_file_;
-  real_precision := real_precision_;
-  (output_file :=
-     match output_ with
-     | Some o -> o
-     | None -> if backend_ = "interpreter" then "" else assert false);
-  (* else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_))); *)
-  run_all_tests := run_all_tests_;
-  run_test := run_test_;
-  year := year_
+  print_cycles_flag := print_cycles_
 
 (**{1 Terminal formatting}*)
 

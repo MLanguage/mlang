@@ -3,9 +3,7 @@ SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=ir-calcul/sources2018m_6_7/
 
-SOURCE_FILES=$(SOURCE_DIR_2018)
-
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
+SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
 default: build
 
@@ -20,36 +18,21 @@ format:
 build: #format
 	dune build
 
+MLANG= dune exec src/main.exe -- \
+	--display_time --debug \
+	--mpp_file=2018.mpp \
+	--mpp_function=compute_double_liquidation_pvro
+
 # use: TEST_FILE=bla make test
 test: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--mpp_file=2018.mpp \
-		--run_test=$(TEST_FILE) \
-		$(SOURCE_FILES)
+	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES)
 
+# use: TEST_DIR=bla make test
 tests: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--mpp_file=2018.mpp \
-		--run_all_tests=tests/ \
-		$(SOURCE_FILES)
+	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
-
-tests2017: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--function_spec tests.m_spec\
-		--run_all_tests=tests_2017/ --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
-test2017: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter\
-		--function_spec tests.m_spec\
-		--run_test=$(TEST_FILE) --year=2017 \
-		$(shell find $(SOURCE_DIR_2017) -name "*.m")
-
+interpreter:
+	$(MLANG) --backend interpreter --function_spec interpreter.m_spec $(SOURCE_FILES)
 
 doc:
 	dune build @doc
