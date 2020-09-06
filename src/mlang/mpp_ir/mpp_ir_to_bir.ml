@@ -359,13 +359,14 @@ let generate_verif_conds (exec_order : Mir_dependency_graph.execution_order)
        [] exec_order)
 
 let create_combined_program (m_program : Mir_interface.full_program)
-    (mpp_program : Mpp_ir.mpp_program) : Bir.program =
+    (mpp_program : Mpp_ir.mpp_program) (mpp_function_to_extract : string) : Bir.program =
   let mpp_program = List.rev mpp_program in
+  let decl_to_extract =
+    List.find (fun decl -> decl.Mpp_ir.name = mpp_function_to_extract) mpp_program
+  in
   {
     statements =
-      ( snd
-      @@ translate_mpp_function mpp_program m_program (List.hd mpp_program) [] emtpy_translation_ctx
-      )
+      (snd @@ translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx)
       (* we append the M verification conditions at the end, when everything has already been
          computed *)
       @ generate_verif_conds m_program.execution_order m_program.program.program_conds;

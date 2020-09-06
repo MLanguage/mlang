@@ -15,11 +15,11 @@ open Lexing
 open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
-let driver (files : string list) (application : string) (debug : bool) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (backend : string)
-    (function_spec : string option) (mpp_file : string option) (_output : string option)
-    (run_all_tests : string option) (run_test : string option) =
-  Cli.set_all_arg_refs files application debug display_time dep_graph_file print_cycles;
+let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
+    (print_cycles : bool) (backend : string) (function_spec : string option) (mpp_file : string)
+    (_output : string option) (run_all_tests : string option) (run_test : string option)
+    (mpp_function : string) =
+  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in
@@ -52,7 +52,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
-    let application = if !Cli.application = "" then None else Some !Cli.application in
+    let application = Some "iliad" in
     Cli.debug_print "Elaborating...";
     let m_program = Mast_to_mvg.translate !m_program application in
     let full_m_program = Mir_interface.to_full_program m_program in
@@ -62,11 +62,11 @@ let driver (files : string list) (application : string) (debug : bool) (display_
     Cli.debug_print "Checking for circular variable definitions...";
     ignore
       (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
-    let mpp = Option.get @@ Mpp_frontend.process mpp_file full_m_program in
+    let mpp = Mpp_frontend.process mpp_file full_m_program in
     let m_program = Mir_interface.reset_all_outputs full_m_program.program in
     let full_m_program = Mir_interface.to_full_program m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
-    let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp in
+    let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
     if run_all_tests <> None then
       let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
       Test_interpreter.check_all_tests combined_program full_m_program.execution_order tests

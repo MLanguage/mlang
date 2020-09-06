@@ -18,27 +18,20 @@ format:
 build: #format
 	dune build
 
+MLANG= dune exec src/main.exe -- \
+	--display_time --debug \
+	--mpp_file=2018.mpp \
+	--mpp_function=compute_double_liquidation_pvro
+
 # use: TEST_FILE=bla make test
 test: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--mpp_file=2018.mpp \
-		--run_test=$(TEST_FILE) \
-		$(SOURCE_FILES)
+	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES)
 
 tests: build
-	dune exec src/main.exe -- --application iliad \
-	 	--display_time --debug --backend interpreter \
-		--mpp_file=2018.mpp \
-		--run_all_tests=tests/ \
-		$(SOURCE_FILES)
+	$(MLANG) --run_all_tests=tests/ $(SOURCE_FILES)
 
 interpreter:
-	dune exec src/main.exe -- --application iliad \
-		--function_spec interpreter.m_spec \
-		--mpp_file=2018.mpp \
-    	--display_time --debug --backend interpreter \
-    	$(SOURCE_FILES)
+	$(MLANG) --backend interpreter --function_spec interpreter.m_spec $(SOURCE_FILES)
 
 doc:
 	dune build @doc
