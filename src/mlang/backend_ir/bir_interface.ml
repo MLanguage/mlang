@@ -149,7 +149,8 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_functio
         (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
 
 let read_inputs_from_stdin (f : bir_function) : Mir.literal Mir.VariableMap.t =
-  Cli.result_print "Enter the input values of the program, followed by a semicolon:";
+  if Mir.VariableMap.cardinal f.func_variable_inputs > 0 then
+    Cli.result_print "Enter the input values of the program, followed by a semicolon:";
   Mir.VariableMap.mapi
     (fun var _ ->
       Format.printf "%s (%s) = "
@@ -172,3 +173,22 @@ let print_output (f : bir_function) (results : Bir_interpreter.ctx) : unit =
       if Mir.VariableMap.mem var f.func_outputs then
         Cli.result_print "%a" Bir_interpreter.format_var_literal_with_var (var, value))
     results.ctx_vars
+
+let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program =
+  let const_input_stmts =
+    Mir.VariableMap.fold
+      (fun var e acc ->
+        Pos.same_pos_as
+          (Bir.SAssign
+             ( var,
+               { Mir.var_typ = None; Mir.var_io = Regular; Mir.var_definition = Mir.SimpleVar e } ))
+          e
+        :: acc)
+      f.func_constant_inputs []
+  in
+  let conds_stmts =
+    Mir.VariableMap.fold
+      (fun _ cond acc -> Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
+      f.func_conds []
+  in
+  { p with statements = const_input_stmts @ p.statements @ conds_stmts; outputs = f.func_outputs }
