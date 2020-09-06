@@ -88,10 +88,10 @@ let driver (files : string list) (application : string) (debug : bool) (display_
       let combined_program =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in
-      Cli.debug_print "Combined program has %d instructions"
-        (Bir.count_instructions combined_program);
+      let old_inst_count = Bir.count_instructions combined_program in
+      Cli.debug_print "Removing dead code...";
       let combined_program = Bir_optimizations.dead_code_elimination combined_program in
-      Cli.debug_print "After dead code removal, the combined program has %d instructions"
+      Cli.debug_print "Instruction count: %d -> %d" old_inst_count
         (Bir.count_instructions combined_program);
       if String.lowercase_ascii backend = "interpreter" then begin
         Cli.debug_print "Interpreting the program...";
