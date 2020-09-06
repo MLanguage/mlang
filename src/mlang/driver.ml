@@ -98,8 +98,7 @@ let driver (files : string list) (application : string) (debug : bool) (display_
         Cli.debug_print "Compiling the program to Python...";
         if !Cli.output_file = "" then
           Errors.raise_error "an output file must be defined with --output";
-        Bir_to_python.generate_python_program full_m_program.program full_m_program.dep_graph
-          !Cli.output_file;
+        Bir_to_python.generate_python_program combined_program !Cli.output_file;
         Cli.result_print
           "Generated Python function from requested set of inputs and outputs, results written to %s\n"
           !Cli.output_file

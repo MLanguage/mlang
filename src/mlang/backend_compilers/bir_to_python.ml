@@ -142,197 +142,32 @@ let rec generate_python_expr (e : expression) : string =
       let s2 = generate_python_expr (Pos.unmark e2) in
       match Pos.unmark e2 with
       | _ -> Format.asprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value )
-  (* This special case has been added, because otherwise huge sums would produce too many
-     parenthesis, causing the Python parser to crash *)
-  | Binop
-      ( (Mast.Add, _),
-        e1,
-        ( Binop
-            ( (Mast.Add, _),
-              e2,
-              ( Binop
-                  ( (Mast.Add, _),
-                    e3,
-                    ( Binop
-                        ( (Mast.Add, _),
-                          e4,
-                          ( Binop
-                              ( (Mast.Add, _),
-                                e5,
-                                ( Binop
-                                    ( (Mast.Add, _),
-                                      e6,
-                                      ( Binop
-                                          ( (Mast.Add, _),
-                                            e7,
-                                            ( Binop
-                                                ( (Mast.Add, _),
-                                                  e8,
-                                                  ( Binop
-                                                      ( (Mast.Add, _),
-                                                        e9,
-                                                        ( Binop
-                                                            ( (Mast.Add, _),
-                                                              e10,
-                                                              ( Binop
-                                                                  ( (Mast.Add, _),
-                                                                    e11,
-                                                                    ( Binop
-                                                                        ( (Mast.Add, _),
-                                                                          e12,
-                                                                          ( Binop
-                                                                              ( (Mast.Add, _),
-                                                                                e13,
-                                                                                ( Binop
-                                                                                    ( (Mast.Add, _),
-                                                                                      e14,
-                                                                                      ( Binop
-                                                                                          ( ( Mast
-                                                                                              .Add,
-                                                                                              _ ),
-                                                                                            e15,
-                                                                                            ( Binop
-                                                                                                ( ( Mast
-                                                                                                    .Add,
-                                                                                                    _
-                                                                                                  ),
-                                                                                                  e16,
-                                                                                                  ( Binop
-                                                                                                    ( 
-                                                                                                    ( 
-                                                                                                    Mast
-                                                                                                    .Add,
-                                                                                                    _
-                                                                                                    ),
-                                                                                                    e17,
-                                                                                                    ( 
-                                                                                                    Binop
-                                                                                                    ( 
-                                                                                                    ( 
-                                                                                                    Mast
-                                                                                                    .Add,
-                                                                                                    _
-                                                                                                    ),
-                                                                                                    e18,
-                                                                                                    ( 
-                                                                                                    Binop
-                                                                                                    ( 
-                                                                                                    ( 
-                                                                                                    Mast
-                                                                                                    .Add,
-                                                                                                    _
-                                                                                                    ),
-                                                                                                    e19,
-                                                                                                    e20
-                                                                                                    ),
-                                                                                                    _
-                                                                                                    )
-                                                                                                    ),
-                                                                                                    _
-                                                                                                    )
-                                                                                                    ),
-                                                                                                    _
-                                                                                                  )
-                                                                                                ),
-                                                                                              _ ) ),
-                                                                                        _ ) ),
-                                                                                  _ ) ),
-                                                                            _ ) ),
-                                                                      _ ) ),
-                                                                _ ) ),
-                                                          _ ) ),
-                                                    _ ) ),
-                                              _ ) ),
-                                        _ ) ),
-                                  _ ) ),
-                            _ ) ),
-                      _ ) ),
-                _ ) ),
-          _ ) ) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      let s3 = generate_python_expr (Pos.unmark e3) in
-      let s4 = generate_python_expr (Pos.unmark e4) in
-      let s5 = generate_python_expr (Pos.unmark e5) in
-      let s6 = generate_python_expr (Pos.unmark e6) in
-      let s7 = generate_python_expr (Pos.unmark e7) in
-      let s8 = generate_python_expr (Pos.unmark e8) in
-      let s9 = generate_python_expr (Pos.unmark e9) in
-      let s10 = generate_python_expr (Pos.unmark e10) in
-      let s11 = generate_python_expr (Pos.unmark e11) in
-      let s12 = generate_python_expr (Pos.unmark e12) in
-      let s13 = generate_python_expr (Pos.unmark e13) in
-      let s14 = generate_python_expr (Pos.unmark e14) in
-      let s15 = generate_python_expr (Pos.unmark e15) in
-      let s16 = generate_python_expr (Pos.unmark e16) in
-      let s17 = generate_python_expr (Pos.unmark e17) in
-      let s18 = generate_python_expr (Pos.unmark e18) in
-      let s19 = generate_python_expr (Pos.unmark e19) in
-      let s20 = generate_python_expr (Pos.unmark e20) in
-      Format.asprintf
-        "(%s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s + %s \
-         + %s + %s)"
-        s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20
-  | Binop
-      ( (Mast.Add, _),
-        e1,
-        ( Binop
-            ( (Mast.Add, _),
-              e2,
-              ( Binop
-                  ( (Mast.Add, _),
-                    e3,
-                    ( Binop
-                        ( (Mast.Add, _),
-                          e4,
-                          ( Binop
-                              ( (Mast.Add, _),
-                                e5,
-                                ( Binop
-                                    ( (Mast.Add, _),
-                                      e6,
-                                      ( Binop
-                                          ( (Mast.Add, _),
-                                            e7,
-                                            ( Binop
-                                                ( (Mast.Add, _),
-                                                  e8,
-                                                  (Binop ((Mast.Add, _), e9, e10), _) ),
-                                              _ ) ),
-                                        _ ) ),
-                                  _ ) ),
-                            _ ) ),
-                      _ ) ),
-                _ ) ),
-          _ ) ) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      let s3 = generate_python_expr (Pos.unmark e3) in
-      let s4 = generate_python_expr (Pos.unmark e4) in
-      let s5 = generate_python_expr (Pos.unmark e5) in
-      let s6 = generate_python_expr (Pos.unmark e6) in
-      let s7 = generate_python_expr (Pos.unmark e7) in
-      let s8 = generate_python_expr (Pos.unmark e8) in
-      let s9 = generate_python_expr (Pos.unmark e9) in
-      let s10 = generate_python_expr (Pos.unmark e10) in
-      Format.asprintf "(%s + %s + %s + %s + %s + %s + %s + %s + %s + %s)" s1 s2 s3 s4 s5 s6 s7 s8 s9
-        s10
-  | Binop
-      ( (Mast.Add, _),
-        e1,
-        ( Binop
-            ((Mast.Add, _), e2, (Binop ((Mast.Add, _), e3, (Binop ((Mast.Add, _), e4, e5), _)), _)),
-          _ ) ) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      let s3 = generate_python_expr (Pos.unmark e3) in
-      let s4 = generate_python_expr (Pos.unmark e4) in
-      let s5 = generate_python_expr (Pos.unmark e5) in
-      Format.asprintf "(%s + %s + %s + %s + %s)" s1 s2 s3 s4 s5
-  | Binop (op, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "(%s %s %s)" s1 (generate_binop (Pos.unmark op)) s2
+  | Binop ((op, _), e1, e2) ->
+      let left =
+        let s1 = generate_python_expr (Pos.unmark e1) in
+        match Pos.unmark e1 with
+        | Binop ((opl, _), _, _) ->
+            let left_paren =
+              Mast.has_priority opl op
+              || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative opl)
+            in
+            let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
+            Format.asprintf "%s%s%s" lleft_paren s1 rleft_paren
+        | _ -> Format.asprintf "%s" s1
+      in
+      let right =
+        let s2 = generate_python_expr (Pos.unmark e2) in
+        match Pos.unmark e2 with
+        | Binop ((opr, _), _, _) ->
+            let right_paren =
+              Mast.has_priority op opr
+              || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative opr)
+            in
+            let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
+            Format.asprintf "%s%s%s" lright_paren s2 rright_paren
+        | _ -> Format.asprintf "%s" s2
+      in
+      Format.asprintf "%s %s %s" left (generate_binop op) right
   | Unop (op, e) ->
       let s = generate_python_expr (Pos.unmark e) in
       Format.asprintf "(%s %s)" (generate_unop op) s
@@ -376,11 +211,11 @@ let rec generate_python_expr (e : expression) : string =
       let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(lambda v%d: %s)(%s)" lvar.LocalVariable.id s2 s1
 
-let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatter) : unit =
-  try
-    let data = VariableMap.find var program.program_vars in
-    if data.var_io = Regular || data.var_io = Output then begin
-      Format.fprintf oc "    # %s: %s\n" (generate_name var) (Pos.unmark var.Variable.descr);
+let generate_var_def var data (oc : Format.formatter) : unit =
+  (* try
+   *   let data = VariableMap.find var program.program_vars in
+   *   if data.var_io = Regular || data.var_io = Output then begin
+   *     Format.fprintf oc "    # %s: %s\n" (generate_name var) (Pos.unmark var.Variable.descr); *)
       match data.var_definition with
       | SimpleVar e ->
           Format.fprintf oc "    # Defined %a\n    %s = %s\n\n" Pos.format_position
@@ -400,40 +235,32 @@ let generate_var_def (program : program) (var : Variable.t) (oc : Format.formatt
             (generate_python_expr (Pos.unmark e))
       | InputVar -> assert false
       (* should not happen *)
-    end
-  with Not_found ->
-    let cond = VariableMap.find var program.program_conds in
-    Format.fprintf oc
-      "    # Verification condition %a\n\
-      \    cond = %s\n\
-      \    if cond:\n\
-      \        raise TypeError(\"Error triggered\\n%s\")\n\n"
-      Pos.format_position (Pos.get_position cond.cond_expr)
-      (generate_python_expr (Pos.unmark cond.cond_expr))
-      (String.concat "\\n"
-         (List.map
-            (fun err ->
-              Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
-            cond.cond_errors))
+  (*   end
+   * with Not_found ->
+   *   let cond = VariableMap.find var program.program_conds in
+   *   Format.fprintf oc
+   *     "    # Verification condition %a\n\
+   *     \    cond = %s\n\
+   *     \    if cond:\n\
+   *     \        raise TypeError(\"Error triggered\\n%s\")\n\n"
+   *     Pos.format_position (Pos.get_position cond.cond_expr)
+   *     (generate_python_expr (Pos.unmark cond.cond_expr))
+   *     (String.concat "\\n"
+   *        (List.map
+   *           (fun err ->
+   *             Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
+   *           cond.cond_errors)) *)
 
-let generate_python_program (program : program) (dep_graph : Mir_dependency_graph.G.t)
-    (filename : string) : unit =
-  let _oc = open_out filename in
-  let oc = Format.formatter_of_out_channel _oc in
-  let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
-  let input_vars =
-    List.map
-      (fun (var, _) -> var)
-      (List.filter
-         (fun (_, data) -> data.var_io = Input)
-         (VariableMap.bindings program.program_vars))
-  in
+let generate_header (oc: Format.formatter) : unit =
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
   else Format.fprintf oc "from math import floor\n\n";
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
-  Format.fprintf oc "local_variables = dict()\n\n\n";
+  Format.fprintf oc "local_variables = dict()\n\n\n"
+
+let generate_input_handling (mvg_func:Mir_interface.mvg_function) oc =
+  let input_vars = List.map fst (VariableMap.bindings mvg_func.func_variable_inputs) in
   Format.fprintf oc "# The following keys must be present in the input:\n%s\n"
     (String.concat "\n"
        (List.map
@@ -447,27 +274,73 @@ let generate_python_program (program : program) (dep_graph : Mir_dependency_grap
           (fun var ->
             Format.asprintf "    %s = input_variables[\"%s\"]" (generate_variable var)
               (generate_name var))
-          input_vars));
-  List.iter (fun var -> generate_var_def program var oc) exec_order;
-  let returned_variables =
-    List.map
-      (fun (var, _) -> var)
-      (List.filter
-         (fun (_, data) -> data.var_io = Output)
-         (VariableMap.bindings program.program_vars))
-  in
+          input_vars))
+
+let generate_var_cond cond oc =
+  Format.fprintf oc
+    "    # Verification condition %a\n\
+     \    cond = %s\n\
+     \    if cond:\n\
+     \        raise TypeError(\"Error triggered\\n%s\")\n\n"
+    Pos.format_position (Pos.get_position cond.cond_expr)
+    (generate_python_expr (Pos.unmark cond.cond_expr))
+    (String.concat "\\n"
+       (List.map
+          (fun err ->
+            Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
+          cond.cond_errors))
+
+let rec generate_stmts (program:Bir.program) oc stmts =
+  List.iter (fun stmt -> generate_stmt program oc stmt) stmts
+
+and generate_stmt program oc stmt =
+  match Pos.unmark stmt with
+  | Bir.SAssign(var, vdata) ->
+     generate_var_def var vdata oc
+  | SConditional(cond, tt, []) ->
+     Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\n"
+       (generate_python_expr cond)
+       (generate_stmts program) tt
+  | SConditional(cond, tt, ff) ->
+     Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n"
+       (generate_python_expr cond)
+       (generate_stmts program)  tt
+       (generate_stmts program) ff
+  | SVerif v ->
+     generate_var_cond v oc
+
+let generate_return (mvg_func:Mir_interface.mvg_function) oc =
+  let returned_variables = List.map fst (VariableMap.bindings mvg_func.func_outputs) in
   Format.fprintf oc
     "    # The following two lines help us keep all previously defined variable bindings\n\
     \    global local_variables\n\
     \    local_variables = locals()\n\n";
   if List.length returned_variables = 1 then
     Format.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
-  else begin
-    Format.fprintf oc "    out = {}\n";
-    List.iter
-      (fun var ->
-        Format.fprintf oc "    out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
-      returned_variables;
-    Format.fprintf oc "    return out\n"
-  end;
+  else
+    begin
+      Format.fprintf oc "    out = {}\n";
+      List.iter
+        (fun var ->
+          Format.fprintf oc "    out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
+        returned_variables;
+      Format.fprintf oc "    return out\n"
+    end
+
+let generate_python_program (program : Bir.program) (filename : string) : unit =
+  let _oc = open_out filename in
+  let oc = Format.formatter_of_out_channel _oc in
+  (* let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
+   * let input_vars =
+   *   List.map
+   *     (fun (var, _) -> var)
+   *     (List.filter
+   *        (fun (_, data) -> data.var_io = Input)
+   *        (VariableMap.bindings program.program_vars))
+   * in *)
+  let mvg_func = Mir_interface.read_function_from_spec program.mir_program in
+  generate_header oc;
+  generate_input_handling mvg_func oc;
+  generate_stmts program oc program.statements;
+  generate_return mvg_func oc;
   close_out _oc
