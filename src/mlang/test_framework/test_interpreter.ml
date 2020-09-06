@@ -228,7 +228,7 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
           let errs_varname = try VariableMap.find v failures with Not_found -> [] in
           (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
       | _ ->
-          Cli.error_print "Test %s incorrect (error%s %a raised)@." name
+          Cli.error_print "Test %s incorrect (error%s %a raised)" name
             (if List.length err > 1 then "s" else "")
             (Format.pp_print_list Format.pp_print_string)
             (List.map (fun x -> Pos.unmark x.Error.name) err);
@@ -242,7 +242,7 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
   finish "done!";
   Cli.warning_flag := true;
   Cli.display_time := true;
-  Cli.result_print "Test results: %d successes in files: %s@." (List.length s)
+  Cli.result_print "Test results: %d successes in files: %s" (List.length s)
     (String.concat ", " (List.sort compare s));
 
   let f_l =
@@ -250,7 +250,7 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
       (fun (_, i) (_, i') -> -compare (List.length i) (List.length i'))
       (VariableMap.bindings f)
   in
-  if List.length f_l = 0 then Cli.result_print "No failures!@."
+  if List.length f_l = 0 then Cli.result_print "No failures!"
   else begin
     Cli.warning_print "Failures:@.";
     List.iter

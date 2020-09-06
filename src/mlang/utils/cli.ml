@@ -45,7 +45,7 @@ let print_cycles =
 
 let backend =
   Arg.(
-    required
+    value
     & opt (some string) None
     & info [ "backend"; "b" ] ~docv:"BACKEND"
         ~doc:"Backend selection: interpreter, python, java, clojure")

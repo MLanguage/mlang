@@ -16,9 +16,9 @@ open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
-    (print_cycles : bool) (backend : string) (function_spec : string option) (mpp_file : string)
-    (_output : string option) (run_all_tests : string option) (run_test : string option)
-    (mpp_function : string) =
+    (print_cycles : bool) (backend : string option) (function_spec : string option)
+    (mpp_file : string) (_output : string option) (run_all_tests : string option)
+    (run_test : string option) (mpp_function : string) =
   Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles;
   try
     Cli.debug_print "Reading M files...";
@@ -93,16 +93,19 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       let combined_program = Bir_optimizations.dead_code_elimination combined_program in
       Cli.debug_print "Instruction count: %d -> %d" old_inst_count
         (Bir.count_instructions combined_program);
-      if String.lowercase_ascii backend = "interpreter" then begin
-        Cli.debug_print "Interpreting the program...";
-        let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-        let end_ctx =
-          Bir_interpreter.evaluate_program combined_program inputs
-            (Bir_interpreter.empty_ctx combined_program.mir_program)
-        in
-        Bir_interface.print_output function_spec end_ctx
-      end
-      else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+      match backend with
+      | Some backend ->
+          if String.lowercase_ascii backend = "interpreter" then begin
+            Cli.debug_print "Interpreting the program...";
+            let inputs = Bir_interface.read_inputs_from_stdin function_spec in
+            let end_ctx =
+              Bir_interpreter.evaluate_program combined_program inputs
+                (Bir_interpreter.empty_ctx combined_program.mir_program)
+            in
+            Bir_interface.print_output function_spec end_ctx
+          end
+          else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+      | None -> Errors.raise_error "No backend specified!"
       (* if String.lowercase_ascii !Cli.backend = "python" || String.lowercase_ascii !Cli.backend =
          "autograd" then begin Cli.debug_print "Compiling the program to Python..."; if
          !Cli.output_file = "" then Errors.raise_error "an output file must be defined with
