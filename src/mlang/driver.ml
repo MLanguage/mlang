@@ -19,7 +19,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     (print_cycles : bool) (backend : string option) (function_spec : string option)
     (mpp_file : string) (_output : string option) (run_all_tests : string option)
     (run_test : string option) (mpp_function : string) =
-  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles;
+  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles _output;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in
@@ -105,11 +105,12 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             Bir_interface.print_output function_spec end_ctx
           end
           else if String.lowercase_ascii backend = "python" then begin
-              Cli.debug_print "Compiling the codebase to Python...";
-              if !Cli.output_file = "" then Errors.raise_error "an output file must be defined with --output";
-              Bir_to_python.generate_python_program combined_program !Cli.output_file;
-              Cli.debug_print "Result written to %s\n" !Cli.output_file
-            end
+            Cli.debug_print "Compiling the codebase to Python...";
+            if !Cli.output_file = "" then
+              Errors.raise_error "an output file must be defined with --output";
+            Bir_to_python.generate_python_program combined_program function_spec !Cli.output_file;
+            Cli.debug_print "Result written to %s\n" !Cli.output_file
+          end
           else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
       (* if String.lowercase_ascii !Cli.backend = "python" || String.lowercase_ascii !Cli.backend =
@@ -131,7 +132,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
          else Errors.raise_error (Format.asprintf "unknown backend %s" !Cli.backend) *)
     end
   with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "%a\n" Errors.format_structured_error (msg, pos);
+    Cli.error_print "Error: %a\n" Errors.format_structured_error (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit (-1)
 

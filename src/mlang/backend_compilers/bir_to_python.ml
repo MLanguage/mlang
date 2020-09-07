@@ -13,6 +13,8 @@
 
 open Mir
 
+(* FIXME: m_multimax *)
+
 let undefined_class_prelude : string =
   "class Undefined:\n\
   \    def __init__(self):\n\
@@ -201,6 +203,10 @@ let rec generate_python_expr (e : expression) : string =
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "m_min(%s, %s)" s1 s2
+  | FunctionCall (Multimax, [ e1; e2 ]) ->
+      let s1 = generate_python_expr (Pos.unmark e1) in
+      let s2 = generate_python_expr (Pos.unmark e2) in
+      Format.asprintf "m_multimax(%s, %s)" s1 s2
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.asprintf "%f" f
   | Literal Undefined -> none_value
@@ -214,46 +220,26 @@ let rec generate_python_expr (e : expression) : string =
       Format.asprintf "(lambda v%d: %s)(%s)" lvar.LocalVariable.id s2 s1
 
 let generate_var_def var data (oc : Format.formatter) : unit =
-  (* try
-   *   let data = VariableMap.find var program.program_vars in
-   *   if data.var_io = Regular || data.var_io = Output then begin
-   *     Format.fprintf oc "    # %s: %s\n" (generate_name var) (Pos.unmark var.Variable.descr); *)
-      match data.var_definition with
-      | SimpleVar e ->
-          Format.fprintf oc "    # Defined %a\n    %s = %s\n\n" Pos.format_position
-            (Pos.get_position e) (generate_variable var)
-            (generate_python_expr (Pos.unmark e))
-      | TableVar (_, IndexTable es) ->
-          IndexMap.iter
-            (fun i e ->
-              Format.fprintf oc "    # Defined %a\n    %s[%d] = %s\n" Pos.format_position
-                (Pos.get_position e) (generate_variable var) i
-                (generate_python_expr (Pos.unmark e)))
-            es;
-          Format.fprintf oc "\n"
-      | TableVar (_, IndexGeneric e) ->
-          Format.fprintf oc "    # Defined %a\n    %s = lambda generic_index: %s\n\n"
-            Pos.format_position (Pos.get_position e) (generate_variable var)
-            (generate_python_expr (Pos.unmark e))
-      | InputVar -> assert false
-      (* should not happen *)
-  (*   end
-   * with Not_found ->
-   *   let cond = VariableMap.find var program.program_conds in
-   *   Format.fprintf oc
-   *     "    # Verification condition %a\n\
-   *     \    cond = %s\n\
-   *     \    if cond:\n\
-   *     \        raise TypeError(\"Error triggered\\n%s\")\n\n"
-   *     Pos.format_position (Pos.get_position cond.cond_expr)
-   *     (generate_python_expr (Pos.unmark cond.cond_expr))
-   *     (String.concat "\\n"
-   *        (List.map
-   *           (fun err ->
-   *             Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
-   *           cond.cond_errors)) *)
+  match data.var_definition with
+  | SimpleVar e ->
+      Format.fprintf oc "# Defined %a@\n%s = %s@\n@\n" Pos.format_position (Pos.get_position e)
+        (generate_variable var)
+        (generate_python_expr (Pos.unmark e))
+  | TableVar (_, IndexTable es) ->
+      IndexMap.iter
+        (fun i e ->
+          Format.fprintf oc "# Defined %a@\n%s[%d] = %s@\n" Pos.format_position (Pos.get_position e)
+            (generate_variable var) i
+            (generate_python_expr (Pos.unmark e)))
+        es;
+      Format.fprintf oc "@\n"
+  | TableVar (_, IndexGeneric e) ->
+      Format.fprintf oc "# Defined %a@\n%s = lambda generic_index: %s@\n@\n" Pos.format_position
+        (Pos.get_position e) (generate_variable var)
+        (generate_python_expr (Pos.unmark e))
+  | InputVar -> assert false
 
-let generate_header (oc: Format.formatter) : unit =
+let generate_header (oc : Format.formatter) : unit =
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
@@ -261,29 +247,29 @@ let generate_header (oc: Format.formatter) : unit =
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
   Format.fprintf oc "local_variables = dict()\n\n\n"
 
-let generate_input_handling (mvg_func:Mir_interface.mvg_function) oc =
-  let input_vars = List.map fst (VariableMap.bindings mvg_func.func_variable_inputs) in
-  Format.fprintf oc "# The following keys must be present in the input:\n%s\n"
-    (String.concat "\n"
-       (List.map
-          (fun var ->
-            Format.asprintf "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr))
-          input_vars));
-  Format.fprintf oc "def extracted(input_variables):\n\n";
-  Format.fprintf oc "    # First we extract the input variables from the dictionnary:\n%s\n\n"
-    (String.concat "\n"
-       (List.map
-          (fun var ->
-            Format.asprintf "    %s = input_variables[\"%s\"]" (generate_variable var)
-              (generate_name var))
-          input_vars))
+let generate_input_handling (function_spec : Bir_interface.bir_function) oc =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  Format.fprintf oc "# The following keys must be present in the input:@\n%a@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr)))
+    input_vars;
+  Format.fprintf oc "def extracted(input_variables):@\n@[<h 4>    @\n";
+  Format.fprintf oc "# First we extract the input variables from the dictionnary:@\n%a@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "%s = input_variables[\"%s\"]" (generate_variable var)
+           (generate_name var)))
+    input_vars
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "    # Verification condition %a\n\
-     \    cond = %s\n\
-     \    if cond:\n\
-     \        raise TypeError(\"Error triggered\\n%s\")\n\n"
+    "# Verification condition %a\n\
+     cond = %s@\n\
+     if cond:@\n\
+    \    raise TypeError(\"Error triggered\\n%s\")\n\n"
     Pos.format_position (Pos.get_position cond.cond_expr)
     (generate_python_expr (Pos.unmark cond.cond_expr))
     (String.concat "\\n"
@@ -292,44 +278,41 @@ let generate_var_cond cond oc =
             Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
           cond.cond_errors))
 
-let rec generate_stmts (program:Bir.program) oc stmts =
+let rec generate_stmts (program : Bir.program) oc stmts =
   List.iter (fun stmt -> generate_stmt program oc stmt) stmts
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign(var, vdata) ->
-     generate_var_def var vdata oc
-  | SConditional(cond, tt, []) ->
-     Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\n"
-       (generate_python_expr cond)
-       (generate_stmts program) tt
-  | SConditional(cond, tt, ff) ->
-     Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n"
-       (generate_python_expr cond)
-       (generate_stmts program)  tt
-       (generate_stmts program) ff
-  | SVerif v ->
-     generate_var_cond v oc
+  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
+  | SConditional (cond, tt, []) ->
+      Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\n" (generate_python_expr cond)
+        (generate_stmts program) tt
+  | SConditional (cond, tt, ff) ->
+      Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n"
+        (generate_python_expr cond) (generate_stmts program) tt (generate_stmts program) ff
+  | SVerif v -> generate_var_cond v oc
 
-let generate_return (mvg_func:Mir_interface.mvg_function) oc =
-  let returned_variables = List.map fst (VariableMap.bindings mvg_func.func_outputs) in
+let generate_return (function_spec : Bir_interface.bir_function) oc =
+  let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "    # The following two lines help us keep all previously defined variable bindings\n\
-    \    global local_variables\n\
-    \    local_variables = locals()\n\n";
+    "# The following two lines help us keep all previously defined variable bindings@\n\
+     global local_variables@\n\
+     local_variables = locals()@\n\
+     @\n";
   if List.length returned_variables = 1 then
-    Format.fprintf oc "    return %s\n\n" (generate_variable (List.hd returned_variables))
-  else
-    begin
-      Format.fprintf oc "    out = {}\n";
-      List.iter
-        (fun var ->
-          Format.fprintf oc "    out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
-        returned_variables;
-      Format.fprintf oc "    return out\n"
-    end
+    Format.fprintf oc "return %s\n@]@\n" (generate_variable (List.hd returned_variables))
+  else begin
+    Format.fprintf oc "out = {}\n";
+    Format.pp_print_list
+      ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.")
+      (fun fmt var ->
+        Format.fprintf fmt "out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
+      oc returned_variables;
+    Format.fprintf oc "return out@\n@]\n"
+  end
 
-let generate_python_program (program : Bir.program) (filename : string) : unit =
+let generate_python_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
+    (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   (* let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
@@ -340,9 +323,8 @@ let generate_python_program (program : Bir.program) (filename : string) : unit =
    *        (fun (_, data) -> data.var_io = Input)
    *        (VariableMap.bindings program.program_vars))
    * in *)
-  let mvg_func = Mir_interface.read_function_from_spec program.mir_program in
   generate_header oc;
-  generate_input_handling mvg_func oc;
+  generate_input_handling function_spec oc;
   generate_stmts program oc program.statements;
-  generate_return mvg_func oc;
+  generate_return function_spec oc;
   close_out _oc

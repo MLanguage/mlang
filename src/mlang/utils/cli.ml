@@ -163,13 +163,17 @@ let print_cycles_flag = ref false
 (** Displays timing information *)
 let display_time = ref false
 
+(** Output file *)
+let output_file = ref ""
+
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (display_time_ : bool)
-    (dep_graph_file_ : string) (print_cycles_ : bool) =
+    (dep_graph_file_ : string) (print_cycles_ : bool) (output_file_ : string option) =
   source_files := files_;
   debug_flag := debug_;
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
-  print_cycles_flag := print_cycles_
+  print_cycles_flag := print_cycles_;
+  match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)
 
