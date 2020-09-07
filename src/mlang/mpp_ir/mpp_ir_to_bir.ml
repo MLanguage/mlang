@@ -191,7 +191,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         | None ->
             let new_l =
               Mir.Variable.new_var (l, pos) None ("", pos)
-                ({ rule_number = -1; seq_number = -1; pos } : Mir.execution_number)
+                (Mast_to_mvg.dummy_exec_number pos)
                 ~attributes:[] ~is_income:false
             in
             let ctx = { ctx with new_variables = StringMap.add l new_l ctx.new_variables } in
@@ -364,12 +364,16 @@ let create_combined_program (m_program : Mir_interface.full_program)
   let decl_to_extract =
     List.find (fun decl -> decl.Mpp_ir.name = mpp_function_to_extract) mpp_program
   in
+  let stmts =
+    snd @@ translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx
+  in
+  let stmts_verif =
+    generate_verif_conds m_program.execution_order m_program.program.program_conds
+  in
+
   {
-    statements =
-      (snd @@ translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx)
-      (* we append the M verification conditions at the end, when everything has already been
-         computed *)
-      @ generate_verif_conds m_program.execution_order m_program.program.program_conds;
+    statements = stmts @ stmts_verif;
+    (* we append the M verification conditions at the end, when everything has already been computed *)
     idmap = m_program.program.program_idmap;
     mir_program = m_program.program;
     outputs = Mir.VariableMap.empty;
