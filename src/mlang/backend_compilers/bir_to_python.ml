@@ -266,10 +266,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) oc =
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "# Verification condition %a\n\
-     cond = %s@\n\
-     if cond:@\n\
-    \    raise TypeError(\"Error triggered\\n%s\")\n\n"
+    "# Verification condition %a@\ncond = %s@\nif cond:@\n    raise TypeError(\"Error triggered\\n%s\")@\n@\n"
     Pos.format_position (Pos.get_position cond.cond_expr)
     (generate_python_expr (Pos.unmark cond.cond_expr))
     (String.concat "\\n"
@@ -302,11 +299,10 @@ let generate_return (function_spec : Bir_interface.bir_function) oc =
   if List.length returned_variables = 1 then
     Format.fprintf oc "return %s\n@]@\n" (generate_variable (List.hd returned_variables))
   else begin
-    Format.fprintf oc "out = {}\n";
+    Format.fprintf oc "out = {}@\n";
     Format.pp_print_list
-      ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.")
       (fun fmt var ->
-        Format.fprintf fmt "out[\"%s\"] = %s\n" (generate_variable var) (generate_variable var))
+        Format.fprintf fmt "out[\"%s\"] = %s@\n" (generate_variable var) (generate_variable var))
       oc returned_variables;
     Format.fprintf oc "return out@\n@]\n"
   end
