@@ -13,7 +13,7 @@
 
 open Mir
 
-(* FIXME: m_multimax *)
+(* FIXME: Singleton instance for Undefined? *)
 
 let undefined_class_prelude : string =
   "class Undefined:\n\
@@ -54,41 +54,48 @@ let undefined_class_prelude : string =
   \            return Undefined()\n\
   \        else:\n\
   \            return 0.0\n\n\
-  \    def __rtruediv__(self, lhs):\n\
+  \    def __rtruediv__(self, rhs):\n\
   \        if isinstance(rhs, Undefined):\n\
   \            return Undefined()\n\
   \        else:\n\
   \            return Undefined()\n\n\
+  \    def __neg__(self):\n\
+  \        return 0\n\n\
   \    def __lt__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
-  \    def __lte__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
+  \        return Undefined()\n\
+  \    def __le__(self, rhs):\n\
+  \        return Undefined()\n\
   \    def __gt__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
-  \    def __gte__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
+  \        return Undefined()\n\
+  \    def __ge__(self, rhs):\n\
+  \        return Undefined()\n\
   \    def __eq__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
+  \        return Undefined()\n\
   \    def __neq__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n"
+  \        return Undefined()\n\n\
+   def m_div(lhs, rhs):\n\
+  \   if not isinstance(rhs, Undefined) and rhs == 0: return 0\n\
+  \   else: return lhs / rhs\n\
+   def m_max(lhs, rhs):\n\
+  \    return max(lhs + 0, rhs + 0)\n\n\
+   def m_min(lhs, rhs):\n\
+  \    return min(lhs + 0, rhs + 0)\n\n\
+   def m_multimax(count, l):\n\
+  \    m = l[0] + 0\n\
+  \    for i in range(int(count)):\n\
+  \        m = max(m, l[i+1] + 0)\n\
+  \    return m\n\n\
+   def m_round(x):\n\
+  \    if isinstance(x, Undefined): return x\n\
+  \    else: return round(x)\n\n\
+   def m_floor(x):\n\
+  \    if isinstance(x, Undefined): return x\n\
+  \    else: return floor(x)\n\n\
+   class GenericIndex:\n\
+  \    def __init__(self, lambda_function):\n\
+  \      self.l = lambda_function\n\
+  \    def __getitem__(self, x):\n\
+  \      return self.l(x)"
 
 let none_value = "Undefined()"
 
@@ -141,11 +148,10 @@ let rec generate_python_expr (e : expression) : string =
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
       Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
-  | Binop ((Mast.Div, _), e1, e2) -> (
+  | Binop ((Mast.Div, _), e1, e2) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
-      match Pos.unmark e2 with
-      | _ -> Format.asprintf "((%s / %s) if %s != 0.0 else %s)" s1 s2 s2 none_value )
+      Format.asprintf "m_div(%s, %s)" s1 s2
   | Binop ((op, _), e1, e2) ->
       let left =
         let s1 = generate_python_expr (Pos.unmark e1) in
@@ -177,7 +183,8 @@ let rec generate_python_expr (e : expression) : string =
       Format.asprintf "(%s %s)" (generate_unop op) s
   | Index (var, e) ->
       let s = generate_python_expr (Pos.unmark e) in
-      Format.asprintf "%s[%s]" (generate_variable (Pos.unmark var)) s
+      (* FIXME: int cast hack *)
+      Format.asprintf "%s[int(%s)]" (generate_variable (Pos.unmark var)) s
   | Conditional (e1, e2, e3) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
@@ -191,10 +198,10 @@ let rec generate_python_expr (e : expression) : string =
       Format.asprintf "(%s == %s)" sarg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
       let sarg = generate_python_expr (Pos.unmark arg) in
-      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "round(%s)" sarg
+      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "m_round(%s)" sarg
   | FunctionCall (InfFunc, [ arg ]) ->
       let sarg = generate_python_expr (Pos.unmark arg) in
-      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "floor(%s)" sarg
+      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "m_floor(%s)" sarg
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let s1 = generate_python_expr (Pos.unmark e1) in
       let s2 = generate_python_expr (Pos.unmark e2) in
@@ -226,6 +233,7 @@ let generate_var_def var data (oc : Format.formatter) : unit =
         (generate_variable var)
         (generate_python_expr (Pos.unmark e))
   | TableVar (_, IndexTable es) ->
+      Format.fprintf oc "%s = [Undefined()] * %d@\n" (generate_variable var) (IndexMap.cardinal es);
       IndexMap.iter
         (fun i e ->
           Format.fprintf oc "# Defined %a@\n%s[%d] = %s@\n" Pos.format_position (Pos.get_position e)
@@ -234,8 +242,8 @@ let generate_var_def var data (oc : Format.formatter) : unit =
         es;
       Format.fprintf oc "@\n"
   | TableVar (_, IndexGeneric e) ->
-      Format.fprintf oc "# Defined %a@\n%s = lambda generic_index: %s@\n@\n" Pos.format_position
-        (Pos.get_position e) (generate_variable var)
+      Format.fprintf oc "# Defined %a@\n%s = GenericIndex(lambda generic_index: %s)@\n@\n"
+        Pos.format_position (Pos.get_position e) (generate_variable var)
         (generate_python_expr (Pos.unmark e))
   | InputVar -> assert false
 
@@ -266,7 +274,11 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) oc =
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "# Verification condition %a@\ncond = %s@\nif cond:@\n    raise TypeError(\"Error triggered\\n%s\")@\n@\n"
+    "# Verification condition %a@\n\
+     cond = %s@\n\
+     if cond:@\n\
+    \    raise TypeError(\"Error triggered\\n%s\")@\n\
+     @\n"
     Pos.format_position (Pos.get_position cond.cond_expr)
     (generate_python_expr (Pos.unmark cond.cond_expr))
     (String.concat "\\n"
