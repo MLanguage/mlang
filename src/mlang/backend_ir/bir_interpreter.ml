@@ -43,16 +43,10 @@ type ctx = {
   ctx_generic_index : int option;
 }
 
-let empty_ctx (p : program) : ctx =
+let empty_ctx : ctx =
   {
     ctx_local_vars = LocalVariableMap.empty;
-    ctx_vars =
-      VariableMap.map
-        (fun def ->
-          match def.var_definition with
-          | Mir.SimpleVar _ | InputVar -> SimpleVar Undefined
-          | Mir.TableVar (size, _) -> TableVar (size, Array.make size Undefined))
-        p.program_vars;
+    ctx_vars = VariableMap.empty;
     ctx_generic_index = None;
   }
 
@@ -413,7 +407,7 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                  (Format.asprintf "%s (%s)"
                     (Pos.unmark var.Mir.Variable.name)
                     (Pos.unmark var.Mir.Variable.descr)),
-               empty_ctx p )))
+               empty_ctx )))
     input_values p
 
 let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
@@ -448,16 +442,16 @@ let rec evaluate_stmt (p : Bir.program) ctx stmt =
 
 and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
 
-let evaluate_program (p : Bir.program) (inputs : literal VariableMap.t) (ctx : ctx) : ctx =
-  let ctx =
-    {
-      ctx with
-      ctx_vars =
-        VariableMap.fold
-          (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
-          inputs ctx.ctx_vars;
-    }
-  in
+let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
+  {
+    ctx with
+    ctx_vars =
+      VariableMap.fold
+        (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
+        inputs ctx.ctx_vars;
+  }
+
+let evaluate_program (p : Bir.program) (ctx : ctx) : ctx =
   try evaluate_stmts p ctx p.statements
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program

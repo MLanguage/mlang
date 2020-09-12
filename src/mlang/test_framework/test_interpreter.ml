@@ -131,12 +131,13 @@ let check_test (combined_program : Bir.program) (exec_order : Mir_dependency_gra
   Cli.debug_print "Running test %s..." t.nom;
   let f, test_conds, input_file = to_mvg_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
-  let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in
+  let combined_program = Bir_interface.adapt_program_to_function combined_program f in
+  (* let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in *)
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_bir.format_program
      combined_program; *)
   let ctx =
-    Bir_interpreter.evaluate_program combined_program input_file
-      (Bir_interpreter.empty_ctx combined_program.mir_program)
+    Bir_interpreter.evaluate_program combined_program
+      (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
   in
   let test_cond_list = VariableMap.bindings test_conds in
   let execution_order_list : (Variable.t * int) list =

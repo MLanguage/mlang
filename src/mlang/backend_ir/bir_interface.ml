@@ -184,9 +184,33 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
         :: acc)
       f.func_constant_inputs []
   in
+  let unused_input_stmts =
+    Mir.VariableMap.fold
+      (fun var def acc ->
+        match def.Mir.var_definition with
+        | Mir.InputVar ->
+            if Mir.VariableMap.mem var f.func_variable_inputs then acc
+            else
+              let pos = Pos.no_pos in
+              ( Bir.SAssign
+                  ( var,
+                    {
+                      Mir.var_typ = None;
+                      Mir.var_io = Regular;
+                      Mir.var_definition = Mir.SimpleVar (Mir.Literal Mir.Undefined, pos);
+                    } ),
+                pos )
+              :: acc
+        | _ -> acc)
+      p.mir_program.program_vars []
+  in
   let conds_stmts =
     Mir.VariableMap.fold
       (fun _ cond acc -> Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  { p with statements = const_input_stmts @ p.statements @ conds_stmts; outputs = f.func_outputs }
+  {
+    p with
+    statements = unused_input_stmts @ const_input_stmts @ p.statements @ conds_stmts;
+    outputs = f.func_outputs;
+  }

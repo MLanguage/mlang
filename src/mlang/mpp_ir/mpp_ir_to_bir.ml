@@ -118,7 +118,7 @@ let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos
                     (Bir_interpreter.RuntimeError
                        ( Bir_interpreter.IncorrectOutputVariable
                            (Format.asprintf "%a is an input" Format_mir.format_variable var),
-                         Bir_interpreter.empty_ctx p.program ))
+                         Bir_interpreter.empty_ctx ))
               | Output -> data
               | Regular -> { data with var_io = Output }
             else

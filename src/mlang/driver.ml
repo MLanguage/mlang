@@ -99,8 +99,8 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
             let end_ctx =
-              Bir_interpreter.evaluate_program combined_program inputs
-                (Bir_interpreter.empty_ctx combined_program.mir_program)
+              Bir_interpreter.evaluate_program combined_program
+                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx inputs)
             in
             Bir_interface.print_output function_spec end_ctx
           end
