@@ -113,7 +113,7 @@ type binop = And | Or | Add | Sub | Mul | Div
 
 let precedence = function Add -> 2 | Sub -> 2 | Mul -> 1 | Div -> 1 | And -> 3 | Or -> 4
 
-let has_priority op op' = precedence op < precedence op'
+let has_priority op op' = precedence op' < precedence op
 
 let is_right_associative = function _ -> false
 

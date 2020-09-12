@@ -13,66 +13,53 @@
 
 open Mir
 
-(* FIXME: Singleton instance for Undefined? *)
-
 let undefined_class_prelude : string =
-  "class Undefined:\n\
+  "class Singleton(type):\n\
+  \    _instances = {}\n\
+  \    def __call__(cls, *args, **kwargs):\n\
+  \        if cls not in cls._instances:\n\
+  \            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)\n\
+  \        return cls._instances[cls]\n\n\n\
+   class Undefined(metaclass=Singleton):\n\
   \    def __init__(self):\n\
   \        pass\n\n\
   \    def __add__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        if isinstance(rhs, Undefined): return self\n\
+  \        else: return rhs\n\n\
   \    def __radd__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        if isinstance(rhs, Undefined): return self\n\
+  \        else: return rhs\n\n\
   \    def __sub__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        if isinstance(rhs, Undefined): return self\n\
+  \        else: return -rhs\n\n\
   \    def __rsub__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        if isinstance(rhs, Undefined): return self\n\
+  \        else: return rhs\n\n\
   \    def __mul__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        return self\n\n\
   \    def __rmul__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return rhs\n\n\
+  \        return self\n\n\
   \    def __truediv__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return 0.0\n\n\
+  \        return self\n\n\
   \    def __rtruediv__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined):\n\
-  \            return Undefined()\n\
-  \        else:\n\
-  \            return Undefined()\n\n\
+  \        return self\n\n\
   \    def __neg__(self):\n\
   \        return 0\n\n\
   \    def __lt__(self, rhs):\n\
-  \        return Undefined()\n\
+  \        return self\n\n\
   \    def __le__(self, rhs):\n\
-  \        return Undefined()\n\
+  \        return self\n\n\
   \    def __gt__(self, rhs):\n\
-  \        return Undefined()\n\
+  \        return self\n\n\
   \    def __ge__(self, rhs):\n\
-  \        return Undefined()\n\
+  \        return self\n\n\
   \    def __eq__(self, rhs):\n\
-  \        return Undefined()\n\
-  \    def __neq__(self, rhs):\n\
-  \        return Undefined()\n\n\
+  \        return self\n\n\
+  \    def __ne__(self, rhs):\n\
+  \        return self\n\n\
+   def m_cond(cond, true, false):\n\
+  \    if isinstance(cond, Undefined): return cond\n\
+  \    else: return true if cond else false\n\
    def m_div(lhs, rhs):\n\
   \   if not isinstance(rhs, Undefined) and rhs == 0: return 0\n\
   \   else: return lhs / rhs\n\
@@ -119,7 +106,7 @@ let generate_binop (op : Mast.binop) : string =
 
 let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "not" | Mast.Minus -> "-"
 
-let generate_variable (var : Variable.t) : string =
+let generate_variable fmt (var : Variable.t) : unit =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
   let v =
@@ -131,7 +118,7 @@ let generate_variable (var : Variable.t) : string =
       Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
         var.Variable.execution_number.Mir.seq_number
   in
-  if Re.Str.string_match (Re.Str.regexp "[0-9].+") v 0 then "var_" ^ v else v
+  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v else Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -142,19 +129,16 @@ let autograd_ref = ref false
 
 let autograd () : bool = !autograd_ref
 
-let rec generate_python_expr (e : expression) : string =
-  match e with
+let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
+  match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "(%s %s %s)" s1 (generate_comp_op (Pos.unmark op)) s2
+      Format.fprintf fmt "(%a %s %a)" generate_python_expr e1
+        (generate_comp_op (Pos.unmark op))
+        generate_python_expr e2
   | Binop ((Mast.Div, _), e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "m_div(%s, %s)" s1 s2
+      Format.fprintf fmt "m_div(%a, %a)" generate_python_expr e1 generate_python_expr e2
   | Binop ((op, _), e1, e2) ->
-      let left =
-        let s1 = generate_python_expr (Pos.unmark e1) in
+      let left fmt () =
         match Pos.unmark e1 with
         | Binop ((opl, _), _, _) ->
             let left_paren =
@@ -162,92 +146,74 @@ let rec generate_python_expr (e : expression) : string =
               || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative opl)
             in
             let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
-            Format.asprintf "%s%s%s" lleft_paren s1 rleft_paren
-        | _ -> Format.asprintf "%s" s1
+            Format.fprintf fmt "%s%a%s" lleft_paren generate_python_expr e1 rleft_paren
+        | _ -> generate_python_expr fmt e1
       in
-      let right =
-        let s2 = generate_python_expr (Pos.unmark e2) in
+      let right fmt () =
         match Pos.unmark e2 with
         | Binop ((opr, _), _, _) ->
             let right_paren =
-              Mast.has_priority op opr
+              Mast.has_priority opr op
               || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative opr)
             in
             let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
-            Format.asprintf "%s%s%s" lright_paren s2 rright_paren
-        | _ -> Format.asprintf "%s" s2
+            Format.fprintf fmt "%s%a%s" lright_paren generate_python_expr e2 rright_paren
+        | _ -> generate_python_expr fmt e2
       in
-      Format.asprintf "%s %s %s" left (generate_binop op) right
-  | Unop (op, e) ->
-      let s = generate_python_expr (Pos.unmark e) in
-      Format.asprintf "(%s %s)" (generate_unop op) s
+      Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
+  | Unop (op, e) -> Format.fprintf fmt "(%s %a)" (generate_unop op) generate_python_expr e
   | Index (var, e) ->
-      let s = generate_python_expr (Pos.unmark e) in
       (* FIXME: int cast hack *)
-      Format.asprintf "%s[int(%s)]" (generate_variable (Pos.unmark var)) s
+      Format.fprintf fmt "%a[int(%a)]" generate_variable (Pos.unmark var) generate_python_expr e
   | Conditional (e1, e2, e3) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      let s3 = generate_python_expr (Pos.unmark e3) in
-      Format.asprintf "(%s if %s else %s)" s2 s1 s3
+      Format.fprintf fmt "m_cond(%a, %a, %a)" generate_python_expr e1 generate_python_expr e2
+        generate_python_expr e3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) in
-      Format.asprintf "(%s != %s)" sarg none_value
+      Format.fprintf fmt "(%a != %s)" generate_python_expr arg none_value
   | FunctionCall (NullFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) in
-      Format.asprintf "(%s == %s)" sarg none_value
+      Format.fprintf fmt "(%a == %s)" generate_python_expr arg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) in
-      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "m_round(%s)" sarg
+      if autograd () then generate_python_expr fmt arg
+      else Format.fprintf fmt "m_round(%a)" generate_python_expr arg
   | FunctionCall (InfFunc, [ arg ]) ->
-      let sarg = generate_python_expr (Pos.unmark arg) in
-      if autograd () then Format.asprintf "%s" sarg else Format.asprintf "m_floor(%s)" sarg
+      if autograd () then generate_python_expr fmt arg
+      else Format.fprintf fmt "m_floor(%a)" generate_python_expr arg
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "m_max(%s, %s)" s1 s2
+      Format.fprintf fmt "m_max(%a, %a)" generate_python_expr e1 generate_python_expr e2
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "m_min(%s, %s)" s1 s2
+      Format.fprintf fmt "m_min(%a, %a)" generate_python_expr e1 generate_python_expr e2
   | FunctionCall (Multimax, [ e1; e2 ]) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "m_multimax(%s, %s)" s1 s2
+      Format.fprintf fmt "m_multimax(%a, %a)" generate_python_expr e1 generate_python_expr e2
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> Format.asprintf "%f" f
-  | Literal Undefined -> none_value
-  | Var var -> generate_variable var
-  | LocalVar lvar -> Format.asprintf "v%d" lvar.LocalVariable.id
-  | GenericTableIndex -> "generic_index"
+  | Literal (Float f) -> Format.fprintf fmt "%f" f
+  | Literal Undefined -> Format.fprintf fmt "%s" none_value
+  | Var var -> Format.fprintf fmt "%a" generate_variable var
+  | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
+  | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      let s1 = generate_python_expr (Pos.unmark e1) in
-      let s2 = generate_python_expr (Pos.unmark e2) in
-      Format.asprintf "(lambda v%d: %s)(%s)" lvar.LocalVariable.id s2 s1
+      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id generate_python_expr e2
+        generate_python_expr e1
 
 let generate_var_def var data (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      Format.fprintf oc "# Defined %a@\n%s = %s@\n@\n" Pos.format_position (Pos.get_position e)
-        (generate_variable var)
-        (generate_python_expr (Pos.unmark e))
+      Format.fprintf oc "# Defined %a@\n%a = %a@\n" Pos.format_position_short (Pos.get_position e)
+        generate_variable var generate_python_expr e
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%s = [Undefined()] * %d@\n" (generate_variable var) (IndexMap.cardinal es);
+      Format.fprintf oc "%a = [Undefined()] * %d@\n" generate_variable var (IndexMap.cardinal es);
       IndexMap.iter
         (fun i e ->
-          Format.fprintf oc "# Defined %a@\n%s[%d] = %s@\n" Pos.format_position (Pos.get_position e)
-            (generate_variable var) i
-            (generate_python_expr (Pos.unmark e)))
+          Format.fprintf oc "# Defined %a@\n%a[%d] = %a@\n" Pos.format_position_short
+            (Pos.get_position e) generate_variable var i generate_python_expr e)
         es;
       Format.fprintf oc "@\n"
   | TableVar (_, IndexGeneric e) ->
-      Format.fprintf oc "# Defined %a@\n%s = GenericIndex(lambda generic_index: %s)@\n@\n"
-        Pos.format_position (Pos.get_position e) (generate_variable var)
-        (generate_python_expr (Pos.unmark e))
+      Format.fprintf oc "# Defined %a@\n%a = GenericIndex(lambda generic_index: %a)@\n@\n"
+        Pos.format_position_short (Pos.get_position e) generate_variable var generate_python_expr e
   | InputVar -> assert false
 
-let generate_header (oc : Format.formatter) : unit =
+let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
@@ -255,7 +221,7 @@ let generate_header (oc : Format.formatter) : unit =
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
   Format.fprintf oc "local_variables = dict()\n\n\n"
 
-let generate_input_handling (function_spec : Bir_interface.bir_function) oc =
+let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   Format.fprintf oc "# The following keys must be present in the input:@\n%a@\n"
     (Format.pp_print_list
@@ -268,40 +234,38 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) oc =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%s = input_variables[\"%s\"]" (generate_variable var)
-           (generate_name var)))
+         Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_variable var (generate_name var)))
     input_vars
 
 let generate_var_cond cond oc =
   Format.fprintf oc
     "# Verification condition %a@\n\
-     cond = %s@\n\
+     cond = %a@\n\
      if cond:@\n\
-    \    raise TypeError(\"Error triggered\\n%s\")@\n\
+    \    raise TypeError(\"Error triggered\\n%a\")@\n\
      @\n"
-    Pos.format_position (Pos.get_position cond.cond_expr)
-    (generate_python_expr (Pos.unmark cond.cond_expr))
-    (String.concat "\\n"
-       (List.map
-          (fun err ->
-            Format.asprintf "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr))
-          cond.cond_errors))
+    Pos.format_position_short (Pos.get_position cond.cond_expr) generate_python_expr cond.cond_expr
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt err ->
+         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)))
+    cond.cond_errors
 
 let rec generate_stmts (program : Bir.program) oc stmts =
-  List.iter (fun stmt -> generate_stmt program oc stmt) stmts
+  Format.pp_print_list (generate_stmt program) oc stmts
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, []) ->
-      Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\n" (generate_python_expr cond)
-        (generate_stmts program) tt
+      Format.fprintf oc "if %a:@\n@[<h 4>    %a@]@\n" generate_python_expr
+        (Pos.same_pos_as cond stmt) (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
-      Format.fprintf oc "if %s:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n"
-        (generate_python_expr cond) (generate_stmts program) tt (generate_stmts program) ff
+      Format.fprintf oc "if %a:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n" generate_python_expr
+        (Pos.same_pos_as cond stmt) (generate_stmts program) tt (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
-let generate_return (function_spec : Bir_interface.bir_function) oc =
+let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
     "# The following two lines help us keep all previously defined variable bindings@\n\
@@ -309,12 +273,12 @@ let generate_return (function_spec : Bir_interface.bir_function) oc =
      local_variables = locals()@\n\
      @\n";
   if List.length returned_variables = 1 then
-    Format.fprintf oc "return %s\n@]@\n" (generate_variable (List.hd returned_variables))
+    Format.fprintf oc "return %a\n@]@\n" generate_variable (List.hd returned_variables)
   else begin
     Format.fprintf oc "out = {}@\n";
     Format.pp_print_list
       (fun fmt var ->
-        Format.fprintf fmt "out[\"%s\"] = %s@\n" (generate_variable var) (generate_variable var))
+        Format.fprintf fmt "out[\"%a\"] = %a@\n" generate_variable var generate_variable var)
       oc returned_variables;
     Format.fprintf oc "return out@\n@]\n"
   end
@@ -323,16 +287,6 @@ let generate_python_program (program : Bir.program) (function_spec : Bir_interfa
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  (* let exec_order = Mir_dependency_graph.get_execution_order dep_graph in
-   * let input_vars =
-   *   List.map
-   *     (fun (var, _) -> var)
-   *     (List.filter
-   *        (fun (_, data) -> data.var_io = Input)
-   *        (VariableMap.bindings program.program_vars))
-   * in *)
-  generate_header oc;
-  generate_input_handling function_spec oc;
-  generate_stmts program oc program.statements;
-  generate_return function_spec oc;
+  Format.fprintf oc "%a%a%a%a" generate_header () generate_input_handling function_spec
+    (generate_stmts program) program.statements generate_return function_spec;
   close_out _oc

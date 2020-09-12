@@ -15,6 +15,22 @@
 type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
 (** A position in the source code is a file, as well as begin and end location of the form col:line *)
 
+let format_position_short fmt pos =
+  let s, e = pos.pos_loc in
+  if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
+    Format.fprintf fmt "in file %s:%d:%d-%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+  else
+    Format.fprintf fmt "in file %s, from %d:%d to %d:%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      e.Lexing.pos_lnum
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+
 let format_position fmt (pos : t) =
   let s, e = pos.pos_loc in
   Format.fprintf fmt "in file %s, from %d:%d to %d:%d" pos.pos_filename s.Lexing.pos_lnum
