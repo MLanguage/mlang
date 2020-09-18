@@ -91,6 +91,10 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       let old_inst_count = Bir.count_instructions combined_program in
       Cli.debug_print "Removing dead code...";
       let combined_program = Bir_optimizations.dead_code_elimination combined_program in
+      (* Cli.debug_print "Translating to CFG form for optimizations..."; let oir_program =
+         Bir_to_oir.bir_program_to_oir combined_program in Cli.debug_print "Optimizing..."; let
+         oir_program = Oir_optimizations.optimize oir_program in Cli.debug_print "Translating back
+         to AST..."; let combined_program = Bir_to_oir.oir_program_to_bir oir_program in *)
       Cli.debug_print "Instruction count: %d -> %d" old_inst_count
         (Bir.count_instructions combined_program);
       match backend with
@@ -113,23 +117,6 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
           end
           else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
-      (* if String.lowercase_ascii !Cli.backend = "python" || String.lowercase_ascii !Cli.backend =
-         "autograd" then begin Cli.debug_print "Compiling the program to Python..."; if
-         !Cli.output_file = "" then Errors.raise_error "an output file must be defined with
-         --output"; Bir_to_python.generate_python_program full_m_program.program
-         full_m_program.dep_graph !Cli.output_file; Cli.result_print "Generated Python function from
-         requested set of inputs and outputs, results written to %s\n" !Cli.output_file end else if
-         String.lowercase_ascii !Cli.backend = "java" then begin Cli.debug_print "Compiling the
-         program to Java..."; if !Cli.output_file = "" then Errors.raise_error "an output file must
-         be defined with --output"; Bir_to_java.generate_java_program full_m_program.program
-         full_m_program.dep_graph !Cli.output_file; Cli.result_print "Generated Java function from
-         requested set of inputs and outputs, results written to %s\n" !Cli.output_file end else if
-         String.lowercase_ascii !Cli.backend = "clojure" then begin Cli.debug_print "Compiling the
-         program to Clojure..."; if !Cli.output_file = "" then Errors.raise_error "an output file
-         must be defined with --output"; Bir_to_clojure.generate_clj_program full_m_program.program
-         full_m_program.dep_graph !Cli.output_file; Cli.result_print "Generated Clojure function
-         from requested set of inputs and outputs, results written to \ %s\n" !Cli.output_file end
-         else Errors.raise_error (Format.asprintf "unknown backend %s" !Cli.backend) *)
     end
   with Errors.StructuredError (msg, pos, kont) ->
     Cli.error_print "Error: %a\n" Errors.format_structured_error (msg, pos);

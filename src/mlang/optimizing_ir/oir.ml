@@ -1,0 +1,46 @@
+(* Copyright (C) 2020 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
+
+   This program is free software: you can redistribute it and/or modify it under the terms of the
+   GNU General Public License as published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along with this program. If
+   not, see <https://www.gnu.org/licenses/>. *)
+
+type block_id = int
+
+module BlockMap = Map.Make (Int)
+
+type stmt = stmt_kind Pos.marked
+
+and stmt_kind =
+  | SAssign of Mir.Variable.t * Mir.variable_data
+  | SConditional of Mir.expression * block_id * block_id
+  | SVerif of Mir.condition_data
+  | SGoto of block_id
+
+type block = stmt list
+
+type program = {
+  blocks : block BlockMap.t;
+  entry_block : block_id;
+  idmap : Mir.idmap;
+  mir_program : Mir.program;
+  outputs : unit Mir.VariableMap.t;
+}
+
+module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
+  type t = block_id
+
+  let hash v = v
+
+  let compare v1 v2 = compare v1 v2
+
+  let equal v1 v2 = v1 = v2
+end)
+
+let get_cfg (_p : program) : CFG.t = assert false
