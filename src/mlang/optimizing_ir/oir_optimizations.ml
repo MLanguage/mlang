@@ -13,4 +13,5 @@
 
 let optimize (p : Oir.program) : Oir.program =
   (* let _g = Oir.get_cfg p in *)
+  Cli.debug_print "Intruction count: %d" (Oir.count_instr p);
   p

@@ -19,7 +19,8 @@ type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
   | SAssign of Mir.Variable.t * Mir.variable_data
-  | SConditional of Mir.expression * block_id * block_id
+  | SConditional of Mir.expression * block_id * block_id * block_id option
+      (** The first two block ids are the true and false branch, the third is the join point after *)
   | SVerif of Mir.condition_data
   | SGoto of block_id
 
@@ -32,6 +33,17 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
+
+let count_instr (p : program) : int =
+  BlockMap.fold
+    (fun _ block acc ->
+      List.fold_left
+        (fun acc s ->
+          match Pos.unmark s with
+          | SConditional _ | SAssign _ | SVerif _ -> acc + 1
+          | SGoto _ -> acc)
+        acc block)
+    p.blocks 0
 
 module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   type t = block_id

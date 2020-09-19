@@ -32,7 +32,7 @@ let count_instructions (p : program) : int =
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SAssign _ | SVerif _ -> acc + 1
-        | SConditional (_, s1, s2) -> acc + cond_instr_blocks s1 + cond_instr_blocks s2)
+        | SConditional (_, s1, s2) -> acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
   cond_instr_blocks p.statements

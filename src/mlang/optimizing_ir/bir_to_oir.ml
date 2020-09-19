@@ -25,15 +25,21 @@ let rec translate_statement_list (l : Bir.stmt list) : Oir.block_id * Oir.block 
       (fun (blocks, new_list, current_block_id) stmt ->
         let new_stmt, new_blocks = translate_statement stmt in
         match Pos.unmark new_stmt with
-        | Oir.SConditional (_, b1_id, b2_id) ->
+        | Oir.SConditional (e, b1_id, b2_id, _) ->
             let next_block_id = fresh_block_id () in
             let new_blocks =
-              Oir.BlockMap.add current_block_id (List.rev (new_stmt :: new_list)) new_blocks
+              Oir.BlockMap.add current_block_id
+                (List.rev
+                   ( Pos.same_pos_as
+                       (Oir.SConditional (e, b1_id, b2_id, Some next_block_id))
+                       new_stmt
+                   :: new_list ))
+                new_blocks
             in
-            let add_goto b1 =
-              match b1 with
+            let add_goto b =
+              match b with
               | None -> assert false (* should not happen *)
-              | Some b1 -> Some (b1 @ [ (Oir.SGoto next_block_id, Pos.no_pos) ])
+              | Some b -> Some (b @ [ (Oir.SGoto next_block_id, Pos.no_pos) ])
             in
             let new_blocks = Oir.BlockMap.update b1_id add_goto new_blocks in
             let new_blocks = Oir.BlockMap.update b2_id add_goto new_blocks in
@@ -60,7 +66,7 @@ and translate_statement (s : Bir.stmt) : Oir.stmt * Oir.block Oir.BlockMap.t =
   | Bir.SConditional (e, l1, l2) ->
       let b1_id, new_blocks1 = translate_statement_list l1 in
       let b2_id, new_blocks2 = translate_statement_list l2 in
-      ( Pos.same_pos_as (Oir.SConditional (e, b1_id, b2_id)) s,
+      ( Pos.same_pos_as (Oir.SConditional (e, b1_id, b2_id, None)) s,
         Oir.BlockMap.union
           (fun _ _ _ -> assert false (* should not happen *))
           new_blocks1 new_blocks2 )
@@ -78,16 +84,11 @@ let rec re_translate_statement (s : Oir.stmt) (blocks : Oir.block Oir.BlockMap.t
   match Pos.unmark s with
   | Oir.SAssign (var, data) -> Stmt (Pos.same_pos_as (Bir.SAssign (var, data)) s)
   | Oir.SVerif cond -> Stmt (Pos.same_pos_as (Bir.SVerif cond) s)
-  | Oir.SConditional (e, b1, b2) -> (
-      let b1 = Oir.BlockMap.find b1 blocks in
-      let b1, next_block1 = re_translate_statement_list b1 blocks in
-      let b2 = Oir.BlockMap.find b2 blocks in
-      let b2, next_block2 = re_translate_statement_list b2 blocks in
-      match (next_block1, next_block2) with
-      | Some n1, Some n2 when n1 = n2 ->
-          Conditional (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s, n1)
-      | _ -> assert false
-      (* should not happen *) )
+  | Oir.SConditional (e, b1, b2, join_block) ->
+      let join_block = Option.get join_block in
+      let b1 = translate_program_statements b1 (Some join_block) blocks in
+      let b2 = translate_program_statements b2 (Some join_block) blocks in
+      Conditional (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s, join_block)
   | Oir.SGoto b -> Nextblock b
 
 and re_translate_statement_list (ss : Oir.block) (blocks : Oir.block Oir.BlockMap.t) :
@@ -103,7 +104,7 @@ and re_translate_statement_list (ss : Oir.block) (blocks : Oir.block Oir.BlockMa
   in
   (List.rev stmts, next_block)
 
-let rec translate_program_statements (entry_block : Oir.block_id)
+and translate_program_statements (entry_block : Oir.block_id) (stop_block : Oir.block_id option)
     (blocks : Oir.block Oir.BlockMap.t) : Bir.stmt list =
   let new_statements, next_block =
     re_translate_statement_list (Oir.BlockMap.find entry_block blocks) blocks
@@ -112,11 +113,14 @@ let rec translate_program_statements (entry_block : Oir.block_id)
   @
   match next_block with
   | None -> []
-  | Some next_block -> translate_program_statements next_block blocks
+  | Some next_block -> (
+      match stop_block with
+      | Some stop_block when next_block = stop_block -> []
+      | _ -> translate_program_statements next_block stop_block blocks )
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   {
-    statements = translate_program_statements p.entry_block p.blocks;
+    statements = translate_program_statements p.entry_block None p.blocks;
     idmap = p.idmap;
     mir_program = p.mir_program;
     outputs = p.outputs;
