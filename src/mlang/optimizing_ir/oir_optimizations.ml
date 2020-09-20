@@ -97,6 +97,12 @@ let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t
     ctx_inside_block = Some block_id;
   }
 
+let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id) : int =
+  if dom id1 id2 then (* id1 dominates id2 so we want to pick id2 *)
+    -1
+  else if dom id2 id1 then 1
+  else 0
+
 let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t)
     (var_lit : var_literal) : partial_ev_ctx =
   {
@@ -225,8 +231,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             in
             let sorted_dominating_defs =
               List.sort
-                (fun (b1, _) (b2, _) ->
-                  if ctx.ctx_doms b1 b2 then 1 else if ctx.ctx_doms b2 b1 then -1 else 0)
+                (fun (b1, _) (b2, _) -> compare_for_min_dom ctx.ctx_doms b1 b2)
                 dominating_defs
             in
             match snd (List.hd sorted_dominating_defs) with
@@ -250,10 +255,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                previous_defs)
         in
         let sorted_dominating_defs =
-          List.sort
-            (fun (b1, _) (b2, _) ->
-              if ctx.ctx_doms b1 b2 then 1 else if ctx.ctx_doms b2 b1 then -1 else 0)
-            dominating_defs
+          List.sort (fun (b1, _) (b2, _) -> compare_for_min_dom ctx.ctx_doms b1 b2) dominating_defs
         in
         match List.hd sorted_dominating_defs with
         | _, SimpleVar (PartialLiteral e') -> Pos.same_pos_as (Mir.Literal e') e
