@@ -167,7 +167,7 @@ let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : li
 
 let eval_debug = ref false
 
-let rec evaluate_expr (ctx : ctx) (p : Bir.program) (e : expression Pos.marked) : literal =
+let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) : literal =
   try
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -362,8 +362,7 @@ let rec evaluate_expr (ctx : ctx) (p : Bir.program) (e : expression Pos.marked) 
                     func Pos.format_position (Pos.get_position e)),
                ctx ))
   with RuntimeError (e, ctx) ->
-    if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
-    else raise (RuntimeError (e, ctx))
+    if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
 
 let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
   raise
@@ -412,16 +411,17 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
 
 let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
   match vdef with
-  | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p e)
+  | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
   | Mir.TableVar (size, es) ->
       TableVar
         ( size,
           Array.init size (fun idx ->
               match es with
-              | IndexGeneric e -> evaluate_expr { ctx with ctx_generic_index = Some idx } p e
+              | IndexGeneric e ->
+                  evaluate_expr { ctx with ctx_generic_index = Some idx } p.mir_program e
               | IndexTable es ->
                   let e = IndexMap.find idx es in
-                  evaluate_expr ctx p e) )
+                  evaluate_expr ctx p.mir_program e) )
   | Mir.InputVar -> assert false
 
 let rec evaluate_stmt (p : Bir.program) ctx stmt =
@@ -436,7 +436,7 @@ let rec evaluate_stmt (p : Bir.program) ctx stmt =
       | SimpleVar Undefined -> ctx
       | _ -> assert false )
   | Bir.SVerif data -> (
-      match evaluate_expr ctx p data.cond_expr with
+      match evaluate_expr ctx p.mir_program data.cond_expr with
       | Float f when f = 1. -> report_violatedcondition data ctx
       | _ -> ctx )
 

@@ -161,7 +161,9 @@ let check_test (combined_program : Bir.program) (exec_order : Mir_dependency_gra
   try
     List.iter
       (fun (_, cond) ->
-        let result = Bir_interpreter.evaluate_expr ctx combined_program cond.cond_expr in
+        let result =
+          Bir_interpreter.evaluate_expr ctx combined_program.mir_program cond.cond_expr
+        in
         match result with
         | Float f when f <> 0. ->
             raise

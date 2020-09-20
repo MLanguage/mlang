@@ -72,3 +72,4 @@ let get_cfg (p : program) : CFG.t =
     p.blocks g
 
 module Topological = Graph.Topological.Make (CFG)
+module Dominators = Graph.Dominator.Make (CFG)

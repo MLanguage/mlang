@@ -13,6 +13,8 @@
 
 open Oir
 
+(** {2 Dead code removal}*)
+
 let remove_dead_statements (stmts : block) (used_vars : unit Mir.VariableMap.t) :
     unit Mir.VariableMap.t * stmt list =
   List.fold_right
@@ -54,9 +56,344 @@ let dead_code_removal (p : program) (g : CFG.t) : program =
   in
   p
 
+(** {2 Partial evaluation} *)
+
+type partial_expr = PartialLiteral of Mir.literal | PartialVar of Mir.Variable.t
+
+let partial_to_expr (e : partial_expr) : Mir.expression =
+  match e with PartialLiteral l -> Literal l | PartialVar v -> Var v
+
+let expr_to_partial (e : Mir.expression) : partial_expr option =
+  match e with Literal l -> Some (PartialLiteral l) | Var v -> Some (PartialVar v) | _ -> None
+
+type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
+
+type partial_ev_ctx = {
+  ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
+  ctx_vars : var_literal BlockMap.t Mir.VariableMap.t;
+  ctx_inside_table_index : int option;
+  ctx_inside_var : Mir.Variable.t option;
+  ctx_doms : Dominators.dom;
+  ctx_inside_block : block_id option;
+}
+
+let empty_ctx (g : CFG.t) (entry_block : block_id) =
+  {
+    ctx_local_vars = Mir.LocalVariableMap.empty;
+    ctx_vars = Mir.VariableMap.empty;
+    ctx_inside_table_index = None;
+    ctx_inside_var = None;
+    ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
+    ctx_inside_block = None;
+  }
+
+let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t) (idx : int option)
+    =
+  {
+    ctx with
+    ctx_local_vars = Mir.LocalVariableMap.empty;
+    ctx_inside_table_index = idx;
+    ctx_inside_var = Some var;
+    ctx_inside_block = Some block_id;
+  }
+
+let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t)
+    (var_lit : var_literal) : partial_ev_ctx =
+  {
+    ctx with
+    ctx_vars =
+      Mir.VariableMap.add var
+        ( match Mir.VariableMap.find_opt var ctx.ctx_vars with
+        | None -> BlockMap.singleton block_id var_lit
+        | Some defs -> BlockMap.add block_id var_lit defs )
+        ctx.ctx_vars;
+  }
+
+let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
+    (e : Mir.expression Pos.marked) : Mir.expression Pos.marked =
+  match Pos.unmark e with
+  | Comparison (op, e1, e2) ->
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      let new_e2 = partially_evaluate_expr ctx p e2 in
+      Pos.same_pos_as
+        begin
+          match (Pos.unmark new_e1, Pos.unmark new_e2) with
+          | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
+          | Conditional (b, (Literal (Float 1.), _), (Literal (Float 0.), _)), Literal (Float 1.)
+            when Pos.unmark op = Mast.Eq ->
+              Pos.unmark b
+          | (FunctionCall (Mir.PresentFunc, _) as fc), Literal (Float 1.)
+            when Pos.unmark op = Mast.Neq ->
+              Unop (Mast.Not, Pos.same_pos_as fc new_e1)
+          | Literal _, Literal _ ->
+              Mir.Literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
+          | _ -> Comparison (op, new_e1, new_e2)
+        end
+        e
+  | Binop (op, e1, e2) ->
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      let new_e2 = partially_evaluate_expr ctx p e2 in
+      Pos.same_pos_as
+        begin
+          match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
+          | Mast.And, Literal Undefined, _
+          | Mast.And, _, Literal Undefined
+          | Mast.Or, Literal Undefined, _
+          | Mast.Or, _, Literal Undefined
+          | Mast.Div, _, Literal Undefined ->
+              Mir.Literal Undefined
+          | Mast.Or, Literal (Float f), _ when f <> 0. -> Mir.Literal Mir.true_literal
+          | Mast.Or, _, Literal (Float f) when f <> 0. -> Literal Mir.true_literal
+          | Mast.And, Literal (Float 0.), _ | Mast.And, _, Literal (Float 0.) ->
+              Literal Mir.false_literal
+          | Mast.And, Literal (Float f), e' when f <> 0. -> e'
+          | Mast.And, e', Literal (Float f) when f <> 0. -> e'
+          | Mast.Or, Literal (Float 0.), e'
+          | Mast.Or, e', Literal (Float 0.)
+          | Mast.Add, Literal (Float 0. | Undefined), e'
+          | Mast.Add, e', Literal (Float 0. | Undefined)
+          | Mast.Mul, Literal (Float 1.), e'
+          | Mast.Mul, e', Literal (Float 1.)
+          | Mast.Div, e', Literal (Float 1.)
+          | Mast.Sub, e', Literal (Float 0. | Undefined) ->
+              e'
+          | Mast.Sub, Literal (Float 0. | Undefined), e' -> Unop (Minus, Pos.same_pos_as e' e)
+          | Mast.Mul, Literal (Float 0. | Undefined), _
+          | Mast.Mul, _, Literal (Float 0. | Undefined)
+          | Mast.Div, Literal (Float 0. | Undefined), _ ->
+              Mir.Literal (Mir.Float 0.)
+          | _, Literal _, Literal _ ->
+              Mir.Literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+          | Mast.Add, _, Literal (Float f) when f < 0. ->
+              Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2)
+          | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, e1, e2')
+          | _ -> Binop (op, new_e1, new_e2)
+        end
+        e
+  | Unop (op, e1) ->
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      Pos.same_pos_as
+        begin
+          match Pos.unmark new_e1 with
+          | Literal _ ->
+              Mir.Literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
+          | _ -> Unop (op, new_e1)
+        end
+        e
+  | Conditional (e1, e2, e3) -> (
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      let new_e2 = partially_evaluate_expr ctx p e2 in
+      let new_e3 = partially_evaluate_expr ctx p e3 in
+      match Pos.unmark new_e1 with
+      | Literal (Float 0.) -> new_e3
+      | Literal (Float _) -> new_e2
+      | Literal Undefined -> Pos.same_pos_as (Mir.Literal Undefined) e
+      | _ -> Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e )
+  | Index (var, e1) -> (
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      match Pos.unmark new_e1 with
+      | Literal Undefined -> Pos.same_pos_as (Mir.Literal Undefined) e
+      | Literal l -> (
+          let idx =
+            match l with
+            | Undefined -> assert false (* should not happen *)
+            | Float f ->
+                if
+                  let fraction, _ = modf f in
+                  fraction = 0.
+                then int_of_float f
+                else
+                  Bir_interpreter.raise_runtime_as_structured
+                    (Bir_interpreter.FloatIndex
+                       (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)))
+                    Bir_interpreter.empty_ctx p
+          in
+          try
+            let previous_defs = Mir.VariableMap.find (Pos.unmark var) ctx.ctx_vars in
+            let dominating_defs =
+              BlockMap.bindings
+                (BlockMap.filter
+                   (fun def_block_id _ ->
+                     ctx.ctx_doms def_block_id (Option.get ctx.ctx_inside_block))
+                   previous_defs)
+            in
+            let sorted_dominating_defs =
+              List.sort
+                (fun (b1, _) (b2, _) ->
+                  if ctx.ctx_doms b1 b2 then 1 else if ctx.ctx_doms b2 b1 then -1 else 0)
+                dominating_defs
+            in
+            match snd (List.hd sorted_dominating_defs) with
+            | SimpleVar _ -> assert false (* should not happen *)
+            | TableVar (size, es') -> (
+                if idx >= size || idx < 0 then Pos.same_pos_as (Mir.Literal Undefined) e
+                else
+                  match es'.(idx) with
+                  | PartialLiteral e' -> Pos.same_pos_as (Mir.Literal e') e
+                  | PartialVar v' -> Pos.same_pos_as (Mir.Var v') e )
+          with _ -> Pos.same_pos_as (Mir.Index (var, new_e1)) e )
+      | _ -> Pos.same_pos_as (Mir.Index (var, new_e1)) e )
+  | Literal _ -> e
+  | Var var -> (
+      try
+        let previous_defs = Mir.VariableMap.find var ctx.ctx_vars in
+        let dominating_defs =
+          BlockMap.bindings
+            (BlockMap.filter
+               (fun def_block_id _ -> ctx.ctx_doms def_block_id (Option.get ctx.ctx_inside_block))
+               previous_defs)
+        in
+        let sorted_dominating_defs =
+          List.sort
+            (fun (b1, _) (b2, _) ->
+              if ctx.ctx_doms b1 b2 then 1 else if ctx.ctx_doms b2 b1 then -1 else 0)
+            dominating_defs
+        in
+        match List.hd sorted_dominating_defs with
+        | _, SimpleVar (PartialLiteral e') -> Pos.same_pos_as (Mir.Literal e') e
+        | _, SimpleVar (PartialVar v') -> Pos.same_pos_as (Mir.Var v') e
+        | _ -> assert false
+        (* should not happen *)
+      with _ -> e )
+  | LocalVar lvar -> (
+      try Pos.same_pos_as (partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars)) e
+      with Not_found -> e )
+  | GenericTableIndex -> e
+  | Error -> e
+  | LocalLet (l1, b, (LocalVar l2, _)) when Mir.LocalVariable.compare l1 l2 = 0 -> b
+  | LocalLet (lvar, e1, e2) -> (
+      let new_e1 = partially_evaluate_expr ctx p e1 in
+      match Pos.unmark new_e1 with
+      | Literal _ | Var _ ->
+          let new_ctx =
+            {
+              ctx with
+              ctx_local_vars =
+                Mir.LocalVariableMap.add lvar
+                  (Option.get (expr_to_partial (Pos.unmark new_e1)))
+                  ctx.ctx_local_vars;
+            }
+          in
+          let new_e2 = partially_evaluate_expr new_ctx p e2 in
+          new_e2
+      | _ -> (
+          let new_e2 = partially_evaluate_expr ctx p e2 in
+          match Pos.unmark new_e2 with
+          | Literal _ | Var _ -> new_e2
+          | _ -> Pos.same_pos_as (Mir.LocalLet (lvar, new_e1, new_e2)) e ) )
+  | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
+      let new_arg = partially_evaluate_expr ctx p arg in
+      match Pos.unmark new_arg with
+      | Literal _ ->
+          Pos.same_pos_as
+            (Mir.Literal
+               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e)))
+            e
+      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e )
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) -> (
+      let new_arg1 = partially_evaluate_expr ctx p arg1 in
+      let new_arg2 = partially_evaluate_expr ctx p arg2 in
+      match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
+      | Literal _, Literal _ ->
+          Pos.same_pos_as
+            (Mir.Literal
+               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
+            e
+      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e )
+  | FunctionCall (func, args) ->
+      Pos.same_pos_as
+        (Mir.FunctionCall (func, List.map (fun arg -> partially_evaluate_expr ctx p arg) args))
+        e
+
+let partial_evaluation (p : program) (g : CFG.t) : program =
+  let p, _ =
+    Topological.fold
+      (fun (block_id : block_id) (p, ctx) ->
+        let block = BlockMap.find block_id p.blocks in
+        let new_block, ctx =
+          List.fold_left
+            (fun (new_block, ctx) stmt ->
+              match Pos.unmark stmt with
+              | SAssign (var, def) ->
+                  let new_def, new_ctx =
+                    match def.var_definition with
+                    | InputVar -> (Mir.InputVar, ctx)
+                    | SimpleVar e -> (
+                        let e' =
+                          partially_evaluate_expr (reset_ctx ctx block_id var None) p.mir_program e
+                        in
+                        ( SimpleVar e',
+                          match expr_to_partial (Pos.unmark e') with
+                          | None -> ctx
+                          | Some e' -> add_var_def_to_ctx ctx block_id var (SimpleVar e') ) )
+                    | TableVar (size, def) -> (
+                        match def with
+                        | IndexGeneric e -> (
+                            let e' =
+                              partially_evaluate_expr (reset_ctx ctx block_id var None)
+                                p.mir_program e
+                            in
+                            ( TableVar (size, IndexGeneric e'),
+                              match expr_to_partial (Pos.unmark e') with
+                              | None -> ctx
+                              | Some e' ->
+                                  add_var_def_to_ctx ctx block_id var
+                                    (TableVar (size, Array.init size (fun _ -> e'))) ) )
+                        | IndexTable es ->
+                            let es' =
+                              Mir.IndexMap.mapi
+                                (fun idx e ->
+                                  partially_evaluate_expr
+                                    (reset_ctx ctx block_id var (Some idx))
+                                    p.mir_program e)
+                                es
+                            in
+                            let new_ctx =
+                              if
+                                Mir.IndexMap.for_all
+                                  (fun _ e -> Option.is_some (expr_to_partial (Pos.unmark e)))
+                                  es'
+                              then
+                                add_var_def_to_ctx ctx block_id var
+                                  (TableVar
+                                     ( size,
+                                       Array.init size (fun i ->
+                                           Option.get
+                                             (expr_to_partial
+                                                (Pos.unmark (Mir.IndexMap.find i es')))) ))
+                              else ctx
+                            in
+                            (TableVar (size, IndexTable es'), new_ctx) )
+                  in
+                  let new_stmt =
+                    Pos.same_pos_as (SAssign (var, { def with var_definition = new_def })) stmt
+                  in
+                  (new_stmt :: new_block, new_ctx)
+              | _ -> (stmt :: new_block, ctx))
+            ([], ctx) block
+        in
+        ({ p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks }, ctx))
+      g
+      (p, empty_ctx g p.entry_block)
+  in
+  p
+
 let optimize (p : program) : program =
   let g = get_cfg p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
+  Cli.debug_print "Dead code removal...";
+  let p = dead_code_removal p g in
+  Cli.debug_print "Intruction count: %d" (count_instr p);
+  Cli.debug_print "Partial evaluation...";
+  let p = partial_evaluation p g in
   let p = dead_code_removal p g in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p
