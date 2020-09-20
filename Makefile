@@ -27,7 +27,7 @@ MLANG= dune exec src/main.exe -- \
 test: build
 	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES)
 
-# use: TEST_DIR=bla make test
+# use: TESTS_DIR=bla make test
 tests: build
 	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
