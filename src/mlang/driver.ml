@@ -88,18 +88,12 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       let combined_program =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in
-      let old_inst_count = Bir.count_instructions combined_program in
-      Cli.debug_print "Instruction count: %d" old_inst_count;
-      Cli.debug_print "Removing dead code...";
-      let combined_program = Bir_optimizations.dead_code_elimination combined_program in
-      Cli.debug_print "Instruction count: %d" (Bir.count_instructions combined_program);
       Cli.debug_print "Translating to CFG form for optimizations...";
       let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
       Cli.debug_print "Optimizing...";
       let oir_program = Oir_optimizations.optimize oir_program in
       Cli.debug_print "Translating back to AST...";
       let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
-      Cli.debug_print "Instruction count: %d " (Bir.count_instructions combined_program);
       match backend with
       | Some backend ->
           if String.lowercase_ascii backend = "interpreter" then begin

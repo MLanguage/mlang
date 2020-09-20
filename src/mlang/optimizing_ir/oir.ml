@@ -55,4 +55,20 @@ module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   let equal v1 v2 = v1 = v2
 end)
 
-let get_cfg (_p : program) : CFG.t = assert false
+let get_cfg (p : program) : CFG.t =
+  let g = CFG.empty in
+  BlockMap.fold
+    (fun (id : block_id) (block : block) (g : CFG.t) ->
+      let g = CFG.add_vertex g id in
+      List.fold_left
+        (fun g stmt ->
+          match Pos.unmark stmt with
+          | SGoto next_b -> CFG.add_edge g id next_b
+          | SConditional (_, next_b1, next_b2, _) ->
+              let g = CFG.add_edge g id next_b1 in
+              CFG.add_edge g id next_b2
+          | _ -> g)
+        g block)
+    p.blocks g
+
+module Topological = Graph.Topological.Make (CFG)
