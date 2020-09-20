@@ -18,110 +18,98 @@ let fresh_block_id () : Oir.block_id =
   block_id_counter := out + 1;
   out
 
-let rec translate_statement_list (l : Bir.stmt list) : Oir.block_id * Oir.block Oir.BlockMap.t =
-  let first_block_id = fresh_block_id () in
-  let blocks, new_stmts, last_block_id =
-    List.fold_left
-      (fun (blocks, new_list, current_block_id) stmt ->
-        let new_stmt, new_blocks = translate_statement stmt in
-        match Pos.unmark new_stmt with
-        | Oir.SConditional (e, b1_id, b2_id, _) ->
-            let next_block_id = fresh_block_id () in
-            let new_blocks =
-              Oir.BlockMap.add current_block_id
-                (List.rev
-                   ( Pos.same_pos_as
-                       (Oir.SConditional (e, b1_id, b2_id, Some next_block_id))
-                       new_stmt
-                   :: new_list ))
-                new_blocks
-            in
-            let add_goto b =
-              match b with
-              | None -> assert false (* should not happen *)
-              | Some b -> Some (b @ [ (Oir.SGoto next_block_id, Pos.no_pos) ])
-            in
-            let new_blocks = Oir.BlockMap.update b1_id add_goto new_blocks in
-            let new_blocks = Oir.BlockMap.update b2_id add_goto new_blocks in
-            ( Oir.BlockMap.union
-                (fun _ _ _ -> assert false (* should not happen *))
-                blocks new_blocks,
-              [],
-              next_block_id )
-        | _ ->
-            ( Oir.BlockMap.union
-                (fun _ _ _ -> assert false (* should not happen *))
-                blocks new_blocks,
-              new_stmt :: new_list,
-              current_block_id ))
-      (Oir.BlockMap.empty, [], first_block_id)
-      l
-  in
-  (first_block_id, Oir.BlockMap.add last_block_id (List.rev new_stmts) blocks)
+let append_to_block (s : Oir.stmt) (bid : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block Oir.BlockMap.t =
+  match Oir.BlockMap.find_opt bid blocks with
+  | None -> assert false (* should not happen *)
+  | Some stmts -> Oir.BlockMap.add bid (s :: stmts) blocks
 
-and translate_statement (s : Bir.stmt) : Oir.stmt * Oir.block Oir.BlockMap.t =
+let initialize_block (bid : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block Oir.BlockMap.t =
+  Oir.BlockMap.add bid [] blocks
+
+let rec translate_statement_list (l : Bir.stmt list) (curr_block_id : Oir.block_id)
+    (blocks : Oir.block Oir.BlockMap.t) : Oir.block_id * Oir.block Oir.BlockMap.t =
+  let blocks, last_block_id =
+    List.fold_left
+      (fun (blocks, current_block_id) stmt ->
+        let new_current_block_id, new_blocks = translate_statement stmt current_block_id blocks in
+        (new_blocks, new_current_block_id))
+      (blocks, curr_block_id) l
+  in
+  (last_block_id, blocks)
+
+and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
+    (blocks : Oir.block Oir.BlockMap.t) : Oir.block_id * Oir.block Oir.BlockMap.t =
   match Pos.unmark s with
-  | Bir.SAssign (var, data) -> (Pos.same_pos_as (Oir.SAssign (var, data)) s, Oir.BlockMap.empty)
-  | Bir.SVerif cond -> (Pos.same_pos_as (Oir.SVerif cond) s, Oir.BlockMap.empty)
+  | Bir.SAssign (var, data) ->
+      ( curr_block_id,
+        append_to_block (Pos.same_pos_as (Oir.SAssign (var, data)) s) curr_block_id blocks )
+  | Bir.SVerif cond ->
+      (curr_block_id, append_to_block (Pos.same_pos_as (Oir.SVerif cond) s) curr_block_id blocks)
   | Bir.SConditional (e, l1, l2) ->
-      let b1_id, new_blocks1 = translate_statement_list l1 in
-      let b2_id, new_blocks2 = translate_statement_list l2 in
-      ( Pos.same_pos_as (Oir.SConditional (e, b1_id, b2_id, None)) s,
-        Oir.BlockMap.union
-          (fun _ _ _ -> assert false (* should not happen *))
-          new_blocks1 new_blocks2 )
+      let b1id = fresh_block_id () in
+      let blocks = initialize_block b1id blocks in
+      let b2id = fresh_block_id () in
+      let blocks = initialize_block b2id blocks in
+      let join_block = fresh_block_id () in
+      let blocks = initialize_block join_block blocks in
+      let blocks =
+        append_to_block
+          (Pos.same_pos_as (Oir.SConditional (e, b1id, b2id, join_block)) s)
+          curr_block_id blocks
+      in
+      let last_b1id, blocks = translate_statement_list l1 b1id blocks in
+      let blocks = append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b1id blocks in
+      let last_b2id, blocks = translate_statement_list l2 b2id blocks in
+      let blocks = append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b2id blocks in
+      (join_block, blocks)
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
-  let entry_block, blocks = translate_statement_list p.statements in
+  let entry_block = fresh_block_id () in
+  let blocks = initialize_block entry_block Oir.BlockMap.empty in
+  let _, blocks = translate_statement_list p.statements entry_block blocks in
+  let blocks = Oir.BlockMap.map (fun stmts -> List.rev stmts) blocks in
   { blocks; entry_block; idmap = p.idmap; mir_program = p.mir_program; outputs = p.outputs }
 
-type result =
-  | Stmt of Bir.stmt
-  | Nextblock of Oir.block_id
-  | Conditional of Bir.stmt * Oir.block_id
-
-let rec re_translate_statement (s : Oir.stmt) (blocks : Oir.block Oir.BlockMap.t) : result =
+let rec re_translate_statement (s : Oir.stmt) (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block_id option * Bir.stmt option =
   match Pos.unmark s with
-  | Oir.SAssign (var, data) -> Stmt (Pos.same_pos_as (Bir.SAssign (var, data)) s)
-  | Oir.SVerif cond -> Stmt (Pos.same_pos_as (Bir.SVerif cond) s)
+  | Oir.SAssign (var, data) -> (None, Some (Pos.same_pos_as (Bir.SAssign (var, data)) s))
+  | Oir.SVerif cond -> (None, Some (Pos.same_pos_as (Bir.SVerif cond) s))
   | Oir.SConditional (e, b1, b2, join_block) ->
-      let join_block = Option.get join_block in
-      let b1 = translate_program_statements b1 (Some join_block) blocks in
-      let b2 = translate_program_statements b2 (Some join_block) blocks in
-      Conditional (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s, join_block)
-  | Oir.SGoto b -> Nextblock b
+      let b1 = re_translate_blocks_until b1 blocks (Some join_block) in
+      let b2 = re_translate_blocks_until b2 blocks (Some join_block) in
+      (Some join_block, Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s))
+  | Oir.SGoto b -> (Some b, None)
 
-and re_translate_statement_list (ss : Oir.block) (blocks : Oir.block Oir.BlockMap.t) :
-    Bir.stmt list * Oir.block_id option =
-  let next_block, stmts =
-    List.fold_left
-      (fun (_, acc) s ->
-        match re_translate_statement s blocks with
-        | Stmt s -> (None, s :: acc)
-        | Nextblock b -> (Some b, acc)
-        | Conditional (s, b) -> (Some b, s :: acc))
-      (None, []) ss
-  in
-  (List.rev stmts, next_block)
-
-and translate_program_statements (entry_block : Oir.block_id) (stop_block : Oir.block_id option)
-    (blocks : Oir.block Oir.BlockMap.t) : Bir.stmt list =
-  let new_statements, next_block =
-    re_translate_statement_list (Oir.BlockMap.find entry_block blocks) blocks
-  in
-  new_statements
+and re_translate_blocks_until (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t)
+    (stop : Oir.block_id option) : Bir.stmt list =
+  let next_block, stmts = re_translate_block block_id blocks in
+  stmts
   @
-  match next_block with
-  | None -> []
-  | Some next_block -> (
-      match stop_block with
-      | Some stop_block when next_block = stop_block -> []
-      | _ -> translate_program_statements next_block stop_block blocks )
+  match (next_block, stop) with
+  | None, Some _ -> assert false (* should not happen *)
+  | None, None -> []
+  | Some next_block, None -> re_translate_blocks_until next_block blocks stop
+  | Some next_block, Some stop ->
+      if next_block = stop then [] else re_translate_blocks_until next_block blocks (Some stop)
+
+and re_translate_block (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block_id option * Bir.stmt list =
+  match Oir.BlockMap.find_opt block_id blocks with
+  | None -> assert false (* should not happen *)
+  | Some block ->
+      let next_block_id, stmts =
+        List.fold_left
+          (fun (_, acc) s ->
+            let next_block, stmt = re_translate_statement s blocks in
+            (next_block, match stmt with None -> acc | Some s -> s :: acc))
+          (None, []) block
+      in
+      let stmts = List.rev stmts in
+      (next_block_id, stmts)
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
-  {
-    statements = translate_program_statements p.entry_block None p.blocks;
-    idmap = p.idmap;
-    mir_program = p.mir_program;
-    outputs = p.outputs;
-  }
+  let statements = re_translate_blocks_until p.entry_block p.blocks None in
+  { statements; idmap = p.idmap; mir_program = p.mir_program; outputs = p.outputs }
