@@ -15,13 +15,13 @@ open Oir
 
 (** {2 Dead code removal}*)
 
-let remove_dead_statements (stmts : block) (used_vars : unit Mir.VariableMap.t) :
-    unit Mir.VariableMap.t * stmt list =
+let remove_dead_statements (stmts : block) (used_vars : unit Mir.VariableMap.t)
+    (outputs : unit Mir.VariableMap.t) : unit Mir.VariableMap.t * stmt list =
   List.fold_right
     (fun stmt (used_vars, acc) ->
       match Pos.unmark stmt with
       | SAssign (var, var_def) ->
-          if Mir.VariableMap.mem var used_vars then
+          if Mir.VariableMap.mem var used_vars || Mir.VariableMap.mem var outputs then
             ( begin
                 match var_def.Mir.var_definition with
                 | Mir.SimpleVar e -> Mir_dependency_graph.get_used_variables e used_vars
@@ -43,7 +43,8 @@ let remove_dead_statements (stmts : block) (used_vars : unit Mir.VariableMap.t) 
       | SGoto _ -> (used_vars, stmt :: acc))
     stmts (used_vars, [])
 
-let remove_empty_conditionals (p : program) (g : CFG.t) : program =
+let remove_empty_conditionals (p : program) : program =
+  let g = get_cfg p in
   let empty_cond_branches : block_id list =
     List.map fst
       (BlockMap.bindings
@@ -57,19 +58,22 @@ let remove_empty_conditionals (p : program) (g : CFG.t) : program =
       (fun (new_blocks : block BlockMap.t) (id : block_id) ->
         let old_block = BlockMap.find id new_blocks in
         let new_block =
-          match List.hd (List.rev old_block) with
-          | SConditional (_, b1, b2, join), pos ->
-              if List.mem b1 empty_cond_branches && List.mem b2 empty_cond_branches then
-                List.rev ((SGoto join, pos) :: List.tl (List.rev old_block))
-              else assert false
-          | _ -> old_block
+          try
+            match List.hd (List.rev old_block) with
+            | SConditional (_, b1, b2, join), pos ->
+                if List.mem b1 empty_cond_branches && List.mem b2 empty_cond_branches then
+                  List.rev ((SGoto join, pos) :: List.tl (List.rev old_block))
+                else old_block
+            | _ -> old_block
+          with Failure s when s = "hd" -> old_block
         in
         BlockMap.add id new_block new_blocks)
       p.blocks rev_topological_order
   in
   { p with blocks = new_blocks }
 
-let dead_code_removal (p : program) (g : CFG.t) : program =
+let dead_code_removal (p : program) : program =
+  let g = get_cfg p in
   let rev_topological_order = Topological.fold (fun id acc -> id :: acc) g [] in
   let is_entry block_id = block_id = p.entry_block in
   let is_reachable = Reachability.analyze is_entry g in
@@ -77,12 +81,15 @@ let dead_code_removal (p : program) (g : CFG.t) : program =
   let _, p =
     List.fold_left
       (fun (used_vars, p) block_id ->
-        let block = BlockMap.find block_id p.blocks in
-        let used_vars, block = remove_dead_statements block used_vars in
-        let p = { p with blocks = BlockMap.add block_id block p.blocks } in
-        (used_vars, p))
+        try
+          let block = BlockMap.find block_id p.blocks in
+          let used_vars, block = remove_dead_statements block used_vars p.outputs in
+          let p = { p with blocks = BlockMap.add block_id block p.blocks } in
+          (used_vars, p)
+        with Not_found -> (used_vars, p))
       (Mir.VariableMap.empty, p) rev_topological_order
   in
+  let p = remove_empty_conditionals p in
   p
 
 (** {2 Partial evaluation} *)
@@ -361,7 +368,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           e
       else new_e
 
-let partial_evaluation (p : program) (g : CFG.t) : program =
+let partial_evaluation (p : program) : program =
+  let g = get_cfg p in
   let p, _ =
     Topological.fold
       (fun (block_id : block_id) (p, ctx) ->
@@ -470,13 +478,18 @@ let partial_evaluation (p : program) (g : CFG.t) : program =
   p
 
 let optimize (p : program) : program =
-  let g = get_cfg p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   Cli.debug_print "Dead code removal...";
-  let p = dead_code_removal p g in
-  Cli.debug_print "Intruction count: %d" (count_instr p);
-  Cli.debug_print "Partial evaluation...";
-  let p = partial_evaluation p g in
-  let p = dead_code_removal p g in
+  let curr_inst_count = ref (count_instr p) in
+  let p = dead_code_removal p in
+  let p = ref p in
+  while count_instr !p < !curr_inst_count do
+    curr_inst_count := count_instr !p;
+    Cli.debug_print "Intruction count: %d" !curr_inst_count;
+    Cli.debug_print "Partial evaluation...";
+    p := partial_evaluation !p;
+    p := dead_code_removal !p
+  done;
+  let p = !p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p
