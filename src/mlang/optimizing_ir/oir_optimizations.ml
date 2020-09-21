@@ -213,6 +213,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Mast.Add, _, Literal (Float f) when f < 0. ->
               Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2)
           | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2')
+          | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
+              Literal (Float 0.)
           | _ -> Binop (op, new_e1, new_e2)
         end
         e
@@ -330,6 +332,28 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e2 with
           | Literal _ | Var _ -> new_e2
           | _ -> Pos.same_pos_as (Mir.LocalLet (lvar, new_e1, new_e2)) e ) )
+  | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
+      let new_arg = partially_evaluate_expr ctx p arg in
+      match Pos.unmark new_arg with
+      | Literal _ ->
+          Pos.same_pos_as
+            (Mir.Literal
+               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e)))
+            e
+      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e )
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) -> (
+      let new_arg1 = partially_evaluate_expr ctx p arg1 in
+      let new_arg2 = partially_evaluate_expr ctx p arg2 in
+      match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
+      | Literal Undefined, _ | _, Literal Undefined -> Pos.same_pos_as (Mir.Literal Undefined) e
+      | Literal _, Literal _ ->
+          Pos.same_pos_as
+            (Mir.Literal
+               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
+            e
+      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e )
   | FunctionCall (func, args) ->
       let new_args = List.map (fun arg -> partially_evaluate_expr ctx p arg) args in
       let all_args_literal =
