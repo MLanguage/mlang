@@ -180,6 +180,10 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       Pos.same_pos_as
         begin
           match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
+          | _, Literal _, Literal _ ->
+              Mir.Literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
           | Mast.And, Literal Undefined, _
           | Mast.And, _, Literal Undefined
           | Mast.Or, Literal Undefined, _
@@ -206,13 +210,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Mast.Mul, _, Literal (Float 0. | Undefined)
           | Mast.Div, Literal (Float 0. | Undefined), _ ->
               Mir.Literal (Mir.Float 0.)
-          | _, Literal _, Literal _ ->
-              Mir.Literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
           | Mast.Add, _, Literal (Float f) when f < 0. ->
               Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2)
-          | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, e1, e2')
+          | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2')
           | _ -> Binop (op, new_e1, new_e2)
         end
         e
@@ -299,8 +299,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         match List.hd sorted_dominating_defs with
         | _, SimpleVar (PartialLiteral e') -> Pos.same_pos_as (Mir.Literal e') e
         | _, SimpleVar (PartialVar v') -> Pos.same_pos_as (Mir.Var v') e
-        | _ -> assert false
-        (* should not happen *)
+        | _, TableVar _ -> e
+        (* this case happens when calling functions like "multimax" *)
       with
       | Not_found -> e
       | Failure s when s = "hd" -> e )
@@ -330,35 +330,11 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e2 with
           | Literal _ | Var _ -> new_e2
           | _ -> Pos.same_pos_as (Mir.LocalLet (lvar, new_e1, new_e2)) e ) )
-  | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
-      let new_arg = partially_evaluate_expr ctx p arg in
-      match Pos.unmark new_arg with
-      | Literal _ ->
-          Pos.same_pos_as
-            (Mir.Literal
-               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e)))
-            e
-      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e )
-  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) -> (
-      let new_arg1 = partially_evaluate_expr ctx p arg1 in
-      let new_arg2 = partially_evaluate_expr ctx p arg2 in
-      match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
-      | Literal _, Literal _ ->
-          Pos.same_pos_as
-            (Mir.Literal
-               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
-            e
-      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e )
   | FunctionCall (func, args) ->
       let new_args = List.map (fun arg -> partially_evaluate_expr ctx p arg) args in
       let all_args_literal =
         List.for_all
-          (fun arg ->
-            match expr_to_partial (Pos.unmark arg) with
-            | Some (PartialLiteral _) -> true
-            | _ -> false)
+          (fun arg -> match Pos.unmark arg with Mir.Literal _ -> true | _ -> false)
           new_args
       in
       let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
@@ -480,16 +456,10 @@ let partial_evaluation (p : program) : program =
 let optimize (p : program) : program =
   Cli.debug_print "Intruction count: %d" (count_instr p);
   Cli.debug_print "Dead code removal...";
-  let curr_inst_count = ref (count_instr p) in
   let p = dead_code_removal p in
-  let p = ref p in
-  while count_instr !p < !curr_inst_count do
-    curr_inst_count := count_instr !p;
-    Cli.debug_print "Intruction count: %d" !curr_inst_count;
-    Cli.debug_print "Partial evaluation...";
-    p := partial_evaluation !p;
-    p := dead_code_removal !p
-  done;
-  let p = !p in
+  Cli.debug_print "Intruction count: %d" (count_instr p);
+  Cli.debug_print "Partial evaluation...";
+  let p = partial_evaluation p in
+  let p = dead_code_removal p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p
