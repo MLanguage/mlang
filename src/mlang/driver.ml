@@ -110,7 +110,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
             Bir_to_python.generate_python_program combined_program function_spec !Cli.output_file;
-            Cli.debug_print "Result written to %s\n" !Cli.output_file
+            Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"

@@ -73,3 +73,24 @@ let get_cfg (p : program) : CFG.t =
 
 module Topological = Graph.Topological.Make (CFG)
 module Dominators = Graph.Dominator.Make (CFG)
+
+module Reachability =
+  Graph.Fixpoint.Make
+    (CFG)
+    (struct
+      type vertex = CFG.E.vertex
+
+      type edge = CFG.E.t
+
+      type g = CFG.t
+
+      type data = bool
+
+      let direction = Graph.Fixpoint.Forward
+
+      let equal = ( = )
+
+      let join = ( || )
+
+      let analyze _ x = x
+    end)
