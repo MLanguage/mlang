@@ -17,9 +17,9 @@ open Mlexer
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
     (print_cycles : bool) (backend : string option) (function_spec : string option)
-    (mpp_file : string) (_output : string option) (run_all_tests : string option)
-    (run_test : string option) (mpp_function : string) =
-  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles _output;
+    (mpp_file : string) (output : string option) (run_all_tests : string option)
+    (run_test : string option) (mpp_function : string) (optimize : bool) =
+  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles output;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in
@@ -69,11 +69,11 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
     if run_all_tests <> None then
       let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests combined_program full_m_program.execution_order tests
+      Test_interpreter.check_all_tests combined_program tests optimize
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       let test : string = match run_test with Some s -> s | _ -> assert false in
-      Test_interpreter.check_test combined_program full_m_program.execution_order test;
+      Test_interpreter.check_test combined_program test optimize;
       Cli.result_print "Test passed!"
     end
     else begin
@@ -88,12 +88,18 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       let combined_program =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in
-      Cli.debug_print "Translating to CFG form for optimizations...";
-      let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
-      Cli.debug_print "Optimizing...";
-      let oir_program = Oir_optimizations.optimize oir_program in
-      Cli.debug_print "Translating back to AST...";
-      let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
+      let combined_program =
+        if optimize then begin
+          Cli.debug_print "Translating to CFG form for optimizations...";
+          let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
+          Cli.debug_print "Optimizing...";
+          let oir_program = Oir_optimizations.optimize oir_program in
+          Cli.debug_print "Translating back to AST...";
+          let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
+          combined_program
+        end
+        else combined_program
+      in
       match backend with
       | Some backend ->
           if String.lowercase_ascii backend = "interpreter" then begin

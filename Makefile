@@ -5,6 +5,12 @@ SOURCE_DIR_2018=ir-calcul/sources2018m_6_7/
 
 SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
+ifeq ($(OPTIMIZE), 1)
+    OPTIMIZE_FLAG=-O
+else
+    OPTIMIZE_FLAG=
+endif
+
 default: build
 
 deps:
@@ -21,6 +27,7 @@ build: #format
 MLANG= dune exec src/main.exe -- \
 	--display_time --debug \
 	--mpp_file=2018.mpp \
+	$(OPTIMIZE_FLAG) \
 	--mpp_function=compute_double_liquidation_pvro
 
 # use: TEST_FILE=bla make test

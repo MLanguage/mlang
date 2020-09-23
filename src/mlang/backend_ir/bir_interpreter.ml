@@ -227,7 +227,6 @@ let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) 
           | Mast.Minus, Float f1 -> Float (-.f1)
           | Mast.Not, Undefined -> Undefined
           | Mast.Minus, Undefined -> Float 0.
-          (* should not happen *)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | Conditional (e1, e2, e3) -> (
@@ -235,8 +234,7 @@ let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) 
         match new_e1 with
         | Float 0. -> evaluate_expr ctx p e3
         | Float _ -> evaluate_expr ctx p e2 (* the float is not zero *)
-        | Undefined -> Undefined
-        (* should not happen *) )
+        | Undefined -> Undefined )
     | Literal l -> l
     | Index (var, e1) -> (
         let new_e1 = evaluate_expr ctx p e1 in
