@@ -107,8 +107,6 @@ type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr ar
 type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
   ctx_vars : var_literal BlockMap.t Mir.VariableMap.t;
-  ctx_inside_table_index : int option;
-  ctx_inside_var : Mir.Variable.t option;
   ctx_doms : Dominators.dom;
   ctx_inside_block : block_id option;
 }
@@ -117,21 +115,12 @@ let empty_ctx (g : CFG.t) (entry_block : block_id) =
   {
     ctx_local_vars = Mir.LocalVariableMap.empty;
     ctx_vars = Mir.VariableMap.empty;
-    ctx_inside_table_index = None;
-    ctx_inside_var = None;
     ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
     ctx_inside_block = None;
   }
 
-let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t option)
-    (idx : int option) =
-  {
-    ctx with
-    ctx_local_vars = Mir.LocalVariableMap.empty;
-    ctx_inside_table_index = idx;
-    ctx_inside_var = var;
-    ctx_inside_block = Some block_id;
-  }
+let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) =
+  { ctx with ctx_local_vars = Mir.LocalVariableMap.empty; ctx_inside_block = Some block_id }
 
 let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id) : int =
   if dom id1 id2 then (* id1 dominates id2 so we want to pick id2 *)
@@ -383,11 +372,7 @@ let partial_evaluation (p : program) : program =
                     match def.var_definition with
                     | InputVar -> (Mir.InputVar, ctx)
                     | SimpleVar e -> (
-                        let e' =
-                          partially_evaluate_expr
-                            (reset_ctx ctx block_id (Some var) None)
-                            p.mir_program e
-                        in
+                        let e' = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e in
                         ( SimpleVar e',
                           match expr_to_partial (Pos.unmark e') with
                           | None -> ctx
@@ -396,9 +381,7 @@ let partial_evaluation (p : program) : program =
                         match def with
                         | IndexGeneric e -> (
                             let e' =
-                              partially_evaluate_expr
-                                (reset_ctx ctx block_id (Some var) None)
-                                p.mir_program e
+                              partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e
                             in
                             ( TableVar (size, IndexGeneric e'),
                               match expr_to_partial (Pos.unmark e') with
@@ -409,10 +392,8 @@ let partial_evaluation (p : program) : program =
                         | IndexTable es ->
                             let es' =
                               Mir.IndexMap.mapi
-                                (fun idx e ->
-                                  partially_evaluate_expr
-                                    (reset_ctx ctx block_id (Some var) (Some idx))
-                                    p.mir_program e)
+                                (fun _ e ->
+                                  partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e)
                                 es
                             in
                             let new_ctx =
@@ -438,9 +419,7 @@ let partial_evaluation (p : program) : program =
                   (new_stmt :: new_block, new_ctx)
               | SConditional (e, b1, b2, join) -> (
                   let new_e =
-                    partially_evaluate_expr
-                      (reset_ctx ctx block_id None None)
-                      p.mir_program (e, Pos.no_pos)
+                    partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program (e, Pos.no_pos)
                   in
                   match expr_to_partial (Pos.unmark new_e) with
                   | Some (PartialLiteral (Float 0.0)) ->
@@ -455,9 +434,7 @@ let partial_evaluation (p : program) : program =
                         ctx ) )
               | SVerif cond -> (
                   let new_e =
-                    partially_evaluate_expr
-                      (reset_ctx ctx block_id None None)
-                      p.mir_program cond.cond_expr
+                    partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program cond.cond_expr
                   in
                   match expr_to_partial (Pos.unmark new_e) with
                   | Some (PartialLiteral (Undefined | Float 0.0)) -> (new_block, ctx)
