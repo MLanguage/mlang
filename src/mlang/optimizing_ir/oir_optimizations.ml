@@ -357,6 +357,72 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           e
       else new_e
 
+let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
+    (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =
+  match Pos.unmark stmt with
+  | SAssign (var, def) ->
+      let new_def, new_ctx =
+        match def.var_definition with
+        | InputVar -> (Mir.InputVar, ctx)
+        | SimpleVar e -> (
+            let e' = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e in
+            ( SimpleVar e',
+              match expr_to_partial (Pos.unmark e') with
+              | None -> ctx
+              | Some e' -> add_var_def_to_ctx ctx block_id var (SimpleVar e') ) )
+        | TableVar (size, def) -> (
+            match def with
+            | IndexGeneric e -> (
+                let e' = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e in
+                ( TableVar (size, IndexGeneric e'),
+                  match expr_to_partial (Pos.unmark e') with
+                  | None -> ctx
+                  | Some e' ->
+                      add_var_def_to_ctx ctx block_id var
+                        (TableVar (size, Array.init size (fun _ -> e'))) ) )
+            | IndexTable es ->
+                let es' =
+                  Mir.IndexMap.mapi
+                    (fun _ e -> partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e)
+                    es
+                in
+                let new_ctx =
+                  if
+                    Mir.IndexMap.for_all
+                      (fun _ e -> Option.is_some (expr_to_partial (Pos.unmark e)))
+                      es'
+                  then
+                    add_var_def_to_ctx ctx block_id var
+                      (TableVar
+                         ( size,
+                           Array.init size (fun i ->
+                               Option.get (expr_to_partial (Pos.unmark (Mir.IndexMap.find i es'))))
+                         ))
+                  else ctx
+                in
+                (TableVar (size, IndexTable es'), new_ctx) )
+      in
+      let new_stmt = Pos.same_pos_as (SAssign (var, { def with var_definition = new_def })) stmt in
+      (new_stmt :: new_block, new_ctx)
+  | SConditional (e, b1, b2, join) -> (
+      let new_e = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program (e, Pos.no_pos) in
+      match expr_to_partial (Pos.unmark new_e) with
+      | Some (PartialLiteral (Float 0.0)) -> (Pos.same_pos_as (SGoto b2) stmt :: new_block, ctx)
+      | Some (PartialLiteral (Float _)) -> (Pos.same_pos_as (SGoto b1) stmt :: new_block, ctx)
+      | Some (PartialLiteral Undefined) -> (Pos.same_pos_as (SGoto join) stmt :: new_block, ctx)
+      | _ -> (Pos.same_pos_as (SConditional (Pos.unmark new_e, b1, b2, join)) stmt :: new_block, ctx)
+      )
+  | SVerif cond -> (
+      let new_e = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program cond.cond_expr in
+      match expr_to_partial (Pos.unmark new_e) with
+      | Some (PartialLiteral (Undefined | Float 0.0)) -> (new_block, ctx)
+      | Some (PartialLiteral (Float _)) ->
+          Bir_interpreter.raise_runtime_as_structured
+            (Bir_interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []))
+            Bir_interpreter.empty_ctx p.mir_program
+      | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx) )
+  | _ -> (stmt :: new_block, ctx)
+
 let partial_evaluation (p : program) : program =
   let g = get_cfg p in
   let p, _ =
@@ -365,87 +431,7 @@ let partial_evaluation (p : program) : program =
         let block = BlockMap.find block_id p.blocks in
         let new_block, ctx =
           List.fold_left
-            (fun (new_block, ctx) stmt ->
-              match Pos.unmark stmt with
-              | SAssign (var, def) ->
-                  let new_def, new_ctx =
-                    match def.var_definition with
-                    | InputVar -> (Mir.InputVar, ctx)
-                    | SimpleVar e -> (
-                        let e' = partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e in
-                        ( SimpleVar e',
-                          match expr_to_partial (Pos.unmark e') with
-                          | None -> ctx
-                          | Some e' -> add_var_def_to_ctx ctx block_id var (SimpleVar e') ) )
-                    | TableVar (size, def) -> (
-                        match def with
-                        | IndexGeneric e -> (
-                            let e' =
-                              partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e
-                            in
-                            ( TableVar (size, IndexGeneric e'),
-                              match expr_to_partial (Pos.unmark e') with
-                              | None -> ctx
-                              | Some e' ->
-                                  add_var_def_to_ctx ctx block_id var
-                                    (TableVar (size, Array.init size (fun _ -> e'))) ) )
-                        | IndexTable es ->
-                            let es' =
-                              Mir.IndexMap.mapi
-                                (fun _ e ->
-                                  partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program e)
-                                es
-                            in
-                            let new_ctx =
-                              if
-                                Mir.IndexMap.for_all
-                                  (fun _ e -> Option.is_some (expr_to_partial (Pos.unmark e)))
-                                  es'
-                              then
-                                add_var_def_to_ctx ctx block_id var
-                                  (TableVar
-                                     ( size,
-                                       Array.init size (fun i ->
-                                           Option.get
-                                             (expr_to_partial
-                                                (Pos.unmark (Mir.IndexMap.find i es')))) ))
-                              else ctx
-                            in
-                            (TableVar (size, IndexTable es'), new_ctx) )
-                  in
-                  let new_stmt =
-                    Pos.same_pos_as (SAssign (var, { def with var_definition = new_def })) stmt
-                  in
-                  (new_stmt :: new_block, new_ctx)
-              | SConditional (e, b1, b2, join) -> (
-                  let new_e =
-                    partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program (e, Pos.no_pos)
-                  in
-                  match expr_to_partial (Pos.unmark new_e) with
-                  | Some (PartialLiteral (Float 0.0)) ->
-                      (Pos.same_pos_as (SGoto b2) stmt :: new_block, ctx)
-                  | Some (PartialLiteral (Float _)) ->
-                      (Pos.same_pos_as (SGoto b1) stmt :: new_block, ctx)
-                  | Some (PartialLiteral Undefined) ->
-                      (Pos.same_pos_as (SGoto join) stmt :: new_block, ctx)
-                  | _ ->
-                      ( Pos.same_pos_as (SConditional (Pos.unmark new_e, b1, b2, join)) stmt
-                        :: new_block,
-                        ctx ) )
-              | SVerif cond -> (
-                  let new_e =
-                    partially_evaluate_expr (reset_ctx ctx block_id) p.mir_program cond.cond_expr
-                  in
-                  match expr_to_partial (Pos.unmark new_e) with
-                  | Some (PartialLiteral (Undefined | Float 0.0)) -> (new_block, ctx)
-                  | Some (PartialLiteral (Float _)) ->
-                      Bir_interpreter.raise_runtime_as_structured
-                        (Bir_interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []))
-                        Bir_interpreter.empty_ctx p.mir_program
-                  | _ ->
-                      ( Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block,
-                        ctx ) )
-              | _ -> (stmt :: new_block, ctx))
+            (fun (new_block, ctx) stmt -> partially_evaluate_stmt stmt block_id ctx new_block p)
             ([], ctx) block
         in
         ({ p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks }, ctx))
