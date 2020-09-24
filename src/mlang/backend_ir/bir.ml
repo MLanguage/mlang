@@ -43,12 +43,10 @@ let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
        (fun acc stmt ->
          match Pos.unmark stmt with
          | SConditional (e, b1, b2) ->
+             let b1 = remove_empty_conditionals b1 in
+             let b2 = remove_empty_conditionals b2 in
              if List.length b1 = 0 && List.length b2 = 0 then acc
                (* empty conditional, we can discard it *)
-             else
-               Pos.same_pos_as
-                 (SConditional (e, remove_empty_conditionals b1, remove_empty_conditionals b2))
-                 stmt
-               :: acc
+             else Pos.same_pos_as (SConditional (e, b1, b2)) stmt :: acc
          | _ -> stmt :: acc)
        [] stmts)
