@@ -258,7 +258,16 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (* multiplication *)
           | Mast.Mul, Literal (Float 1.), e' -> e'
           | Mast.Mul, e', Literal (Float 1.) -> e'
-          (* TODO: for some reason we can't optimize float multiplication by 0 here... *)
+          (* we can't optimize float multiplication by 0 here in the general case, because
+             Undefined. But if we know that the other term can't be undefined, then we can go ! This
+             is the case for the result of some functions *)
+          | ( Mast.Mul,
+              Literal (Float 0.),
+              Mir.FunctionCall ((Mir.MinFunc | Mir.MaxFunc | Mir.PresentFunc), _) )
+          | ( Mast.Mul,
+              Mir.FunctionCall ((Mir.MinFunc | Mir.MaxFunc | Mir.PresentFunc), _),
+              Literal (Float 0.) ) ->
+              Literal (Float 0.)
           (* division *)
           | Mast.Div, e', Literal (Float 1.) -> e'
           | Mast.Div, Literal (Float 0.), _ -> Mir.Literal (Mir.Float 0.)
