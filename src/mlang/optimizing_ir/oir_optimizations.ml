@@ -108,6 +108,8 @@ type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
   ctx_vars : var_literal BlockMap.t Mir.VariableMap.t;
   ctx_doms : Dominators.dom;
+  ctx_paths : Paths.path_checker;
+  ctx_entry_block : block_id;
   ctx_inside_block : block_id option;
 }
 
@@ -116,13 +118,17 @@ let empty_ctx (g : CFG.t) (entry_block : block_id) =
     ctx_local_vars = Mir.LocalVariableMap.empty;
     ctx_vars = Mir.VariableMap.empty;
     ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
+    ctx_paths = Paths.create g;
     ctx_inside_block = None;
+    ctx_entry_block = entry_block;
   }
 
 let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) =
   { ctx with ctx_local_vars = Mir.LocalVariableMap.empty; ctx_inside_block = Some block_id }
 
 let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id) : int =
+  (* the sort puts smaller items first, and we want the first item to be the block that is less
+     dominating. So if id1 dominates id2, we want id2 to be smaller hence returning a positive value *)
   if dom id1 id2 then 1 else if dom id2 id1 then -1 else 0
 
 let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t)
@@ -139,23 +145,40 @@ let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.V
 
 let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
     (block_id * var_literal) option =
-  try
-    let previous_defs = Mir.VariableMap.find var ctx.ctx_vars in
-    let dominating_defs =
-      BlockMap.bindings
-        (BlockMap.filter
-           (fun def_block_id _ ->
-             def_block_id = Option.get ctx.ctx_inside_block
-             || ctx.ctx_doms def_block_id (Option.get ctx.ctx_inside_block))
-           previous_defs)
-    in
-    let sorted_dominating_defs =
-      List.sort (fun (b1, _) (b2, _) -> compare_for_min_dom ctx.ctx_doms b1 b2) dominating_defs
-    in
-    Some (List.hd sorted_dominating_defs)
-  with
-  | Not_found -> None
-  | Failure s when s = "hd" -> None
+  let curr_block = Option.get ctx.ctx_inside_block in
+  match Mir.VariableMap.find_opt var ctx.ctx_vars with
+  | None -> None
+  | Some defs -> (
+      let previous_defs = Mir.VariableMap.find var ctx.ctx_vars in
+      let dominating_defs =
+        BlockMap.bindings
+          (BlockMap.filter
+             (fun def_block_id _ ->
+               def_block_id = Option.get ctx.ctx_inside_block
+               || ctx.ctx_doms def_block_id curr_block)
+             previous_defs)
+      in
+      let sorted_dominating_defs =
+        List.sort (fun (b1, _) (b2, _) -> compare_for_min_dom ctx.ctx_doms b1 b2) dominating_defs
+      in
+      match sorted_dominating_defs with
+      | [] -> None
+      | (def_block, def) :: _ ->
+          (* Now we have the closest def in a block that dominates the current block. But something
+             could go wrong in the case where a branch of an if in between the current block and the
+             def block redefines the variable. So we have to check that they are no such defs *)
+          if def_block = Option.get ctx.ctx_inside_block then Some (def_block, def)
+          else
+            let exists_other_def_in_between =
+              BlockMap.exists
+                (fun intermediate_block _ ->
+                  if intermediate_block = def_block || intermediate_block = curr_block then false
+                  else
+                    Paths.check_path ctx.ctx_paths def_block intermediate_block
+                    && Paths.check_path ctx.ctx_paths intermediate_block curr_block)
+                defs
+            in
+            if exists_other_def_in_between then None else Some (def_block, def) )
 
 let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.ctx =
   {
@@ -171,6 +194,8 @@ let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter
                 | _ -> None)
               ctx.ctx_vars));
   }
+
+[@@@warning "-11"]
 
 let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
     (e : Mir.expression Pos.marked) : Mir.expression Pos.marked =
@@ -292,10 +317,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
   | Var var -> (
       match get_closest_dominating_def var ctx with
       | Some (_, SimpleVar (PartialLiteral e')) -> Pos.same_pos_as (Mir.Literal e') e
-      | Some (_, SimpleVar (PartialVar v')) -> Pos.same_pos_as (Mir.Var v') e
-      | Some (_, TableVar _) -> e
-      (* this case happens when calling functions like "multimax" *)
-      | None -> e )
+      | Some (_, TableVar _) -> e (* this case happens when calling functions like "multimax" *)
+      | _ -> e )
   | LocalVar lvar -> (
       try Pos.same_pos_as (partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars)) e
       with Not_found -> e )
@@ -357,6 +380,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (Mir.Literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e))
           e
       else new_e
+  | _ -> e
 
 let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
     (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =

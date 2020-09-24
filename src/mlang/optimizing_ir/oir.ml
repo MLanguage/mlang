@@ -73,6 +73,7 @@ let get_cfg (p : program) : CFG.t =
 
 module Topological = Graph.Topological.Make (CFG)
 module Dominators = Graph.Dominator.Make (CFG)
+module Paths = Graph.Path.Check (CFG)
 
 module Reachability =
   Graph.Fixpoint.Make
