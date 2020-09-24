@@ -41,7 +41,8 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
                 (* this definition is useful only if there exists a path from this block to the
                    block where it is being used *)
                 BlockMap.exists
-                  (fun used_block _ -> Paths.check_path path_checker id used_block)
+                  (fun used_block _ ->
+                    id = used_block || Paths.check_path path_checker id used_block)
                   used_blocks
           then
             let stmt_used_vars =
@@ -105,7 +106,7 @@ type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
   ctx_vars : var_literal option BlockMap.t Mir.VariableMap.t;
       (** The option at the leaves of the [BlockMap.t] is to account for definitions that are not
-          literals but that are to be taken into account for validity of inlinling later *)
+          literals but that are to be taken into account for validity of inlining later *)
   ctx_doms : Dominators.dom;
   ctx_paths : Paths.path_checker;
   ctx_entry_block : block_id;
@@ -220,37 +221,48 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       Pos.same_pos_as
         begin
           match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
+          (* calling the interpreter when verything is a literal *)
           | _, Literal _, Literal _ ->
               Mir.Literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
                    (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+              (* first all the combinations giving undefined *)
           | Mast.And, Literal Undefined, _ -> Mir.Literal Undefined
           | Mast.And, _, Literal Undefined -> Mir.Literal Undefined
           | Mast.Or, Literal Undefined, _ -> Mir.Literal Undefined
           | Mast.Or, _, Literal Undefined -> Mir.Literal Undefined
+          | Mast.Mul, _, Literal Undefined -> Mir.Literal Undefined
+          | Mast.Mul, Literal Undefined, _ -> Mir.Literal Undefined
+          | Mast.Div, Literal Undefined, _ -> Mir.Literal Undefined
           | Mast.Div, _, Literal Undefined -> Mir.Literal Undefined
+          (* logical or *)
           | Mast.Or, Literal (Float f), _ when f <> 0. -> Mir.Literal Mir.true_literal
           | Mast.Or, _, Literal (Float f) when f <> 0. -> Literal Mir.true_literal
+          | Mast.Or, Literal (Float 0.), e' | Mast.Or, e', Literal (Float 0.) -> e'
+          (* logican and *)
           | Mast.And, Literal (Float 0.), _ -> Literal Mir.false_literal
           | Mast.And, _, Literal (Float 0.) -> Literal Mir.false_literal
           | Mast.And, Literal (Float f), e' when f <> 0. -> e'
           | Mast.And, e', Literal (Float f) when f <> 0. -> e'
-          | Mast.Or, Literal (Float 0.), e' | Mast.Or, e', Literal (Float 0.) -> e'
-          | Mast.Add, Literal Undefined, e' -> e' (* 0 + e' <> e' because e' can be undefined *)
+          (* addition *)
+          | Mast.Add, Literal Undefined, e' -> e'
           | Mast.Add, e', Literal Undefined -> e'
-          | Mast.Mul, Literal (Float 1.), e' -> e'
-          | Mast.Mul, e', Literal (Float 1.) -> e'
-          | Mast.Div, e', Literal (Float 1.) -> e'
-          | Mast.Sub, e', Literal Undefined -> e' (* 0 - e' <> e' because e' can be undefined *)
-          | Mast.Sub, Literal Undefined, e' -> Unop (Minus, Pos.same_pos_as e' e)
-          | Mast.Mul, Literal (Float 0. | Undefined), _ -> Mir.Literal (Mir.Float 0.)
-          | Mast.Mul, _, Literal (Float 0. | Undefined) -> Mir.Literal (Mir.Float 0.)
-          | Mast.Div, Literal (Float 0. | Undefined), _ -> Mir.Literal (Mir.Float 0.)
           | Mast.Add, _, Literal (Float f) when f < 0. ->
               Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2)
           | Mast.Add, _, Unop (Minus, e2') -> Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2')
+          (* substraction *)
           | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
               Literal (Float 0.)
+          | Mast.Sub, Literal Undefined, e' -> Unop (Minus, Pos.same_pos_as e' e)
+          | Mast.Sub, e', Literal Undefined -> e'
+          (* multiplication *)
+          | Mast.Mul, Literal (Float 1.), e' -> e'
+          | Mast.Mul, e', Literal (Float 1.) -> e'
+          (* TODO: for some reason we can't optimize float multiplication by 0 here... *)
+          (* division *)
+          | Mast.Div, e', Literal (Float 1.) -> e'
+          | Mast.Div, Literal (Float 0.), _ -> Mir.Literal (Mir.Float 0.)
+          (* default case *)
           | _ -> Binop (op, new_e1, new_e2)
         end
         e
@@ -443,13 +455,13 @@ let optimize (p : program) : program =
   Cli.debug_print "Dead code removal...";
   let p = dead_code_removal p in
   let p = ref p in
-  (* while !instrs <> count_instr !p do *)
-  Cli.debug_print "Intruction count: %d" (count_instr !p);
-  Cli.debug_print "Partial evaluation...";
-  instrs := count_instr !p;
-  p := partial_evaluation !p;
-  p := dead_code_removal !p;
-  (* done; *)
+  while !instrs <> count_instr !p do
+    Cli.debug_print "Intruction count: %d" (count_instr !p);
+    Cli.debug_print "Partial evaluation...";
+    instrs := count_instr !p;
+    p := partial_evaluation !p;
+    p := dead_code_removal !p
+  done;
   let p = !p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p
