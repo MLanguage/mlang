@@ -200,8 +200,6 @@ let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter
               ctx.ctx_vars));
   }
 
-[@@@warning "-11"]
-
 let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
     (e : Mir.expression Pos.marked) : Mir.expression Pos.marked =
   match Pos.unmark e with
@@ -212,12 +210,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         begin
           match (Pos.unmark new_e1, Pos.unmark new_e2) with
           | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
-          | Conditional (b, (Literal (Float 1.), _), (Literal (Float 0.), _)), Literal (Float 1.)
-            when Pos.unmark op = Mast.Eq ->
-              Pos.unmark b
-          | (FunctionCall (Mir.PresentFunc, _) as fc), Literal (Float 1.)
-            when Pos.unmark op = Mast.Neq ->
-              Unop (Mast.Not, Pos.same_pos_as fc new_e1)
           | Literal _, Literal _ ->
               Mir.Literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
@@ -355,21 +347,11 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           new_args
       in
       let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
-      if
-        all_args_literal
-        &&
-        match func with
-        | Mir.GtezFunc | Mir.GtzFunc | Mir.MaxFunc | Mir.MinFunc | Mir.AbsFunc | Mir.ArrFunc
-        | Mir.InfFunc | Mir.SumFunc | Mir.Supzero | Mir.Multimax | Mir.NullFunc ->
-            true
-        | Mir.PresentFunc -> false
-        (* Why can't we optimize that ?? *)
-      then
+      if all_args_literal then
         Pos.same_pos_as
           (Mir.Literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e))
           e
       else new_e
-  | _ -> e
 
 let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
     (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =
@@ -455,12 +437,18 @@ let partial_evaluation (p : program) : program =
   p
 
 let optimize (p : program) : program =
-  Cli.debug_print "Intruction count: %d" (count_instr p);
+  let instrs = ref (count_instr p) in
+  Cli.debug_print "Intruction count: %d" !instrs;
   Cli.debug_print "Dead code removal...";
   let p = dead_code_removal p in
-  Cli.debug_print "Intruction count: %d" (count_instr p);
-  Cli.debug_print "Partial evaluation...";
-  let p = partial_evaluation p in
-  let p = dead_code_removal p in
+  let p = ref p in
+  while !instrs <> count_instr !p do
+    Cli.debug_print "Intruction count: %d" (count_instr !p);
+    Cli.debug_print "Partial evaluation...";
+    instrs := count_instr !p;
+    p := partial_evaluation !p;
+    p := dead_code_removal !p
+  done;
+  let p = !p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p

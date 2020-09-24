@@ -187,7 +187,6 @@ let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) 
           | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
           | Mast.Neq, Float i1, Float i2 -> Float (float_of_bool (i1 <> i2))
           | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
-          (* should not happen *)
         in
         evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
     | Binop (op, e1, e2) ->
