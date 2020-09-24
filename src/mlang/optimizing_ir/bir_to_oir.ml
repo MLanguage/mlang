@@ -119,4 +119,12 @@ and re_translate_block (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMa
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   let statements = re_translate_blocks_until p.entry_block p.blocks None in
-  { statements; idmap = p.idmap; mir_program = p.mir_program; outputs = p.outputs }
+  let p =
+    {
+      Bir.statements = Bir.remove_empty_conditionals statements;
+      idmap = p.idmap;
+      mir_program = p.mir_program;
+      outputs = p.outputs;
+    }
+  in
+  p
