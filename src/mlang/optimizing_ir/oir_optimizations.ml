@@ -94,19 +94,21 @@ let dead_code_removal (p : program) : program =
 
 (** {2 Partial evaluation} *)
 
-type partial_expr = PartialLiteral of Mir.literal | PartialVar of Mir.Variable.t
+type partial_expr = PartialLiteral of Mir.literal
 
 let partial_to_expr (e : partial_expr) : Mir.expression =
-  match e with PartialLiteral l -> Literal l | PartialVar v -> Var v
+  match e with PartialLiteral l -> Literal l
 
 let expr_to_partial (e : Mir.expression) : partial_expr option =
-  match e with Literal l -> Some (PartialLiteral l) | Var v -> Some (PartialVar v) | _ -> None
+  match e with Literal l -> Some (PartialLiteral l) | _ -> None
 
 type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
 
 type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
-  ctx_vars : var_literal BlockMap.t Mir.VariableMap.t;
+  ctx_vars : var_literal option BlockMap.t Mir.VariableMap.t;
+      (** The option at the leaves of the [BlockMap.t] is to account for definitions that are not
+          literals but that are to be taken into account for validity of inlinling later *)
   ctx_doms : Dominators.dom;
   ctx_paths : Paths.path_checker;
   ctx_entry_block : block_id;
@@ -132,7 +134,7 @@ let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id)
   if dom id1 id2 then 1 else if dom id2 id1 then -1 else 0
 
 let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.Variable.t)
-    (var_lit : var_literal) : partial_ev_ctx =
+    (var_lit : var_literal option) : partial_ev_ctx =
   {
     ctx with
     ctx_vars =
@@ -153,9 +155,11 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
       let dominating_defs =
         BlockMap.bindings
           (BlockMap.filter
-             (fun def_block_id _ ->
-               def_block_id = Option.get ctx.ctx_inside_block
-               || ctx.ctx_doms def_block_id curr_block)
+             (fun def_block_id def ->
+               Option.is_some def
+               (* we only consider definitions that were partially evaluated to a literal *)
+               && ( def_block_id = Option.get ctx.ctx_inside_block
+                  || ctx.ctx_doms def_block_id curr_block ))
              previous_defs)
       in
       let sorted_dominating_defs =
@@ -163,7 +167,8 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
       in
       match sorted_dominating_defs with
       | [] -> None
-      | (def_block, def) :: _ ->
+      | (_, None) :: _ -> assert false (* should not happen *)
+      | (def_block, Some def) :: _ ->
           (* Now we have the closest def in a block that dominates the current block. But something
              could go wrong in the case where a branch of an if in between the current block and the
              def block redefines the variable. So we have to check that they are no such defs *)
@@ -307,10 +312,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Some (_, SimpleVar _) -> assert false (* should not happen *)
           | Some (_, TableVar (size, es')) -> (
               if idx >= size || idx < 0 then Pos.same_pos_as (Mir.Literal Undefined) e
-              else
-                match es'.(idx) with
-                | PartialLiteral e' -> Pos.same_pos_as (Mir.Literal e') e
-                | PartialVar v' -> Pos.same_pos_as (Mir.Var v') e )
+              else match es'.(idx) with PartialLiteral e' -> Pos.same_pos_as (Mir.Literal e') e )
           | None -> Pos.same_pos_as (Mir.Index (var, new_e1)) e )
       | _ -> Pos.same_pos_as (Mir.Index (var, new_e1)) e )
   | Literal _ -> e
@@ -328,7 +330,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
   | LocalLet (lvar, e1, e2) -> (
       let new_e1 = partially_evaluate_expr ctx p e1 in
       match Pos.unmark new_e1 with
-      | Literal _ | Var _ ->
+      | Literal _ ->
           let new_ctx =
             {
               ctx with
@@ -343,7 +345,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       | _ -> (
           let new_e2 = partially_evaluate_expr ctx p e2 in
           match Pos.unmark new_e2 with
-          | Literal _ | Var _ -> new_e2
+          | Literal _ -> new_e2
           | _ -> Pos.same_pos_as (Mir.LocalLet (lvar, new_e1, new_e2)) e ) )
   | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
       let new_arg = partially_evaluate_expr ctx p arg in
@@ -390,22 +392,20 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
       let new_def, new_ctx =
         match def.var_definition with
         | InputVar -> (Mir.InputVar, ctx)
-        | SimpleVar e -> (
+        | SimpleVar e ->
             let e' = partially_evaluate_expr ctx p.mir_program e in
-            ( SimpleVar e',
-              match expr_to_partial (Pos.unmark e') with
-              | None -> ctx
-              | Some e' -> add_var_def_to_ctx ctx block_id var (SimpleVar e') ) )
+            let partial_e' = Option.map (fun x -> SimpleVar x) (expr_to_partial (Pos.unmark e')) in
+            (SimpleVar e', add_var_def_to_ctx ctx block_id var partial_e')
         | TableVar (size, def) -> (
             match def with
-            | IndexGeneric e -> (
+            | IndexGeneric e ->
                 let e' = partially_evaluate_expr ctx p.mir_program e in
-                ( TableVar (size, IndexGeneric e'),
-                  match expr_to_partial (Pos.unmark e') with
-                  | None -> ctx
-                  | Some e' ->
-                      add_var_def_to_ctx ctx block_id var
-                        (TableVar (size, Array.init size (fun _ -> e'))) ) )
+                let partial_e' =
+                  Option.map
+                    (fun x -> TableVar (size, Array.init size (fun _ -> x)))
+                    (expr_to_partial (Pos.unmark e'))
+                in
+                (TableVar (size, IndexGeneric e'), add_var_def_to_ctx ctx block_id var partial_e')
             | IndexTable es ->
                 let es' =
                   Mir.IndexMap.mapi (fun _ e -> partially_evaluate_expr ctx p.mir_program e) es
@@ -417,12 +417,13 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
                       es'
                   then
                     add_var_def_to_ctx ctx block_id var
-                      (TableVar
-                         ( size,
-                           Array.init size (fun i ->
-                               Option.get (expr_to_partial (Pos.unmark (Mir.IndexMap.find i es'))))
-                         ))
-                  else ctx
+                      (Some
+                         (TableVar
+                            ( size,
+                              Array.init size (fun i ->
+                                  Option.get
+                                    (expr_to_partial (Pos.unmark (Mir.IndexMap.find i es')))) )))
+                  else add_var_def_to_ctx ctx block_id var None
                 in
                 (TableVar (size, IndexTable es'), new_ctx) )
       in
