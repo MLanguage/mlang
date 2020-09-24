@@ -443,9 +443,13 @@ let optimize (p : program) : program =
   Cli.debug_print "Dead code removal...";
   let p = dead_code_removal p in
   let p = ref p in
-  (* while !instrs <> count_instr !p do Cli.debug_print "Intruction count: %d" (count_instr !p);
-     Cli.debug_print "Partial evaluation..."; instrs := count_instr !p; p := partial_evaluation !p;
-     p := dead_code_removal !p done; *)
+  (* while !instrs <> count_instr !p do *)
+  Cli.debug_print "Intruction count: %d" (count_instr !p);
+  Cli.debug_print "Partial evaluation...";
+  instrs := count_instr !p;
+  p := partial_evaluation !p;
+  p := dead_code_removal !p;
+  (* done; *)
   let p = !p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p

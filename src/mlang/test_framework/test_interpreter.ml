@@ -179,6 +179,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
                       _ ),
                     _ ),
                 _ ) ) ) ->
+          Cli.error_print "Test %s incorrect (error on variable %s)" name
+            (Pos.unmark v.Variable.name);
           let errs_varname = try VariableMap.find v failures with Not_found -> [] in
           (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
       | _ ->
@@ -206,10 +208,10 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   in
   if List.length f_l = 0 then Cli.result_print "No failures!"
   else begin
-    Cli.warning_print "Failures:@.";
+    Cli.warning_print "Failures:";
     List.iter
       (fun (var, infos) ->
-        Cli.error_print "\t%s, %d errors in files %s@." (Pos.unmark var.Variable.name)
+        Cli.error_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
           (List.length infos)
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
