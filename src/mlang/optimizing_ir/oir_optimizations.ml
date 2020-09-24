@@ -347,28 +347,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e2 with
           | Literal _ -> new_e2
           | _ -> Pos.same_pos_as (Mir.LocalLet (lvar, new_e1, new_e2)) e ) )
-  | FunctionCall (((ArrFunc | InfFunc | PresentFunc | NullFunc) as f), [ arg ]) -> (
-      let new_arg = partially_evaluate_expr ctx p arg in
-      match Pos.unmark new_arg with
-      | Literal _ ->
-          Pos.same_pos_as
-            (Mir.Literal
-               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e)))
-            e
-      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg ])) e )
-  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) -> (
-      let new_arg1 = partially_evaluate_expr ctx p arg1 in
-      let new_arg2 = partially_evaluate_expr ctx p arg2 in
-      match (Pos.unmark new_arg1, Pos.unmark new_arg2) with
-      | Literal Undefined, _ | _, Literal Undefined -> Pos.same_pos_as (Mir.Literal Undefined) e
-      | Literal _, Literal _ ->
-          Pos.same_pos_as
-            (Mir.Literal
-               (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                  (Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e)))
-            e
-      | _ -> Pos.same_pos_as (Mir.FunctionCall (f, [ new_arg1; new_arg2 ])) e )
   | FunctionCall (func, args) ->
       let new_args = List.map (fun arg -> partially_evaluate_expr ctx p arg) args in
       let all_args_literal =
@@ -377,7 +355,16 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           new_args
       in
       let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
-      if all_args_literal then
+      if
+        all_args_literal
+        &&
+        match func with
+        | Mir.GtezFunc | Mir.GtzFunc | Mir.MaxFunc | Mir.MinFunc | Mir.AbsFunc | Mir.ArrFunc
+        | Mir.InfFunc | Mir.SumFunc | Mir.Supzero | Mir.Multimax | Mir.NullFunc ->
+            true
+        | Mir.PresentFunc -> false
+        (* Why can't we optimize that ?? *)
+      then
         Pos.same_pos_as
           (Mir.Literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e))
           e
