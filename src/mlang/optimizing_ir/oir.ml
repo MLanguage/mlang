@@ -29,6 +29,7 @@ type block = stmt list
 type program = {
   blocks : block BlockMap.t;
   entry_block : block_id;
+  exit_block : block_id;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;

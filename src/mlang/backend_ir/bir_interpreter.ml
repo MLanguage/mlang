@@ -374,8 +374,7 @@ let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
                   (List.map
                      (fun (x, _) -> x)
                      (Mir.VariableMap.bindings
-                        (Mir_dependency_graph.get_used_variables cond.cond_expr
-                           Mir.VariableMap.empty))) ),
+                        (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
          ctx ))
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is

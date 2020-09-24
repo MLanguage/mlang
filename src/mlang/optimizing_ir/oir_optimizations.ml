@@ -15,62 +15,58 @@ open Oir
 
 (** {2 Dead code removal}*)
 
-let remove_dead_statements (stmts : block) (used_vars : unit Mir.VariableMap.t)
-    (outputs : unit Mir.VariableMap.t) : unit Mir.VariableMap.t * stmt list =
+let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths.path_checker)
+    (used_vars : unit BlockMap.t Mir.VariableMap.t) : unit BlockMap.t Mir.VariableMap.t * stmt list
+    =
+  let update_used_vars (stmt_used_vars : unit Mir.VariableMap.t)
+      (used_vars : unit BlockMap.t Mir.VariableMap.t) : unit BlockMap.t Mir.VariableMap.t =
+    Mir.VariableMap.fold
+      (fun stmt_used_var _ used_vars ->
+        Mir.VariableMap.update stmt_used_var
+          (fun old_entry ->
+            match old_entry with
+            | None -> Some (BlockMap.singleton id ())
+            | Some used -> Some (BlockMap.add id () used))
+          used_vars)
+      stmt_used_vars used_vars
+  in
   List.fold_right
     (fun stmt (used_vars, acc) ->
       match Pos.unmark stmt with
       | SAssign (var, var_def) ->
-          if Mir.VariableMap.mem var used_vars || Mir.VariableMap.mem var outputs then
-            ( begin
-                match var_def.Mir.var_definition with
-                | Mir.SimpleVar e -> Mir_dependency_graph.get_used_variables e used_vars
-                | Mir.TableVar (_, def) -> (
-                    match def with
-                    | Mir.IndexGeneric e -> Mir_dependency_graph.get_used_variables e used_vars
-                    | Mir.IndexTable es ->
-                        Mir.IndexMap.fold
-                          (fun _ e used_vars -> Mir_dependency_graph.get_used_variables e used_vars)
-                          es used_vars )
-                | Mir.InputVar -> assert false (* should not happen *)
-              end,
-              stmt :: acc )
+          if
+            match Mir.VariableMap.find_opt var used_vars with
+            | None -> false
+            | Some used_blocks ->
+                (* this definition is useful only if there exists a path from this block to the
+                   block where it is being used *)
+                BlockMap.exists
+                  (fun used_block _ -> Paths.check_path path_checker id used_block)
+                  used_blocks
+          then
+            let stmt_used_vars =
+              match var_def.Mir.var_definition with
+              | Mir.SimpleVar e -> Mir_dependency_graph.get_used_variables e
+              | Mir.TableVar (_, def) -> (
+                  match def with
+                  | Mir.IndexGeneric e -> Mir_dependency_graph.get_used_variables e
+                  | Mir.IndexTable es ->
+                      Mir.IndexMap.fold
+                        (fun _ e used_vars -> Mir_dependency_graph.get_used_variables_ e used_vars)
+                        es Mir.VariableMap.empty )
+              | Mir.InputVar -> assert false
+              (* should not happen *)
+            in
+            (update_used_vars stmt_used_vars used_vars, stmt :: acc)
           else (used_vars, acc)
       | SVerif cond ->
-          (Mir_dependency_graph.get_used_variables cond.cond_expr used_vars, stmt :: acc)
+          let stmt_used_vars = Mir_dependency_graph.get_used_variables cond.cond_expr in
+          (update_used_vars stmt_used_vars used_vars, stmt :: acc)
       | SConditional (cond, _, _, _) ->
-          (Mir_dependency_graph.get_used_variables (cond, Pos.no_pos) used_vars, stmt :: acc)
+          let stmt_used_vars = Mir_dependency_graph.get_used_variables (cond, Pos.no_pos) in
+          (update_used_vars stmt_used_vars used_vars, stmt :: acc)
       | SGoto _ -> (used_vars, stmt :: acc))
     stmts (used_vars, [])
-
-let remove_empty_conditionals (p : program) : program =
-  let g = get_cfg p in
-  let empty_cond_branches : block_id list =
-    List.map fst
-      (BlockMap.bindings
-         (BlockMap.filter
-            (fun _ block -> match block with [ (SGoto _, _) ] -> true | _ -> false)
-            p.blocks))
-  in
-  let rev_topological_order = Topological.fold (fun id acc -> id :: acc) g [] in
-  let new_blocks =
-    List.fold_left
-      (fun (new_blocks : block BlockMap.t) (id : block_id) ->
-        let old_block = BlockMap.find id new_blocks in
-        let new_block =
-          try
-            match List.hd (List.rev old_block) with
-            | SConditional (_, b1, b2, join), pos ->
-                if List.mem b1 empty_cond_branches && List.mem b2 empty_cond_branches then
-                  List.rev ((SGoto join, pos) :: List.tl (List.rev old_block))
-                else old_block
-            | _ -> old_block
-          with Failure s when s = "hd" -> old_block
-        in
-        BlockMap.add id new_block new_blocks)
-      p.blocks rev_topological_order
-  in
-  { p with blocks = new_blocks }
 
 let dead_code_removal (p : program) : program =
   let g = get_cfg p in
@@ -78,18 +74,19 @@ let dead_code_removal (p : program) : program =
   let is_entry block_id = block_id = p.entry_block in
   let is_reachable = Reachability.analyze is_entry g in
   let p = { p with blocks = BlockMap.filter (fun bid _ -> is_reachable bid) p.blocks } in
+  let path_checker = Paths.create g in
   let _, p =
     List.fold_left
       (fun (used_vars, p) block_id ->
         try
           let block = BlockMap.find block_id p.blocks in
-          let used_vars, block = remove_dead_statements block used_vars p.outputs in
+          let used_vars, block = remove_dead_statements block block_id path_checker used_vars in
           let p = { p with blocks = BlockMap.add block_id block p.blocks } in
           (used_vars, p)
         with Not_found -> (used_vars, p))
-      (Mir.VariableMap.empty, p) rev_topological_order
+      (Mir.VariableMap.map (fun () -> BlockMap.singleton p.exit_block ()) p.outputs, p)
+      rev_topological_order
   in
-  let p = remove_empty_conditionals p in
   p
 
 (** {2 Partial evaluation} *)
@@ -291,14 +288,15 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                   let fraction, _ = modf f in
                   fraction = 0.
                 then int_of_float f
-                else begin
-                  Cli.error_print "Error during partial evaluation!";
-                  Bir_interpreter.raise_runtime_as_structured
-                    (Bir_interpreter.FloatIndex
-                       (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)))
-                    (interpreter_ctx_from_partial_ev_ctx ctx)
-                    p
-                end
+                else
+                  let err, ctx =
+                    ( Bir_interpreter.FloatIndex
+                        (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
+                      interpreter_ctx_from_partial_ev_ctx ctx )
+                  in
+                  if !Bir_interpreter.exit_on_rte then
+                    Bir_interpreter.raise_runtime_as_structured err ctx p
+                  else raise (Bir_interpreter.RuntimeError (err, ctx))
           in
           match get_closest_dominating_def (Pos.unmark var) ctx with
           | Some (_, SimpleVar _) -> assert false (* should not happen *)
@@ -412,10 +410,13 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
       | Some (PartialLiteral (Undefined | Float 0.0)) -> (new_block, ctx)
       | Some (PartialLiteral (Float _)) ->
           Cli.error_print "Error during partial evaluation!";
-          Bir_interpreter.raise_runtime_as_structured
-            (Bir_interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []))
-            (interpreter_ctx_from_partial_ev_ctx ctx)
-            p.mir_program
+          let err, ctx =
+            ( Bir_interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
+              interpreter_ctx_from_partial_ev_ctx ctx )
+          in
+          if !Bir_interpreter.exit_on_rte then
+            Bir_interpreter.raise_runtime_as_structured err ctx p.mir_program
+          else raise (Bir_interpreter.RuntimeError (err, ctx))
       | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx) )
   | _ -> (stmt :: new_block, ctx)
 
@@ -442,13 +443,9 @@ let optimize (p : program) : program =
   Cli.debug_print "Dead code removal...";
   let p = dead_code_removal p in
   let p = ref p in
-  while !instrs <> count_instr !p do
-    Cli.debug_print "Intruction count: %d" (count_instr !p);
-    Cli.debug_print "Partial evaluation...";
-    instrs := count_instr !p;
-    p := partial_evaluation !p;
-    p := dead_code_removal !p
-  done;
+  (* while !instrs <> count_instr !p do Cli.debug_print "Intruction count: %d" (count_instr !p);
+     Cli.debug_print "Partial evaluation..."; instrs := count_instr !p; p := partial_evaluation !p;
+     p := dead_code_removal !p done; *)
   let p = !p in
   Cli.debug_print "Intruction count: %d" (count_instr p);
   p

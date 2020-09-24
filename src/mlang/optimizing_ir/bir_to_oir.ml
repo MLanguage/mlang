@@ -68,9 +68,16 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
   let blocks = initialize_block entry_block Oir.BlockMap.empty in
-  let _, blocks = translate_statement_list p.statements entry_block blocks in
+  let exit_block, blocks = translate_statement_list p.statements entry_block blocks in
   let blocks = Oir.BlockMap.map (fun stmts -> List.rev stmts) blocks in
-  { blocks; entry_block; idmap = p.idmap; mir_program = p.mir_program; outputs = p.outputs }
+  {
+    blocks;
+    entry_block;
+    exit_block;
+    idmap = p.idmap;
+    mir_program = p.mir_program;
+    outputs = p.outputs;
+  }
 
 let rec re_translate_statement (s : Oir.stmt) (blocks : Oir.block Oir.BlockMap.t) :
     Oir.block_id option * Bir.stmt option =
