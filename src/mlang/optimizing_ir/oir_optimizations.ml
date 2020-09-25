@@ -13,23 +13,49 @@
 
 open Oir
 
+exception Exit
+
+let get_reduction_percent (old : int) (new_ : int) : float =
+  (1. -. (float_of_int new_ /. float_of_int old)) *. 100.
+
+let print_done ?msg (old : int) (new_ : int) : unit =
+  let reduction_percent = get_reduction_percent old new_ in
+  let strict_reduction = reduction_percent > 0. in
+  Cli.debug_print "%s%s (%s) "
+    (match msg with None -> "" | Some msg -> msg ^ ": ")
+    (ANSITerminal.sprintf [ ANSITerminal.magenta ] "%d → %d" old new_)
+    (ANSITerminal.sprintf
+       [ (if strict_reduction then ANSITerminal.green else ANSITerminal.yellow) ]
+       "%s %.1f%%"
+       (if strict_reduction then "🡖" else "~")
+       reduction_percent)
+
 let optimize (p : program) : program =
-  let instrs = ref (count_instr p) in
-  Cli.debug_print "Intruction count: %d" !instrs;
+  let start_instrs = count_instr p in
   Cli.debug_print "Dead code removal...";
   let p = Dead_code_removal.dead_code_removal p in
+  print_done start_instrs (count_instr p);
   let p = ref p in
-  while !instrs <> count_instr !p do
-    Cli.debug_print "Intruction count: %d" (count_instr !p);
-    Cli.debug_print "Partial evaluation...";
-    instrs := count_instr !p;
-    p := Partial_evaluation.partial_evaluation !p;
-    p := Dead_code_removal.dead_code_removal !p;
-    Cli.debug_print "Intruction count: %d" (count_instr !p);
-    Cli.debug_print "Inlining...";
-    p := Inlining.inlining !p;
-    p := Dead_code_removal.dead_code_removal !p
-  done;
+  ( try
+      while true do
+        Cli.debug_print "Partial evaluation...";
+        let old_instrs = count_instr !p in
+        p := Partial_evaluation.partial_evaluation !p;
+        p := Dead_code_removal.dead_code_removal !p;
+        let intermediate_instrs = count_instr !p in
+        print_done old_instrs intermediate_instrs;
+        if intermediate_instrs = old_instrs then raise Exit
+        else begin
+          Cli.debug_print "Inlining...";
+          p := Inlining.inlining !p;
+          p := Dead_code_removal.dead_code_removal !p;
+          let end_instrs = count_instr !p in
+          print_done intermediate_instrs end_instrs;
+          if end_instrs = intermediate_instrs then raise Exit
+        end
+      done
+    with Exit -> () );
   let p = !p in
-  Cli.debug_print "Intruction count: %d" (count_instr p);
+  let end_instrs = count_instr p in
+  print_done ~msg:"Optimizations done! Total effect" start_instrs end_instrs;
   p
