@@ -40,8 +40,36 @@ let add_var_def_to_ctx (var : Mir.Variable.t) (def : Mir.variable_def) (current_
         ctx.ctx_vars;
   }
 
-let inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_id) (current_pos : int) :
-    Mir.expression =
+let is_inlining_worthy (e : Mir.expression Pos.marked) : bool =
+  (* we forbid inlining expressions with local variables to prevent conflicts of local variable
+     names *)
+  let rec no_local_vars (e : Mir.expression Pos.marked) : bool =
+    match Pos.unmark e with
+    | Mir.LocalVar _ -> false
+    | Mir.LocalLet _ -> false
+    | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> true
+    | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> no_local_vars e1 && no_local_vars e2
+    | Mir.Index (_, e1) | Mir.Unop (_, e1) -> no_local_vars e1
+    | Mir.FunctionCall (_, args) -> List.for_all (fun arg -> no_local_vars arg) args
+    | Mir.Conditional (e1, e2, e3) -> no_local_vars e1 && no_local_vars e2 && no_local_vars e3
+  in
+  let rec expr_size (e : Mir.expression Pos.marked) : int =
+    match Pos.unmark e with
+    | Mir.LocalVar _ | Mir.LocalLet _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error
+    | Mir.Var _ ->
+        1
+    | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> expr_size e1 + expr_size e2 + 1
+    | Mir.Index (_, e1) | Mir.Unop (_, e1) -> expr_size e1 + 1
+    | Mir.FunctionCall (_, args) -> List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
+    | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
+  in
+  (* the size limit is arbitrary *)
+  no_local_vars e && expr_size e < 5
+
+(* todo: size and no local vars *)
+
+let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_id)
+    (current_pos : int) : Mir.expression =
   match e with
   | Mir.Var var_x -> (
       match Mir.VariableMap.find_opt var_x ctx.ctx_vars with
@@ -55,6 +83,8 @@ let inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_id) (
                 &&
                 match previous_x_def with
                 | Mir.SimpleVar previous_e ->
+                    is_inlining_worthy previous_e
+                    &&
                     let vars_used_in_previous_x_def =
                       Mir_dependency_graph.get_used_variables previous_e
                     in
@@ -94,7 +124,60 @@ let inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_id) (
               | _ -> assert false (* should not happen *) )
           | None -> e )
       | None -> e )
-  | _ -> e
+  | Mir.Comparison (op, e1, e2) ->
+      let new_e1 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
+      in
+      let new_e2 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
+      in
+      Mir.Comparison (op, new_e1, new_e2)
+  | Mir.Binop (op, e1, e2) ->
+      let new_e1 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
+      in
+      let new_e2 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
+      in
+      Mir.Binop (op, new_e1, new_e2)
+  | Mir.Unop (op, e1) ->
+      let new_e1 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
+      in
+      Mir.Unop (op, new_e1)
+  | Mir.Conditional (cond, e_t, e_f) ->
+      let new_cond =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark cond) ctx current_block current_pos) cond
+      in
+      let new_e_t =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e_t) ctx current_block current_pos) e_t
+      in
+      let new_e_f =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e_f) ctx current_block current_pos) e_f
+      in
+      Mir.Conditional (new_cond, new_e_t, new_e_f)
+  | Mir.LocalLet (l, e1, e2) ->
+      let new_e1 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
+      in
+      let new_e2 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
+      in
+      Mir.LocalLet (l, new_e1, new_e2)
+  | Mir.Literal _ | Mir.LocalVar _ | Mir.GenericTableIndex | Mir.Error -> e
+  | Mir.Index (v, e2) ->
+      let new_e2 =
+        Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
+      in
+      Mir.Index (v, new_e2)
+  | Mir.FunctionCall (f, args) ->
+      let new_args =
+        List.map
+          (fun arg ->
+            Pos.same_pos_as (inline_in_expr (Pos.unmark arg) ctx current_block current_pos) arg)
+          args
+      in
+      Mir.FunctionCall (f, new_args)
 
 let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current_stmt_pos : int) :
     stmt * ctx =
