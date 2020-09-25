@@ -24,6 +24,10 @@ let optimize (p : program) : program =
     Cli.debug_print "Partial evaluation...";
     instrs := count_instr !p;
     p := Partial_evaluation.partial_evaluation !p;
+    p := Dead_code_removal.dead_code_removal !p;
+    Cli.debug_print "Intruction count: %d" (count_instr !p);
+    Cli.debug_print "Inlining...";
+    p := Inlining.inlining !p;
     p := Dead_code_removal.dead_code_removal !p
   done;
   let p = !p in
