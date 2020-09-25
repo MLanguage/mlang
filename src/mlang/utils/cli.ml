@@ -43,6 +43,10 @@ let print_cycles =
   in
   Arg.(value & flag & info [ "print_cycles"; "c" ] ~doc)
 
+let optimize =
+  let doc = "Applies dead code removal and partial evaluation to the generated code" in
+  Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
+
 let backend =
   Arg.(
     value
@@ -96,7 +100,7 @@ let run_test =
 let mlang_t f =
   Term.(
     const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
-    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function)
+    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize)
 
 let info =
   let doc =

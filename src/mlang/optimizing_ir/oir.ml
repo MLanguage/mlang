@@ -19,7 +19,7 @@ type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
   | SAssign of Mir.Variable.t * Mir.variable_data
-  | SConditional of Mir.expression * block_id * block_id * block_id option
+  | SConditional of Mir.expression * block_id * block_id * block_id
       (** The first two block ids are the true and false branch, the third is the join point after *)
   | SVerif of Mir.condition_data
   | SGoto of block_id
@@ -29,6 +29,7 @@ type block = stmt list
 type program = {
   blocks : block BlockMap.t;
   entry_block : block_id;
+  exit_block : block_id;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
@@ -55,4 +56,43 @@ module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   let equal v1 v2 = v1 = v2
 end)
 
-let get_cfg (_p : program) : CFG.t = assert false
+let get_cfg (p : program) : CFG.t =
+  let g = CFG.empty in
+  BlockMap.fold
+    (fun (id : block_id) (block : block) (g : CFG.t) ->
+      let g = CFG.add_vertex g id in
+      List.fold_left
+        (fun g stmt ->
+          match Pos.unmark stmt with
+          | SGoto next_b -> CFG.add_edge g id next_b
+          | SConditional (_, next_b1, next_b2, _) ->
+              let g = CFG.add_edge g id next_b1 in
+              CFG.add_edge g id next_b2
+          | _ -> g)
+        g block)
+    p.blocks g
+
+module Topological = Graph.Topological.Make (CFG)
+module Dominators = Graph.Dominator.Make (CFG)
+module Paths = Graph.Path.Check (CFG)
+
+module Reachability =
+  Graph.Fixpoint.Make
+    (CFG)
+    (struct
+      type vertex = CFG.E.vertex
+
+      type edge = CFG.E.t
+
+      type g = CFG.t
+
+      type data = bool
+
+      let direction = Graph.Fixpoint.Forward
+
+      let equal = ( = )
+
+      let join = ( || )
+
+      let analyze _ x = x
+    end)

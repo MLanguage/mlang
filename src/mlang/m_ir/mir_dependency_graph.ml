@@ -26,32 +26,35 @@ module G = Graph.Persistent.Digraph.ConcreteBidirectional (struct
 end)
 
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
-let rec get_used_variables (e : Mir.expression Pos.marked) (acc : unit Mir.VariableMap.t) :
+let rec get_used_variables_ (e : Mir.expression Pos.marked) (acc : unit Mir.VariableMap.t) :
     unit Mir.VariableMap.t =
   match Pos.unmark e with
   | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2) ->
-      let acc = get_used_variables e1 acc in
-      let acc = get_used_variables e2 acc in
+      let acc = get_used_variables_ e1 acc in
+      let acc = get_used_variables_ e2 acc in
       acc
-  | Mir.Unop (_, e) -> get_used_variables e acc
+  | Mir.Unop (_, e) -> get_used_variables_ e acc
   | Mir.Index ((var, _), e) ->
       let acc = Mir.VariableMap.add var () acc in
-      let acc = get_used_variables e acc in
+      let acc = get_used_variables_ e acc in
       acc
   | Mir.Conditional (e1, e2, e3) ->
-      let acc = get_used_variables e1 acc in
-      let acc = get_used_variables e2 acc in
-      let acc = get_used_variables e3 acc in
+      let acc = get_used_variables_ e1 acc in
+      let acc = get_used_variables_ e2 acc in
+      let acc = get_used_variables_ e3 acc in
       acc
   | Mir.FunctionCall (_, args) ->
-      List.fold_left (fun acc arg -> get_used_variables arg acc) acc args
+      List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
   | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
   | Mir.Var var -> Mir.VariableMap.add var () acc
+
+let get_used_variables (e : Mir.expression Pos.marked) : unit Mir.VariableMap.t =
+  get_used_variables_ e Mir.VariableMap.empty
 
 let add_usages (lvar : Mir.Variable.t) (e : Mir.expression Pos.marked) (acc : G.t) : G.t =
   let acc = G.add_vertex acc lvar in
   let add_edge acc var lvar = G.add_edge acc var lvar in
-  let usages = get_used_variables e Mir.VariableMap.empty in
+  let usages = get_used_variables_ e Mir.VariableMap.empty in
   Mir.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
 
 (** The dependency graph also includes nodes for the conditions to be checked at execution *)

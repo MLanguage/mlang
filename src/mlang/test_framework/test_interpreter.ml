@@ -44,7 +44,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
          (Pos.VarNameToID.find name p.program_idmap))
 
 let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
-    Bir_interface.bir_function * condition_data VariableMap.t * Mir.literal VariableMap.t =
+    Bir_interface.bir_function * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
@@ -87,9 +87,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
          t.rp)
   in
-  ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds = VariableMap.empty },
-    func_conds,
-    input_file )
+  ({ func_variable_inputs; func_constant_inputs; func_outputs; func_conds }, input_file)
 
 let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data VariableMap.t) :
     Bir.program =
@@ -124,78 +122,33 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   in
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
-let check_test (combined_program : Bir.program) (exec_order : Mir_dependency_graph.execution_order)
-    (test_name : string) =
+let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool) =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, test_conds, input_file = to_mvg_function_and_inputs combined_program t in
+  let f, input_file = to_mvg_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
   let combined_program = Bir_interface.adapt_program_to_function combined_program f in
-  (* let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in *)
+  let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_bir.format_program
      combined_program; *)
-  let ctx =
-    Bir_interpreter.evaluate_program combined_program
-      (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
+  let combined_program =
+    if optimize then begin
+      Cli.debug_print "Translating to CFG form for optimizations...";
+      let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
+      Cli.debug_print "Optimizing...";
+      let oir_program = Oir_optimizations.optimize oir_program in
+      Cli.debug_print "Translating back to AST...";
+      let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
+      combined_program
+    end
+    else combined_program
   in
-  let test_cond_list = VariableMap.bindings test_conds in
-  let execution_order_list : (Variable.t * int) list =
-    List.mapi (fun i var -> (var, i)) exec_order
-  in
-  let execution_order_map : int VariableMap.t =
-    List.fold_left
-      (fun acc (var, i) -> VariableMap.add var i acc)
-      VariableMap.empty execution_order_list
-  in
-  (* We sort the control variables according to execution order so that we are able to catch the
-     "first" mistakes first. *)
-  let exec_order_compare ((var1, _) : Variable.t * condition_data)
-      ((var2, _) : Variable.t * condition_data) : int =
-    try
-      let pos1 = VariableMap.find var1 execution_order_map in
-      let pos2 = VariableMap.find var2 execution_order_map in
-      compare pos1 pos2
-    with Not_found -> 0
-  in
-  try
-    List.iter
-      (fun (_, cond) ->
-        let result = Bir_interpreter.evaluate_expr ctx combined_program cond.cond_expr in
-        match result with
-        | Float f when f <> 0. ->
-            raise
-              (Bir_interpreter.RuntimeError
-                 ( Bir_interpreter.ConditionViolated
-                     ( cond.cond_errors,
-                       cond.cond_expr,
-                       [
-                         ( match Pos.unmark cond.cond_expr with
-                         | Unop
-                             ( Mast.Not,
-                               ( Mir.Binop
-                                   ( (Mast.And, _),
-                                     ( Comparison
-                                         ( (Mast.Lte, _),
-                                           (Mir.Binop ((Mast.Sub, _), (Var var, _), _), _),
-                                           (_, _) ),
-                                       _ ),
-                                     _ ),
-                                 _ ) ) ->
-                             (var, VariableMap.find var ctx.ctx_vars)
-                         | _ -> assert false );
-                         (* should not happen *)
-                       ] ),
-                   ctx ))
-        | _ -> ())
-      (List.sort exec_order_compare test_cond_list)
-  with Bir_interpreter.RuntimeError (e, ctx) ->
-    if !Bir_interpreter.exit_on_rte then
-      Bir_interpreter.raise_runtime_as_structured e ctx combined_program.mir_program
-    else raise (Bir_interpreter.RuntimeError (e, ctx))
+  ignore
+    (Bir_interpreter.evaluate_program combined_program
+       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file))
 
-let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.execution_order)
-    (test_dir : string) =
+let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -210,7 +163,7 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
   let process name (successes, failures) =
     try
       Cli.debug_flag := false;
-      check_test p exec_order (test_dir ^ name);
+      check_test p (test_dir ^ name) optimize;
       Cli.debug_flag := true;
       (name :: successes, failures)
     with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
@@ -226,6 +179,8 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
                       _ ),
                     _ ),
                 _ ) ) ) ->
+          Cli.error_print "Test %s incorrect (error on variable %s)" name
+            (Pos.unmark v.Variable.name);
           let errs_varname = try VariableMap.find v failures with Not_found -> [] in
           (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
       | _ ->
@@ -253,10 +208,10 @@ let check_all_tests (p : Bir.program) (exec_order : Mir_dependency_graph.executi
   in
   if List.length f_l = 0 then Cli.result_print "No failures!"
   else begin
-    Cli.warning_print "Failures:@.";
+    Cli.warning_print "Failures:";
     List.iter
       (fun (var, infos) ->
-        Cli.error_print "\t%s, %d errors in files %s@." (Pos.unmark var.Variable.name)
+        Cli.error_print "\t%s, %d errors in files %s" (Pos.unmark var.Variable.name)
           (List.length infos)
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
