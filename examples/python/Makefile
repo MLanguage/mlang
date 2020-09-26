@@ -1,33 +1,19 @@
-SOURCE_DIR_2018 ?= ../../ir-calcul/sources2018m_6_7/
+MLANG_BIN=dune exec ../../src/main.exe --
+OPTIMIZE_FLAG=-O
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-SOURCE_FILES_2018=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
-MLANG=dune exec ../../src/main.exe --
+all: cas_basique simulateur_simplifie
 
-cas_general_2018:
-	$(MLANG) --display_time --debug --optimize \
-	        --mpp_file ../../2018.mpp --mpp_function compute_double_liquidation_pvro \
-	        --backend python --output cas_general_2018.py \
-                --function_spec ../../specs/all_ins_and_outs.m_spec \
-		$(SOURCE_FILES_2018)
+simulateur_simplifie:
+	$(MLANG) \
+		--backend python --output ir_2019.py \
+		--function_spec simulateur_simplifie_2019.m_spec \
+		$(SOURCE_FILES)
+	python3.7 simulateur_simplifie_2019.py
 
-simulateur_simplifie_2018:
-	$(MLANG) --display_time --debug --optimize \
-	        --mpp_file ../../2018.mpp --mpp_function compute_double_liquidation_pvro \
-	        --backend python --output simulateur_simplifie_2018.py \
-                --function_spec ../../specs/simulateur_simplifie.m_spec \
-		$(SOURCE_FILES_2018)
-
-cas_basique_2018:
-	$(MLANG) --display_time --debug --optimize \
-	        --mpp_file ../../2018.mpp --mpp_function compute_double_liquidation_pvro \
-	        --backend python --output cas_basique_2018.py \
-                --function_spec ../../specs/cas_basique.m_spec \
-		$(SOURCE_FILES_2018)
-
-autograd:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend autograd --function_spec autograd.m_spec \
-		--output ir_2018.py $(SOURCE_FILES_2017) && \
-	python example_autograd.py
+cas_basique:
+	$(MLANG) \
+		--backend python --function_spec cas_basique.m_spec \
+		--output ir_2019.py $(SOURCE_FILES) && \
+	python3.7 cas_basique_2019.py
