@@ -74,10 +74,10 @@ let undefined_class_prelude : string =
   \    return m\n\n\
    def m_round(x):\n\
   \    if isinstance(x, Undefined): return x\n\
-  \    else: return round(x)\n\n\
+  \    else: return modf(x + copysign(0.50005, x))[1]\n\n\
    def m_floor(x):\n\
   \    if isinstance(x, Undefined): return x\n\
-  \    else: return floor(x)\n\n\
+  \    else: return floor(x + 0.000001)\n\n\
    class GenericIndex:\n\
   \    def __init__(self, lambda_function):\n\
   \      self.l = lambda_function\n\
@@ -132,7 +132,7 @@ let autograd () : bool = !autograd_ref
 let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      Format.fprintf fmt "(%a %s %a)" generate_python_expr e1
+      Format.fprintf fmt "(%a) %s (%a)" generate_python_expr e1
         (generate_comp_op (Pos.unmark op))
         generate_python_expr e2
   | Binop ((Mast.Div, _), e1, e2) ->
@@ -143,7 +143,7 @@ let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
         | Binop ((opl, _), _, _) ->
             let left_paren =
               Mast.has_priority opl op
-              || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative opl)
+              || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative op)
             in
             let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
             Format.fprintf fmt "%s%a%s" lleft_paren generate_python_expr e1 rleft_paren
@@ -154,22 +154,22 @@ let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
         | Binop ((opr, _), _, _) ->
             let right_paren =
               Mast.has_priority opr op
-              || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative opr)
+              || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative op)
             in
             let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
             Format.fprintf fmt "%s%a%s" lright_paren generate_python_expr e2 rright_paren
         | _ -> generate_python_expr fmt e2
       in
       Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
-  | Unop (op, e) -> Format.fprintf fmt "(%s %a)" (generate_unop op) generate_python_expr e
+  | Unop (op, e) -> Format.fprintf fmt "%s (%a)" (generate_unop op) generate_python_expr e
   | Index (var, e) ->
       (* FIXME: int cast hack *)
-      Format.fprintf fmt "%a[int(%a)]" generate_variable (Pos.unmark var) generate_python_expr e
+      Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()" generate_variable (Pos.unmark var) generate_python_expr e generate_python_expr e
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)" generate_python_expr e1 generate_python_expr e2
         generate_python_expr e3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      Format.fprintf fmt "(%a != %s)" generate_python_expr arg none_value
+      Format.fprintf fmt "(isinstance(%a, Undefined) == False)" generate_python_expr arg
   | FunctionCall (NullFunc, [ arg ]) ->
       Format.fprintf fmt "(%a == %s)" generate_python_expr arg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
@@ -185,7 +185,7 @@ let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
   | FunctionCall (Multimax, [ e1; e2 ]) ->
       Format.fprintf fmt "m_multimax(%a, %a)" generate_python_expr e1 generate_python_expr e2
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> Format.fprintf fmt "%f" f
+  | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
   | Var var -> Format.fprintf fmt "%a" generate_variable var
   | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
@@ -217,7 +217,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
-  else Format.fprintf oc "from math import floor\n\n";
+  else Format.fprintf oc "from math import floor, modf, copysign\n\n";
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
   Format.fprintf oc "local_variables = dict()\n\n\n"
 
@@ -256,13 +256,20 @@ let rec generate_stmts (program : Bir.program) oc stmts =
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
+  | Bir.SAssign (var, vdata) ->
+     generate_var_def var vdata oc
   | SConditional (cond, tt, []) ->
-      Format.fprintf oc "if %a:@\n@[<h 4>    %a@]@\n" generate_python_expr
-        (Pos.same_pos_as cond stmt) (generate_stmts program) tt
+     let pos = Pos.get_position stmt in
+     let fname = String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos)) in
+     let cond_name = Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos) (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos) in
+     Format.fprintf oc "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\n" cond_name generate_python_expr
+        (Pos.same_pos_as cond stmt) cond_name cond_name (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
-      Format.fprintf oc "if %a:@\n@[<h 4>    %a@]@\nelse:@\n@[<h 4>    %a@]@\n" generate_python_expr
-        (Pos.same_pos_as cond stmt) (generate_stmts program) tt (generate_stmts program) ff
+     let pos = Pos.get_position stmt in
+     let fname = String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos)) in
+     let cond_name = Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos) (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos) in
+     Format.fprintf oc "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\nelif not(isinstance(%s, Undefined)):@\n@[<h 4>    %a@]@\n" cond_name generate_python_expr
+        (Pos.same_pos_as cond stmt) cond_name cond_name (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =

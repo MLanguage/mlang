@@ -17,7 +17,7 @@ if __name__ == "__main__":
         resultats_test = tests.extracted(entrees_completees)
         for (x, r) in resultats_test.items():
             initial_x = '_'.join(x.split('_')[:-2]).upper() if not x.startswith("var_") else '_'.join(x.split('_')[1:]).upper()
-            if initial_x in sorties and r != sorties[initial_x]:
-                print(f"Error in {f}, computed output = {r}, expected {sorties[initial_x]}!")
+            if initial_x in sorties and not(isinstance(r, tests.Undefined)) and r != sorties[initial_x]:
+                print(f"Error in {f}, on variable {x} computed output = {r}, expected {sorties[initial_x]}!")
                 sys.exit(-1)
         print(f"Test {f} successfully passed!")
