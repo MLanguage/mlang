@@ -103,7 +103,7 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
   generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
 
 let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos.marked list) :
-      Mir_interface.full_program =
+    Mir_interface.full_program =
   let outputs = List.map (fun out -> Mir.find_var_by_name p.program out) outputs in
   let program =
     {
@@ -374,10 +374,11 @@ let create_combined_program (m_program : Mir_interface.full_program)
 
     {
       statements = stmts @ stmts_verif;
-      (* we append the M verification conditions at the end, when everything has already been computed *)
+      (* we append the M verification conditions at the end, when everything has already been
+         computed *)
       idmap = m_program.program.program_idmap;
       mir_program = m_program.program;
       outputs = Mir.VariableMap.empty;
     }
-  with Bir_interpreter.RuntimeError(r, ctx) ->
+  with Bir_interpreter.RuntimeError (r, ctx) ->
     Bir_interpreter.raise_runtime_as_structured r ctx m_program.program

@@ -32,13 +32,13 @@ default: build
 
 deps:
 	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
-	cmdliner dune-build-info visitors parmap num ocamlformat
+		cmdliner dune-build-info visitors parmap num ocamlformat
 	git submodule update --init --recursive
 
 format:
 	dune build @fmt --auto-promote | true
 
-build: #format
+build: format
 	dune build
 
 ##################################################
@@ -62,7 +62,7 @@ quick_test:
 
 doc:
 	dune build @doc
-	ln -s _build/default/_doc/_html/index.html doc.html
+	ln -s _build/default/_doc/_html/index.html doc/doc.html
 
 examples: FORCE
 	$(MAKE) -C examples/python

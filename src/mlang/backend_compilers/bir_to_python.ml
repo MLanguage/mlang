@@ -164,7 +164,8 @@ let rec generate_python_expr fmt (e : expression Pos.marked) : unit =
   | Unop (op, e) -> Format.fprintf fmt "%s (%a)" (generate_unop op) generate_python_expr e
   | Index (var, e) ->
       (* FIXME: int cast hack *)
-      Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()" generate_variable (Pos.unmark var) generate_python_expr e generate_python_expr e
+      Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
+        generate_variable (Pos.unmark var) generate_python_expr e generate_python_expr e
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)" generate_python_expr e1 generate_python_expr e2
         generate_python_expr e3
@@ -256,20 +257,37 @@ let rec generate_stmts (program : Bir.program) oc stmts =
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) ->
-     generate_var_def var vdata oc
+  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, []) ->
-     let pos = Pos.get_position stmt in
-     let fname = String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos)) in
-     let cond_name = Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos) (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos) in
-     Format.fprintf oc "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\n" cond_name generate_python_expr
-        (Pos.same_pos_as cond stmt) cond_name cond_name (generate_stmts program) tt
+      let pos = Pos.get_position stmt in
+      let fname =
+        String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
+      in
+      let cond_name =
+        Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
+          (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
+      in
+      Format.fprintf oc
+        "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\n" cond_name
+        generate_python_expr (Pos.same_pos_as cond stmt) cond_name cond_name
+        (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
-     let pos = Pos.get_position stmt in
-     let fname = String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos)) in
-     let cond_name = Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos) (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos) in
-     Format.fprintf oc "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\nelif not(isinstance(%s, Undefined)):@\n@[<h 4>    %a@]@\n" cond_name generate_python_expr
-        (Pos.same_pos_as cond stmt) cond_name cond_name (generate_stmts program) tt cond_name (generate_stmts program) ff
+      let pos = Pos.get_position stmt in
+      let fname =
+        String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
+      in
+      let cond_name =
+        Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
+          (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
+      in
+      Format.fprintf oc
+        "%s = %a@\n\
+         if not(isinstance(%s, Undefined)) and %s != 0:@\n\
+         @[<h 4>    %a@]@\n\
+         elif not(isinstance(%s, Undefined)):@\n\
+         @[<h 4>    %a@]@\n"
+        cond_name generate_python_expr (Pos.same_pos_as cond stmt) cond_name cond_name
+        (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =

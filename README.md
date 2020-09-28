@@ -21,18 +21,17 @@ of the source files responsible for computing the tax on the 2018 income.
 
 Mlang is implemented in OCaml. To manage dependencies,
 [install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
-of OCaml that is at least 4.0.7. Then, you can install Mlang's dependencies using
+of OCaml that is at least 4.0.9. Then, you can install Mlang's dependencies using
 
     make deps
 
-Warning: the Z3 opam package takes a very long time to install (10 minutes).
 Next, fetch the source code dependencies of Mlang with
 
     git submodule update --init --recursive
 
 This will fetch the M source code released by the DGFiP.
 
-You can then use `dune build` to build all source files, and other dune commands.
+You can then use `make build` to build all source files, and other dune commands.
 
 If you want to install the `mlang` executable and the opam packages, use
 
@@ -72,7 +71,17 @@ documentation using
 
         make doc
 
-To browse the documentation, just open the file `doc.html` with your browser.
+To browse the documentation, just open the file `doc.html` with your browser. Here 
+is a high-level picture describing the architecture of the compiler:
+
+<center>
+<img src="doc/architecture.png" alt="Architecture" height="300"/>
+</center>
+
+First, the code is parsed into AST (both for M and M++). Then, the AST are 
+desugared into M and M++ intermediate representations. BIR stands for Backend 
+IR, and collects the result of inlining the M code inside M++. OIR is the 
+Optimization IR, which is a CFG-form of BIR.
 
 ## Known Limitations
 
@@ -87,7 +96,7 @@ the logic of this iterative computation. Currently, the authors have transcribed
 the unpublished source code into the `2018.mpp` file, which has been tested only 
 for the computation of taxes for the 2018 income.
 
-## Contributors
+## Contributions
 
 The project accepts pull requests. There is currently no formalized contribution
 guide or centralized discussion place about the project. Please email the authors
