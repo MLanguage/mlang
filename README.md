@@ -11,10 +11,11 @@ released by the DGFiP.
 
 ## Disclaimer
 
-There is currently no guarantee of any kind about the correctness of the code
+There is currently no legal guarantee of any kind about the correctness of the code
 produced by the Mlang compiler, or by the results produced by the interpreter of
-Mlang. However, authors are in contact with DGFiP to try and validate the
-semantics of M implemented in Mlang.
+Mlang. However, authors have been in contact with DGFiP to validate Mlang, and
+the system passes all the private DGFiP tests as of Sept. 2020 for the version
+of the source files responsible for computing the tax on the 2018 income.
 
 ## Installation
 
@@ -43,16 +44,26 @@ If the `mlang` executable is install, you can consult its man page with
 
     mlang --help
 
-The `examples` folder  contains several examples of invocation of the `mlang` executable,
-catagorized by the backend used. For instance, if you want to
-compile all the source code files released by the DGFiP for the year 2017,
-and produce a Python module equivalent to the official simplified simulator available
-[published by the DGFiP](https://www3.impots.gouv.fr/simulateur/calcul_impot/2018/simplifie/index.htm),
-go to the `examples/python` folder and use
+If you invoke `make quick_test`, Make will show you the Mlang options is is 
+using to run a simple test of the Mlang interpreter. 
 
-        make simulateur_simplifie_2018
+Mlang's run are configured by a specification file (`.m_spec`), see the 
+[dedicated README](specs/README.md) for more details.
 
-Mlang should generate a file named `ir_2018.py` containing the generated Python code.
+For how to produce ready-to-use Python income tax computation 
+source files for your application, see the 
+[dedicated README](examples/python/README.md).
+
+
+## Testing
+
+Mlang is tested using the `FIP` test file format used by the DGFiP to test 
+their internal tooling. The `--run_test` and `--run_all_tests` options ease 
+the testing process of the interpreter (with or without optimizations) and 
+report test errors in a convenient format.
+
+Mlang backends are also tested using the same `FIP` format, see for instance 
+`examples/python/backend_test`.
 
 ## Documentation
 
@@ -65,14 +76,16 @@ To browse the documentation, just open the file `doc.html` with your browser.
 
 ## Known Limitations
 
-The code released by the DGFiP is not complete as of September 2019. Indeed,
+The code released by the DGFiP is not complete as of September 2020. Indeed,
 in order to correctly compute the amount of taxes for a fiscal household, the DGFiP
 executes the M program several times, each time changing the values of some variables
 to enable or disable parts of the computation.
 
-The DGFiP has not published the details of this iterative computation. Hence,
-until they do, the amounts of taxes computed by Mlang-generated programs are usually
-false (except on very simple situations).
+The DGFiP has not published the source code of this iterative computation. However,
+the authors of Mlang have come up with a new DSL called M++, used for describing 
+the logic of this iterative computation. Currently, the authors have transcribed 
+the unpublished source code into the `2018.mpp` file, which has been tested only 
+for the computation of taxes for the 2018 income.
 
 ## Contributors
 

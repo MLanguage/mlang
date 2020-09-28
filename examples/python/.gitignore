@@ -1,3 +1,3 @@
-ir_*.py
-ir_*.pyc
+ir*.py
+ir*.pyc
 __pycache__/
