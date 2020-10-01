@@ -1300,7 +1300,7 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                     List.for_all
                       (fun err ->
                         match err with
-                        | None -> true
+                        | None -> false (* if the error is undefined then we take it anyway *)
                         | Some err -> err.Mir.Error.typ = Mast.Information)
                       errs
                   then
