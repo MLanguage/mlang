@@ -28,11 +28,9 @@ compute_double_liquidation3(outputs):
   PREM8_11 = 0
   compute_article1731bis()
   calcul_avfisc = exists_taxbenefit_defined_variables()
+  v_8ZG = 8ZG
   if present(8ZG) and calcul_avfisc:
-    v_8ZG = 8ZG
     del 8ZG
-  else:
-    v_8ZG = 0
   if calcul_avfisc:
     V_AVFISCOPBIS = 0
     V_DIFTEOREEL = 0
