@@ -272,7 +272,7 @@ verification_name:
 
 verification:
 | VERIFICATION name = verification_name+ COLON apps = application_reference
-  SEMICOLON conds = verification_condition+ { {
+  SEMICOLON conds = verification_condition* { {
   verif_name = name;
   verif_applications = apps;
   verif_conditions = conds;
