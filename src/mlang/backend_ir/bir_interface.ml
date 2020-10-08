@@ -172,7 +172,7 @@ let print_output (f : bir_function) (results : Bir_interpreter.ctx) : unit =
         Cli.result_print "%a" Bir_interpreter.format_var_literal_with_var (var, value))
     results.ctx_vars
 
-let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program =
+let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program * int =
   let const_input_stmts =
     Mir.VariableMap.fold
       (fun var e acc ->
@@ -209,8 +209,9 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
       (fun _ cond acc -> Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  {
-    p with
-    statements = unused_input_stmts @ const_input_stmts @ p.statements @ conds_stmts;
-    outputs = f.func_outputs;
-  }
+  ( {
+      p with
+      statements = unused_input_stmts @ const_input_stmts @ p.statements @ conds_stmts;
+      outputs = f.func_outputs;
+    },
+    List.length unused_input_stmts + List.length const_input_stmts )

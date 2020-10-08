@@ -85,7 +85,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
         | Some f -> f
       in
       let function_spec = Bir_interface.read_function_from_spec combined_program spec_file in
-      let combined_program =
+      let combined_program, _ =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in
       let combined_program =
@@ -108,6 +108,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             let end_ctx =
               Bir_interpreter.evaluate_program combined_program
                 (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx inputs)
+                0
             in
             Bir_interface.print_output function_spec end_ctx
           end

@@ -129,7 +129,9 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   Cli.debug_print "Running test %s..." t.nom;
   let f, input_file = to_mvg_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
-  let combined_program = Bir_interface.adapt_program_to_function combined_program f in
+  let combined_program, code_loc_offset =
+    Bir_interface.adapt_program_to_function combined_program f
+  in
   let combined_program = add_test_conds_to_combined_program combined_program f.func_conds in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@." Format_bir.format_program
      combined_program; *)
@@ -148,31 +150,23 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   Bir_instrumentation.code_coverage_init ();
   ignore
     (Bir_interpreter.evaluate_program combined_program
-       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file));
+       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
+       (-code_loc_offset));
   Bir_instrumentation.code_coverage_result ()
 
 type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
 
 type process_acc = string list * test_failures * Bir_instrumentation.code_coverage_acc
 
-let print_warning_univalued_variable (var : Mir.Variable.t)
-    (defs : Bir_instrumentation.code_coverage_map_value) =
-  Cli.warning_print "%s: %s %s"
-    (Pos.unmark var.Mir.Variable.name)
-    ( match defs with
-    | MultipleDefPatterns | MultipleDefs -> assert false
-    | OnlyOneDefPattern def_pattern ->
-        Format.asprintf "%a"
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt _ -> Format.fprintf fmt " -> ")
-             Bir_interpreter.format_var_literal)
-          def_pattern
-    | OnlyUndefined -> "indéfini"
-    | OnlyOneDef def -> Format.asprintf "%a" Bir_interpreter.format_var_literal def
-    | OnlyOneDefAndUndefined def ->
-        Format.asprintf "%a ou indéfini" Bir_interpreter.format_var_literal def )
-    (let descr = Pos.unmark var.Mir.Variable.descr in
-     if descr = "" then "" else "(" ^ descr ^ ")")
+type coverage_kind =
+  | NotCovered
+  | Covered
+  | CoveredOneDef of Bir_interpreter.var_literal
+  | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
+
+let print_warning_code_locations_with_coverage
+    (_undertested_code_locs : coverage_kind Bir_instrumentation.CodeLocationMap.t) : unit =
+  ()
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   let arr = Sys.readdir test_dir in
@@ -248,30 +242,39 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
   end;
-  let univalue_variables =
-    Mir.VariableMap.filter
-      (fun _ def ->
-        match def with
-        | Bir_instrumentation.OnlyOneDefPattern _ | Bir_instrumentation.OnlyOneDef _
-        | Bir_instrumentation.OnlyUndefined | Bir_instrumentation.OnlyOneDefAndUndefined _ ->
-            true
-        | _ -> false)
-      code_coverage
+  let all_code_locs = Bir_instrumentation.get_code_locs p in
+  let all_code_locs_num = Bir_instrumentation.CodeLocationMap.cardinal all_code_locs in
+  let undertested_code_locs =
+    Bir_instrumentation.CodeLocationMap.mapi
+      (fun code_loc var ->
+        match Mir.VariableMap.find_opt var code_coverage with
+        | None -> NotCovered
+        | Some used_code_locs -> (
+            match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
+            | None -> NotCovered
+            | Some def -> (
+                match def with
+                | Bir_instrumentation.OnlyOneDef def -> CoveredOneDef def
+                | Bir_instrumentation.OnlyOneDefAndUndefined def -> CoveredOneDefAndUndefined def
+                | Bir_instrumentation.MultipleDefs -> Covered ) ))
+      all_code_locs
   in
-  let univalue_variables =
-    Mir.VariableMap.filter
-      (fun var _ ->
-        try
-          match (Mir.VariableMap.find var p.mir_program.program_vars).var_io with
-          | Mir.Input -> false
-          | _ -> true
-        with Not_found -> true)
-      univalue_variables
+  let undertested_code_locs =
+    Bir_instrumentation.CodeLocationMap.filter
+      (fun _ cov ->
+        match cov with
+        | NotCovered | CoveredOneDefAndUndefined _ | CoveredOneDef _ -> true
+        | Covered -> false)
+      undertested_code_locs
   in
-  if Mir.VariableMap.cardinal univalue_variables > 0 then begin
-    Cli.warning_print
-      "Some non-input variables (%d) are always assigned the same value in all the test runs:"
-      (Mir.VariableMap.cardinal univalue_variables);
 
-    Mir.VariableMap.iter print_warning_univalued_variable univalue_variables
+  let undertested_code_locs_num =
+    Bir_instrumentation.CodeLocationMap.cardinal undertested_code_locs
+  in
+  if undertested_code_locs_num > 0 then begin
+    Cli.warning_print
+      "Some code locations (%.1f%%) are not covered properly by this set of test runs: they \
+       receive at most one distinct value different from undefined"
+      (float_of_int undertested_code_locs_num /. float_of_int all_code_locs_num *. 100.);
+    print_warning_code_locations_with_coverage undertested_code_locs
   end
