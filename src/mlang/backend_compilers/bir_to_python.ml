@@ -13,6 +13,8 @@
 
 open Mir
 
+let verbose_output = ref false
+
 let undefined_class_prelude : string =
   "class Singleton(type):\n\
   \    _instances = {}\n\
@@ -73,6 +75,7 @@ let undefined_class_prelude : string =
    def m_and(lhs, rhs):\n\
   \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
    and rhs\n\n\
+   def m_present(e): return isinstance(e, Undefined) == False\n\
    def m_multimax(count, l):\n\
   \    m = l[0] + 0\n\
   \    for i in range(int(count)):\n\
@@ -187,14 +190,18 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
       Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
   | Unop (op, e) ->
       Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_python_expr safe_bool_binops) e
-  | Index (var, e) ->
-      (* FIXME: int cast hack *)
-      Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
-        generate_variable (Pos.unmark var)
-        (generate_python_expr safe_bool_binops)
-        e
-        (generate_python_expr safe_bool_binops)
-        e
+  | Index (var, e) -> (
+      match Pos.unmark e with
+      | Literal (Float f) ->
+          Format.fprintf fmt "%a[%d]" generate_variable (Pos.unmark var) (int_of_float f)
+      | _ ->
+          (* FIXME: int cast hack *)
+          Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
+            generate_variable (Pos.unmark var)
+            (generate_python_expr safe_bool_binops)
+            e
+            (generate_python_expr safe_bool_binops)
+            e )
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)"
         (generate_python_expr safe_bool_binops)
@@ -204,9 +211,7 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
         (generate_python_expr safe_bool_binops)
         e3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      Format.fprintf fmt "(isinstance(%a, Undefined) == False)"
-        (generate_python_expr safe_bool_binops)
-        arg
+      Format.fprintf fmt "m_present(%a)" (generate_python_expr safe_bool_binops) arg
   | FunctionCall (NullFunc, [ arg ]) ->
       Format.fprintf fmt "(%a == %s)" (generate_python_expr safe_bool_binops) arg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
@@ -250,19 +255,18 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
 let generate_var_def var data (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      Format.fprintf oc "# Defined %a@\n%a = %a@\n" Pos.format_position_short (Pos.get_position e)
-        generate_variable var (generate_python_expr false) e
+      if !verbose_output then
+        Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
+      Format.fprintf oc "%a = %a@\n" generate_variable var (generate_python_expr false) e
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a = [Undefined()] * %d@\n" generate_variable var (IndexMap.cardinal es);
-      IndexMap.iter
-        (fun i e ->
-          Format.fprintf oc "# Defined %a@\n%a[%d] = %a@\n" Pos.format_position_short
-            (Pos.get_position e) generate_variable var i (generate_python_expr false) e)
-        es;
-      Format.fprintf oc "@\n"
+      Format.fprintf oc "%a = [%a]@\n" generate_variable var
+        (fun fmt ->
+          IndexMap.iter (fun _ v -> Format.fprintf fmt "%a, " (generate_python_expr false) v))
+        es
   | TableVar (_, IndexGeneric e) ->
-      Format.fprintf oc "# Defined %a@\n%a = GenericIndex(lambda generic_index: %a)@\n@\n"
-        Pos.format_position_short (Pos.get_position e) generate_variable var
+      if !verbose_output then
+        Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
+      Format.fprintf oc "%a = GenericIndex(lambda generic_index: %a)@\n@\n" generate_variable var
         (generate_python_expr false) e
   | InputVar -> assert false
 
@@ -276,12 +280,13 @@ let generate_header (oc : Format.formatter) () : unit =
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "# The following keys must be present in the input:@\n%a@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr)))
-    input_vars;
+  if !verbose_output then
+    Format.fprintf oc "# The following keys must be present in the input:@\n%a@\n"
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+         (fun fmt var ->
+           Format.fprintf fmt "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr)))
+      input_vars;
   Format.fprintf oc "def extracted(input_variables):@\n@[<h 4>    @\n";
   Format.fprintf oc "# First we extract the input variables from the dictionnary:@\n%a@\n@\n"
     (Format.pp_print_list
