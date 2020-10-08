@@ -64,6 +64,9 @@ report test errors in a convenient format.
 Mlang backends are also tested using the same `FIP` format, see for instance
 `examples/python/backend_test`.
 
+When running `--run_all_text`, you can also enable code coverage instrumentation 
+with the `--code_coverage` option.
+
 ## Documentation
 
 The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML
