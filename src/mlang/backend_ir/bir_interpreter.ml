@@ -415,9 +415,24 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                empty_ctx )))
     input_values p
 
-let assign_hook : (Mir.Variable.t -> var_literal -> unit) ref = ref (fun _var _lit -> ())
+type code_location_segment = InsideBlock of int | ConditionalBranch of bool
 
-let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
+let format_code_location_segment (fmt : Format.formatter) (s : code_location_segment) =
+  match s with
+  | InsideBlock i -> Format.fprintf fmt "#%d" i
+  | ConditionalBranch b -> Format.fprintf fmt "?%b" b
+
+type code_location = code_location_segment list
+
+let format_code_location (fmt : Format.formatter) (l : code_location) =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
+    format_code_location_segment fmt l
+
+let assign_hook : (Mir.Variable.t -> var_literal -> code_location -> unit) ref =
+  ref (fun _var _lit _code_loc -> ())
+
+let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_literal =
   match vdef with
   | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
   | Mir.TableVar (size, es) ->
@@ -432,16 +447,16 @@ let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
                   evaluate_expr ctx p.mir_program e) )
   | Mir.InputVar -> assert false
 
-let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) =
+let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) (loc : code_location) =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) ->
       let res = evaluate_variable p ctx vdata.var_definition in
-      !assign_hook var res;
+      !assign_hook var res loc;
       { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
   | Bir.SConditional (b, t, f) -> (
       match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
-      | SimpleVar (Float 0.) -> evaluate_stmts p ctx f
-      | SimpleVar (Float _) -> evaluate_stmts p ctx t
+      | SimpleVar (Float 0.) -> evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
+      | SimpleVar (Float _) -> evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
       | SimpleVar Undefined -> ctx
       | _ -> assert false )
   | Bir.SVerif data -> (
@@ -449,8 +464,14 @@ let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) =
       | Float f when f = 1. -> report_violatedcondition data ctx
       | _ -> ctx )
 
-and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) : ctx =
-  List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
+and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
+    (start_value : int) : ctx =
+  let ctx, _ =
+    List.fold_left
+      (fun (ctx, i) stmt -> (evaluate_stmt p ctx stmt (InsideBlock i :: loc), i + 1))
+      (ctx, start_value) stmts
+  in
+  ctx
 
 let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
   {
@@ -461,8 +482,8 @@ let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
         inputs ctx.ctx_vars;
   }
 
-let evaluate_program (p : Bir.program) (ctx : ctx) : ctx =
-  try evaluate_stmts p ctx p.statements
+let evaluate_program (p : Bir.program) (ctx : ctx) (code_loc_start_value : int) : ctx =
+  try evaluate_stmts p ctx p.statements [] code_loc_start_value
   with RuntimeError (e, ctx) ->
     if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
     else raise (RuntimeError (e, ctx))

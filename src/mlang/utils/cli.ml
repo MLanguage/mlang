@@ -97,10 +97,16 @@ let run_test =
     & opt (some file) None
     & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
 
+let code_coverage =
+  Arg.(
+    value & flag
+    & info [ "code_coverage" ]
+        ~doc:"Instruments the interpreter to retrieve the code coverage (use with --run_all_tests)")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
-    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize)
+    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage)
 
 let info =
   let doc =
