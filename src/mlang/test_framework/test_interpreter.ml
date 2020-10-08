@@ -157,17 +157,22 @@ type process_acc = string list * test_failures * Bir_instrumentation.code_covera
 
 let print_warning_univalued_variable (var : Mir.Variable.t)
     (defs : Bir_instrumentation.code_coverage_map_value) =
-  Cli.warning_print "%s: %s (%s)"
+  Cli.warning_print "%s: %s %s"
     (Pos.unmark var.Mir.Variable.name)
     ( match defs with
     | MultipleDefPatterns | MultipleDefs -> assert false
     | OnlyOneDefPattern def_pattern ->
-        Format.asprintf "%a" (Format.pp_print_list Bir_interpreter.format_var_literal) def_pattern
+        Format.asprintf "%a"
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt _ -> Format.fprintf fmt " -> ")
+             Bir_interpreter.format_var_literal)
+          def_pattern
     | OnlyUndefined -> "indéfini"
     | OnlyOneDef def -> Format.asprintf "%a" Bir_interpreter.format_var_literal def
     | OnlyOneDefAndUndefined def ->
         Format.asprintf "%a ou indéfini" Bir_interpreter.format_var_literal def )
-    (Pos.unmark var.Mir.Variable.descr)
+    (let descr = Pos.unmark var.Mir.Variable.descr in
+     if descr = "" then "" else "(" ^ descr ^ ")")
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   let arr = Sys.readdir test_dir in
@@ -257,9 +262,11 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   let univalue_variables =
     Mir.VariableMap.filter
       (fun var _ ->
-        match (Mir.VariableMap.find var p.mir_program.program_vars).var_io with
-        | Mir.Input -> false
-        | _ -> true)
+        try
+          match (Mir.VariableMap.find var p.mir_program.program_vars).var_io with
+          | Mir.Input -> false
+          | _ -> true
+        with Not_found -> true)
       univalue_variables
   in
   if Mir.VariableMap.cardinal univalue_variables > 0 then begin

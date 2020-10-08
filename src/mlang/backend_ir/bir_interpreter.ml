@@ -29,7 +29,7 @@ let format_var_literal (fmt : Format.formatter) (var_lit : var_literal) : unit =
   match var_lit with
   | SimpleVar e -> Format.fprintf fmt "%a" Format_mir.format_literal e
   | TableVar (_, es) ->
-      Format.fprintf fmt "%a"
+      Format.fprintf fmt "[%a]"
         (Format.pp_print_list
            ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
            (fun fmt e -> Format.fprintf fmt "%a" Format_mir.format_literal e))
