@@ -68,9 +68,11 @@ let undefined_class_prelude : string =
    def m_min(lhs, rhs):\n\
   \    return min(lhs + 0, rhs + 0)\n\n\
    def m_or(lhs, rhs):\n\
-  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs or rhs\n\n\
+  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
+   or rhs\n\n\
    def m_and(lhs, rhs):\n\
-  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs and rhs\n\n\
+  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
+   and rhs\n\n\
    def m_multimax(count, l):\n\
   \    m = l[0] + 0\n\
   \    for i in range(int(count)):\n\
@@ -136,17 +138,25 @@ let autograd () : bool = !autograd_ref
 let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      Format.fprintf fmt "(%a) %s (%a)" (generate_python_expr safe_bool_binops) e1
+      Format.fprintf fmt "(%a) %s (%a)"
+        (generate_python_expr safe_bool_binops)
+        e1
         (generate_comp_op (Pos.unmark op))
-        (generate_python_expr safe_bool_binops) e2
+        (generate_python_expr safe_bool_binops)
+        e2
   | Binop ((Mast.Div, _), e1, e2) ->
-     Format.fprintf fmt "m_div(%a, %a)" (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
-  | Binop (((Mast.Or | Mast.And) as f, _), e1, e2) when safe_bool_binops ->
-     let f = match f with
-       | Mast.Or -> "m_or"
-       | Mast.And -> "m_and"
-       | _ -> assert false in
-     Format.fprintf fmt "%s(%a, %a)" f (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
+      Format.fprintf fmt "m_div(%a, %a)"
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
+  | Binop ((((Mast.Or | Mast.And) as f), _), e1, e2) when safe_bool_binops ->
+      let f = match f with Mast.Or -> "m_or" | Mast.And -> "m_and" | _ -> assert false in
+      Format.fprintf fmt "%s(%a, %a)" f
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
   | Binop ((op, _), e1, e2) ->
       let left fmt () =
         match Pos.unmark e1 with
@@ -156,7 +166,9 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
               || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative op)
             in
             let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
-            Format.fprintf fmt "%s%a%s" lleft_paren (generate_python_expr safe_bool_binops) e1 rleft_paren
+            Format.fprintf fmt "%s%a%s" lleft_paren
+              (generate_python_expr safe_bool_binops)
+              e1 rleft_paren
         | _ -> (generate_python_expr safe_bool_binops) fmt e1
       in
       let right fmt () =
@@ -167,20 +179,34 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
               || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative op)
             in
             let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
-            Format.fprintf fmt "%s%a%s" lright_paren (generate_python_expr safe_bool_binops) e2 rright_paren
+            Format.fprintf fmt "%s%a%s" lright_paren
+              (generate_python_expr safe_bool_binops)
+              e2 rright_paren
         | _ -> (generate_python_expr safe_bool_binops) fmt e2
       in
       Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
-  | Unop (op, e) -> Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_python_expr safe_bool_binops) e
+  | Unop (op, e) ->
+      Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_python_expr safe_bool_binops) e
   | Index (var, e) ->
       (* FIXME: int cast hack *)
       Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
-        generate_variable (Pos.unmark var) (generate_python_expr safe_bool_binops) e (generate_python_expr safe_bool_binops) e
+        generate_variable (Pos.unmark var)
+        (generate_python_expr safe_bool_binops)
+        e
+        (generate_python_expr safe_bool_binops)
+        e
   | Conditional (e1, e2, e3) ->
-      Format.fprintf fmt "m_cond(%a, %a, %a)" (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
-        (generate_python_expr safe_bool_binops) e3
+      Format.fprintf fmt "m_cond(%a, %a, %a)"
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
+        (generate_python_expr safe_bool_binops)
+        e3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      Format.fprintf fmt "(isinstance(%a, Undefined) == False)" (generate_python_expr safe_bool_binops) arg
+      Format.fprintf fmt "(isinstance(%a, Undefined) == False)"
+        (generate_python_expr safe_bool_binops)
+        arg
   | FunctionCall (NullFunc, [ arg ]) ->
       Format.fprintf fmt "(%a == %s)" (generate_python_expr safe_bool_binops) arg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
@@ -190,11 +216,23 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
       if autograd () then (generate_python_expr safe_bool_binops) fmt arg
       else Format.fprintf fmt "m_floor(%a)" (generate_python_expr safe_bool_binops) arg
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_max(%a, %a)" (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
+      Format.fprintf fmt "m_max(%a, %a)"
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_min(%a, %a)" (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
+      Format.fprintf fmt "m_min(%a, %a)"
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
   | FunctionCall (Multimax, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_multimax(%a, %a)" (generate_python_expr safe_bool_binops) e1 (generate_python_expr safe_bool_binops) e2
+      Format.fprintf fmt "m_multimax(%a, %a)"
+        (generate_python_expr safe_bool_binops)
+        e1
+        (generate_python_expr safe_bool_binops)
+        e2
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
@@ -203,8 +241,11 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
   | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id (generate_python_expr safe_bool_binops) e2
-        (generate_python_expr safe_bool_binops) e1
+      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id
+        (generate_python_expr safe_bool_binops)
+        e2
+        (generate_python_expr safe_bool_binops)
+        e1
 
 let generate_var_def var data (oc : Format.formatter) : unit =
   match data.var_definition with
@@ -221,7 +262,8 @@ let generate_var_def var data (oc : Format.formatter) : unit =
       Format.fprintf oc "@\n"
   | TableVar (_, IndexGeneric e) ->
       Format.fprintf oc "# Defined %a@\n%a = GenericIndex(lambda generic_index: %a)@\n@\n"
-        Pos.format_position_short (Pos.get_position e) generate_variable var (generate_python_expr false) e
+        Pos.format_position_short (Pos.get_position e) generate_variable var
+        (generate_python_expr false) e
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
@@ -255,7 +297,8 @@ let generate_var_cond cond oc =
      if not(isinstance(cond, Undefined)) and cond:@\n\
     \    raise TypeError(\"Error triggered\\n%a\")@\n\
      @\n"
-    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true) cond.cond_expr
+    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
+    cond.cond_expr
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt err ->
