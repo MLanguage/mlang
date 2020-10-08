@@ -17,12 +17,18 @@ endif
 
 MLANG_BIN=dune exec --no-print-director src/main.exe --
 
+MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
+
+MPP_FUNCTION?=compute_double_liquidation_pvro
+
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
-	--mpp_file=$(PWD)/2018_6_7.mpp \
-	--mpp_function=compute_double_liquidation_pvro
+	--mpp_file=$(MPP_FILE) \
+	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
+
+TESTS_DIR?=random_tests/
 
 default: build
 

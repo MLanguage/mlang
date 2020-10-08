@@ -231,8 +231,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   finish "done!";
   Cli.warning_flag := true;
   Cli.display_time := true;
-  Cli.result_print "Test results: %d successes in files: %s" (List.length s)
-    (String.concat ", " (List.sort compare s));
+  Cli.result_print "Test results: %d successes" (List.length s);
 
   let f_l =
     List.sort
