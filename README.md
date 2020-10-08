@@ -47,7 +47,7 @@ If you invoke `make quick_test`, Make will show you the Mlang options is is
 using to run a simple test of the Mlang interpreter.
 
 Mlang's run are configured by a specification file (`.m_spec`), see the
-[dedicated README](specs/README.md) for more details.
+[dedicated README](m_specs/README.md) for more details.
 
 For how to produce ready-to-use Python income tax computation
 source files for your application, see the
@@ -93,7 +93,7 @@ to enable or disable parts of the computation.
 The DGFiP has not published the source code of this iterative computation. However,
 the authors of Mlang have come up with a new DSL called M++, used for describing
 the logic of this iterative computation. Currently, the authors have transcribed
-the unpublished source code into the `2018.mpp` file, which has been tested only
+the unpublished source code into the `mpp_specs/2018_6_7.mpp` file, which has been tested only
 for the computation of taxes for the 2018 income.
 
 ## Contributions
