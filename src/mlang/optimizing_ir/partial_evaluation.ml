@@ -260,9 +260,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
   | Error -> e
   (* let l1 = b in l2 *)
   | LocalLet (l1, b, (LocalVar l2, _)) when Mir.LocalVariable.compare l1 l2 = 0 -> b
-  | LocalLet (l1, b, (Comparison (c, (LocalVar l2, _), e), pos))
-    when Mir.LocalVariable.compare l1 l2 = 0 ->
-      (Comparison (c, b, e), pos)
   | LocalLet (lvar, e1, e2) -> (
       let new_e1 = partially_evaluate_expr ctx p e1 in
       match Pos.unmark new_e1 with

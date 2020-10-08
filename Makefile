@@ -60,7 +60,7 @@ tests: build
 	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
 quick_test:
-	$(MLANG) --backend interpreter --function_spec specs/complex_case_with_ins_outs_2018.m_spec $(SOURCE_FILES)
+	$(MLANG) --backend interpreter --function_spec m_specs/complex_case_with_ins_outs_2018.m_spec $(SOURCE_FILES)
 
 ##################################################
 # Doc and examples

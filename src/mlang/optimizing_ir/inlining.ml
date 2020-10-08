@@ -16,6 +16,7 @@ open Oir
 type ctx = {
   ctx_vars : (Mir.variable_def * int) BlockMap.t Mir.VariableMap.t;
   (* the int is the statement number inside the block *)
+  ctx_local_vars : Mir.expression Mir.LocalVariableMap.t;
   ctx_doms : Dominators.dom;
   ctx_paths : Paths.path_checker;
 }
@@ -23,6 +24,7 @@ type ctx = {
 let empty_ctx (g : CFG.t) (entry_block : block_id) =
   {
     ctx_vars = Mir.VariableMap.empty;
+    ctx_local_vars = Mir.LocalVariableMap.empty;
     ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
     ctx_paths = Paths.create g;
   }
@@ -40,29 +42,42 @@ let add_var_def_to_ctx (var : Mir.Variable.t) (def : Mir.variable_def) (current_
         ctx.ctx_vars;
   }
 
+let rec no_local_vars (e : Mir.expression Pos.marked) : bool =
+  match Pos.unmark e with
+  | Mir.LocalVar _ -> false
+  | Mir.LocalLet _ -> false
+  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> true
+  | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> no_local_vars e1 && no_local_vars e2
+  | Mir.Index (_, e1) | Mir.Unop (_, e1) -> no_local_vars e1
+  | Mir.FunctionCall (_, args) -> List.for_all (fun arg -> no_local_vars arg) args
+  | Mir.Conditional (e1, e2, e3) -> no_local_vars e1 && no_local_vars e2 && no_local_vars e3
+
+let rec has_this_local_var (e : Mir.expression Pos.marked) (l : Mir.LocalVariable.t) : bool =
+  match Pos.unmark e with
+  | Mir.LocalVar l' -> l = l'
+  | Mir.LocalLet (l', e1, e2) -> l = l' || has_this_local_var e1 l || has_this_local_var e2 l
+  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> false
+  | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) ->
+      has_this_local_var e1 l || has_this_local_var e2 l
+  | Mir.Index (_, e1) | Mir.Unop (_, e1) -> has_this_local_var e1 l
+  | Mir.FunctionCall (_, args) -> List.exists (fun arg -> has_this_local_var arg l) args
+  | Mir.Conditional (e1, e2, e3) ->
+      has_this_local_var e1 l || has_this_local_var e2 l || has_this_local_var e3 l
+
+let rec expr_size (e : Mir.expression Pos.marked) : int =
+  match Pos.unmark e with
+  | Mir.LocalVar _ | Mir.LocalLet _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _
+    ->
+      1
+  | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> expr_size e1 + expr_size e2 + 1
+  | Mir.Index (_, e1) | Mir.Unop (_, e1) -> expr_size e1 + 1
+  | Mir.FunctionCall (_, args) -> List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
+  | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
+
 let is_inlining_worthy (e : Mir.expression Pos.marked) : bool =
   (* we forbid inlining expressions with local variables to prevent conflicts of local variable
      names *)
-  let rec no_local_vars (e : Mir.expression Pos.marked) : bool =
-    match Pos.unmark e with
-    | Mir.LocalVar _ -> false
-    | Mir.LocalLet _ -> false
-    | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> true
-    | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> no_local_vars e1 && no_local_vars e2
-    | Mir.Index (_, e1) | Mir.Unop (_, e1) -> no_local_vars e1
-    | Mir.FunctionCall (_, args) -> List.for_all (fun arg -> no_local_vars arg) args
-    | Mir.Conditional (e1, e2, e3) -> no_local_vars e1 && no_local_vars e2 && no_local_vars e3
-  in
-  let rec expr_size (e : Mir.expression Pos.marked) : int =
-    match Pos.unmark e with
-    | Mir.LocalVar _ | Mir.LocalLet _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error
-    | Mir.Var _ ->
-        1
-    | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) -> expr_size e1 + expr_size e2 + 1
-    | Mir.Index (_, e1) | Mir.Unop (_, e1) -> expr_size e1 + 1
-    | Mir.FunctionCall (_, args) -> List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
-    | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
-  in
+
   (* the size limit is arbitrary *)
   no_local_vars e && expr_size e < 5
 
@@ -160,11 +175,21 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
       let new_e1 =
         Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
       in
+      let ctx =
+        if is_inlining_worthy new_e1 then
+          {
+            ctx with
+            ctx_local_vars = Mir.LocalVariableMap.add l (Pos.unmark new_e1) ctx.ctx_local_vars;
+          }
+        else ctx
+      in
       let new_e2 =
         Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
       in
-      Mir.LocalLet (l, new_e1, new_e2)
-  | Mir.Literal _ | Mir.LocalVar _ | Mir.GenericTableIndex | Mir.Error -> e
+      if has_this_local_var new_e2 l then Mir.LocalLet (l, new_e1, new_e2) else Pos.unmark new_e2
+  | Mir.LocalVar l -> (
+      match Mir.LocalVariableMap.find_opt l ctx.ctx_local_vars with None -> e | Some e' -> e' )
+  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> e
   | Mir.Index (v, e2) ->
       let new_e2 =
         Pos.same_pos_as (inline_in_expr (Pos.unmark e2) ctx current_block current_pos) e2
