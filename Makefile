@@ -60,7 +60,7 @@ quick_test:
 # Doc and examples
 ##################################################
 
-doc:
+doc: FORCE
 	dune build @doc
 	ln -s _build/default/_doc/_html/index.html doc/doc.html
 
