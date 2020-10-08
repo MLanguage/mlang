@@ -43,25 +43,25 @@ If the `mlang` executable is install, you can consult its man page with
 
     mlang --help
 
-If you invoke `make quick_test`, Make will show you the Mlang options is is 
-using to run a simple test of the Mlang interpreter. 
+If you invoke `make quick_test`, Make will show you the Mlang options is is
+using to run a simple test of the Mlang interpreter.
 
-Mlang's run are configured by a specification file (`.m_spec`), see the 
+Mlang's run are configured by a specification file (`.m_spec`), see the
 [dedicated README](specs/README.md) for more details.
 
-For how to produce ready-to-use Python income tax computation 
-source files for your application, see the 
+For how to produce ready-to-use Python income tax computation
+source files for your application, see the
 [dedicated README](examples/python/README.md).
 
 
 ## Testing
 
-Mlang is tested using the `FIP` test file format used by the DGFiP to test 
-their internal tooling. The `--run_test` and `--run_all_tests` options ease 
-the testing process of the interpreter (with or without optimizations) and 
+Mlang is tested using the `FIP` test file format used by the DGFiP to test
+their internal tooling. The `--run_test` and `--run_all_tests` options ease
+the testing process of the interpreter (with or without optimizations) and
 report test errors in a convenient format.
 
-Mlang backends are also tested using the same `FIP` format, see for instance 
+Mlang backends are also tested using the same `FIP` format, see for instance
 `examples/python/backend_test`.
 
 ## Documentation
@@ -71,16 +71,16 @@ documentation using
 
         make doc
 
-To browse the documentation, just open the file `doc.html` with your browser. Here 
+To browse the documentation, just open the file `doc.html` with your browser. Here
 is a high-level picture describing the architecture of the compiler:
 
 <center>
 <img src="doc/architecture.png" alt="Architecture" height="300"/>
 </center>
 
-First, the code is parsed into AST (both for M and M++). Then, the AST are 
-desugared into M and M++ intermediate representations. BIR stands for Backend 
-IR, and collects the result of inlining the M code inside M++. OIR is the 
+First, the code is parsed into AST (both for M and M++). Then, the AST are
+desugared into M and M++ intermediate representations. BIR stands for Backend
+IR, and collects the result of inlining the M code inside M++. OIR is the
 Optimization IR, which is a CFG-form of BIR.
 
 ## Known Limitations
@@ -91,9 +91,9 @@ executes the M program several times, each time changing the values of some vari
 to enable or disable parts of the computation.
 
 The DGFiP has not published the source code of this iterative computation. However,
-the authors of Mlang have come up with a new DSL called M++, used for describing 
-the logic of this iterative computation. Currently, the authors have transcribed 
-the unpublished source code into the `2018.mpp` file, which has been tested only 
+the authors of Mlang have come up with a new DSL called M++, used for describing
+the logic of this iterative computation. Currently, the authors have transcribed
+the unpublished source code into the `2018.mpp` file, which has been tested only
 for the computation of taxes for the 2018 income.
 
 ## Contributions
@@ -105,7 +105,7 @@ if you are interested.
 Please note that the copyright of this code is owned by Inria; by contributing,
 you disclaim all copyright interests in favor of Inria.
 
-Don't format to use `make format` before you commit to ensure a uniform style.
+Use `make format` before you commit to ensure a uniform style.
 
 ## Formal semantics
 

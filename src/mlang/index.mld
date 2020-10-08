@@ -20,9 +20,8 @@ usage inside multiple DGFiP applications. {!module: Mlang.Mast_to_mvg } extracts
 AST the computational core corresponding to a DGFiP application into the M Variable
 Graph ({!module: Mlang.Mir}), which consists basically of a flat map of all the definitions of
 the variables used in the application. The type system of M is very primitive,
-and basically all programs typecheck ; however {!module: Mlang.Mir_typechecker} provides
-a bidirectional typechecking algorithm with lattice-based unificiation (with {!module: Mlang.Union_find})
-to infer missing variable types.
+and basically all programs typecheck ; however {!module: Mlang.Mir_typechecker} provides a top-down typechecking algorithm to split simple variables from tables.
+
 
 At this point, the {!module: Mlang.Dependency} modules interprets the MVG as a first-class
 graph and computes various reachability and cycle analysis in order to determine
