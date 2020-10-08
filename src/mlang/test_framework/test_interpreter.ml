@@ -122,8 +122,8 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   in
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
-let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool) :
-    Bir_instrumentation.code_coverage_result =
+let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool)
+    (code_coverage : bool) : Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -147,12 +147,13 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
     end
     else combined_program
   in
-  Bir_instrumentation.code_coverage_init ();
+  if code_coverage then Bir_instrumentation.code_coverage_init ();
   ignore
     (Bir_interpreter.evaluate_program combined_program
        (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
        (-code_loc_offset));
-  Bir_instrumentation.code_coverage_result ()
+  if code_coverage then Bir_instrumentation.code_coverage_result ()
+  else Bir_instrumentation.empty_code_coverage_result
 
 type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
 
@@ -168,7 +169,8 @@ let print_warning_code_locations_with_coverage
     (_undertested_code_locs : coverage_kind Bir_instrumentation.CodeLocationMap.t) : unit =
   ()
 
-let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
+let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
+    (code_coverage_activated : bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -184,7 +186,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
       =
     try
       Cli.debug_flag := false;
-      let code_coverage_result = check_test p (test_dir ^ name) optimize in
+      let code_coverage_result = check_test p (test_dir ^ name) optimize code_coverage_activated in
       Cli.debug_flag := true;
       let code_coverage_acc =
         Bir_instrumentation.merge_code_coverage_single_results_with_acc code_coverage_result
@@ -242,39 +244,40 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
   end;
-  let all_code_locs = Bir_instrumentation.get_code_locs p in
-  let all_code_locs_num = Bir_instrumentation.CodeLocationMap.cardinal all_code_locs in
-  let undertested_code_locs =
-    Bir_instrumentation.CodeLocationMap.mapi
-      (fun code_loc var ->
-        match Mir.VariableMap.find_opt var code_coverage with
-        | None -> NotCovered
-        | Some used_code_locs -> (
-            match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
-            | None -> NotCovered
-            | Some def -> (
-                match def with
-                | Bir_instrumentation.OnlyOneDef def -> CoveredOneDef def
-                | Bir_instrumentation.OnlyOneDefAndUndefined def -> CoveredOneDefAndUndefined def
-                | Bir_instrumentation.MultipleDefs -> Covered ) ))
-      all_code_locs
-  in
-  let undertested_code_locs =
-    Bir_instrumentation.CodeLocationMap.filter
-      (fun _ cov ->
-        match cov with
-        | NotCovered | CoveredOneDefAndUndefined _ | CoveredOneDef _ -> true
-        | Covered -> false)
-      undertested_code_locs
-  in
+  if code_coverage_activated then
+    let all_code_locs = Bir_instrumentation.get_code_locs p in
+    let all_code_locs_num = Bir_instrumentation.CodeLocationMap.cardinal all_code_locs in
+    let undertested_code_locs =
+      Bir_instrumentation.CodeLocationMap.mapi
+        (fun code_loc var ->
+          match Mir.VariableMap.find_opt var code_coverage with
+          | None -> NotCovered
+          | Some used_code_locs -> (
+              match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
+              | None -> NotCovered
+              | Some def -> (
+                  match def with
+                  | Bir_instrumentation.OnlyOneDef def -> CoveredOneDef def
+                  | Bir_instrumentation.OnlyOneDefAndUndefined def -> CoveredOneDefAndUndefined def
+                  | Bir_instrumentation.MultipleDefs -> Covered ) ))
+        all_code_locs
+    in
+    let undertested_code_locs =
+      Bir_instrumentation.CodeLocationMap.filter
+        (fun _ cov ->
+          match cov with
+          | NotCovered | CoveredOneDefAndUndefined _ | CoveredOneDef _ -> true
+          | Covered -> false)
+        undertested_code_locs
+    in
 
-  let undertested_code_locs_num =
-    Bir_instrumentation.CodeLocationMap.cardinal undertested_code_locs
-  in
-  if undertested_code_locs_num > 0 then begin
-    Cli.warning_print
-      "Some code locations (%.1f%%) are not covered properly by this set of test runs: they \
-       receive at most one distinct value different from undefined"
-      (float_of_int undertested_code_locs_num /. float_of_int all_code_locs_num *. 100.);
-    print_warning_code_locations_with_coverage undertested_code_locs
-  end
+    let undertested_code_locs_num =
+      Bir_instrumentation.CodeLocationMap.cardinal undertested_code_locs
+    in
+    if undertested_code_locs_num > 0 then begin
+      Cli.warning_print
+        "Some code locations are not covered properly by this set of test runs, they receive at \
+         most one distinct value different from undefined. The estimated code coverage is %.1f%%."
+        ((1. -. (float_of_int undertested_code_locs_num /. float_of_int all_code_locs_num)) *. 100.);
+      print_warning_code_locations_with_coverage undertested_code_locs
+    end

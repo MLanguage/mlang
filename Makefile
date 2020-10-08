@@ -15,6 +15,12 @@ else
     OPTIMIZE_FLAG=
 endif
 
+ifeq ($(CODE_COVERAGE), 1)
+    CODE_COVERAGE_FLAG=--code_coverage
+else
+    CODE_COVERAGE_FLAG=
+endif
+
 MLANG_BIN=dune exec --no-print-director src/main.exe --
 
 MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
@@ -26,7 +32,7 @@ MLANG_DEFAULT_OPTS=\
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
-MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
 
 TESTS_DIR?=random_tests/
 

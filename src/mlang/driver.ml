@@ -18,7 +18,7 @@ open Mlexer
 let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
     (print_cycles : bool) (backend : string option) (function_spec : string option)
     (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (run_test : string option) (mpp_function : string) (optimize : bool) =
+    (run_test : string option) (mpp_function : string) (optimize : bool) (code_coverage : bool) =
   Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles output;
   try
     Cli.debug_print "Reading M files...";
@@ -67,13 +67,20 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     let full_m_program = Mir_interface.to_full_program m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
-    if run_all_tests <> None then
+    if run_all_tests <> None then begin
+      if code_coverage && optimize then
+        Errors.raise_error
+          "Code coverage and program optimizations cannot be enabled together when running a test \
+           suite, check your command-line options";
       let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests combined_program tests optimize
+      Test_interpreter.check_all_tests combined_program tests optimize code_coverage
+    end
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
+      if code_coverage then
+        Cli.warning_print "The code coverage flag is ignored when running a single test";
       let test : string = match run_test with Some s -> s | _ -> assert false in
-      ignore (Test_interpreter.check_test combined_program test optimize);
+      ignore (Test_interpreter.check_test combined_program test optimize false);
       Cli.result_print "Test passed!"
     end
     else begin
@@ -123,7 +130,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
       | None -> Errors.raise_error "No backend specified!"
     end
   with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "Error: %a\n" Errors.format_structured_error (msg, pos);
+    Cli.error_print "Error: %a" Errors.format_structured_error (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit (-1)
 
