@@ -122,7 +122,8 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   in
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
-let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool) =
+let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool) :
+    Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -144,9 +145,29 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
     end
     else combined_program
   in
+  Bir_instrumentation.code_coverage_init ();
   ignore
     (Bir_interpreter.evaluate_program combined_program
-       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file))
+       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file));
+  Bir_instrumentation.code_coverage_result ()
+
+type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
+
+type process_acc = string list * test_failures * Bir_instrumentation.code_coverage_acc
+
+let print_warning_univalued_variable (var : Mir.Variable.t)
+    (defs : Bir_instrumentation.code_coverage_map_value) =
+  Cli.warning_print "%s: %s (%s)"
+    (Pos.unmark var.Mir.Variable.name)
+    ( match defs with
+    | MultipleDefPatterns | MultipleDefs -> assert false
+    | OnlyOneDefPattern def_pattern ->
+        Format.asprintf "%a" (Format.pp_print_list Bir_interpreter.format_var_literal) def_pattern
+    | OnlyUndefined -> "indéfini"
+    | OnlyOneDef def -> Format.asprintf "%a" Bir_interpreter.format_var_literal def
+    | OnlyOneDefAndUndefined def ->
+        Format.asprintf "%a ou indéfini" Bir_interpreter.format_var_literal def )
+    (Pos.unmark var.Mir.Variable.descr)
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   let arr = Sys.readdir test_dir in
@@ -160,12 +181,17 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
   Cli.warning_flag := false;
   Cli.display_time := false;
   let _, finish = Cli.create_progress_bar "Testing files" in
-  let process name (successes, failures) =
+  let process (name : string) ((successes, failures, code_coverage_acc) : process_acc) : process_acc
+      =
     try
       Cli.debug_flag := false;
-      check_test p (test_dir ^ name) optimize;
+      let code_coverage_result = check_test p (test_dir ^ name) optimize in
       Cli.debug_flag := true;
-      (name :: successes, failures)
+      let code_coverage_acc =
+        Bir_instrumentation.merge_code_coverage_single_results_with_acc code_coverage_result
+          code_coverage_acc
+      in
+      (name :: successes, failures, code_coverage_acc)
     with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
@@ -182,18 +208,20 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
           Cli.error_print "Test %s incorrect (error on variable %s)" name
             (Pos.unmark v.Variable.name);
           let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures)
+          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures, code_coverage_acc)
       | _ ->
           Cli.error_print "Test %s incorrect (error%s %a raised)" name
             (if List.length err > 1 then "s" else "")
             (Format.pp_print_list Format.pp_print_string)
             (List.map (fun x -> Pos.unmark x.Error.name) err);
-          (successes, failures) )
+          (successes, failures, code_coverage_acc) )
   in
-  let s, f =
-    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty)
-      (fun (old_s, old_f) (new_s, new_f) ->
-        (new_s @ old_s, VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f))
+  let s, f, code_coverage =
+    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty, VariableMap.empty)
+      (fun (old_s, old_f, old_code_coverage) (new_s, new_f, new_code_coverage) ->
+        ( new_s @ old_s,
+          VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f,
+          Bir_instrumentation.merge_code_coverage_acc old_code_coverage new_code_coverage ))
   in
   finish "done!";
   Cli.warning_flag := true;
@@ -215,4 +243,29 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool) =
           (List.length infos)
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
+  end;
+  let univalue_variables =
+    Mir.VariableMap.filter
+      (fun _ def ->
+        match def with
+        | Bir_instrumentation.OnlyOneDefPattern _ | Bir_instrumentation.OnlyOneDef _
+        | Bir_instrumentation.OnlyUndefined | Bir_instrumentation.OnlyOneDefAndUndefined _ ->
+            true
+        | _ -> false)
+      code_coverage
+  in
+  let univalue_variables =
+    Mir.VariableMap.filter
+      (fun var _ ->
+        match (Mir.VariableMap.find var p.mir_program.program_vars).var_io with
+        | Mir.Input -> false
+        | _ -> true)
+      univalue_variables
+  in
+  if Mir.VariableMap.cardinal univalue_variables > 0 then begin
+    Cli.warning_print
+      "Some non-input variables (%d) are always assigned the same value in all the test runs:"
+      (Mir.VariableMap.cardinal univalue_variables);
+
+    Mir.VariableMap.iter print_warning_univalued_variable univalue_variables
   end

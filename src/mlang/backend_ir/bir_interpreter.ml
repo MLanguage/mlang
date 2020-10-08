@@ -25,6 +25,16 @@ let roundf x = snd (modf (x +. copysign 0.50005 x))
 
 type var_literal = SimpleVar of literal | TableVar of int * literal array
 
+let format_var_literal (fmt : Format.formatter) (var_lit : var_literal) : unit =
+  match var_lit with
+  | SimpleVar e -> Format.fprintf fmt "%a" Format_mir.format_literal e
+  | TableVar (_, es) ->
+      Format.fprintf fmt "%a"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+           (fun fmt e -> Format.fprintf fmt "%a" Format_mir.format_literal e))
+        (Array.to_list es)
+
 let format_var_literal_with_var fmt ((var, vl) : Variable.t * var_literal) =
   match vl with
   | SimpleVar value ->
@@ -405,6 +415,8 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                empty_ctx )))
     input_values p
 
+let assign_hook : (Mir.Variable.t -> var_literal -> unit) ref = ref (fun _var _lit -> ())
+
 let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
   match vdef with
   | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
@@ -420,10 +432,11 @@ let evaluate_variable (p : Bir.program) ctx vdef : var_literal =
                   evaluate_expr ctx p.mir_program e) )
   | Mir.InputVar -> assert false
 
-let rec evaluate_stmt (p : Bir.program) ctx stmt =
+let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) ->
       let res = evaluate_variable p ctx vdata.var_definition in
+      !assign_hook var res;
       { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
   | Bir.SConditional (b, t, f) -> (
       match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
@@ -436,7 +449,8 @@ let rec evaluate_stmt (p : Bir.program) ctx stmt =
       | Float f when f = 1. -> report_violatedcondition data ctx
       | _ -> ctx )
 
-and evaluate_stmts p ctx stmts = List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
+and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) : ctx =
+  List.fold_left (fun ctx stmt -> evaluate_stmt p ctx stmt) ctx stmts
 
 let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
   {

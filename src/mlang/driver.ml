@@ -73,7 +73,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       let test : string = match run_test with Some s -> s | _ -> assert false in
-      Test_interpreter.check_test combined_program test optimize;
+      ignore (Test_interpreter.check_test combined_program test optimize);
       Cli.result_print "Test passed!"
     end
     else begin
