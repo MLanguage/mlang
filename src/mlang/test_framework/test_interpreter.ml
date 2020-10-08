@@ -165,10 +165,6 @@ type coverage_kind =
   | CoveredOneDef of Bir_interpreter.var_literal
   | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
 
-let print_warning_code_locations_with_coverage
-    (_undertested_code_locs : coverage_kind Bir_instrumentation.CodeLocationMap.t) : unit =
-  ()
-
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     (code_coverage_activated : bool) =
   let arr = Sys.readdir test_dir in
@@ -244,7 +240,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           (String.concat ", " (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
       f_l
   end;
-  if code_coverage_activated then
+  if code_coverage_activated then begin
     let all_code_locs = Bir_instrumentation.get_code_locs p in
     let all_code_locs_num = Bir_instrumentation.CodeLocationMap.cardinal all_code_locs in
     let undertested_code_locs =
@@ -262,22 +258,22 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                   | Bir_instrumentation.MultipleDefs -> Covered ) ))
         all_code_locs
     in
-    let undertested_code_locs =
-      Bir_instrumentation.CodeLocationMap.filter
-        (fun _ cov ->
+    let not_covered, one_value, one_value_or_undefined =
+      Bir_instrumentation.CodeLocationMap.fold
+        (fun _ cov (not_covered, one_value, one_value_or_undefined) ->
           match cov with
-          | NotCovered | CoveredOneDefAndUndefined _ | CoveredOneDef _ -> true
-          | Covered -> false)
-        undertested_code_locs
+          | NotCovered -> (not_covered + 1, one_value + 1, one_value_or_undefined + 1)
+          | CoveredOneDef _ -> (not_covered, one_value + 1, one_value_or_undefined + 1)
+          | CoveredOneDefAndUndefined _ -> (not_covered, one_value, one_value_or_undefined + 1)
+          | Covered -> (not_covered, one_value, one_value_or_undefined))
+        undertested_code_locs (0, 0, 0)
     in
-
-    let undertested_code_locs_num =
-      Bir_instrumentation.CodeLocationMap.cardinal undertested_code_locs
-    in
-    if undertested_code_locs_num > 0 then begin
-      Cli.warning_print
-        "Some code locations are not covered properly by this set of test runs, they receive at \
-         most one distinct value different from undefined. The estimated code coverage is %.1f%%."
-        ((1. -. (float_of_int undertested_code_locs_num /. float_of_int all_code_locs_num)) *. 100.);
-      print_warning_code_locations_with_coverage undertested_code_locs
-    end
+    Cli.warning_print "Some code locations are not covered properly by this set of test runs.";
+    Cli.warning_print "The estimated code coverage is:";
+    Cli.warning_print "-> assigmnents covered by at least one value: %.3f%%"
+      ((1. -. (float_of_int not_covered /. float_of_int all_code_locs_num)) *. 100.);
+    Cli.warning_print "-> assigmnents covered by at least one value that is not undefined: %.3f%%"
+      ((1. -. (float_of_int one_value /. float_of_int all_code_locs_num)) *. 100.);
+    Cli.warning_print "-> assigmnents covered by at least two non-undefined values: %.3f%%"
+      ((1. -. (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num)) *. 100.)
+  end
