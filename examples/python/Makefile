@@ -19,7 +19,7 @@ MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
-	--mpp_file=$(PWD)/2018.mpp \
+	--mpp_file=$(PWD)/mpp_specs/2018_6_7.mpp \
 	--mpp_function=compute_double_liquidation_pvro
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
@@ -30,17 +30,17 @@ all: $(shell find . -name "run_*.py")
 # Generating Python files from Mlang
 ##################################################
 
-ir_%.py: FORCE 
+ir_%.py: FORCE
 	$(MLANG) \
 		--backend python --output $@ \
-		--function_spec ../../specs/$*.m_spec \
+		--function_spec ../../m_specs/$*.m_spec \
 		$(SOURCE_FILES)
 
 ##################################################
 # Running the tests
 ##################################################
 
-run_%.py: ir_%.py	
+run_%.py: ir_%.py
 	python3.7 $@
 
 FORCE:
