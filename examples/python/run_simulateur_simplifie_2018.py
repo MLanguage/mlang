@@ -49,6 +49,7 @@ print(ir_simulateur_simplifie_2018.extracted({
     "2TT": 0,
     "2TU": 0,
     "2TV": 0,
+    "2OP": 1,
     "3SG": 0,
     "4BK": 0,
     "4BL": 0,

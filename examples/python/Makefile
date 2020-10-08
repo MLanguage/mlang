@@ -24,7 +24,7 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-all: $(shell find . -name "run_*.py")
+all: backend_tests $(shell find . -name "run_*.py")
 
 ##################################################
 # Generating Python files from Mlang
@@ -42,5 +42,9 @@ ir_%.py: FORCE
 
 run_%.py: ir_%.py
 	python3.7 $@
+
+backend_tests: FORCE
+	$(MAKE) -C backend_tests
+
 
 FORCE:
