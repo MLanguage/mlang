@@ -52,9 +52,8 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
-    let application = Some "iliad" in
     Cli.debug_print "Elaborating...";
-    let m_program = Mast_to_mvg.translate !m_program application in
+    let m_program = Mast_to_mvg.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";

@@ -3,7 +3,7 @@
 [![CI](https://gitlab.inria.fr/verifisc/mlang/badges/master/pipeline.svg)](https://gitlab.inria.fr/verifisc/mlang/-/commits/master)
 
 The M language has been invented by the French Direction Générale des Finances
-Publiques, equivalent to the IRS, to transcribe the tax code into machine-readable
+Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
 of the syntax and the semantics of M, from the [codebase](https://framagit.org/dgfip/ir-calcul)
@@ -31,20 +31,36 @@ Next, fetch the source code dependencies of Mlang with
 
 This will fetch the M source code released by the DGFiP.
 
-You can then use `make build` to build all source files, and other dune commands.
-
-If you want to install the `mlang` executable and the opam packages, use
-
-    chmod +x install.h && ./install.sh
+You can then use `make build` to build the compiler.
 
 ## Usage
 
-If the `mlang` executable is install, you can consult its man page with
+As of July 2020, the only reliable feature of the M compiler that consistently
+produces results similar to the DGFiP's computation is the interpreter for the
+2018 tax campaign sources. To use it, simply launch
 
-    mlang --help
+```
+make interpreter
+```
+
+Please read the `interpreter.m_spec` for a walk-through of what happens in this example. You can
+compare what happens on the [official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm) by entering the exact amounts of the case in the right income codes.
+Everything should be the same.
+
+The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec`
+file, in the `const` section. If you put a variable in the `saisie` section, you will then be
+prompted to input it at interpretation time. You can also change which variables you want the
+interpreter to output in the `sortie` section.
 
 If you invoke `make quick_test`, Make will show you the Mlang options is is
 using to run a simple test of the Mlang interpreter.
+
+Please refer to the DGFiP's simulator for the meaning of the variables. Important variables are:
+
+* `0AC` and `0AM`, which should be set to 1 for respectively single or married;
+* `1AJ` and `1BJ`, salaried income for individuals number 1 and 2;
+* `0CF`, the number of dependent persons (children);
+* ...
 
 Mlang's run are configured by a specification file (`.m_spec`), see the
 [dedicated README](m_specs/README.md) for more details.
@@ -103,19 +119,23 @@ for the computation of taxes for the 2018 income.
 
 The project accepts pull requests. There is currently no formalized contribution
 guide or centralized discussion place about the project. Please email the authors
-if you are interested.
+if you are interested:
+
+  denis DOT merigoux AT inria DOT fr
+  raphael DOT monat AT lip6 DOT fr
 
 Please note that the copyright of this code is owned by Inria; by contributing,
 you disclaim all copyright interests in favor of Inria.
 
-Use `make format` before you commit to ensure a uniform style.
+Don't forget format to use `make format` before you commit to ensure a uniform style.
 
 ## Formal semantics
 
 The `formal_semantics` folder contains two separate formalizations for the core of the
 M language, that roughly corresponds to the `Mir` internal representation in Mlang.
 The reference formalization is the Coq one, in file `semantique.v`. The F* formalization
-is a proof of concept.
+is a proof of concept. See [the research paper](https://hal.inria.fr/hal-02320347) for
+more details.
 
 ## License
 

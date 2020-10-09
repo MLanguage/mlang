@@ -392,10 +392,8 @@ let get_constants (p : Mast.program) :
   in
   (vars, idmap, int_const_vals)
 
-let belongs_to_app (r : Mast.application Pos.marked list) (application : string option) : bool =
-  match application with
-  | None -> true
-  | Some application -> List.exists (fun app -> Pos.unmark app = application) r
+let belongs_to_iliad_app (r : Mast.application Pos.marked list) : bool =
+  List.exists (fun app -> Pos.unmark app = "iliad") r
 
 (** Retrieves variable declaration data. Done in a separate pass because wen don't want to deal with
     sorting the dependencies between files or inside files. *)
@@ -657,7 +655,7 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
 (** Linear pass that fills [idmap] with all the variable assignments along with their execution
     number. *)
 let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
-    (int_const_vals : int Mir.VariableMap.t) (application : string option) : Mir.idmap =
+    (int_const_vals : int Mir.VariableMap.t) : Mir.idmap =
   let idmap =
     List.fold_left
       (fun (idmap : Mir.idmap) source_file ->
@@ -666,7 +664,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
             match Pos.unmark source_file_item with
             | Mast.Rule r ->
                 let rule_number = Mast.rule_number r.Mast.rule_name in
-                if not (belongs_to_app r.Mast.rule_applications application) then idmap
+                if not (belongs_to_iliad_app r.Mast.rule_applications) then idmap
                 else
                   fst
                     (List.fold_left
@@ -1054,7 +1052,7 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t) (var_lvalue : M
     the variables being defined (with the execution number corresponding to the place where it is
     defined) and whose values are the expressions corresponding to the definitions. *)
 let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.VariableMap.t)
-    (int_const_vals : int Mir.VariableMap.t) (p : Mast.program) (application : string option) :
+    (int_const_vals : int Mir.VariableMap.t) (p : Mast.program) :
     Mir.variable_data Mir.VariableMap.t =
   let out =
     List.fold_left
@@ -1064,7 +1062,7 @@ let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.Variable
             match Pos.unmark source_file_item with
             | Mast.Rule r ->
                 let rule_number = Mast.rule_number r.Mast.rule_name in
-                if not (belongs_to_app r.Mast.rule_applications application) then var_data
+                if not (belongs_to_iliad_app r.Mast.rule_applications) then var_data
                 else
                   fst
                     (List.fold_left
@@ -1252,14 +1250,14 @@ let add_dummy_definition_for_variable_declaration (var_data : Mir.variable_data 
     var_decl_data var_data
 
 (** Returns a map whose keys are dummy variables and whose values are the verification conditions. *)
-let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.program)
-    (application : Mast.application option) : Mir.condition_data Mir.VariableMap.t =
+let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.program) :
+    Mir.condition_data Mir.VariableMap.t =
   List.fold_left
     (fun conds source_file ->
       List.fold_left
         (fun conds source_file_item ->
           match Pos.unmark source_file_item with
-          | Mast.Verification verif when belongs_to_app verif.Mast.verif_applications application ->
+          | Mast.Verification verif when belongs_to_iliad_app verif.Mast.verif_applications ->
               let rule_number = Mast.verification_number verif.verif_name in
               List.fold_left
                 (fun conds verif_cond ->
@@ -1372,14 +1370,14 @@ let remove_corrective_rules (p : Mast.program) : Mast.program =
     - [add_dummy_definition_for_variable_declaration] adds [Undefined] definitions placeholder for
       all variables declarations;
     - [get_errors_conds] parses the verification conditions definitions. *)
-let translate (p : Mast.program) (application : string option) : Mir.program =
+let translate (p : Mast.program) : Mir.program =
   let p = remove_corrective_rules p in
   let var_decl_data, idmap, int_const_vals = get_constants p in
   let var_decl_data, error_decls, idmap = get_variables_decl p var_decl_data idmap in
-  let idmap = get_var_redefinitions p idmap int_const_vals application in
-  let var_data = get_var_data idmap var_decl_data int_const_vals p application in
+  let idmap = get_var_redefinitions p idmap int_const_vals in
+  let var_data = get_var_data idmap var_decl_data int_const_vals p in
   let var_data = add_dummy_definition_for_variable_declaration var_data var_decl_data idmap in
-  let conds = get_conds error_decls idmap p application in
+  let conds = get_conds error_decls idmap p in
   {
     Mir.program_vars = var_data;
     Mir.program_conds = conds;

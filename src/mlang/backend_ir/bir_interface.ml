@@ -123,7 +123,7 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
         verif_conditions = verif_conds;
       }
   in
-  Mast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ] None
+  Mast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_function =
   let input = open_in spec_file in
