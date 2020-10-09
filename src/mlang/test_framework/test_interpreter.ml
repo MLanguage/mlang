@@ -242,8 +242,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   end;
   if code_coverage_activated then begin
     let all_code_locs = Bir_instrumentation.get_code_locs p in
-    let all_code_locs_num = Bir_instrumentation.CodeLocationMap.cardinal all_code_locs in
-    let undertested_code_locs =
+    let all_code_locs_with_coverage =
       Bir_instrumentation.CodeLocationMap.mapi
         (fun code_loc var ->
           match Mir.VariableMap.find_opt var code_coverage with
@@ -258,22 +257,29 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                   | Bir_instrumentation.MultipleDefs -> Covered ) ))
         all_code_locs
     in
-    let not_covered, one_value, one_value_or_undefined =
+    let all_code_locs_num =
+      Bir_instrumentation.CodeLocationMap.cardinal all_code_locs_with_coverage
+    in
+    let not_covered, one_value, one_value_or_undefined, covered =
       Bir_instrumentation.CodeLocationMap.fold
-        (fun _ cov (not_covered, one_value, one_value_or_undefined) ->
+        (fun _ cov (not_covered, one_value, one_value_or_undefined, covered) ->
           match cov with
-          | NotCovered -> (not_covered + 1, one_value + 1, one_value_or_undefined + 1)
-          | CoveredOneDef _ -> (not_covered, one_value + 1, one_value_or_undefined + 1)
-          | CoveredOneDefAndUndefined _ -> (not_covered, one_value, one_value_or_undefined + 1)
-          | Covered -> (not_covered, one_value, one_value_or_undefined))
-        undertested_code_locs (0, 0, 0)
+          | NotCovered -> (not_covered + 1, one_value, one_value_or_undefined, covered)
+          | CoveredOneDef _ -> (not_covered, one_value + 1, one_value_or_undefined, covered)
+          | CoveredOneDefAndUndefined _ ->
+              (not_covered, one_value, one_value_or_undefined + 1, covered)
+          | Covered -> (not_covered, one_value, one_value_or_undefined, covered + 1))
+        all_code_locs_with_coverage (0, 0, 0, 0)
     in
     Cli.warning_print "Some code locations are not covered properly by this set of test runs.";
     Cli.warning_print "The estimated code coverage is:";
-    Cli.warning_print "-> assigmnents covered by at least one value: %.3f%%"
-      ((1. -. (float_of_int not_covered /. float_of_int all_code_locs_num)) *. 100.);
-    Cli.warning_print "-> assigmnents covered by at least one value that is not undefined: %.3f%%"
-      ((1. -. (float_of_int one_value /. float_of_int all_code_locs_num)) *. 100.);
-    Cli.warning_print "-> assigmnents covered by at least two non-undefined values: %.3f%%"
-      ((1. -. (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num)) *. 100.)
+    Cli.warning_print "-> assigmnents never covered: %.3f%%"
+      (float_of_int not_covered /. float_of_int all_code_locs_num *. 100.);
+    Cli.warning_print "-> assigmnents covered by only the undefined value: %.3f%%"
+      (float_of_int one_value /. float_of_int all_code_locs_num *. 100.);
+    Cli.warning_print "-> assigmnents covered by only one value different from undefined: %.3f%%"
+      (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num *. 100.);
+    Cli.warning_print
+      "-> assigmnents covered by only two or more values different from undefined: %.3f%%"
+      (float_of_int covered /. float_of_int all_code_locs_num *. 100.)
   end
