@@ -286,7 +286,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     Cli.warning_print "The estimated code coverage is:";
     Cli.warning_print "-> assigmnents never covered: %.3f%%"
       (float_of_int not_covered /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only the undefined value: %.3f%%"
+    Cli.warning_print "-> assigmnents covered by only one value (possibly undefined): %.3f%%"
       (float_of_int one_value /. float_of_int all_code_locs_num *. 100.);
     Cli.warning_print "-> assigmnents covered by only one value different from undefined: %.3f%%"
       (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num *. 100.);
