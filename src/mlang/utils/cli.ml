@@ -44,12 +44,12 @@ let print_cycles =
   Arg.(value & flag & info [ "print_cycles"; "c" ] ~doc)
 
 let optimize =
-  Arg.(
-    value & flag & info [ "optimize"; "O" ] ~doc:"Enables the optimizations passes on the M program")
+  let doc = "Applies dead code removal and partial evaluation to the generated code" in
+  Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
 
 let backend =
   Arg.(
-    required
+    value
     & opt (some string) None
     & info [ "backend"; "b" ] ~docv:"BACKEND"
         ~doc:"Backend selection: interpreter, python, java, clojure")
@@ -64,6 +64,18 @@ let function_spec =
            inputs, outputs and constant values. This information will be used to select the \
            relevant computational rules from the M code corpus.")
 
+let mpp_file =
+  Arg.(
+    required
+    & opt (some file) None
+    & info [ "mpp_file" ] ~docv:"MPP_FILE" ~doc:"M++ preprocessor file (extension .mpp)")
+
+let mpp_function =
+  Arg.(
+    required
+    & opt (some string) None
+    & info [ "mpp_function" ] ~docv:"MPP_FUNCTION" ~doc:"M++ file main function")
+
 let output =
   Arg.(
     value
@@ -72,15 +84,6 @@ let output =
         ~doc:
           "$(i, OUTPUT) is the file that will contain the extracted function (for compiler \
            backends)")
-
-let real_precision =
-  Arg.(
-    value & opt int 100
-    & info [ "real_precision"; "p" ] ~docv:"PRECISION"
-        ~doc:
-          "Z3 only deals with integer arithmetic, while M supports floating point values. This \
-           parameter lets you choose the level of precision you want for Z3 computations, which is \
-           equal to 1/$(i, PRECISION).")
 
 let run_all_tests =
   Arg.(
@@ -94,12 +97,16 @@ let run_test =
     & opt (some file) None
     & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
 
-let year = Arg.(value & opt int 2018 & info [ "year" ] ~docv:"FILES" ~doc:"year of the M program")
+let code_coverage =
+  Arg.(
+    value & flag
+    & info [ "code_coverage" ]
+        ~doc:"Instruments the interpreter to retrieve the code coverage (use with --run_all_tests)")
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ optimize $ backend
-    $ function_spec $ output $ real_precision $ run_all_tests $ run_test $ year)
+    const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
+    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage)
 
 let info =
   let doc =
@@ -166,47 +173,40 @@ let print_cycles_flag = ref false
 (** Displays timing information *)
 let display_time = ref false
 
-(** Run the optimisations on the M variable graph *)
-let optimize = ref false
-
+(** Output file *)
 let output_file = ref ""
 
-let function_spec = ref None
-
-let real_precision = ref 100
-
-let backend = ref "python"
-
-let run_all_tests : string option ref = ref None
-
-let run_test : string option ref = ref None
-
-let year : int ref = ref 2018
-
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (display_time_ : bool)
-    (dep_graph_file_ : string) (print_cycles_ : bool) (optimize_ : bool) (backend_ : string)
-    (function_spec_ : string option) (output_ : string option) (real_precision_ : int)
-    (run_all_tests_ : string option) (run_test_ : string option) (year_ : int) =
+    (dep_graph_file_ : string) (print_cycles_ : bool) (output_file_ : string option) =
   source_files := files_;
   debug_flag := debug_;
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;
-  optimize := optimize_;
-  backend := backend_;
-  function_spec := function_spec_;
-  real_precision := real_precision_;
-  (output_file :=
-     match output_ with
-     | Some o -> o
-     | None ->
-         if backend_ = "interpreter" then ""
-         else raise (Errors.ArgumentError ("--output flag must be set for the backend " ^ backend_)));
-  run_all_tests := run_all_tests_;
-  run_test := run_test_;
-  year := year_
+  match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)
+
+let concat_with_line_depending_prefix_and_suffix (prefix : int -> string) (suffix : int -> string)
+    (ss : string list) =
+  match ss with
+  | hd :: rest ->
+      let out, _ =
+        List.fold_left
+          (fun (acc, i) s ->
+            ((acc ^ prefix i ^ s ^ if i = List.length ss - 1 then "" else suffix i), i + 1))
+          ((prefix 0 ^ hd ^ if 0 = List.length ss - 1 then "" else suffix 0), 1)
+          rest
+      in
+      out
+  | [] -> prefix 0
+
+(** The int argument of the prefix corresponds to the line number, starting at 0 *)
+let add_prefix_to_each_line (s : string) (prefix : int -> string) =
+  concat_with_line_depending_prefix_and_suffix
+    (fun i -> prefix i)
+    (fun _ -> "\n")
+    (String.split_on_char '\n' s)
 
 (**{2 Markers}*)
 
@@ -224,6 +224,10 @@ let time_marker () =
   let delta = (new_time -. old_time) *. 1000. in
   if delta > 100. then
     ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.black ] "[TIME] %.0f ms\n" delta
+
+let format_with_style (styles : ANSITerminal.style list) (str : ('a, unit, string) format) =
+  if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
+  else Printf.sprintf str
 
 (** Prints [\[DEBUG\]] in purple on the terminal standard output as well as timing since last debug *)
 let debug_marker (f_time : bool) =
@@ -261,6 +265,7 @@ let clock_marker i =
 (** All the printers below print their argument after the correct marker *)
 
 let debug_print ?(endline = "\n") kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !debug_flag then
     Format.kasprintf
       (fun str -> Format.printf "%a%s%s@?" (fun _ -> debug_marker) !display_time str endline)
@@ -268,12 +273,14 @@ let debug_print ?(endline = "\n") kont =
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !var_info_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> var_info_marker) () str) kont
+    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str) kont
   else Format.ifprintf Format.std_formatter kont
 
 let error_print kont =
-  Format.kasprintf (fun str -> Format.eprintf "%a%s@?" (fun _ -> error_marker) () str) kont
+  ANSITerminal.erase ANSITerminal.Eol;
+  Format.kasprintf (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str) kont
 
 (** Returns two functions: the first one, [current_progress], has to be called during the progress
     loop and the other one, [finish], has to be called at the end of the progressive task. *)
@@ -288,6 +295,7 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
       clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
       Format.printf "%s" !msg;
+      flush_all ();
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();
       Unix.sleepf 0.05
@@ -305,9 +313,11 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
       time_marker () )
 
 let warning_print kont =
+  ANSITerminal.erase ANSITerminal.Eol;
   if !warning_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> warning_marker) () str) kont
+    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str) kont
   else Format.ifprintf Format.std_formatter kont
 
 let result_print kont =
-  Format.kasprintf (fun str -> Format.printf "%a%s@?" (fun _ -> result_marker) () str) kont
+  ANSITerminal.erase ANSITerminal.Eol;
+  Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str) kont

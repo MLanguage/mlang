@@ -1,0 +1,4 @@
+(ocamllex mpp_lexer)
+
+(menhir
+ (modules mpp_parser))

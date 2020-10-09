@@ -1,4 +1,4 @@
-(ocamllex tlexer)
+(ocamllex test_lexer)
 
 (menhir
- (modules tparser))
+ (modules test_parser))

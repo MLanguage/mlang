@@ -12,20 +12,19 @@
    not, see <https://www.gnu.org/licenses/>. *)
 
 open Lexing
-open Lexer
+open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
 let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
-    (print_cycles : bool) (optimize : bool) (backend : string) (function_spec : string option)
-    (output : string option) (real_precision : int) (run_all_tests : string option)
-    (run_test : string option) (year : int) =
-  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles optimize backend
-    function_spec output real_precision run_all_tests run_test year;
+    (print_cycles : bool) (backend : string option) (function_spec : string option)
+    (mpp_file : string) (output : string option) (run_all_tests : string option)
+    (run_test : string option) (mpp_function : string) (optimize : bool) (code_coverage : bool) =
+  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles output;
   try
-    Cli.debug_print "Reading files...";
-    let program = ref [] in
+    Cli.debug_print "Reading M files...";
+    let m_program = ref [] in
     if List.length !Cli.source_files = 0 then
-      raise (Errors.ArgumentError "please provide at least one M source file");
+      Errors.raise_error "please provide at least one M source file";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     List.iter
       (fun source_file ->
@@ -38,115 +37,100 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
         in
         current_progress source_file;
         let filebuf =
-          {
-            filebuf with
-            lex_curr_p = { filebuf.lex_curr_p with pos_fname = Filename.basename source_file };
-          }
+          { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } }
         in
         try
-          Parse_utils.current_file := source_file;
-          let commands = Parser.source_file token filebuf in
-          program := commands :: !program
-        with
-        | Errors.LexingError msg | Errors.ParsingError msg -> Cli.error_print "%s" msg
-        | Parser.Error ->
-            Cli.error_print "Lexer error in file %s at position %a\n" !Parse_utils.current_file
-              Errors.print_lexer_position filebuf.lex_curr_p;
-            begin
-              match input with
-              | Some input -> close_in input
-              | None -> ()
-            end;
-            Cmdliner.Term.exit_status (`Ok 2))
+          let commands = Mparser.source_file token filebuf in
+          m_program := commands :: !m_program
+        with Mparser.Error ->
+          begin
+            match input with
+            | Some input -> close_in input
+            | None -> ()
+          end;
+          Errors.raise_spanned_error "M syntax error"
+            (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
-    let program = Ast_to_mvg.translate !program in
-    Cli.debug_print "Expanding function definitions...";
-    let program = Functions.expand_functions program in
+    Cli.debug_print "Elaborating...";
+    let m_program = Mast_to_mvg.translate !m_program in
+    let full_m_program = Mir_interface.to_full_program m_program in
+    let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
-    let program = Typechecker.typecheck program in
+    let full_m_program = Mir_typechecker.typecheck full_m_program in
     Cli.debug_print "Checking for circular variable definitions...";
-    let dep_graph = Dependency.create_dependency_graph program in
-    ignore (Dependency.check_for_cycle dep_graph program true);
-    if !Cli.run_all_tests <> None then
-      let tests : string = match !Cli.run_all_tests with Some s -> s | _ -> assert false in
-      Test.check_all_tests program tests
-    else if !Cli.run_test <> None then begin
-      Interpreter.repl_debug := true;
-      let test : string = match !Cli.run_test with Some s -> s | _ -> assert false in
-      Test.check_test program test;
-      Cli.result_print "Test passed!@."
+    ignore
+      (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
+    let mpp = Mpp_frontend.process mpp_file full_m_program in
+    let m_program = Mir_interface.reset_all_outputs full_m_program.program in
+    let full_m_program = Mir_interface.to_full_program m_program in
+    Cli.debug_print "Creating combined program suitable for execution...";
+    let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
+    if run_all_tests <> None then begin
+      if code_coverage && optimize then
+        Errors.raise_error
+          "Code coverage and program optimizations cannot be enabled together when running a test \
+           suite, check your command-line options";
+      let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
+      Test_interpreter.check_all_tests combined_program tests optimize code_coverage
+    end
+    else if run_test <> None then begin
+      Bir_interpreter.repl_debug := true;
+      if code_coverage then
+        Cli.warning_print "The code coverage flag is ignored when running a single test";
+      let test : string = match run_test with Some s -> s | _ -> assert false in
+      ignore (Test_interpreter.check_test combined_program test optimize false);
+      Cli.result_print "Test passed!"
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let mvg_func = Interface.read_function_from_spec program in
-      let program = Interface.fit_function program mvg_func in
-      let dep_graph = Dependency.create_dependency_graph program in
-      if String.lowercase_ascii !Cli.backend = "interpreter" then begin
-        Cli.debug_print "Interpreting the program...";
-        let program =
-          {
-            Interpreter.ip_program = program;
-            ip_utils =
-              {
-                Interpreter.utilities_dep_graph = dep_graph;
-                Interpreter.utilities_execution_order =
-                  Execution_order.get_execution_order dep_graph;
-              };
-          }
-        in
-        let f = Interface.make_function_from_program program in
-        try
-          let results = f (Interface.read_inputs_from_stdin mvg_func) in
-          Interface.print_output mvg_func results;
-          Interpreter.repl_debugguer results program.ip_program
-        with Interpreter.RuntimeError (e, ctx) ->
-          Cli.error_print "%a@." Interpreter.format_runtime_error e;
-          Interpreter.repl_debugguer ctx program.ip_program;
-          exit 1
-      end
-      else if
-        String.lowercase_ascii !Cli.backend = "python"
-        || String.lowercase_ascii !Cli.backend = "autograd"
-      then begin
-        Cli.debug_print "Compiling the program to Python...";
-        if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_python.generate_python_program program dep_graph !Cli.output_file;
-        Cli.result_print
-          "Generated Python function from requested set of inputs and outputs, results written to %s\n"
-          !Cli.output_file
-      end
-      else if String.lowercase_ascii !Cli.backend = "java" then begin
-        Cli.debug_print "Compiling the program to Java...";
-        if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_java.generate_java_program program dep_graph !Cli.output_file;
-        Cli.result_print
-          "Generated Java function from requested set of inputs and outputs, results written to %s\n"
-          !Cli.output_file
-      end
-      else if String.lowercase_ascii !Cli.backend = "clojure" then begin
-        Cli.debug_print "Compiling the program to Clojure...";
-        if !Cli.output_file = "" then
-          raise (Errors.ArgumentError "an output file must be defined with --output");
-        Mvg_to_clojure.generate_clj_program program dep_graph !Cli.output_file;
-        Cli.result_print
-          "Generated Clojure function from requested set of inputs and outputs, results written to \
-           %s\n"
-          !Cli.output_file
-      end
-      else raise (Errors.ArgumentError (Format.asprintf "unknown backend (%s)" !Cli.backend))
+      let spec_file =
+        match function_spec with
+        | None ->
+            Errors.raise_error "function specification file is not specified using --function_spec"
+        | Some f -> f
+      in
+      let function_spec = Bir_interface.read_function_from_spec combined_program spec_file in
+      let combined_program, _ =
+        Bir_interface.adapt_program_to_function combined_program function_spec
+      in
+      let combined_program =
+        if optimize then begin
+          Cli.debug_print "Translating to CFG form for optimizations...";
+          let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
+          Cli.debug_print "Optimizing...";
+          let oir_program = Oir_optimizations.optimize oir_program in
+          Cli.debug_print "Translating back to AST...";
+          let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
+          combined_program
+        end
+        else combined_program
+      in
+      match backend with
+      | Some backend ->
+          if String.lowercase_ascii backend = "interpreter" then begin
+            Cli.debug_print "Interpreting the program...";
+            let inputs = Bir_interface.read_inputs_from_stdin function_spec in
+            let end_ctx =
+              Bir_interpreter.evaluate_program combined_program
+                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx inputs)
+                0
+            in
+            Bir_interface.print_output function_spec end_ctx
+          end
+          else if String.lowercase_ascii backend = "python" then begin
+            Cli.debug_print "Compiling the codebase to Python...";
+            if !Cli.output_file = "" then
+              Errors.raise_error "an output file must be defined with --output";
+            Bir_to_python.generate_python_program combined_program function_spec !Cli.output_file;
+            Cli.debug_print "Result written to %s" !Cli.output_file
+          end
+          else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+      | None -> Errors.raise_error "No backend specified!"
     end
-  with
-  | Errors.TypeError e ->
-      Cli.error_print "%a\n" Errors.format_typ_error e;
-      Cmdliner.Term.exit_status (`Ok 2)
-  | Errors.Unimplemented msg ->
-      Cli.error_print "unimplemented (%s)\n" msg;
-      Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_internal_error (`Ok ())
-  | Errors.ArgumentError msg ->
-      Cli.error_print "Command line argument error: %s\n" msg;
-      Cmdliner.Term.exit ~term_err:Cmdliner.Term.exit_status_cli_error (`Ok ())
+  with Errors.StructuredError (msg, pos, kont) ->
+    Cli.error_print "Error: %a" Errors.format_structured_error (msg, pos);
+    (match kont with None -> () | Some kont -> kont ());
+    exit (-1)
 
 let main () = Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)

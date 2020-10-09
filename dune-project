@@ -21,7 +21,7 @@
               "\| before translating it into various backend languages.
  )
  (depends
-   (ocaml (>= 4.09.1))
+   (ocaml (>= 4.09.0))
    (dune (and :build ))
    (ANSITerminal (= 0.8.2))
    (re (= 1.9.0))

@@ -1,43 +1,82 @@
-SOURCE_DIR_2015=ir-calcul/sources2015m_4_6/
-SOURCE_DIR_2016=ir-calcul/sources2016m_4_5/
-SOURCE_DIR_2017=ir-calcul/sources2017m_6_10/
-SOURCE_DIR_2018=ir-calcul/sources2018m_6_7/
+##################################################
+# Variables
+##################################################
 
-SOURCE_FILES=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/
+SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/
+SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/
+SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(ocamlfind query z3)
+SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+
+ifeq ($(OPTIMIZE), 1)
+    OPTIMIZE_FLAG=-O
+else
+    OPTIMIZE_FLAG=
+endif
+
+ifeq ($(CODE_COVERAGE), 1)
+    CODE_COVERAGE_FLAG=--code_coverage
+else
+    CODE_COVERAGE_FLAG=
+endif
+
+MLANG_BIN=dune exec --no-print-director src/main.exe --
+
+MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
+
+MPP_FUNCTION?=compute_double_liquidation_pvro
+
+MLANG_DEFAULT_OPTS=\
+	--display_time --debug \
+	--mpp_file=$(MPP_FILE) \
+	--mpp_function=$(MPP_FUNCTION)
+
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
+
+TESTS_DIR?=random_tests/
 
 default: build
 
+##################################################
+# Building the compiler
+##################################################
+
 deps:
 	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
-	cmdliner dune-build-info visitors parmap num ocamlformat
+		cmdliner dune-build-info visitors parmap num ocamlformat
 	git submodule update --init --recursive
 
 format:
 	dune build @fmt --auto-promote | true
 
-build: #format
+build: format
 	dune build
+
+##################################################
+# Testing the compiler
+##################################################
 
 # use: TEST_FILE=bla make test
 test: build
-	dune exec src/main.exe -- \
-	 	--display_time --debug --backend interpreter \
-		--run_test=$(TEST_FILE) \
-		$(SOURCE_FILES)
+	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES)
 
+# use: TESTS_DIR=bla make test
 tests: build
-	dune exec src/main.exe -- \
-	 	--display_time --debug --backend interpreter \
-		--run_all_tests=tests/ \
-		$(SOURCE_FILES)
+	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
-interpreter:
-	dune exec src/main.exe -- --function_spec interpreter.m_spec \
-	 --display_time --debug --backend interpreter \
-	 $(SOURCE_FILES)
+quick_test:
+	$(MLANG) --backend interpreter --function_spec m_specs/complex_case_with_ins_outs_2018.m_spec $(SOURCE_FILES)
 
-doc:
+##################################################
+# Doc and examples
+##################################################
+
+doc: FORCE
 	dune build @doc
-	ln -s _build/default/_doc/_html/index.html doc.html
+	ln -s _build/default/_doc/_html/index.html doc/doc.html
+
+examples: FORCE
+	$(MAKE) -C examples/python
+
+FORCE:

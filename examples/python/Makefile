@@ -1,52 +1,50 @@
-SOURCE_DIR_2015=../../ir-calcul/sources2015m_4_6/
-SOURCE_DIR_2016=../../ir-calcul/sources2016m_4_5/
-SOURCE_DIR_2017=../../ir-calcul/sources2017m_6_10/
-SOURCE_DIR_2018=../../ir-calcul/sources2018m_6_3/
+##################################################
+# Variables
+##################################################
 
-SOURCE_FILES_2017=$(shell find $(SOURCE_DIR_2017) -name "*.m")
-SOURCE_FILES_2018=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/
+SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/
+SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/
+SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/
 
-MLANG=dune exec ../../src/main.exe --
+SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
-simulateur_simplifie_2018:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend python --output ir_2018.py \
-		--function_spec simulateur_simplifie_2018.m_spec \
-		$(SOURCE_FILES_2017)
-	python simulateur_simplifie_2018.py
+ifeq ($(OPTIMIZE), 1)
+    OPTIMIZE_FLAG=-O
+else
+    OPTIMIZE_FLAG=
+endif
 
-simulateur_simplifie_2019:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend python --output ir_2019.py \
-		--function_spec simulateur_simplifie_2019.m_spec \
-		$(SOURCE_FILES_2018)
-	python simulateur_simplifie_2019.py
+MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
-cas_basique_2018:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend python --function_spec cas_basique.m_spec \
-		--output ir_2018.py $(SOURCE_FILES_2017) && \
-	python cas_basique_2018.py
+MLANG_DEFAULT_OPTS=\
+	--display_time --debug \
+	--mpp_file=$(PWD)/mpp_specs/2018_6_7.mpp \
+	--mpp_function=compute_double_liquidation_pvro
 
-cas_basique_2019:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend python --function_spec cas_basique.m_spec \
-		--output ir_2019.py $(SOURCE_FILES_2018) && \
-	python cas_basique_2019.py
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-autograd:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend autograd --function_spec autograd.m_spec \
-		--output ir_2018.py $(SOURCE_FILES_2017) && \
-	python example_autograd.py
+all: backend_tests $(shell find . -name "run_*.py")
 
-verifisc_cas_basique_2018:
-	$(MLANG) --application iliad \
-	 	--display_time --debug --optimize \
-		--backend verifisc --function_spec cas_basique.m_spec \
-		--output ir_2018.py $(SOURCE_FILES_2017)
+##################################################
+# Generating Python files from Mlang
+##################################################
+
+ir_%.py: FORCE
+	$(MLANG) \
+		--backend python --output $@ \
+		--function_spec ../../m_specs/$*.m_spec \
+		$(SOURCE_FILES)
+
+##################################################
+# Running the tests
+##################################################
+
+run_%.py: ir_%.py
+	python3.7 $@
+
+backend_tests: FORCE
+	$(MAKE) -C backend_tests
+
+
+FORCE:
