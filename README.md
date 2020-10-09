@@ -25,29 +25,24 @@ of OCaml that is at least 4.0.9. Then, you can install Mlang's dependencies usin
 
     make deps
 
-Next, fetch the source code dependencies of Mlang with
+This command also fetchs the M source code released by the DGFiP with
 
     git submodule update --init --recursive
 
-This will fetch the M source code released by the DGFiP.
-
-You can then use `make build` to build the compiler.
+You can then use 
+    
+    make build
+    
+to build the compiler.
 
 ## Usage
 
-As of July 2020, the only reliable feature of the M compiler that consistently
-produces results similar to the DGFiP's computation is the interpreter for the
-2018 tax campaign sources. To use it, simply launch
+Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
+of what happens in this example. You can compare what happens on the 
+[official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm)
+by entering the exact amounts of the case in the right income codes. Everything should be the same.
 
-```
-make interpreter
-```
-
-Please read the `interpreter.m_spec` for a walk-through of what happens in this example. You can
-compare what happens on the [official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm) by entering the exact amounts of the case in the right income codes.
-Everything should be the same.
-
-The input variables that you want to use have to be declared beforehand in the `interpreter.m_spec`
+The input variables that you want to use have to be declared beforehand in the `.m_spec`
 file, in the `const` section. If you put a variable in the `saisie` section, you will then be
 prompted to input it at interpretation time. You can also change which variables you want the
 interpreter to output in the `sortie` section.
@@ -65,6 +60,11 @@ Please refer to the DGFiP's simulator for the meaning of the variables. Importan
 Mlang's run are configured by a specification file (`.m_spec`), see the
 [dedicated README](m_specs/README.md) for more details.
 
+Mlang also need an M++ file to know how to run the "liquidations multiples"
+mechanism that is necessary to compute the income tax correctly. The file 
+`mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
+for version of the M sources published in `ir-calcul`.
+
 For how to produce ready-to-use Python income tax computation
 source files for your application, see the
 [dedicated README](examples/python/README.md).
@@ -80,15 +80,27 @@ report test errors in a convenient format.
 Mlang backends are also tested using the same `FIP` format, see for instance
 `examples/python/backend_test`.
 
-When running `--run_all_text`, you can also enable code coverage instrumentation 
+When running `--run_all_tests`, you can also enable code coverage instrumentation 
 with the `--code_coverage` option.
+
+The DGFiP does not publish its internal test base. However, randomized test 
+cases have been created for the 2018 income version of the software, in the 
+folder `random_tests`. The fact that Mlang passes these tests only means that 
+it faithfully reproduces the computation done by the DGFiP using unpublished 
+software. Notably, it does not mean that the M sources (published by the 
+DGFiP) and the M++ sources (recreated from unpublished sources) are faithful to
+the way the law says taxes should be computed.
+
+To check that Mlang passes all the randomized tests, simply invoke 
+
+    make tests
 
 ## Documentation
 
 The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML
 documentation using
 
-        make doc
+    make doc
 
 To browse the documentation, just open the file `doc.html` with your browser. Here
 is a high-level picture describing the architecture of the compiler:
