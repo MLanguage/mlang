@@ -189,29 +189,35 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           code_coverage_acc
       in
       (name :: successes, failures, code_coverage_acc)
-    with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
-      Cli.debug_flag := true;
-      match (bindings, Pos.unmark expr) with
-      | ( [ (v, Bir_interpreter.SimpleVar l1) ],
-          Unop
-            ( Mast.Not,
-              ( Mir.Binop
-                  ( (Mast.And, _),
-                    ( Comparison
-                        ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+    with
+    | Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
+        Cli.debug_flag := true;
+        match (bindings, Pos.unmark expr) with
+        | ( [ (v, Bir_interpreter.SimpleVar l1) ],
+            Unop
+              ( Mast.Not,
+                ( Mir.Binop
+                    ( (Mast.And, _),
+                      ( Comparison
+                          ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+                        _ ),
                       _ ),
-                    _ ),
-                _ ) ) ) ->
-          Cli.error_print "Test %s incorrect (error on variable %s)" name
-            (Pos.unmark v.Variable.name);
-          let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures, code_coverage_acc)
-      | _ ->
-          Cli.error_print "Test %s incorrect (error%s %a raised)" name
-            (if List.length err > 1 then "s" else "")
-            (Format.pp_print_list Format.pp_print_string)
-            (List.map (fun x -> Pos.unmark x.Error.name) err);
-          (successes, failures, code_coverage_acc) )
+                  _ ) ) ) ->
+            Cli.error_print "Test %s incorrect (error on variable %s)" name
+              (Pos.unmark v.Variable.name);
+            let errs_varname = try VariableMap.find v failures with Not_found -> [] in
+            ( successes,
+              VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
+              code_coverage_acc )
+        | _ ->
+            Cli.error_print "Test %s incorrect (error%s %a raised)" name
+              (if List.length err > 1 then "s" else "")
+              (Format.pp_print_list Format.pp_print_string)
+              (List.map (fun x -> Pos.unmark x.Error.name) err);
+            (successes, failures, code_coverage_acc) )
+    | Test_parser.Error ->
+        Cli.error_print "Parsing error on test %s" name;
+        (successes, failures, code_coverage_acc)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty, VariableMap.empty)
