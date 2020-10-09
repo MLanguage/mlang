@@ -68,7 +68,7 @@ name:
 | n = SYMBOL { n }
 
 fip:
-  FIP SLASH SYMBOL { }
+  FIP SLASH option(SYMBOL) { }
 
 variable_and_value:
 | var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value), mk_position $sloc) }

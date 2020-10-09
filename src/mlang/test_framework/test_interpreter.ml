@@ -19,10 +19,14 @@ let parse_file (test_name : string) : test_file =
   let filebuf = Lexing.from_channel input in
   let filebuf = { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name } } in
   let f =
-    try Test_parser.test_file Test_lexer.token filebuf
-    with Errors.StructuredError e ->
-      close_in input;
-      raise (Errors.StructuredError e)
+    try Test_parser.test_file Test_lexer.token filebuf with
+    | Errors.StructuredError e ->
+        close_in input;
+        raise (Errors.StructuredError e)
+    | Test_parser.Error ->
+        close_in input;
+        Errors.raise_spanned_error "Test syntax error"
+          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
   in
   close_in input;
   f
@@ -215,8 +219,9 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
               (Format.pp_print_list Format.pp_print_string)
               (List.map (fun x -> Pos.unmark x.Error.name) err);
             (successes, failures, code_coverage_acc) )
-    | Test_parser.Error ->
-        Cli.error_print "Parsing error on test %s" name;
+    | Errors.StructuredError (msg, pos, kont) ->
+        Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
+        (match kont with None -> () | Some kont -> kont ());
         (successes, failures, code_coverage_acc)
   in
   let s, f, code_coverage =
