@@ -37,6 +37,85 @@ let count_instructions (p : program) : int =
   in
   cond_instr_blocks p.statements
 
+let get_assigned_variables (p : program) : unit Mir.VariableMap.t =
+  let rec get_assigned_variables_block (stmts : stmt list) : unit Mir.VariableMap.t =
+    List.fold_left
+      (fun acc stmt ->
+        match Pos.unmark stmt with
+        | SVerif _ -> acc
+        | SAssign (var, _) -> Mir.VariableMap.add var () acc
+        | SConditional (_, s1, s2) ->
+            Mir.VariableMap.union
+              (fun _ _ _ -> Some ())
+              (get_assigned_variables_block s1) (get_assigned_variables_block s2))
+      Mir.VariableMap.empty stmts
+  in
+  get_assigned_variables_block p.statements
+
+let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_expr (e : Mir.expression Pos.marked) : unit Mir.LocalVariableMap.t =
+    match Pos.unmark e with
+    | Mir.Unop (_, e) | Mir.Index (_, e) -> get_local_vars_expr e
+    | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) ->
+        Mir.LocalVariableMap.union
+          (fun _ _ _ -> Some ())
+          (get_local_vars_expr e1) (get_local_vars_expr e2)
+    | Mir.Conditional (e1, e2, e3) ->
+        Mir.LocalVariableMap.union
+          (fun _ _ _ -> Some ())
+          (Mir.LocalVariableMap.union
+             (fun _ _ _ -> Some ())
+             (get_local_vars_expr e1) (get_local_vars_expr e2))
+          (get_local_vars_expr e3)
+    | Mir.FunctionCall (_, args) ->
+        List.fold_left
+          (fun (acc : unit Mir.LocalVariableMap.t) arg ->
+            Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr arg) acc)
+          Mir.LocalVariableMap.empty args
+    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error | Mir.LocalVar _ ->
+        Mir.LocalVariableMap.empty
+    | Mir.LocalLet (lvar, e1, e2) ->
+        Mir.LocalVariableMap.add lvar ()
+          (Mir.LocalVariableMap.union
+             (fun _ _ _ -> Some ())
+             (get_local_vars_expr e1) (get_local_vars_expr e2))
+  in
+  let rec get_assigned_variables_block (stmts : stmt list) : unit Mir.LocalVariableMap.t =
+    List.fold_left
+      (fun acc stmt ->
+        match Pos.unmark stmt with
+        | SVerif cond ->
+            Mir.LocalVariableMap.union
+              (fun _ _ _ -> Some ())
+              (get_local_vars_expr cond.Mir.cond_expr)
+              acc
+        | SAssign (_, data) -> (
+            match data.Mir.var_definition with
+            | Mir.SimpleVar e ->
+                Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc
+            | Mir.TableVar (_, defs) -> (
+                match defs with
+                | Mir.IndexTable es ->
+                    Mir.IndexMap.fold
+                      (fun _ e acc ->
+                        Mir.LocalVariableMap.union
+                          (fun _ _ _ -> Some ())
+                          (get_local_vars_expr e) acc)
+                      es acc
+                | Mir.IndexGeneric e ->
+                    Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc )
+            | _ -> acc )
+        | SConditional (cond, s1, s2) ->
+            Mir.LocalVariableMap.union
+              (fun _ _ _ -> Some ())
+              (get_local_vars_expr (cond, Pos.no_pos))
+              (Mir.LocalVariableMap.union
+                 (fun _ _ _ -> Some ())
+                 (get_assigned_variables_block s1) (get_assigned_variables_block s2)))
+      Mir.LocalVariableMap.empty stmts
+  in
+  get_assigned_variables_block p.statements
+
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev
     (List.fold_left

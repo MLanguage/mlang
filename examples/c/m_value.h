@@ -1,0 +1,299 @@
+#include <math.h>
+#include <stdbool.h>
+
+typedef struct m_value
+{
+    double value;
+    bool undefined;
+} m_value;
+// type invariant : if undefined, then value == 0
+
+const static struct m_value m_undefined = (struct m_value){.value = 0, .undefined = true};
+
+const static struct m_value m_zero = (struct m_value){.value = 0, .undefined = false};
+
+const static struct m_value m_one = (struct m_value){.value = 1, .undefined = false};
+
+m_value m_add(m_value x, m_value y)
+{
+    if (x.undefined && y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value + y.value, .undefined = false};
+    }
+}
+
+m_value m_sub(m_value x, m_value y)
+{
+    if (x.undefined && y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value - y.value, .undefined = false};
+    }
+}
+
+m_value m_neg(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = -x.value, .undefined = false};
+    }
+}
+
+m_value m_mul(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value * y.value, .undefined = false};
+    }
+}
+
+m_value m_div(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else if (y.value == 0)
+    {
+        return m_zero;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value / y.value, .undefined = false};
+    }
+}
+
+m_value m_lt(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value < y.value, .undefined = false};
+    }
+}
+
+m_value m_lte(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value <= y.value, .undefined = false};
+    }
+}
+
+m_value m_gt(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value > y.value, .undefined = false};
+    }
+}
+
+m_value m_gte(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value > y.value, .undefined = false};
+    }
+}
+
+m_value m_eq(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value == y.value, .undefined = false};
+    }
+}
+
+m_value m_neq(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value != y.value, .undefined = false};
+    }
+}
+
+m_value m_and(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value && y.value, .undefined = false};
+    }
+}
+
+m_value m_or(m_value x, m_value y)
+{
+    if (x.undefined || y.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = x.value || y.value, .undefined = false};
+    }
+}
+
+m_value m_not(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = !x.value, .undefined = false};
+    }
+}
+
+m_value m_cond(m_value c, m_value t, m_value f)
+{
+    if (c.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        if (c.value)
+        {
+            return t;
+        }
+        else
+        {
+            return f;
+        }
+    }
+}
+
+m_value m_max(m_value x, m_value y)
+{
+    return (struct m_value){
+        .value = fmax(x.value, y.value),
+        .undefined = false};
+}
+
+m_value m_min(m_value x, m_value y)
+{
+    return (struct m_value){
+        .value = fmin(x.value, y.value),
+        .undefined = false};
+}
+
+m_value m_present(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_zero;
+    }
+    else
+    {
+        return m_one;
+    }
+}
+
+m_value m_null(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_one;
+    }
+    else
+    {
+        return m_zero;
+    }
+}
+
+m_value m_round(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        double ipart;
+        modf(x.value + copysign(0.50005, x.value), &ipart);
+        return (struct m_value){.value = ipart, .undefined = false};
+    }
+}
+
+m_value m_floor(m_value x)
+{
+    if (x.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        return (struct m_value){.value = floor(x.value + 0.000001), .undefined = false};
+    }
+}
+
+bool m_is_defined_true(m_value x)
+{
+    if (x.undefined)
+    {
+        return false;
+    }
+    else
+    {
+        return x.value != 0;
+    }
+}
+
+bool m_is_defined_false(m_value x)
+{
+    if (x.undefined)
+    {
+        return false;
+    }
+    else
+    {
+        return x.value == 0;
+    }
+}
+
+m_value m_literal(double v)
+{
+    return (struct m_value){.value = v, .undefined = false};
+}
