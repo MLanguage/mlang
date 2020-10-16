@@ -39,7 +39,7 @@ let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "m_not" | Mast.Minus -> "m_neg"
 
 let generate_variable fmt (var : Variable.t) : unit =
-  let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
+  let v = match var.alias with Some v -> v ^ "_alias" | None -> Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
   let v =
     if
@@ -157,8 +157,7 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "m_value %a; // %s" generate_variable var
-           (Pos.unmark var.Variable.descr)))
+         Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
     output_vars;
   Format.fprintf oc
     "m_output m_empty_output() {@\n\
@@ -169,7 +168,7 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
      @\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%a = m_undefined," generate_variable var))
+       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
     output_vars;
   Format.fprintf oc "m_output m_extracted(m_input input) {@\n@[<h 4>    @\n";
   Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
@@ -178,14 +177,13 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
        (fun fmt var ->
          Format.fprintf fmt "m_value %a = input.%s;" generate_variable var (generate_name var)))
     input_vars;
+  let assigned_variables = Bir.get_assigned_variables p in
   Format.fprintf oc "%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt (var, ()) -> Format.fprintf fmt "m_value %a;" generate_variable var))
     (Mir.VariableMap.bindings
-       (Mir.VariableMap.filter
-          (fun var _ -> not (List.mem var input_vars))
-          (Bir.get_assigned_variables p)));
+       (Mir.VariableMap.filter (fun var _ -> not (List.mem var input_vars)) assigned_variables));
   Format.fprintf oc "%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -195,6 +193,7 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
 
 let generate_var_cond cond oc =
   let scond, defs = generate_c_expr cond.cond_expr in
+  let percent = Re.Pcre.regexp "\%" in
   Format.fprintf oc
     "%acond = %s;@\n\
      if (m_is_defined_true(cond)) {@\n\
@@ -205,8 +204,12 @@ let generate_var_cond cond oc =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
        (fun fmt err ->
-         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)))
+         let error_descr = Pos.unmark err.Error.descr in
+         let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
+         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
     cond.cond_errors
+
+let fresh_cond_counter = ref 0
 
 let rec generate_stmts (program : Bir.program) oc stmts =
   Format.pp_print_list (generate_stmt program) oc stmts
@@ -220,9 +223,11 @@ and generate_stmt program oc stmt =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
       in
       let cond_name =
-        Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
+        Format.asprintf "cond_%s_%d_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
+          !fresh_cond_counter
       in
+      fresh_cond_counter := !fresh_cond_counter + 1;
       let scond, defs = generate_c_expr (Pos.same_pos_as cond stmt) in
       Format.fprintf oc
         "%am_value %s = %s;@\n\
@@ -241,7 +246,7 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
   Format.fprintf oc "return (struct m_output){@\n@[<h 4>    %a@]@\n};@\n@]@\n}"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%a = %a," generate_variable var generate_variable var))
+       (fun fmt var -> Format.fprintf fmt ".%s = %a," (generate_name var) generate_variable var))
     returned_variables
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)

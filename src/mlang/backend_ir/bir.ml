@@ -47,7 +47,10 @@ let get_assigned_variables (p : program) : unit Mir.VariableMap.t =
         | SConditional (_, s1, s2) ->
             Mir.VariableMap.union
               (fun _ _ _ -> Some ())
-              (get_assigned_variables_block s1) (get_assigned_variables_block s2))
+              acc
+              (Mir.VariableMap.union
+                 (fun _ _ _ -> Some ())
+                 (get_assigned_variables_block s1) (get_assigned_variables_block s2)))
       Mir.VariableMap.empty stmts
   in
   get_assigned_variables_block p.statements
@@ -80,7 +83,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
              (fun _ _ _ -> Some ())
              (get_local_vars_expr e1) (get_local_vars_expr e2))
   in
-  let rec get_assigned_variables_block (stmts : stmt list) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_block (stmts : stmt list) : unit Mir.LocalVariableMap.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
@@ -111,10 +114,10 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
               (get_local_vars_expr (cond, Pos.no_pos))
               (Mir.LocalVariableMap.union
                  (fun _ _ _ -> Some ())
-                 (get_assigned_variables_block s1) (get_assigned_variables_block s2)))
+                 (get_local_vars_block s1) (get_local_vars_block s2)))
       Mir.LocalVariableMap.empty stmts
   in
-  get_assigned_variables_block p.statements
+  get_local_vars_block p.statements
 
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev
