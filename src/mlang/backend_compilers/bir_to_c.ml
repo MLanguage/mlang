@@ -152,6 +152,17 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
        (fun fmt var ->
          Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
     input_vars;
+  Format.fprintf oc
+    "m_input m_empty_input() {@\n\
+     @[<h 4>    return (struct m_input){@\n\
+     @[<h 4>    %a@]@\n\
+     };@]@\n\
+     };@\n\
+     @\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
+    input_vars;
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc "typedef struct m_output {@\n@[<h 4>    %a@]@\n} m_output;@\n@\n"
     (Format.pp_print_list
@@ -193,7 +204,7 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
 
 let generate_var_cond cond oc =
   let scond, defs = generate_c_expr cond.cond_expr in
-  let percent = Re.Pcre.regexp "\%" in
+  let percent = Re.Pcre.regexp "%" in
   Format.fprintf oc
     "%acond = %s;@\n\
      if (m_is_defined_true(cond)) {@\n\

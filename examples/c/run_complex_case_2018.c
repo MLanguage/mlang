@@ -4,7 +4,7 @@ int main()
 {
 
     m_output output;
-    for (int i = 11000; i <= 40000; i++)
+    for (int i = 39000; i <= 40000; i++)
     {
         output = m_extracted((struct m_input){
             .v_0AM = m_literal(1),     // Case a cocher : situation de famille Maries
@@ -16,21 +16,17 @@ int main()
             .v_4BE = m_literal(4000),  // Regime Micro-foncier - Recettes brutes
             .v_1AJ = m_literal(i),     // Salaires - Declarant 1
         });
-        if (i % 1000 == 0)
-        {
-            printf("With 1AJ = %d, TXMOYIMP: %.2f\n", i, output.txmoyimp_222120_1.value);
-        };
     };
-    printf("IAN: %.2f\n", output.ian_301050_1.value);
-    printf("IINET: %.2f\n", output.iinet_221190_0.value);
-    printf("IRNET: %.2f\n", output.irnet_221230_0.value);
-    printf("NAPCR: %.2f\n", output.napcr_221940_0.value);
-    printf("TXMOYIMP: %.2f\n", output.txmoyimp_222120_1.value);
-    printf("NBPT: %.2f\n", output.nbpt_601000_0.value);
-    printf("CSG: %.2f\n", output.csg_101210_0.value);
-    printf("RDSN: %.2f\n", output.rdsn_101210_1.value);
-    printf("PSOL: %.2f\n", output.psol_101210_2.value);
-    printf("CIRM: %.2f\n", output.cimr_201908_0.value);
-    printf("REVKIRE: %.2f\n", output.revkire_871125_0.value);
+    printf("IAN: %.2f\n", output.v_IAN.value);
+    printf("IINET: %.2f\n", output.v_IINET.value);
+    printf("IRNET: %.2f\n", output.v_IRNET.value);
+    printf("NAPCR: %.2f\n", output.v_NAPCR.value);
+    printf("TXMOYIMP: %.2f\n", output.v_TXMOYIMP.value);
+    printf("NBPT: %.2f\n", output.v_NBPT.value);
+    printf("CSG: %.2f\n", output.v_CSG.value);
+    printf("RDSN: %.2f\n", output.v_RDSN.value);
+    printf("PSOL: %.2f\n", output.v_PSOL.value);
+    printf("CIRM: %.2f\n", output.v_CIMR.value);
+    printf("REVKIRE: %.2f\n", output.v_REVKIRE.value);
     return 0;
 }

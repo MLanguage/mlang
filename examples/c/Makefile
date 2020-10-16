@@ -9,11 +9,7 @@ SOURCE_DIR_2018=../../ir-calcul/sources2018m_6_7/
 
 SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 
-ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O
-else
-    OPTIMIZE_FLAG=
-endif
+OPTIMIZE_FLAG=-O
 
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
@@ -24,15 +20,29 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-all: backend_tests $(shell find . -name "run_*.py")
-
 ##################################################
-# Generating Python files from Mlang
+# Generating C files from Mlang
 ##################################################
 
-ir_%.c: FORCE
+ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --output $@ \
-		--function_spec ../../m_specs/$*.m_spec \
+		--function_spec $< \
 		$(SOURCE_FILES)
-FORCE:
+
+##################################################
+# Compiling the C files
+##################################################
+
+C_COMPILER=clang
+
+ir_%.o : ir_%.c 
+	$(C_COMPILER) -c -o $@ $<
+
+##################################################
+# Final targets
+##################################################
+
+complex_case_2018: ir_complex_case_2018.c
+	$(C_COMPILER) -lm -O3 -o $@.exe run_complex_case_2018.c
+
