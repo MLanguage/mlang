@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 typedef struct m_value
 {
@@ -296,4 +297,46 @@ bool m_is_defined_false(m_value x)
 m_value m_literal(double v)
 {
     return (struct m_value){.value = v, .undefined = false};
+}
+
+m_value m_array_index(m_value *array, m_value index)
+{
+    if (index.undefined)
+    {
+        return m_undefined;
+    }
+    else
+    {
+        if (index.value < 0)
+        {
+            return m_zero;
+        }
+        else
+        {
+            return array[(int)floor(index.value)];
+        }
+    }
+}
+
+m_value m_multimax(m_value bound, m_value *array)
+{
+    if (bound.undefined)
+    {
+        printf("Multimax bound undefined!");
+        exit(-1);
+    }
+    else
+    {
+        int max_index = floor(bound.value);
+        m_value max = m_add(array[0], m_zero);
+        for (int i = 0; i <= max_index; i++)
+        {
+            m_value challenger = m_add(array[i], m_zero);
+            if (challenger.value > max.value)
+            {
+                max = challenger;
+            }
+        }
+        return max;
+    }
 }

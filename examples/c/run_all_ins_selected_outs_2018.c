@@ -1,4 +1,4 @@
-#include "ir_complex_case_2018.c"
+#include "ir_all_ins_selected_outs_2018.c"
 
 int main()
 {

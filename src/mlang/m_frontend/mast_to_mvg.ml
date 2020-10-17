@@ -357,7 +357,7 @@ let get_constants (p : Mast.program) :
                         Mir.Variable.new_var marked_name None
                           (Pos.same_pos_as "constant" marked_name)
                           (dummy_exec_number (Pos.get_position marked_name))
-                          ~attributes:[] ~is_income:false
+                          ~attributes:[] ~is_income:false ~is_table:None
                         (* a constant variable does not have attributes *)
                       in
                       let new_var_data =
@@ -440,6 +440,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                         Mir.Variable.new_var cvar.Mast.comp_name None cvar.Mast.comp_description
                           (dummy_exec_number (Pos.get_position cvar.Mast.comp_name))
                           ~attributes:attrs ~is_income:false
+                          ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                       in
                       let new_var_data =
                         {
@@ -486,6 +487,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                           (dummy_exec_number (Pos.get_position ivar.Mast.input_name))
                           ~attributes:ivar.input_attributes
                           ~is_income:(Pos.unmark ivar.input_subtyp = Mast.Income)
+                          ~is_table:None
                         (* Input variables also have a low order *)
                       in
                       let new_var_data =
@@ -695,6 +697,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                  lvar.Mir.Variable.descr exec_number
                                  ~attributes:lvar.Mir.Variable.attributes
                                  ~is_income:lvar.Mir.Variable.is_income
+                                 ~is_table:lvar.Mir.Variable.is_table
                              in
                              let new_idmap =
                                Pos.VarNameToID.add
@@ -745,6 +748,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                    lvar.Mir.Variable.descr exec_number
                                    ~attributes:lvar.Mir.Variable.attributes
                                    ~is_income:lvar.Mir.Variable.is_income
+                                   ~is_table:lvar.Mir.Variable.is_table
                                in
                                (Pos.unmark lvar.Mir.Variable.name, new_var)
                              in
@@ -1323,7 +1327,7 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                           Mir.seq_number = 0;
                           Mir.pos = Pos.get_position verif_cond;
                         }
-                        ~attributes:[] ~is_income:false
+                        ~attributes:[] ~is_income:false ~is_table:None
                     in
                     Mir.VariableMap.add dummy_var
                       {

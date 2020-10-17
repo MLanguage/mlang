@@ -30,19 +30,14 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 		--function_spec $< \
 		$(SOURCE_FILES)
 
-##################################################
-# Compiling the C files
-##################################################
-
-C_COMPILER=clang
-
-ir_%.o : ir_%.c 
-	$(C_COMPILER) -c -o $@ $<
+.SECONDARY: %.c
 
 ##################################################
 # Final targets
 ##################################################
 
-complex_case_2018: ir_complex_case_2018.c
-	$(C_COMPILER) -lm -O3 -o $@.exe run_complex_case_2018.c
+C_COMPILER=clang -fbracket-depth=2048
 
+# To call this target, use "make <name of file in m_spec/ without extension>
+%: ir_%.c 
+	$(C_COMPILER) -lm $(C_OPT) -o $@.exe run_$*.c

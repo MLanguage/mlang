@@ -71,7 +71,7 @@ let rec generate_c_expr (e : expression Pos.marked) :
       (Format.asprintf "%s(%s)" (generate_unop op) se, s)
   | Index (var, e) ->
       let se, s = generate_c_expr e in
-      (Format.asprintf "%a[floor(%s)]" generate_variable (Pos.unmark var) se, s)
+      (Format.asprintf "m_array_index(%a, %s)" generate_variable (Pos.unmark var) se, s)
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_c_expr e1 in
       let se2, s2 = generate_c_expr e2 in
@@ -97,8 +97,10 @@ let rec generate_c_expr (e : expression Pos.marked) :
       let se1, s1 = generate_c_expr e1 in
       let se2, s2 = generate_c_expr e2 in
       (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
-  | FunctionCall (Multimax, [ _e1; _e2 ]) ->
-      Errors.raise_spanned_error "multimax not supported in the C backend" (Pos.get_position e)
+  | FunctionCall (Multimax, [ e1; e2 ]) ->
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
+      (Format.asprintf "m_multimax(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "m_literal(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
@@ -192,7 +194,10 @@ let generate_input_handling (p : Bir.program) (oc : Format.formatter)
   Format.fprintf oc "%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, ()) -> Format.fprintf fmt "m_value %a;" generate_variable var))
+       (fun fmt (var, ()) ->
+         match var.Mir.Variable.is_table with
+         | None -> Format.fprintf fmt "m_value %a;" generate_variable var
+         | Some size -> Format.fprintf fmt "m_value %a[%d];" generate_variable var size))
     (Mir.VariableMap.bindings
        (Mir.VariableMap.filter (fun var _ -> not (List.mem var input_vars)) assigned_variables));
   Format.fprintf oc "%a@\n@\n"

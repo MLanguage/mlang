@@ -69,6 +69,7 @@ module Variable = struct
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
     attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
+    is_table : int option;
   }
 
   let counter : int ref = ref 0
@@ -81,8 +82,8 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option) (descr : string Pos.marked)
       (execution_number : execution_number)
       ~(attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list)
-      ~(is_income : bool) : t =
-    { name; id = fresh_id (); descr; alias; execution_number; attributes; is_income }
+      ~(is_income : bool) ~(is_table : int option) : t =
+    { name; id = fresh_id (); descr; alias; execution_number; attributes; is_income; is_table }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
