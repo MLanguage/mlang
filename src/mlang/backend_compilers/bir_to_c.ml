@@ -141,74 +141,7 @@ let generate_var_def var data (oc : Format.formatter) : unit =
         (Pos.get_position e)
   | InputVar -> assert false
 
-let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "// %s\n\n" Prelude.message;
-  Format.fprintf oc "#include <stdio.h>\n";
-  Format.fprintf oc "%s\n\n" m_value_prelude
-
-let generate_input_handling (p : Bir.program) (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "typedef struct m_input {@[<h 4>    %a@]@\n} m_input;@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
-    input_vars;
-  Format.fprintf oc
-    "m_input m_empty_input() {@\n\
-     @[<h 4>    return (struct m_input){@\n\
-     @[<h 4>    %a@]@\n\
-     };@]@\n\
-     };@\n\
-     @\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
-    input_vars;
-  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc "typedef struct m_output {@\n@[<h 4>    %a@]@\n} m_output;@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
-    output_vars;
-  Format.fprintf oc
-    "m_output m_empty_output() {@\n\
-     @[<h 4>    return (struct m_output){@\n\
-     @[<h 4>    %a@]@\n\
-     };@]@\n\
-     };@\n\
-     @\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
-    output_vars;
-  Format.fprintf oc "m_output m_extracted(m_input input) {@\n@[<h 4>    @\n";
-  Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt "m_value %a = input.%s;" generate_variable var (generate_name var)))
-    input_vars;
-  let assigned_variables = Bir.get_assigned_variables p in
-  Format.fprintf oc "%a@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, ()) ->
-         match var.Mir.Variable.is_table with
-         | None -> Format.fprintf fmt "m_value %a;" generate_variable var
-         | Some size -> Format.fprintf fmt "m_value %a[%d];" generate_variable var size))
-    (Mir.VariableMap.bindings
-       (Mir.VariableMap.filter (fun var _ -> not (List.mem var input_vars)) assigned_variables));
-  Format.fprintf oc "%a@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, ()) -> Format.fprintf fmt "m_value v_%d;" var.Mir.LocalVariable.id))
-    (Mir.LocalVariableMap.bindings (Bir.get_local_variables p));
-  Format.fprintf oc "m_value cond;@\n@\n"
-
-let generate_var_cond cond oc =
+let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
   let scond, defs = generate_c_expr cond.cond_expr in
   let percent = Re.Pcre.regexp "%" in
   Format.fprintf oc
@@ -228,10 +161,7 @@ let generate_var_cond cond oc =
 
 let fresh_cond_counter = ref 0
 
-let rec generate_stmts (program : Bir.program) oc stmts =
-  Format.pp_print_list (generate_stmt program) oc stmts
-
-and generate_stmt program oc stmt =
+let rec generate_stmt program oc stmt =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, ff) ->
@@ -258,6 +188,36 @@ and generate_stmt program oc stmt =
         (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
+and generate_stmts (program : Bir.program) oc stmts =
+  Format.pp_print_list (generate_stmt program) oc stmts
+
+let generate_main_function_signature_and_var_decls (p : Bir.program) (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  Format.fprintf oc "m_output m_extracted(m_input input) {@\n@[<h 4>    @\n";
+  Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "m_value %a = input.%s;" generate_variable var (generate_name var)))
+    input_vars;
+  let assigned_variables = Bir.get_assigned_variables p in
+  Format.fprintf oc "%a@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt (var, ()) ->
+         match var.Mir.Variable.is_table with
+         | None -> Format.fprintf fmt "m_value %a;" generate_variable var
+         | Some size -> Format.fprintf fmt "m_value %a[%d];" generate_variable var size))
+    (Mir.VariableMap.bindings
+       (Mir.VariableMap.filter (fun var _ -> not (List.mem var input_vars)) assigned_variables));
+  Format.fprintf oc "%a@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt (var, ()) -> Format.fprintf fmt "m_value v_%d;" var.Mir.LocalVariable.id))
+    (Mir.LocalVariableMap.bindings (Bir.get_local_variables p));
+  Format.fprintf oc "m_value cond;@\n@\n"
+
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc "return (struct m_output){@\n@[<h 4>    %a@]@\n};@\n@]@\n}"
@@ -266,10 +226,57 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
        (fun fmt var -> Format.fprintf fmt ".%s = %a," (generate_name var) generate_variable var))
     returned_variables
 
+let generate_header (oc : Format.formatter) () : unit =
+  Format.fprintf oc "// %s\n\n" Prelude.message;
+  Format.fprintf oc "#include <stdio.h>\n";
+  Format.fprintf oc "%s\n\n" m_value_prelude
+
+let generate_input_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  Format.fprintf oc "typedef struct m_input {@[<h 4>    %a@]@\n} m_input;@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
+    input_vars;
+  Format.fprintf oc
+    "m_input m_empty_input() {@\n\
+     @[<h 4>    return (struct m_input){@\n\
+     @[<h 4>    %a@]@\n\
+     };@]@\n\
+     };@\n\
+     @\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
+    input_vars
+
+let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
+  Format.fprintf oc "typedef struct m_output {@\n@[<h 4>    %a@]@\n} m_output;@\n@\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
+    output_vars;
+  Format.fprintf oc
+    "m_output m_empty_output() {@\n\
+     @[<h 4>    return (struct m_output){@\n\
+     @[<h 4>    %a@]@\n\
+     };@]@\n\
+     };@\n\
+     @\n"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
+    output_vars
+
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a" generate_header () (generate_input_handling program) function_spec
-    (generate_stmts program) program.statements generate_return function_spec;
+  Format.fprintf oc "%a%a%a%a%a%a" generate_header () generate_input_type function_spec
+    generate_output_type function_spec
+    (generate_main_function_signature_and_var_decls program)
+    function_spec (generate_stmts program) program.statements generate_return function_spec;
   close_out _oc
