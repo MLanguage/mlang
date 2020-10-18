@@ -1,11 +1,11 @@
 #include "m_value.h"
 #include <stdio.h>
 
-const static struct m_value m_undefined = (struct m_value){.value = 0, .undefined = true};
+const struct m_value m_undefined = (struct m_value){.value = 0, .undefined = true};
 
-const static struct m_value m_zero = (struct m_value){.value = 0, .undefined = false};
+const struct m_value m_zero = (struct m_value){.value = 0, .undefined = false};
 
-const static struct m_value m_one = (struct m_value){.value = 1, .undefined = false};
+const struct m_value m_one = (struct m_value){.value = 1, .undefined = false};
 
 m_value m_add(m_value x, m_value y)
 {

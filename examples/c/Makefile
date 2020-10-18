@@ -30,8 +30,7 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 		--function_spec $< \
 		$(SOURCE_FILES)
 
-.SECONDARY: %.c
-.PRECIOUS: %.c
+.SECONDARY: ir_%.c ir_%.h
 
 ##################################################
 # Compiling the generated C
