@@ -1,4 +1,4 @@
-#include "ir_complex_case_2018.c"
+#include "ir_complex_case_2018.h"
 
 int main()
 {

@@ -1,4 +1,4 @@
-#include "ir_all_ins_selected_outs_2018.h"
+#include "ir_simulateur_simplifie_2018.h"
 
 int main()
 {

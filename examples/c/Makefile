@@ -31,13 +31,24 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 		$(SOURCE_FILES)
 
 .SECONDARY: %.c
+.PRECIOUS: %.c
+
+##################################################
+# Compiling the generated C
+##################################################
+
+C_COMPILER=clang
+
+ir_%.o: ir_%.c
+	$(C_COMPILER) -fbracket-depth=2048 $(C_OPT) -c $< m_value.c
+
+%.o: %.c
+	$(C_COMPILER) -c $<
 
 ##################################################
 # Final targets
 ##################################################
 
-C_COMPILER=clang -fbracket-depth=2048
-
-# To call this target, use "make <name of file in m_spec/ without extension>
-%: ir_%.c 
-	$(C_COMPILER) -lm $(C_OPT) -o $@.exe run_$*.c
+# To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
+run_%.exe: ir_%.o run_%.o m_value.o
+	$(C_COMPILER) -lm -o $@ $^
