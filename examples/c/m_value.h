@@ -299,7 +299,7 @@ m_value m_literal(double v)
     return (struct m_value){.value = v, .undefined = false};
 }
 
-m_value m_array_index(m_value *array, m_value index)
+m_value m_array_index(m_value *array, m_value index, int array_size)
 {
     if (index.undefined)
     {
@@ -310,6 +310,10 @@ m_value m_array_index(m_value *array, m_value index)
         if (index.value < 0)
         {
             return m_zero;
+        }
+        else if (index.value >= array_size - 1)
+        {
+            return m_undefined;
         }
         else
         {

@@ -71,7 +71,8 @@ let rec generate_c_expr (e : expression Pos.marked) :
       (Format.asprintf "%s(%s)" (generate_unop op) se, s)
   | Index (var, e) ->
       let se, s = generate_c_expr e in
-      (Format.asprintf "m_array_index(%a, %s)" generate_variable (Pos.unmark var) se, s)
+      let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
+      (Format.asprintf "m_array_index(%a, %s, %d)" generate_variable (Pos.unmark var) se size, s)
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_c_expr e1 in
       let se2, s2 = generate_c_expr e2 in
