@@ -1,5 +1,5 @@
 #!/usr/binenv python3
-# usage gen_m_spec TESTS_DIR spec_filename all_ins_filename
+# usage gen_m_spec TESTS_DIR spec_filename
 
 import sys
 import os
@@ -56,7 +56,6 @@ def total_names(total):
 if __name__ == "__main__":
     test_dir = sys.argv[1]
     spec_filename = sys.argv[2]
-    entrees_filename = sys.argv[3]
     total_entrees, total_resultats, total_files = get_test_distribution(
         test_dir)
     entrees = ", ".join(total_names(total_entrees))
@@ -64,5 +63,3 @@ if __name__ == "__main__":
     with open(spec_filename, 'w') as f:
         f.write(
             f"saisie: {entrees};\n\nconst: non;\n\ncondition:non;\n\nsortie:{sorties};")
-    with open(entrees_filename, 'w') as f:
-        f.write(entrees)

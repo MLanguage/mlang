@@ -8,6 +8,7 @@ SOURCE_DIR_2017=../../../ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=../../../ir-calcul/sources2018m_6_7/
 
 SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
 
 OPTIMIZE_FLAG=-O
 
@@ -15,7 +16,7 @@ MLANG_BIN=dune exec --no-print-director ../../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
-	--mpp_file=../../../mpp_specs/2018_6_7.mpp \
+	--mpp_file=$(MPP_FILE) \
 	--mpp_function=compute_double_liquidation_pvro
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
@@ -24,10 +25,10 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 # Generating the tests.m_spec
 ##################################################
 
-TESTS_DIR=../../../random_tests
+TESTS_DIR?=../../../random_tests
 
 tests.m_spec: gen_m_spec.py 
-	python3.7 $< $(TESTS_DIR) $@ all_ins.csv
+	python3.7 $< $(TESTS_DIR) $@ 
 
 ##################################################
 # Generating the C code

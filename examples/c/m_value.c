@@ -115,7 +115,7 @@ m_value m_gte(m_value x, m_value y)
     }
     else
     {
-        return (struct m_value){.value = x.value > y.value, .undefined = false};
+        return (struct m_value){.value = x.value >= y.value, .undefined = false};
     }
 }
 
@@ -258,7 +258,9 @@ m_value m_floor(m_value x)
     }
     else
     {
-        return (struct m_value){.value = floor(x.value + 0.000001), .undefined = false};
+        double ipart;
+        modf(x.value + 0.000001, &ipart);
+        return (struct m_value){.value = ipart, .undefined = false};
     }
 }
 
