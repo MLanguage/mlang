@@ -52,6 +52,14 @@ ir_%.o: ir_%.c
 	$(C_COMPILER) -I ../ -fbracket-depth=2048 $(C_OPT) -c $< ../m_value.c
 
 %.o: %.c
-	$(C_COMPILER) -I ../ -c $<
+	$(C_COMPILER) -I ../ -c -o $@ $<
+
+##################################################
+# Building the test harness
+##################################################
+
+test_harness.exe: parse_and_run_tests.o ir_tests.o ../m_value.o
+	$(C_COMPILER) -lm -o $@ $^
+
 
 FORCE:
