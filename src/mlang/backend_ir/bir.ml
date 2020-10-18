@@ -75,8 +75,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
           (fun (acc : unit Mir.LocalVariableMap.t) arg ->
             Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr arg) acc)
           Mir.LocalVariableMap.empty args
-    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error | Mir.LocalVar _ ->
-        Mir.LocalVariableMap.empty
+    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error -> Mir.LocalVariableMap.empty
+    | Mir.LocalVar lvar -> Mir.LocalVariableMap.singleton lvar ()
     | Mir.LocalLet (lvar, e1, e2) ->
         Mir.LocalVariableMap.add lvar ()
           (Mir.LocalVariableMap.union
@@ -111,10 +111,13 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
         | SConditional (cond, s1, s2) ->
             Mir.LocalVariableMap.union
               (fun _ _ _ -> Some ())
-              (get_local_vars_expr (cond, Pos.no_pos))
+              acc
               (Mir.LocalVariableMap.union
                  (fun _ _ _ -> Some ())
-                 (get_local_vars_block s1) (get_local_vars_block s2)))
+                 (get_local_vars_expr (cond, Pos.no_pos))
+                 (Mir.LocalVariableMap.union
+                    (fun _ _ _ -> Some ())
+                    (get_local_vars_block s1) (get_local_vars_block s2))))
       Mir.LocalVariableMap.empty stmts
   in
   get_local_vars_block p.statements

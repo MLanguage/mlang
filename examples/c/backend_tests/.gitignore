@@ -1,0 +1,4 @@
+all_ins.csv
+ir_*.c
+ir_*.h 
+*.o
