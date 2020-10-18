@@ -58,7 +58,7 @@ ir_%.o: ir_%.c
 # Building the test harness
 ##################################################
 
-test_harness.exe: parse_and_run_tests.o ir_tests.o ../m_value.o
+test_harness.exe: ir_tests.o ../m_value.o parse_and_run_tests.o
 	$(C_COMPILER) -lm -o $@ $^
 
 
