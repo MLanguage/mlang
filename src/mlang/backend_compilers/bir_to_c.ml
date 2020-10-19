@@ -13,7 +13,9 @@
 
 open Mir
 
-let m_value_prelude : string = "#include \"m_value.h\""
+let m_value_prelude : string = "#include \"m_value.c\""
+
+let m_value_prelude_header : string = "#include \"m_value.h\""
 
 let none_value = "m_undefined"
 
@@ -234,7 +236,7 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
   Format.fprintf oc "#include <stdio.h>\n";
-  Format.fprintf oc "%s\n\n" m_value_prelude
+  Format.fprintf oc "%s\n\n" m_value_prelude_header
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "m_input m_empty_input()%s" (if add_semicolon then ";\n\n" else "")

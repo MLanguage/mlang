@@ -44,7 +44,6 @@ int main(int argc, char *argv[])
             {
                 continue;
             }
-            printf("Testing file: %s\n", test_file);
             snprintf(file_path, sizeof file_path, "%s/%s", tests_dir, test_file);
 
             FILE *fp = fopen(file_path, "r");
@@ -117,11 +116,13 @@ int main(int argc, char *argv[])
                     computed_value = outputs_array_for_m[name_index];
                     if (computed_value.undefined)
                     {
+                        printf("Testing file: %s\n", test_file);
                         printf("Expected value %s has been computed as undefined!\n", name);
                         exit(-1);
                     }
                     if (computed_value.value != expected_value)
                     {
+                        printf("Testing file: %s\n", test_file);
                         printf("Expected value for %s : %.4f, computed %.4f!\n", name, expected_value, computed_value.value);
                         exit(-1);
                     }

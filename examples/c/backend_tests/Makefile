@@ -50,7 +50,7 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 C_COMPILER=clang
 
 ir_%.o: ir_%.c
-	$(C_COMPILER) -I ../ -fbracket-depth=2048 $(C_OPT) -c $< ../m_value.c
+	$(C_COMPILER) -I ../ -fbracket-depth=2048 $(C_OPT) -c $<
 
 %.o: %.c
 	$(C_COMPILER) -I ../ -c $<
@@ -59,7 +59,7 @@ ir_%.o: ir_%.c
 # Building the test harness
 ##################################################
 
-test_harness.exe: m_value.o ir_tests.o parse_and_run_tests.o
+test_harness.exe: ir_tests.o parse_and_run_tests.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
 
