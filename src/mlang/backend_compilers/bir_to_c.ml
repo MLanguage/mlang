@@ -271,7 +271,7 @@ let generate_get_input_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   Format.fprintf oc
-    "%a {@\n@[<h 4>    %a@\nprintf(\"Input var name not found!\");@\nexit(-1);@]@\n};@\n@\n"
+    "%a {@\n@[<h 4>    %a@\nprintf(\"Input var %%s not found!\\n\", name);@\nexit(-1);@]@\n};@\n@\n"
     generate_get_input_index_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -332,12 +332,18 @@ let generate_get_output_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "%a {@\n@[<h 4>    %a@\nprintf(\"output var name not found!\");@\nexit(-1);@]@\n};@\n@\n"
+    "%a {@\n\
+     @[<h 4>    %a@\n\
+     printf(\"Output var %%s not found!\\n\", name);@\n\
+     exit(-1);@]@\n\
+     };@\n\
+     @\n"
     generate_get_output_index_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt (var, i) ->
-         Format.fprintf fmt "if (strcmp(\"%s\", name) == 0) { return %d; }" (generate_raw_name var)
+         Format.fprintf fmt "if (strcmp(\"%s\", name) == 0) { return %d; }"
+           (Pos.unmark var.Mir.Variable.name)
            i))
     (List.mapi (fun i x -> (x, i)) output_vars)
 

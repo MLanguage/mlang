@@ -116,9 +116,8 @@ int main(int argc, char *argv[])
                     computed_value = outputs_array_for_m[name_index];
                     if (computed_value.undefined)
                     {
-                        printf("Testing file: %s\n", test_file);
-                        printf("Expected value %s has been computed as undefined!\n", name);
-                        exit(-1);
+                        // Undefined values returned are interpreted as 0
+                        computed_value.value = 0;
                     }
                     if (computed_value.value != expected_value)
                     {

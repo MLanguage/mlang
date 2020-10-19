@@ -2,3 +2,4 @@ all_ins.csv
 ir_*.c
 ir_*.h 
 *.o
+tests.m_spec
