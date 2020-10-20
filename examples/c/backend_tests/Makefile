@@ -116,8 +116,11 @@ clean:
 	$(C_COMPILER) -I ../ -fbracket-depth=2048 -I $(KLEE_DIR)/include \
 		 -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -o $@ $<
 
-run_klee: klee_harness.bc ir_$(FUZZ_M_SPEC).bc ../m_value.bc
-	$(KLEE_DIR)/build/bin/klee $^
+run_klee: ../m_value.bc ir_$(FUZZ_M_SPEC).bc klee_harness.bc
+	$(KLEE_DIR)/build/bin/klee \
+		-link-llvm-lib=ir_$(FUZZ_M_SPEC).bc \
+		-link-llvm-lib=../m_value.bc \
+		klee_harness.bc
 
 
 FORCE:
