@@ -17,14 +17,14 @@ int main(int argc, char *argv[])
     FILE *input_file = fopen(argv[1], "r");
     fseek(input_file, 0, SEEK_END);
     long fsize = ftell(input_file);
-    if (fsize != correct_string_size)
+    if (fsize < correct_string_size)
     {
         printf("%d != %d\n", (int)correct_string_size, (int)fsize);
         return 2;
     }
     rewind(input_file);
     char input_string[correct_string_size];
-    fread(input_string, 1, fsize, input_file);
+    fread(input_string, 1, correct_string_size, input_file);
     fclose(input_file);
 
     // First we fill the array with the contents of the fuzzing input
