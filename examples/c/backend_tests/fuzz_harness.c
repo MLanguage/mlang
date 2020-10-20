@@ -1,4 +1,4 @@
-#include "ir_all_ins_no_outs_2018.h"
+#include "ir_simulateur_simplifie_inputs_no_outs_2018.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     m_output output = m_extracted(input_for_m);
     if (output.is_error)
     {
-        return 3;
+        return 1;
     }
     else
     {
