@@ -34,6 +34,11 @@ tests.m_spec: gen_m_spec.py
 # Generating the C code
 ##################################################
 
+ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
+	$(MLANG) \
+		--backend c --output $@ \
+		--function_spec $< \
+		$(SOURCE_FILES)
 ir_%.c: %.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --output $@ \
@@ -47,13 +52,19 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
-C_COMPILER=clang
+C_COMPILER?=clang
+
+ifeq ($(C_COMPILER), clang)
+    F_BRACKET_OPT=-fbracket-depth=2048
+else
+    F_BRACKET_OPT= 
+endif
 
 ir_%.o: ir_%.c
-	$(C_COMPILER) -I ../ -fbracket-depth=2048 $(C_OPT) -c $<
+	$(C_COMPILER) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
 %.o: %.c
-	$(C_COMPILER) -I ../ -c $<
+	$(C_COMPILER) -I ../ -c -o $@ $<
 
 ##################################################
 # Building the test harness
@@ -62,5 +73,38 @@ ir_%.o: ir_%.c
 test_harness.exe: ir_tests.o parse_and_run_tests.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
+##################################################
+# Building and running the fuzzing harness
+##################################################
+
+FULL_INPUTS_FUZZ?=0
+
+ifeq ($(FULL_INPUTS_FUZZ), 0)
+    FUZZ_M_SPEC=all_ins_no_outs_2018
+else
+    FUZZ_M_SPEC=simulateur_simplifie_inputs_no_outs_2018
+endif
+
+fuzz_harness.exe: C_COMPILER=afl-clang
+fuzz_harness.exe: export AFL_DONT_OPTIMIZE=1
+fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
+	$(C_COMPILER) -lm -o $@ $^
+
+AFL_FUZZ=afl-fuzz
+
+ifeq ($(JOB_NO), 0)
+	AFL_JOB_FLAG=-M fuzzer$(JOB_NO)
+else 
+	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
+endif
+
+launch_fuzz: fuzz_harness.exe
+	ulimit -s 65536
+	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
+		-m 500 -t 50 $(AFL_JOB_FLAG) \
+		-- ./fuzz_harness.exe
+
+clean:
+	rm -rf fuzz_findings/*
 
 FORCE:

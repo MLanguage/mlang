@@ -3,3 +3,4 @@ ir_*.c
 ir_*.h 
 *.o
 tests.m_spec
+fuzz_findings/*

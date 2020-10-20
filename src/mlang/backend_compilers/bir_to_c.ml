@@ -152,7 +152,11 @@ let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
     "%acond = %s;@\n\
      if (m_is_defined_true(cond)) {@\n\
     \    printf(\"Error triggered: %a\\n\");@\n\
-    \    return m_empty_output();@\n\
+    \    {@\n\
+    \        m_output out = m_empty_output();@\n\
+    \        out.is_error = true;@\n\
+    \        return out;@\n\
+    \    }@\n\
      }@\n"
     format_local_vars_defs defs scond
     (Format.pp_print_list
@@ -305,7 +309,13 @@ let generate_empty_output_func (oc : Format.formatter) (function_spec : Bir_inte
     =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "%a {@\n@[<h 4>    return (struct m_output){@\n@[<h 4>    %a@]@\n};@]@\n};@\n@\n"
+    "%a {@\n\
+     @[<h 4>    return (struct m_output){@\n\
+     @[<h 4>    .is_error = false,@\n\
+     %a@]@\n\
+     };@]@\n\
+     };@\n\
+     @\n"
     generate_empty_output_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -358,7 +368,8 @@ let generate_get_output_num_func (oc : Format.formatter)
 
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc "typedef struct m_output {@\n@[<h 4>    %a@]@\n} m_output;@\n@\n"
+  Format.fprintf oc
+    "typedef struct m_output {@\n@[<h 4>    bool is_error;@\n%a@]@\n} m_output;@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
