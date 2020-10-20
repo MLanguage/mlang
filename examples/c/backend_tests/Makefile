@@ -77,7 +77,7 @@ test_harness.exe: ir_tests.o parse_and_run_tests.o ../m_value.o
 # Building and running the fuzzing harness
 ##################################################
 
-FULL_INPUTS_FUZZ?=1
+FULL_INPUTS_FUZZ?=0
 
 ifeq ($(FULL_INPUTS_FUZZ), 1)
     FUZZ_M_SPEC=all_ins_no_outs_2018
@@ -106,5 +106,18 @@ launch_fuzz: fuzz_harness.exe
 
 clean:
 	rm -rf fuzz_findings/*
+
+##################################################
+# Building and running the KLEE harness
+##################################################
+
+%.bc: C_COMPILER=clang
+%.bc: %.c
+	$(C_COMPILER) -I ../ -fbracket-depth=2048 -I $(KLEE_DIR)/include \
+		 -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -o $@ $<
+
+run_klee: klee_harness.bc ir_$(FUZZ_M_SPEC).bc ../m_value.bc
+	$(KLEE_DIR)/build/bin/klee $^
+
 
 FORCE:

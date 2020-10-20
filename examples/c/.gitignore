@@ -3,3 +3,4 @@ ir_*.h
 *.exe
 *.o
 *.tmp
+*.bc
