@@ -77,9 +77,9 @@ test_harness.exe: ir_tests.o parse_and_run_tests.o ../m_value.o
 # Building and running the fuzzing harness
 ##################################################
 
-FULL_INPUTS_FUZZ?=0
+FULL_INPUTS_FUZZ?=1
 
-ifeq ($(FULL_INPUTS_FUZZ), 0)
+ifeq ($(FULL_INPUTS_FUZZ), 1)
     FUZZ_M_SPEC=all_ins_no_outs_2018
 else
     FUZZ_M_SPEC=simulateur_simplifie_inputs_no_outs_2018
@@ -102,7 +102,7 @@ launch_fuzz: fuzz_harness.exe
 	ulimit -s 65536
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 50 $(AFL_JOB_FLAG) \
-		-- ./fuzz_harness.exe
+		-- ./fuzz_harness.exe @@
 
 clean:
 	rm -rf fuzz_findings/*
