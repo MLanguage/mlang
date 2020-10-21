@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
         m_output_to_array(output_array_for_m, output);
         // We print the test case found in the FIP format on stdin
         printf("#NOM\n");
-        printf("RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
+        printf("#RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
         printf("#ENTREES-PRIMITIF\n");
         for (int i = 0; i < num_inputs; i++)
         {

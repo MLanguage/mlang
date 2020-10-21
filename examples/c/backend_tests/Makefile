@@ -109,8 +109,21 @@ launch_fuzz: fuzz_harness.exe
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
-clean:
+FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash")
+
+sanitize_crash_names:
+	./sanitize_crash_names.sh
+
+%.m_test: %.m_crash FORCE
+	-bash -c "ulimit -s 65536;./fuzz_harness.exe $< > $@"
+
+transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+	rm -rf fuzz_tests/*.m_crash
+
+clean_fuzz_findings:
 	rm -rf fuzz_findings/*
+clean_fuzz_tests:
+	rm -rf fuzz_tests/*
 
 ##################################################
 # Building and running the KLEE harness
