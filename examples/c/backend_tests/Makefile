@@ -60,6 +60,7 @@ else
     F_BRACKET_OPT= 
 endif
 
+ir_%.o: export AFL_DONT_OPTIMIZE=1
 ir_%.o: ir_%.c
 	$(C_COMPILER) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
@@ -86,7 +87,6 @@ else
 endif
 
 fuzz_harness.exe: C_COMPILER=afl-clang
-fuzz_harness.exe: export AFL_DONT_OPTIMIZE=1
 fuzz_harness.exe: ir_tests.o fuzz_harness.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
