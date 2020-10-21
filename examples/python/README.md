@@ -24,7 +24,7 @@ mlang --display_time --debug \ # Prints debug information
 
 ### Using the generated Python file 
 
-The generated Python file generates one function, `extracted`, taking as an 
+The generated Python file provides one function, `extracted`, taking as an 
 argument a dictionary whose keys are the input variables declared in the `.m_spec`
 file. The function returns a dictionary of the output variables, or just a single 
 value if there is only one output variable declared. Caution: the returned value 
@@ -49,3 +49,7 @@ otherwise use `-B` to force re-generation.
 
 The `backend_tests` folder contains a small utility that compares the output
 of running the Python against the expected output for a test base.
+
+To launch the tests, simply invoke from this folder:
+
+    make backend_tests

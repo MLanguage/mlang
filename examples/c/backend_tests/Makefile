@@ -68,11 +68,15 @@ ir_%.o: ir_%.c
 	$(C_COMPILER) -I ../ -c -o $@ $<
 
 ##################################################
-# Building the test harness
+# Building and running the test harness
 ##################################################
 
-test_harness.exe: ir_tests.o parse_and_run_tests.o ../m_value.o
+test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
+
+run_tests: test_harness.exe FORCE
+	ulimit -s 65536; \
+	./$< $(TESTS_DIR)
 
 ##################################################
 # Building and running the fuzzing harness
@@ -98,6 +102,7 @@ else
 	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
 endif
 
+# Usage: NO_JOB=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
 	ulimit -s 65536; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
