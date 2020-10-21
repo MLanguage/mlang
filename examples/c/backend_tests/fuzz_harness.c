@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
         char *value = input_string + size_per_value * i + 1;
         bool undefined_v = ((unsigned int)*undefined > 32767) ? true : false;
         // Values cannot have more than 10 digits
-        unsigned int value_v = (*((unsigned int *)value)) % 10000000000;
+        unsigned int value_v = (*((unsigned int *)value)) % 1000000;
         m_value input = (struct m_value){
             .undefined = undefined_v,
             .value = (double)value_v,

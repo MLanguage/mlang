@@ -118,12 +118,11 @@ sanitize_crash_names:
 	-bash -c "ulimit -s 65536;./fuzz_harness.exe $< > $@"
 
 transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
-	rm -rf fuzz_tests/*.m_crash
 
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*
 clean_fuzz_tests:
-	rm -rf fuzz_tests/*
+	rm -rf fuzz_tests/*.m_crash
 
 ##################################################
 # Building and running the KLEE harness
