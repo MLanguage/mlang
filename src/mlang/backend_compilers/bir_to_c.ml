@@ -284,6 +284,27 @@ let generate_get_input_index_func (oc : Format.formatter)
            i))
     (List.mapi (fun i x -> (x, i)) input_vars)
 
+let generate_get_input_name_from_index_prototype (oc : Format.formatter) (add_semicolon : bool) =
+  Format.fprintf oc "char* m_get_input_name_from_index(int index)%s"
+    (if add_semicolon then ";\n\n" else "")
+
+let generate_get_input_name_from_index_func (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  Format.fprintf oc
+    "%a {@\n\
+     @[<h 4>    %a@\n\
+     printf(\"Input int %%d not found!\\n\", index);@\n\
+     exit(-1);@]@\n\
+     };@\n\
+     @\n"
+    generate_get_input_name_from_index_prototype false
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt (var, i) ->
+         Format.fprintf fmt "if (%d == index) { return \"%s\"; }" i (generate_raw_name var)))
+    (List.mapi (fun i x -> (x, i)) input_vars)
+
 let generate_get_input_num_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "int m_num_inputs()%s" (if add_semicolon then ";\n\n" else "")
 
@@ -357,6 +378,28 @@ let generate_get_output_index_func (oc : Format.formatter)
            i))
     (List.mapi (fun i x -> (x, i)) output_vars)
 
+let generate_get_output_name_from_index_prototype (oc : Format.formatter) (add_semicolon : bool) =
+  Format.fprintf oc "char* m_get_output_name_from_index(int index)%s"
+    (if add_semicolon then ";\n\n" else "")
+
+let generate_get_output_name_from_index_func (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
+  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
+  Format.fprintf oc
+    "%a {@\n\
+     @[<h 4>    %a@\n\
+     printf(\"Output index %%d not found!\\n\", index);@\n\
+     exit(-1);@]@\n\
+     };@\n\
+     @\n"
+    generate_get_output_name_from_index_prototype false
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt (var, i) ->
+         Format.fprintf fmt "if (index == %d) { return \"%s\"; }" i
+           (Pos.unmark var.Mir.Variable.name)))
+    (List.mapi (fun i x -> (x, i)) output_vars)
+
 let generate_get_output_num_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "int m_num_outputs()%s" (if add_semicolon then ";\n\n" else "")
 
@@ -389,20 +432,23 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type function_spec
-    generate_empty_input_prototype true generate_input_from_array_prototype true
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
+    function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
     generate_get_input_index_prototype true generate_get_input_num_prototype true
-    generate_output_type function_spec generate_output_to_array_prototype true
-    generate_get_output_index_prototype true generate_get_output_num_prototype true
+    generate_get_input_name_from_index_prototype true generate_output_type function_spec
+    generate_output_to_array_prototype true generate_get_output_index_prototype true
+    generate_get_output_name_from_index_prototype true generate_get_output_num_prototype true
     generate_empty_output_prototype true generate_main_function_signature true;
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
     generate_empty_input_func function_spec generate_input_from_array_func function_spec
-    generate_get_input_index_func function_spec generate_get_input_num_func function_spec
-    generate_output_to_array_func function_spec generate_get_output_index_func function_spec
-    generate_get_output_num_func function_spec generate_empty_output_func function_spec
+    generate_get_input_index_func function_spec generate_get_input_name_from_index_func
+    function_spec generate_get_input_num_func function_spec generate_output_to_array_func
+    function_spec generate_get_output_index_func function_spec
+    generate_get_output_name_from_index_func function_spec generate_get_output_num_func
+    function_spec generate_empty_output_func function_spec
     (generate_main_function_signature_and_var_decls program)
     function_spec (generate_stmts program) program.statements generate_return function_spec;
   close_out _oc

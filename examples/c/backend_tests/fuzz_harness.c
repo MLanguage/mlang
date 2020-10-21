@@ -52,6 +52,30 @@ int main(int argc, char *argv[])
     }
     else
     {
+        int num_outputs = m_num_outputs();
+        m_value output_array_for_m[num_outputs];
+        m_output_to_array(output_array_for_m, output);
+        // We print the test case found in the FIP format on stdin
+        printf("#NOM\n");
+        printf("RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
+        printf("#ENTREES-PRIMITIF");
+        for (int i = 0; i < num_inputs; i++)
+        {
+            printf("%s/%f", m_get_input_name_from_index(i), input_array_for_m[i].value);
+        }
+        printf("#CONTROLES-PRIMITIF");
+        printf("#RESULTATS-PRIMITIF");
+        // Here should go the output variable
+        for (int i = 0; i < num_outputs; i++)
+        {
+            printf("%s/%f", m_get_output_name_from_index(i), output_array_for_m[i].value);
+        }
+        printf("#ENTREES-CORRECTIF");
+        printf("#CONTROLES-CORRECTIF");
+        printf("#RESULTATS-CORRECTIF");
+        printf("##");
+
+        // Aborting to signal the fuzzer that this is a good one
         abort();
     }
 }
