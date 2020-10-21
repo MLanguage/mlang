@@ -1,4 +1,4 @@
-#include "ir_simulateur_simplifie_inputs_no_outs_2018.h"
+#include "ir_tests.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -12,14 +12,15 @@ int main(int argc, char *argv[])
     }
 
     int num_inputs = m_num_inputs();
-    long correct_string_size = 2 * num_inputs + 1;
+    int size_per_value = 1 + sizeof(unsigned int);
+    long correct_string_size = size_per_value * num_inputs + 1;
 
     FILE *input_file = fopen(argv[1], "r");
     fseek(input_file, 0, SEEK_END);
     long fsize = ftell(input_file);
     if (fsize < correct_string_size)
     {
-        printf("%d != %d\n", (int)correct_string_size, (int)fsize);
+        printf("Input file size: %ld (correct string size %ld)\n", fsize, correct_string_size);
         return 2;
     }
     rewind(input_file);
@@ -34,21 +35,20 @@ int main(int argc, char *argv[])
     {
         // A char holds values from 0 to 65535 so it's a good range for
         // our input values
-        char *value = input_string + 2 * i;
-        char *undefined = input_string + 2 * i + 1;
+        char *undefined = input_string + size_per_value * i;
+        char *value = input_string + size_per_value * i + 1;
         m_value input = (struct m_value){
-            .undefined = (((unsigned int)*undefined) > 32767) ? true : false,
-            .value = (double)((unsigned int)(*value)),
+            .undefined = ((unsigned int)*undefined > 32767) ? true : false,
+            .value = (double)(*((unsigned int *)value)),
         };
         input_array_for_m[i] = input;
     }
-
     // Then we call the program
     m_input input_for_m = m_input_from_array(input_array_for_m);
     m_output output = m_extracted(input_for_m);
     if (output.is_error)
     {
-        return 1;
+        return 3;
     }
     else
     {

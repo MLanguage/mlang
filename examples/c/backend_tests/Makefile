@@ -87,7 +87,7 @@ endif
 
 fuzz_harness.exe: C_COMPILER=afl-clang
 fuzz_harness.exe: export AFL_DONT_OPTIMIZE=1
-fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
+fuzz_harness.exe: ir_tests.o fuzz_harness.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
 AFL_FUZZ=afl-fuzz
@@ -99,9 +99,9 @@ else
 endif
 
 launch_fuzz: fuzz_harness.exe
-	ulimit -s 65536
+	ulimit -s 65536; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
-		-m 500 -t 50 $(AFL_JOB_FLAG) \
+		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
 clean:
