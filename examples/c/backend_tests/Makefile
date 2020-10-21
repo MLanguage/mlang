@@ -87,7 +87,7 @@ FULL_INPUTS_FUZZ?=0
 ifeq ($(FULL_INPUTS_FUZZ), 1)
     FUZZ_M_SPEC=all_ins_no_outs_2018
 else
-    FUZZ_M_SPEC=simulateur_simplifie_inputs_no_outs_2018
+    FUZZ_M_SPEC=simulateur_simplifie_2018
 endif
 
 fuzz_harness.exe: C_COMPILER=afl-clang

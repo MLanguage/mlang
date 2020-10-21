@@ -1,4 +1,4 @@
-#include "ir_simulateur_simplifie_inputs_no_outs_2018.h"
+#include "ir_simulateur_simplifie_2018.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -59,22 +59,22 @@ int main(int argc, char *argv[])
         // We print the test case found in the FIP format on stdin
         printf("#NOM\n");
         printf("RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
-        printf("#ENTREES-PRIMITIF");
+        printf("#ENTREES-PRIMITIF\n");
         for (int i = 0; i < num_inputs; i++)
         {
-            printf("%s/%f", m_get_input_name_from_index(i), input_array_for_m[i].value);
+            printf("%s/%f\n", m_get_input_name_from_index(i), input_array_for_m[i].value);
         }
-        printf("#CONTROLES-PRIMITIF");
-        printf("#RESULTATS-PRIMITIF");
+        printf("#CONTROLES-PRIMITIF\n");
+        printf("#RESULTATS-PRIMITIF\n");
         // Here should go the output variable
         for (int i = 0; i < num_outputs; i++)
         {
-            printf("%s/%f", m_get_output_name_from_index(i), output_array_for_m[i].value);
+            printf("%s/%f\n", m_get_output_name_from_index(i), output_array_for_m[i].value);
         }
-        printf("#ENTREES-CORRECTIF");
-        printf("#CONTROLES-CORRECTIF");
-        printf("#RESULTATS-CORRECTIF");
-        printf("##");
+        printf("#ENTREES-CORRECTIF\n");
+        printf("#CONTROLES-CORRECTIF\n");
+        printf("#RESULTATS-CORRECTIF\n");
+        printf("##\n");
 
         // Aborting to signal the fuzzer that this is a good one
         abort();
