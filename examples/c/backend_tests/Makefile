@@ -72,7 +72,7 @@ ir_%.o: ir_%.c
 ##################################################
 
 test_harness.exe: ir_tests.o test_harness.o ../m_value.o
-	$(C_COMPILER) -lm -o $@ $^
+	$(C_COMPILER) -fPIE -lm -o $@ $^
 
 run_tests: test_harness.exe FORCE
 	ulimit -s 65536; \
@@ -92,7 +92,7 @@ endif
 
 fuzz_harness.exe: C_COMPILER=afl-clang
 fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
-	$(C_COMPILER) -lm -o $@ $^
+	$(C_COMPILER) -fPIE -lm -o $@ $^
 
 AFL_FUZZ=afl-fuzz
 
