@@ -1,4 +1,4 @@
-#include "ir_tests.h"
+#include "ir_simulateur_simplifie_inputs_no_outs_2018.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
     else
     {
         int num_outputs = m_num_outputs();
+
         m_value output_array_for_m[num_outputs];
         m_output_to_array(output_array_for_m, output);
         // We print the test case found in the FIP format on stdin

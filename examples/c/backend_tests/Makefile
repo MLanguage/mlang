@@ -91,7 +91,7 @@ else
 endif
 
 fuzz_harness.exe: C_COMPILER=afl-clang
-fuzz_harness.exe: ir_tests.o fuzz_harness.o ../m_value.o
+fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
 AFL_FUZZ=afl-fuzz
