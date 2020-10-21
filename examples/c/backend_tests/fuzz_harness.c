@@ -33,13 +33,14 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < num_inputs; i++)
     {
-        // A char holds values from 0 to 65535 so it's a good range for
-        // our input values
         char *undefined = input_string + size_per_value * i;
         char *value = input_string + size_per_value * i + 1;
+        bool undefined_v = ((unsigned int)*undefined > 32767) ? true : false;
+        // Values cannot have more than 10 digits
+        unsigned int value_v = (*((unsigned int *)value)) % 10000000000;
         m_value input = (struct m_value){
-            .undefined = ((unsigned int)*undefined > 32767) ? true : false,
-            .value = (double)(*((unsigned int *)value)),
+            .undefined = undefined_v,
+            .value = (double)value_v,
         };
         input_array_for_m[i] = input;
     }
