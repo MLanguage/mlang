@@ -306,7 +306,10 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   in
   match v with
   | Some v -> v
-  | None -> Errors.raise_spanned_error "alias not found" (Pos.get_position alias)
+  | None ->
+      Errors.raise_spanned_error
+        (Format.asprintf "alias not found: %s" (Pos.unmark alias))
+        (Pos.get_position alias)
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try

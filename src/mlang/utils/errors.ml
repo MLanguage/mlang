@@ -14,7 +14,7 @@
 exception StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 
 let format_structured_error fmt ((msg, pos) : string * (string option * Pos.t) list) =
-  Format.fprintf fmt "%s%s%s" msg
+  Format.fprintf fmt "%s%s%s%s" msg
     (if List.length pos = 0 then "" else "\n\n")
     (String.concat "\n\n"
        (List.map
@@ -23,6 +23,7 @@ let format_structured_error fmt ((msg, pos) : string * (string option * Pos.t) l
               (match msg with None -> "" | Some msg -> msg ^ "\n")
               (Pos.retrieve_loc_text pos))
           pos))
+    (if List.length pos = 0 then "" else "\n")
 
 let raise_spanned_error (msg : string) ?(span_msg : string option) (span : Pos.t) : 'a =
   raise (StructuredError (msg, [ (span_msg, span) ], None))

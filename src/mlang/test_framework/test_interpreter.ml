@@ -19,10 +19,14 @@ let parse_file (test_name : string) : test_file =
   let filebuf = Lexing.from_channel input in
   let filebuf = { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name } } in
   let f =
-    try Test_parser.test_file Test_lexer.token filebuf
-    with Errors.StructuredError e ->
-      close_in input;
-      raise (Errors.StructuredError e)
+    try Test_parser.test_file Test_lexer.token filebuf with
+    | Errors.StructuredError e ->
+        close_in input;
+        raise (Errors.StructuredError e)
+    | Test_parser.Error ->
+        close_in input;
+        Errors.raise_spanned_error "Test syntax error"
+          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
   in
   close_in input;
   f
@@ -189,29 +193,36 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           code_coverage_acc
       in
       (name :: successes, failures, code_coverage_acc)
-    with Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
-      Cli.debug_flag := true;
-      match (bindings, Pos.unmark expr) with
-      | ( [ (v, Bir_interpreter.SimpleVar l1) ],
-          Unop
-            ( Mast.Not,
-              ( Mir.Binop
-                  ( (Mast.And, _),
-                    ( Comparison
-                        ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+    with
+    | Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
+        Cli.debug_flag := true;
+        match (bindings, Pos.unmark expr) with
+        | ( [ (v, Bir_interpreter.SimpleVar l1) ],
+            Unop
+              ( Mast.Not,
+                ( Mir.Binop
+                    ( (Mast.And, _),
+                      ( Comparison
+                          ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+                        _ ),
                       _ ),
-                    _ ),
-                _ ) ) ) ->
-          Cli.error_print "Test %s incorrect (error on variable %s)" name
-            (Pos.unmark v.Variable.name);
-          let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures, code_coverage_acc)
-      | _ ->
-          Cli.error_print "Test %s incorrect (error%s %a raised)" name
-            (if List.length err > 1 then "s" else "")
-            (Format.pp_print_list Format.pp_print_string)
-            (List.map (fun x -> Pos.unmark x.Error.name) err);
-          (successes, failures, code_coverage_acc) )
+                  _ ) ) ) ->
+            Cli.error_print "Test %s incorrect (error on variable %s)" name
+              (Pos.unmark v.Variable.name);
+            let errs_varname = try VariableMap.find v failures with Not_found -> [] in
+            ( successes,
+              VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
+              code_coverage_acc )
+        | _ ->
+            Cli.error_print "Test %s incorrect (error%s %a raised)" name
+              (if List.length err > 1 then "s" else "")
+              (Format.pp_print_list Format.pp_print_string)
+              (List.map (fun x -> Pos.unmark x.Error.name) err);
+            (successes, failures, code_coverage_acc) )
+    | Errors.StructuredError (msg, pos, kont) ->
+        Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
+        (match kont with None -> () | Some kont -> kont ());
+        (successes, failures, code_coverage_acc)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty, VariableMap.empty)
@@ -275,7 +286,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     Cli.warning_print "The estimated code coverage is:";
     Cli.warning_print "-> assigmnents never covered: %.3f%%"
       (float_of_int not_covered /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only the undefined value: %.3f%%"
+    Cli.warning_print "-> assigmnents covered by only one value (possibly undefined): %.3f%%"
       (float_of_int one_value /. float_of_int all_code_locs_num *. 100.);
     Cli.warning_print "-> assigmnents covered by only one value different from undefined: %.3f%%"
       (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num *. 100.);
