@@ -154,7 +154,7 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   if code_coverage then Bir_instrumentation.code_coverage_init ();
   ignore
     (Bir_interpreter.evaluate_program combined_program
-       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
+       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx input_file)
        (-code_loc_offset));
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result

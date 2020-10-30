@@ -113,7 +113,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
             let end_ctx =
               Bir_interpreter.evaluate_program combined_program
-                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx inputs)
+                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx inputs)
                 0
             in
             Bir_interface.print_output function_spec end_ctx
