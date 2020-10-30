@@ -109,7 +109,7 @@ end
 type typ = Real
 [@@deriving visitors { variety = "iter"; nude = true; polymorphic = true; name = "typ_iter" }]
 
-type literal = Float of float | Undefined [@@deriving eq]
+type literal = Float of float | Undefined [@@deriving eq, ord]
 
 let false_literal = Float 0.
 
