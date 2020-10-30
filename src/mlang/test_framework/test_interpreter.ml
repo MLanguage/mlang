@@ -79,11 +79,11 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
            in
            let second_exp =
              ( Mast.Comparison
-                 ( (Gte, pos),
+                 ( (Lte, pos),
                    ( Mast.Binop
                        ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
+                         (Literal (to_ast_literal value), pos),
+                         (Literal (Variable (Normal var)), pos) ),
                      pos ),
                    (Literal (Float 0.), pos) ),
                pos )
