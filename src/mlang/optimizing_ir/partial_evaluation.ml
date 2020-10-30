@@ -132,7 +132,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Literal _, Literal _ ->
               Mir.Literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
-                   (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
+                   (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e)
+                   RegularFloat)
           | _ -> Comparison (op, new_e1, new_e2)
         end
         e
@@ -146,7 +147,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | _, Literal _, Literal _ ->
               Mir.Literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
-                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
+                   RegularFloat)
               (* first all the combinations giving undefined *)
           | Mast.And, Literal Undefined, _ -> Mir.Literal Undefined
           | Mast.And, _, Literal Undefined -> Mir.Literal Undefined
@@ -204,7 +206,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Literal _ ->
               Mir.Literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
-                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1)
+                   RegularFloat)
           | _ -> Unop (op, new_e1)
         end
         e
@@ -290,7 +293,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
       if all_args_literal then
         Pos.same_pos_as
-          (Mir.Literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e))
+          (Mir.Literal
+             (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat))
           e
       else new_e
 

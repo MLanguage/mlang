@@ -27,8 +27,11 @@ MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
 
 MPP_FUNCTION?=compute_double_liquidation_pvro
 
+PRECISION?=double
+
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
+	--precision $(PRECISION) \
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 

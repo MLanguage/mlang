@@ -540,14 +540,31 @@ module Make (R : Bir_real.Real) = struct
       else raise (RuntimeError (e, ctx))
 end
 
-module RegularRealFloatInterpreter = Make (Bir_real.RegularFloatReal)
+module RegularFloatInterpreter = Make (Bir_real.RegularFloatReal)
+module MPFRInterpreter = Make (Bir_real.MPFRReal)
 
-let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int) :
-    vanilla_ctx =
-  RegularRealFloatInterpreter.evaluate_program p ctx code_loc_start_value
+type value_sort = RegularFloat | MPFR
 
-let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.marked) : literal =
-  RegularRealFloatInterpreter.value_to_literal
-    (RegularRealFloatInterpreter.evaluate_expr
-       (RegularRealFloatInterpreter.vanilla_ctx_to_ctx ctx)
-       p e)
+let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int)
+    (sort : value_sort) : vanilla_ctx =
+  let f =
+    match sort with
+    | RegularFloat -> RegularFloatInterpreter.evaluate_program
+    | MPFR -> MPFRInterpreter.evaluate_program
+  in
+  f p ctx code_loc_start_value
+
+let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.marked)
+    (sort : value_sort) : literal =
+  let f p e =
+    match sort with
+    | RegularFloat ->
+        RegularFloatInterpreter.value_to_literal
+          (RegularFloatInterpreter.evaluate_expr
+             (RegularFloatInterpreter.vanilla_ctx_to_ctx ctx)
+             p e)
+    | MPFR ->
+        MPFRInterpreter.value_to_literal
+          (MPFRInterpreter.evaluate_expr (MPFRInterpreter.vanilla_ctx_to_ctx ctx) p e)
+  in
+  f p e

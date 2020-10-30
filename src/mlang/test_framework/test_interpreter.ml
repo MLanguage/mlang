@@ -127,7 +127,8 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
 let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool)
-    (code_coverage : bool) : Bir_instrumentation.code_coverage_result =
+    (code_coverage : bool) (value_sort : Bir_interpreter.value_sort) :
+    Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -155,7 +156,7 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   ignore
     (Bir_interpreter.evaluate_program combined_program
        (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx input_file)
-       (-code_loc_offset));
+       (-code_loc_offset) value_sort);
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
@@ -170,7 +171,7 @@ type coverage_kind =
   | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
-    (code_coverage_activated : bool) =
+    (code_coverage_activated : bool) (value_sort : Bir_interpreter.value_sort) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -186,7 +187,9 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       =
     try
       Cli.debug_flag := false;
-      let code_coverage_result = check_test p (test_dir ^ name) optimize code_coverage_activated in
+      let code_coverage_result =
+        check_test p (test_dir ^ name) optimize code_coverage_activated value_sort
+      in
       Cli.debug_flag := true;
       let code_coverage_acc =
         Bir_instrumentation.merge_code_coverage_single_results_with_acc code_coverage_result

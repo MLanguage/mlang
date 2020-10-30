@@ -100,3 +100,56 @@ module RegularFloatReal : Real = struct
 
   let max x y = max x y
 end
+
+module MPFRReal : Real = struct
+  type t = Mpfrf.t
+
+  let format_t fmt f = Format.fprintf fmt "%f" (Mpfrf.to_float ~round:Near f)
+
+  let modf x =
+    let x = Mpfrf.to_mpfr x in
+    let frac_part = Mpfr.init () in
+    let int_part = Mpfr.init () in
+    ignore (Mpfr.modf frac_part int_part x Near);
+    (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
+
+  let copysign x y =
+    match (Mpfrf.sgn x, Mpfrf.sgn y) with
+    | 0, _ -> x
+    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
+    | _ -> Mpfrf.sub (Mpfrf.of_int 0 Near) x Near
+
+  let of_int i = Mpfrf.of_int i Near
+
+  let to_int f = int_of_float (Mpfrf.to_float f)
+
+  let of_float f = Mpfrf.of_float f Near
+
+  let to_float f = Mpfrf.to_float ~round:Near f
+
+  let zero = Mpfrf.of_int 0 Near
+
+  let one = Mpfrf.of_int 1 Near
+
+  let ( =. ) x y = Mpfrf.cmp x y = 0
+
+  let ( >=. ) x y = Mpfrf.cmp x y >= 0
+
+  let ( >. ) x y = Mpfrf.cmp x y > 0
+
+  let ( <. ) x y = Mpfrf.cmp x y < 0
+
+  let ( <=. ) x y = Mpfrf.cmp x y <= 0
+
+  let ( +. ) x y = Mpfrf.add x y Near
+
+  let ( -. ) x y = Mpfrf.sub x y Near
+
+  let ( /. ) x y = Mpfrf.mul x y Near
+
+  let ( *. ) x y = Mpfrf.div x y Near
+
+  let min x y = if x >. y then y else x
+
+  let max x y = if x >. y then x else y
+end

@@ -102,10 +102,18 @@ let code_coverage =
     & info [ "code_coverage" ]
         ~doc:"Instruments the interpreter to retrieve the code coverage (use with --run_all_tests)")
 
+let precision =
+  Arg.(
+    value
+    & opt (some string) (Some "double")
+    & info [ "precision"; "p" ] ~docv:"PRECISION"
+        ~doc:"Precision of the interpreter: double, mpfr (default double)")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
-    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage)
+    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage
+    $ precision)
 
 let info =
   let doc =
