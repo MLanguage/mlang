@@ -1299,12 +1299,13 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                       (Pos.unmark verif_cond).Mast.verif_cond_errors
                   in
                   if
-                    List.for_all
-                      (fun err ->
-                        match err with
-                        | None -> false (* if the error is undefined then we take it anyway *)
-                        | Some err -> err.Mir.Error.typ = Mast.Information)
-                      errs
+                    List.length errs > 0
+                    && List.for_all
+                         (fun err ->
+                           match err with
+                           | None -> false (* if the error is undefined then we take it anyway *)
+                           | Some err -> err.Mir.Error.typ = Mast.Information)
+                         errs
                   then
                     (* If all errors raised by this verification condition are informative, we don't
                        need it! *)
