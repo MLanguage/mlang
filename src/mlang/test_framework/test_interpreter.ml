@@ -65,27 +65,26 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
     Bir_interface.translate_cond program.idmap
       (List.map
          (fun (var, value, pos) ->
-           (* we allow a difference of 0 between the control value and the result *)
+           let casted_var =
+             ( Mast.Binop
+                 ((Mast.Add, pos), (Literal (Variable (Normal var)), pos), (Literal (Float 0.), pos)),
+               pos )
+           in
+           (* we allow a difference of 0.000001 between the control value and the result *)
            let first_exp =
              ( Mast.Comparison
                  ( (Lte, pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
+                   ( Mast.Binop ((Mast.Sub, pos), casted_var, (Literal (to_ast_literal value), pos)),
                      pos ),
-                   (Literal (Float 0.000001), pos) ),
+                   (Literal (Float 0.), pos) ),
                pos )
            in
            let second_exp =
              ( Mast.Comparison
-                 ( (Gte, pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
+                 ( (Lte, pos),
+                   ( Mast.Binop ((Mast.Sub, pos), casted_var, (Literal (to_ast_literal value), pos)),
                      pos ),
-                   (Literal (Float 0.000001), pos) ),
+                   (Literal (Float 0.), pos) ),
                pos )
            in
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
