@@ -110,7 +110,7 @@ module MPFRReal : Real = struct
     let x = Mpfrf.to_mpfr x in
     let frac_part = Mpfr.init () in
     let int_part = Mpfr.init () in
-    ignore (Mpfr.modf frac_part int_part x Near);
+    ignore (Mpfr.modf int_part frac_part x Near);
     (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
 
   let copysign x y =

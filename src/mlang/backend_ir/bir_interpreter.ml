@@ -294,11 +294,13 @@ module Make (R : Bir_real.Real) = struct
       | Undefined -> assert false (* should not happen *)
       | Real f ->
           let fraction, int_part = R.modf f in
-          if R.(fraction = zero) then int_part
+          if R.(fraction =. zero) then int_part
           else
             raise
               (RuntimeError
-                 (FloatIndex (Format.asprintf "%a" Pos.format_position pos), ctx_to_vanilla_ctx ctx))
+                 ( FloatIndex
+                     (Format.asprintf "got value %a %a" R.format_t f Pos.format_position pos),
+                   ctx_to_vanilla_ctx ctx ))
     in
     if R.(idx >=. R.of_int size) then Undefined
     else if R.(idx <. R.zero) then Real R.zero
