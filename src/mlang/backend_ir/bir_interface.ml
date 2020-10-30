@@ -119,7 +119,7 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
     Mast.Verification
       {
         verif_name = [ ("000", Pos.no_pos) ];
-        verif_applications = [];
+        verif_applications = [ ("iliad", Pos.no_pos) ];
         verif_conditions = verif_conds;
       }
   in

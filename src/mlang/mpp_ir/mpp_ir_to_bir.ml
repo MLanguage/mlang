@@ -193,7 +193,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             let new_l =
               Mir.Variable.new_var (l, pos) None ("", pos)
                 (Mast_to_mvg.dummy_exec_number pos)
-                ~attributes:[] ~is_income:false
+                ~attributes:[] ~is_income:false ~is_table:None
             in
             let ctx = { ctx with new_variables = StringMap.add l new_l ctx.new_variables } in
             (ctx, new_l)

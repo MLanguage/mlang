@@ -27,21 +27,22 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 all: backend_tests $(shell find . -name "run_*.py")
 
 ##################################################
-# Generating Python files from Mlang
+# Generating and running Python files from Mlang
 ##################################################
 
-ir_%.py: FORCE
+ir_%.py: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend python --output $@ \
-		--function_spec ../../m_specs/$*.m_spec \
+		--function_spec $^ \
 		$(SOURCE_FILES)
+
+run_%.py: ir_%.py
+	python3.7 $@
 
 ##################################################
 # Running the tests
 ##################################################
 
-run_%.py: ir_%.py
-	python3.7 $@
 
 backend_tests: FORCE
 	$(MAKE) -C backend_tests

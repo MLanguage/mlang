@@ -51,8 +51,7 @@ let backend =
   Arg.(
     value
     & opt (some string) None
-    & info [ "backend"; "b" ] ~docv:"BACKEND"
-        ~doc:"Backend selection: interpreter, python, java, clojure")
+    & info [ "backend"; "b" ] ~docv:"BACKEND" ~doc:"Backend selection: interpreter, Python, C")
 
 let function_spec =
   Arg.(
