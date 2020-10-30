@@ -70,7 +70,10 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     let value_sort =
       let precision = Option.get precision in
       if precision = "double" then Bir_interpreter.RegularFloat
-      else if precision = "mpfr" then Bir_interpreter.MPFR
+      else if precision = "mpfr" then begin
+        Mpfr.set_default_prec 1024;
+        Bir_interpreter.MPFR
+      end
       else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
     in
     if run_all_tests <> None then begin

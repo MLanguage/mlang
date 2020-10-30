@@ -74,7 +74,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float 0.), pos) ),
+                   (Literal (Float 0.000001), pos) ),
                pos )
            in
            let second_exp =
@@ -85,7 +85,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float 0.), pos) ),
+                   (Literal (Float 0.000001), pos) ),
                pos )
            in
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))

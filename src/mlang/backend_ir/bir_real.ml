@@ -55,6 +55,8 @@ module type Real = sig
   val min : t -> t -> t
 
   val max : t -> t -> t
+
+  val is_nan_or_inf : t -> bool
 end
 
 module RegularFloatReal : Real = struct
@@ -99,6 +101,8 @@ module RegularFloatReal : Real = struct
   let min x y = min x y
 
   let max x y = max x y
+
+  let is_nan_or_inf x = not (Float.is_finite x)
 end
 
 module MPFRReal : Real = struct
@@ -145,11 +149,13 @@ module MPFRReal : Real = struct
 
   let ( -. ) x y = Mpfrf.sub x y Near
 
-  let ( /. ) x y = Mpfrf.mul x y Near
+  let ( /. ) x y = Mpfrf.div x y Near
 
-  let ( *. ) x y = Mpfrf.div x y Near
+  let ( *. ) x y = Mpfrf.mul x y Near
 
   let min x y = if x >. y then y else x
 
   let max x y = if x >. y then x else y
+
+  let is_nan_or_inf x = not (Mpfrf.number_p x)
 end
