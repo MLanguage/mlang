@@ -11,34 +11,27 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(* FIXME: new definedness optimizations
+(* FIXME:
+   new definedness optimizations
    - max(0, -x) ~> -min(0,x)?
-   - tag conditionals / max/min working on floats only for the backends to use the host operation?
-   - Literal op m_cond() -> put literal op inside conditional? At least in some cases?
-Also:
-   - x * (1 - b) + y * b ~> cond(b, x, y)?
- *)
+   - tag conditionals / max/min
+   working on floats only for the backends to use the host operation?
+   - Literal op m_cond() -> put literal op inside conditional? At least in some cases? Also:
+   - x * (1 - b) + y * b ~> cond(b, x, y)? *)
 open Oir
 
-type partial_expr =
-  | PartialLiteral of Mir.literal
-  | UnknownFloat
-[@@deriving ord]
+type partial_expr = PartialLiteral of Mir.literal | UnknownFloat [@@deriving ord]
 
 let format_partial_expr fmt pe =
   match pe with
   | PartialLiteral l -> Format.fprintf fmt "PartialLiteral %a" Format_mir.format_literal l
   | UnknownFloat -> Format.fprintf fmt "UnknwonFloat"
 
-
 type definedness = Bot | Undefined | Float | Top
 
 let format_definedness fmt d =
-  Format.fprintf fmt (match d with
-                      | Bot -> "bot"
-                      | Undefined -> "undef"
-                      | Float -> "float"
-                      | Top -> "top")
+  Format.fprintf fmt
+    (match d with Bot -> "bot" | Undefined -> "undef" | Float -> "float" | Top -> "top")
 
 let maybe_undefined = function Undefined | Top -> true | _ -> false
 
@@ -84,23 +77,24 @@ let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
   | _, Float -> Some UnknownFloat
   | _ -> None
 
-type var_literal =
-  | SimpleVar of partial_expr
-  | TableVar of int * partial_expr array
+type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
 [@@deriving ord]
 
 let format_var_literal fmt v =
   match v with
   | SimpleVar pe -> Format.fprintf fmt "SimpleVar %a" format_partial_expr pe
-  | TableVar (i, a) -> Format.fprintf fmt "TableVar[%d, %a]" i (Format.pp_print_list format_partial_expr) (Array.to_list a)
+  | TableVar (i, a) ->
+      Format.fprintf fmt "TableVar[%d, %a]" i
+        (Format.pp_print_list format_partial_expr)
+        (Array.to_list a)
 
 let format_block fmt (id, ov) =
-  Format.fprintf fmt "%d: %a" id (fun fmt ov ->
+  Format.fprintf fmt "%d: %a" id
+    (fun fmt ov ->
       match ov with
       | None -> Format.fprintf fmt "None"
-      | Some v -> Format.fprintf fmt "Some %a" format_var_literal v) ov
-
-
+      | Some v -> Format.fprintf fmt "Some %a" format_var_literal v)
+    ov
 
 type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
@@ -145,13 +139,10 @@ let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.V
         ctx.ctx_vars;
   }
 
-
-let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
-    var_literal option =
+let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : var_literal option =
   let curr_block = Option.get ctx.ctx_inside_block in
   match Mir.VariableMap.find_opt var ctx.ctx_vars with
-  | None ->
-     None
+  | None -> None
   | Some defs -> (
       let previous_defs = Mir.VariableMap.find var ctx.ctx_vars in
       let dominating_defs =
@@ -168,8 +159,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
         List.sort (fun (b1, _) (b2, _) -> compare_for_min_dom ctx.ctx_doms b1 b2) dominating_defs
       in
       match sorted_dominating_defs with
-      | [] ->
-         None
+      | [] -> None
       | (_, None) :: _ -> assert false (* should not happen *)
       | (def_block, Some def) :: _ ->
           (* Now we have the closest def in a block that dominates the current block. But something
@@ -189,22 +179,23 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
             in
             if BlockMap.cardinal exists_other_def_in_between > 0 then
               let defs = List.map snd (BlockMap.bindings exists_other_def_in_between) in
-              let result = List.fold_left (fun acc od ->
-                               match acc, od with
-                               | _, None | None, _ -> None
-                               | Some (SimpleVar a), Some (SimpleVar d) ->
-                                  begin match a, d with
-                                  | PartialLiteral (Float _), PartialLiteral (Float _)
-                                    | PartialLiteral (Float _), UnknownFloat
-                                    | UnknownFloat, PartialLiteral (Float _)
-                                    | UnknownFloat, UnknownFloat ->
-                                     Some (SimpleVar UnknownFloat)
-                                  | _ ->
-                                     None
-                                  end
-                               | _ -> None (* FIXME: tablevars? *)
-                             )
-                             (Some def) defs in
+              let result =
+                List.fold_left
+                  (fun acc od ->
+                    match (acc, od) with
+                    | _, None | None, _ -> None
+                    | Some (SimpleVar a), Some (SimpleVar d) -> (
+                        match (a, d) with
+                        | PartialLiteral (Float _), PartialLiteral (Float _)
+                        | PartialLiteral (Float _), UnknownFloat
+                        | UnknownFloat, PartialLiteral (Float _)
+                        | UnknownFloat, UnknownFloat ->
+                            Some (SimpleVar UnknownFloat)
+                        | _ -> None )
+                    | _ -> None
+                    (* FIXME: tablevars? *))
+                  (Some def) defs
+              in
               (* let () = if result = None then
                *            Cli.debug_print "get_closest_dominating_def %s: multiple conflicting definitions:@.%a@.%a"
                *              (Pos.unmark var.name)
@@ -212,7 +203,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
                *              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") format_block)
                *              (BlockMap.bindings exists_other_def_in_between) in *)
               result
-            else Some def)
+            else Some def )
 
 let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.ctx =
   {
@@ -229,255 +220,258 @@ let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter
               ctx.ctx_vars));
   }
 
-let (=>) b1 b2 = not b1 || b2
-let check e d =
-  if d = Undefined && Pos.unmark e <> Mir.Literal Undefined then
-    failwith "check"
-  else match Pos.unmark e with
-       | Literal Undefined when d <> Undefined -> failwith "check"
-       | Literal (Float _) when d <> Float -> failwith "check"
-       | _ -> ()
+let ( => ) b1 b2 = (not b1) || b2
 
+let check e d =
+  match Pos.unmark e with
+  | Mir.Literal Undefined when d <> Undefined -> false
+  | Literal (Float _) when d <> Float -> false
+  | _ -> true
 
 let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
     (e : Mir.expression Pos.marked) : Mir.expression Pos.marked * definedness =
-  let new_e, d = match Pos.unmark e with
-  | Comparison (op, e1, e2) ->
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      let new_e2, d2 = partially_evaluate_expr ctx p e2 in
-      ( Pos.same_pos_as
-          begin
-            match (Pos.unmark new_e1, Pos.unmark new_e2) with
-            | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
-            | Literal _, Literal _ ->
-                Mir.Literal
-                  (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                     (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
-            | _ ->
-               if d1 = Undefined || d2 = Undefined then Mir.Literal Undefined
-               else
-                 Comparison (op, new_e1, new_e2)
-          end
-          e,
-        undef_absorb d1 d2 )
-  | Binop (op, e1, e2) ->
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      let new_e2, d2 = partially_evaluate_expr ctx p e2 in
-      let new_e, d =
-        match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
-        (* calling the interpreter when verything is a literal *)
-        | _, Literal _, Literal _ ->
-            from_literal
-              (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                 (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
-            (* first all the combinations giving undefined *)
-        | Mast.And, Literal Undefined, _ -> from_literal Undefined
-        | Mast.And, _, Literal Undefined -> from_literal Undefined
-        | Mast.Or, Literal Undefined, _ -> from_literal Undefined
-        | Mast.Or, _, Literal Undefined -> from_literal Undefined
-        | Mast.Mul, _, Literal Undefined -> from_literal Undefined
-        | Mast.Mul, Literal Undefined, _ -> from_literal Undefined
-        | Mast.Div, Literal Undefined, _ -> from_literal Undefined
-        | Mast.Div, _, Literal Undefined -> from_literal Undefined
-        (* logical or *)
-        | Mast.Or, Literal (Float f), _ when f <> 0. -> from_literal Mir.true_literal
-        | Mast.Or, _, Literal (Float f) when f <> 0. -> from_literal Mir.true_literal
-        | Mast.Or, Literal (Float 0.), _ -> (Pos.unmark new_e2, d2)
-        | Mast.Or, _, Literal (Float 0.) -> (Pos.unmark new_e1, d1)
-        (* logican and *)
-        | Mast.And, Literal (Float 0.), _ -> from_literal Mir.false_literal
-        | Mast.And, _, Literal (Float 0.) -> from_literal Mir.false_literal
-        | Mast.And, Literal (Float f), _ when f <> 0. -> (Pos.unmark new_e2, d2)
-        | Mast.And, _, Literal (Float f) when f <> 0. -> (Pos.unmark new_e1, d1)
-        (* addition *)
-        | Mast.Add, Literal Undefined, _ -> (Pos.unmark new_e2, d2)
-        | Mast.Add, _, Literal Undefined -> (Pos.unmark new_e1, d1)
-        | Mast.Add, _, Literal (Float f) when f < 0. ->
-            ( Binop (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2),
-              undef_cast d1 Float )
-        | Mast.Add, _, Unop (Minus, e2') ->
-           (Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'), undef_cast d1 d2)
-        | (Mast.Add | Mast.Sub), Literal (Float 0.), _ when d2 = Float ->
-           Pos.unmark new_e2, d2
-        | (Mast.Add | Mast.Sub), _, Literal (Float 0.) when d1 = Float ->
-           Pos.unmark new_e1, d1
-        (* substraction *)
-        | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
-            from_literal (Float 0.)
-        | Mast.Sub, Literal Undefined, e' ->
-            (Unop (Minus, Pos.same_pos_as e' e), undef_cast Undefined d2)
-        | Mast.Sub, e', Literal Undefined -> (e', undef_cast d1 Undefined)
-        (* multiplication *)
-        | Mast.Mul, Literal (Float 1.), e' -> (e', undef_cast Float d2)
-        | Mast.Mul, e', Literal (Float 1.) -> (e', undef_cast d1 Float)
-        (* we can't optimize float multiplication by 0 here in the general case, because Undefined.
-           But if we know that the other term can't be undefined, then we can go ! This is the case
-           for the result of some functions *)
-        | Mast.Mul, Literal (Float 0.), _ when d2 = Float -> from_literal (Float 0.)
-        | Mast.Mul, _, Literal (Float 0.) when d1 = Float -> from_literal (Float 0.)
-        (* division *)
-        | Mast.Div, e', Literal (Float 1.) -> (e', d1)
-        | Mast.Div, Literal (Float 0.), _ -> from_literal (Mir.Float 0.)
-        (* default case *)
-        | (Mast.Add | Mast.Sub), _, _ -> (Binop (op, new_e1, new_e2), undef_cast d1 d2)
-        | (Mast.Mul | Mast.Div | Mast.And | Mast.Or), _, _ ->
-            (Binop (op, new_e1, new_e2), undef_absorb d1 d2)
-      in
-      (Pos.same_pos_as new_e e, d)
-  | Unop (op, e1) ->
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      let new_e, d =
+  let new_e, d =
+    match Pos.unmark e with
+    | Comparison (op, e1, e2) ->
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
+        let new_e2, d2 = partially_evaluate_expr ctx p e2 in
+        ( Pos.same_pos_as
+            begin
+              match (Pos.unmark new_e1, Pos.unmark new_e2) with
+              | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
+              | Literal _, Literal _ ->
+                  Mir.Literal
+                    (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                       (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
+              | _ ->
+                  if d1 = Undefined || d2 = Undefined then Mir.Literal Undefined
+                  else Comparison (op, new_e1, new_e2)
+            end
+            e,
+          undef_absorb d1 d2 )
+    | Binop (op, e1, e2) ->
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
+        let new_e2, d2 = partially_evaluate_expr ctx p e2 in
+        let new_e, d =
+          match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
+          (* calling the interpreter when verything is a literal *)
+          | _, Literal _, Literal _ ->
+              from_literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+              (* first all the combinations giving undefined *)
+          | Mast.And, Literal Undefined, _ -> from_literal Undefined
+          | Mast.And, _, Literal Undefined -> from_literal Undefined
+          | Mast.Or, Literal Undefined, _ -> from_literal Undefined
+          | Mast.Or, _, Literal Undefined -> from_literal Undefined
+          | Mast.Mul, _, Literal Undefined -> from_literal Undefined
+          | Mast.Mul, Literal Undefined, _ -> from_literal Undefined
+          | Mast.Div, Literal Undefined, _ -> from_literal Undefined
+          | Mast.Div, _, Literal Undefined -> from_literal Undefined
+          (* logical or *)
+          | Mast.Or, Literal (Float f), _ when f <> 0. -> from_literal Mir.true_literal
+          | Mast.Or, _, Literal (Float f) when f <> 0. -> from_literal Mir.true_literal
+          | Mast.Or, Literal (Float 0.), _ -> (Pos.unmark new_e2, d2)
+          | Mast.Or, _, Literal (Float 0.) -> (Pos.unmark new_e1, d1)
+          (* logican and *)
+          | Mast.And, Literal (Float 0.), _ -> from_literal Mir.false_literal
+          | Mast.And, _, Literal (Float 0.) -> from_literal Mir.false_literal
+          | Mast.And, Literal (Float f), _ when f <> 0. -> (Pos.unmark new_e2, d2)
+          | Mast.And, _, Literal (Float f) when f <> 0. -> (Pos.unmark new_e1, d1)
+          (* addition *)
+          | Mast.Add, Literal Undefined, _ -> (Pos.unmark new_e2, d2)
+          | Mast.Add, _, Literal Undefined -> (Pos.unmark new_e1, d1)
+          | Mast.Add, _, Literal (Float f) when f < 0. ->
+              ( Binop
+                  (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2),
+                undef_cast d1 Float )
+          | Mast.Add, _, Unop (Minus, e2') ->
+              (Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'), undef_cast d1 d2)
+          | Mast.Add, Literal (Float 0.), _ when d2 = Float -> Pos.unmark new_e2, d2
+          | Mast.Sub, Literal (Float 0.), _ when d2 = Float -> Unop (Minus, new_e2), d2
+          | (Mast.Add | Mast.Sub), _, Literal (Float 0.) when d1 = Float -> (Pos.unmark new_e1, d1)
+          (* substraction *)
+          | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
+              from_literal (Float 0.)
+          | Mast.Sub, Literal Undefined, e' ->
+              (Unop (Minus, Pos.same_pos_as e' e), d2)
+          | Mast.Sub, e', Literal Undefined -> (e', d1)
+          (* multiplication *)
+          | Mast.Mul, Literal (Float 1.), e' -> (e', undef_cast Float d2)
+          | Mast.Mul, e', Literal (Float 1.) -> (e', undef_cast d1 Float)
+          (* we can't optimize float multiplication by 0 here in the general case, because
+             Undefined. But if we know that the other term can't be undefined, then we can go ! This
+             is the case for the result of some functions *)
+          | Mast.Mul, Literal (Float 0.), _ when d2 = Float -> from_literal (Float 0.)
+          | Mast.Mul, _, Literal (Float 0.) when d1 = Float -> from_literal (Float 0.)
+          (* division *)
+          | Mast.Div, e', Literal (Float 1.) -> (e', d1)
+          | Mast.Div, Literal (Float 0.), _ -> from_literal (Mir.Float 0.)
+          (* default case *)
+          | (Mast.Add | Mast.Sub), _, _ -> (Binop (op, new_e1, new_e2), undef_cast d1 d2)
+          | (Mast.Mul | Mast.Div | Mast.And | Mast.Or), _, _ ->
+              (Binop (op, new_e1, new_e2), undef_absorb d1 d2)
+        in
+        (Pos.same_pos_as new_e e, d)
+    | Unop (op, e1) ->
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
+        let new_e, d =
+          match Pos.unmark new_e1 with
+          | Literal _ ->
+              from_literal
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
+          | _ -> (
+              ( Unop (op, new_e1),
+                match (op, d1) with
+                | Not, Float -> Float
+                | Not, Undefined -> Undefined
+                | Not, Top -> Top
+                | Minus, Float -> Float
+                | Minus, Undefined -> Float
+                | Minus, Top -> Float
+                | _ -> assert false ) )
+        in
+        (Pos.same_pos_as new_e e, d)
+    | Conditional (e1, e2, e3) -> (
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
+        let new_e2, d2 = partially_evaluate_expr ctx p e2 in
+        let new_e3, d3 = partially_evaluate_expr ctx p e3 in
+        match Pos.unmark new_e1 with
+        | Literal (Float 0.) -> (new_e3, d3)
+        | Literal (Float _) -> (new_e2, d2)
+        | _ ->
+            if Pos.unmark new_e1 = Literal Undefined || d1 = Undefined then
+              (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
+            else (Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e, join d2 d3) )
+    | Index (var, e1) ->
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
+        let new_e, d =
+          match Pos.unmark new_e1 with
+          | Literal Undefined -> from_literal Undefined
+          | Literal (Float f) -> (
+              let idx =
+                if
+                  let fraction, _ = modf f in
+                  fraction = 0.
+                then int_of_float f
+                else
+                  let err, ctx =
+                    ( Bir_interpreter.FloatIndex
+                        (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
+                      interpreter_ctx_from_partial_ev_ctx ctx )
+                  in
+                  if !Bir_interpreter.exit_on_rte then
+                    Bir_interpreter.raise_runtime_as_structured err ctx p
+                  else raise (Bir_interpreter.RuntimeError (err, ctx))
+              in
+              match get_closest_dominating_def (Pos.unmark var) ctx with
+              | Some (SimpleVar _) -> assert false (* should not happen *)
+              | Some (TableVar (size, es')) -> (
+                  if idx >= size || idx < 0 then from_literal Undefined
+                  else
+                    match es'.(idx) with
+                    | PartialLiteral e' -> from_literal e'
+                    | UnknownFloat -> (Mir.Index (var, new_e1), Float) )
+              | None -> (Mir.Index (var, new_e1), Top) )
+          | _ -> if d1 = Undefined then from_literal Undefined else (Mir.Index (var, new_e1), Top)
+        in
+        (Pos.same_pos_as new_e e, d)
+    | Literal l -> ( (e, match l with Undefined -> Undefined | Float _ -> Float) )
+    | Var var -> (
+        match get_closest_dominating_def var ctx with
+        | Some (SimpleVar pexpr) ->
+            let oe, d = partial_to_expr pexpr in
+            let new_e = match oe with Some e' -> e' | None -> Pos.unmark e in
+            (Pos.same_pos_as new_e e, d)
+        | Some (TableVar _) ->
+            (e, Top)
+            (* this case happens when calling functions like "multimax" *)
+            (* FIXME: definedness? *)
+        | r ->
+            if !peval_debug then
+              Cli.debug_print "%s ~> is_none:%b" (Pos.unmark var.name) (Option.is_none r);
+            (e, Top) )
+    | LocalVar lvar -> (
+        try
+          (* FIXME *)
+          let oe, d = partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars) in
+          match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
+        with Not_found -> (e, Top) )
+    | GenericTableIndex -> (e, Float)
+    | Error -> (e, Top) (* FIXME *)
+    (* let l1 = b in l2 *)
+    | LocalLet (l1, b, (LocalVar l2, _)) when Mir.LocalVariable.compare l1 l2 = 0 ->
+        partially_evaluate_expr ctx p b
+    | LocalLet (lvar, e1, e2) -> (
+        let new_e1, d1 = partially_evaluate_expr ctx p e1 in
         match Pos.unmark new_e1 with
         | Literal _ ->
-            from_literal
-              (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                 (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
-        | _ -> (
-            ( Unop (op, new_e1),
-              match (op, d1) with
-              | Not, Float -> Float
-              | Not, Undefined -> Undefined
-              | Not, Top -> Top
-              | Minus, Float -> Float
-              | Minus, Undefined -> Float
-              | Minus, Top -> Float
-              | _ -> assert false ) )
-      in
-      (Pos.same_pos_as new_e e, d)
-  | Conditional (e1, e2, e3) -> (
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      let new_e2, d2 = partially_evaluate_expr ctx p e2 in
-      let new_e3, d3 = partially_evaluate_expr ctx p e3 in
-      match Pos.unmark new_e1 with
-      | Literal (Float 0.) -> (new_e3, d3)
-      | Literal (Float _) -> (new_e2, d2)
-      | _ ->
-          if Pos.unmark new_e1 = Literal Undefined || d1 = Undefined then
-            (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
-          else (Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e, join d2 d3) )
-  | Index (var, e1) ->
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      let new_e, d =
-        match Pos.unmark new_e1 with
-        | Literal Undefined -> from_literal Undefined
-        | Literal (Float f) -> (
-            let idx =
-              if
-                let fraction, _ = modf f in
-                fraction = 0.
-              then int_of_float f
-              else
-                let err, ctx =
-                  ( Bir_interpreter.FloatIndex
-                      (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
-                    interpreter_ctx_from_partial_ev_ctx ctx )
-                in
-                if !Bir_interpreter.exit_on_rte then
-                  Bir_interpreter.raise_runtime_as_structured err ctx p
-                else raise (Bir_interpreter.RuntimeError (err, ctx))
-            in
-            match get_closest_dominating_def (Pos.unmark var) ctx with
-            | Some (SimpleVar _) -> assert false (* should not happen *)
-            | Some (TableVar (size, es')) -> (
-                if idx >= size || idx < 0 then from_literal Undefined
-                else
-                  match es'.(idx) with
-                  | PartialLiteral e' -> from_literal e'
-                  | UnknownFloat -> (Mir.Index (var, new_e1), Float) )
-            | None -> (Mir.Index (var, new_e1), Top) )
-        | _ -> if d1 = Undefined then from_literal Undefined else (Mir.Index (var, new_e1), Top)
-      in
-      (Pos.same_pos_as new_e e, d)
-  | Literal l -> ( (e, match l with Undefined -> Undefined | Float _ -> Float) )
-  | Var var -> (
-      match get_closest_dominating_def var ctx with
-      | Some (SimpleVar pexpr ) ->
-         let oe, d = partial_to_expr pexpr in
-         let new_e = match oe with | Some e' -> e' | None -> Pos.unmark e in
-         (Pos.same_pos_as new_e e, d)
-      | Some (TableVar _) ->
-          (e, Top) (* this case happens when calling functions like "multimax" *)
-            (* FIXME: definedness? *)
-      | r ->
-         if !peval_debug then Cli.debug_print "%s ~> is_none:%b" (Pos.unmark var.name) (Option.is_none r);
-         (e, Top) )
-  | LocalVar lvar -> (
-      try
-        (* FIXME *)
-        let oe, d = partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars) in
-        match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
-      with Not_found -> (e, Top) )
-  | GenericTableIndex -> (e, Float)
-  | Error -> (e, Top) (* FIXME *)
-  (* let l1 = b in l2 *)
-  | LocalLet (l1, b, (LocalVar l2, _)) when Mir.LocalVariable.compare l1 l2 = 0 ->
-      partially_evaluate_expr ctx p b
-  | LocalLet (lvar, e1, e2) -> (
-      let new_e1, d1 = partially_evaluate_expr ctx p e1 in
-      match Pos.unmark new_e1 with
-      | Literal _ ->
-          let new_ctx =
-            {
-              ctx with
-              ctx_local_vars =
-                Mir.LocalVariableMap.add lvar
-                  (Option.get (expr_to_partial (Pos.unmark new_e1) d1))
-                  ctx.ctx_local_vars;
-            }
-          in
-          partially_evaluate_expr new_ctx p e2
-      | _ ->
-          if d1 = Undefined then
             let new_ctx =
               {
                 ctx with
                 ctx_local_vars =
                   Mir.LocalVariableMap.add lvar
-                    (Option.get (expr_to_partial (Literal Undefined) d1))
+                    (Option.get (expr_to_partial (Pos.unmark new_e1) d1))
                     ctx.ctx_local_vars;
               }
             in
             partially_evaluate_expr new_ctx p e2
+        | _ ->
+            if d1 = Undefined then
+              let new_ctx =
+                {
+                  ctx with
+                  ctx_local_vars =
+                    Mir.LocalVariableMap.add lvar
+                      (Option.get (expr_to_partial (Literal Undefined) d1))
+                      ctx.ctx_local_vars;
+                }
+              in
+              partially_evaluate_expr new_ctx p e2
+            else
+              let new_e2, d2 = partially_evaluate_expr ctx p e2 in
+              let new_e, d =
+                match Pos.unmark new_e2 with
+                | Literal l -> from_literal l
+                | _ -> (Mir.LocalLet (lvar, new_e1, new_e2), d2)
+              in
+              (Pos.same_pos_as new_e e, d) )
+    | FunctionCall (func, args) ->
+        let new_args, new_ds =
+          List.split @@ List.map (fun arg -> partially_evaluate_expr ctx p arg) args
+        in
+        let all_args_literal =
+          List.for_all
+            (fun arg -> match Pos.unmark arg with Mir.Literal _ -> true | _ -> false)
+            new_args
+        in
+        let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
+        let new_e, d =
+          if all_args_literal then
+            from_literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e)
           else
-            let new_e2, d2 = partially_evaluate_expr ctx p e2 in
-            let new_e, d =
-              match Pos.unmark new_e2 with
-              | Literal l -> from_literal l
-              | _ -> (Mir.LocalLet (lvar, new_e1, new_e2), d2)
-            in
-            (Pos.same_pos_as new_e e, d) )
-  | FunctionCall (func, args) ->
-      let new_args, new_ds =
-        List.split @@ List.map (fun arg -> partially_evaluate_expr ctx p arg) args
-      in
-      let all_args_literal =
-        List.for_all
-          (fun arg -> match Pos.unmark arg with Mir.Literal _ -> true | _ -> false)
-          new_args
-      in
-      let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
-      let new_e, d =
-        if all_args_literal then
-          from_literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e)
-        else
-          match func with
-          | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
-          | PresentFunc ->
-             begin match List.hd new_ds with
-             | Undefined -> from_literal Mir.false_literal
-             | Float -> from_literal Mir.true_literal
-             | _ -> Pos.unmark new_e, Float
-             end
-          | MinFunc | MaxFunc | Multimax -> (Pos.unmark new_e, Float)
-          | _ -> assert false
-      in
-      (Pos.same_pos_as new_e e, d)
+            match func with
+            | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
+            | PresentFunc -> (
+                match List.hd new_ds with
+                | Undefined -> from_literal Mir.false_literal
+                | Float -> from_literal Mir.true_literal
+                | _ -> (Pos.unmark new_e, Float) )
+            | MinFunc | MaxFunc | Multimax -> (Pos.unmark new_e, Float)
+            | _ -> assert false
+        in
+        (Pos.same_pos_as new_e e, d)
   in
-  check new_e d;
-  if !peval_debug then Cli.debug_print "%a ~> %a, d = %a" Format_mir.format_expression (Pos.unmark e) Format_mir.format_expression (Pos.unmark new_e) format_definedness d;
-  new_e, d
+  if not @@ check new_e d then
+    Cli.debug_print "check failed @@%a: %a %a" Pos.format_position_short (Pos.get_position e)
+      Format_mir.format_expression (Pos.unmark e) format_definedness d;
+  if !peval_debug then
+    Cli.debug_print "%a ~> %a, d = %a" Format_mir.format_expression (Pos.unmark e)
+      Format_mir.format_expression (Pos.unmark new_e) format_definedness d;
+  (new_e, d)
 
-let debug_vars = [] (*"APATNAT"; "ART1731BIS"*)
+let debug_vars = []
 
 let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
     (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =
@@ -489,6 +483,8 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
         match def.var_definition with
         | InputVar -> (Mir.InputVar, ctx)
         | SimpleVar e ->
+            if !peval_debug then
+              Cli.debug_print "starting partial evaluation for %s" (Pos.unmark var.name);
             let e', d' = partially_evaluate_expr ctx p.mir_program e in
             let partial_e' =
               Option.map (fun x -> SimpleVar x) (expr_to_partial (Pos.unmark e') d')
