@@ -65,9 +65,9 @@ mechanism that is necessary to compute the income tax correctly. The file
 `mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
 for version of the M sources published in `ir-calcul`.
 
-For how to produce ready-to-use Python income tax computation
+For how to produce ready-to-use income tax computation
 source files for your application, see the
-[dedicated README](examples/python/README.md).
+[dedicated README](examples/README.md).
 
 
 ## Testing
