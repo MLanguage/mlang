@@ -1,4 +1,4 @@
-(lang dune 2.7)
+(lang dune 2.5)
 (name mlang)
 (version 1.1.0)
 (generate_opam_files true)

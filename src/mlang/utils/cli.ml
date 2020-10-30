@@ -107,7 +107,9 @@ let precision =
     value
     & opt (some string) (Some "double")
     & info [ "precision"; "p" ] ~docv:"PRECISION"
-        ~doc:"Precision of the interpreter: double, mpfr (precision 1024 bits). Default is double")
+        ~doc:
+          "Precision of the interpreter: double, mpfr (precision 1024 bits), bigint<n> (where n > \
+           0 is the fixpoint precision). Default is double")
 
 let mlang_t f =
   Term.(

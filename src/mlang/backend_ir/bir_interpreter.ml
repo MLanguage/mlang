@@ -567,7 +567,13 @@ end
 module RegularFloatInterpreter = Make (Bir_real.RegularFloatReal)
 module MPFRInterpreter = Make (Bir_real.MPFRReal)
 
-type value_sort = RegularFloat | MPFR
+module BigIntPrecision = struct
+  let bit_size_of_int = ref 64
+end
+
+module BigIntInterpreter = Make (Bir_real.BigIntFixedPointReal (BigIntPrecision))
+
+type value_sort = RegularFloat | MPFR | BigInt of int  (** precision of the fixed point *)
 
 let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int)
     (sort : value_sort) : vanilla_ctx =
@@ -575,6 +581,9 @@ let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value
     match sort with
     | RegularFloat -> RegularFloatInterpreter.evaluate_program
     | MPFR -> MPFRInterpreter.evaluate_program
+    | BigInt prec ->
+        BigIntPrecision.bit_size_of_int := prec;
+        BigIntInterpreter.evaluate_program
   in
   f p ctx code_loc_start_value
 
@@ -590,5 +599,9 @@ let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.mark
     | MPFR ->
         MPFRInterpreter.value_to_literal
           (MPFRInterpreter.evaluate_expr (MPFRInterpreter.vanilla_ctx_to_ctx ctx) p e)
+    | BigInt prec ->
+        BigIntPrecision.bit_size_of_int := prec;
+        BigIntInterpreter.value_to_literal
+          (BigIntInterpreter.evaluate_expr (BigIntInterpreter.vanilla_ctx_to_ctx ctx) p e)
   in
   f p e
