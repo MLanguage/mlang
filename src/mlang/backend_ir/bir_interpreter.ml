@@ -204,7 +204,7 @@ module Make (R : Bir_real.Real) = struct
 
   let false_value = Real R.zero
 
-  let true_value = Real R.one
+  let true_value () = Real (R.one ())
 
   let format_value (fmt : Format.formatter) (x : value) =
     match x with
@@ -290,7 +290,7 @@ module Make (R : Bir_real.Real) = struct
 
   let is_zero (l : value) : bool = match l with Real z -> R.(z =. zero) | _ -> false
 
-  let real_of_bool (b : bool) = if b then R.one else R.zero
+  let real_of_bool (b : bool) = if b then R.one () else R.zero
 
   let bool_of_real (f : R.t) : bool = not R.(f =. zero)
 
@@ -428,7 +428,7 @@ module Make (R : Bir_real.Real) = struct
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with Real x -> Real (truncatef x) | Undefined -> Undefined (*Float 0.*) )
         | FunctionCall (PresentFunc, [ arg ]) -> (
-            match evaluate_expr ctx p arg with Undefined -> false_value | _ -> true_value )
+            match evaluate_expr ctx p arg with Undefined -> false_value | _ -> true_value () )
         | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Real f | Real f, Undefined -> Real (R.min R.zero f)
@@ -455,11 +455,18 @@ module Make (R : Bir_real.Real) = struct
               match Pos.unmark arg2 with Var v -> v | _ -> assert false
               (* todo: rte *)
             in
-            let cast_to_int (e : value) : int option =
-              match e with
+            let cast_to_int (v : value) : int option =
+              match v with
               | Real f when R.of_int (R.to_int f) = f -> Some (R.to_int f)
               | Undefined -> Some 0
-              | _ -> assert false
+              | v ->
+                  raise
+                    (RuntimeError
+                       ( ErrorValue
+                           (Format.asprintf
+                              "evaluation of multimax %a, should be an integer, not %a"
+                              Pos.format_position (Pos.get_position e) format_value v),
+                         ctx_to_vanilla_ctx ctx ))
             in
             let pos = Pos.get_position arg2 in
             let access_index (i : int) : int option =

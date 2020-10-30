@@ -32,7 +32,7 @@ module type Real = sig
 
   val zero : t
 
-  val one : t
+  val one : unit -> t
 
   val ( =. ) : t -> t -> bool
 
@@ -78,7 +78,7 @@ module RegularFloatReal : Real = struct
 
   let zero = 0.
 
-  let one = 1.
+  let one () = 1.
 
   let ( =. ) x y = x = y
 
@@ -133,7 +133,7 @@ module MPFRReal : Real = struct
 
   let zero = Mpfrf.of_int 0 Near
 
-  let one = Mpfrf.of_int 1 Near
+  let one () = Mpfrf.of_int 1 Near
 
   let ( =. ) x y = Mpfrf.cmp x y = 0
 
@@ -171,15 +171,15 @@ end) : Real = struct
     Mpz.pow_ui result (Mpzf.of_int 2) !P.bit_size_of_int;
     Mpzf.of_mpz result
 
-  let format_t fmt f =
-    Format.fprintf fmt "%a.%a" Mpzf.print
-      (Mpzf.tdiv_q f (precision_modulo ()))
-      Mpzf.print
-      (Mpzf.tdiv_r f (precision_modulo ()))
+  let format_t fmt (f : t) =
+    Format.fprintf fmt "%f"
+      (Mpfrf.to_float
+         (Mpfrf.div (Mpfrf.of_mpz f Near) (Mpfrf.of_mpz (precision_modulo ()) Near) Near))
 
   let modf x =
-    let q, r = Mpzf.tdiv_qr x (precision_modulo ()) in
-    (r, q)
+    let int_part, frac_part = Mpzf.tdiv_qr x (precision_modulo ()) in
+    let int_part = Mpzf.mul int_part (precision_modulo ()) in
+    (frac_part, int_part)
 
   let copysign x y =
     match (Mpzf.sgn x, Mpzf.sgn y) with
@@ -189,19 +189,22 @@ end) : Real = struct
 
   let of_int i = Mpzf.mul (Mpzf.of_int i) (precision_modulo ())
 
-  let to_int f = int_of_string (Mpzf.to_string (Mpzf.tdiv_q f (precision_modulo ())))
+  let to_int f =
+    let s = Mpzf.to_float (Mpzf.tdiv_q f (precision_modulo ())) in
+    int_of_float s
 
   let of_float (f : float) : t =
     let frac_part, int_part = Float.modf f in
-    Mpzf.add (Mpzf.of_float int_part) (Mpzf.mul (Mpzf.of_float frac_part) (precision_modulo ()))
+    Mpzf.add (Mpzf.of_float frac_part) (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
 
   let to_float f =
     let frac_part, int_part = modf f in
-    Mpzf.to_float int_part +. (Mpzf.to_float frac_part /. Mpzf.to_float (precision_modulo ()))
+    Mpzf.to_float (Mpzf.tdiv_q int_part (precision_modulo ()))
+    +. (Mpzf.to_float frac_part /. Mpzf.to_float (precision_modulo ()))
 
   let zero = Mpzf.of_int 0
 
-  let one = Mpzf.of_int 1
+  let one () = Mpzf.mul (Mpzf.of_int 1) (precision_modulo ())
 
   let ( =. ) x y = Mpzf.cmp x y = 0
 
@@ -217,7 +220,7 @@ end) : Real = struct
 
   let ( -. ) x y = Mpzf.sub x y
 
-  let ( /. ) x y = Mpzf.tdiv_q x y
+  let ( /. ) x y = Mpzf.tdiv_q (Mpzf.mul x (precision_modulo ())) y
 
   let ( *. ) x y = Mpzf.tdiv_q (Mpzf.mul x y) (precision_modulo ())
 
