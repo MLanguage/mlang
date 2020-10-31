@@ -75,7 +75,7 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
         Bir_interpreter.MPFR
       end
       else
-        let bigint_regex = Re.Pcre.regexp "^bigint(\\d+)$" in
+        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
         if Re.Pcre.pmatch ~rex:bigint_regex precision then
           let fixpoint_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1 in
           Bir_interpreter.BigInt (int_of_string fixpoint_prec)

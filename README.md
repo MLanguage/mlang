@@ -21,7 +21,13 @@ of the source files responsible for computing the tax on the 2018 income.
 
 Mlang is implemented in OCaml. To manage dependencies,
 [install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
-of OCaml that is at least 4.0.9. Then, you can install Mlang's dependencies using
+of OCaml that is at least 4.0.9. In order to support multi-precision floating-point
+computation, you will need also need to install the MPFR library. For Debian-based
+distributions, simply invoke
+
+    sudo apt install libmpfr-dev
+
+Then, you can install Mlang's Ocaml dependencies using
 
     make deps
 
@@ -80,8 +86,16 @@ report test errors in a convenient format.
 Mlang backends are also tested using the same `FIP` format, see for instance
 `examples/python/backend_test`.
 
-When running `--run_all_tests`, you can also enable code coverage instrumentation 
-with the `--code_coverage` option.
+When running `--run_all_tests`, you can enable code coverage instrumentation 
+with the `--code_coverage` option. Another interesting option is `--precision`,
+which lets you choose how numbers are represented for the tax computation. 
+The default is `--precision double`, that uses the 64-bits IEEE754 floating-point 
+representation and associated operations. This is what the DGFiP uses. The 
+`--precision mpfr` option lets you use 1024-bits floating point numbers for 
+virtually infinite precision. Finally, `--precision fixed<n>` uses 
+fixed-point arithmetic with GMP-provided big integers. The fixed-point numbers 
+are represented with the [Q number format](https://en.wikipedia.org/wiki/Q_(number_format))
+and `<n>` is the number of fractional bits. The integer bits are unbounded. 
 
 The DGFiP does not publish its internal test base. However, randomized test 
 cases have been created for the 2018 income version of the software, in the 
