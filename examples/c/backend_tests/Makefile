@@ -115,7 +115,7 @@ sanitize_crash_names:
 	./sanitize_crash_names.sh
 
 %.m_test: %.m_crash FORCE
-	-bash -c "ulimit -s 65536;./fuzz_harness.exe $< > $@"
+	-stdbuf -oL bash -c "ulimit -s 65536;./fuzz_harness.exe $< > $@"
 
 transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
 
