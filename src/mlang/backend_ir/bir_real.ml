@@ -195,7 +195,9 @@ end) : Real = struct
 
   let of_float (f : float) : t =
     let frac_part, int_part = Float.modf f in
-    Mpzf.add (Mpzf.of_float frac_part) (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
+    let frac_part_scaled = frac_part *. Mpzf.to_float (precision_modulo ()) in
+    Mpzf.add (Mpzf.of_float frac_part_scaled)
+      (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
 
   let to_float f =
     let frac_part, int_part = modf f in
