@@ -1,4 +1,4 @@
-#include "ir_simulateur_simplifie_2018.h"
+#include "ir_tests.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -47,30 +47,41 @@ int main(int argc, char *argv[])
     // Then we call the program
     m_input input_for_m = m_input_from_array(input_array_for_m);
     m_output output = m_extracted(input_for_m);
-    if (output.is_error)
+    int num_outputs = m_num_outputs();
+    m_value output_array_for_m[num_outputs];
+    m_output_to_array(output_array_for_m, output);
+    // We don't want error cases or household whose revenue is astronomically high
+    if (output.is_error || output_array_for_m[m_get_input_index("REVKIRE")].value > 10000000.)
     {
         return 3;
     }
     else
     {
-        int num_outputs = m_num_outputs();
-
-        m_value output_array_for_m[num_outputs];
-        m_output_to_array(output_array_for_m, output);
         // We print the test case found in the FIP format on stdin
         printf("#NOM\n");
-        printf("#RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
+        int checksum = 0;
+        for (int i = 0; i < correct_string_size / (sizeof(int)); i++)
+        {
+            checksum ^= ((int *)input_string)[i];
+        }
+        printf("RANDOMFUZZERTEST%d\n", checksum);
         printf("#ENTREES-PRIMITIF\n");
         for (int i = 0; i < num_inputs; i++)
         {
-            printf("%s/%f\n", m_get_input_name_from_index(i), input_array_for_m[i].value);
+            if (!input_array_for_m[i].undefined)
+            {
+                printf("%s/%f\n", m_get_input_name_from_index(i), input_array_for_m[i].value);
+            }
         }
         printf("#CONTROLES-PRIMITIF\n");
         printf("#RESULTATS-PRIMITIF\n");
         // Here should go the output variable
         for (int i = 0; i < num_outputs; i++)
         {
-            printf("%s/%f\n", m_get_output_name_from_index(i), output_array_for_m[i].value);
+            if (!output_array_for_m[i].undefined)
+            {
+                printf("%s/%f\n", m_get_output_name_from_index(i), output_array_for_m[i].value);
+            }
         }
         printf("#ENTREES-CORRECTIF\n");
         printf("#CONTROLES-CORRECTIF\n");

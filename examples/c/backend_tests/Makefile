@@ -65,7 +65,7 @@ ir_%.o: ir_%.c
 	$(C_COMPILER) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
 %.o: %.c
-	$(C_COMPILER) -I ../ -c -o $@ $<
+	$(C_COMPILER) -I ../ -O1 -c -o $@ $<
 
 ##################################################
 # Building and running the test harness
@@ -82,13 +82,7 @@ run_tests: test_harness.exe FORCE
 # Building and running the fuzzing harness
 ##################################################
 
-FULL_INPUTS_FUZZ?=0
-
-ifeq ($(FULL_INPUTS_FUZZ), 1)
-    FUZZ_M_SPEC=all_ins_no_outs_2018
-else
-    FUZZ_M_SPEC=simulateur_simplifie_2018
-endif
+FUZZ_M_SPEC=tests
 
 fuzz_harness.exe: C_COMPILER=afl-clang
 fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
