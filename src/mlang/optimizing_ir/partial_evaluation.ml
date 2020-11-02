@@ -104,10 +104,10 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
             in
             if exists_other_def_in_between then None else Some (def_block, def) )
 
-let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.ctx =
+let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.vanilla_ctx =
   {
-    Bir_interpreter.empty_ctx with
-    Bir_interpreter.ctx_vars =
+    Bir_interpreter.empty_vanilla_ctx with
+    Bir_interpreter.vanilla_ctx_vars =
       Mir.VariableMap.map Option.get
         (Mir.VariableMap.filter
            (fun _ x -> Option.is_some x)
@@ -131,8 +131,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
           | Literal _, Literal _ ->
               Mir.Literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                   (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e)
+                   RegularFloat)
           | _ -> Comparison (op, new_e1, new_e2)
         end
         e
@@ -145,8 +146,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (* calling the interpreter when verything is a literal *)
           | _, Literal _, Literal _ ->
               Mir.Literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
+                   RegularFloat)
               (* first all the combinations giving undefined *)
           | Mast.And, Literal Undefined, _ -> Mir.Literal Undefined
           | Mast.And, _, Literal Undefined -> Mir.Literal Undefined
@@ -203,8 +205,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e1 with
           | Literal _ ->
               Mir.Literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1)
+                   RegularFloat)
           | _ -> Unop (op, new_e1)
         end
         e
@@ -290,7 +293,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
       if all_args_literal then
         Pos.same_pos_as
-          (Mir.Literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e))
+          (Mir.Literal
+             (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat))
           e
       else new_e
 

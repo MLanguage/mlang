@@ -13,29 +13,9 @@
 
 open Mir
 
-let repl_debug = ref false
-
-let exit_on_rte = ref true
-
-(* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
-let truncatef x = snd (modf (x +. 0.000001))
-
-(* Careful : rounding in M is done with this arbitrary behavior *)
-let roundf x = snd (modf (x +. copysign 0.50005 x))
-
 type var_literal = SimpleVar of literal | TableVar of int * literal array
 
-let format_var_literal (fmt : Format.formatter) (var_lit : var_literal) : unit =
-  match var_lit with
-  | SimpleVar e -> Format.fprintf fmt "%a" Format_mir.format_literal e
-  | TableVar (_, es) ->
-      Format.fprintf fmt "[%a]"
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-           (fun fmt e -> Format.fprintf fmt "%a" Format_mir.format_literal e))
-        (Array.to_list es)
-
-let format_var_literal_with_var fmt ((var, vl) : Variable.t * var_literal) =
+let format_var_literal_with_var (fmt : Format.formatter) ((var, vl) : Variable.t * var_literal) =
   match vl with
   | SimpleVar value ->
       Format.fprintf fmt "%s (%s): %a" (Pos.unmark var.Variable.name)
@@ -47,28 +27,40 @@ let format_var_literal_with_var fmt ((var, vl) : Variable.t * var_literal) =
         (fun idx value -> Format.fprintf fmt "| %d -> %a\n" idx Format_mir.format_literal value)
         (Array.to_list values)
 
-type ctx = {
-  ctx_local_vars : literal Pos.marked LocalVariableMap.t;
-  ctx_vars : var_literal VariableMap.t;
-  ctx_generic_index : int option;
+type vanilla_ctx = {
+  vanilla_ctx_local_vars : literal Pos.marked LocalVariableMap.t;
+  vanilla_ctx_vars : var_literal VariableMap.t;
 }
 
-let empty_ctx : ctx =
-  {
-    ctx_local_vars = LocalVariableMap.empty;
-    ctx_vars = VariableMap.empty;
-    ctx_generic_index = None;
-  }
+let empty_vanilla_ctx : vanilla_ctx =
+  { vanilla_ctx_local_vars = LocalVariableMap.empty; vanilla_ctx_vars = VariableMap.empty }
 
-let int_of_bool (b : bool) = if b then 1 else 0
+type code_location_segment = InsideBlock of int | ConditionalBranch of bool
 
-let is_zero (l : literal) : bool = match l with Float 0. -> true | _ -> false
+let format_code_location_segment (fmt : Format.formatter) (s : code_location_segment) =
+  match s with
+  | InsideBlock i -> Format.fprintf fmt "#%d" i
+  | ConditionalBranch b -> Format.fprintf fmt "?%b" b
 
-let float_of_bool (b : bool) = if b then 1. else 0.
+type code_location = code_location_segment list
 
-let bool_of_float (f : float) : bool = not (f = 0.)
+let format_code_location (fmt : Format.formatter) (l : code_location) =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
+    format_code_location_segment fmt l
 
-let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
+type run_error =
+  | ErrorValue of string
+  | FloatIndex of string
+  | IndexOutOfBounds of string
+  | IncorrectOutputVariable of string
+  | UnknownInputVariable of string
+  | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
+  | NanOrInf of string * expression Pos.marked
+
+exception RuntimeError of run_error * vanilla_ctx
+
+let repl_debugguer (ctx : vanilla_ctx) (p : Mir.program) : unit =
   Cli.warning_print
     "Starting interactive debugger. Please query the interpreter state for the values of \
      variables. Exit with \"quit\".@\n";
@@ -113,7 +105,7 @@ let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
         List.iter
           (fun var ->
             try
-              let var_l = Mir.VariableMap.find var ctx.ctx_vars in
+              let var_l = Mir.VariableMap.find var ctx.vanilla_ctx_vars in
               Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
                 var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
                 format_var_literal_with_var (var, var_l)
@@ -124,21 +116,17 @@ let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
       with Not_found -> Format.printf "Inexisting variable@\n"
   done
 
-type run_error =
-  | ErrorValue of string
-  | FloatIndex of string
-  | IndexOutOfBounds of string
-  | IncorrectOutputVariable of string
-  | UnknownInputVariable of string
-  | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
-
-exception RuntimeError of run_error * ctx
-
-let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : program) =
+let raise_runtime_as_structured (e : run_error) (ctx : vanilla_ctx) (p : program) =
   match e with
   | ErrorValue s -> Errors.raise_error (Format.asprintf "Error value at runtime: %s" s)
   | FloatIndex s -> Errors.raise_error (Format.asprintf "Index is not an integer: %s" s)
   | IndexOutOfBounds s -> Errors.raise_error (Format.asprintf "Index out of bounds: %s" s)
+  | NanOrInf (v, e) ->
+      Errors.raise_spanned_error_with_continuation
+        (Format.asprintf "Expression evaluated to %s: %a" v Format_mir.format_expression
+           (Pos.unmark e))
+        (Pos.get_position e)
+        (fun _ -> repl_debugguer ctx p)
   | UnknownInputVariable s -> Errors.raise_error (Format.asprintf "Unknown input variable: %s" s)
   | IncorrectOutputVariable s ->
       Errors.raise_error (Format.asprintf "Incorrect output variable: %s" s)
@@ -161,231 +149,12 @@ let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : program) =
         (Pos.get_position condition)
         (fun _ -> repl_debugguer ctx p)
 
-let evaluate_array_index (ctx : ctx) (index : literal) (size : int) (values : literal array)
-    (pos : Pos.t) : literal =
-  let idx =
-    match index with
-    | Undefined -> assert false (* should not happen *)
-    | Float f ->
-        if
-          let fraction, _ = modf f in
-          fraction = 0.
-        then int_of_float f
-        else raise (RuntimeError (FloatIndex (Format.asprintf "%a" Pos.format_position pos), ctx))
-  in
-  if idx >= size then Undefined else if idx < 0 then Float 0. else values.(idx)
+let assign_hook : (Mir.Variable.t -> var_literal -> code_location -> unit) ref =
+  ref (fun _var _lit _code_loc -> ())
 
-let eval_debug = ref false
+let exit_on_rte = ref true
 
-let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) : literal =
-  try
-    match Pos.unmark e with
-    | Comparison (op, e1, e2) ->
-        let new_e1 = evaluate_expr ctx p e1 in
-        let new_e2 = evaluate_expr ctx p e2 in
-        let l =
-          match (Pos.unmark op, new_e1, new_e2) with
-          | Mast.Gt, Float i1, Float i2 -> Float (float_of_bool (i1 > i2))
-          | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-          | Mast.Gte, Float i1, Float i2 -> Float (float_of_bool (i1 >= i2))
-          | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-          | Mast.Lt, Float i1, Float i2 -> Float (float_of_bool (i1 < i2))
-          | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-          | Mast.Lte, Float i1, Float i2 -> Float (float_of_bool (i1 <= i2))
-          | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-          | Mast.Eq, Float i1, Float i2 -> Float (float_of_bool (i1 = i2))
-          | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-          | Mast.Neq, Float i1, Float i2 -> Float (float_of_bool (i1 <> i2))
-          | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | Binop (op, e1, e2) ->
-        let new_e1 = evaluate_expr ctx p e1 in
-        let new_e2 = evaluate_expr ctx p e2 in
-        let l =
-          match (Pos.unmark op, new_e1, new_e2) with
-          | Mast.Add, Float i1, Float i2 -> Float (i1 +. i2)
-          | Mast.Add, Float i1, Undefined -> Float (i1 +. 0.)
-          | Mast.Add, Undefined, Float i2 -> Float (0. +. i2)
-          | Mast.Add, Undefined, Undefined -> Undefined
-          | Mast.Sub, Float i1, Float i2 -> Float (i1 -. i2)
-          | Mast.Sub, Float i1, Undefined -> Float (i1 -. 0.)
-          | Mast.Sub, Undefined, Float i2 -> Float (0. -. i2)
-          | Mast.Sub, Undefined, Undefined -> Undefined
-          | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
-          | Mast.Mul, Float i1, Float i2 -> Float (i1 *. i2)
-          | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
-          | Mast.Div, _, l2 when is_zero l2 -> Float 0.
-          | Mast.Div, Float i1, Float i2 -> Float (i1 /. i2)
-          | Mast.And, Undefined, _
-          | Mast.And, _, Undefined
-          | Mast.Or, Undefined, _
-          | Mast.Or, _, Undefined ->
-              Undefined
-          | Mast.And, Float i1, Float i2 ->
-              Float (float_of_bool (bool_of_float i1 && bool_of_float i2))
-          | Mast.Or, Float i1, Float i2 ->
-              Float (float_of_bool (bool_of_float i1 || bool_of_float i2))
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | Unop (op, e1) ->
-        let new_e1 = evaluate_expr ctx p e1 in
-        let l =
-          match (op, new_e1) with
-          | Mast.Not, Float b1 -> Float (float_of_bool (not (bool_of_float b1)))
-          | Mast.Minus, Float f1 -> Float (-.f1)
-          | Mast.Not, Undefined -> Undefined
-          | Mast.Minus, Undefined -> Float 0.
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | Conditional (e1, e2, e3) -> (
-        let new_e1 = evaluate_expr ctx p e1 in
-        match new_e1 with
-        | Float 0. -> evaluate_expr ctx p e3
-        | Float _ -> evaluate_expr ctx p e2 (* the float is not zero *)
-        | Undefined -> Undefined )
-    | Literal l -> l
-    | Index (var, e1) -> (
-        let new_e1 = evaluate_expr ctx p e1 in
-        if new_e1 = Undefined then Undefined
-        else
-          match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
-          | SimpleVar _ -> assert false (* should not happen *)
-          | TableVar (size, values) ->
-              evaluate_array_index ctx new_e1 size values (Pos.get_position e1) )
-    | LocalVar lvar -> (
-        try Pos.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars)
-        with Not_found -> assert false (* should not happen*) )
-    | Var var ->
-        let r =
-          try
-            match VariableMap.find var ctx.ctx_vars with
-            | SimpleVar l -> l
-            | TableVar _ -> assert false
-            (* should not happen *)
-          with Not_found ->
-            Errors.raise_spanned_error
-              ("Var not found (should not happen): " ^ Pos.unmark var.Variable.name)
-              (Pos.get_position e)
-        in
-        r
-    | GenericTableIndex -> (
-        match ctx.ctx_generic_index with
-        | None -> assert false (* should not happen *)
-        | Some i -> Float (float_of_int i) )
-    | Error ->
-        raise
-          (RuntimeError
-             (ErrorValue (Format.asprintf "%a" Pos.format_position (Pos.get_position e)), ctx))
-    | LocalLet (lvar, e1, e2) ->
-        let new_e1 = evaluate_expr ctx p e1 in
-        let new_e2 =
-          evaluate_expr
-            {
-              ctx with
-              ctx_local_vars =
-                LocalVariableMap.add lvar (Pos.same_pos_as new_e1 e1) ctx.ctx_local_vars;
-            }
-            p e2
-        in
-        new_e2
-    | FunctionCall (ArrFunc, [ arg ]) ->
-        let new_arg = evaluate_expr ctx p arg in
-        let l =
-          match new_arg with Float x -> Float (roundf x) | Undefined -> Undefined
-          (*nope:Float 0.*)
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | FunctionCall (InfFunc, [ arg ]) ->
-        let new_arg = evaluate_expr ctx p arg in
-        let l =
-          match new_arg with Float x -> Float (truncatef x) | Undefined -> Undefined
-          (*Float 0.*)
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | FunctionCall (PresentFunc, [ arg ]) ->
-        let l =
-          match evaluate_expr ctx p arg with Undefined -> false_literal | _ -> true_literal
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | FunctionCall (MinFunc, [ arg1; arg2 ]) ->
-        let mini =
-          match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-          | Undefined, Float f | Float f, Undefined -> Float (min 0. f)
-          | Undefined, Undefined -> Float 0.
-          | Float fl, Float fr -> Float (min fl fr)
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal mini) e)
-    | FunctionCall (MaxFunc, [ arg1; arg2 ]) ->
-        let maxi =
-          match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-          | Undefined, Undefined -> Float 0.
-          | Undefined, Float f | Float f, Undefined -> Float (max 0. f)
-          | Float fl, Float fr -> Float (max fl fr)
-        in
-        evaluate_expr ctx p (Pos.same_pos_as (Literal maxi) e)
-    | FunctionCall (Multimax, [ arg1; arg2 ]) ->
-        let up =
-          match evaluate_expr ctx p arg1 with
-          | Float f when float_of_int (int_of_float f) = f -> int_of_float f
-          | e ->
-              raise
-                (RuntimeError
-                   ( ErrorValue
-                       (Format.asprintf "evaluation of %a should be an integer, not %a"
-                          Format_mir.format_expression (Pos.unmark arg1) Format_mir.format_literal
-                          e),
-                     ctx ))
-        in
-        let var_arg2 =
-          match Pos.unmark arg2 with Var v -> v | _ -> assert false
-          (* todo: rte *)
-        in
-        let cast_to_int e =
-          match e with
-          | Float f when float_of_int (int_of_float f) = f -> Some (int_of_float f)
-          | Undefined -> Some 0
-          | _ -> assert false
-        in
-        let pos = Pos.get_position arg2 in
-        let access_index i =
-          cast_to_int
-          @@ evaluate_expr ctx p
-               (Index ((var_arg2, pos), (Literal (Float (float_of_int i)), pos)), pos)
-        in
-
-        let maxi = ref (access_index 0) in
-        for i = 0 to up do
-          maxi := max !maxi (access_index i)
-        done;
-        let l = match !maxi with None -> Undefined | Some f -> Float (float_of_int f) in
-        (* let l = match !maxi with None -> Undefined | Some v -> Float (float_of_int v) in *)
-        evaluate_expr ctx p (Pos.same_pos_as (Literal l) e)
-    | FunctionCall (func, _) ->
-        raise
-          (RuntimeError
-             ( ErrorValue
-                 (Format.asprintf "the function %a %a has not been expanded" Format_mir.format_func
-                    func Pos.format_position (Pos.get_position e)),
-               ctx ))
-  with RuntimeError (e, ctx) ->
-    if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
-
-let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
-  raise
-    (RuntimeError
-       ( ConditionViolated
-           ( cond.cond_errors,
-             cond.cond_expr,
-             List.rev
-             @@ List.fold_left
-                  (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
-                  []
-                  (List.map
-                     (fun (x, _) -> x)
-                     (Mir.VariableMap.bindings
-                        (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
-         ctx ))
+let repl_debug = ref false
 
 (* During evaluation, variables that have an I/O property set to InputVariable have a value that is
    read directly from the input map. However, one can pass inside the input map a value for a
@@ -412,78 +181,434 @@ let replace_undefined_with_input_variables (p : program) (input_values : literal
                  (Format.asprintf "%s (%s)"
                     (Pos.unmark var.Mir.Variable.name)
                     (Pos.unmark var.Mir.Variable.descr)),
-               empty_ctx )))
+               empty_vanilla_ctx )))
     input_values p
 
-type code_location_segment = InsideBlock of int | ConditionalBranch of bool
-
-let format_code_location_segment (fmt : Format.formatter) (s : code_location_segment) =
-  match s with
-  | InsideBlock i -> Format.fprintf fmt "#%d" i
-  | ConditionalBranch b -> Format.fprintf fmt "?%b" b
-
-type code_location = code_location_segment list
-
-let format_code_location (fmt : Format.formatter) (l : code_location) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
-    format_code_location_segment fmt l
-
-let assign_hook : (Mir.Variable.t -> var_literal -> code_location -> unit) ref =
-  ref (fun _var _lit _code_loc -> ())
-
-let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_literal =
-  match vdef with
-  | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
-  | Mir.TableVar (size, es) ->
-      TableVar
-        ( size,
-          Array.init size (fun idx ->
-              match es with
-              | IndexGeneric e ->
-                  evaluate_expr { ctx with ctx_generic_index = Some idx } p.mir_program e
-              | IndexTable es ->
-                  let e = IndexMap.find idx es in
-                  evaluate_expr ctx p.mir_program e) )
-  | Mir.InputVar -> assert false
-
-let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) (loc : code_location) =
-  match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) ->
-      let res = evaluate_variable p ctx vdata.var_definition in
-      !assign_hook var res loc;
-      { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
-  | Bir.SConditional (b, t, f) -> (
-      match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
-      | SimpleVar (Float 0.) -> evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
-      | SimpleVar (Float _) -> evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
-      | SimpleVar Undefined -> ctx
-      | _ -> assert false )
-  | Bir.SVerif data -> (
-      match evaluate_expr ctx p.mir_program data.cond_expr with
-      | Float f when f = 1. -> report_violatedcondition data ctx
-      | _ -> ctx )
-
-and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
-    (start_value : int) : ctx =
-  let ctx, _ =
-    List.fold_left
-      (fun (ctx, i) stmt -> (evaluate_stmt p ctx stmt (InsideBlock i :: loc), i + 1))
-      (ctx, start_value) stmts
-  in
-  ctx
-
-let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
+let update_ctx_with_inputs (ctx : vanilla_ctx) (inputs : literal VariableMap.t) : vanilla_ctx =
   {
     ctx with
-    ctx_vars =
+    vanilla_ctx_vars =
       VariableMap.fold
         (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
-        inputs ctx.ctx_vars;
+        inputs ctx.vanilla_ctx_vars;
   }
 
-let evaluate_program (p : Bir.program) (ctx : ctx) (code_loc_start_value : int) : ctx =
-  try evaluate_stmts p ctx p.statements [] code_loc_start_value
-  with RuntimeError (e, ctx) ->
-    if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
-    else raise (RuntimeError (e, ctx))
+module Make (R : Bir_number.NumberInterface) = struct
+  (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
+  let truncatef (x : R.t) : R.t = snd (R.modf R.(x +. R.of_float 0.000001))
+
+  (* Careful : rounding in M is done with this arbitrary behavior *)
+  let roundf (x : R.t) = snd (R.modf R.(x +. R.copysign (R.of_float 0.50005) x))
+
+  type value = Real of R.t | Undefined
+
+  let false_value = Real R.zero
+
+  let true_value () = Real (R.one ())
+
+  let format_value (fmt : Format.formatter) (x : value) =
+    match x with
+    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Real x -> R.format_t fmt x
+
+  type var_value = SimpleVar of value | TableVar of int * value array
+
+  let format_var_value (fmt : Format.formatter) (var_lit : var_value) : unit =
+    match var_lit with
+    | SimpleVar e -> Format.fprintf fmt "%a" format_value e
+    | TableVar (_, es) ->
+        Format.fprintf fmt "[%a]"
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+             (fun fmt e -> Format.fprintf fmt "%a" format_value e))
+          (Array.to_list es)
+
+  let format_var_value_with_var (fmt : Format.formatter) ((var, vl) : Variable.t * var_value) =
+    match vl with
+    | SimpleVar value ->
+        Format.fprintf fmt "%s (%s): %a" (Pos.unmark var.Variable.name)
+          (Pos.unmark var.Variable.descr) format_value value
+    | TableVar (size, values) ->
+        Format.fprintf fmt "%s (%s): Table (%d values)@\n" (Pos.unmark var.Variable.name)
+          (Pos.unmark var.Variable.descr) size;
+        List.iteri
+          (fun idx value -> Format.fprintf fmt "| %d -> %a\n" idx format_value value)
+          (Array.to_list values)
+
+  type ctx = {
+    ctx_local_vars : value Pos.marked LocalVariableMap.t;
+    ctx_vars : var_value VariableMap.t;
+    ctx_generic_index : int option;
+  }
+
+  let empty_ctx : ctx =
+    {
+      ctx_local_vars = LocalVariableMap.empty;
+      ctx_vars = VariableMap.empty;
+      ctx_generic_index = None;
+    }
+
+  let literal_to_value (l : Mir.literal) : value =
+    match l with Mir.Undefined -> Undefined | Mir.Float f -> Real (R.of_float f)
+
+  let var_literal_to_var_value (def : var_literal) : var_value =
+    match def with
+    | SimpleVar v -> SimpleVar (literal_to_value v)
+    | TableVar (size, defs) -> TableVar (size, Array.map (fun v -> literal_to_value v) defs)
+
+  let vanilla_ctx_to_ctx (ctx : vanilla_ctx) : ctx =
+    {
+      ctx_local_vars =
+        LocalVariableMap.map
+          (fun f -> Pos.same_pos_as (literal_to_value (Pos.unmark f)) f)
+          ctx.vanilla_ctx_local_vars;
+      ctx_vars = VariableMap.map var_literal_to_var_value ctx.vanilla_ctx_vars;
+      ctx_generic_index = None;
+    }
+
+  let value_to_literal (l : value) : Mir.literal =
+    match l with Undefined -> Mir.Undefined | Real f -> Mir.Float (R.to_float f)
+
+  let var_value_to_var_literal (def : var_value) : var_literal =
+    let l : var_literal =
+      match def with
+      | SimpleVar v -> SimpleVar (value_to_literal v)
+      | TableVar (size, defs) -> TableVar (size, Array.map (fun v -> value_to_literal v) defs)
+    in
+    l
+
+  let ctx_to_vanilla_ctx (ctx : ctx) : vanilla_ctx =
+    {
+      vanilla_ctx_local_vars =
+        LocalVariableMap.map
+          (fun f -> Pos.same_pos_as (value_to_literal (Pos.unmark f)) f)
+          ctx.ctx_local_vars;
+      vanilla_ctx_vars = VariableMap.map var_value_to_var_literal ctx.ctx_vars;
+    }
+
+  let int_of_bool (b : bool) = if b then 1 else 0
+
+  let is_zero (l : value) : bool = match l with Real z -> R.(z =. zero) | _ -> false
+
+  let real_of_bool (b : bool) = if b then R.one () else R.zero
+
+  let bool_of_real (f : R.t) : bool = not R.(f =. zero)
+
+  let evaluate_array_index (ctx : ctx) (index : value) (size : int) (values : value array)
+      (pos : Pos.t) : value =
+    let idx =
+      match index with
+      | Undefined -> assert false (* should not happen *)
+      | Real f ->
+          let fraction, int_part = R.modf f in
+          if R.(fraction =. zero) then int_part
+          else
+            raise
+              (RuntimeError
+                 ( FloatIndex
+                     (Format.asprintf "got value %a %a" R.format_t f Pos.format_position pos),
+                   ctx_to_vanilla_ctx ctx ))
+    in
+    if R.(idx >=. R.of_int size) then Undefined
+    else if R.(idx <. R.zero) then Real R.zero
+    else values.(R.to_int idx)
+
+  let eval_debug = ref false
+
+  let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) : value =
+    let out =
+      try
+        match Pos.unmark e with
+        | Comparison (op, e1, e2) -> (
+            let new_e1 = evaluate_expr ctx p e1 in
+            let new_e2 = evaluate_expr ctx p e2 in
+            match (Pos.unmark op, new_e1, new_e2) with
+            | Mast.Gt, Real i1, Real i2 -> Real (real_of_bool (i1 > i2))
+            | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
+            | Mast.Gte, Real i1, Real i2 -> Real (real_of_bool (i1 >= i2))
+            | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
+            | Mast.Lt, Real i1, Real i2 -> Real (real_of_bool (i1 < i2))
+            | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
+            | Mast.Lte, Real i1, Real i2 -> Real (real_of_bool (i1 <= i2))
+            | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
+            | Mast.Eq, Real i1, Real i2 -> Real (real_of_bool (i1 = i2))
+            | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
+            | Mast.Neq, Real i1, Real i2 -> Real (real_of_bool (i1 <> i2))
+            | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined )
+        | Binop (op, e1, e2) -> (
+            let new_e1 = evaluate_expr ctx p e1 in
+            let new_e2 = evaluate_expr ctx p e2 in
+            match (Pos.unmark op, new_e1, new_e2) with
+            | Mast.Add, Real i1, Real i2 -> Real R.(i1 +. i2)
+            | Mast.Add, Real i1, Undefined -> Real R.(i1 +. zero)
+            | Mast.Add, Undefined, Real i2 -> Real R.(zero +. i2)
+            | Mast.Add, Undefined, Undefined -> Undefined
+            | Mast.Sub, Real i1, Real i2 -> Real R.(i1 -. i2)
+            | Mast.Sub, Real i1, Undefined -> Real R.(i1 -. zero)
+            | Mast.Sub, Undefined, Real i2 -> Real R.(zero -. i2)
+            | Mast.Sub, Undefined, Undefined -> Undefined
+            | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
+            | Mast.Mul, Real i1, Real i2 -> Real R.(i1 *. i2)
+            | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
+            | Mast.Div, _, l2 when is_zero l2 -> Real R.zero
+            | Mast.Div, Real i1, Real i2 -> Real R.(i1 /. i2)
+            | Mast.And, Undefined, _
+            | Mast.And, _, Undefined
+            | Mast.Or, Undefined, _
+            | Mast.Or, _, Undefined ->
+                Undefined
+            | Mast.And, Real i1, Real i2 -> Real (real_of_bool (bool_of_real i1 && bool_of_real i2))
+            | Mast.Or, Real i1, Real i2 -> Real (real_of_bool (bool_of_real i1 || bool_of_real i2))
+            )
+        | Unop (op, e1) -> (
+            let new_e1 = evaluate_expr ctx p e1 in
+            match (op, new_e1) with
+            | Mast.Not, Real b1 -> Real (real_of_bool (not (bool_of_real b1)))
+            | Mast.Minus, Real f1 -> Real R.(zero -. f1)
+            | Mast.Not, Undefined -> Undefined
+            | Mast.Minus, Undefined -> Real R.zero )
+        | Conditional (e1, e2, e3) -> (
+            let new_e1 = evaluate_expr ctx p e1 in
+            match new_e1 with
+            | Real z when R.(z =. zero) -> evaluate_expr ctx p e3
+            | Real _ -> evaluate_expr ctx p e2 (* the float is not zero *)
+            | Undefined -> Undefined )
+        | Literal Undefined -> Undefined
+        | Literal (Float f) -> Real (R.of_float f)
+        | Index (var, e1) -> (
+            let new_e1 = evaluate_expr ctx p e1 in
+            if new_e1 = Undefined then Undefined
+            else
+              match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
+              | SimpleVar _ -> assert false (* should not happen *)
+              | TableVar (size, values) ->
+                  evaluate_array_index ctx new_e1 size values (Pos.get_position e1) )
+        | LocalVar lvar -> (
+            try Pos.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars)
+            with Not_found -> assert false (* should not happen*) )
+        | Var var ->
+            let r =
+              try
+                match VariableMap.find var ctx.ctx_vars with
+                | SimpleVar l -> l
+                | TableVar _ -> assert false
+                (* should not happen *)
+              with Not_found ->
+                Errors.raise_spanned_error
+                  ("Var not found (should not happen): " ^ Pos.unmark var.Variable.name)
+                  (Pos.get_position e)
+            in
+            r
+        | GenericTableIndex -> (
+            match ctx.ctx_generic_index with
+            | None -> assert false (* should not happen *)
+            | Some i -> Real (R.of_int i) )
+        | Error ->
+            raise
+              (RuntimeError
+                 ( ErrorValue (Format.asprintf "%a" Pos.format_position (Pos.get_position e)),
+                   ctx_to_vanilla_ctx ctx ))
+        | LocalLet (lvar, e1, e2) ->
+            let new_e1 = evaluate_expr ctx p e1 in
+            let new_e2 =
+              evaluate_expr
+                {
+                  ctx with
+                  ctx_local_vars =
+                    LocalVariableMap.add lvar (Pos.same_pos_as new_e1 e1) ctx.ctx_local_vars;
+                }
+                p e2
+            in
+            new_e2
+        | FunctionCall (ArrFunc, [ arg ]) -> (
+            let new_arg = evaluate_expr ctx p arg in
+            match new_arg with Real x -> Real (roundf x) | Undefined -> Undefined
+            (*nope:Float 0.*) )
+        | FunctionCall (InfFunc, [ arg ]) -> (
+            let new_arg = evaluate_expr ctx p arg in
+            match new_arg with Real x -> Real (truncatef x) | Undefined -> Undefined (*Float 0.*) )
+        | FunctionCall (PresentFunc, [ arg ]) -> (
+            match evaluate_expr ctx p arg with Undefined -> false_value | _ -> true_value () )
+        | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
+            match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
+            | Undefined, Real f | Real f, Undefined -> Real (R.min R.zero f)
+            | Undefined, Undefined -> Real R.zero
+            | Real fl, Real fr -> Real (R.min fl fr) )
+        | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
+            match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
+            | Undefined, Undefined -> Real R.zero
+            | Undefined, Real f | Real f, Undefined -> Real (R.max R.zero f)
+            | Real fl, Real fr -> Real (R.max fl fr) )
+        | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
+            let up =
+              match evaluate_expr ctx p arg1 with
+              | Real f when R.of_int (R.to_int f) = f -> R.to_int f
+              | e ->
+                  raise
+                    (RuntimeError
+                       ( ErrorValue
+                           (Format.asprintf "evaluation of %a should be an integer, not %a"
+                              Format_mir.format_expression (Pos.unmark arg1) format_value e),
+                         ctx_to_vanilla_ctx ctx ))
+            in
+            let var_arg2 =
+              match Pos.unmark arg2 with Var v -> v | _ -> assert false
+              (* todo: rte *)
+            in
+            let cast_to_int (v : value) : int option =
+              match v with
+              | Real f when R.of_int (R.to_int f) = f -> Some (R.to_int f)
+              | Undefined -> Some 0
+              | v ->
+                  raise
+                    (RuntimeError
+                       ( ErrorValue
+                           (Format.asprintf
+                              "evaluation of multimax %a, should be an integer, not %a"
+                              Pos.format_position (Pos.get_position e) format_value v),
+                         ctx_to_vanilla_ctx ctx ))
+            in
+            let pos = Pos.get_position arg2 in
+            let access_index (i : int) : int option =
+              cast_to_int
+              @@ evaluate_expr ctx p
+                   (Index ((var_arg2, pos), (Literal (Float (float_of_int i)), pos)), pos)
+            in
+            let maxi = ref (access_index 0) in
+            for i = 0 to up do
+              maxi := max !maxi (access_index i)
+            done;
+            match !maxi with None -> Undefined | Some f -> Real (R.of_int f) )
+        | FunctionCall (func, _) ->
+            raise
+              (RuntimeError
+                 ( ErrorValue
+                     (Format.asprintf "the function %a %a has not been expanded"
+                        Format_mir.format_func func Pos.format_position (Pos.get_position e)),
+                   ctx_to_vanilla_ctx ctx ))
+      with RuntimeError (e, ctx) ->
+        if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
+    in
+    if match out with Undefined -> false | Real out -> R.is_nan_or_inf out then
+      let e =
+        NanOrInf
+          ( ( match out with
+            | Undefined -> assert false
+            | Real out -> Format.asprintf "%a" R.format_t out ),
+            e )
+      in
+      if !exit_on_rte then raise_runtime_as_structured e (ctx_to_vanilla_ctx ctx) p
+      else raise (RuntimeError (e, ctx_to_vanilla_ctx ctx))
+    else out
+
+  let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
+    let ctx = ctx_to_vanilla_ctx ctx in
+    raise
+      (RuntimeError
+         ( ConditionViolated
+             ( cond.cond_errors,
+               cond.cond_expr,
+               List.rev
+               @@ List.fold_left
+                    (fun acc var -> (var, VariableMap.find var ctx.vanilla_ctx_vars) :: acc)
+                    []
+                    (List.map
+                       (fun (x, _) -> x)
+                       (Mir.VariableMap.bindings
+                          (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
+           ctx ))
+
+  let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_value =
+    match vdef with
+    | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
+    | Mir.TableVar (size, es) ->
+        TableVar
+          ( size,
+            Array.init size (fun idx ->
+                match es with
+                | IndexGeneric e ->
+                    evaluate_expr { ctx with ctx_generic_index = Some idx } p.mir_program e
+                | IndexTable es ->
+                    let e = IndexMap.find idx es in
+                    evaluate_expr ctx p.mir_program e) )
+    | Mir.InputVar -> assert false
+
+  let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt) (loc : code_location) =
+    match Pos.unmark stmt with
+    | Bir.SAssign (var, vdata) ->
+        let res = evaluate_variable p ctx vdata.var_definition in
+        !assign_hook var (var_value_to_var_literal res) loc;
+        { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
+    | Bir.SConditional (b, t, f) -> (
+        match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
+        | SimpleVar (Real z) when R.(z =. zero) ->
+            evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
+        | SimpleVar (Real _) -> evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
+        | SimpleVar Undefined -> ctx
+        | _ -> assert false )
+    | Bir.SVerif data -> (
+        match evaluate_expr ctx p.mir_program data.cond_expr with
+        | Real f when not R.(f =. zero) -> report_violatedcondition data ctx
+        | _ -> ctx )
+
+  and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
+      (start_value : int) : ctx =
+    let ctx, _ =
+      List.fold_left
+        (fun (ctx, i) stmt -> (evaluate_stmt p ctx stmt (InsideBlock i :: loc), i + 1))
+        (ctx, start_value) stmts
+    in
+    ctx
+
+  let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int) :
+      vanilla_ctx =
+    let ctx = vanilla_ctx_to_ctx ctx in
+    try
+      let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
+      ctx_to_vanilla_ctx ctx
+    with RuntimeError (e, ctx) ->
+      if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
+      else raise (RuntimeError (e, ctx))
+end
+
+module RegularFloatInterpreter = Make (Bir_number.RegularFloatReal)
+module MPFRInterpreter = Make (Bir_number.MPFRReal)
+
+module BigIntPrecision = struct
+  let bit_size_of_int = ref 64
+end
+
+module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecision))
+
+type value_sort = RegularFloat | MPFR | BigInt of int  (** precision of the fixed point *)
+
+let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int)
+    (sort : value_sort) : vanilla_ctx =
+  let f =
+    match sort with
+    | RegularFloat -> RegularFloatInterpreter.evaluate_program
+    | MPFR -> MPFRInterpreter.evaluate_program
+    | BigInt prec ->
+        BigIntPrecision.bit_size_of_int := prec;
+        BigIntInterpreter.evaluate_program
+  in
+  f p ctx code_loc_start_value
+
+let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.marked)
+    (sort : value_sort) : literal =
+  let f p e =
+    match sort with
+    | RegularFloat ->
+        RegularFloatInterpreter.value_to_literal
+          (RegularFloatInterpreter.evaluate_expr
+             (RegularFloatInterpreter.vanilla_ctx_to_ctx ctx)
+             p e)
+    | MPFR ->
+        MPFRInterpreter.value_to_literal
+          (MPFRInterpreter.evaluate_expr (MPFRInterpreter.vanilla_ctx_to_ctx ctx) p e)
+    | BigInt prec ->
+        BigIntPrecision.bit_size_of_int := prec;
+        BigIntInterpreter.value_to_literal
+          (BigIntInterpreter.evaluate_expr (BigIntInterpreter.vanilla_ctx_to_ctx ctx) p e)
+  in
+  f p e

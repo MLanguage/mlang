@@ -27,9 +27,15 @@ MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
 
 MPP_FUNCTION?=compute_double_liquidation_pvro
 
+PRECISION?=double
+
+TEST_ERROR_MARGIN?=0.
+
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
+	--precision $(PRECISION) \
 	--mpp_file=$(MPP_FILE) \
+	--test_error_margin=0. \
 	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
@@ -44,7 +50,7 @@ default: build
 
 deps:
 	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
-		cmdliner dune-build-info visitors parmap num ocamlformat
+		cmdliner dune-build-info visitors parmap num ocamlformat mlgmpidl
 	git submodule update --init --recursive
 
 format:

@@ -5,7 +5,7 @@
  (ocamlopt_flags
   (-cclib -lstdc++))
  (libraries ocamlgraph re ANSITerminal parmap cmdliner threads
-   dune-build-info num)
+   dune-build-info num gmp)
  (preprocess
   (pps ppx_deriving.std visitors.ppx)))
 

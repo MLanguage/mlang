@@ -18,7 +18,8 @@ open Mlexer
 let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
     (print_cycles : bool) (backend : string option) (function_spec : string option)
     (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (run_test : string option) (mpp_function : string) (optimize : bool) (code_coverage : bool) =
+    (run_test : string option) (mpp_function : string) (optimize : bool) (code_coverage : bool)
+    (precision : string option) (test_error_margin : float option) =
   Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles output;
   try
     Cli.debug_print "Reading M files...";
@@ -66,20 +67,37 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
     let full_m_program = Mir_interface.to_full_program m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
+    let value_sort =
+      let precision = Option.get precision in
+      if precision = "double" then Bir_interpreter.RegularFloat
+      else if precision = "mpfr" then begin
+        Mpfr.set_default_prec 1024;
+        Bir_interpreter.MPFR
+      end
+      else
+        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:bigint_regex precision then
+          let fixpoint_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1 in
+          Bir_interpreter.BigInt (int_of_string fixpoint_prec)
+        else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
+    in
     if run_all_tests <> None then begin
       if code_coverage && optimize then
         Errors.raise_error
           "Code coverage and program optimizations cannot be enabled together when running a test \
            suite, check your command-line options";
       let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests combined_program tests optimize code_coverage
+      Test_interpreter.check_all_tests combined_program tests optimize code_coverage value_sort
+        (Option.get test_error_margin)
     end
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       if code_coverage then
         Cli.warning_print "The code coverage flag is ignored when running a single test";
       let test : string = match run_test with Some s -> s | _ -> assert false in
-      ignore (Test_interpreter.check_test combined_program test optimize false);
+      ignore
+        (Test_interpreter.check_test combined_program test optimize false value_sort
+           (Option.get test_error_margin));
       Cli.result_print "Test passed!"
     end
     else begin
@@ -113,8 +131,8 @@ let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
             let end_ctx =
               Bir_interpreter.evaluate_program combined_program
-                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx inputs)
-                0
+                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx inputs)
+                0 value_sort
             in
             Bir_interface.print_output function_spec end_ctx
           end

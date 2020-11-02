@@ -1,6 +1,6 @@
-(lang dune 2.2)
+(lang dune 2.5)
 (name mlang)
-(version 1.0.3)
+(version 1.1.0)
 (generate_opam_files true)
 
 (source (uri git+https://gitlab.inria.fr/verifisc/mlang.git))
@@ -30,5 +30,6 @@
    (ocamlgraph (= 1.8.8))
    (dune-build-info (= 2.5.1))
    (num (>= 1.3))
+   (mlgmpidl (>= 1.2.12))
  )
 )
