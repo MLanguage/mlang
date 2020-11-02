@@ -109,6 +109,14 @@ To check that Mlang passes all the randomized tests, simply invoke
 
     make tests
 
+Some tests might fail using non-default precision settings, even if the error 
+message shows no difference between the expected value and the computed value.
+This is because we control a difference of 0 between the computed and the 
+expected, but when doing computations with a higher precision, a difference 
+lower than the smallest representable float value might appear. To pass the test,
+we have provided the command line option `--test_error_margin=0.0000001` to 
+let you define how much error margin you want to tolerate when running tests.
+
 ## Documentation
 
 The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML

@@ -111,11 +111,18 @@ let precision =
           "Precision of the interpreter: double, mpfr (precision 1024 bits), fixed<n> (where n > 0 \
            is the fixpoint precision). Default is double")
 
+let test_error_margin =
+  Arg.(
+    value
+    & opt (some float) (Some 0.)
+    & info [ "test_error_margin" ] ~docv:"ERROR_MARGIN"
+        ~doc:"Margin of error tolerated when executing tests, as a float. Default 0.")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
     $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage
-    $ precision)
+    $ precision $ test_error_margin)
 
 let info =
   let doc =

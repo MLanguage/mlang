@@ -47,7 +47,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
          (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
+let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
@@ -74,7 +74,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float 0.000001), pos) ),
+                   (Literal (Float test_error_margin), pos) ),
                pos )
            in
            let second_exp =
@@ -85,7 +85,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
                          (Literal (to_ast_literal value), pos),
                          (Literal (Variable (Normal var)), pos) ),
                      pos ),
-                   (Literal (Float 0.000001), pos) ),
+                   (Literal (Float test_error_margin), pos) ),
                pos )
            in
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
@@ -127,12 +127,12 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
 let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool)
-    (code_coverage : bool) (value_sort : Bir_interpreter.value_sort) :
+    (code_coverage : bool) (value_sort : Bir_interpreter.value_sort) (test_error_margin : float) :
     Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file = to_mvg_function_and_inputs combined_program t in
+  let f, input_file = to_mvg_function_and_inputs combined_program t test_error_margin in
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f
@@ -171,7 +171,8 @@ type coverage_kind =
   | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
-    (code_coverage_activated : bool) (value_sort : Bir_interpreter.value_sort) =
+    (code_coverage_activated : bool) (value_sort : Bir_interpreter.value_sort)
+    (test_error_margin : float) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -188,7 +189,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     try
       Cli.debug_flag := false;
       let code_coverage_result =
-        check_test p (test_dir ^ name) optimize code_coverage_activated value_sort
+        check_test p (test_dir ^ name) optimize code_coverage_activated value_sort test_error_margin
       in
       Cli.debug_flag := true;
       let code_coverage_acc =

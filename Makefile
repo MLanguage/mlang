@@ -29,10 +29,13 @@ MPP_FUNCTION?=compute_double_liquidation_pvro
 
 PRECISION?=double
 
+TEST_ERROR_MARGIN?=0.
+
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--precision $(PRECISION) \
 	--mpp_file=$(MPP_FILE) \
+	--test_error_margin=0. \
 	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
