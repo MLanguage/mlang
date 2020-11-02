@@ -163,11 +163,12 @@ type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
 
 type process_acc = string list * test_failures * Bir_instrumentation.code_coverage_acc
 
-type coverage_kind =
-  | NotCovered
-  | Covered
-  | CoveredOneDef of Bir_interpreter.var_literal
-  | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
+type coverage_kind = NotCovered | Covered of int  (** The int is the number of different values *)
+
+module IntMap = Map.Make (Int)
+
+let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
+  match IntMap.find_opt key m with None -> IntMap.add key 0 m | Some i -> IntMap.add key (i + 1) m
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     (code_coverage_activated : bool) =
@@ -261,36 +262,42 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           | Some used_code_locs -> (
               match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
               | None -> NotCovered
-              | Some def -> (
-                  match def with
-                  | Bir_instrumentation.OnlyOneDef def -> CoveredOneDef def
-                  | Bir_instrumentation.OnlyOneDefAndUndefined def -> CoveredOneDefAndUndefined def
-                  | Bir_instrumentation.MultipleDefs -> Covered ) ))
+              | Some def -> Covered (Bir_instrumentation.VarLiteralSet.cardinal def) ))
         all_code_locs
     in
     let all_code_locs_num =
       Bir_instrumentation.CodeLocationMap.cardinal all_code_locs_with_coverage
     in
-    let not_covered, one_value, one_value_or_undefined, covered =
+    let number_of_values_to_number_of_statements =
       Bir_instrumentation.CodeLocationMap.fold
-        (fun _ cov (not_covered, one_value, one_value_or_undefined, covered) ->
+        (fun _ cov number_of_values_to_number_of_statements ->
           match cov with
-          | NotCovered -> (not_covered + 1, one_value, one_value_or_undefined, covered)
-          | CoveredOneDef _ -> (not_covered, one_value + 1, one_value_or_undefined, covered)
-          | CoveredOneDefAndUndefined _ ->
-              (not_covered, one_value, one_value_or_undefined + 1, covered)
-          | Covered -> (not_covered, one_value, one_value_or_undefined, covered + 1))
-        all_code_locs_with_coverage (0, 0, 0, 0)
+          | NotCovered -> incr_int_key number_of_values_to_number_of_statements 0
+          | Covered i -> incr_int_key number_of_values_to_number_of_statements i)
+        all_code_locs_with_coverage IntMap.empty
     in
-    Cli.warning_print "Some code locations are not covered properly by this set of test runs.";
-    Cli.warning_print "The estimated code coverage is:";
-    Cli.warning_print "-> assigmnents never covered: %.3f%%"
-      (float_of_int not_covered /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only one value (possibly undefined): %.3f%%"
-      (float_of_int one_value /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only one value different from undefined: %.3f%%"
-      (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print
-      "-> assigmnents covered by only two or more values different from undefined: %.3f%%"
-      (float_of_int covered /. float_of_int all_code_locs_num *. 100.)
+    Cli.result_print "Here is the estimated code coverage of this set of test runs, broke down";
+    Cli.result_print "by the number of values statements are covered with:";
+    let number_of_values_to_number_of_statements =
+      List.sort
+        (fun x y -> compare (fst x) (fst y))
+        (IntMap.bindings number_of_values_to_number_of_statements)
+    in
+    let number_of_values_to_number_of_statements =
+      let rec build_list (i : int) (input : (int * int) list) =
+        match input with
+        | [] -> []
+        | (i', n) :: tl ->
+            if i' = i then (i', n) :: build_list (i + 1) tl else (i, 0) :: build_list (i + 1) input
+      in
+      build_list 0 number_of_values_to_number_of_statements
+    in
+    List.iter
+      (fun (number_of_values, number_of_statements) ->
+        Cli.result_print "%s values → %d (%s of statements)"
+          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%d" number_of_values)
+          number_of_statements
+          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%.4f%%"
+             (float_of_int number_of_statements /. float_of_int all_code_locs_num *. 100.)))
+      number_of_values_to_number_of_statements
   end
