@@ -193,7 +193,7 @@ let update_ctx_with_inputs (ctx : vanilla_ctx) (inputs : literal VariableMap.t) 
         inputs ctx.vanilla_ctx_vars;
   }
 
-module Make (R : Bir_real.Real) = struct
+module Make (R : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
   let truncatef (x : R.t) : R.t = snd (R.modf R.(x +. R.of_float 0.000001))
 
@@ -571,14 +571,14 @@ module Make (R : Bir_real.Real) = struct
       else raise (RuntimeError (e, ctx))
 end
 
-module RegularFloatInterpreter = Make (Bir_real.RegularFloatReal)
-module MPFRInterpreter = Make (Bir_real.MPFRReal)
+module RegularFloatInterpreter = Make (Bir_number.RegularFloatReal)
+module MPFRInterpreter = Make (Bir_number.MPFRReal)
 
 module BigIntPrecision = struct
   let bit_size_of_int = ref 64
 end
 
-module BigIntInterpreter = Make (Bir_real.BigIntFixedPointReal (BigIntPrecision))
+module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecision))
 
 type value_sort = RegularFloat | MPFR | BigInt of int  (** precision of the fixed point *)
 

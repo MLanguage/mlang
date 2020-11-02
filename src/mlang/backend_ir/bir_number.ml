@@ -11,7 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-module type Real = sig
+module type NumberInterface = sig
   type t
 
   val format_t : Format.formatter -> t -> unit
@@ -59,7 +59,7 @@ module type Real = sig
   val is_nan_or_inf : t -> bool
 end
 
-module RegularFloatReal : Real = struct
+module RegularFloatReal : NumberInterface = struct
   type t = float
 
   let format_t fmt f = Format.fprintf fmt "%f" f
@@ -105,7 +105,7 @@ module RegularFloatReal : Real = struct
   let is_nan_or_inf x = not (Float.is_finite x)
 end
 
-module MPFRReal : Real = struct
+module MPFRReal : NumberInterface = struct
   type t = Mpfrf.t
 
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
@@ -162,7 +162,7 @@ end
 
 module BigIntFixedPointReal (P : sig
   val bit_size_of_int : int ref
-end) : Real = struct
+end) : NumberInterface = struct
   type t = Mpzf.t
 
   let precision_modulo () =
