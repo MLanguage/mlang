@@ -11,13 +11,10 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(* FIXME:
-   new definedness optimizations
-   - max(0, -x) ~> -min(0,x)?
-   - tag conditionals / max/min
-   working on floats only for the backends to use the host operation?
-   - Literal op m_cond() -> put literal op inside conditional? At least in some cases? Also:
-   - x * (1 - b) + y * b ~> cond(b, x, y)? *)
+(* FIXME: new definedness optimizations - max(0, -x) ~> -min(0,x)? - tag conditionals / max/min
+   working on floats only for the backends to use the host operation? - Literal op m_cond() -> put
+   literal op inside conditional? At least in some cases? Also: - x * (1 - b) + y * b ~> cond(b, x,
+   y)? *)
 open Oir
 
 type partial_expr = PartialLiteral of Mir.literal | UnknownFloat [@@deriving ord]
@@ -287,14 +284,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 undef_cast d1 Float )
           | Mast.Add, _, Unop (Minus, e2') ->
               (Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'), undef_cast d1 d2)
-          | Mast.Add, Literal (Float 0.), _ when d2 = Float -> Pos.unmark new_e2, d2
-          | Mast.Sub, Literal (Float 0.), _ when d2 = Float -> Unop (Minus, new_e2), d2
+          | Mast.Add, Literal (Float 0.), _ when d2 = Float -> (Pos.unmark new_e2, d2)
+          | Mast.Sub, Literal (Float 0.), _ when d2 = Float -> (Unop (Minus, new_e2), d2)
           | (Mast.Add | Mast.Sub), _, Literal (Float 0.) when d1 = Float -> (Pos.unmark new_e1, d1)
           (* substraction *)
           | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
               from_literal (Float 0.)
-          | Mast.Sub, Literal Undefined, e' ->
-              (Unop (Minus, Pos.same_pos_as e' e), d2)
+          | Mast.Sub, Literal Undefined, e' -> (Unop (Minus, Pos.same_pos_as e' e), d2)
           | Mast.Sub, e', Literal Undefined -> (e', d1)
           (* multiplication *)
           | Mast.Mul, Literal (Float 1.), e' -> (e', undef_cast Float d2)
