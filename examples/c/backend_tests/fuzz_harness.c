@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     m_value output_array_for_m[num_outputs];
     m_output_to_array(output_array_for_m, output);
     // We don't want error cases or household whose revenue is astronomically high
-    if (output.is_error || output_array_for_m[m_get_input_index("REVKIRE")].value > 10000000.)
+    if (output.is_error) //||  output_array_for_m[m_get_output_index("REVKIRE")].value > 10000000.)
     {
         return 3;
     }
