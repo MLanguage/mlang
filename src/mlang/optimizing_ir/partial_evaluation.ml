@@ -250,59 +250,60 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         let new_e1, d1 = partially_evaluate_expr ctx p e1 in
         let new_e2, d2 = partially_evaluate_expr ctx p e2 in
         let new_e, d =
-          match (Pos.unmark op, Pos.unmark new_e1, Pos.unmark new_e2) with
+          match (Pos.unmark op, (Pos.unmark new_e1, d1), (Pos.unmark new_e2, d2)) with
           (* calling the interpreter when verything is a literal *)
-          | _, Literal _, Literal _ ->
+          | _, (Literal _, _), (Literal _, _) ->
               from_literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
                    (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
               (* first all the combinations giving undefined *)
-          | Mast.And, Literal Undefined, _ -> from_literal Undefined
-          | Mast.And, _, Literal Undefined -> from_literal Undefined
-          | Mast.Or, Literal Undefined, _ -> from_literal Undefined
-          | Mast.Or, _, Literal Undefined -> from_literal Undefined
-          | Mast.Mul, _, Literal Undefined -> from_literal Undefined
-          | Mast.Mul, Literal Undefined, _ -> from_literal Undefined
-          | Mast.Div, Literal Undefined, _ -> from_literal Undefined
-          | Mast.Div, _, Literal Undefined -> from_literal Undefined
+          | Mast.And, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
+          | Mast.And, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
+          | Mast.Or, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
+          | Mast.Or, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
+          | Mast.Mul, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
+          | Mast.Mul, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
+          | Mast.Div, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
+          | Mast.Div, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
           (* logical or *)
-          | Mast.Or, Literal (Float f), _ when f <> 0. -> from_literal Mir.true_literal
-          | Mast.Or, _, Literal (Float f) when f <> 0. -> from_literal Mir.true_literal
-          | Mast.Or, Literal (Float 0.), _ -> (Pos.unmark new_e2, d2)
-          | Mast.Or, _, Literal (Float 0.) -> (Pos.unmark new_e1, d1)
+          | Mast.Or, (Literal (Float f), _), (_, Float) when f <> 0. ->
+              from_literal Mir.true_literal
+          | Mast.Or, (_, Float), (Literal (Float f), _) when f <> 0. ->
+              from_literal Mir.true_literal
+          | Mast.Or, (Literal (Float 0.), _), (_, Float) -> (Pos.unmark new_e2, d2)
+          | Mast.Or, (_, Float), (Literal (Float 0.), _) -> (Pos.unmark new_e1, d1)
           (* logican and *)
-          | Mast.And, Literal (Float 0.), _ -> from_literal Mir.false_literal
-          | Mast.And, _, Literal (Float 0.) -> from_literal Mir.false_literal
-          | Mast.And, Literal (Float f), _ when f <> 0. -> (Pos.unmark new_e2, d2)
-          | Mast.And, _, Literal (Float f) when f <> 0. -> (Pos.unmark new_e1, d1)
+          | Mast.And, (Literal (Float 0.), _), (_, Float) -> from_literal Mir.false_literal
+          | Mast.And, (_, Float), (Literal (Float 0.), _) -> from_literal Mir.false_literal
+          | Mast.And, (Literal (Float f), _), (_, Float) when f <> 0. -> (Pos.unmark new_e2, d2)
+          | Mast.And, (_, Float), (Literal (Float f), _) when f <> 0. -> (Pos.unmark new_e1, d1)
           (* addition *)
-          | Mast.Add, Literal Undefined, _ -> (Pos.unmark new_e2, d2)
-          | Mast.Add, _, Literal Undefined -> (Pos.unmark new_e1, d1)
-          | Mast.Add, _, Literal (Float f) when f < 0. ->
+          | Mast.Add, (Literal Undefined, _ | _, Undefined), _ -> (Pos.unmark new_e2, d2)
+          | Mast.Add, _, (Literal Undefined, _ | _, Undefined) -> (Pos.unmark new_e1, d1)
+          | Mast.Add, _, (Literal (Float f), _) when f < 0. ->
               ( Binop
                   (Pos.same_pos_as Mast.Sub op, e1, Pos.same_pos_as (Mir.Literal (Float (-.f))) e2),
                 undef_cast d1 Float )
-          | Mast.Add, _, Unop (Minus, e2') ->
+          | Mast.Add, _, (Unop (Minus, e2'), _) ->
               (Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'), undef_cast d1 d2)
-          | Mast.Add, Literal (Float 0.), _ when d2 = Float -> (Pos.unmark new_e2, d2)
-          | Mast.Sub, Literal (Float 0.), _ when d2 = Float -> (Unop (Minus, new_e2), d2)
-          | (Mast.Add | Mast.Sub), _, Literal (Float 0.) when d1 = Float -> (Pos.unmark new_e1, d1)
+          | Mast.Add, (Literal (Float 0.), _), (_, Float) -> (Pos.unmark new_e2, d2)
+          | (Mast.Add | Mast.Sub), (_, Float), (Literal (Float 0.), _) -> (Pos.unmark new_e1, d1)
           (* substraction *)
-          | Mast.Sub, e1, e2 when e1 = e2 && e1 <> Literal Undefined && e2 <> Literal Undefined ->
-              from_literal (Float 0.)
-          | Mast.Sub, Literal Undefined, e' -> (Unop (Minus, Pos.same_pos_as e' e), d2)
-          | Mast.Sub, e', Literal Undefined -> (e', d1)
+          | Mast.Sub, (Literal (Float 0.), _), (_, Float) -> (Unop (Minus, new_e2), d2)
+          | Mast.Sub, (e1, Float), (e2, Float) when e1 = e2 -> from_literal (Float 0.)
+          | Mast.Sub, (Literal Undefined, _), (e', _) -> (Unop (Minus, Pos.same_pos_as e' e), d2)
+          | Mast.Sub, (e', _), (Literal Undefined, _ | _, Undefined) -> (e', d1)
           (* multiplication *)
-          | Mast.Mul, Literal (Float 1.), e' -> (e', undef_cast Float d2)
-          | Mast.Mul, e', Literal (Float 1.) -> (e', undef_cast d1 Float)
+          | Mast.Mul, (Literal (Float 1.), _), (e', _) -> (e', undef_cast Float d2)
+          | Mast.Mul, (e', _), (Literal (Float 1.), _) -> (e', undef_cast d1 Float)
           (* we can't optimize float multiplication by 0 here in the general case, because
              Undefined. But if we know that the other term can't be undefined, then we can go ! This
              is the case for the result of some functions *)
-          | Mast.Mul, Literal (Float 0.), _ when d2 = Float -> from_literal (Float 0.)
-          | Mast.Mul, _, Literal (Float 0.) when d1 = Float -> from_literal (Float 0.)
+          | Mast.Mul, (Literal (Float 0.), _), (_, Float) -> from_literal (Float 0.)
+          | Mast.Mul, (_, Float), (Literal (Float 0.), _) -> from_literal (Float 0.)
           (* division *)
-          | Mast.Div, e', Literal (Float 1.) -> (e', d1)
-          | Mast.Div, Literal (Float 0.), _ -> from_literal (Mir.Float 0.)
+          | Mast.Div, (e', _), (Literal (Float 1.), _) -> (e', d1)
+          | Mast.Div, (Literal (Float 0.), _), (_, Float) -> from_literal (Mir.Float 0.)
           (* default case *)
           | (Mast.Add | Mast.Sub), _, _ -> (Binop (op, new_e1, new_e2), undef_cast d1 d2)
           | (Mast.Mul | Mast.Div | Mast.And | Mast.Or), _, _ ->
