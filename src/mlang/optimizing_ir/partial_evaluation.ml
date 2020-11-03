@@ -434,6 +434,61 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 | _ -> (Mir.LocalLet (lvar, new_e1, new_e2), d2)
               in
               (Pos.same_pos_as new_e e, d) )
+    (* max(0, -max(0, x)) = 0 *)
+    | FunctionCall
+        ( MaxFunc,
+          [
+            (Literal (Float 0.), _);
+            (Unop (Minus, (FunctionCall (MaxFunc, [ (Literal (Float 0.), _); _ ]), _)), _);
+          ] ) ->
+        let new_e, d = from_literal (Float 0.) in
+        (Pos.same_pos_as new_e e, d)
+    (* min(0, min(0, x)) = min(0, x) *)
+    | FunctionCall
+        ( MinFunc,
+          [
+            (Literal (Float 0.), _);
+            ((FunctionCall (MinFunc, [ (Literal (Float 0.), _); _ ]), _) as inner_min);
+          ] ) ->
+        (inner_min, Float)
+    | FunctionCall
+        ( MaxFunc,
+          [
+            (Literal (Float 0.), _);
+            ((FunctionCall (MaxFunc, [ (Literal (Float 0.), _); _ ]), _) as inner_max);
+          ] ) ->
+        (inner_max, Float)
+    (* max(0, min(0, x)) = 0 ; same for min(0, max(0, x)) etc *)
+    | FunctionCall
+        ( MaxFunc,
+          ( [
+              ( FunctionCall
+                  (MinFunc, ([ (Literal (Float 0.), _); _ ] | [ _; (Literal (Float 0.), _) ])),
+                _ );
+              (Literal (Float 0.), _);
+            ]
+          | [
+              (Literal (Float 0.), _);
+              ( FunctionCall
+                  (MinFunc, ([ (Literal (Float 0.), _); _ ] | [ _; (Literal (Float 0.), _) ])),
+                _ );
+            ] ) )
+    | FunctionCall
+        ( MinFunc,
+          ( [
+              ( FunctionCall
+                  (MaxFunc, ([ (Literal (Float 0.), _); _ ] | [ _; (Literal (Float 0.), _) ])),
+                _ );
+              (Literal (Float 0.), _);
+            ]
+          | [
+              (Literal (Float 0.), _);
+              ( FunctionCall
+                  (MaxFunc, ([ (Literal (Float 0.), _); _ ] | [ _; (Literal (Float 0.), _) ])),
+                _ );
+            ] ) ) ->
+        let new_e, d = from_literal (Float 0.) in
+        (Pos.same_pos_as new_e e, d)
     | FunctionCall (func, args) ->
         let new_args, new_ds =
           List.split @@ List.map (fun arg -> partially_evaluate_expr ctx p arg) args
@@ -455,7 +510,18 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 | Undefined -> from_literal Mir.false_literal
                 | Float -> from_literal Mir.true_literal
                 | _ -> (Pos.unmark new_e, Float) )
-            | MinFunc | MaxFunc | Multimax -> (Pos.unmark new_e, Float)
+            | MinFunc | MaxFunc | Multimax ->
+                let new_args =
+                  List.map2
+                    (fun a d ->
+                      if Pos.unmark a = Mir.Literal Undefined || d = Undefined then
+                        Pos.same_pos_as (Mir.Literal (Float 0.)) a
+                      else a)
+                    new_args new_ds
+                in
+                let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
+                (* FIXME: change undef into 0 *)
+                (Pos.unmark new_e, Float)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
