@@ -229,8 +229,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                   Mir.Literal
                     (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
                        (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e)
-                       RegularFloat
-                    )
+                       RegularFloat)
               | _ ->
                   if d1 = Undefined || d2 = Undefined then Mir.Literal Undefined
                   else Comparison (op, new_e1, new_e2)
@@ -246,7 +245,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | _, (Literal _, _), (Literal _, _) ->
               from_literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
-                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1) RegularFloat)
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
+                   RegularFloat)
               (* first all the combinations giving undefined *)
           | Mast.And, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
           | Mast.And, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
@@ -308,7 +308,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Literal _ ->
               from_literal
                 (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
-                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1) RegularFloat)
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1)
+                   RegularFloat)
           | _ -> (
               ( Unop (op, new_e1),
                 match (op, d1) with
@@ -486,7 +487,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
         let new_e, d =
           if all_args_literal then
-            from_literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat)
+            from_literal
+              (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat)
           else
             match func with
             | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
