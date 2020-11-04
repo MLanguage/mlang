@@ -15,11 +15,12 @@ open Lexing
 open Mlexer
 
 (** Entry function for the executable. Returns a negative number in case of error. *)
-let driver (files : string list) (debug : bool) (display_time : bool) (dep_graph_file : string)
-    (print_cycles : bool) (backend : string option) (function_spec : string option)
-    (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (run_test : string option) (mpp_function : string) (optimize : bool) (code_coverage : bool) =
-  Cli.set_all_arg_refs files debug display_time dep_graph_file print_cycles output;
+let driver (files : string list) (debug : bool) (var_info_debug : string list) (display_time : bool)
+    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
+    (function_spec : string option) (mpp_file : string) (output : string option)
+    (run_all_tests : string option) (run_test : string option) (mpp_function : string)
+    (optimize : bool) (code_coverage : bool) =
+  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file print_cycles output;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in

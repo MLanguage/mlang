@@ -25,6 +25,11 @@ let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M fil
 
 let debug = Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
+let var_info_debug =
+  Arg.(
+    value & opt_all string []
+    & info [ "var_info_debug" ] ~doc:"Prints debug information for variables passed as arguments")
+
 let display_time =
   Arg.(
     value & flag
@@ -104,8 +109,9 @@ let code_coverage =
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ display_time $ dep_graph_file $ print_cycles $ backend $ function_spec
-    $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function $ optimize $ code_coverage)
+    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
+    $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
+    $ optimize $ code_coverage)
 
 let info =
   let doc =
@@ -163,6 +169,8 @@ let debug_flag = ref false
 (** Print infomation about variables declared, defined ou used incorrectly *)
 let var_info_flag = ref false
 
+let var_info_debug = ref []
+
 (** Print warning info *)
 let warning_flag = ref true
 
@@ -175,10 +183,13 @@ let display_time = ref false
 (** Output file *)
 let output_file = ref ""
 
-let set_all_arg_refs (files_ : string list) (debug_ : bool) (display_time_ : bool)
-    (dep_graph_file_ : string) (print_cycles_ : bool) (output_file_ : string option) =
+let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
+    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
+    (output_file_ : string option) =
   source_files := files_;
   debug_flag := debug_;
+  var_info_debug := var_info_debug_;
+  var_info_flag := !var_info_debug <> [];
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;

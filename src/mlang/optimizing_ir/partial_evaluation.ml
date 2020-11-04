@@ -11,10 +11,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(* FIXME: new definedness optimizations - max(0, -x) ~> -min(0,x)? - tag conditionals / max/min
-   working on floats only for the backends to use the host operation? - Literal op m_cond() -> put
-   literal op inside conditional? At least in some cases? Also: - x * (1 - b) + y * b ~> cond(b, x,
-   y)? *)
 open Oir
 
 type partial_expr = PartialLiteral of Mir.literal | UnknownFloat [@@deriving ord]
@@ -34,7 +30,7 @@ let maybe_undefined = function Undefined | Top -> true | _ -> false
 
 let maybe_float = function Float | Top -> true | _ -> false
 
-let join d1 d2 =
+let join (d1 : definedness) (d2 : definedness) : definedness =
   match (d1, d2) with
   | Bot, _ -> d2
   | _, Bot -> d1
@@ -44,7 +40,7 @@ let join d1 d2 =
   | Float, Float -> Float
 
 (* operations where undef is absorbing, such as the multiplication *)
-let undef_absorb d1 d2 =
+let undef_absorb (d1 : definedness) (d2 : definedness) : definedness =
   if d1 = Bot || d2 = Bot then Bot
   else if maybe_float d1 && maybe_float d2 then
     if maybe_undefined d1 || maybe_undefined d2 then Top else Float
@@ -52,13 +48,14 @@ let undef_absorb d1 d2 =
   else assert false
 
 (* operations where a single undef is cast to 0, such as the addition *)
-let undef_cast d1 d2 =
+let undef_cast (d1 : definedness) (d2 : definedness) : definedness =
   if maybe_undefined d1 && maybe_undefined d2 then
     if maybe_float d1 || maybe_float d2 then Top else Undefined
   else if maybe_float d1 || maybe_float d2 then Float
   else assert false
 
-let from_literal l = (Mir.Literal l, match l with Float _ -> Float | Undefined -> Undefined)
+let from_literal (l : Mir.literal) : Mir.expression * definedness =
+  (Mir.Literal l, match l with Float _ -> Float | Undefined -> Undefined)
 
 let partial_to_expr (e : partial_expr) : Mir.expression option * definedness =
   match e with
@@ -117,8 +114,6 @@ let empty_ctx (g : CFG.t) (entry_block : block_id) =
 let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) =
   { ctx with ctx_local_vars = Mir.LocalVariableMap.empty; ctx_inside_block = Some block_id }
 
-let peval_debug = ref false
-
 let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id) : int =
   (* the sort puts smaller items first, and we want the first item to be the block that is less
      dominating. So if id1 dominates id2, we want id2 to be smaller hence returning a positive value *)
@@ -171,10 +166,13 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
                   else
                     Paths.check_path ctx.ctx_paths def_block intermediate_block
                     && Paths.check_path ctx.ctx_paths intermediate_block curr_block
+                    (* if the definition is the same, this is not an issue *)
                     && (Option.compare compare_var_literal) ov (Some def) <> 0)
                 defs
             in
             if BlockMap.cardinal exists_other_def_in_between > 0 then
+              (* if there are multiple conflicting definitions but they have the same defined-ness,
+                 we keep that information *)
               let defs = List.map snd (BlockMap.bindings exists_other_def_in_between) in
               let result =
                 List.fold_left
@@ -189,16 +187,9 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
                         | UnknownFloat, UnknownFloat ->
                             Some (SimpleVar UnknownFloat)
                         | _ -> None )
-                    | _ -> None
-                    (* FIXME: tablevars? *))
+                    | Some (TableVar _), _ | _, Some (TableVar _) -> assert false)
                   (Some def) defs
               in
-              (* let () = if result = None then
-               *            Cli.debug_print "get_closest_dominating_def %s: multiple conflicting definitions:@.%a@.%a"
-               *              (Pos.unmark var.name)
-               *              format_block (def_block, Some def)
-               *              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") format_block)
-               *              (BlockMap.bindings exists_other_def_in_between) in *)
               result
             else Some def )
 
@@ -216,8 +207,6 @@ let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter
                 | _ -> None)
               ctx.ctx_vars));
   }
-
-let ( => ) b1 b2 = (not b1) || b2
 
 let check e d =
   match Pos.unmark e with
@@ -381,22 +370,16 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             let oe, d = partial_to_expr pexpr in
             let new_e = match oe with Some e' -> e' | None -> Pos.unmark e in
             (Pos.same_pos_as new_e e, d)
-        | Some (TableVar _) ->
-            (e, Top)
-            (* this case happens when calling functions like "multimax" *)
-            (* FIXME: definedness? *)
-        | r ->
-            if !peval_debug then
-              Cli.debug_print "%s ~> is_none:%b" (Pos.unmark var.name) (Option.is_none r);
-            (e, Top) )
+        | Some (TableVar _) -> (e, Top)
+        | _ -> (e, Top) )
     | LocalVar lvar -> (
         try
-          (* FIXME *)
           let oe, d = partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars) in
           match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
         with Not_found -> (e, Top) )
     | GenericTableIndex -> (e, Float)
-    | Error -> (e, Top) (* FIXME *)
+    | Error -> assert false
+    (* (e, Top) *)
     (* let l1 = b in l2 *)
     | LocalLet (l1, b, (LocalVar l2, _)) when Mir.LocalVariable.compare l1 l2 = 0 ->
         partially_evaluate_expr ctx p b
@@ -511,6 +494,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 | Float -> from_literal Mir.true_literal
                 | _ -> (Pos.unmark new_e, Float) )
             | MinFunc | MaxFunc | Multimax ->
+                (* in the functions, undef is implicitly cast to 0, so let's cast it! *)
                 let new_args =
                   List.map2
                     (fun a d ->
@@ -520,35 +504,29 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                     new_args new_ds
                 in
                 let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
-                (* FIXME: change undef into 0 *)
                 (Pos.unmark new_e, Float)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
   in
   if not @@ check new_e d then
-    Cli.debug_print "check failed @@%a: %a %a" Pos.format_position_short (Pos.get_position e)
-      Format_mir.format_expression (Pos.unmark e) format_definedness d;
-  if !peval_debug then
-    Cli.debug_print "%a ~> %a, d = %a" Format_mir.format_expression (Pos.unmark e)
-      Format_mir.format_expression (Pos.unmark new_e) format_definedness d;
+    Cli.debug_print "imprecise definedness inference @@%a: %a %a" Pos.format_position_short
+      (Pos.get_position e) Format_mir.format_expression (Pos.unmark e) format_definedness d;
   (new_e, d)
-
-let debug_vars = []
 
 let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
     (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =
   let ctx = reset_ctx ctx block_id in
   match Pos.unmark stmt with
   | SAssign (var, def) ->
-      if List.mem (Pos.unmark var.name) debug_vars then peval_debug := true;
+     let peval_debug = List.mem (Pos.unmark var.name) !Cli.var_info_debug in
       let new_def, new_ctx =
         match def.var_definition with
         | InputVar -> (Mir.InputVar, ctx)
         | SimpleVar e ->
-            if !peval_debug then
-              Cli.debug_print "starting partial evaluation for %s" (Pos.unmark var.name);
-            let e', d' = partially_evaluate_expr ctx p.mir_program e in
+           if peval_debug then Cli.var_info_print "starting partial evaluation for %s = %a" (Pos.unmark var.name) Format_mir.format_expression (Pos.unmark e);
+           let e', d' = partially_evaluate_expr ctx p.mir_program e in
+           if peval_debug then Cli.var_info_print "changed into %a, d = %a" Format_mir.format_expression (Pos.unmark e') format_definedness d';
             let partial_e' =
               Option.map (fun x -> SimpleVar x) (expr_to_partial (Pos.unmark e') d')
             in
@@ -584,7 +562,6 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
                 in
                 (TableVar (size, IndexTable (Mir.IndexMap.map fst es')), new_ctx) )
       in
-      if List.mem (Pos.unmark var.name) debug_vars then peval_debug := false;
       let new_stmt = Pos.same_pos_as (SAssign (var, { def with var_definition = new_def })) stmt in
       (new_stmt :: new_block, new_ctx)
   | SConditional (e, b1, b2, join) -> (
