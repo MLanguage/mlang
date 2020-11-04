@@ -39,10 +39,24 @@ let code_coverage_init () : unit =
 
 let code_coverage_result () : code_coverage_result = !code_coverage_acc
 
-type code_coverage_map_value =
-  | OnlyOneDef of Bir_interpreter.var_literal
-  | OnlyOneDefAndUndefined of Bir_interpreter.var_literal
-  | MultipleDefs
+module VarLiteralSet = Set.Make (struct
+  type t = Bir_interpreter.var_literal
+
+  let compare x y =
+    match (x, y) with
+    | Bir_interpreter.SimpleVar l1, Bir_interpreter.SimpleVar l2 -> compare l1 l2
+    | Bir_interpreter.TableVar (size1, t1), Bir_interpreter.TableVar (size2, t2) -> (
+        if size1 <> size2 then compare size1 size2
+        else
+          let different = ref None in
+          Array.iter2
+            (fun t1i t2i -> if t1i = t2i then () else different := Some (compare t1i t2i))
+            t1 t2;
+          match !different with None -> 0 | Some i -> i )
+    | _ -> compare x y
+end)
+
+type code_coverage_map_value = VarLiteralSet.t
 
 type code_coverage_acc = code_coverage_map_value CodeLocationMap.t Mir.VariableMap.t
 
@@ -51,26 +65,18 @@ let merge_code_coverage_single_results_with_acc (results : code_coverage_result)
   Mir.VariableMap.fold
     (fun var (new_defs : Bir_interpreter.var_literal CodeLocationMap.t) acc ->
       match Mir.VariableMap.find_opt var acc with
-      | None -> Mir.VariableMap.add var (CodeLocationMap.map (fun x -> OnlyOneDef x) new_defs) acc
+      | None ->
+          Mir.VariableMap.add var
+            (CodeLocationMap.map (fun x -> VarLiteralSet.singleton x) new_defs)
+            acc
       | Some old_defs ->
           Mir.VariableMap.add var
             (CodeLocationMap.fold
                (fun code_loc new_def defs ->
                  match CodeLocationMap.find_opt code_loc defs with
-                 | None -> CodeLocationMap.add code_loc (OnlyOneDef new_def) defs
-                 | Some old_def -> (
-                     match old_def with
-                     | OnlyOneDef old_def ->
-                         if old_def = new_def then defs
-                         else if new_def = SimpleVar Undefined then
-                           CodeLocationMap.add code_loc (OnlyOneDefAndUndefined old_def) defs
-                         else if old_def = SimpleVar Undefined then
-                           CodeLocationMap.add code_loc (OnlyOneDefAndUndefined new_def) defs
-                         else CodeLocationMap.add code_loc MultipleDefs defs
-                     | OnlyOneDefAndUndefined old_def ->
-                         if old_def = new_def then defs
-                         else CodeLocationMap.add code_loc MultipleDefs defs
-                     | MultipleDefs -> CodeLocationMap.add code_loc MultipleDefs defs ))
+                 | None -> CodeLocationMap.add code_loc (VarLiteralSet.singleton new_def) defs
+                 | Some old_def ->
+                     CodeLocationMap.add code_loc (VarLiteralSet.add new_def old_def) defs)
                new_defs old_defs)
             acc)
     results acc
@@ -81,18 +87,7 @@ let merge_code_coverage_acc (acc1 : code_coverage_acc) (acc2 : code_coverage_acc
     (fun _ defs1 defs2 ->
       Some
         (CodeLocationMap.union
-           (fun _ def1 def2 ->
-             match (def1, def2) with
-             | MultipleDefs, _ | _, MultipleDefs -> Some MultipleDefs
-             | OnlyOneDefAndUndefined def1, OnlyOneDefAndUndefined def2
-             | OnlyOneDefAndUndefined def1, OnlyOneDef def2
-             | OnlyOneDef def1, OnlyOneDefAndUndefined def2 ->
-                 if def1 = def2 then Some (OnlyOneDefAndUndefined def1) else Some MultipleDefs
-             | OnlyOneDef def1, OnlyOneDef def2 ->
-                 if def1 = def2 then Some (OnlyOneDef def1)
-                 else if def1 = SimpleVar Undefined then Some (OnlyOneDefAndUndefined def2)
-                 else if def2 = SimpleVar Undefined then Some (OnlyOneDefAndUndefined def1)
-                 else Some MultipleDefs)
+           (fun _ def1 def2 -> Some (VarLiteralSet.union def1 def2))
            defs1 defs2))
     acc1 acc2
 

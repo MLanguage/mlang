@@ -47,7 +47,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
          (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
+let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
@@ -65,7 +65,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
     Bir_interface.translate_cond program.idmap
       (List.map
          (fun (var, value, pos) ->
-           (* we allow a difference of 0 between the control value and the result *)
+           (* we allow a difference of 0.000001 between the control value and the result *)
            let first_exp =
              ( Mast.Comparison
                  ( (Lte, pos),
@@ -74,18 +74,18 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) :
                          (Literal (Variable (Normal var)), pos),
                          (Literal (to_ast_literal value), pos) ),
                      pos ),
-                   (Literal (Float 0.), pos) ),
+                   (Literal (Float test_error_margin), pos) ),
                pos )
            in
            let second_exp =
              ( Mast.Comparison
-                 ( (Gte, pos),
+                 ( (Lte, pos),
                    ( Mast.Binop
                        ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
+                         (Literal (to_ast_literal value), pos),
+                         (Literal (Variable (Normal var)), pos) ),
                      pos ),
-                   (Literal (Float 0.), pos) ),
+                   (Literal (Float test_error_margin), pos) ),
                pos )
            in
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
@@ -127,11 +127,12 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
   { p with Bir.statements = new_stmts @ conditions_stmts }
 
 let check_test (combined_program : Bir.program) (test_name : string) (optimize : bool)
-    (code_coverage : bool) : Bir_instrumentation.code_coverage_result =
+    (code_coverage : bool) (value_sort : Bir_interpreter.value_sort) (test_error_margin : float) :
+    Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file = to_mvg_function_and_inputs combined_program t in
+  let f, input_file = to_mvg_function_and_inputs combined_program t test_error_margin in
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f
@@ -154,8 +155,8 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   if code_coverage then Bir_instrumentation.code_coverage_init ();
   ignore
     (Bir_interpreter.evaluate_program combined_program
-       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_ctx input_file)
-       (-code_loc_offset));
+       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx input_file)
+       (-code_loc_offset) value_sort);
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
@@ -163,14 +164,16 @@ type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
 
 type process_acc = string list * test_failures * Bir_instrumentation.code_coverage_acc
 
-type coverage_kind =
-  | NotCovered
-  | Covered
-  | CoveredOneDef of Bir_interpreter.var_literal
-  | CoveredOneDefAndUndefined of Bir_interpreter.var_literal
+type coverage_kind = NotCovered | Covered of int  (** The int is the number of different values *)
+
+module IntMap = Map.Make (Int)
+
+let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
+  match IntMap.find_opt key m with None -> IntMap.add key 0 m | Some i -> IntMap.add key (i + 1) m
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
-    (code_coverage_activated : bool) =
+    (code_coverage_activated : bool) (value_sort : Bir_interpreter.value_sort)
+    (test_error_margin : float) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -186,7 +189,9 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       =
     try
       Cli.debug_flag := false;
-      let code_coverage_result = check_test p (test_dir ^ name) optimize code_coverage_activated in
+      let code_coverage_result =
+        check_test p (test_dir ^ name) optimize code_coverage_activated value_sort test_error_margin
+      in
       Cli.debug_flag := true;
       let code_coverage_acc =
         Bir_instrumentation.merge_code_coverage_single_results_with_acc code_coverage_result
@@ -261,36 +266,42 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           | Some used_code_locs -> (
               match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
               | None -> NotCovered
-              | Some def -> (
-                  match def with
-                  | Bir_instrumentation.OnlyOneDef def -> CoveredOneDef def
-                  | Bir_instrumentation.OnlyOneDefAndUndefined def -> CoveredOneDefAndUndefined def
-                  | Bir_instrumentation.MultipleDefs -> Covered ) ))
+              | Some def -> Covered (Bir_instrumentation.VarLiteralSet.cardinal def) ))
         all_code_locs
     in
     let all_code_locs_num =
       Bir_instrumentation.CodeLocationMap.cardinal all_code_locs_with_coverage
     in
-    let not_covered, one_value, one_value_or_undefined, covered =
+    let number_of_values_to_number_of_statements =
       Bir_instrumentation.CodeLocationMap.fold
-        (fun _ cov (not_covered, one_value, one_value_or_undefined, covered) ->
+        (fun _ cov number_of_values_to_number_of_statements ->
           match cov with
-          | NotCovered -> (not_covered + 1, one_value, one_value_or_undefined, covered)
-          | CoveredOneDef _ -> (not_covered, one_value + 1, one_value_or_undefined, covered)
-          | CoveredOneDefAndUndefined _ ->
-              (not_covered, one_value, one_value_or_undefined + 1, covered)
-          | Covered -> (not_covered, one_value, one_value_or_undefined, covered + 1))
-        all_code_locs_with_coverage (0, 0, 0, 0)
+          | NotCovered -> incr_int_key number_of_values_to_number_of_statements 0
+          | Covered i -> incr_int_key number_of_values_to_number_of_statements i)
+        all_code_locs_with_coverage IntMap.empty
     in
-    Cli.warning_print "Some code locations are not covered properly by this set of test runs.";
-    Cli.warning_print "The estimated code coverage is:";
-    Cli.warning_print "-> assigmnents never covered: %.3f%%"
-      (float_of_int not_covered /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only one value (possibly undefined): %.3f%%"
-      (float_of_int one_value /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print "-> assigmnents covered by only one value different from undefined: %.3f%%"
-      (float_of_int one_value_or_undefined /. float_of_int all_code_locs_num *. 100.);
-    Cli.warning_print
-      "-> assigmnents covered by only two or more values different from undefined: %.3f%%"
-      (float_of_int covered /. float_of_int all_code_locs_num *. 100.)
+    Cli.result_print "Here is the estimated code coverage of this set of test runs, broke down";
+    Cli.result_print "by the number of values statements are covered with:";
+    let number_of_values_to_number_of_statements =
+      List.sort
+        (fun x y -> compare (fst x) (fst y))
+        (IntMap.bindings number_of_values_to_number_of_statements)
+    in
+    let number_of_values_to_number_of_statements =
+      let rec build_list (i : int) (input : (int * int) list) =
+        match input with
+        | [] -> []
+        | (i', n) :: tl ->
+            if i' = i then (i', n) :: build_list (i + 1) tl else (i, 0) :: build_list (i + 1) input
+      in
+      build_list 0 number_of_values_to_number_of_statements
+    in
+    List.iter
+      (fun (number_of_values, number_of_statements) ->
+        Cli.result_print "%s values → %d (%s of statements)"
+          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%d" number_of_values)
+          number_of_statements
+          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%.4f%%"
+             (float_of_int number_of_statements /. float_of_int all_code_locs_num *. 100.)))
+      number_of_values_to_number_of_statements
   end

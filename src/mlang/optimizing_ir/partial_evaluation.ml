@@ -193,10 +193,10 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
               result
             else Some def )
 
-let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.ctx =
+let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.vanilla_ctx =
   {
-    Bir_interpreter.empty_ctx with
-    Bir_interpreter.ctx_vars =
+    Bir_interpreter.empty_vanilla_ctx with
+    Bir_interpreter.vanilla_ctx_vars =
       Mir.VariableMap.map Option.get
         (Mir.VariableMap.filter
            (fun _ x -> Option.is_some x)
@@ -227,8 +227,10 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
               | Literal _, Literal _ ->
                   Mir.Literal
-                    (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                       (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e))
+                    (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                       (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e)
+                       RegularFloat
+                    )
               | _ ->
                   if d1 = Undefined || d2 = Undefined then Mir.Literal Undefined
                   else Comparison (op, new_e1, new_e2)
@@ -243,8 +245,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (* calling the interpreter when verything is a literal *)
           | _, (Literal _, _), (Literal _, _) ->
               from_literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1))
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                   (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1) RegularFloat)
               (* first all the combinations giving undefined *)
           | Mast.And, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
           | Mast.And, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
@@ -305,8 +307,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e1 with
           | Literal _ ->
               from_literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p
-                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1))
+                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                   (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1) RegularFloat)
           | _ -> (
               ( Unop (op, new_e1),
                 match (op, d1) with
@@ -484,7 +486,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
         let new_e, d =
           if all_args_literal then
-            from_literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_ctx p new_e)
+            from_literal (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat)
           else
             match func with
             | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
@@ -519,14 +521,18 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
   let ctx = reset_ctx ctx block_id in
   match Pos.unmark stmt with
   | SAssign (var, def) ->
-     let peval_debug = List.mem (Pos.unmark var.name) !Cli.var_info_debug in
+      let peval_debug = List.mem (Pos.unmark var.name) !Cli.var_info_debug in
       let new_def, new_ctx =
         match def.var_definition with
         | InputVar -> (Mir.InputVar, ctx)
         | SimpleVar e ->
-           if peval_debug then Cli.var_info_print "starting partial evaluation for %s = %a" (Pos.unmark var.name) Format_mir.format_expression (Pos.unmark e);
-           let e', d' = partially_evaluate_expr ctx p.mir_program e in
-           if peval_debug then Cli.var_info_print "changed into %a, d = %a" Format_mir.format_expression (Pos.unmark e') format_definedness d';
+            if peval_debug then
+              Cli.var_info_print "starting partial evaluation for %s = %a" (Pos.unmark var.name)
+                Format_mir.format_expression (Pos.unmark e);
+            let e', d' = partially_evaluate_expr ctx p.mir_program e in
+            if peval_debug then
+              Cli.var_info_print "changed into %a, d = %a" Format_mir.format_expression
+                (Pos.unmark e') format_definedness d';
             let partial_e' =
               Option.map (fun x -> SimpleVar x) (expr_to_partial (Pos.unmark e') d')
             in

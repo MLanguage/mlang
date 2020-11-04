@@ -1,4 +1,4 @@
-#include "ir_simulateur_simplifie_2018.h"
+#include "ir_tests.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
     }
 
     int num_inputs = m_num_inputs();
-    int size_per_value = 1 + sizeof(unsigned int);
+    int size_per_value = (sizeof(char)) + sizeof(unsigned int);
     long correct_string_size = size_per_value * num_inputs + 1;
 
     FILE *input_file = fopen(argv[1], "r");
@@ -34,43 +34,54 @@ int main(int argc, char *argv[])
     for (int i = 0; i < num_inputs; i++)
     {
         char *undefined = input_string + size_per_value * i;
-        char *value = input_string + size_per_value * i + 1;
+        char *value = input_string + size_per_value * i + (sizeof(char));
         bool undefined_v = ((unsigned int)*undefined > 32767) ? true : false;
         // Values cannot have more than 10 digits
         unsigned int value_v = (*((unsigned int *)value)) % 1000000;
         m_value input = (struct m_value){
             .undefined = undefined_v,
-            .value = (double)value_v,
+            .value = undefined_v ? 0 : (double)value_v,
         };
         input_array_for_m[i] = input;
     }
     // Then we call the program
     m_input input_for_m = m_input_from_array(input_array_for_m);
     m_output output = m_extracted(input_for_m);
-    if (output.is_error)
+    int num_outputs = m_num_outputs();
+    m_value output_array_for_m[num_outputs];
+    m_output_to_array(output_array_for_m, output);
+    // We don't want error cases or household whose revenue is astronomically high
+    if (output.is_error) //||  output_array_for_m[m_get_output_index("REVKIRE")].value > 10000000.)
     {
         return 3;
     }
     else
     {
-        int num_outputs = m_num_outputs();
-
-        m_value output_array_for_m[num_outputs];
-        m_output_to_array(output_array_for_m, output);
         // We print the test case found in the FIP format on stdin
         printf("#NOM\n");
-        printf("#RANDOMFUZZERTEST#FIP/%llx\n", (unsigned long long)(*input_string));
+        int checksum = 0;
+        for (int i = 0; i < correct_string_size / (sizeof(int)); i++)
+        {
+            checksum ^= ((int *)input_string)[i];
+        }
+        printf("RANDOMFUZZERTEST%d\n", checksum);
         printf("#ENTREES-PRIMITIF\n");
         for (int i = 0; i < num_inputs; i++)
         {
-            printf("%s/%f\n", m_get_input_name_from_index(i), input_array_for_m[i].value);
+            if (!input_array_for_m[i].undefined)
+            {
+                printf("%s/%f\n", m_get_input_name_from_index(i), input_array_for_m[i].value);
+            }
         }
         printf("#CONTROLES-PRIMITIF\n");
         printf("#RESULTATS-PRIMITIF\n");
         // Here should go the output variable
         for (int i = 0; i < num_outputs; i++)
         {
-            printf("%s/%f\n", m_get_output_name_from_index(i), output_array_for_m[i].value);
+            if (!output_array_for_m[i].undefined)
+            {
+                printf("%s/%f\n", m_get_output_name_from_index(i), output_array_for_m[i].value);
+            }
         }
         printf("#ENTREES-CORRECTIF\n");
         printf("#CONTROLES-CORRECTIF\n");
