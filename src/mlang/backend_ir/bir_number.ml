@@ -27,6 +27,8 @@ module type NumberInterface = sig
 
   val of_float : float -> t
 
+  val of_float_input : float -> t
+
   val to_float : t -> float
   (** Warning: lossy *)
 
@@ -75,6 +77,8 @@ module RegularFloatReal : NumberInterface = struct
   let to_int f = int_of_float f
 
   let of_float f = f
+
+  let of_float_input f = f
 
   let to_float f = f
 
@@ -133,6 +137,8 @@ module MPFRReal : NumberInterface = struct
 
   let of_float f = Mpfrf.of_float f Near
 
+  let of_float_input f = Mpfrf.of_float f Near
+
   let to_float f = Mpfrf.to_float ~round:Near f
 
   let zero = Mpfrf.of_int 0 Near
@@ -167,7 +173,7 @@ module MPFRReal : NumberInterface = struct
 end
 
 module IntervalReal : NumberInterface = struct
-  let epsilon = Float.succ @@ Float.succ @@ Float.succ 0.
+  let epsilon = 0.01
 
   type t = Interval_crlibm.t
 
@@ -205,23 +211,25 @@ module IntervalReal : NumberInterface = struct
         (Format.asprintf "converting %a to int, too much imprecision (low: %d, high: %d)!" format_t
            f i_low i_high)
 
-  let of_float (f : float) = Interval_crlibm.I.v (f -. epsilon) (f +. epsilon)
+  let of_float (f : float) = Interval_crlibm.I.v f f
+
+  let of_float_input (f : float) = Interval_crlibm.I.v (f -. epsilon) (f +. epsilon)
 
   let to_float f = (Interval_crlibm.I.low f +. Interval_crlibm.I.high f) /. 2.
 
-  let zero = Interval_crlibm.I.v (0. -. epsilon) (0. +. epsilon)
+  let zero = Interval_crlibm.I.zero
 
-  let one () = Interval_crlibm.I.v (1. -. epsilon) (1. +. epsilon)
+  let one () = Interval_crlibm.I.one
 
-  let ( =. ) x y = Interval_crlibm.I.equal x y
+  let ( =. ) x y = not (Interval_crlibm.I.disjoint x y)
 
-  let ( >=. ) x y = Interval_crlibm.I.( >= ) x y
+  let ( >=. ) x y = Interval_crlibm.I.precedes y x
 
-  let ( >. ) x y = Interval_crlibm.I.( > ) x y
+  let ( >. ) x y = Interval_crlibm.I.strict_precedes y x
 
-  let ( <. ) x y = Interval_crlibm.I.( < ) x y
+  let ( <. ) x y = Interval_crlibm.I.strict_precedes x y
 
-  let ( <=. ) x y = Interval_crlibm.I.( <= ) x y
+  let ( <=. ) x y = Interval_crlibm.I.precedes x y
 
   let ( +. ) x y = Interval_crlibm.I.( + ) x y
 
@@ -278,6 +286,8 @@ end) : NumberInterface = struct
     let frac_part_scaled = frac_part *. Mpzf.to_float (precision_modulo ()) in
     Mpzf.add (Mpzf.of_float frac_part_scaled)
       (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
+
+  let of_float_input (f : float) : t = of_float f
 
   let to_float f =
     let frac_part, int_part = modf f in

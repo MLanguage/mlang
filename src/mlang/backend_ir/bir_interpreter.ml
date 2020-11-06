@@ -116,7 +116,10 @@ module Make (R : Bir_number.NumberInterface) = struct
       ctx_vars =
         VariableMap.fold
           (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
-          (VariableMap.map literal_to_value inputs)
+          (VariableMap.map
+             (fun l ->
+               match l with Mir.Undefined -> Undefined | Mir.Float f -> Real (R.of_float_input f))
+             inputs)
           ctx.ctx_vars;
     }
 

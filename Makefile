@@ -2,12 +2,12 @@
 # Variables
 ##################################################
 
-SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/
-SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/
-SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/
-SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/
+SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/*.m
+SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/*.m
+SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
+SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
 
-SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_FILES?=$(SOURCE_DIR_2018)
 
 ifeq ($(OPTIMIZE), 1)
     OPTIMIZE_FLAG=-O
