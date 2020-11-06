@@ -75,6 +75,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
         Mpfr.set_default_prec 1024;
         Bir_interpreter.MPFR
       end
+      else if precision = "interval" then Bir_interpreter.Interval
       else
         let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
         if Re.Pcre.pmatch ~rex:bigint_regex precision then
@@ -130,10 +131,8 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
           if String.lowercase_ascii backend = "interpreter" then begin
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let _end_ctx, print_output =
-              Bir_interpreter.evaluate_program function_spec combined_program
-                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx inputs)
-                0 value_sort
+            let print_output =
+              Bir_interpreter.evaluate_program function_spec combined_program inputs 0 value_sort
             in
             print_output ()
           end

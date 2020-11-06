@@ -193,17 +193,21 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
               result
             else Some def )
 
-let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) : Bir_interpreter.vanilla_ctx =
+let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) :
+    Bir_interpreter.RegularFloatInterpreter.ctx =
   {
-    Bir_interpreter.empty_vanilla_ctx with
-    Bir_interpreter.vanilla_ctx_vars =
+    Bir_interpreter.RegularFloatInterpreter.empty_ctx with
+    Bir_interpreter.RegularFloatInterpreter.ctx_vars =
       Mir.VariableMap.map Option.get
         (Mir.VariableMap.filter
            (fun _ x -> Option.is_some x)
            (Mir.VariableMap.mapi
               (fun var _ ->
                 match get_closest_dominating_def var ctx with
-                | Some (SimpleVar (PartialLiteral l)) -> Some (Bir_interpreter.SimpleVar l)
+                | Some (SimpleVar (PartialLiteral l)) ->
+                    Some
+                      (Bir_interpreter.RegularFloatInterpreter.SimpleVar
+                         (Bir_interpreter.RegularFloatInterpreter.literal_to_value l))
                 | _ -> None)
               ctx.ctx_vars));
   }
@@ -227,7 +231,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               | Literal Undefined, _ | _, Literal Undefined -> Mir.Literal Undefined
               | Literal _, Literal _ ->
                   Mir.Literal
-                    (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                    (Bir_interpreter.evaluate_expr p
                        (Pos.same_pos_as (Mir.Comparison (op, new_e1, new_e2)) e)
                        RegularFloat)
               | _ ->
@@ -244,7 +248,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (* calling the interpreter when verything is a literal *)
           | _, (Literal _, _), (Literal _, _) ->
               from_literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                (Bir_interpreter.evaluate_expr p
                    (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
                    RegularFloat)
               (* first all the combinations giving undefined *)
@@ -307,7 +311,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           match Pos.unmark new_e1 with
           | Literal _ ->
               from_literal
-                (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p
+                (Bir_interpreter.evaluate_expr p
                    (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1)
                    RegularFloat)
           | _ -> (
@@ -346,13 +350,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 then int_of_float f
                 else
                   let err, ctx =
-                    ( Bir_interpreter.FloatIndex
-                        (Format.asprintf "%a" Pos.format_position (Pos.get_position e1)),
+                    ( Bir_interpreter.RegularFloatInterpreter.FloatIndex
+                        (Format.asprintf "%f" f, Pos.get_position e1),
                       interpreter_ctx_from_partial_ev_ctx ctx )
                   in
                   if !Bir_interpreter.exit_on_rte then
-                    Bir_interpreter.raise_runtime_as_structured err ctx p
-                  else raise (Bir_interpreter.RuntimeError (err, ctx))
+                    Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured err ctx p
+                  else raise (Bir_interpreter.RegularFloatInterpreter.RuntimeError (err, ctx))
               in
               match get_closest_dominating_def (Pos.unmark var) ctx with
               | Some (SimpleVar _) -> assert false (* should not happen *)
@@ -486,9 +490,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         in
         let new_e = Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e in
         let new_e, d =
-          if all_args_literal then
-            from_literal
-              (Bir_interpreter.evaluate_expr Bir_interpreter.empty_vanilla_ctx p new_e RegularFloat)
+          if all_args_literal then from_literal (Bir_interpreter.evaluate_expr p new_e RegularFloat)
           else
             match func with
             | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
@@ -587,12 +589,14 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
       | Some (PartialLiteral (Float _)) ->
           Cli.error_print "Error during partial evaluation!";
           let err, ctx =
-            ( Bir_interpreter.ConditionViolated (cond.cond_errors, cond.cond_expr, []),
+            ( Bir_interpreter.RegularFloatInterpreter.ConditionViolated
+                (cond.cond_errors, cond.cond_expr, []),
               interpreter_ctx_from_partial_ev_ctx ctx )
           in
           if !Bir_interpreter.exit_on_rte then
-            Bir_interpreter.raise_runtime_as_structured err ctx p.mir_program
-          else raise (Bir_interpreter.RuntimeError (err, ctx))
+            Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured err ctx
+              p.mir_program
+          else raise (Bir_interpreter.RegularFloatInterpreter.RuntimeError (err, ctx))
       | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx) )
   | _ -> (stmt :: new_block, ctx)
 

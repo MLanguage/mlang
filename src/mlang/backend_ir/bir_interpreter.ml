@@ -15,26 +15,6 @@ open Mir
 
 type var_literal = SimpleVar of literal | TableVar of int * literal array
 
-let format_var_literal_with_var (fmt : Format.formatter) ((var, vl) : Variable.t * var_literal) =
-  match vl with
-  | SimpleVar value ->
-      Format.fprintf fmt "%s (%s): %a" (Pos.unmark var.Variable.name)
-        (Pos.unmark var.Variable.descr) Format_mir.format_literal value
-  | TableVar (size, values) ->
-      Format.fprintf fmt "%s (%s): Table (%d values)@\n" (Pos.unmark var.Variable.name)
-        (Pos.unmark var.Variable.descr) size;
-      List.iteri
-        (fun idx value -> Format.fprintf fmt "| %d -> %a\n" idx Format_mir.format_literal value)
-        (Array.to_list values)
-
-type vanilla_ctx = {
-  vanilla_ctx_local_vars : literal Pos.marked LocalVariableMap.t;
-  vanilla_ctx_vars : var_literal VariableMap.t;
-}
-
-let empty_vanilla_ctx : vanilla_ctx =
-  { vanilla_ctx_local_vars = LocalVariableMap.empty; vanilla_ctx_vars = VariableMap.empty }
-
 type code_location_segment = InsideBlock of int | ConditionalBranch of bool
 
 let format_code_location_segment (fmt : Format.formatter) (s : code_location_segment) =
@@ -49,149 +29,12 @@ let format_code_location (fmt : Format.formatter) (l : code_location) =
     ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
     format_code_location_segment fmt l
 
-type run_error =
-  | ErrorValue of string
-  | FloatIndex of string
-  | IndexOutOfBounds of string
-  | IncorrectOutputVariable of string
-  | UnknownInputVariable of string
-  | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_literal) list
-  | NanOrInf of string * expression Pos.marked
-
-exception RuntimeError of run_error * vanilla_ctx
-
-let repl_debugguer (ctx : vanilla_ctx) (p : Mir.program) : unit =
-  Cli.warning_print
-    "Starting interactive debugger. Please query the interpreter state for the values of \
-     variables. Exit with \"quit\".@\n";
-  let exit = ref false in
-  while not !exit do
-    Format.printf "> @?";
-    let query = read_line () in
-    if query = "quit" then exit := true
-    else if query = "explain" then begin
-      Format.printf ">> @?";
-      let query = read_line () in
-      try
-        let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
-        let vars =
-          List.sort
-            (fun var1 var2 ->
-              compare_execution_number var1.Variable.execution_number var2.Variable.execution_number)
-            vars
-        in
-        List.iter
-          (fun var ->
-            Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
-              var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
-              (fun fmt () ->
-                try
-                  Format_mir.format_variable_def fmt
-                    (VariableMap.find var p.program_vars).Mir.var_definition
-                with Not_found -> Format.fprintf fmt "unused definition")
-              ())
-          vars
-      with Not_found -> Format.printf "Inexisting variable@\n"
-    end
-    else
-      try
-        let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
-        let vars =
-          List.sort
-            (fun var1 var2 ->
-              compare_execution_number var1.Variable.execution_number var2.Variable.execution_number)
-            vars
-        in
-        List.iter
-          (fun var ->
-            try
-              let var_l = Mir.VariableMap.find var ctx.vanilla_ctx_vars in
-              Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
-                var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
-                format_var_literal_with_var (var, var_l)
-            with Not_found ->
-              Format.printf "[%a %a] -> not computed@\n" Format_mir.format_execution_number_short
-                var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos)
-          vars
-      with Not_found -> Format.printf "Inexisting variable@\n"
-  done
-
-let raise_runtime_as_structured (e : run_error) (ctx : vanilla_ctx) (p : program) =
-  match e with
-  | ErrorValue s -> Errors.raise_error (Format.asprintf "Error value at runtime: %s" s)
-  | FloatIndex s -> Errors.raise_error (Format.asprintf "Index is not an integer: %s" s)
-  | IndexOutOfBounds s -> Errors.raise_error (Format.asprintf "Index out of bounds: %s" s)
-  | NanOrInf (v, e) ->
-      Errors.raise_spanned_error_with_continuation
-        (Format.asprintf "Expression evaluated to %s: %a" v Format_mir.format_expression
-           (Pos.unmark e))
-        (Pos.get_position e)
-        (fun _ -> repl_debugguer ctx p)
-  | UnknownInputVariable s -> Errors.raise_error (Format.asprintf "Unknown input variable: %s" s)
-  | IncorrectOutputVariable s ->
-      Errors.raise_error (Format.asprintf "Incorrect output variable: %s" s)
-  | ConditionViolated (errors, condition, bindings) ->
-      Errors.raise_spanned_error_with_continuation
-        (Format.asprintf
-           "Verification condition failed! Errors thrown:\n\
-           \  * %a\n\
-            Violated condition:\n\
-           \  * %a\n\
-            Values of the relevant variables at this point:\n\
-            %a"
-           (Format_mast.pp_print_list_endline (fun fmt err ->
-                Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
-                  (Pos.unmark err.Error.descr)))
-           errors Format_mir.format_expression (Pos.unmark condition)
-           (Format_mast.pp_print_list_endline (fun fmt v ->
-                Format.fprintf fmt "  * %a" format_var_literal_with_var v))
-           bindings)
-        (Pos.get_position condition)
-        (fun _ -> repl_debugguer ctx p)
-
 let assign_hook : (Mir.Variable.t -> var_literal -> code_location -> unit) ref =
   ref (fun _var _lit _code_loc -> ())
 
 let exit_on_rte = ref true
 
 let repl_debug = ref false
-
-(* During evaluation, variables that have an I/O property set to InputVariable have a value that is
-   read directly from the input map. However, one can pass inside the input map a value for a
-   variable whose I/O type was not properly set to InputVariable. This function is precisely for
-   these cases, it set the I/O flag properly for execution. Not that such a change to the program
-   does not require to recompute the dependency graph and the execution order. *)
-let replace_undefined_with_input_variables (p : program) (input_values : literal VariableMap.t) :
-    program =
-  VariableMap.fold
-    (fun var _ p ->
-      try
-        let old_var_data = VariableMap.find var p.program_vars in
-        {
-          p with
-          program_vars =
-            VariableMap.add var
-              { old_var_data with var_definition = InputVar; var_io = Input }
-              p.program_vars;
-        }
-      with Not_found ->
-        raise
-          (RuntimeError
-             ( UnknownInputVariable
-                 (Format.asprintf "%s (%s)"
-                    (Pos.unmark var.Mir.Variable.name)
-                    (Pos.unmark var.Mir.Variable.descr)),
-               empty_vanilla_ctx )))
-    input_values p
-
-let update_ctx_with_inputs (ctx : vanilla_ctx) (inputs : literal VariableMap.t) : vanilla_ctx =
-  {
-    ctx with
-    vanilla_ctx_vars =
-      VariableMap.fold
-        (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
-        inputs ctx.vanilla_ctx_vars;
-  }
 
 module Make (R : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
@@ -248,13 +91,6 @@ module Make (R : Bir_number.NumberInterface) = struct
       ctx_generic_index = None;
     }
 
-  let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
-    Mir.VariableMap.iter
-      (fun var value ->
-        if Mir.VariableMap.mem var f.func_outputs then
-          Cli.result_print "%a" format_var_value_with_var (var, value))
-      results.ctx_vars
-
   let literal_to_value (l : Mir.literal) : value =
     match l with Mir.Undefined -> Undefined | Mir.Float f -> Real (R.of_float f)
 
@@ -262,16 +98,6 @@ module Make (R : Bir_number.NumberInterface) = struct
     match def with
     | SimpleVar v -> SimpleVar (literal_to_value v)
     | TableVar (size, defs) -> TableVar (size, Array.map (fun v -> literal_to_value v) defs)
-
-  let vanilla_ctx_to_ctx (ctx : vanilla_ctx) : ctx =
-    {
-      ctx_local_vars =
-        LocalVariableMap.map
-          (fun f -> Pos.same_pos_as (literal_to_value (Pos.unmark f)) f)
-          ctx.vanilla_ctx_local_vars;
-      ctx_vars = VariableMap.map var_literal_to_var_value ctx.vanilla_ctx_vars;
-      ctx_generic_index = None;
-    }
 
   let value_to_literal (l : value) : Mir.literal =
     match l with Undefined -> Mir.Undefined | Real f -> Mir.Float (R.to_float f)
@@ -284,37 +110,170 @@ module Make (R : Bir_number.NumberInterface) = struct
     in
     l
 
-  let ctx_to_vanilla_ctx (ctx : ctx) : vanilla_ctx =
+  let update_ctx_with_inputs (ctx : ctx) (inputs : literal VariableMap.t) : ctx =
     {
-      vanilla_ctx_local_vars =
-        LocalVariableMap.map
-          (fun f -> Pos.same_pos_as (value_to_literal (Pos.unmark f)) f)
-          ctx.ctx_local_vars;
-      vanilla_ctx_vars = VariableMap.map var_value_to_var_literal ctx.ctx_vars;
+      ctx with
+      ctx_vars =
+        VariableMap.fold
+          (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
+          (VariableMap.map literal_to_value inputs)
+          ctx.ctx_vars;
     }
+
+  type run_error =
+    | ErrorValue of string * Pos.t
+    | FloatIndex of string * Pos.t
+    | IndexOutOfBounds of string * Pos.t
+    | IncorrectOutputVariable of string * Pos.t
+    | UnknownInputVariable of string * Pos.t
+    | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_value) list
+    | NanOrInf of string * expression Pos.marked
+
+  exception RuntimeError of run_error * ctx
+
+  (* During evaluation, variables that have an I/O property set to InputVariable have a value that
+     is read directly from the input map. However, one can pass inside the input map a value for a
+     variable whose I/O type was not properly set to InputVariable. This function is precisely for
+     these cases, it set the I/O flag properly for execution. Not that such a change to the program
+     does not require to recompute the dependency graph and the execution order. *)
+  let replace_undefined_with_input_variables (p : program) (input_values : literal VariableMap.t) :
+      program =
+    VariableMap.fold
+      (fun var _ p ->
+        try
+          let old_var_data = VariableMap.find var p.program_vars in
+          {
+            p with
+            program_vars =
+              VariableMap.add var
+                { old_var_data with var_definition = InputVar; var_io = Input }
+                p.program_vars;
+          }
+        with Not_found ->
+          raise
+            (RuntimeError
+               ( UnknownInputVariable
+                   ( Format.asprintf "%s (%s)"
+                       (Pos.unmark var.Mir.Variable.name)
+                       (Pos.unmark var.Mir.Variable.descr),
+                     Pos.get_position var.Mir.Variable.name ),
+                 empty_ctx )))
+      input_values p
+
+  let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
+    Mir.VariableMap.iter
+      (fun var value ->
+        if Mir.VariableMap.mem var f.func_outputs then
+          Cli.result_print "%a" format_var_value_with_var (var, value))
+      results.ctx_vars
+
+  let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
+    Cli.warning_print
+      "Starting interactive debugger. Please query the interpreter state for the values of \
+       variables. Exit with \"quit\".@\n";
+    let exit = ref false in
+    while not !exit do
+      Format.printf "> @?";
+      let query = read_line () in
+      if query = "quit" then exit := true
+      else if query = "explain" then begin
+        Format.printf ">> @?";
+        let query = read_line () in
+        try
+          let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
+          let vars =
+            List.sort
+              (fun var1 var2 ->
+                compare_execution_number var1.Variable.execution_number
+                  var2.Variable.execution_number)
+              vars
+          in
+          List.iter
+            (fun var ->
+              Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
+                var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
+                (fun fmt () ->
+                  try
+                    Format_mir.format_variable_def fmt
+                      (VariableMap.find var p.program_vars).Mir.var_definition
+                  with Not_found -> Format.fprintf fmt "unused definition")
+                ())
+            vars
+        with Not_found -> Format.printf "Inexisting variable@\n"
+      end
+      else
+        try
+          let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
+          let vars =
+            List.sort
+              (fun var1 var2 ->
+                compare_execution_number var1.Variable.execution_number
+                  var2.Variable.execution_number)
+              vars
+          in
+          List.iter
+            (fun var ->
+              try
+                let var_l = Mir.VariableMap.find var ctx.ctx_vars in
+                Format.printf "[%a %a] -> %a@\n" Format_mir.format_execution_number_short
+                  var.Variable.execution_number Pos.format_position
+                  var.Variable.execution_number.pos format_var_value_with_var (var, var_l)
+              with Not_found ->
+                Format.printf "[%a %a] -> not computed@\n" Format_mir.format_execution_number_short
+                  var.Variable.execution_number Pos.format_position
+                  var.Variable.execution_number.pos)
+            vars
+        with Not_found -> Format.printf "Inexisting variable@\n"
+    done
+
+  let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : program) =
+    match e with
+    | ErrorValue (s, pos) ->
+        Errors.raise_spanned_error (Format.asprintf "Error value at runtime: %s" s) pos
+    | FloatIndex (s, pos) ->
+        Errors.raise_spanned_error (Format.asprintf "Index is not an integer: %s" s) pos
+    | IndexOutOfBounds (s, pos) ->
+        Errors.raise_spanned_error (Format.asprintf "Index out of bounds: %s" s) pos
+    | NanOrInf (v, e) ->
+        Errors.raise_spanned_error_with_continuation
+          (Format.asprintf "Expression evaluated to %s: %a" v Format_mir.format_expression
+             (Pos.unmark e))
+          (Pos.get_position e)
+          (fun _ -> repl_debugguer ctx p)
+    | UnknownInputVariable (s, pos) ->
+        Errors.raise_spanned_error (Format.asprintf "Unknown input variable: %s" s) pos
+    | IncorrectOutputVariable (s, pos) ->
+        Errors.raise_spanned_error (Format.asprintf "Incorrect output variable: %s" s) pos
+    | ConditionViolated (errors, condition, bindings) ->
+        Errors.raise_spanned_error_with_continuation
+          (Format.asprintf
+             "Verification condition failed! Errors thrown:\n\
+             \  * %a\n\
+              Violated condition:\n\
+             \  * %a\n\
+              Values of the relevant variables at this point:\n\
+              %a"
+             (Format_mast.pp_print_list_endline (fun fmt err ->
+                  Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
+                    (Pos.unmark err.Error.descr)))
+             errors Format_mir.format_expression (Pos.unmark condition)
+             (Format_mast.pp_print_list_endline (fun fmt v ->
+                  Format.fprintf fmt "  * %a" format_var_value_with_var v))
+             bindings)
+          (Pos.get_position condition)
+          (fun _ -> repl_debugguer ctx p)
 
   let int_of_bool (b : bool) = if b then 1 else 0
 
-  let is_zero (l : value) : bool = match l with Real z -> R.(z =. zero) | _ -> false
+  let is_zero (l : value) : bool = match l with Real z -> R.is_zero z | _ -> false
 
   let real_of_bool (b : bool) = if b then R.one () else R.zero
 
   let bool_of_real (f : R.t) : bool = not R.(f =. zero)
 
-  let evaluate_array_index (ctx : ctx) (index : value) (size : int) (values : value array)
-      (pos : Pos.t) : value =
+  let evaluate_array_index (index : value) (size : int) (values : value array) : value =
     let idx =
-      match index with
-      | Undefined -> assert false (* should not happen *)
-      | Real f ->
-          let fraction, int_part = R.modf f in
-          if R.(fraction =. zero) then int_part
-          else
-            raise
-              (RuntimeError
-                 ( FloatIndex
-                     (Format.asprintf "got value %a %a" R.format_t f Pos.format_position pos),
-                   ctx_to_vanilla_ctx ctx ))
+      match index with Undefined -> assert false (* should not happen *) | Real f -> roundf f
     in
     if R.(idx >=. R.of_int size) then Undefined
     else if R.(idx <. R.zero) then Real R.zero
@@ -330,17 +289,17 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
             match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Gt, Real i1, Real i2 -> Real (real_of_bool (i1 > i2))
+            | Mast.Gt, Real i1, Real i2 -> Real R.(real_of_bool (i1 >. i2))
             | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-            | Mast.Gte, Real i1, Real i2 -> Real (real_of_bool (i1 >= i2))
+            | Mast.Gte, Real i1, Real i2 -> Real R.(real_of_bool (i1 >=. i2))
             | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-            | Mast.Lt, Real i1, Real i2 -> Real (real_of_bool (i1 < i2))
+            | Mast.Lt, Real i1, Real i2 -> Real R.(real_of_bool (i1 <. i2))
             | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-            | Mast.Lte, Real i1, Real i2 -> Real (real_of_bool (i1 <= i2))
+            | Mast.Lte, Real i1, Real i2 -> Real R.(real_of_bool (i1 <=. i2))
             | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-            | Mast.Eq, Real i1, Real i2 -> Real (real_of_bool (i1 = i2))
+            | Mast.Eq, Real i1, Real i2 -> Real R.(real_of_bool (i1 =. i2))
             | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-            | Mast.Neq, Real i1, Real i2 -> Real (real_of_bool (i1 <> i2))
+            | Mast.Neq, Real i1, Real i2 -> Real R.(real_of_bool (not (i1 =. i2)))
             | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined )
         | Binop (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in
@@ -388,8 +347,7 @@ module Make (R : Bir_number.NumberInterface) = struct
             else
               match VariableMap.find (Pos.unmark var) ctx.ctx_vars with
               | SimpleVar _ -> assert false (* should not happen *)
-              | TableVar (size, values) ->
-                  evaluate_array_index ctx new_e1 size values (Pos.get_position e1) )
+              | TableVar (size, values) -> evaluate_array_index new_e1 size values )
         | LocalVar lvar -> (
             try Pos.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars)
             with Not_found -> assert false (* should not happen*) )
@@ -413,8 +371,10 @@ module Make (R : Bir_number.NumberInterface) = struct
         | Error ->
             raise
               (RuntimeError
-                 ( ErrorValue (Format.asprintf "%a" Pos.format_position (Pos.get_position e)),
-                   ctx_to_vanilla_ctx ctx ))
+                 ( ErrorValue
+                     ( Format.asprintf "%a" Pos.format_position (Pos.get_position e),
+                       Pos.get_position e ),
+                   ctx ))
         | LocalLet (lvar, e1, e2) ->
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 =
@@ -449,31 +409,22 @@ module Make (R : Bir_number.NumberInterface) = struct
         | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
             let up =
               match evaluate_expr ctx p arg1 with
-              | Real f when R.of_int (R.to_int f) = f -> R.to_int f
+              | Real f -> R.to_int (roundf f)
               | e ->
                   raise
                     (RuntimeError
                        ( ErrorValue
-                           (Format.asprintf "evaluation of %a should be an integer, not %a"
-                              Format_mir.format_expression (Pos.unmark arg1) format_value e),
-                         ctx_to_vanilla_ctx ctx ))
+                           ( Format.asprintf "evaluation of %a should be an integer, not %a"
+                               Format_mir.format_expression (Pos.unmark arg1) format_value e,
+                             Pos.get_position arg1 ),
+                         ctx ))
             in
             let var_arg2 =
               match Pos.unmark arg2 with Var v -> v | _ -> assert false
               (* todo: rte *)
             in
             let cast_to_int (v : value) : int option =
-              match v with
-              | Real f when R.of_int (R.to_int f) = f -> Some (R.to_int f)
-              | Undefined -> Some 0
-              | v ->
-                  raise
-                    (RuntimeError
-                       ( ErrorValue
-                           (Format.asprintf
-                              "evaluation of multimax %a, should be an integer, not %a"
-                              Pos.format_position (Pos.get_position e) format_value v),
-                         ctx_to_vanilla_ctx ctx ))
+              match v with Real f -> Some (R.to_int (roundf f)) | Undefined -> Some 0
             in
             let pos = Pos.get_position arg2 in
             let access_index (i : int) : int option =
@@ -490,9 +441,10 @@ module Make (R : Bir_number.NumberInterface) = struct
             raise
               (RuntimeError
                  ( ErrorValue
-                     (Format.asprintf "the function %a %a has not been expanded"
-                        Format_mir.format_func func Pos.format_position (Pos.get_position e)),
-                   ctx_to_vanilla_ctx ctx ))
+                     ( Format.asprintf "the function %a  has not been expanded"
+                         Format_mir.format_func func,
+                       Pos.get_position e ),
+                   ctx ))
       with RuntimeError (e, ctx) ->
         if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
     in
@@ -504,12 +456,10 @@ module Make (R : Bir_number.NumberInterface) = struct
             | Real out -> Format.asprintf "%a" R.format_t out ),
             e )
       in
-      if !exit_on_rte then raise_runtime_as_structured e (ctx_to_vanilla_ctx ctx) p
-      else raise (RuntimeError (e, ctx_to_vanilla_ctx ctx))
+      if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
     else out
 
   let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
-    let ctx = ctx_to_vanilla_ctx ctx in
     raise
       (RuntimeError
          ( ConditionViolated
@@ -517,7 +467,7 @@ module Make (R : Bir_number.NumberInterface) = struct
                cond.cond_expr,
                List.rev
                @@ List.fold_left
-                    (fun acc var -> (var, VariableMap.find var ctx.vanilla_ctx_vars) :: acc)
+                    (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
                     []
                     (List.map
                        (fun (x, _) -> x)
@@ -555,7 +505,7 @@ module Make (R : Bir_number.NumberInterface) = struct
         | _ -> assert false )
     | Bir.SVerif data -> (
         match evaluate_expr ctx p.mir_program data.cond_expr with
-        | Real f when not R.(f =. zero) -> report_violatedcondition data ctx
+        | Real f when not (R.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx )
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
@@ -567,8 +517,7 @@ module Make (R : Bir_number.NumberInterface) = struct
     in
     ctx
 
-  let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int) : ctx =
-    let ctx = vanilla_ctx_to_ctx ctx in
+  let evaluate_program (p : Bir.program) (ctx : ctx) (code_loc_start_value : int) : ctx =
     try
       let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
       ctx
@@ -585,44 +534,53 @@ module BigIntPrecision = struct
 end
 
 module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecision))
+module IntervalInterpreter = Make (Bir_number.IntervalReal)
 
-type value_sort = RegularFloat | MPFR | BigInt of int  (** precision of the fixed point *)
+type value_sort =
+  | RegularFloat
+  | MPFR
+  | BigInt of int
+  | Interval  (** precision of the fixed point *)
 
-let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program) (ctx : vanilla_ctx)
-    (code_loc_start_value : int) (sort : value_sort) : vanilla_ctx * (unit -> unit) =
+let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
+    (inputs : literal VariableMap.t) (code_loc_start_value : int) (sort : value_sort) : unit -> unit
+    =
   match sort with
   | RegularFloat ->
+      let ctx =
+        RegularFloatInterpreter.update_ctx_with_inputs RegularFloatInterpreter.empty_ctx inputs
+      in
       let ctx = RegularFloatInterpreter.evaluate_program p ctx code_loc_start_value in
-      let print_output () = RegularFloatInterpreter.print_output bir_func ctx in
-      let ctx = RegularFloatInterpreter.ctx_to_vanilla_ctx ctx in
-      (ctx, print_output)
+      fun () -> RegularFloatInterpreter.print_output bir_func ctx
   | MPFR ->
+      let ctx = MPFRInterpreter.update_ctx_with_inputs MPFRInterpreter.empty_ctx inputs in
       let ctx = MPFRInterpreter.evaluate_program p ctx code_loc_start_value in
-      let print_output () = MPFRInterpreter.print_output bir_func ctx in
-      let ctx = MPFRInterpreter.ctx_to_vanilla_ctx ctx in
-      (ctx, print_output)
+      fun () -> MPFRInterpreter.print_output bir_func ctx
   | BigInt prec ->
       BigIntPrecision.bit_size_of_int := prec;
+      let ctx = BigIntInterpreter.update_ctx_with_inputs BigIntInterpreter.empty_ctx inputs in
       let ctx = BigIntInterpreter.evaluate_program p ctx code_loc_start_value in
-      let print_output () = BigIntInterpreter.print_output bir_func ctx in
-      let ctx = BigIntInterpreter.ctx_to_vanilla_ctx ctx in
-      (ctx, print_output)
+      fun () -> BigIntInterpreter.print_output bir_func ctx
+  | Interval ->
+      let ctx = IntervalInterpreter.update_ctx_with_inputs IntervalInterpreter.empty_ctx inputs in
+      let ctx = IntervalInterpreter.evaluate_program p ctx code_loc_start_value in
+      fun () -> IntervalInterpreter.print_output bir_func ctx
 
-let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.marked)
-    (sort : value_sort) : literal =
+let evaluate_expr (p : Mir.program) (e : expression Pos.marked) (sort : value_sort) : literal =
   let f p e =
     match sort with
     | RegularFloat ->
         RegularFloatInterpreter.value_to_literal
-          (RegularFloatInterpreter.evaluate_expr
-             (RegularFloatInterpreter.vanilla_ctx_to_ctx ctx)
-             p e)
+          (RegularFloatInterpreter.evaluate_expr RegularFloatInterpreter.empty_ctx p e)
     | MPFR ->
         MPFRInterpreter.value_to_literal
-          (MPFRInterpreter.evaluate_expr (MPFRInterpreter.vanilla_ctx_to_ctx ctx) p e)
+          (MPFRInterpreter.evaluate_expr MPFRInterpreter.empty_ctx p e)
     | BigInt prec ->
         BigIntPrecision.bit_size_of_int := prec;
         BigIntInterpreter.value_to_literal
-          (BigIntInterpreter.evaluate_expr (BigIntInterpreter.vanilla_ctx_to_ctx ctx) p e)
+          (BigIntInterpreter.evaluate_expr BigIntInterpreter.empty_ctx p e)
+    | Interval ->
+        IntervalInterpreter.value_to_literal
+          (IntervalInterpreter.evaluate_expr IntervalInterpreter.empty_ctx p e)
   in
   f p e

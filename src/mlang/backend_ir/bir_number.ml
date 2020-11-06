@@ -57,6 +57,8 @@ module type NumberInterface = sig
   val max : t -> t -> t
 
   val is_nan_or_inf : t -> bool
+
+  val is_zero : t -> bool
 end
 
 module RegularFloatReal : NumberInterface = struct
@@ -103,6 +105,8 @@ module RegularFloatReal : NumberInterface = struct
   let max x y = max x y
 
   let is_nan_or_inf x = not (Float.is_finite x)
+
+  let is_zero x = x = 0.
 end
 
 module MPFRReal : NumberInterface = struct
@@ -157,7 +161,83 @@ module MPFRReal : NumberInterface = struct
 
   let max x y = if x >. y then x else y
 
+  let is_zero x = x =. zero
+
   let is_nan_or_inf x = not (Mpfrf.number_p x)
+end
+
+module IntervalReal : NumberInterface = struct
+  let epsilon = Float.succ @@ Float.succ @@ Float.succ 0.
+
+  type t = Interval_crlibm.t
+
+  let format_t fmt f =
+    Format.fprintf fmt "[%.30f;%.30f]" f.Interval_crlibm.low f.Interval_crlibm.high
+
+  let modf x =
+    let fpart_low, ipart_low = modf (Interval_crlibm.I.low x) in
+    let fpart_high, ipart_high = modf (Interval_crlibm.I.high x) in
+    try
+      ( Interval_crlibm.I.v (min fpart_low fpart_high) (max fpart_low fpart_high),
+        Interval_crlibm.I.v (min ipart_low ipart_high) (max ipart_low ipart_high) )
+    with Invalid_argument msg ->
+      Errors.raise_error
+        (Format.asprintf "Error during interval modf computation of %a, %s" format_t x msg)
+
+  let copysign x y =
+    match (Interval_crlibm.I.sgn x, Interval_crlibm.I.sgn y) with
+    | sx, _ when Interval_crlibm.I.equal sx Interval_crlibm.I.zero -> x
+    | sx, sy
+      when Interval_crlibm.I.(sx > zero && sy > zero)
+           || Interval_crlibm.I.(sx < zero && sy < zero)
+           || Interval_crlibm.I.(equal sy zero) ->
+        x
+    | _ -> Interval_crlibm.I.( ~- ) x
+
+  let of_int i = Interval_crlibm.I.of_int i
+
+  let to_int f =
+    let i_low = int_of_float (Float.round (Interval_crlibm.I.low f)) in
+    let i_high = int_of_float (Float.round (Interval_crlibm.I.high f)) in
+    if i_low = i_high then i_low
+    else
+      Errors.raise_error
+        (Format.asprintf "converting %a to int, too much imprecision (low: %d, high: %d)!" format_t
+           f i_low i_high)
+
+  let of_float (f : float) = Interval_crlibm.I.v (f -. epsilon) (f +. epsilon)
+
+  let to_float f = (Interval_crlibm.I.low f +. Interval_crlibm.I.high f) /. 2.
+
+  let zero = Interval_crlibm.I.v (0. -. epsilon) (0. +. epsilon)
+
+  let one () = Interval_crlibm.I.v (1. -. epsilon) (1. +. epsilon)
+
+  let ( =. ) x y = Interval_crlibm.I.equal x y
+
+  let ( >=. ) x y = Interval_crlibm.I.( >= ) x y
+
+  let ( >. ) x y = Interval_crlibm.I.( > ) x y
+
+  let ( <. ) x y = Interval_crlibm.I.( < ) x y
+
+  let ( <=. ) x y = Interval_crlibm.I.( <= ) x y
+
+  let ( +. ) x y = Interval_crlibm.I.( + ) x y
+
+  let ( -. ) x y = Interval_crlibm.I.( - ) x y
+
+  let ( /. ) x y = Interval_crlibm.I.( / ) x y
+
+  let ( *. ) x y = Interval_crlibm.I.( * ) x y
+
+  let min x y = Interval_crlibm.I.min x y
+
+  let max x y = Interval_crlibm.I.max x y
+
+  let is_zero x = Interval_crlibm.I.subset zero x
+
+  let is_nan_or_inf x = Interval_crlibm.I.is_entire x
 end
 
 module BigIntFixedPointReal (P : sig
@@ -225,6 +305,8 @@ end) : NumberInterface = struct
   let ( /. ) x y = Mpzf.tdiv_q (Mpzf.mul x (precision_modulo ())) y
 
   let ( *. ) x y = Mpzf.tdiv_q (Mpzf.mul x y) (precision_modulo ())
+
+  let is_zero x = x =. zero
 
   let min x y = if x >. y then y else x
 

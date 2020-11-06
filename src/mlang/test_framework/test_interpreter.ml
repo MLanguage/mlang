@@ -153,10 +153,9 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
     else combined_program
   in
   if code_coverage then Bir_instrumentation.code_coverage_init ();
-  ignore
-    (Bir_interpreter.evaluate_program f combined_program
-       (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx input_file)
-       (-code_loc_offset) value_sort);
+  let _print_outputs =
+    Bir_interpreter.evaluate_program f combined_program input_file (-code_loc_offset) value_sort
+  in
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
@@ -187,6 +186,31 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   let _, finish = Cli.create_progress_bar "Testing files" in
   let process (name : string) ((successes, failures, code_coverage_acc) : process_acc) : process_acc
       =
+    let report_violated_condition_error (bindings : (Variable.t * Mir.literal) option)
+        (expr : Mir.expression Pos.marked) (err : Error.t list) =
+      Cli.debug_flag := true;
+      match (bindings, Pos.unmark expr) with
+      | ( Some (v, l1),
+          Unop
+            ( Mast.Not,
+              ( Mir.Binop
+                  ( (Mast.And, _),
+                    ( Comparison
+                        ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
+                      _ ),
+                    _ ),
+                _ ) ) ) ->
+          Cli.error_print "Test %s incorrect (error on variable %s)" name
+            (Pos.unmark v.Variable.name);
+          let errs_varname = try VariableMap.find v failures with Not_found -> [] in
+          (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures, code_coverage_acc)
+      | _ ->
+          Cli.error_print "Test %s incorrect (error%s %a raised)" name
+            (if List.length err > 1 then "s" else "")
+            (Format.pp_print_list Format.pp_print_string)
+            (List.map (fun x -> Pos.unmark x.Error.name) err);
+          (successes, failures, code_coverage_acc)
+    in
     try
       Cli.debug_flag := false;
       let code_coverage_result =
@@ -199,31 +223,62 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       in
       (name :: successes, failures, code_coverage_acc)
     with
-    | Bir_interpreter.RuntimeError (ConditionViolated (err, expr, bindings), _) -> (
-        Cli.debug_flag := true;
-        match (bindings, Pos.unmark expr) with
-        | ( [ (v, Bir_interpreter.SimpleVar l1) ],
-            Unop
-              ( Mast.Not,
-                ( Mir.Binop
-                    ( (Mast.And, _),
-                      ( Comparison
-                          ((Mast.Lte, _), (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _), (_, _)),
-                        _ ),
-                      _ ),
-                  _ ) ) ) ->
-            Cli.error_print "Test %s incorrect (error on variable %s)" name
-              (Pos.unmark v.Variable.name);
-            let errs_varname = try VariableMap.find v failures with Not_found -> [] in
-            ( successes,
-              VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
-              code_coverage_acc )
-        | _ ->
-            Cli.error_print "Test %s incorrect (error%s %a raised)" name
-              (if List.length err > 1 then "s" else "")
-              (Format.pp_print_list Format.pp_print_string)
-              (List.map (fun x -> Pos.unmark x.Error.name) err);
-            (successes, failures, code_coverage_acc) )
+    | Bir_interpreter.RegularFloatInterpreter.RuntimeError ((ConditionViolated _ as cv), _) ->
+        let expr, err, bindings =
+          match cv with
+          | Bir_interpreter.RegularFloatInterpreter.ConditionViolated (err, expr, bindings) -> (
+              ( expr,
+                err,
+                match bindings with
+                | [ (v, Bir_interpreter.RegularFloatInterpreter.SimpleVar l1) ] ->
+                    Some (v, Bir_interpreter.RegularFloatInterpreter.value_to_literal l1)
+                | _ -> None ) )
+          | _ -> assert false
+          (* should not happen *)
+        in
+        report_violated_condition_error bindings expr err
+    | Bir_interpreter.MPFRInterpreter.RuntimeError ((ConditionViolated _ as cv), _) ->
+        let expr, err, bindings =
+          match cv with
+          | Bir_interpreter.MPFRInterpreter.ConditionViolated (err, expr, bindings) -> (
+              ( expr,
+                err,
+                match bindings with
+                | [ (v, Bir_interpreter.MPFRInterpreter.SimpleVar l1) ] ->
+                    Some (v, Bir_interpreter.MPFRInterpreter.value_to_literal l1)
+                | _ -> None ) )
+          | _ -> assert false
+          (* should not happen *)
+        in
+        report_violated_condition_error bindings expr err
+    | Bir_interpreter.BigIntInterpreter.RuntimeError ((ConditionViolated _ as cv), _) ->
+        let expr, err, bindings =
+          match cv with
+          | Bir_interpreter.BigIntInterpreter.ConditionViolated (err, expr, bindings) -> (
+              ( expr,
+                err,
+                match bindings with
+                | [ (v, Bir_interpreter.BigIntInterpreter.SimpleVar l1) ] ->
+                    Some (v, Bir_interpreter.BigIntInterpreter.value_to_literal l1)
+                | _ -> None ) )
+          | _ -> assert false
+          (* should not happen *)
+        in
+        report_violated_condition_error bindings expr err
+    | Bir_interpreter.IntervalInterpreter.RuntimeError ((ConditionViolated _ as cv), _) ->
+        let expr, err, bindings =
+          match cv with
+          | Bir_interpreter.IntervalInterpreter.ConditionViolated (err, expr, bindings) -> (
+              ( expr,
+                err,
+                match bindings with
+                | [ (v, Bir_interpreter.IntervalInterpreter.SimpleVar l1) ] ->
+                    Some (v, Bir_interpreter.IntervalInterpreter.value_to_literal l1)
+                | _ -> None ) )
+          | _ -> assert false
+          (* should not happen *)
+        in
+        report_violated_condition_error bindings expr err
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
