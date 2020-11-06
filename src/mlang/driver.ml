@@ -130,12 +130,12 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
           if String.lowercase_ascii backend = "interpreter" then begin
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let end_ctx =
-              Bir_interpreter.evaluate_program combined_program
+            let _end_ctx, print_output =
+              Bir_interpreter.evaluate_program function_spec combined_program
                 (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx inputs)
                 0 value_sort
             in
-            Bir_interface.print_output function_spec end_ctx
+            print_output ()
           end
           else if String.lowercase_ascii backend = "python" then begin
             Cli.debug_print "Compiling the codebase to Python...";

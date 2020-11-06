@@ -248,6 +248,13 @@ module Make (R : Bir_number.NumberInterface) = struct
       ctx_generic_index = None;
     }
 
+  let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
+    Mir.VariableMap.iter
+      (fun var value ->
+        if Mir.VariableMap.mem var f.func_outputs then
+          Cli.result_print "%a" format_var_value_with_var (var, value))
+      results.ctx_vars
+
   let literal_to_value (l : Mir.literal) : value =
     match l with Mir.Undefined -> Undefined | Mir.Float f -> Real (R.of_float f)
 
@@ -560,12 +567,11 @@ module Make (R : Bir_number.NumberInterface) = struct
     in
     ctx
 
-  let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int) :
-      vanilla_ctx =
+  let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int) : ctx =
     let ctx = vanilla_ctx_to_ctx ctx in
     try
       let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
-      ctx_to_vanilla_ctx ctx
+      ctx
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
       else raise (RuntimeError (e, ctx))
@@ -582,17 +588,25 @@ module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecisio
 
 type value_sort = RegularFloat | MPFR | BigInt of int  (** precision of the fixed point *)
 
-let evaluate_program (p : Bir.program) (ctx : vanilla_ctx) (code_loc_start_value : int)
-    (sort : value_sort) : vanilla_ctx =
-  let f =
-    match sort with
-    | RegularFloat -> RegularFloatInterpreter.evaluate_program
-    | MPFR -> MPFRInterpreter.evaluate_program
-    | BigInt prec ->
-        BigIntPrecision.bit_size_of_int := prec;
-        BigIntInterpreter.evaluate_program
-  in
-  f p ctx code_loc_start_value
+let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program) (ctx : vanilla_ctx)
+    (code_loc_start_value : int) (sort : value_sort) : vanilla_ctx * (unit -> unit) =
+  match sort with
+  | RegularFloat ->
+      let ctx = RegularFloatInterpreter.evaluate_program p ctx code_loc_start_value in
+      let print_output () = RegularFloatInterpreter.print_output bir_func ctx in
+      let ctx = RegularFloatInterpreter.ctx_to_vanilla_ctx ctx in
+      (ctx, print_output)
+  | MPFR ->
+      let ctx = MPFRInterpreter.evaluate_program p ctx code_loc_start_value in
+      let print_output () = MPFRInterpreter.print_output bir_func ctx in
+      let ctx = MPFRInterpreter.ctx_to_vanilla_ctx ctx in
+      (ctx, print_output)
+  | BigInt prec ->
+      BigIntPrecision.bit_size_of_int := prec;
+      let ctx = BigIntInterpreter.evaluate_program p ctx code_loc_start_value in
+      let print_output () = BigIntInterpreter.print_output bir_func ctx in
+      let ctx = BigIntInterpreter.ctx_to_vanilla_ctx ctx in
+      (ctx, print_output)
 
 let evaluate_expr (ctx : vanilla_ctx) (p : Mir.program) (e : expression Pos.marked)
     (sort : value_sort) : literal =
