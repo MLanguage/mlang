@@ -27,7 +27,7 @@ module type NumberInterface = sig
 
   val of_float : float -> t
 
-  val of_float_input : float -> t
+  val of_float_input : Mir.Variable.t -> float -> t
 
   val to_float : t -> float
   (** Warning: lossy *)
@@ -78,7 +78,7 @@ module RegularFloatReal : NumberInterface = struct
 
   let of_float f = f
 
-  let of_float_input f = f
+  let of_float_input _ f = f
 
   let to_float f = f
 
@@ -137,7 +137,7 @@ module MPFRReal : NumberInterface = struct
 
   let of_float f = Mpfrf.of_float f Near
 
-  let of_float_input f = Mpfrf.of_float f Near
+  let of_float_input _ f = Mpfrf.of_float f Near
 
   let to_float f = Mpfrf.to_float ~round:Near f
 
@@ -172,13 +172,13 @@ module MPFRReal : NumberInterface = struct
   let is_nan_or_inf x = not (Mpfrf.number_p x)
 end
 
-module IntervalReal : NumberInterface = struct
-  let epsilon = 0.01
-
+module IntervalReal (E : sig
+  val epsilon : float ref
+end) : NumberInterface = struct
   type t = Interval_crlibm.t
 
   let format_t fmt f =
-    Format.fprintf fmt "[%.30f;%.30f]" f.Interval_crlibm.low f.Interval_crlibm.high
+    Format.fprintf fmt "[%.10f;%.10f]" f.Interval_crlibm.low f.Interval_crlibm.high
 
   let modf x =
     let fpart_low, ipart_low = modf (Interval_crlibm.I.low x) in
@@ -213,7 +213,9 @@ module IntervalReal : NumberInterface = struct
 
   let of_float (f : float) = Interval_crlibm.I.v f f
 
-  let of_float_input (f : float) = Interval_crlibm.I.v (f -. epsilon) (f +. epsilon)
+  let of_float_input (v : Mir.Variable.t) (f : float) =
+    if v.Mir.Variable.is_income then Interval_crlibm.I.v (f -. !E.epsilon) (f +. !E.epsilon)
+    else of_float f
 
   let to_float f = (Interval_crlibm.I.low f +. Interval_crlibm.I.high f) /. 2.
 
@@ -287,7 +289,7 @@ end) : NumberInterface = struct
     Mpzf.add (Mpzf.of_float frac_part_scaled)
       (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
 
-  let of_float_input (f : float) : t = of_float f
+  let of_float_input _ (f : float) : t = of_float f
 
   let to_float f =
     let frac_part, int_part = modf f in

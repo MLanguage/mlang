@@ -116,9 +116,11 @@ module Make (R : Bir_number.NumberInterface) = struct
       ctx_vars =
         VariableMap.fold
           (fun var value ctx_vars -> VariableMap.add var (SimpleVar value) ctx_vars)
-          (VariableMap.map
-             (fun l ->
-               match l with Mir.Undefined -> Undefined | Mir.Float f -> Real (R.of_float_input f))
+          (VariableMap.mapi
+             (fun v l ->
+               match l with
+               | Mir.Undefined -> Undefined
+               | Mir.Float f -> Real (R.of_float_input v f))
              inputs)
           ctx.ctx_vars;
     }
@@ -537,13 +539,18 @@ module BigIntPrecision = struct
 end
 
 module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecision))
-module IntervalInterpreter = Make (Bir_number.IntervalReal)
+
+module IntervalEpsilon = struct
+  let epsilon = ref 0.
+end
+
+module IntervalInterpreter = Make (Bir_number.IntervalReal (IntervalEpsilon))
 
 type value_sort =
   | RegularFloat
   | MPFR
-  | BigInt of int
-  | Interval  (** precision of the fixed point *)
+  | BigInt of int  (** precision of the fixed point *)
+  | Interval of float  (** epsilon to apply on income inputs *)
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
     (inputs : literal VariableMap.t) (code_loc_start_value : int) (sort : value_sort) : unit -> unit
@@ -564,7 +571,8 @@ let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
       let ctx = BigIntInterpreter.update_ctx_with_inputs BigIntInterpreter.empty_ctx inputs in
       let ctx = BigIntInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> BigIntInterpreter.print_output bir_func ctx
-  | Interval ->
+  | Interval epsilon ->
+      IntervalEpsilon.epsilon := epsilon;
       let ctx = IntervalInterpreter.update_ctx_with_inputs IntervalInterpreter.empty_ctx inputs in
       let ctx = IntervalInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> IntervalInterpreter.print_output bir_func ctx
@@ -582,7 +590,8 @@ let evaluate_expr (p : Mir.program) (e : expression Pos.marked) (sort : value_so
         BigIntPrecision.bit_size_of_int := prec;
         BigIntInterpreter.value_to_literal
           (BigIntInterpreter.evaluate_expr BigIntInterpreter.empty_ctx p e)
-    | Interval ->
+    | Interval epsilon ->
+        IntervalEpsilon.epsilon := epsilon;
         IntervalInterpreter.value_to_literal
           (IntervalInterpreter.evaluate_expr IntervalInterpreter.empty_ctx p e)
   in

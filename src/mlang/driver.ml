@@ -75,13 +75,19 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
         Mpfr.set_default_prec 1024;
         Bir_interpreter.MPFR
       end
-      else if precision = "interval" then Bir_interpreter.Interval
       else
-        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:bigint_regex precision then
-          let fixpoint_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1 in
-          Bir_interpreter.BigInt (int_of_string fixpoint_prec)
-        else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
+        let interval_regex = Re.Pcre.regexp "^interval.(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:interval_regex precision then
+          let epsilon = Re.Pcre.get_substring (Re.Pcre.exec ~rex:interval_regex precision) 1 in
+          Bir_interpreter.Interval (float_of_string ("0." ^ epsilon))
+        else
+          let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
+          if Re.Pcre.pmatch ~rex:bigint_regex precision then
+            let fixpoint_prec =
+              Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
+            in
+            Bir_interpreter.BigInt (int_of_string fixpoint_prec)
+          else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
     in
     if run_all_tests <> None then begin
       if code_coverage && optimize then
