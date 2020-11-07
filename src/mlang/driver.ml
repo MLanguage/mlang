@@ -84,6 +84,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
               Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
             in
             Bir_interpreter.BigInt (int_of_string fixpoint_prec)
+          else if precision = "mpq" then Bir_interpreter.Rational
           else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
     in
     if run_all_tests <> None then begin

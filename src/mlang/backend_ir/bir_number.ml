@@ -63,7 +63,7 @@ module type NumberInterface = sig
   val is_zero : t -> bool
 end
 
-module RegularFloatReal : NumberInterface = struct
+module RegularFloatNumber : NumberInterface = struct
   type t = float
 
   let format_t fmt f = Format.fprintf fmt "%f" f
@@ -120,7 +120,7 @@ let modf_round (x : Mpfrf.t) (rounding : Mpfr.round) : Mpfrf.t * Mpfrf.t =
   ignore (Mpfr.modf int_part frac_part x rounding);
   (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
 
-module MPFRReal : NumberInterface = struct
+module MPFRNumber : NumberInterface = struct
   type t = Mpfrf.t
 
   let rounding : Mpfr.round = Near
@@ -176,7 +176,7 @@ module MPFRReal : NumberInterface = struct
   let is_nan_or_inf x = not (Mpfrf.number_p x)
 end
 
-module IntervalReal : NumberInterface = struct
+module IntervalNumber : NumberInterface = struct
   type t = { down : Mpfrf.t; up : Mpfrf.t }
 
   let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
@@ -294,7 +294,66 @@ module IntervalReal : NumberInterface = struct
   let is_nan_or_inf x = not (Mpfrf.number_p x.down && Mpfrf.number_p x.up)
 end
 
-module BigIntFixedPointReal (P : sig
+module RationalNumber : NumberInterface = struct
+  type t = Mpqf.t
+
+  let format_t fmt f = Mpqf.print fmt f
+
+  let modf x =
+    let num = Mpqf.get_num x in
+    let dem = Mpqf.get_den x in
+    let ipart = Mpqf.of_mpz (Mpzf.tdiv_q num dem) in
+    let fpart = Mpqf.sub x ipart in
+    (fpart, ipart)
+
+  let copysign x y =
+    match (Mpqf.sgn x, Mpqf.sgn y) with
+    | 0, _ -> x
+    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
+    | _ -> Mpqf.sub (Mpqf.of_int 0) x
+
+  let of_int i = Mpqf.of_int i
+
+  let to_int f = int_of_float (Mpqf.to_float f)
+
+  let of_float f = Mpqf.of_float f
+
+  let of_float_input _ f = Mpqf.of_float f
+
+  let to_float f = Mpqf.to_float f
+
+  let zero () = Mpqf.of_int 0
+
+  let one () = Mpqf.of_int 1
+
+  let ( =. ) x y = Mpqf.equal x y
+
+  let ( >=. ) x y = Mpqf.cmp x y >= 0
+
+  let ( >. ) x y = Mpqf.cmp x y > 0
+
+  let ( <. ) x y = Mpqf.cmp x y < 0
+
+  let ( <=. ) x y = Mpqf.cmp x y <= 0
+
+  let ( +. ) x y = Mpqf.add x y
+
+  let ( -. ) x y = Mpqf.sub x y
+
+  let ( /. ) x y = Mpqf.div x y
+
+  let ( *. ) x y = Mpqf.mul x y
+
+  let min x y = if x >. y then y else x
+
+  let max x y = if x >. y then x else y
+
+  let is_zero x = x =. zero ()
+
+  let is_nan_or_inf _x = false
+end
+
+module BigIntFixedPointNumber (P : sig
   val scaling_factor_bits : int ref
 end) : NumberInterface = struct
   type t = Mpzf.t

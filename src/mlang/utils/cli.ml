@@ -115,7 +115,8 @@ let precision =
         ~doc:
           "Precision of the interpreter: double, mpfr<n> (where n > 0 it the bit size of the \
            multi-precision floats), fixed<n> (where n > 0 is the fixpoint precision), interval \
-           (64-bits IEEE754 floats, with up and down rounding mode) . Default is double")
+           (64-bits IEEE754 floats, with up and down rounding mode), mpq (multi-precision \
+           rationals) . Default is double")
 
 let test_error_margin =
   Arg.(

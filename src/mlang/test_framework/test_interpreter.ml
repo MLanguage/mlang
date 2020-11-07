@@ -279,6 +279,20 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           (* should not happen *)
         in
         report_violated_condition_error bindings expr err
+    | Bir_interpreter.RationalInterpreter.RuntimeError ((ConditionViolated _ as cv), _) ->
+        let expr, err, bindings =
+          match cv with
+          | Bir_interpreter.RationalInterpreter.ConditionViolated (err, expr, bindings) -> (
+              ( expr,
+                err,
+                match bindings with
+                | [ (v, Bir_interpreter.RationalInterpreter.SimpleVar l1) ] ->
+                    Some (v, Bir_interpreter.RationalInterpreter.value_to_literal l1)
+                | _ -> None ) )
+          | _ -> assert false
+          (* should not happen *)
+        in
+        report_violated_condition_error bindings expr err
     | Bir_interpreter.IntervalInterpreter.RuntimeError
         (Bir_interpreter.IntervalInterpreter.StructuredError (msg, pos, kont), _)
     | Bir_interpreter.BigIntInterpreter.RuntimeError
@@ -287,6 +301,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
         (Bir_interpreter.MPFRInterpreter.StructuredError (msg, pos, kont), _)
     | Bir_interpreter.RegularFloatInterpreter.RuntimeError
         (Bir_interpreter.RegularFloatInterpreter.StructuredError (msg, pos, kont), _)
+    | Bir_interpreter.RationalInterpreter.RuntimeError
+        (Bir_interpreter.RationalInterpreter.StructuredError (msg, pos, kont), _)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
