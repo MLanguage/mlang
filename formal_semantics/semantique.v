@@ -1,4 +1,4 @@
-(* Written using Coq 8.8.2 and coq-flocq 3.2.0 *)
+(* Written using Coq 8.12.0 and coq-flocq 3.3.1 *)
 From Flocq Require Import Core IEEE754.Binary IEEE754.Bits.
 From Coq Require Import Strings.String.
 From Coq Require Import Init.Datatypes.
@@ -84,7 +84,6 @@ Definition float_of_bool (b:bool) :=
   if b then fone else fzero.
 
 
-
 (* Definition is_integer (f: binary64) := *)
 (*   match f with *)
 (*   | B754_finite _ _ s m (Zpos e) _ => true *)
@@ -153,15 +152,6 @@ Inductive envvalues :=
 | VScalar : values -> envvalues
 | VTable : list values -> table_size -> envvalues.
 
-(* Contrary to the paper, we separated usual binary operators from
-functions *)
-(* Inductive boolop := | And | Or | Lt | Eq. *)
-
-(* Inductive arithop := *)
-(* | Add *)
-(* | Sub *)
-(* | Mul *)
-(* | Div. *)
 
 (* Functions are handled in an ad-hoc manner to simplify the
 formalization and due to the finite and small number of defined
@@ -184,8 +174,6 @@ Inductive expression :=
 | X : expression
 | Var : variable -> expression
 | UNeg : expression -> expression
-(* | Boolop : boolop -> expression -> expression -> expression *)
-(* | Arith : arithop -> expression -> expression -> expression *)
 | FunCall1 : func1 -> expression -> expression
 | FunCall2 : func2 -> expression -> expression -> expression
 | TableAccess : variable -> expression -> expression.
@@ -462,11 +450,6 @@ Inductive well_formed : type_environment -> expression -> Prop :=
     well_formed Gamma a2 ->
     well_formed Gamma (FunCall2 f a1 a2).
 
-(* Inductive value_of_type : values -> type -> Prop := *)
-(* | VoBool : forall b, value_of_type (Bool b) TBool *)
-(* | VoFloat : forall f, value_of_type (Float f) TFloat *)
-(* | VoUndef : forall tau, value_of_type Undef tau. *)
-
 (* Hint Constructors value_of_type. *)
 
 (***********************************************************************************)
@@ -481,12 +464,6 @@ Definition related_envs_some_tbl (Gamma: type_environment) (Omega: environment) 
 
 Definition related_envs_none (Gamma: type_environment) (Omega: environment) :=
   forall (s: string), Gamma s = None -> Omega s = None.
-
-(* Definition value_of_type_sound : *)
-(*   forall v tau Gamma, value_of_type v tau -> well_formed Gamma (Value v) tau. *)
-(* Proof. *)
-(*   intros ? ? ? VoT; inversion VoT; subst; constructor; eauto. *)
-(* Qed. *)
 
 
 (***************************************************)
@@ -573,8 +550,9 @@ Fixpoint exec (Omega:cmd_environment) (c:command) : option cmd_environment :=
       end
     | Verif expr err =>
       match eval Omega expr with
-      | Some (Bool true) => Some None (* error but valid omega*)
-      | Some (Bool false) | Some Undef => Some (Some Omega)
+      | Some (Float f) =>
+        if feq f fzero then Some (Some Omega) else Some None
+      | Some Undef => Some (Some Omega)
       | _ => None
       end
     end
@@ -598,15 +576,23 @@ Fixpoint exec_program (Omega: cmd_environment) (p: program) : option cmd_environ
 (*********************************************)
 
 Inductive well_formed_cmd : type_environment -> command -> type_environment -> Prop :=
-| WTCAssign : forall Gamma var expr tau, well_formed Gamma expr tau -> well_formed_cmd Gamma (Assign var expr) (upd_map _ var  (TScalar tau) Gamma)
-| WTCAssignTable : forall Gamma var tabsize expr tau,
+| WTCAssign : forall Gamma var expr,
+    well_formed Gamma expr ->
+    well_formed_cmd Gamma (Assign var expr) (upd_map _ var  TScalar Gamma)
+| WTCAssignTable : forall Gamma var tabsize expr,
     tabsize <> N0 ->
-    well_formed (upd_map _ "X"%string (TScalar TFloat) Gamma) expr tau -> well_formed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var (TTable tau) Gamma)
-| WTCCond : forall Gamma cond err, well_formed Gamma cond TBool -> well_formed_cmd Gamma (Verif cond err) Gamma.
+    well_formed (upd_map _ "X"%string TScalar Gamma) expr ->
+    well_formed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var TTable Gamma)
+| WTCCond : forall Gamma cond err,
+    well_formed Gamma cond ->
+    well_formed_cmd Gamma (Verif cond err) Gamma.
 
 Inductive well_formed_prog : type_environment -> program -> type_environment -> Prop :=
 | WTPnil : forall Gamma, well_formed_prog Gamma nil Gamma
-| WTPcons : forall Gamma c p' Gamma' Gamma'', well_formed_cmd Gamma c Gamma' -> well_formed_prog Gamma' p' Gamma'' -> well_formed_prog Gamma (c :: p') Gamma''.
+| WTPcons : forall Gamma c p' Gamma' Gamma'',
+    well_formed_cmd Gamma c Gamma' ->
+    well_formed_prog Gamma' p' Gamma'' ->
+    well_formed_prog Gamma (c :: p') Gamma''.
 
 (******************************************************************)
 (* Related environments lifted to evaluation context for commands *)
@@ -619,12 +605,12 @@ Hint Unfold related_envs.
 
 (* Some administrative lemmas about the conversation of related_envs through updates  *)
 Lemma upd_related_envs_scalar_table :
-  forall Gamma Omega v tau vals size,
+  forall Gamma Omega v vals size,
     related_envs_some_scalar Gamma Omega ->
-    related_envs_some_scalar (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_some_scalar (upd_map envtypes v TTable Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
-  intros s tau' Hup.
+  intros s Hup.
   unfold upd_map in *.
   destruct (string_dec v s); subst.
   - inversion Hup; eauto.
@@ -632,14 +618,13 @@ Proof.
 Qed.
 
 Lemma upd_related_envs_table_table :
-  forall Gamma Omega v tau vals size,
+  forall Gamma Omega v vals size,
     related_envs_some_tbl Gamma Omega ->
-    List.Forall (fun el => value_of_type el tau) vals ->
     (N.to_nat size) = List.length vals ->
-    related_envs_some_tbl (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_some_tbl (upd_map envtypes v TTable Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
-  intros ? ? Hup.
+  intros ? Hup.
   unfold upd_map in *.
   destruct (string_dec v s); subst.
   - inversion Hup; subst; eauto.
@@ -647,9 +632,9 @@ Proof.
 Qed.
 
 Lemma upd_related_envs_none_table :
-  forall Gamma Omega v tau vals size,
+  forall Gamma Omega v vals size,
     related_envs_none Gamma Omega ->
-    related_envs_none (upd_map envtypes v (TTable tau) Gamma) (upd_map envvalues v (VTable vals size) Omega).
+    related_envs_none (upd_map envtypes v TTable Gamma) (upd_map envvalues v (VTable vals size) Omega).
 Proof.
   intros.
   intros s Hup.
@@ -660,13 +645,12 @@ Proof.
 Qed.
 
 Lemma upd_related_envs_scalar_scalar :
-  forall Gamma Omega v tau k,
+  forall Gamma Omega v k,
     related_envs_some_scalar Gamma Omega ->
-    value_of_type v tau ->
-    related_envs_some_scalar (upd_map _ k (TScalar tau) Gamma) (upd_map _ k (VScalar v) Omega).
+    related_envs_some_scalar (upd_map _ k TScalar Gamma) (upd_map _ k (VScalar v) Omega).
 Proof.
   intros.
-  intros s tau' Hup.
+  intros s Hup.
   unfold upd_map in *.
   destruct (string_dec _ s); subst.
   - inversion Hup; subst; eauto.
@@ -674,13 +658,12 @@ Proof.
 Qed.
 
 Lemma upd_related_envs_table_scalar :
-  forall Gamma Omega v tau k,
+  forall Gamma Omega v k,
     related_envs_some_tbl Gamma Omega ->
-    value_of_type v tau ->
-    related_envs_some_tbl (upd_map _ k (TScalar tau) Gamma) (upd_map _ k (VScalar v) Omega).
+    related_envs_some_tbl (upd_map _ k TScalar Gamma) (upd_map _ k (VScalar v) Omega).
 Proof.
   intros.
-  intros s tau' Hup.
+  intros s Hup.
   unfold upd_map in *.
   destruct (string_dec _ s); subst.
   - inversion Hup; eauto.
@@ -688,10 +671,9 @@ Proof.
 Qed.
 
 Lemma upd_related_envs_none_scalar :
-  forall Gamma Omega v tau k,
+  forall Gamma Omega v k,
     related_envs_none Gamma Omega ->
-    value_of_type v tau ->
-    related_envs_none (upd_map _ k (TScalar tau) Gamma) (upd_map _ k (VScalar v) Omega).
+    related_envs_none (upd_map _ k TScalar Gamma) (upd_map _ k (VScalar v) Omega).
 Proof.
   intros.
   intros s Hup.
@@ -703,48 +685,41 @@ Qed.
 
 (* A lemma specifying the behavior of exec_tbl *)
 Lemma exec_tbl_acc:
-  forall Gamma Omega e tau bound,
+  forall Gamma Omega e bound,
     related_envs_some_scalar Gamma Omega ->
     related_envs_some_tbl Gamma Omega ->
     related_envs_none Gamma Omega ->
-    well_formed (upd_map _ "X"%string (TScalar TFloat) Gamma) e tau ->
+    well_formed (upd_map _ "X"%string TScalar Gamma) e ->
     forall n acc,
     bound >= n ->
-    exists vals, exec_tbl Omega bound e n acc = Some (List.rev acc ++ vals)%list /\ List.length vals = S n /\
-            (forall v, List.In v vals -> value_of_type v tau).
+    exists vals, exec_tbl Omega bound e n acc = Some (List.rev acc ++ vals)%list /\ List.length vals = S n.
 Proof.
   intros ? ? ? ? ? ? ? ?; induction n; intros acc Bn; intros.
   - simpl.
     remember (upd_map envvalues "X"%string (VScalar (Float (B64ofZ (Z.of_nat (bound - 0))))) Omega) as Omega'.
-    remember (upd_map envtypes "X"%string (TScalar TFloat) Gamma) as Gamma'.
+    remember (upd_map envtypes "X"%string TScalar Gamma) as Gamma'.
     assert (related_envs_some_scalar Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_scalar_scalar).
     assert (related_envs_some_tbl Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_table_scalar).
     assert (related_envs_none Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_none_scalar).
-    pose proof (soundness_expr _ _ H3 H4 H5 _ _ H2) as HeqEe.
-    destruct HeqEe as [v [Heqve Tauv]].
+    pose proof (soundness_expr _ _ H3 H4 H5 _ H2) as [v Heqve].
     rewrite Heqve.
     exists (v::nil); repeat split; simpl; eauto.
-    intros ? [? | ?].
-    + subst; eauto.
-    + destruct H6.
   - simpl.
     remember (upd_map envvalues "X"%string (VScalar (Float (B64ofZ (Z.of_nat (bound - S n))))) Omega) as Omega'.
-    remember (upd_map envtypes "X"%string (TScalar TFloat) Gamma) as Gamma'.
+    remember (upd_map envtypes "X"%string TScalar Gamma) as Gamma'.
     assert (related_envs_some_scalar Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_scalar_scalar).
     assert (related_envs_some_tbl Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_table_scalar).
     assert (related_envs_none Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_none_scalar).
-    pose proof (soundness_expr _ _ H3 H4 H5 _ _ H2) as HeqEe.
-    destruct HeqEe as [v [Heqve Tauv]].
+    pose proof (soundness_expr _ _ H3 H4 H5 _ H2) as [v Heqve].
     rewrite Heqve.
     assert (bound >= n) by omega.
     specialize (IHn (v::acc) H6).
-    destruct IHn as [vals [Heqvals [Lenvals Tauvals]]].
+    destruct IHn as [vals [Heqvals Lenvals]].
     exists (v::vals); repeat split; simpl; eauto.
     + rewrite Heqvals.
       f_equal.
       simpl.
       now rewrite <- List.app_assoc.
-    + intros ? [? | ?]; subst; eauto.
 Qed.
 
 
@@ -760,7 +735,7 @@ Proof.
   intros; destruct c; destruct Omega as [Omega | ]; simpl; inversion H; subst; eauto; destruct H0; try discriminate;
     destruct H0 as [Omega' [Oeq [rss [rst rn]]]]; inversion Oeq; subst;
   rename Omega' into Omega.
-  - destruct (soundness_expr _ _ rss rst rn _ _ H5) as [ve [eval_eq_ve ve_tau]]; rewrite eval_eq_ve; simpl.
+  - destruct (soundness_expr _ _ rss rst rn _ H5) as [ve eval_eq_ve]; rewrite eval_eq_ve; simpl.
     exists (Some (upd_map _ v (VScalar ve) Omega)); repeat split; eauto.
     right; exists (upd_map _ v (VScalar ve) Omega); repeat split; eauto.
     + now apply upd_related_envs_scalar_scalar.
@@ -768,17 +743,16 @@ Proof.
     + now apply upd_related_envs_none_scalar.
   - destruct t; [now destruct H6 |].
     assert (N.to_nat (Pos.pred_N p) >= N.to_nat (Pos.pred_N p)) by omega.
-    pose proof (exec_tbl_acc Gamma Omega e tau _ rss rst rn H7 _ nil H0).
-    destruct H1 as [vals [Heqvals [Lenvals Tauvals]]].
+    pose proof (exec_tbl_acc Gamma Omega e _ rss rst rn H7 _ nil H0).
+    destruct H1 as [vals [Heqvals Lenvals]].
     rewrite Heqvals.
     exists (Some (upd_map envvalues v (VTable vals (Npos p)) Omega)); split; f_equal; eauto.
     right.
     exists (upd_map envvalues v (VTable vals (Npos p)) Omega); repeat split.
     + now apply upd_related_envs_scalar_table.
     + apply upd_related_envs_table_table; eauto.
-      * now apply List.Forall_forall.
       * rewrite Lenvals.
-        clear Gamma v e tau H Omega Oeq rss rst rn H6 H7 H0 vals Heqvals Lenvals Tauvals.
+        clear Gamma v e H Omega Oeq rss rst rn H6 H7 H0 vals Heqvals Lenvals.
         simpl.
         pose proof (Pos.succ_pred_or p).
         destruct H as [? | ?]; subst; eauto.
@@ -788,9 +762,9 @@ Proof.
         Require Import Coq.micromega.Lia.
         lia.
     + now apply upd_related_envs_none_table.
-  - destruct (soundness_expr _ _ rss rst rn _ _ H5) as [ve [eval_eq_ve ve_tau]]; rewrite eval_eq_ve; simpl.
-    inversion ve_tau; subst.
-    + destruct b; eauto.
+  - destruct (soundness_expr _ _ rss rst rn _  H5) as [ve eval_eq_ve]; rewrite eval_eq_ve; simpl.
+    destruct ve; subst.
+    + destruct feq; eauto.
       exists (Some Omega); split; eauto.
       right; eauto.
     + exists (Some Omega); split; eauto.
@@ -823,8 +797,8 @@ Proof.
   eapply soundness_prog; eauto.
   right.
   exists (fun _ => None); repeat split.
-  - intros ? ? ?.
+  - intros ? ?.
     inversion H0.
-  - intros ? ? ?.
+  - intros ? ?.
     inversion H0.
 Qed.
