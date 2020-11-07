@@ -113,9 +113,9 @@ let precision =
     & opt (some string) (Some "double")
     & info [ "precision"; "p" ] ~docv:"PRECISION"
         ~doc:
-          "Precision of the interpreter: double, mpfr (precision 1024 bits), fixed<n> (where n > 0 \
-           is the fixpoint precision), interval.<f> (where 0.f is the espilon around the values of \
-           the incomes) . Default is double")
+          "Precision of the interpreter: double, mpfr<n> (where n > 0 it the bit size of the \
+           multi-precision floats), fixed<n> (where n > 0 is the fixpoint precision), interval \
+           (64-bits IEEE754 floats, with up and down rounding mode) . Default is double")
 
 let test_error_margin =
   Arg.(

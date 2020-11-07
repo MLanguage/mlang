@@ -45,7 +45,7 @@ module Make (R : Bir_number.NumberInterface) = struct
 
   type value = Real of R.t | Undefined
 
-  let false_value = Real R.zero
+  let false_value () = Real (R.zero ())
 
   let true_value () = Real (R.one ())
 
@@ -272,16 +272,16 @@ module Make (R : Bir_number.NumberInterface) = struct
 
   let is_zero (l : value) : bool = match l with Real z -> R.is_zero z | _ -> false
 
-  let real_of_bool (b : bool) = if b then R.one () else R.zero
+  let real_of_bool (b : bool) = if b then R.one () else R.zero ()
 
-  let bool_of_real (f : R.t) : bool = not R.(f =. zero)
+  let bool_of_real (f : R.t) : bool = not R.(f =. zero ())
 
   let evaluate_array_index (index : value) (size : int) (values : value array) : value =
     let idx =
       match index with Undefined -> assert false (* should not happen *) | Real f -> roundf f
     in
     if R.(idx >=. R.of_int size) then Undefined
-    else if R.(idx <. R.zero) then Real R.zero
+    else if R.(idx <. R.zero ()) then Real (R.zero ())
     else values.(R.to_int idx)
 
   let eval_debug = ref false
@@ -311,17 +311,17 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_e2 = evaluate_expr ctx p e2 in
             match (Pos.unmark op, new_e1, new_e2) with
             | Mast.Add, Real i1, Real i2 -> Real R.(i1 +. i2)
-            | Mast.Add, Real i1, Undefined -> Real R.(i1 +. zero)
-            | Mast.Add, Undefined, Real i2 -> Real R.(zero +. i2)
+            | Mast.Add, Real i1, Undefined -> Real R.(i1 +. zero ())
+            | Mast.Add, Undefined, Real i2 -> Real R.(zero () +. i2)
             | Mast.Add, Undefined, Undefined -> Undefined
             | Mast.Sub, Real i1, Real i2 -> Real R.(i1 -. i2)
-            | Mast.Sub, Real i1, Undefined -> Real R.(i1 -. zero)
-            | Mast.Sub, Undefined, Real i2 -> Real R.(zero -. i2)
+            | Mast.Sub, Real i1, Undefined -> Real R.(i1 -. zero ())
+            | Mast.Sub, Undefined, Real i2 -> Real R.(zero () -. i2)
             | Mast.Sub, Undefined, Undefined -> Undefined
             | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
             | Mast.Mul, Real i1, Real i2 -> Real R.(i1 *. i2)
             | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
-            | Mast.Div, _, l2 when is_zero l2 -> Real R.zero
+            | Mast.Div, _, l2 when is_zero l2 -> Real (R.zero ())
             | Mast.Div, Real i1, Real i2 -> Real R.(i1 /. i2)
             | Mast.And, Undefined, _
             | Mast.And, _, Undefined
@@ -335,13 +335,13 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_e1 = evaluate_expr ctx p e1 in
             match (op, new_e1) with
             | Mast.Not, Real b1 -> Real (real_of_bool (not (bool_of_real b1)))
-            | Mast.Minus, Real f1 -> Real R.(zero -. f1)
+            | Mast.Minus, Real f1 -> Real R.(zero () -. f1)
             | Mast.Not, Undefined -> Undefined
-            | Mast.Minus, Undefined -> Real R.zero )
+            | Mast.Minus, Undefined -> Real (R.zero ()) )
         | Conditional (e1, e2, e3) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
-            | Real z when R.(z =. zero) -> evaluate_expr ctx p e3
+            | Real z when R.(z =. zero ()) -> evaluate_expr ctx p e3
             | Real _ -> evaluate_expr ctx p e2 (* the float is not zero *)
             | Undefined -> Undefined )
         | Literal Undefined -> Undefined
@@ -400,16 +400,16 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with Real x -> Real (truncatef x) | Undefined -> Undefined (*Float 0.*) )
         | FunctionCall (PresentFunc, [ arg ]) -> (
-            match evaluate_expr ctx p arg with Undefined -> false_value | _ -> true_value () )
+            match evaluate_expr ctx p arg with Undefined -> false_value () | _ -> true_value () )
         | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-            | Undefined, Real f | Real f, Undefined -> Real (R.min R.zero f)
-            | Undefined, Undefined -> Real R.zero
+            | Undefined, Real f | Real f, Undefined -> Real (R.min (R.zero ()) f)
+            | Undefined, Undefined -> Real (R.zero ())
             | Real fl, Real fr -> Real (R.min fl fr) )
         | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-            | Undefined, Undefined -> Real R.zero
-            | Undefined, Real f | Real f, Undefined -> Real (R.max R.zero f)
+            | Undefined, Undefined -> Real (R.zero ())
+            | Undefined, Real f | Real f, Undefined -> Real (R.max (R.zero ()) f)
             | Real fl, Real fr -> Real (R.max fl fr) )
         | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
             let up =
@@ -503,7 +503,7 @@ module Make (R : Bir_number.NumberInterface) = struct
         { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
     | Bir.SConditional (b, t, f) -> (
         match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
-        | SimpleVar (Real z) when R.(z =. zero) ->
+        | SimpleVar (Real z) when R.(z =. zero ()) ->
             evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
         | SimpleVar (Real _) -> evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
         | SimpleVar Undefined -> ctx
@@ -535,22 +535,17 @@ module RegularFloatInterpreter = Make (Bir_number.RegularFloatReal)
 module MPFRInterpreter = Make (Bir_number.MPFRReal)
 
 module BigIntPrecision = struct
-  let bit_size_of_int = ref 64
+  let scaling_factor_bits = ref 64
 end
 
 module BigIntInterpreter = Make (Bir_number.BigIntFixedPointReal (BigIntPrecision))
-
-module IntervalEpsilon = struct
-  let epsilon = ref 0.
-end
-
-module IntervalInterpreter = Make (Bir_number.IntervalReal (IntervalEpsilon))
+module IntervalInterpreter = Make (Bir_number.IntervalReal)
 
 type value_sort =
   | RegularFloat
-  | MPFR
+  | MPFR of int  (** bitsize of the floats *)
   | BigInt of int  (** precision of the fixed point *)
-  | Interval of float  (** epsilon to apply on income inputs *)
+  | Interval
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
     (inputs : literal VariableMap.t) (code_loc_start_value : int) (sort : value_sort) : unit -> unit
@@ -562,17 +557,18 @@ let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
       in
       let ctx = RegularFloatInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> RegularFloatInterpreter.print_output bir_func ctx
-  | MPFR ->
+  | MPFR prec ->
+      Mpfr.set_default_prec prec;
       let ctx = MPFRInterpreter.update_ctx_with_inputs MPFRInterpreter.empty_ctx inputs in
       let ctx = MPFRInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> MPFRInterpreter.print_output bir_func ctx
   | BigInt prec ->
-      BigIntPrecision.bit_size_of_int := prec;
+      BigIntPrecision.scaling_factor_bits := prec;
       let ctx = BigIntInterpreter.update_ctx_with_inputs BigIntInterpreter.empty_ctx inputs in
       let ctx = BigIntInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> BigIntInterpreter.print_output bir_func ctx
-  | Interval epsilon ->
-      IntervalEpsilon.epsilon := epsilon;
+  | Interval ->
+      Mpfr.set_default_prec 64;
       let ctx = IntervalInterpreter.update_ctx_with_inputs IntervalInterpreter.empty_ctx inputs in
       let ctx = IntervalInterpreter.evaluate_program p ctx code_loc_start_value in
       fun () -> IntervalInterpreter.print_output bir_func ctx
@@ -583,15 +579,16 @@ let evaluate_expr (p : Mir.program) (e : expression Pos.marked) (sort : value_so
     | RegularFloat ->
         RegularFloatInterpreter.value_to_literal
           (RegularFloatInterpreter.evaluate_expr RegularFloatInterpreter.empty_ctx p e)
-    | MPFR ->
+    | MPFR prec ->
+        Mpfr.set_default_prec prec;
         MPFRInterpreter.value_to_literal
           (MPFRInterpreter.evaluate_expr MPFRInterpreter.empty_ctx p e)
     | BigInt prec ->
-        BigIntPrecision.bit_size_of_int := prec;
+        BigIntPrecision.scaling_factor_bits := prec;
         BigIntInterpreter.value_to_literal
           (BigIntInterpreter.evaluate_expr BigIntInterpreter.empty_ctx p e)
-    | Interval epsilon ->
-        IntervalEpsilon.epsilon := epsilon;
+    | Interval ->
+        Mpfr.set_default_prec 64;
         IntervalInterpreter.value_to_literal
           (IntervalInterpreter.evaluate_expr IntervalInterpreter.empty_ctx p e)
   in

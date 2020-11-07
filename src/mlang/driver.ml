@@ -71,15 +71,12 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     let value_sort =
       let precision = Option.get precision in
       if precision = "double" then Bir_interpreter.RegularFloat
-      else if precision = "mpfr" then begin
-        Mpfr.set_default_prec 1024;
-        Bir_interpreter.MPFR
-      end
       else
-        let interval_regex = Re.Pcre.regexp "^interval.(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:interval_regex precision then
-          let epsilon = Re.Pcre.get_substring (Re.Pcre.exec ~rex:interval_regex precision) 1 in
-          Bir_interpreter.Interval (float_of_string ("0." ^ epsilon))
+        let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:mpfr_regex precision then
+          let mpfr_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1 in
+          Bir_interpreter.MPFR (int_of_string mpfr_prec)
+        else if precision = "interval" then Bir_interpreter.Interval
         else
           let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
           if Re.Pcre.pmatch ~rex:bigint_regex precision then

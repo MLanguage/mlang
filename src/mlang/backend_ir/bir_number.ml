@@ -32,7 +32,7 @@ module type NumberInterface = sig
   val to_float : t -> float
   (** Warning: lossy *)
 
-  val zero : t
+  val zero : unit -> t
 
   val one : unit -> t
 
@@ -82,7 +82,7 @@ module RegularFloatReal : NumberInterface = struct
 
   let to_float f = f
 
-  let zero = 0.
+  let zero () = 0.
 
   let one () = 1.
 
@@ -116,34 +116,36 @@ end
 module MPFRReal : NumberInterface = struct
   type t = Mpfrf.t
 
+  let rounding : Mpfr.round = Near
+
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
 
   let modf x =
     let x = Mpfrf.to_mpfr x in
     let frac_part = Mpfr.init () in
     let int_part = Mpfr.init () in
-    ignore (Mpfr.modf int_part frac_part x Near);
+    ignore (Mpfr.modf int_part frac_part x rounding);
     (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
 
   let copysign x y =
     match (Mpfrf.sgn x, Mpfrf.sgn y) with
     | 0, _ -> x
     | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
-    | _ -> Mpfrf.sub (Mpfrf.of_int 0 Near) x Near
+    | _ -> Mpfrf.sub (Mpfrf.of_int 0 rounding) x rounding
 
-  let of_int i = Mpfrf.of_int i Near
+  let of_int i = Mpfrf.of_int i rounding
 
   let to_int f = int_of_float (Mpfrf.to_float f)
 
-  let of_float f = Mpfrf.of_float f Near
+  let of_float f = Mpfrf.of_float f rounding
 
-  let of_float_input _ f = Mpfrf.of_float f Near
+  let of_float_input _ f = Mpfrf.of_float f rounding
 
-  let to_float f = Mpfrf.to_float ~round:Near f
+  let to_float f = Mpfrf.to_float ~round:rounding f
 
-  let zero = Mpfrf.of_int 0 Near
+  let zero () = Mpfrf.of_int 0 rounding
 
-  let one () = Mpfrf.of_int 1 Near
+  let one () = Mpfrf.of_int 1 rounding
 
   let ( =. ) x y = Mpfrf.cmp x y = 0
 
@@ -155,110 +157,84 @@ module MPFRReal : NumberInterface = struct
 
   let ( <=. ) x y = Mpfrf.cmp x y <= 0
 
-  let ( +. ) x y = Mpfrf.add x y Near
+  let ( +. ) x y = Mpfrf.add x y rounding
 
-  let ( -. ) x y = Mpfrf.sub x y Near
+  let ( -. ) x y = Mpfrf.sub x y rounding
 
-  let ( /. ) x y = Mpfrf.div x y Near
+  let ( /. ) x y = Mpfrf.div x y rounding
 
-  let ( *. ) x y = Mpfrf.mul x y Near
+  let ( *. ) x y = Mpfrf.mul x y rounding
 
   let min x y = if x >. y then y else x
 
   let max x y = if x >. y then x else y
 
-  let is_zero x = x =. zero
+  let is_zero x = x =. zero ()
 
   let is_nan_or_inf x = not (Mpfrf.number_p x)
 end
 
-module IntervalReal (E : sig
-  val epsilon : float ref
-end) : NumberInterface = struct
-  type t = Interval_crlibm.t
+module IntervalReal : NumberInterface = struct
+  type t = { down : Mpfrf.t; up : Mpfrf.t }
 
-  let format_t fmt f =
-    Format.fprintf fmt "[%.10f;%.10f]" f.Interval_crlibm.low f.Interval_crlibm.high
+  let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
 
-  let modf x =
-    let fpart_low, ipart_low = modf (Interval_crlibm.I.low x) in
-    let fpart_high, ipart_high = modf (Interval_crlibm.I.high x) in
-    try
-      ( Interval_crlibm.I.v (min fpart_low fpart_high) (max fpart_low fpart_high),
-        Interval_crlibm.I.v (min ipart_low ipart_high) (max ipart_low ipart_high) )
-    with Invalid_argument msg ->
-      Errors.raise_error
-        (Format.asprintf "Error during interval modf computation of %a, %s" format_t x msg)
+  let format_t _fmt _f = assert false
 
-  let copysign x y =
-    match (Interval_crlibm.I.sgn x, Interval_crlibm.I.sgn y) with
-    | sx, _ when Interval_crlibm.I.equal sx Interval_crlibm.I.zero -> x
-    | sx, sy
-      when Interval_crlibm.I.(sx > zero && sy > zero)
-           || Interval_crlibm.I.(sx < zero && sy < zero)
-           || Interval_crlibm.I.(equal sy zero) ->
-        x
-    | _ -> Interval_crlibm.I.( ~- ) x
+  let modf _x = assert false
 
-  let of_int i = Interval_crlibm.I.of_int i
+  let copysign _x _y = assert false
 
-  let to_int f =
-    let i_low = int_of_float (Float.round (Interval_crlibm.I.low f)) in
-    let i_high = int_of_float (Float.round (Interval_crlibm.I.high f)) in
-    if i_low = i_high then i_low
-    else
-      Errors.raise_error
-        (Format.asprintf "converting %a to int, too much imprecision (low: %d, high: %d)!" format_t
-           f i_low i_high)
+  let of_int _i = assert false
 
-  let of_float (f : float) = Interval_crlibm.I.v f f
+  let to_int _f = assert false
 
-  let of_float_input (v : Mir.Variable.t) (f : float) =
-    if v.Mir.Variable.is_income then Interval_crlibm.I.v (f -. !E.epsilon) (f +. !E.epsilon)
-    else of_float f
+  let of_float (_f : float) = assert false
 
-  let to_float f = (Interval_crlibm.I.low f +. Interval_crlibm.I.high f) /. 2.
+  let of_float_input (_v : Mir.Variable.t) (_f : float) = assert false
 
-  let zero = Interval_crlibm.I.zero
+  let to_float _f = assert false
 
-  let one () = Interval_crlibm.I.one
+  let zero () = v (Mpfrf.of_int 0 Down) (Mpfrf.of_int 0 Up)
 
-  let ( =. ) x y = not (Interval_crlibm.I.disjoint x y)
+  let one () = v (Mpfrf.of_int 1 Down) (Mpfrf.of_int 1 Up)
 
-  let ( >=. ) x y = Interval_crlibm.I.precedes y x
+  let ( =. ) _x _y = assert false
 
-  let ( >. ) x y = Interval_crlibm.I.strict_precedes y x
+  let ( >=. ) _x _y = assert false
 
-  let ( <. ) x y = Interval_crlibm.I.strict_precedes x y
+  let ( >. ) _x _y = assert false
 
-  let ( <=. ) x y = Interval_crlibm.I.precedes x y
+  let ( <. ) _x _y = assert false
 
-  let ( +. ) x y = Interval_crlibm.I.( + ) x y
+  let ( <=. ) _x _y = assert false
 
-  let ( -. ) x y = Interval_crlibm.I.( - ) x y
+  let ( +. ) _x _y = assert false
 
-  let ( /. ) x y = Interval_crlibm.I.( / ) x y
+  let ( -. ) _x _y = assert false
 
-  let ( *. ) x y = Interval_crlibm.I.( * ) x y
+  let ( /. ) _x _y = assert false
 
-  let min x y = Interval_crlibm.I.min x y
+  let ( *. ) _x _y = assert false
 
-  let max x y = Interval_crlibm.I.max x y
+  let min _x _y = assert false
 
-  let is_zero x = Interval_crlibm.I.subset zero x
+  let max _x _y = assert false
 
-  let is_nan_or_inf x = Interval_crlibm.I.is_entire x
+  let is_zero _x = assert false
+
+  let is_nan_or_inf _x = assert false
 end
 
 module BigIntFixedPointReal (P : sig
-  val bit_size_of_int : int ref
+  val scaling_factor_bits : int ref
 end) : NumberInterface = struct
   type t = Mpzf.t
 
   let precision_modulo () =
     (* 2 ** P.bit_size_of_int *)
     let result = Mpz.init () in
-    Mpz.pow_ui result (Mpzf.of_int 2) !P.bit_size_of_int;
+    Mpz.pow_ui result (Mpzf.of_int 2) !P.scaling_factor_bits;
     Mpzf.of_mpz result
 
   let format_t fmt (f : t) =
@@ -296,7 +272,7 @@ end) : NumberInterface = struct
     Mpzf.to_float (Mpzf.tdiv_q int_part (precision_modulo ()))
     +. (Mpzf.to_float frac_part /. Mpzf.to_float (precision_modulo ()))
 
-  let zero = Mpzf.of_int 0
+  let zero () = Mpzf.of_int 0
 
   let one () = Mpzf.mul (Mpzf.of_int 1) (precision_modulo ())
 
@@ -318,7 +294,7 @@ end) : NumberInterface = struct
 
   let ( *. ) x y = Mpzf.tdiv_q (Mpzf.mul x y) (precision_modulo ())
 
-  let is_zero x = x =. zero
+  let is_zero x = x =. zero ()
 
   let min x y = if x >. y then y else x
 
