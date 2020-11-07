@@ -279,6 +279,14 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           (* should not happen *)
         in
         report_violated_condition_error bindings expr err
+    | Bir_interpreter.IntervalInterpreter.RuntimeError
+        (Bir_interpreter.IntervalInterpreter.StructuredError (msg, pos, kont), _)
+    | Bir_interpreter.BigIntInterpreter.RuntimeError
+        (Bir_interpreter.BigIntInterpreter.StructuredError (msg, pos, kont), _)
+    | Bir_interpreter.MPFRInterpreter.RuntimeError
+        (Bir_interpreter.MPFRInterpreter.StructuredError (msg, pos, kont), _)
+    | Bir_interpreter.RegularFloatInterpreter.RuntimeError
+        (Bir_interpreter.RegularFloatInterpreter.StructuredError (msg, pos, kont), _)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());

@@ -113,6 +113,13 @@ module RegularFloatReal : NumberInterface = struct
   let is_zero x = x = 0.
 end
 
+let modf_round (x : Mpfrf.t) (rounding : Mpfr.round) : Mpfrf.t * Mpfrf.t =
+  let x = Mpfrf.to_mpfr x in
+  let frac_part = Mpfr.init () in
+  let int_part = Mpfr.init () in
+  ignore (Mpfr.modf int_part frac_part x rounding);
+  (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
+
 module MPFRReal : NumberInterface = struct
   type t = Mpfrf.t
 
@@ -120,12 +127,7 @@ module MPFRReal : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
 
-  let modf x =
-    let x = Mpfrf.to_mpfr x in
-    let frac_part = Mpfr.init () in
-    let int_part = Mpfr.init () in
-    ignore (Mpfr.modf int_part frac_part x rounding);
-    (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
+  let modf x = modf_round x rounding
 
   let copysign x y =
     match (Mpfrf.sgn x, Mpfrf.sgn y) with
@@ -179,51 +181,117 @@ module IntervalReal : NumberInterface = struct
 
   let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
 
-  let format_t _fmt _f = assert false
+  let format_t fmt f = Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
 
-  let modf _x = assert false
+  let modf x =
+    let fd, id = modf_round x.down Down in
+    let fu, iu = modf_round x.up Up in
+    (v fd fu, v id iu)
 
-  let copysign _x _y = assert false
+  let copysign (x : t) (y : t) : t =
+    let sgxn =
+      let sgnxd = Mpfrf.sgn x.down in
+      let sgnxu = Mpfrf.sgn x.up in
+      if sgnxd = sgnxu then sgnxd
+      else
+        Errors.raise_error
+          (Format.asprintf "Tried to get the sign of %a but it is inconsistent!" format_t x)
+    in
+    let sgyn =
+      let sgnyd = Mpfrf.sgn y.down in
+      let sgnyu = Mpfrf.sgn y.up in
+      if sgnyd = sgnyu then sgnyd
+      else
+        Errors.raise_error
+          (Format.asprintf "Tried to get the sign of %a but it is inconsistent!" format_t y)
+    in
+    match (sgxn, sgyn) with
+    | 0, _ -> x
+    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
+    | _ -> v (Mpfrf.sub (Mpfrf.of_int 0 Down) x.down Down) (Mpfrf.sub (Mpfrf.of_int 0 Up) x.up Up)
 
-  let of_int _i = assert false
+  let of_int i = v (Mpfrf.of_int i Down) (Mpfrf.of_int i Up)
 
-  let to_int _f = assert false
+  let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
-  let of_float (_f : float) = assert false
+  let of_float_input (_v : Mir.Variable.t) (f : float) =
+    v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
-  let of_float_input (_v : Mir.Variable.t) (_f : float) = assert false
+  let to_float (f : t) : float =
+    let fd = Mpfrf.to_float ~round:Down f.down in
+    let fu = Mpfrf.to_float ~round:Up f.up in
+    if fd = fu then fd
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to convert interval to float, got two different bounds: [%f;%f]" fd
+           fu)
 
-  let to_float _f = assert false
+  let to_int (f : t) : int = int_of_float (to_float f)
 
   let zero () = v (Mpfrf.of_int 0 Down) (Mpfrf.of_int 0 Up)
 
   let one () = v (Mpfrf.of_int 1 Down) (Mpfrf.of_int 1 Up)
 
-  let ( =. ) _x _y = assert false
+  let ( =. ) x y =
+    let outd = Mpfrf.cmp x.down y.down = 0 in
+    let outu = Mpfrf.cmp x.up y.up = 0 in
+    if outd = outu then outu
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to compare %a = %a but got inconsistent results" format_t x format_t
+           y)
 
-  let ( >=. ) _x _y = assert false
+  let ( >=. ) x y =
+    let outd = Mpfrf.cmp x.down y.down >= 0 in
+    let outu = Mpfrf.cmp x.up y.up >= 0 in
+    if outd = outu then outu
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to compare %a >= %a but got inconsistent results" format_t x
+           format_t y)
 
-  let ( >. ) _x _y = assert false
+  let ( >. ) x y =
+    let outd = Mpfrf.cmp x.down y.down > 0 in
+    let outu = Mpfrf.cmp x.up y.up > 0 in
+    if outd = outu then outu
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to compare %a > %a but got inconsistent results" format_t x format_t
+           y)
 
-  let ( <. ) _x _y = assert false
+  let ( <. ) x y =
+    let outd = Mpfrf.cmp x.down y.down < 0 in
+    let outu = Mpfrf.cmp x.up y.up < 0 in
+    if outd = outu then outu
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to compare %a < %a but got inconsistent results" format_t x format_t
+           y)
 
-  let ( <=. ) _x _y = assert false
+  let ( <=. ) x y =
+    let outd = Mpfrf.cmp x.down y.down <= 0 in
+    let outu = Mpfrf.cmp x.up y.up <= 0 in
+    if outd = outu then outu
+    else
+      Errors.raise_error
+        (Format.asprintf "Tried to compare %a <= %a but got inconsistent results" format_t x
+           format_t y)
 
-  let ( +. ) _x _y = assert false
+  let ( +. ) x y = v (Mpfrf.add x.down y.down Down) (Mpfrf.add x.up y.up Up)
 
-  let ( -. ) _x _y = assert false
+  let ( -. ) x y = v (Mpfrf.sub x.down y.down Down) (Mpfrf.add x.up y.up Up)
 
-  let ( /. ) _x _y = assert false
+  let ( /. ) x y = v (Mpfrf.div x.down y.down Down) (Mpfrf.add x.up y.up Up)
 
-  let ( *. ) _x _y = assert false
+  let ( *. ) x y = v (Mpfrf.mul x.down y.down Down) (Mpfrf.add x.up y.up Up)
 
-  let min _x _y = assert false
+  let min x y = if x >. y then y else x
 
-  let max _x _y = assert false
+  let max x y = if x >. y then x else y
 
-  let is_zero _x = assert false
+  let is_zero x = x =. zero ()
 
-  let is_nan_or_inf _x = assert false
+  let is_nan_or_inf x = not (Mpfrf.number_p x.down && Mpfrf.number_p x.up)
 end
 
 module BigIntFixedPointReal (P : sig

@@ -29,7 +29,7 @@ let format_code_location (fmt : Format.formatter) (l : code_location) =
     ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
     format_code_location_segment fmt l
 
-let assign_hook : (Mir.Variable.t -> var_literal -> code_location -> unit) ref =
+let assign_hook : (Mir.Variable.t -> (unit -> var_literal) -> code_location -> unit) ref =
   ref (fun _var _lit _code_loc -> ())
 
 let exit_on_rte = ref true
@@ -133,6 +133,7 @@ module Make (R : Bir_number.NumberInterface) = struct
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_value) list
     | NanOrInf of string * expression Pos.marked
+    | StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 
@@ -267,6 +268,7 @@ module Make (R : Bir_number.NumberInterface) = struct
              bindings)
           (Pos.get_position condition)
           (fun _ -> repl_debugguer ctx p)
+    | StructuredError (msg, pos, kont) -> raise (Errors.StructuredError (msg, pos, kont))
 
   let int_of_bool (b : bool) = if b then 1 else 0
 
@@ -450,8 +452,16 @@ module Make (R : Bir_number.NumberInterface) = struct
                          Format_mir.format_func func,
                        Pos.get_position e ),
                    ctx ))
-      with RuntimeError (e, ctx) ->
-        if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
+      with
+      | RuntimeError (e, ctx) ->
+          if !exit_on_rte then raise_runtime_as_structured e ctx p
+          else raise (RuntimeError (e, ctx))
+      | Errors.StructuredError (msg, pos, kont) ->
+          if !exit_on_rte then
+            raise
+              (Errors.StructuredError
+                 (msg, pos @ [ (Some "Expression raising the error:", Pos.get_position e) ], kont))
+          else raise (RuntimeError (StructuredError (msg, pos, kont), ctx))
     in
     if match out with Undefined -> false | Real out -> R.is_nan_or_inf out then
       let e =
@@ -499,7 +509,7 @@ module Make (R : Bir_number.NumberInterface) = struct
     match Pos.unmark stmt with
     | Bir.SAssign (var, vdata) ->
         let res = evaluate_variable p ctx vdata.var_definition in
-        !assign_hook var (var_value_to_var_literal res) loc;
+        !assign_hook var (fun _ -> var_value_to_var_literal res) loc;
         { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
     | Bir.SConditional (b, t, f) -> (
         match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
