@@ -350,7 +350,14 @@ module RationalNumber : NumberInterface = struct
 
   let is_zero x = x =. zero ()
 
-  let is_nan_or_inf _x = false
+  let is_nan_or_inf (x : t) =
+    let max = Mpz.init () in
+    Mpz.pow_ui max (Mpz.of_int 2) 128;
+    let min = Mpzf.sub (Mpzf.of_int 0) max in
+    Mpzf.cmp (Mpqf.get_num x) max > 0
+    || Mpzf.cmp (Mpqf.get_den x) max > 0
+    || Mpzf.cmp (Mpqf.get_num x) min < 0
+    || Mpzf.cmp (Mpqf.get_den x) min < 0
 end
 
 module BigIntFixedPointNumber (P : sig

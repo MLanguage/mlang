@@ -307,6 +307,13 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
         Cli.error_print "Error in test %s: %a" name Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures, code_coverage_acc)
+    | Bir_interpreter.IntervalInterpreter.RuntimeError (_, _)
+    | Bir_interpreter.BigIntInterpreter.RuntimeError (_, _)
+    | Bir_interpreter.MPFRInterpreter.RuntimeError (_, _)
+    | Bir_interpreter.RegularFloatInterpreter.RuntimeError (_, _)
+    | Bir_interpreter.RationalInterpreter.RuntimeError (_, _) ->
+        Cli.error_print "Runtime error in test %s" name;
+        (successes, failures, code_coverage_acc)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], VariableMap.empty, VariableMap.empty)

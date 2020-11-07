@@ -320,9 +320,10 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let timer () =
     while true do
       if !stop then Thread.exit ();
-      clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
+      clock_marker (!ticks / step_ticks);
       Format.printf "%s" !msg;
+      flush_all ();
       flush_all ();
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();
