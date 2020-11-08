@@ -36,23 +36,23 @@ let exit_on_rte = ref true
 
 let repl_debug = ref false
 
-module Make (R : Bir_number.NumberInterface) = struct
+module Make (N : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
-  let truncatef (x : R.t) : R.t = snd (R.modf R.(x +. R.of_float 0.000001))
+  let truncatef (x : N.t) : N.t = snd (N.modf N.(x +. N.of_float 0.000001))
 
   (* Careful : rounding in M is done with this arbitrary behavior *)
-  let roundf (x : R.t) = snd (R.modf R.(x +. R.copysign (R.of_float 0.50005) x))
+  let roundf (x : N.t) = snd (N.modf N.(x +. N.copysign (N.of_float 0.50005) x))
 
-  type value = Number of R.t | Undefined
+  type value = Number of N.t | Undefined
 
-  let false_value () = Number (R.zero ())
+  let false_value () = Number (N.zero ())
 
-  let true_value () = Number (R.one ())
+  let true_value () = Number (N.one ())
 
   let format_value (fmt : Format.formatter) (x : value) =
     match x with
     | Undefined -> Format_mir.format_literal fmt Mir.Undefined
-    | Number x -> R.format_t fmt x
+    | Number x -> N.format_t fmt x
 
   type var_value = SimpleVar of value | TableVar of int * value array
 
@@ -92,7 +92,7 @@ module Make (R : Bir_number.NumberInterface) = struct
     }
 
   let literal_to_value (l : Mir.literal) : value =
-    match l with Mir.Undefined -> Undefined | Mir.Float f -> Number (R.of_float f)
+    match l with Mir.Undefined -> Undefined | Mir.Float f -> Number (N.of_float f)
 
   let var_literal_to_var_value (def : var_literal) : var_value =
     match def with
@@ -100,7 +100,7 @@ module Make (R : Bir_number.NumberInterface) = struct
     | TableVar (size, defs) -> TableVar (size, Array.map (fun v -> literal_to_value v) defs)
 
   let value_to_literal (l : value) : Mir.literal =
-    match l with Undefined -> Mir.Undefined | Number f -> Mir.Float (R.to_float f)
+    match l with Undefined -> Mir.Undefined | Number f -> Mir.Float (N.to_float f)
 
   let var_value_to_var_literal (def : var_value) : var_literal =
     let l : var_literal =
@@ -120,7 +120,7 @@ module Make (R : Bir_number.NumberInterface) = struct
              (fun v l ->
                match l with
                | Mir.Undefined -> Undefined
-               | Mir.Float f -> Number (R.of_float_input v f))
+               | Mir.Float f -> Number (N.of_float_input v f))
              inputs)
           ctx.ctx_vars;
     }
@@ -272,19 +272,19 @@ module Make (R : Bir_number.NumberInterface) = struct
 
   let int_of_bool (b : bool) = if b then 1 else 0
 
-  let is_zero (l : value) : bool = match l with Number z -> R.is_zero z | _ -> false
+  let is_zero (l : value) : bool = match l with Number z -> N.is_zero z | _ -> false
 
-  let real_of_bool (b : bool) = if b then R.one () else R.zero ()
+  let real_of_bool (b : bool) = if b then N.one () else N.zero ()
 
-  let bool_of_real (f : R.t) : bool = not R.(f =. zero ())
+  let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
 
   let evaluate_array_index (index : value) (size : int) (values : value array) : value =
     let idx =
       match index with Undefined -> assert false (* should not happen *) | Number f -> roundf f
     in
-    if R.(idx >=. R.of_int size) then Undefined
-    else if R.(idx <. R.zero ()) then Number (R.zero ())
-    else values.(R.to_int idx)
+    if N.(idx >=. N.of_int size) then Undefined
+    else if N.(idx <. N.zero ()) then Number (N.zero ())
+    else values.(N.to_int idx)
 
   let eval_debug = ref false
 
@@ -296,35 +296,35 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
             match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Gt, Number i1, Number i2 -> Number R.(real_of_bool (i1 >. i2))
+            | Mast.Gt, Number i1, Number i2 -> Number N.(real_of_bool (i1 >. i2))
             | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-            | Mast.Gte, Number i1, Number i2 -> Number R.(real_of_bool (i1 >=. i2))
+            | Mast.Gte, Number i1, Number i2 -> Number N.(real_of_bool (i1 >=. i2))
             | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-            | Mast.Lt, Number i1, Number i2 -> Number R.(real_of_bool (i1 <. i2))
+            | Mast.Lt, Number i1, Number i2 -> Number N.(real_of_bool (i1 <. i2))
             | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-            | Mast.Lte, Number i1, Number i2 -> Number R.(real_of_bool (i1 <=. i2))
+            | Mast.Lte, Number i1, Number i2 -> Number N.(real_of_bool (i1 <=. i2))
             | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-            | Mast.Eq, Number i1, Number i2 -> Number R.(real_of_bool (i1 =. i2))
+            | Mast.Eq, Number i1, Number i2 -> Number N.(real_of_bool (i1 =. i2))
             | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-            | Mast.Neq, Number i1, Number i2 -> Number R.(real_of_bool (not (i1 =. i2)))
+            | Mast.Neq, Number i1, Number i2 -> Number N.(real_of_bool (not (i1 =. i2)))
             | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined )
         | Binop (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
             match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Add, Number i1, Number i2 -> Number R.(i1 +. i2)
-            | Mast.Add, Number i1, Undefined -> Number R.(i1 +. zero ())
-            | Mast.Add, Undefined, Number i2 -> Number R.(zero () +. i2)
+            | Mast.Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+            | Mast.Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+            | Mast.Add, Undefined, Number i2 -> Number N.(zero () +. i2)
             | Mast.Add, Undefined, Undefined -> Undefined
-            | Mast.Sub, Number i1, Number i2 -> Number R.(i1 -. i2)
-            | Mast.Sub, Number i1, Undefined -> Number R.(i1 -. zero ())
-            | Mast.Sub, Undefined, Number i2 -> Number R.(zero () -. i2)
+            | Mast.Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+            | Mast.Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+            | Mast.Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
             | Mast.Sub, Undefined, Undefined -> Undefined
             | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
-            | Mast.Mul, Number i1, Number i2 -> Number R.(i1 *. i2)
+            | Mast.Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
             | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
-            | Mast.Div, _, l2 when is_zero l2 -> Number (R.zero ())
-            | Mast.Div, Number i1, Number i2 -> Number R.(i1 /. i2)
+            | Mast.Div, _, l2 when is_zero l2 -> Number (N.zero ())
+            | Mast.Div, Number i1, Number i2 -> Number N.(i1 /. i2)
             | Mast.And, Undefined, _
             | Mast.And, _, Undefined
             | Mast.Or, Undefined, _
@@ -338,17 +338,17 @@ module Make (R : Bir_number.NumberInterface) = struct
             let new_e1 = evaluate_expr ctx p e1 in
             match (op, new_e1) with
             | Mast.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
-            | Mast.Minus, Number f1 -> Number R.(zero () -. f1)
+            | Mast.Minus, Number f1 -> Number N.(zero () -. f1)
             | Mast.Not, Undefined -> Undefined
-            | Mast.Minus, Undefined -> Number (R.zero ()) )
+            | Mast.Minus, Undefined -> Number (N.zero ()) )
         | Conditional (e1, e2, e3) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
-            | Number z when R.(z =. zero ()) -> evaluate_expr ctx p e3
+            | Number z when N.(z =. zero ()) -> evaluate_expr ctx p e3
             | Number _ -> evaluate_expr ctx p e2 (* the float is not zero *)
             | Undefined -> Undefined )
         | Literal Undefined -> Undefined
-        | Literal (Float f) -> Number (R.of_float f)
+        | Literal (Float f) -> Number (N.of_float f)
         | Index (var, e1) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             if new_e1 = Undefined then Undefined
@@ -375,7 +375,7 @@ module Make (R : Bir_number.NumberInterface) = struct
         | GenericTableIndex -> (
             match ctx.ctx_generic_index with
             | None -> assert false (* should not happen *)
-            | Some i -> Number (R.of_int i) )
+            | Some i -> Number (N.of_int i) )
         | Error ->
             raise
               (RuntimeError
@@ -407,18 +407,18 @@ module Make (R : Bir_number.NumberInterface) = struct
             match evaluate_expr ctx p arg with Undefined -> false_value () | _ -> true_value () )
         | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-            | Undefined, Number f | Number f, Undefined -> Number (R.min (R.zero ()) f)
-            | Undefined, Undefined -> Number (R.zero ())
-            | Number fl, Number fr -> Number (R.min fl fr) )
+            | Undefined, Number f | Number f, Undefined -> Number (N.min (N.zero ()) f)
+            | Undefined, Undefined -> Number (N.zero ())
+            | Number fl, Number fr -> Number (N.min fl fr) )
         | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-            | Undefined, Undefined -> Number (R.zero ())
-            | Undefined, Number f | Number f, Undefined -> Number (R.max (R.zero ()) f)
-            | Number fl, Number fr -> Number (R.max fl fr) )
+            | Undefined, Undefined -> Number (N.zero ())
+            | Undefined, Number f | Number f, Undefined -> Number (N.max (N.zero ()) f)
+            | Number fl, Number fr -> Number (N.max fl fr) )
         | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
             let up =
               match evaluate_expr ctx p arg1 with
-              | Number f -> R.to_int (roundf f)
+              | Number f -> N.to_int (roundf f)
               | e ->
                   raise
                     (RuntimeError
@@ -433,7 +433,7 @@ module Make (R : Bir_number.NumberInterface) = struct
               (* todo: rte *)
             in
             let cast_to_int (v : value) : int option =
-              match v with Number f -> Some (R.to_int (roundf f)) | Undefined -> Some 0
+              match v with Number f -> Some (N.to_int (roundf f)) | Undefined -> Some 0
             in
             let pos = Pos.get_position arg2 in
             let access_index (i : int) : int option =
@@ -445,7 +445,7 @@ module Make (R : Bir_number.NumberInterface) = struct
             for i = 0 to up do
               maxi := max !maxi (access_index i)
             done;
-            match !maxi with None -> Undefined | Some f -> Number (R.of_int f) )
+            match !maxi with None -> Undefined | Some f -> Number (N.of_int f) )
         | FunctionCall (func, _) ->
             raise
               (RuntimeError
@@ -465,12 +465,12 @@ module Make (R : Bir_number.NumberInterface) = struct
                  (msg, pos @ [ (Some "Expression raising the error:", Pos.get_position e) ], kont))
           else raise (RuntimeError (StructuredError (msg, pos, kont), ctx))
     in
-    if match out with Undefined -> false | Number out -> R.is_nan_or_inf out then
+    if match out with Undefined -> false | Number out -> N.is_nan_or_inf out then
       let e =
         NanOrInf
           ( ( match out with
             | Undefined -> assert false
-            | Number out -> Format.asprintf "%a" R.format_t out ),
+            | Number out -> Format.asprintf "%a" N.format_t out ),
             e )
       in
       if !exit_on_rte then raise_runtime_as_structured e ctx p else raise (RuntimeError (e, ctx))
@@ -515,14 +515,14 @@ module Make (R : Bir_number.NumberInterface) = struct
         { ctx with ctx_vars = VariableMap.add var res ctx.ctx_vars }
     | Bir.SConditional (b, t, f) -> (
         match evaluate_variable p ctx (SimpleVar (b, Pos.no_pos)) with
-        | SimpleVar (Number z) when R.(z =. zero ()) ->
+        | SimpleVar (Number z) when N.(z =. zero ()) ->
             evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
         | SimpleVar (Number _) -> evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
         | SimpleVar Undefined -> ctx
         | _ -> assert false )
     | Bir.SVerif data -> (
         match evaluate_expr ctx p.mir_program data.cond_expr with
-        | Number f when not (R.is_zero f) -> report_violatedcondition data ctx
+        | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx )
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
