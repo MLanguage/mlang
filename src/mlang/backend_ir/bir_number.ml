@@ -279,11 +279,11 @@ module IntervalNumber : NumberInterface = struct
 
   let ( +. ) x y = v (Mpfrf.add x.down y.down Down) (Mpfrf.add x.up y.up Up)
 
-  let ( -. ) x y = v (Mpfrf.sub x.down y.down Down) (Mpfrf.add x.up y.up Up)
+  let ( -. ) x y = v (Mpfrf.sub x.down y.down Down) (Mpfrf.sub x.up y.up Up)
 
-  let ( /. ) x y = v (Mpfrf.div x.down y.down Down) (Mpfrf.add x.up y.up Up)
+  let ( /. ) x y = v (Mpfrf.div x.down y.down Down) (Mpfrf.div x.up y.up Up)
 
-  let ( *. ) x y = v (Mpfrf.mul x.down y.down Down) (Mpfrf.add x.up y.up Up)
+  let ( *. ) x y = v (Mpfrf.mul x.down y.down Down) (Mpfrf.mul x.up y.up Up)
 
   let min x y = if x >. y then y else x
 
