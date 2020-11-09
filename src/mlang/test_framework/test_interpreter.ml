@@ -382,10 +382,19 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       in
       build_list 0 number_of_values_to_number_of_statements
     in
+    let number_zero, number_one, number_two_or_more =
+      match number_of_values_to_number_of_statements with
+      | (0, number_zero) :: (1, number_one) :: rest ->
+          (number_zero, number_one, List.fold_left (fun acc (_, n) -> acc + n) 0 rest)
+      | _ -> assert false
+    in
+    let number_of_values_to_number_of_statements =
+      [ ("zero", number_zero); ("one", number_one); ("two or more", number_two_or_more) ]
+    in
     List.iter
       (fun (number_of_values, number_of_statements) ->
         Cli.result_print "%s values → %d (%s of statements)"
-          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%d" number_of_values)
+          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%s" number_of_values)
           number_of_statements
           (ANSITerminal.sprintf [ ANSITerminal.blue ] "%.4f%%"
              (float_of_int number_of_statements /. float_of_int all_code_locs_num *. 100.)))
