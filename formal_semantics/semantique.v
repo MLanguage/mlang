@@ -506,7 +506,10 @@ Proof.
 Qed.
 
 
+
+
 Require Import String.
+Require Import Coq.micromega.Lia.
 Open Scope string_scope.
 
 (* A helper function to define iteration during evaluation of table assignation *)
@@ -577,10 +580,12 @@ Fixpoint exec_program (Omega: cmd_environment) (p: program) : option cmd_environ
 
 Inductive well_formed_cmd : type_environment -> command -> type_environment -> Prop :=
 | WTCAssign : forall Gamma var expr,
+    (Gamma var <> None -> Gamma var = Some TScalar) ->
     well_formed Gamma expr ->
     well_formed_cmd Gamma (Assign var expr) (upd_map _ var  TScalar Gamma)
 | WTCAssignTable : forall Gamma var tabsize expr,
     tabsize <> N0 ->
+    (Gamma var <> None -> Gamma var = Some TTable) ->
     well_formed (upd_map _ "X"%string TScalar Gamma) expr ->
     well_formed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var TTable Gamma)
 | WTCCond : forall Gamma cond err,
@@ -712,7 +717,7 @@ Proof.
     assert (related_envs_none Gamma' Omega') by (rewrite HeqOmega', HeqGamma'; now apply upd_related_envs_none_scalar).
     pose proof (soundness_expr _ _ H3 H4 H5 _ H2) as [v Heqve].
     rewrite Heqve.
-    assert (bound >= n) by omega.
+    assert (bound >= n) by lia.
     specialize (IHn (v::acc) H6).
     destruct IHn as [vals [Heqvals Lenvals]].
     exists (v::vals); repeat split; simpl; eauto.
@@ -735,15 +740,15 @@ Proof.
   intros; destruct c; destruct Omega as [Omega | ]; simpl; inversion H; subst; eauto; destruct H0; try discriminate;
     destruct H0 as [Omega' [Oeq [rss [rst rn]]]]; inversion Oeq; subst;
   rename Omega' into Omega.
-  - destruct (soundness_expr _ _ rss rst rn _ H5) as [ve eval_eq_ve]; rewrite eval_eq_ve; simpl.
+  - destruct (soundness_expr _ _ rss rst rn _ H6) as [ve eval_eq_ve]; rewrite eval_eq_ve; simpl.
     exists (Some (upd_map _ v (VScalar ve) Omega)); repeat split; eauto.
     right; exists (upd_map _ v (VScalar ve) Omega); repeat split; eauto.
     + now apply upd_related_envs_scalar_scalar.
     + now apply upd_related_envs_table_scalar.
     + now apply upd_related_envs_none_scalar.
-  - destruct t; [now destruct H6 |].
-    assert (N.to_nat (Pos.pred_N p) >= N.to_nat (Pos.pred_N p)) by omega.
-    pose proof (exec_tbl_acc Gamma Omega e _ rss rst rn H7 _ nil H0).
+  - destruct t; [now destruct H5 |].
+    assert (N.to_nat (Pos.pred_N p) >= N.to_nat (Pos.pred_N p)) by lia.
+    pose proof (exec_tbl_acc Gamma Omega e _ rss rst rn H8 _ nil H0).
     destruct H1 as [vals [Heqvals Lenvals]].
     rewrite Heqvals.
     exists (Some (upd_map envvalues v (VTable vals (Npos p)) Omega)); split; f_equal; eauto.
@@ -752,14 +757,12 @@ Proof.
     + now apply upd_related_envs_scalar_table.
     + apply upd_related_envs_table_table; eauto.
       * rewrite Lenvals.
-        clear Gamma v e H Omega Oeq rss rst rn H6 H7 H0 vals Heqvals Lenvals.
         simpl.
         pose proof (Pos.succ_pred_or p).
-        destruct H as [? | ?]; subst; eauto.
-        rewrite <- H.
+        destruct H1 as [? | ?]; subst; eauto.
+        rewrite <- H1.
         rewrite Pos.pred_N_succ.
         simpl.
-        Require Import Coq.micromega.Lia.
         lia.
     + now apply upd_related_envs_none_table.
   - destruct (soundness_expr _ _ rss rst rn _  H5) as [ve eval_eq_ve]; rewrite eval_eq_ve; simpl.
