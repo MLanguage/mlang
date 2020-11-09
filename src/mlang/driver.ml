@@ -20,9 +20,9 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     (function_spec : string option) (mpp_file : string) (output : string option)
     (run_all_tests : string option) (run_test : string option) (mpp_function : string)
     (optimize : bool) (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (test_error_margin : float option) =
+    (precision : string option) (test_error_margin : float option) (m_clean_calls : bool) =
   Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file print_cycles output
-    optimize_unsafe_float;
+    optimize_unsafe_float m_clean_calls;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in

@@ -192,7 +192,9 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         match StringMap.find_opt l ctx.new_variables with
         | None ->
             let new_l =
-              Mir.Variable.new_var (l, pos) None ("", pos)
+              Mir.Variable.new_var
+                ("mpp_" ^ l, pos)
+                None ("", pos)
                 (Mast_to_mvg.dummy_exec_number pos)
                 ~attributes:[] ~is_income:false ~is_table:None
             in
@@ -298,17 +300,42 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         list_map_opt
           (fun var ->
             try
-              let vdef =
-                Mir.VariableMap.find var m_program.program.program_vars
-                (* should be a verification condition *)
-              in
+              let vdef = Mir.VariableMap.find var m_program.program.program_vars in
               match vdef.var_definition with
               | InputVar -> None
-              | _ -> Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
+              | _ ->
+                  (* variables used in the context should not be reassigned *)
+                  Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
             with Not_found -> None)
           exec_order
       in
-      (ctx, inlined_program)
+      let clean_state =
+        (* no cleaning or no arguments: we may want anything afterwards, so no cleaning *)
+        if (not !Cli.m_clean_calls) || real_args = [] then []
+        else
+          list_map_opt
+            (fun var ->
+              try
+                let vdef = Mir.VariableMap.find var m_program.program.program_vars in
+                match (vdef.var_definition, vdef.var_io) with
+                | InputVar, _ -> None
+                | _, Regular ->
+                    let pos = var.Mir.Variable.execution_number.pos in
+                    Some
+                      ( Bir.SAssign
+                          ( var,
+                            {
+                              var_definition = SimpleVar (Mir.Literal Undefined, pos);
+                              var_typ = vdef.var_typ;
+                              var_io = vdef.var_io;
+                            } ),
+                        pos )
+                | _ -> None
+              with Not_found -> None)
+            exec_order
+      in
+      Cli.var_info_print "|clean_state| += %d" (List.length clean_state);
+      (ctx, inlined_program @ clean_state)
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
       let ctx, partition_pre, partition_post =
