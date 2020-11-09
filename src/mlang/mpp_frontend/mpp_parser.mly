@@ -10,7 +10,7 @@
 %token <int> INT
 %token EOF INDENT NEWLINE DEDENT
 %token LT GT LE GE
-%token EQUAL NEQ  EQ LPAREN RPAREN
+%token EQUAL NEQ  EQ LPAREN RPAREN LEFTARROW
 %token AND OR
 %token IF ELSE DELETE PARTITION COLON COMMA MINUS
 
@@ -36,6 +36,7 @@ ident:
 | i = IDENT { (i, mk_position $sloc) }
 
 stmt:
+| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN RPAREN NEWLINE { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | var = IDENT EQ e = expr NEWLINE { Assign(var, e), mk_position $sloc }
 | DELETE var = IDENT NEWLINE { Delete var, mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
