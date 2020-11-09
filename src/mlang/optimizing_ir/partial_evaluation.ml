@@ -332,7 +332,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         | _ ->
             if Pos.unmark new_e1 = Literal Undefined || d1 = Undefined then
               (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
-            else (Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e, join d2 d3) )
+            else
+              ( Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e,
+                if maybe_undefined d1 then join Undefined (join d2 d3) else join d2 d3 ) )
     | Index (var, e1) ->
         let new_e1, d1 = partially_evaluate_expr ctx p e1 in
         let new_e, d =
