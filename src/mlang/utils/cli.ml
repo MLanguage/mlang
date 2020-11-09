@@ -113,8 +113,10 @@ let precision =
     & opt (some string) (Some "double")
     & info [ "precision"; "p" ] ~docv:"PRECISION"
         ~doc:
-          "Precision of the interpreter: double, mpfr (precision 1024 bits), fixed<n> (where n > 0 \
-           is the fixpoint precision). Default is double")
+          "Precision of the interpreter: double, mpfr<n> (where n > 0 it the bit size of the \
+           multi-precision floats), fixed<n> (where n > 0 is the fixpoint precision), interval \
+           (64-bits IEEE754 floats, with up and down rounding mode), mpq (multi-precision \
+           rationals) . Default is double")
 
 let test_error_margin =
   Arg.(
@@ -318,9 +320,10 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let timer () =
     while true do
       if !stop then Thread.exit ();
-      clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
+      clock_marker (!ticks / step_ticks);
       Format.printf "%s" !msg;
+      flush_all ();
       flush_all ();
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();

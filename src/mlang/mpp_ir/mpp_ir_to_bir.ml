@@ -116,10 +116,11 @@ let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos
               match data.Mir.var_io with
               | Input ->
                   raise
-                    (Bir_interpreter.RuntimeError
-                       ( Bir_interpreter.IncorrectOutputVariable
-                           (Format.asprintf "%a is an input" Format_mir.format_variable var),
-                         Bir_interpreter.empty_vanilla_ctx ))
+                    (Bir_interpreter.RegularFloatInterpreter.RuntimeError
+                       ( Bir_interpreter.RegularFloatInterpreter.IncorrectOutputVariable
+                           ( Format.asprintf "%a is an input" Format_mir.format_variable var,
+                             Pos.get_position var.Mir.Variable.name ),
+                         Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
               | Output -> data
               | Regular -> { data with var_io = Output }
             else
@@ -289,7 +290,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         {
           m_program with
           program =
-            Bir_interpreter.replace_undefined_with_input_variables m_program.program
+            Bir_interpreter.RegularFloatInterpreter.replace_undefined_with_input_variables
+              m_program.program
               (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
@@ -417,5 +419,5 @@ let create_combined_program (m_program : Mir_interface.full_program)
       mir_program = m_program.program;
       outputs = Mir.VariableMap.empty;
     }
-  with Bir_interpreter.RuntimeError (r, ctx) ->
-    Bir_interpreter.raise_runtime_as_structured r ctx m_program.program
+  with Bir_interpreter.RegularFloatInterpreter.RuntimeError (r, ctx) ->
+    Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured r ctx m_program.program
