@@ -282,11 +282,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
           (List.map
              (function
                | Mpp_ir.Mbased (s, _) ->
-                   (* Cli.debug_print "Mbased %a%a" Format_mir.format_variable s
-                    *   Format_mir.format_execution_number s.Mir.Variable.execution_number; *)
                    s.Mir.Variable.name
                | Local l ->
-                   (* Cli.debug_print "Local %s" l; *)
                    (l, Pos.no_pos))
              real_args)
       in
@@ -301,11 +298,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       (** Let's try using the cleaner M++ semantics:
         *  1) assert there are no writes at least
         *  2) clean state after M has been called (remove everything that is not an output)
-        *  3) a real dependency analysis to avoid unnecessary assignments (and then removal)
-        **)
-      (* oO, computing the new dep graph doesn't change anything... *)
-      (* let dep_graph = Mir_dependency_graph.create_dependency_graph m_program.program in
-       * let exec_order = Mir_dependency_graph.get_execution_order dep_graph in *)
+        *)
       let exec_order = m_program.execution_order in
       let inlined_program =
         list_map_opt
@@ -351,6 +344,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             with Not_found -> None)
           exec_order
       in
+      Cli.var_info_print "|clean_state| += %d" (List.length clean_state);
       (ctx, inlined_program @ clean_state)
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
