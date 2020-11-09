@@ -35,6 +35,7 @@ rule next_tokens = parse
     | "and"                     { [AND] }
     | "or"                      { [OR] }
     | "="                       { [EQ] }
+    | "<-"                      { [LEFTARROW] }
     | '('                       { [LPAREN] }
     | ')'                       { [RPAREN] }
     | "if"                      { [IF] }

@@ -17,7 +17,7 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | "exists_deposit_defined_variables" -> DepositDefinedVariables
   | "exists_taxbenefit_defined_variables" -> TaxbenefitDefinedVariables
   | "exists_taxbenefit_ceiled_variables" -> TaxbenefitCeiledVariables
-  | "evaluate_program" -> Program
+  | "call_m" -> Program
   | x ->
       if List.mem x translated_names then MppFunction x
       else
