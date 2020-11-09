@@ -125,11 +125,19 @@ let test_error_margin =
     & info [ "test_error_margin" ] ~docv:"ERROR_MARGIN"
         ~doc:"Margin of error tolerated when executing tests, as a float. Default 0.")
 
+let m_clean_calls =
+  Arg.(
+    value & flag
+    & info [ "clean_between_m_calls" ]
+        ~doc:
+          "Clean the value of computed variables between two m calls (to check that there is no \
+           hidden state kept between two calls)")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
-    $ optimize $ code_coverage $ precision $ test_error_margin)
+    $ optimize $ code_coverage $ precision $ test_error_margin $ m_clean_calls)
 
 let info =
   let doc =
@@ -201,9 +209,12 @@ let display_time = ref false
 (** Output file *)
 let output_file = ref ""
 
+(* Clean regular variables between M calls *)
+let m_clean_calls = ref false
+
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
-    (output_file_ : string option) =
+    (output_file_ : string option) (m_clean_calls_ : bool) =
   source_files := files_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
@@ -211,6 +222,7 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;
+  m_clean_calls := m_clean_calls_;
   match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)
