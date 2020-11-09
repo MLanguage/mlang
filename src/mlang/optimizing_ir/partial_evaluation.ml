@@ -282,10 +282,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Mast.Add, _, (Unop (Minus, e2'), _) ->
               (Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'), undef_cast d1 d2)
           | Mast.Add, (Literal (Float 0.), _), (_, Float) -> (Pos.unmark new_e2, d2)
-          | (Mast.Add | Mast.Sub), (_, Float), (Literal (Float 0.), _) -> (Pos.unmark new_e1, d1)
+          | (Mast.Add | Mast.Sub), (_, Float), (Literal (Float 0.), _)
+            when !Cli.optimize_unsafe_float ->
+              (Pos.unmark new_e1, d1)
           (* substraction *)
           | Mast.Sub, (Literal (Float 0.), _), (_, Float) -> (Unop (Minus, new_e2), d2)
-          | Mast.Sub, (e1, Float), (e2, Float) when e1 = e2 -> from_literal (Float 0.)
+          | Mast.Sub, (e1, Float), (e2, Float) when e1 = e2 && !Cli.optimize_unsafe_float ->
+              from_literal (Float 0.)
           | Mast.Sub, (Literal Undefined, _), (e', _) -> (Unop (Minus, Pos.same_pos_as e' e), d2)
           | Mast.Sub, (e', _), (Literal Undefined, _ | _, Undefined) -> (e', d1)
           (* multiplication *)
@@ -294,8 +297,10 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           (* we can't optimize float multiplication by 0 here in the general case, because
              Undefined. But if we know that the other term can't be undefined, then we can go ! This
              is the case for the result of some functions *)
-          | Mast.Mul, (Literal (Float 0.), _), (_, Float) -> from_literal (Float 0.)
-          | Mast.Mul, (_, Float), (Literal (Float 0.), _) -> from_literal (Float 0.)
+          | Mast.Mul, (Literal (Float 0.), _), (_, Float) when !Cli.optimize_unsafe_float ->
+              from_literal (Float 0.)
+          | Mast.Mul, (_, Float), (Literal (Float 0.), _) when !Cli.optimize_unsafe_float ->
+              from_literal (Float 0.)
           (* division *)
           | Mast.Div, (e', _), (Literal (Float 1.), _) -> (e', d1)
           | Mast.Div, (Literal (Float 0.), _), (_, Float) -> from_literal (Mir.Float 0.)
