@@ -295,10 +295,6 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
-      (* Let's try using the cleaner M++ semantics:
-       *  1) assert there are no writes at least
-       *  2) clean state after M has been called (remove everything that is not an output)
-       *)
       let exec_order = m_program.execution_order in
       let inlined_program =
         list_map_opt
@@ -314,8 +310,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
           exec_order
       in
       let clean_state =
-        (* no arguments: we may want anything afterwards, so no cleaning *)
-        if real_args = [] then []
+        (* no cleaning or no arguments: we may want anything afterwards, so no cleaning *)
+        if (not !Cli.m_clean_calls) || real_args = [] then []
         else
           list_map_opt
             (fun var ->
