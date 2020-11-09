@@ -280,7 +280,14 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       let m_program =
         reset_and_add_outputs m_program
           (List.map
-             (function Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name | Local l -> (l, Pos.no_pos))
+             (function
+               | Mpp_ir.Mbased (s, _) ->
+                   (* Cli.debug_print "Mbased %a%a" Format_mir.format_variable s
+                    *   Format_mir.format_execution_number s.Mir.Variable.execution_number; *)
+                   s.Mir.Variable.name
+               | Local l ->
+                   (* Cli.debug_print "Local %s" l; *)
+                   (l, Pos.no_pos))
              real_args)
       in
       let m_program =
@@ -291,6 +298,14 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
+      (** Let's try using the cleaner M++ semantics:
+        *  1) assert there are no writes at least
+        *  2) clean state after M has been called (remove everything that is not an output)
+        *  3) a real dependency analysis to avoid unnecessary assignments (and then removal)
+        **)
+      (* oO, computing the new dep graph doesn't change anything... *)
+      (* let dep_graph = Mir_dependency_graph.create_dependency_graph m_program.program in
+       * let exec_order = Mir_dependency_graph.get_execution_order dep_graph in *)
       let exec_order = m_program.execution_order in
       let inlined_program =
         list_map_opt
@@ -298,15 +313,45 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             try
               let vdef =
                 Mir.VariableMap.find var m_program.program.program_vars
-                (* should be a verification condition *)
               in
               match vdef.var_definition with
               | InputVar -> None
-              | _ -> Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
+              | _ ->
+                  (* variables used in the context should not be reassigned *)
+                  assert (
+                    not
+                    @@ Mir.VariableMap.exists
+                         (fun var' _ -> Mir.Variable.compare var' var = 0)
+                         ctx.variables_used_as_inputs );
+                  Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
             with Not_found -> None)
           exec_order
       in
-      (ctx, inlined_program)
+      let clean_state =
+        (* no arguments: we may want anything afterwards, so no cleaning *)
+        if real_args = [] then [] else
+        list_map_opt
+          (fun var ->
+            try
+              let vdef = Mir.VariableMap.find var m_program.program.program_vars in
+              match (vdef.var_definition, vdef.var_io) with
+              | InputVar, _ -> None
+              | _, Regular ->
+                  let pos = var.Mir.Variable.execution_number.pos in
+                  Some
+                    ( Bir.SAssign
+                        ( var,
+                          {
+                            var_definition = SimpleVar (Mir.Literal Undefined, pos);
+                            var_typ = vdef.var_typ;
+                            var_io = vdef.var_io;
+                          } ),
+                      pos )
+              | _ -> None
+            with Not_found -> None)
+          exec_order
+      in
+      (ctx, inlined_program @ clean_state)
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
       let ctx, partition_pre, partition_post =
