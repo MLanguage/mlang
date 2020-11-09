@@ -71,6 +71,12 @@ test: build
 tests: build
 	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
+test_python_backend:
+	$(MAKE) -C examples/python/backend_tests all_tests
+
+test_c_backend:
+	$(MAKE) -C examples/c/backend_tests run_tests
+
 quick_test:
 	$(MLANG) --backend interpreter --function_spec m_specs/complex_case_with_ins_outs_2018.m_spec $(SOURCE_FILES)
 
