@@ -191,7 +191,9 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         match StringMap.find_opt l ctx.new_variables with
         | None ->
             let new_l =
-              Mir.Variable.new_var (l, pos) None ("", pos)
+              Mir.Variable.new_var
+                ("mpp_" ^ l, pos)
+                None ("", pos)
                 (Mast_to_mvg.dummy_exec_number pos)
                 ~attributes:[] ~is_income:false ~is_table:None
             in
@@ -280,11 +282,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       let m_program =
         reset_and_add_outputs m_program
           (List.map
-             (function
-               | Mpp_ir.Mbased (s, _) ->
-                   s.Mir.Variable.name
-               | Local l ->
-                   (l, Pos.no_pos))
+             (function Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name | Local l -> (l, Pos.no_pos))
              real_args)
       in
       let m_program =
@@ -295,18 +293,16 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
         }
       in
-      (** Let's try using the cleaner M++ semantics:
-        *  1) assert there are no writes at least
-        *  2) clean state after M has been called (remove everything that is not an output)
-        *)
+      (* Let's try using the cleaner M++ semantics:
+       *  1) assert there are no writes at least
+       *  2) clean state after M has been called (remove everything that is not an output)
+       *)
       let exec_order = m_program.execution_order in
       let inlined_program =
         list_map_opt
           (fun var ->
             try
-              let vdef =
-                Mir.VariableMap.find var m_program.program.program_vars
-              in
+              let vdef = Mir.VariableMap.find var m_program.program.program_vars in
               match vdef.var_definition with
               | InputVar -> None
               | _ ->
@@ -322,27 +318,28 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       in
       let clean_state =
         (* no arguments: we may want anything afterwards, so no cleaning *)
-        if real_args = [] then [] else
-        list_map_opt
-          (fun var ->
-            try
-              let vdef = Mir.VariableMap.find var m_program.program.program_vars in
-              match (vdef.var_definition, vdef.var_io) with
-              | InputVar, _ -> None
-              | _, Regular ->
-                  let pos = var.Mir.Variable.execution_number.pos in
-                  Some
-                    ( Bir.SAssign
-                        ( var,
-                          {
-                            var_definition = SimpleVar (Mir.Literal Undefined, pos);
-                            var_typ = vdef.var_typ;
-                            var_io = vdef.var_io;
-                          } ),
-                      pos )
-              | _ -> None
-            with Not_found -> None)
-          exec_order
+        if real_args = [] then []
+        else
+          list_map_opt
+            (fun var ->
+              try
+                let vdef = Mir.VariableMap.find var m_program.program.program_vars in
+                match (vdef.var_definition, vdef.var_io) with
+                | InputVar, _ -> None
+                | _, Regular ->
+                    let pos = var.Mir.Variable.execution_number.pos in
+                    Some
+                      ( Bir.SAssign
+                          ( var,
+                            {
+                              var_definition = SimpleVar (Mir.Literal Undefined, pos);
+                              var_typ = vdef.var_typ;
+                              var_io = vdef.var_io;
+                            } ),
+                        pos )
+                | _ -> None
+              with Not_found -> None)
+            exec_order
       in
       Cli.var_info_print "|clean_state| += %d" (List.length clean_state);
       (ctx, inlined_program @ clean_state)
