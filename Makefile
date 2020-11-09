@@ -7,7 +7,7 @@ SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/
 
-SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m" ! -name 'tgvB.m')
 
 ifeq ($(OPTIMIZE), 1)
     OPTIMIZE_FLAG=-O
