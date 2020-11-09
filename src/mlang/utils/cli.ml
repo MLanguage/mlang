@@ -52,6 +52,10 @@ let optimize =
   let doc = "Applies dead code removal and partial evaluation to the generated code" in
   Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
 
+let optimize_unsafe_float =
+  let doc = "Activate unsafe floating point optimizations (such as x * 0 ~> 0)" in
+  Arg.(value & flag & info [ "fast-math" ] ~doc)
+
 let backend =
   Arg.(
     value
@@ -129,7 +133,7 @@ let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
-    $ optimize $ code_coverage $ precision $ test_error_margin)
+    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin)
 
 let info =
   let doc =
@@ -201,9 +205,12 @@ let display_time = ref false
 (** Output file *)
 let output_file = ref ""
 
+(* Activate unsafe floating point optimizations *)
+let optimize_unsafe_float = ref false
+
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
-    (output_file_ : string option) =
+    (output_file_ : string option) (optimize_unsafe_float_ : bool) =
   source_files := files_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
@@ -211,6 +218,7 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;
+  optimize_unsafe_float := optimize_unsafe_float_;
   match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)

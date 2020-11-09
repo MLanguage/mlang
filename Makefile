@@ -10,7 +10,7 @@ SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
 SOURCE_FILES?=$(SOURCE_DIR_2018)
 
 ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O
+    OPTIMIZE_FLAG=-O --fast-math
 else
     OPTIMIZE_FLAG=
 endif
