@@ -309,11 +309,6 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               | InputVar -> None
               | _ ->
                   (* variables used in the context should not be reassigned *)
-                  assert (
-                    not
-                    @@ Mir.VariableMap.exists
-                         (fun var' _ -> Mir.Variable.compare var' var = 0)
-                         ctx.variables_used_as_inputs );
                   Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
             with Not_found -> None)
           exec_order
