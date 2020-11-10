@@ -9,7 +9,7 @@ compute_benefits():
     partition with var_is_taxbenefit:
       V_INDTEO = 1
       V_CALCUL_NAPS = 1
-      evaluate_program(NAPSANSPENA, IAD11, INE, IRE, PREM8_11)
+      NAPSANSPENA, IAD11, INE, IRE, PREM8_11 <- call_m()
       V_CALCUL_NAPS = 0
       iad11 = cast(IAD11)
       ire = cast(IRE)
@@ -42,14 +42,14 @@ compute_double_liquidation3(outputs):
   8ZG = v_8ZG
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  evaluate_program(outputs)
+  outputs <- call_m()
 
 compute_double_liquidation_exit_taxe(outputs):
   annee = 2018 # FIXME
   if present(PVIMPOS) or present(CODRWB):
     FLAG_EXIT = 1
     FLAG_3WBNEG = 0
-    compute_double_liquidation3(NAPTIR, IHAUTREVT, ID11, RASTXFOYER)
+    NAPTIR, IHAUTREVT, ID11, RASTXFOYER <- compute_double_liquidation3()
     if present(NAPTIR):
       if NAPTIR < 0:
         FLAG_3WBNEG = 1
@@ -62,7 +62,7 @@ compute_double_liquidation_exit_taxe(outputs):
   if present(PVSURSI) or present(CODRWA):
     FLAG_3WANEG = 0
     FLAG_EXIT = 2
-    compute_double_liquidation3(NAPTIR, IHAUTREVT, ID11)
+    NAPTIR, IHAUTREVT, ID11 <-  compute_double_liquidation3()
     if present(NAPTIR):
       if NAPTIR < 0:
         FLAG_3WANEG = 1
@@ -74,7 +74,7 @@ compute_double_liquidation_exit_taxe(outputs):
     FLAG_EXIT = 0
   if annee >= 2018:
     FLAG_BAREM = 1
-    compute_double_liquidation3(RASTXFOYER, RASTXDEC1, RASTXDEC2, INDTAZ, IITAZIR, IRTOTAL)
+    RASTXFOYER, RASTXDEC1, RASTXDEC2, INDTAZ, IITAZIR, IRTOTAL <- compute_double_liquidation3()
     if present(RASTXFOYER):
       V_BARTXFOYER = RASTXFOYER # I wonder if the conditional on the defined-ness is really useful
     if present(RASTXDEC1):
@@ -92,13 +92,13 @@ compute_double_liquidation_exit_taxe(outputs):
     if present(IRTOTAL):
       V_BARIRTOTAL = IRTOTAL
     FLAG_BAREM = 0
-  compute_double_liquidation3(outputs)
+    outputs <- compute_double_liquidation3()
 
 compute_double_liquidation_pvro():
   V_IND_TRAIT = 4
   if present(COD3WG):
    FLAG_PVRO = 1
-   compute_double_liquidation_exit_taxe(IAD11)
+   IAD11 <- compute_double_liquidation_exit_taxe()
    if present(IAD11):
      V_IPVRO = IAD11
   FLAG_PVRO = 0

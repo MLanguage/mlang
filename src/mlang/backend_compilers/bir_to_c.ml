@@ -13,10 +13,6 @@
 
 open Mir
 
-let m_value_prelude : string = "#include \"m_value.c\""
-
-let m_value_prelude_header : string = "#include \"m_value.h\""
-
 let none_value = "m_undefined"
 
 let generate_comp_op (op : Mast.comp_op) : string =
@@ -40,103 +36,122 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "m_not" | Mast.Minus -> "m_neg"
 
-let generate_variable fmt (var : Variable.t) : unit =
-  let v = match var.alias with Some v -> v ^ "_alias" | None -> Pos.unmark var.Variable.name in
-  let v = String.lowercase_ascii v in
-  let v =
-    if
-      same_execution_number var.Variable.execution_number
-        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
-    then v
-    else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
-        var.Variable.execution_number.Mir.seq_number
+type offset = GetValue of int | PassPointer | None
+
+let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
+    (fmt : Format.formatter) (var : Variable.t) : unit =
+  let var_index =
+    match Mir.VariableMap.find_opt var var_indexes with
+    | Some i -> i
+    | None ->
+        Errors.raise_error
+          (Format.asprintf "Variable %s not found in TGV" (Pos.unmark var.Mir.Variable.name))
   in
-  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v else Format.fprintf fmt "%s" v
+  match offset with
+  | PassPointer ->
+      Format.fprintf fmt "(TGV + %d/*%s*/)" var_index (Pos.unmark var.Mir.Variable.name)
+  | _ ->
+      Format.fprintf fmt "TGV[%d/*%s*/%s]" var_index
+        (Pos.unmark var.Mir.Variable.name)
+        ( match offset with
+        | None -> ""
+        | GetValue offset -> " + " ^ string_of_int offset
+        | PassPointer -> assert false )
 
 let generate_raw_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
 let generate_name (v : Variable.t) : string = "v_" ^ generate_raw_name v
 
-let rec generate_c_expr (e : expression Pos.marked) :
+let rec generate_c_expr (e : expression Pos.marked) (var_indexes : int Mir.VariableMap.t) :
     string * (LocalVariable.t * expression Pos.marked) list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
       (Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2, s1 @ s2)
   | Binop (op, e1, e2) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
       (Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2, s1 @ s2)
   | Unop (op, e) ->
-      let se, s = generate_c_expr e in
+      let se, s = generate_c_expr e var_indexes in
       (Format.asprintf "%s(%s)" (generate_unop op) se, s)
   | Index (var, e) ->
-      let se, s = generate_c_expr e in
+      let se, s = generate_c_expr e var_indexes in
       let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
-      (Format.asprintf "m_array_index(%a, %s, %d)" generate_variable (Pos.unmark var) se size, s)
+      ( Format.asprintf "m_array_index(%a, %s, %d)"
+          (generate_variable var_indexes PassPointer)
+          (Pos.unmark var) se size,
+        s )
   | Conditional (e1, e2, e3) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
-      let se3, s3 = generate_c_expr e3 in
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
+      let se3, s3 = generate_c_expr e3 var_indexes in
       (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg in
+      let se, s = generate_c_expr arg var_indexes in
       (Format.asprintf "m_present(%s)" se, s)
   | FunctionCall (NullFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg in
+      let se, s = generate_c_expr arg var_indexes in
       (Format.asprintf "m_null(%s)" se, s)
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg in
+      let se, s = generate_c_expr arg var_indexes in
       (Format.asprintf "m_round(%s)" se, s)
   | FunctionCall (InfFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg in
+      let se, s = generate_c_expr arg var_indexes in
       (Format.asprintf "m_floor(%s)" se, s)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
       (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
       (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
-  | FunctionCall (Multimax, [ e1; e2 ]) ->
-      let se1, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
-      (Format.asprintf "m_multimax(%s, %s)" se1 se2, s1 @ s2)
+  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+      let se1, s1 = generate_c_expr e1 var_indexes in
+      (Format.asprintf "m_multimax(%s, %a)" se1 (generate_variable var_indexes PassPointer) v2, s1)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "m_literal(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (Format.asprintf "%a" generate_variable var, [])
+  | Var var -> (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
   | LocalVar lvar -> (Format.asprintf "v_%d" lvar.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
-      let _, s1 = generate_c_expr e1 in
-      let se2, s2 = generate_c_expr e2 in
+      let _, s1 = generate_c_expr e1 var_indexes in
+      let se2, s2 = generate_c_expr e2 var_indexes in
       (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2))
 
-let format_local_vars_defs fmt (defs : (LocalVariable.t * expression Pos.marked) list) =
+let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.formatter)
+    (defs : (LocalVariable.t * expression Pos.marked) list) =
   List.iter
     (fun (lvar, e) ->
-      let se, _ = generate_c_expr e in
+      let se, _ = generate_c_expr e var_indexes in
       Format.fprintf fmt "v_%d = %s;@\n" lvar.LocalVariable.id se)
     defs
 
-let generate_var_def var data (oc : Format.formatter) : unit =
+let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
+    (data : Mir.variable_data) (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      let se, defs = generate_c_expr e in
-      Format.fprintf oc "%a%a = %s;@\n" format_local_vars_defs defs generate_variable var se
+      let se, defs = generate_c_expr e var_indexes in
+      Format.fprintf oc "%a%a = %s;@\n"
+        (format_local_vars_defs var_indexes)
+        defs
+        (generate_variable var_indexes None)
+        var se
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a"
         (fun fmt ->
           IndexMap.iter (fun i v ->
-              let sv, defs = generate_c_expr v in
-              Format.fprintf fmt "%a%a[%d] = %s;@\n" format_local_vars_defs defs generate_variable
-                var i sv))
+              let sv, defs = generate_c_expr v var_indexes in
+              Format.fprintf fmt "%a%a = %s;@\n"
+                (format_local_vars_defs var_indexes)
+                defs
+                (generate_variable var_indexes (GetValue i))
+                var sv))
         es
   | TableVar (_size, IndexGeneric e) ->
       (* Format.asprintf "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\ @[<h
@@ -145,20 +160,21 @@ let generate_var_def var data (oc : Format.formatter) : unit =
         (Pos.get_position e)
   | InputVar -> assert false
 
-let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
-  let scond, defs = generate_c_expr cond.cond_expr in
+let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
+    (oc : Format.formatter) =
+  let scond, defs = generate_c_expr cond.cond_expr var_indexes in
   let percent = Re.Pcre.regexp "%" in
   Format.fprintf oc
     "%acond = %s;@\n\
      if (m_is_defined_true(cond)) {@\n\
     \    printf(\"Error triggered: %a\\n\");@\n\
     \    {@\n\
-    \        m_output out = m_empty_output();@\n\
-    \        out.is_error = true;@\n\
-    \        return out;@\n\
+    \        output->is_error = true;@\n\
+    \        return -1;@\n\
     \    }@\n\
      }@\n"
-    format_local_vars_defs defs scond
+    (format_local_vars_defs var_indexes)
+    defs scond
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
        (fun fmt err ->
@@ -169,9 +185,10 @@ let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
 
 let fresh_cond_counter = ref 0
 
-let rec generate_stmt program oc stmt =
+let rec generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (stmt : Bir.stmt) =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
+  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -183,7 +200,7 @@ let rec generate_stmt program oc stmt =
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      let scond, defs = generate_c_expr (Pos.same_pos_as cond stmt) in
+      let scond, defs = generate_c_expr (Pos.same_pos_as cond stmt) var_indexes in
       Format.fprintf oc
         "%am_value %s = %s;@\n\
          if (m_is_defined_true(%s)) {@\n\
@@ -192,36 +209,60 @@ let rec generate_stmt program oc stmt =
          if (m_is_defined_false(%s)) {@\n\
          @[<h 4>    %a@]@\n\n\
          };@\n"
-        format_local_vars_defs defs cond_name scond cond_name (generate_stmts program) tt cond_name
-        (generate_stmts program) ff
-  | SVerif v -> generate_var_cond v oc
+        (format_local_vars_defs var_indexes)
+        defs cond_name scond cond_name
+        (generate_stmts program var_indexes)
+        tt cond_name
+        (generate_stmts program var_indexes)
+        ff
+  | SVerif v -> generate_var_cond var_indexes v oc
 
-and generate_stmts (program : Bir.program) oc stmts =
-  Format.pp_print_list (generate_stmt program) oc stmts
+and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (stmts : Bir.stmt list) =
+  Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
 let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "m_output m_extracted(m_input input)%s" (if add_semicolon then ";" else "")
+  Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
+    (if add_semicolon then ";" else "")
 
-let generate_main_function_signature_and_var_decls (p : Bir.program) (oc : Format.formatter)
+let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
+    int Mir.VariableMap.t * int =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  let assigned_variables = List.map fst (Mir.VariableMap.bindings (Bir.get_assigned_variables p)) in
+  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
+  let all_relevant_variables =
+    List.fold_left
+      (fun acc var -> Mir.VariableMap.add var () acc)
+      Mir.VariableMap.empty
+      (input_vars @ assigned_variables @ output_vars)
+  in
+  let counter = ref 0 in
+  let var_indexes =
+    VariableMap.mapi
+      (fun var _ ->
+        let id = !counter in
+        let size = match var.Mir.Variable.is_table with None -> 1 | Some size -> size in
+        counter := !counter + size;
+        id)
+      all_relevant_variables
+  in
+  (var_indexes, !counter)
+
+let generate_main_function_signature_and_var_decls (p : Bir.program)
+    (var_indexes : int Mir.VariableMap.t) (var_table_size : int) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   Format.fprintf oc "%a {@\n@[<h 4>    @\n" generate_main_function_signature false;
-  Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
+  Format.fprintf oc "// First we initialize the table of all the variables used in the program@\n";
+  Format.fprintf oc "m_value *TGV = malloc(%d * sizeof(m_value));@\n@\n" var_table_size;
+  Format.fprintf oc "// Then we extract the input variables from the dictionnary:@\n%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "m_value %a = input.%s;" generate_variable var (generate_name var)))
+         Format.fprintf fmt "%a = input->%s;"
+           (generate_variable var_indexes None)
+           var (generate_name var)))
     input_vars;
-  let assigned_variables = Bir.get_assigned_variables p in
-  Format.fprintf oc "%a@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, ()) ->
-         match var.Mir.Variable.is_table with
-         | None -> Format.fprintf fmt "m_value %a;" generate_variable var
-         | Some size -> Format.fprintf fmt "m_value %a[%d];" generate_variable var size))
-    (Mir.VariableMap.bindings
-       (Mir.VariableMap.filter (fun var _ -> not (List.mem var input_vars)) assigned_variables));
   Format.fprintf oc "%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -229,18 +270,22 @@ let generate_main_function_signature_and_var_decls (p : Bir.program) (oc : Forma
     (Mir.LocalVariableMap.bindings (Bir.get_local_variables p));
   Format.fprintf oc "m_value cond;@\n@\n"
 
-let generate_return oc (function_spec : Bir_interface.bir_function) =
+let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc "return (struct m_output){@\n@[<h 4>    %a@]@\n};@\n@]@\n}"
+  Format.fprintf oc "%a@\n@\nfree(TGV);@\noutput->is_error = false;@\nreturn 0;@]@\n}"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%s = %a," (generate_name var) generate_variable var))
+       (fun fmt var ->
+         Format.fprintf fmt "output->%s = %a;" (generate_name var)
+           (generate_variable var_indexes None)
+           var))
     returned_variables
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
   Format.fprintf oc "#include <stdio.h>\n";
-  Format.fprintf oc "%s\n\n" m_value_prelude_header
+  Format.fprintf oc "#include <m_value.h>\n\n"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "m_input m_empty_input()%s" (if add_semicolon then ";\n\n" else "")
@@ -420,9 +465,9 @@ let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.
     output_vars
 
 let generate_implem_header oc header_filename =
-  Format.fprintf oc
-    "// File generated by the Mlang compiler\n\n#include <string.h>\n\n#include \"%s\"\n\n"
-    header_filename
+  Format.fprintf oc "// File generated by the Mlang compiler\n\n";
+  Format.fprintf oc "#include <string.h>\n";
+  Format.fprintf oc "#include \"%s\"\n\n" header_filename
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -431,6 +476,7 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
       (Format.asprintf "Output file should have a .c extension (currently %s)" filename);
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
+  let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
@@ -449,6 +495,8 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
     function_spec generate_get_output_index_func function_spec
     generate_get_output_name_from_index_func function_spec generate_get_output_num_func
     function_spec generate_empty_output_func function_spec
-    (generate_main_function_signature_and_var_decls program)
-    function_spec (generate_stmts program) program.statements generate_return function_spec;
+    (generate_main_function_signature_and_var_decls program var_indexes var_table_size)
+    function_spec
+    (generate_stmts program var_indexes)
+    program.statements (generate_return var_indexes) function_spec;
   close_out _oc

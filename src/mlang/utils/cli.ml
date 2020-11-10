@@ -52,6 +52,10 @@ let optimize =
   let doc = "Applies dead code removal and partial evaluation to the generated code" in
   Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
 
+let optimize_unsafe_float =
+  let doc = "Activate unsafe floating point optimizations (such as x * 0 ~> 0)" in
+  Arg.(value & flag & info [ "fast-math" ] ~doc)
+
 let backend =
   Arg.(
     value
@@ -113,8 +117,10 @@ let precision =
     & opt (some string) (Some "double")
     & info [ "precision"; "p" ] ~docv:"PRECISION"
         ~doc:
-          "Precision of the interpreter: double, mpfr (precision 1024 bits), fixed<n> (where n > 0 \
-           is the fixpoint precision). Default is double")
+          "Precision of the interpreter: double, mpfr<n> (where n > 0 it the bit size of the \
+           multi-precision floats), fixed<n> (where n > 0 is the fixpoint precision), interval \
+           (64-bits IEEE754 floats, with up and down rounding mode), mpq (multi-precision \
+           rationals) . Default is double")
 
 let test_error_margin =
   Arg.(
@@ -123,11 +129,20 @@ let test_error_margin =
     & info [ "test_error_margin" ] ~docv:"ERROR_MARGIN"
         ~doc:"Margin of error tolerated when executing tests, as a float. Default 0.")
 
+let m_clean_calls =
+  Arg.(
+    value & flag
+    & info [ "clean_between_m_calls" ]
+        ~doc:
+          "Clean the value of computed variables between two m calls (to check that there is no \
+           hidden state kept between two calls)")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
-    $ optimize $ code_coverage $ precision $ test_error_margin)
+    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin
+    $ m_clean_calls)
 
 let info =
   let doc =
@@ -199,9 +214,15 @@ let display_time = ref false
 (** Output file *)
 let output_file = ref ""
 
+(* Activate unsafe floating point optimizations *)
+let optimize_unsafe_float = ref false
+
+(* Clean regular variables between M calls *)
+let m_clean_calls = ref false
+
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
-    (output_file_ : string option) =
+    (output_file_ : string option) (optimize_unsafe_float_ : bool) (m_clean_calls_ : bool) =
   source_files := files_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
@@ -209,6 +230,8 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;
+  optimize_unsafe_float := optimize_unsafe_float_;
+  m_clean_calls := m_clean_calls_;
   match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)
@@ -318,9 +341,10 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let timer () =
     while true do
       if !stop then Thread.exit ();
-      clock_marker (!ticks / step_ticks);
       ticks := !ticks + 1;
+      clock_marker (!ticks / step_ticks);
       Format.printf "%s" !msg;
+      flush_all ();
       flush_all ();
       ANSITerminal.erase ANSITerminal.Below;
       ANSITerminal.move_bol ();

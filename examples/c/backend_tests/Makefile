@@ -34,7 +34,7 @@ tests.m_spec: gen_m_spec.py
 # Generating the C code
 ##################################################
 
-ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
+ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES) FORCE
 	$(MLANG) \
 		--backend c --output $@ \
 		--function_spec $< \
@@ -75,7 +75,6 @@ test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(C_COMPILER) -fPIE -lm -o $@ $^
 
 run_tests: test_harness.exe FORCE
-	ulimit -s 65536; \
 	./$< $(TESTS_DIR)
 
 ##################################################
@@ -98,18 +97,17 @@ endif
 
 # Usage: NO_JOB=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
-	ulimit -s 65536; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
-FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash")
+FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
 
 sanitize_crash_names:
 	./sanitize_crash_names.sh
 
 %.m_test: %.m_crash FORCE
-	-stdbuf -oL bash -c "ulimit -s 65536;./fuzz_harness.exe $< > $@"
+	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
 
 transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
 

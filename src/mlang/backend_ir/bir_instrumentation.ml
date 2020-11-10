@@ -33,8 +33,8 @@ let code_coverage_init () : unit =
         Mir.VariableMap.update var
           (fun old_defs ->
             match old_defs with
-            | None -> Some (CodeLocationMap.singleton code_loc literal)
-            | Some old_defs -> Some (CodeLocationMap.add code_loc literal old_defs))
+            | None -> Some (CodeLocationMap.singleton code_loc (literal ()))
+            | Some old_defs -> Some (CodeLocationMap.add code_loc (literal ()) old_defs))
           !code_coverage_acc
 
 let code_coverage_result () : code_coverage_result = !code_coverage_acc

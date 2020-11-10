@@ -46,7 +46,8 @@ int main(int argc, char *argv[])
     }
     // Then we call the program
     m_input input_for_m = m_input_from_array(input_array_for_m);
-    m_output output = m_extracted(input_for_m);
+    m_output output;
+    m_extracted(&output, &input_for_m);
     int num_outputs = m_num_outputs();
     m_value output_array_for_m[num_outputs];
     m_output_to_array(output_array_for_m, output);

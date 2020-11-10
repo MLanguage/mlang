@@ -19,9 +19,10 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     (dep_graph_file : string) (print_cycles : bool) (backend : string option)
     (function_spec : string option) (mpp_file : string) (output : string option)
     (run_all_tests : string option) (run_test : string option) (mpp_function : string)
-    (optimize : bool) (code_coverage : bool) (precision : string option)
-    (test_error_margin : float option) =
-  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file print_cycles output;
+    (optimize : bool) (optimize_unsafe_float : bool) (code_coverage : bool)
+    (precision : string option) (test_error_margin : float option) (m_clean_calls : bool) =
+  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file print_cycles output
+    optimize_unsafe_float m_clean_calls;
   try
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in
@@ -71,16 +72,21 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     let value_sort =
       let precision = Option.get precision in
       if precision = "double" then Bir_interpreter.RegularFloat
-      else if precision = "mpfr" then begin
-        Mpfr.set_default_prec 1024;
-        Bir_interpreter.MPFR
-      end
       else
-        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:bigint_regex precision then
-          let fixpoint_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1 in
-          Bir_interpreter.BigInt (int_of_string fixpoint_prec)
-        else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
+        let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:mpfr_regex precision then
+          let mpfr_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1 in
+          Bir_interpreter.MPFR (int_of_string mpfr_prec)
+        else if precision = "interval" then Bir_interpreter.Interval
+        else
+          let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
+          if Re.Pcre.pmatch ~rex:bigint_regex precision then
+            let fixpoint_prec =
+              Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
+            in
+            Bir_interpreter.BigInt (int_of_string fixpoint_prec)
+          else if precision = "mpq" then Bir_interpreter.Rational
+          else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
     in
     if run_all_tests <> None then begin
       if code_coverage && optimize then
@@ -130,12 +136,10 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
           if String.lowercase_ascii backend = "interpreter" then begin
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let end_ctx =
-              Bir_interpreter.evaluate_program combined_program
-                (Bir_interpreter.update_ctx_with_inputs Bir_interpreter.empty_vanilla_ctx inputs)
-                0 value_sort
+            let print_output =
+              Bir_interpreter.evaluate_program function_spec combined_program inputs 0 value_sort
             in
-            Bir_interface.print_output function_spec end_ctx
+            print_output ()
           end
           else if String.lowercase_ascii backend = "python" then begin
             Cli.debug_print "Compiling the codebase to Python...";

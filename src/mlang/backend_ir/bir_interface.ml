@@ -165,13 +165,6 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Mir.VariableMap.t =
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
-let print_output (f : bir_function) (results : Bir_interpreter.vanilla_ctx) : unit =
-  Mir.VariableMap.iter
-    (fun var value ->
-      if Mir.VariableMap.mem var f.func_outputs then
-        Cli.result_print "%a" Bir_interpreter.format_var_literal_with_var (var, value))
-    results.vanilla_ctx_vars
-
 let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program * int =
   let const_input_stmts =
     Mir.VariableMap.fold
