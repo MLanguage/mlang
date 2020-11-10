@@ -101,7 +101,7 @@ launch_fuzz: fuzz_harness.exe
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
-FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash")
+FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
 
 sanitize_crash_names:
 	./sanitize_crash_names.sh

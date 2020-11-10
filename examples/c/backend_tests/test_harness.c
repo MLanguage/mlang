@@ -83,10 +83,10 @@ int main(int argc, char *argv[])
                     if (strcmp(line_buffer, "#CONTROLES-PRIMITIF") == 0)
                     {
                         state = 2;
-                        // Here we move to controlling the ouputs, so we
+                        // Here we move to controlling the outputs, so we
                         // have to run the computation!
                         input_for_m = m_input_from_array(input_array_for_m);
-                        output_for_m = m_extracted(input_for_m);
+                        m_extracted(&output_for_m, &input_for_m);
                         m_output_to_array(outputs_array_for_m, output_for_m);
                         break;
                     }

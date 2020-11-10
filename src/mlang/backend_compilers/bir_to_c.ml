@@ -169,9 +169,8 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
      if (m_is_defined_true(cond)) {@\n\
     \    printf(\"Error triggered: %a\\n\");@\n\
     \    {@\n\
-    \        m_output out = m_empty_output();@\n\
-    \        out.is_error = true;@\n\
-    \        return out;@\n\
+    \        output->is_error = true;@\n\
+    \        return -1;@\n\
     \    }@\n\
      }@\n"
     (format_local_vars_defs var_indexes)
@@ -223,7 +222,8 @@ and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
   Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
 let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "m_output m_extracted(m_input input)%s" (if add_semicolon then ";" else "")
+  Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
+    (if add_semicolon then ";" else "")
 
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
@@ -259,7 +259,7 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%a = input.%s;"
+         Format.fprintf fmt "%a = input->%s;"
            (generate_variable var_indexes None)
            var (generate_name var)))
     input_vars;
@@ -273,11 +273,13 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
 let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc "return (struct m_output){@\n@[<h 4>    %a@]@\n};@\n@]@\n}"
+  Format.fprintf oc "%a@\n@\nfree(TGV);@\noutput->is_error = false;@\nreturn 0;@]@\n}"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt ".%s = %a," (generate_name var) (generate_variable var_indexes None) var))
+         Format.fprintf fmt "output->%s = %a;" (generate_name var)
+           (generate_variable var_indexes None)
+           var))
     returned_variables
 
 let generate_header (oc : Format.formatter) () : unit =

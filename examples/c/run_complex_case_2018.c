@@ -15,7 +15,7 @@ int main()
     for (int i = 39000; i <= 40000; i++)
     {
         input.v_1AJ = m_literal(i);
-        output = m_extracted(input);
+        m_extracted(&output, &input);
     };
     printf("IAN: %.2f\n", output.v_IAN.value);
     printf("IINET: %.2f\n", output.v_IINET.value);
