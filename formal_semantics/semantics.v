@@ -48,7 +48,6 @@ Definition fmin f1 f2 :=
 Definition fmax f1 f2 :=
   if flt f1 f2 then f2 else f1.
 
-
 (* Similar to CompCert's implementation *)
 Definition ZofB64 (f: binary64): option Z :=
   match f with
@@ -339,7 +338,9 @@ Definition scalar_of_envvalue (e : envvalues) : option values :=
 (********************************)
 Fixpoint eval (Omega:environment) (e:expression) : option values :=
   match e with
+  (* D-VALUE *)
   | Value v => Some v
+  (* D-COND-{TRUE,FALSE,UNDEF} *)
   | If cond t f =>
     match eval Omega cond with
     | Some (Float c) =>
@@ -348,22 +349,26 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
       Some Undef
     | _ => None
     end
+  (* D-X *)
   | X =>
     match Omega "X"%string with
     | None => Some Undef
     | Some e => scalar_of_envvalue e
     end
+  (* D-VAR *)
   | Var v =>
     match Omega v with
     | None => Some Undef
     | Some e => scalar_of_envvalue e
     end
+  (* hidden in D-FUNC *)
   | UNeg e =>
     match eval Omega e with
     | Some (Float f) => Some (Float (fsub fone f))
     | Some Undef => Some Undef
     | _ => None
     end
+  (* D-FUNC *)
   | FunCall1 o arg1 =>
     match eval Omega arg1 with
     | Some v =>
@@ -380,6 +385,7 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
         )
     | _ => None
     end
+  (* D-FUNC *)
   | FunCall2 o arg1 arg2 =>
     let ee1 := eval Omega arg1 in
     let ee2 := eval Omega arg2 in
@@ -400,6 +406,7 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
          end)
     | _, _ => None
     end
+  (* D-INDEX-NEG, D-INDEX-UNDEF, D-INDEX-OUTSIDE, D-TAB-UNDEF, D-INDEX *)
   | TableAccess var index =>
     match eval Omega index with
     | Some (Float f) =>
@@ -428,24 +435,24 @@ Fixpoint eval (Omega:environment) (e:expression) : option values :=
 (* Typing jugement for expressions  *)
 (************************************)
 Inductive well_formed : type_environment -> expression -> Prop :=
-| WTFloat : forall Gamma f, well_formed Gamma (Value (Float f))
-| WTUndef : forall Gamma, well_formed Gamma (Value Undef)
-| WTVarUndef : forall Gamma x, Gamma(x) = None -> well_formed Gamma (Var x)
-| WTVar : forall Gamma x, Gamma(x) = Some TScalar -> well_formed Gamma (Var x)
-| WTIndexUndef : forall Gamma x e, Gamma(x) = None -> well_formed Gamma e -> well_formed Gamma (TableAccess x e)
-| WTIndex : forall Gamma tabvar index,
+| TFloat : forall Gamma f, well_formed Gamma (Value (Float f))
+| TUndef : forall Gamma, well_formed Gamma (Value Undef)
+| TVarUndef : forall Gamma x, Gamma(x) = None -> well_formed Gamma (Var x)
+| TVar : forall Gamma x, Gamma(x) = Some TScalar -> well_formed Gamma (Var x)
+| TIndexUndef : forall Gamma x e, Gamma(x) = None -> well_formed Gamma e -> well_formed Gamma (TableAccess x e)
+| TIndex : forall Gamma tabvar index,
     Gamma(tabvar) = Some TTable ->
     well_formed Gamma index ->
     well_formed Gamma (TableAccess tabvar index)
-| WTConditional : forall Gamma cond tr fa,
+| TConditional : forall Gamma cond tr fa,
     well_formed Gamma cond ->
     well_formed Gamma tr ->
     well_formed Gamma fa ->
     well_formed Gamma (If cond tr fa)
-| WTfunc1 : forall Gamma f arg,
+| Tfunc1 : forall Gamma f arg,
     well_formed Gamma arg ->
     well_formed Gamma (FunCall1 f arg)
-| WTfunc2 : forall Gamma f a1 a2,
+| Tfunc2 : forall Gamma f a1 a2,
     well_formed Gamma a1 ->
     well_formed Gamma a2 ->
     well_formed Gamma (FunCall2 f a1 a2).
@@ -537,11 +544,13 @@ Fixpoint exec (Omega:cmd_environment) (c:command) : option cmd_environment :=
   match Omega with
   | Some Omega =>
     match c with
+    (* D-ASSIGN *)
     | Assign x e =>
       match eval Omega e with
       | None => None
       | Some v => Some (Some (upd_map _ x (VScalar v) Omega))
       end
+    (* D-ASSIGN-TABLE *)
     | TableAssign x  tbl_size e =>
       match tbl_size with
       | N0 => None
@@ -551,6 +560,7 @@ Fixpoint exec (Omega:cmd_environment) (c:command) : option cmd_environment :=
         | None => None
         end
       end
+    (* D-ASSERT-OTHER, D-ASSERT-TRUE *)
     | Verif expr err =>
       match eval Omega expr with
       | Some (Float f) =>
@@ -559,6 +569,7 @@ Fixpoint exec (Omega:cmd_environment) (c:command) : option cmd_environment :=
       | _ => None
       end
     end
+  (* D-ERROR *)
   | None (* meaning error *) => Some None
   end.
 
@@ -568,6 +579,7 @@ Fixpoint exec (Omega:cmd_environment) (c:command) : option cmd_environment :=
 Fixpoint exec_program (Omega: cmd_environment) (p: program) : option cmd_environment :=
   match p with
   | nil => Some Omega
+  (* D-SEQ *)
   | c :: p' => match exec Omega c with
              | Some Omega => exec_program Omega p'
              | None => None
@@ -579,16 +591,16 @@ Fixpoint exec_program (Omega: cmd_environment) (p: program) : option cmd_environ
 (*********************************************)
 
 Inductive well_formed_cmd : type_environment -> command -> type_environment -> Prop :=
-| WTCAssign : forall Gamma var expr,
+| TCAssign : forall Gamma var expr,
     (Gamma var <> None -> Gamma var = Some TScalar) ->
     well_formed Gamma expr ->
     well_formed_cmd Gamma (Assign var expr) (upd_map _ var  TScalar Gamma)
-| WTCAssignTable : forall Gamma var tabsize expr,
+| TCAssignArray : forall Gamma var tabsize expr,
     tabsize <> N0 ->
     (Gamma var <> None -> Gamma var = Some TTable) ->
     well_formed (upd_map _ "X"%string TScalar Gamma) expr ->
     well_formed_cmd Gamma (TableAssign var tabsize expr) (upd_map _ var TTable Gamma)
-| WTCCond : forall Gamma cond err,
+| TCCond : forall Gamma cond err,
     well_formed Gamma cond ->
     well_formed_cmd Gamma (Verif cond err) Gamma.
 
