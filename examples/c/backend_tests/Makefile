@@ -115,6 +115,9 @@ clean_fuzz_findings:
 clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
 
+clean:
+	rm -f ir_tests.* ../m_value.o tests.m_spec *.exe *.tmp
+
 ##################################################
 # Building and running the KLEE harness
 ##################################################
