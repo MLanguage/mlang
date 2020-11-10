@@ -83,9 +83,8 @@ run_tests: test_harness.exe FORCE
 
 FUZZ_M_SPEC=tests
 
-fuzz_harness.exe: C_COMPILER=afl-clang
 fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
-	$(C_COMPILER) -fPIE -lm -o $@ $^
+	afl-$(C_COMPILER) -fPIE -lm -o $@ $^
 
 AFL_FUZZ=afl-fuzz
 
@@ -109,7 +108,7 @@ sanitize_crash_names:
 %.m_test: %.m_crash FORCE
 	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
 
-transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
 
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*
