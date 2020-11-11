@@ -25,7 +25,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 # Generating the tests.m_spec
 ##################################################
 
-TESTS_DIR?=../../../random_tests
+TESTS_DIR?=../../../tests/fuzzing/
 
 tests.m_spec: gen_m_spec.py 
 	python3.7 $< $(TESTS_DIR) $@ 
