@@ -25,7 +25,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 # Generating the tests.m_spec
 ##################################################
 
-TESTS_DIR?=../../../random_tests
+TESTS_DIR?=../../../tests/fuzzing/
 
 tests.m_spec: gen_m_spec.py 
 	python3.7 $< $(TESTS_DIR) $@ 
@@ -53,6 +53,7 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 ##################################################
 
 C_COMPILER?=clang
+CC=$(C_COMPILER)
 
 ifeq ($(C_COMPILER), clang)
     F_BRACKET_OPT=-fbracket-depth=2048
@@ -62,19 +63,20 @@ endif
 
 ir_%.o: export AFL_DONT_OPTIMIZE=1
 ir_%.o: ir_%.c
-	$(C_COMPILER) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
+	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
 %.o: %.c
-	$(C_COMPILER) -I ../ -O1 -c -o $@ $<
+	$(CC) -I ../ -O1 -c -o $@ $<
 
 ##################################################
 # Building and running the test harness
 ##################################################
 
 test_harness.exe: ir_tests.o test_harness.o ../m_value.o
-	$(C_COMPILER) -fPIE -lm -o $@ $^
+	$(CC) -fPIE -lm -o $@ $^
 
 run_tests: test_harness.exe FORCE
+	ulimit -s 65536; \
 	./$< $(TESTS_DIR)
 
 ##################################################
@@ -83,9 +85,9 @@ run_tests: test_harness.exe FORCE
 
 FUZZ_M_SPEC=tests
 
-fuzz_harness.exe: C_COMPILER=afl-clang
+fuzz_harness.exe: CC=afl-$(C_COMPILER)
 fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
-	$(C_COMPILER) -fPIE -lm -o $@ $^
+	$(CC) -fPIE -lm -o $@ $^
 
 AFL_FUZZ=afl-fuzz
 
@@ -97,6 +99,7 @@ endif
 
 # Usage: NO_JOB=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
+	ulimit -s 65536; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
@@ -109,12 +112,15 @@ sanitize_crash_names:
 %.m_test: %.m_crash FORCE
 	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
 
-transform_crashes_into_tests: sanitize_crash_names $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
 
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*
 clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
+
+clean:
+	rm -f ir_tests.* ../m_value.o tests.m_spec *.exe *.tmp
 
 ##################################################
 # Building and running the KLEE harness

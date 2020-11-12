@@ -1,5 +1,5 @@
 SOURCE_DIR_2018 ?= ../../../ir-calcul/sources2018m_6_7/
-TESTS_DIR ?= ../../../random_tests/
+TESTS_DIR ?= ../../../tests/fuzzing/
 
 SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
 MPP_FILE?=../../../mpp_specs/2018_6_7.mpp

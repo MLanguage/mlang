@@ -1,18 +1,19 @@
 #include "ir_tests.h"
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 
 int main(int argc, char *argv[])
 {
 
     if (argc != 2)
     {
-        printf("%d\n", argc);
-        return 1;
+        printf("Expected 1 argument, got %d\n", argc - 1);
+        return -1;
     }
 
     int num_inputs = m_num_inputs();
-    int size_per_value = (sizeof(char)) + sizeof(unsigned int);
+    int size_per_value = (sizeof(char)) + sizeof(uint16_t);
     long correct_string_size = size_per_value * num_inputs + 1;
 
     FILE *input_file = fopen(argv[1], "r");
@@ -20,8 +21,8 @@ int main(int argc, char *argv[])
     long fsize = ftell(input_file);
     if (fsize < correct_string_size)
     {
-        printf("Input file size: %ld (correct string size %ld)\n", fsize, correct_string_size);
-        return 2;
+        printf("Input file size %ld bytes but expected at least %ld\n", fsize, correct_string_size);
+        return -2;
     }
     rewind(input_file);
     char input_string[correct_string_size];
@@ -35,9 +36,10 @@ int main(int argc, char *argv[])
     {
         char *undefined = input_string + size_per_value * i;
         char *value = input_string + size_per_value * i + (sizeof(char));
-        bool undefined_v = ((unsigned int)*undefined > 32767) ? true : false;
-        // Values cannot have more than 10 digits
-        unsigned int value_v = (*((unsigned int *)value)) % 1000000;
+        bool undefined_v = ((uint16_t)*undefined > 32767) ? true : false;
+        // Values are seeded with a uint16_t, 
+        // corresponding to a value no bigger than 65536
+        uint16_t value_v = (*((uint16_t *)value));
         m_value input = (struct m_value){
             .undefined = undefined_v,
             .value = undefined_v ? 0 : (double)value_v,
@@ -52,9 +54,15 @@ int main(int argc, char *argv[])
     m_value output_array_for_m[num_outputs];
     m_output_to_array(output_array_for_m, output);
     // We don't want error cases or household whose revenue is astronomically high
-    if (output.is_error) //||  output_array_for_m[m_get_output_index("REVKIRE")].value > 10000000.)
+    bool keep_test_case = 
+        !output.is_error && // the test case should not be an error 
+        // output_array_for_m[m_get_output_index("REVKIRE")].value < 10000000.) && // the reference income should be low 
+        true
+    ;
+
+    if (!keep_test_case)
     {
-        return 3;
+        return -3;
     }
     else
     {

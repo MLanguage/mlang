@@ -38,10 +38,10 @@ let repl_debug = ref false
 
 module Make (N : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
-  let truncatef (x : N.t) : N.t = snd (N.modf N.(x +. N.of_float 0.000001))
+  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float 0.000001)
 
   (* Careful : rounding in M is done with this arbitrary behavior *)
-  let roundf (x : N.t) = snd (N.modf N.(x +. N.copysign (N.of_float 0.50005) x))
+  let roundf (x : N.t) = N.floor N.(x +. N.copysign (N.of_float 0.50005) x)
 
   type value = Number of N.t | Undefined
 

@@ -16,7 +16,7 @@ module type NumberInterface = sig
 
   val format_t : Format.formatter -> t -> unit
 
-  val modf : t -> t * t
+  val floor : t -> t
 
   val copysign : t -> t -> t
 
@@ -68,7 +68,7 @@ module RegularFloatNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%f" f
 
-  let modf x = modf x
+  let floor x = Float.floor x
 
   let copysign x y = copysign x y
 
@@ -113,12 +113,10 @@ module RegularFloatNumber : NumberInterface = struct
   let is_zero x = x = 0.
 end
 
-let modf_round (x : Mpfrf.t) (rounding : Mpfr.round) : Mpfrf.t * Mpfrf.t =
-  let x = Mpfrf.to_mpfr x in
-  let frac_part = Mpfr.init () in
-  let int_part = Mpfr.init () in
-  ignore (Mpfr.modf int_part frac_part x rounding);
-  (Mpfrf.of_mpfr frac_part, Mpfrf.of_mpfr int_part)
+let mpfr_float (x : Mpfrf.t) : Mpfrf.t =
+  let out = Mpfr.init () in
+  ignore (Mpfr.floor out x);
+  Mpfrf.of_mpfr out
 
 module MPFRNumber : NumberInterface = struct
   type t = Mpfrf.t
@@ -127,7 +125,7 @@ module MPFRNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
 
-  let modf x = modf_round x rounding
+  let floor (x : t) : t = mpfr_float x
 
   let copysign x y =
     match (Mpfrf.sgn x, Mpfrf.sgn y) with
@@ -183,10 +181,10 @@ module IntervalNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
 
-  let modf x =
-    let fd, id = modf_round x.down Down in
-    let fu, iu = modf_round x.up Up in
-    (v fd fu, v id iu)
+  let floor x =
+    let id = mpfr_float x.down in
+    let iu = mpfr_float x.up in
+    v id iu
 
   let copysign (x : t) (y : t) : t =
     let sgxn =
@@ -299,12 +297,10 @@ module RationalNumber : NumberInterface = struct
 
   let format_t fmt f = Mpqf.print fmt f
 
-  let modf x =
+  let floor x =
     let num = Mpqf.get_num x in
     let dem = Mpqf.get_den x in
-    let ipart = Mpqf.of_mpz (Mpzf.tdiv_q num dem) in
-    let fpart = Mpqf.sub x ipart in
-    (fpart, ipart)
+    Mpqf.of_mpz (Mpzf.tdiv_q num dem)
 
   let copysign x y =
     match (Mpqf.sgn x, Mpqf.sgn y) with
@@ -380,6 +376,8 @@ end) : NumberInterface = struct
     let int_part, frac_part = Mpzf.tdiv_qr x (precision_modulo ()) in
     let int_part = Mpzf.mul int_part (precision_modulo ()) in
     (frac_part, int_part)
+
+  let floor x = snd (modf x)
 
   let copysign x y =
     match (Mpzf.sgn x, Mpzf.sgn y) with

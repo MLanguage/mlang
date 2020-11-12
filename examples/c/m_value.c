@@ -258,9 +258,7 @@ m_value m_floor(m_value x)
     }
     else
     {
-        double ipart;
-        modf(x.value + 0.000001, &ipart);
-        return (struct m_value){.value = ipart, .undefined = false};
+        return (struct m_value){.value = floor(x.value + 0.000001), .undefined = false};
     }
 }
 
