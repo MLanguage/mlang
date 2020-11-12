@@ -76,6 +76,7 @@ test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
 run_tests: test_harness.exe FORCE
+	ulimit -s 65536; \
 	./$< $(TESTS_DIR)
 
 ##################################################
@@ -98,6 +99,7 @@ endif
 
 # Usage: NO_JOB=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
+	ulimit -s 65536; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
