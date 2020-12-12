@@ -245,7 +245,7 @@ m_value m_round(m_value x)
     else
     {
         double ipart;
-        modf(x.value + copysign(0.50005, x.value), &ipart);
+        modf(x.value + (x.value < 0 ? -0.50005 : 0.50005), &ipart);
         return (struct m_value){.value = ipart, .undefined = false};
     }
 }

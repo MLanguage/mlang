@@ -65,6 +65,9 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) (test_err
     Bir_interface.translate_cond program.idmap
       (List.map
          (fun (var, value, pos) ->
+           (* sometimes test outputs mention aliases so we have to catch thos two using the line
+              below*)
+           let var = Pos.unmark (find_var_of_name program.mir_program (var, pos)).Variable.name in
            (* we allow a difference of 0.000001 between the control value and the result *)
            let first_exp =
              ( Mast.Comparison

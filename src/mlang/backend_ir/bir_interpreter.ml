@@ -40,8 +40,9 @@ module Make (N : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
   let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float 0.000001)
 
-  (* Careful : rounding in M is done with this arbitrary behavior *)
-  let roundf (x : N.t) = N.floor N.(x +. N.copysign (N.of_float 0.50005) x)
+  (* Careful : rounding in M is done with this arbitrary behavior. We can't use copysign here
+     because [x < zero] is critical to have the correct behavior on -0 *)
+  let roundf (x : N.t) = N.floor N.(x +. N.of_float (if N.(x < zero ()) then -0.50005 else 0.50005))
 
   type value = Number of N.t | Undefined
 

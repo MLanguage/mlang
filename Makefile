@@ -41,7 +41,7 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
 
-TESTS_DIR?=tests/fuzzing/
+TESTS_DIR?=tests/2018/fuzzing/
 
 default: build
 
