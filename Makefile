@@ -6,6 +6,7 @@ SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/*.m
 SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/*.m
 SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
 SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
+SOURCE_DIR_2019=$(PWD)/ir-calcul/sources2019m_8_0/*.m
 
 SOURCE_FILES?=$(SOURCE_DIR_2018)
 
@@ -77,8 +78,10 @@ test_python_backend:
 test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
 
+M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2018.m_spec
+
 quick_test:
-	$(MLANG) --backend interpreter --function_spec m_specs/complex_case_with_ins_outs_2018.m_spec $(SOURCE_FILES)
+	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 ##################################################
 # Doc and examples
