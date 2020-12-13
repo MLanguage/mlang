@@ -1,6 +1,6 @@
 # The Mlang compiler
 
-[![CI](https://gitlab.inria.fr/verifisc/mlang/badges/master/pipeline.svg)](https://gitlab.inria.fr/verifisc/mlang/-/commits/master)
+[![CI](https://github.comMLanguage/mlang/workflows/CI/badge.svg)](https://github.com/MLanguage/mlang)
 
 The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable

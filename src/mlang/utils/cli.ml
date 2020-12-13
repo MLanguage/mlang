@@ -164,9 +164,9 @@ let info =
       `P "Raphael Monat <raphael.monat@lip6.fr>";
       `S Manpage.s_examples;
       `P "Typical usage:";
-      `Pre "mlang -a iliad -f query.m_spec -b interpreter ir-calcul/sources2017m_6_10/*.m";
+      `Pre "mlang -a iliad -f query.m_spec -b interpreter ir-calcul/sources2018m_6_3/*.m";
       `S Manpage.s_bugs;
-      `P "Please file bug reports at https://gitlab.inria.fr/verifisc/mlang/issues";
+      `P "Please file bug reports at https://github.com/MLanguage/mlang/issues";
     ]
   in
   let exits =
