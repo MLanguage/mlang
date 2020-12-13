@@ -393,7 +393,10 @@ let create_combined_program (m_program : Mir_interface.full_program)
   try
     let mpp_program = List.rev mpp_program in
     let decl_to_extract =
-      List.find (fun decl -> decl.Mpp_ir.name = mpp_function_to_extract) mpp_program
+      try List.find (fun decl -> decl.Mpp_ir.name = mpp_function_to_extract) mpp_program
+      with Not_found ->
+        Errors.raise_error
+          (Format.asprintf "M++ function %s not found in M++ file!" mpp_function_to_extract)
     in
     let stmts =
       snd @@ translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx

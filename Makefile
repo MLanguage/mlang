@@ -8,7 +8,18 @@ SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
 SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
 SOURCE_DIR_2019=$(PWD)/ir-calcul/sources2019m_8_0/*.m
 
-SOURCE_FILES?=$(SOURCE_DIR_2018)
+YEAR?=2018
+
+ifeq ($(YEAR), 2018)
+	SOURCE_FILES?=$(SOURCE_DIR_2018)
+	MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
+	TESTS_DIR?=tests/2018/fuzzing/
+else ifeq ($(YEAR), 2019)
+	SOURCE_FILES?=$(SOURCE_DIR_2019)
+	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
+else
+    $(error Unsupported year: $(YEAR))
+endif
 
 ifeq ($(OPTIMIZE), 1)
     OPTIMIZE_FLAG=-O --fast-math
@@ -24,8 +35,6 @@ endif
 
 MLANG_BIN=dune exec --no-print-director src/main.exe --
 
-MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
-
 MPP_FUNCTION?=compute_double_liquidation_pvro
 
 PRECISION?=double
@@ -40,8 +49,6 @@ MLANG_DEFAULT_OPTS=\
 	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
-
-TESTS_DIR?=tests/2018/fuzzing/
 
 default: build
 

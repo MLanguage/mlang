@@ -69,7 +69,12 @@ Mlang's run are configured by a specification file (`.m_spec`), see the
 Mlang also need an M++ file to know how to run the "liquidations multiples"
 mechanism that is necessary to compute the income tax correctly. The file 
 `mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
-for version of the M sources published in `ir-calcul`.
+for version of the 2018 M sources published in `ir-calcul`.
+
+If you want to test the output of the interpreter on a situation you made up,
+edit your own `.m_spec` and run it with the command:
+
+    YEAR=<2018 or 2019> M_SPEC_FILE=<path to .m_spec> make quick_test
 
 For how to produce ready-to-use income tax computation
 source files for your application, see the

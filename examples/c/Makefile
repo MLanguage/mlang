@@ -6,8 +6,21 @@ SOURCE_DIR_2015=../../ir-calcul/sources2015m_4_6/
 SOURCE_DIR_2016=../../ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=../../ir-calcul/sources2017m_6_10/
 SOURCE_DIR_2018=../../ir-calcul/sources2018m_6_7/
+SOURCE_DIR_2019=../../ir-calcul/sources2019m_8_0/
 
-SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
+YEAR?=2018
+
+ifeq ($(YEAR), 2018)
+	SOURCE_DIR?=$(SOURCE_DIR_2018)
+	MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
+else ifeq ($(YEAR), 2019)
+	SOURCE_DIR?=$(SOURCE_DIR_2019)
+	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
+else
+    $(error Unsupported year: $(YEAR))
+endif
+
+SOURCE_FILES?=$(shell find $(SOURCE_DIR) -name "*.m")
 
 OPTIMIZE_FLAG=-O
 
@@ -15,7 +28,7 @@ MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
-	--mpp_file=../../mpp_specs/2018_6_7.mpp \
+	--mpp_file=$(MPP_FILE) \
 	--mpp_function=compute_double_liquidation_pvro
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
