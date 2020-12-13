@@ -42,7 +42,8 @@ module Make (N : Bir_number.NumberInterface) = struct
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use copysign here
      because [x < zero] is critical to have the correct behavior on -0 *)
-  let roundf (x : N.t) = N.floor N.(x +. N.of_float (if N.(x < zero ()) then -0.50005 else 0.50005))
+  let roundf (x : N.t) =
+    N.of_int (N.to_int N.(x +. N.of_float (if N.(x < zero ()) then -0.50005 else 0.50005)))
 
   type value = Number of N.t | Undefined
 
@@ -283,9 +284,9 @@ module Make (N : Bir_number.NumberInterface) = struct
     let idx =
       match index with Undefined -> assert false (* should not happen *) | Number f -> roundf f
     in
-    if N.(idx >=. N.of_int size) then Undefined
+    if N.(idx >=. N.of_int (Int64.of_int size)) then Undefined
     else if N.(idx <. N.zero ()) then Number (N.zero ())
-    else values.(N.to_int idx)
+    else values.(Int64.to_int (N.to_int idx))
 
   let eval_debug = ref false
 
@@ -376,7 +377,7 @@ module Make (N : Bir_number.NumberInterface) = struct
         | GenericTableIndex -> (
             match ctx.ctx_generic_index with
             | None -> assert false (* should not happen *)
-            | Some i -> Number (N.of_int i) )
+            | Some i -> Number (N.of_int (Int64.of_int i)) )
         | Error ->
             raise
               (RuntimeError
@@ -433,17 +434,17 @@ module Make (N : Bir_number.NumberInterface) = struct
               match Pos.unmark arg2 with Var v -> v | _ -> assert false
               (* todo: rte *)
             in
-            let cast_to_int (v : value) : int option =
-              match v with Number f -> Some (N.to_int (roundf f)) | Undefined -> Some 0
+            let cast_to_int (v : value) : Int64.t option =
+              match v with Number f -> Some (N.to_int (roundf f)) | Undefined -> Some Int64.zero
             in
             let pos = Pos.get_position arg2 in
-            let access_index (i : int) : int option =
+            let access_index (i : int) : Int64.t option =
               cast_to_int
               @@ evaluate_expr ctx p
                    (Index ((var_arg2, pos), (Literal (Float (float_of_int i)), pos)), pos)
             in
             let maxi = ref (access_index 0) in
-            for i = 0 to up do
+            for i = 0 to Int64.to_int up do
               maxi := max !maxi (access_index i)
             done;
             match !maxi with None -> Undefined | Some f -> Number (N.of_int f) )

@@ -18,11 +18,9 @@ module type NumberInterface = sig
 
   val floor : t -> t
 
-  val copysign : t -> t -> t
+  val of_int : Int64.t -> t
 
-  val of_int : int -> t
-
-  val to_int : t -> int
+  val to_int : t -> Int64.t
   (** Warning: lossy *)
 
   val of_float : float -> t
@@ -70,11 +68,9 @@ module RegularFloatNumber : NumberInterface = struct
 
   let floor x = Float.floor x
 
-  let copysign x y = copysign x y
+  let of_int i = Int64.to_float i
 
-  let of_int i = float_of_int i
-
-  let to_int f = int_of_float f
+  let to_int f = Int64.of_float f
 
   let of_float f = f
 
@@ -127,15 +123,9 @@ module MPFRNumber : NumberInterface = struct
 
   let floor (x : t) : t = mpfr_float x
 
-  let copysign x y =
-    match (Mpfrf.sgn x, Mpfrf.sgn y) with
-    | 0, _ -> x
-    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
-    | _ -> Mpfrf.sub (Mpfrf.of_int 0 rounding) x rounding
+  let of_int i = Mpfrf.of_int (Int64.to_int i) rounding
 
-  let of_int i = Mpfrf.of_int i rounding
-
-  let to_int f = int_of_float (Mpfrf.to_float f)
+  let to_int f = Int64.of_float (Mpfrf.to_float f)
 
   let of_float f = Mpfrf.of_float f rounding
 
@@ -186,29 +176,7 @@ module IntervalNumber : NumberInterface = struct
     let iu = mpfr_float x.up in
     v id iu
 
-  let copysign (x : t) (y : t) : t =
-    let sgxn =
-      let sgnxd = Mpfrf.sgn x.down in
-      let sgnxu = Mpfrf.sgn x.up in
-      if sgnxd = sgnxu then sgnxd
-      else
-        Errors.raise_error
-          (Format.asprintf "Tried to get the sign of %a but it is inconsistent!" format_t x)
-    in
-    let sgyn =
-      let sgnyd = Mpfrf.sgn y.down in
-      let sgnyu = Mpfrf.sgn y.up in
-      if sgnyd = sgnyu then sgnyd
-      else
-        Errors.raise_error
-          (Format.asprintf "Tried to get the sign of %a but it is inconsistent!" format_t y)
-    in
-    match (sgxn, sgyn) with
-    | 0, _ -> x
-    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
-    | _ -> v (Mpfrf.sub (Mpfrf.of_int 0 Down) x.down Down) (Mpfrf.sub (Mpfrf.of_int 0 Up) x.up Up)
-
-  let of_int i = v (Mpfrf.of_int i Down) (Mpfrf.of_int i Up)
+  let of_int i = v (Mpfrf.of_int (Int64.to_int i) Down) (Mpfrf.of_int (Int64.to_int i) Up)
 
   let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
@@ -224,7 +192,7 @@ module IntervalNumber : NumberInterface = struct
         (Format.asprintf "Tried to convert interval to float, got two different bounds: [%f;%f]" fd
            fu)
 
-  let to_int (f : t) : int = int_of_float (to_float f)
+  let to_int (f : t) : Int64.t = Int64.of_float (to_float f)
 
   let zero () = v (Mpfrf.of_int 0 Down) (Mpfrf.of_int 0 Up)
 
@@ -302,15 +270,9 @@ module RationalNumber : NumberInterface = struct
     let dem = Mpqf.get_den x in
     Mpqf.of_mpz (Mpzf.tdiv_q num dem)
 
-  let copysign x y =
-    match (Mpqf.sgn x, Mpqf.sgn y) with
-    | 0, _ -> x
-    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
-    | _ -> Mpqf.sub (Mpqf.of_int 0) x
+  let of_int i = Mpqf.of_int (Int64.to_int i)
 
-  let of_int i = Mpqf.of_int i
-
-  let to_int f = int_of_float (Mpqf.to_float f)
+  let to_int f = Int64.of_float (Mpqf.to_float f)
 
   let of_float f = Mpqf.of_float f
 
@@ -379,17 +341,11 @@ end) : NumberInterface = struct
 
   let floor x = snd (modf x)
 
-  let copysign x y =
-    match (Mpzf.sgn x, Mpzf.sgn y) with
-    | 0, _ -> x
-    | sx, sy when (sx > 0 && sy > 0) || (sx < 0 && sy < 0) || sy = 0 -> x
-    | _ -> Mpzf.sub (Mpzf.of_int 0) x
-
-  let of_int i = Mpzf.mul (Mpzf.of_int i) (precision_modulo ())
+  let of_int i = Mpzf.mul (Mpzf.of_int (Int64.to_int i)) (precision_modulo ())
 
   let to_int f =
     let s = Mpzf.to_float (Mpzf.tdiv_q f (precision_modulo ())) in
-    int_of_float s
+    Int64.of_float s
 
   let of_float (f : float) : t =
     let frac_part, int_part = Float.modf f in
