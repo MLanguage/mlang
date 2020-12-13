@@ -44,6 +44,8 @@ jobs:
     - name: Install dependencies
       run: |
         eval $(opam env)
+        sudo apt update
+        sudo apt install libmpfr-dev
         make deps
 
     - name: Make compiler
