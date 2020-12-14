@@ -83,7 +83,7 @@ let undefined_class_prelude : string =
   \    return m\n\n\
    def m_round(x):\n\
   \    if isinstance(x, Undefined): return x\n\
-  \    else: return modf(x + copysign(0.50005, x))[1]\n\n\
+  \    else: return float(int(x + (-0.50005 if x < 0 else 0.50005)))\n\n\
    def m_floor(x):\n\
   \    if isinstance(x, Undefined): return x\n\
   \    else: return floor(x + 0.000001)\n\n\
@@ -274,7 +274,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "# -*- coding: utf-8 -*-\n";
   Format.fprintf oc "# %s\n\n" Prelude.message;
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
-  else Format.fprintf oc "from math import floor, modf, copysign\n\n";
+  else Format.fprintf oc "from math import floor, modf\n\n";
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
   Format.fprintf oc "local_variables = dict()\n\n\n"
 
@@ -295,6 +295,12 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
          Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_variable var (generate_name var)))
     input_vars
 
+let sanitize_str (s, p) =
+  String.map (fun c -> if c >= Char.chr 128 then
+                         let () = Cli.warning_print "Replaced char code %d by space %a" (Char.code c) Pos.format_position p in
+                         ' '
+                       else c) s
+
 let generate_var_cond cond oc =
   Format.fprintf oc
     "# Verification condition %a@\n\
@@ -307,7 +313,7 @@ let generate_var_cond cond oc =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt err ->
-         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) (Pos.unmark err.Error.descr)))
+         Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
     cond.cond_errors
 
 let rec generate_stmts (program : Bir.program) oc stmts =
