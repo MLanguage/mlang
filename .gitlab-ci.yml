@@ -42,3 +42,9 @@ test_optims:
   stage: optimization-tests
   script:
     - OPTIMIZE=1 make tests
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: always
+    - when: never
