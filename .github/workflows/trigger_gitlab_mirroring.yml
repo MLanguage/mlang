@@ -25,4 +25,5 @@ jobs:
       - name: Trigger gitlab mirroring
         env:
           TOKEN: ${{ secrets.GITLAB_TOKEN }}
-        run: curl --request POST "https://gitlab.com/api/v4/projects/23091471/mirror/pull?private_token=$(TOKEN)"
+        run: curl --request POST "https://gitlab.com/api/v4/projects/23091471/mirror/pull?private_token=$TOKEN" && sleep 30
+        # Sleep is hopefully sufficient to wait for gitlab's ci trigger. Otherwise there is a point in the PR where all checks have passed but gitlab's ci hasn't been triggered yet
