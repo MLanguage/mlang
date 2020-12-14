@@ -2,7 +2,7 @@ variables:
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
-image: mlanguage/mlang:0.1
+image: mlanguage/mlang:0.2
 
 stages:
   - build
@@ -21,7 +21,7 @@ build_job:
 test_interpreter:
   stage: tests
   script:
-    - make tests
+    - OPTIMIZE=0 make tests
 
 test_c_backend:
   stage: tests

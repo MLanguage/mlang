@@ -20,3 +20,4 @@ RUN eval $(opam env)
 RUN opam update -y
 RUN opam switch create 4.11.1 -y
 RUN opam install -y -j 8 $OPAM_DEPS
+RUN echo $(opam env) >> /home/mlang/.bashrc
