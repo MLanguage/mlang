@@ -1,6 +1,6 @@
 FROM ubuntu:20.04
 
-ENV APT_DEPS opam libgmp-dev libmpfr-dev m4 perl python3 llvm-10-dev git
+ENV APT_DEPS opam libgmp-dev libmpfr-dev m4 perl python3 clang git
 
 ENV OPAM_DEPS ppx_deriving ANSITerminal re ocamlgraph dune menhir cmdliner dune-build-info visitors parmap num ocamlformat mlgmpidl
 
