@@ -4,6 +4,10 @@ variables:
 
 image: ocaml/opam:ubuntu-20.04-ocaml-4.11
 
+before_script:
+  - sudo apt install -y -qq libgmp-dev libmpfr-dev m4 perl python3.7
+  - OPAMYES=TRUE make deps
+
 stages:
   - build
   - tests
@@ -12,8 +16,6 @@ stages:
 build_job:
   stage: build
   script:
-    - sudo apt install --yes libgmp-dev libmpfr-dev m4 perl
-    - OPAMYES=TRUE make deps
     - make build
   artifacts:
     paths:
