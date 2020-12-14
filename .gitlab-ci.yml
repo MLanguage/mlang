@@ -4,6 +4,10 @@ variables:
 
 image: mlanguage/mlang:0.2
 
+before_script:
+  - eval $(opam env)
+
+
 stages:
   - build
   - tests
