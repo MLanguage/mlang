@@ -5,6 +5,7 @@
 SOURCE_DIR_2015=../../../ir-calcul/sources2015m_4_6/
 SOURCE_DIR_2016=../../../ir-calcul/sources2016m_4_5/
 SOURCE_DIR_2017=../../../ir-calcul/sources2017m_6_10/
+SOURCE_DIR_2018=../../../ir-calcul/sources2018m_6_7/
 SOURCE_DIR_2019=../../../ir-calcul/sources2019m_8_0/
 
 YEAR?=2018
@@ -37,8 +38,8 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 # Generating the tests.m_spec
 ##################################################
 
-tests.m_spec: gen_m_spec.py 
-	python3.7 $< $(TESTS_DIR) $@ 
+tests.m_spec: gen_m_spec.py
+	python3 $< $(TESTS_DIR) $@
 
 ##################################################
 # Generating the C code
@@ -68,7 +69,7 @@ CC=$(C_COMPILER)
 ifeq ($(C_COMPILER), clang)
     F_BRACKET_OPT=-fbracket-depth=2048
 else
-    F_BRACKET_OPT= 
+    F_BRACKET_OPT=
 endif
 
 ir_%.o: export AFL_DONT_OPTIMIZE=1
@@ -103,7 +104,7 @@ AFL_FUZZ=afl-fuzz
 
 ifeq ($(JOB_NO), 0)
 	AFL_JOB_FLAG=-M fuzzer$(JOB_NO)
-else 
+else
 	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
 endif
 

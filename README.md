@@ -1,6 +1,6 @@
 # The Mlang compiler
 
-![CI](https://github.com/MLanguage/mlang/workflows/CI/badge.svg)
+[![pipeline status](https://gitlab.com/rmonat/mlang/badges/master/pipeline.svg)](https://gitlab.com/rmonat/mlang/-/commits/master)
 
 The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
@@ -35,16 +35,16 @@ This command also fetchs the M source code released by the DGFiP with
 
     git submodule update --init --recursive
 
-You can then use 
-    
+You can then use
+
     make build
-    
+
 to build the compiler.
 
 ## Usage
 
 Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
-of what happens in this example. You can compare what happens on the 
+of what happens in this example. You can compare what happens on the
 [official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm)
 by entering the exact amounts of the case in the right income codes. Everything should be the same.
 
@@ -67,7 +67,7 @@ Mlang's run are configured by a specification file (`.m_spec`), see the
 [dedicated README](m_specs/README.md) for more details.
 
 Mlang also need an M++ file to know how to run the "liquidations multiples"
-mechanism that is necessary to compute the income tax correctly. The file 
+mechanism that is necessary to compute the income tax correctly. The file
 `mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
 for version of the 2018 M sources published in `ir-calcul`.
 
@@ -91,35 +91,35 @@ report test errors in a convenient format.
 Mlang backends are also tested using the same `FIP` format, see for instance
 `examples/python/backend_test`.
 
-When running `--run_all_tests`, you can enable code coverage instrumentation 
+When running `--run_all_tests`, you can enable code coverage instrumentation
 with the `--code_coverage` option. Another interesting option is `--precision`,
-which lets you choose how numbers are represented for the tax computation. 
-The default is `--precision double`, that uses the 64-bits IEEE754 floating-point 
-representation and associated operations. This is what the DGFiP uses. The 
-`--precision mpfr` option lets you use 1024-bits floating point numbers for 
-virtually infinite precision. Finally, `--precision fixed<n>` uses 
-fixed-point arithmetic with GMP-provided big integers. The fixed-point numbers 
+which lets you choose how numbers are represented for the tax computation.
+The default is `--precision double`, that uses the 64-bits IEEE754 floating-point
+representation and associated operations. This is what the DGFiP uses. The
+`--precision mpfr` option lets you use 1024-bits floating point numbers for
+virtually infinite precision. Finally, `--precision fixed<n>` uses
+fixed-point arithmetic with GMP-provided big integers. The fixed-point numbers
 are represented with the [Q number format](https://en.wikipedia.org/wiki/Q_(number_format))
-and `<n>` is the number of fractional bits. The integer bits are unbounded. 
+and `<n>` is the number of fractional bits. The integer bits are unbounded.
 
-The DGFiP does not publish its internal test base. However, randomized test 
-cases have been created for the 2018 income version of the software, in the 
-folder `random_tests`. The fact that Mlang passes these tests only means that 
-it faithfully reproduces the computation done by the DGFiP using unpublished 
-software. Notably, it does not mean that the M sources (published by the 
+The DGFiP does not publish its internal test base. However, randomized test
+cases have been created for the 2018 income version of the software, in the
+folder `random_tests`. The fact that Mlang passes these tests only means that
+it faithfully reproduces the computation done by the DGFiP using unpublished
+software. Notably, it does not mean that the M sources (published by the
 DGFiP) and the M++ sources (recreated from unpublished sources) are faithful to
 the way the law says taxes should be computed.
 
-To check that Mlang passes all the randomized tests, simply invoke 
+To check that Mlang passes all the randomized tests, simply invoke
 
     make tests
 
-Some tests might fail using non-default precision settings, even if the error 
+Some tests might fail using non-default precision settings, even if the error
 message shows no difference between the expected value and the computed value.
-This is because we control a difference of 0 between the computed and the 
-expected, but when doing computations with a higher precision, a difference 
+This is because we control a difference of 0 between the computed and the
+expected, but when doing computations with a higher precision, a difference
 lower than the smallest representable float value might appear. To pass the test,
-we have provided the command line option `--test_error_margin=0.0000001` to 
+we have provided the command line option `--test_error_margin=0.0000001` to
 let you define how much error margin you want to tolerate when running tests.
 
 ## Documentation

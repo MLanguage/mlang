@@ -37,7 +37,7 @@ ir_%.py: ../../m_specs/%.m_spec
 		$(SOURCE_FILES)
 
 run_%.py: ir_%.py
-	python3.7 $@
+	python3 $@
 
 ##################################################
 # Running the tests

@@ -19,10 +19,10 @@ SOURCE_FILES?=$(shell find $(SOURCE_DIR) -name "*.m")
 MLANG=dune exec ../../../src/main.exe --
 
 all_tests:
-	python3.7 gen_m_spec.py $(TESTS_DIR) tests.m_spec all_ins.csv
+	python3 gen_m_spec.py $(TESTS_DIR) tests.m_spec all_ins.csv
 	$(MLANG) --display_time --debug --optimize \
 	        --mpp_file $(MPP_FILE) --mpp_function compute_double_liquidation_pvro \
 	        --backend python --output ./tests.py \
                 --function_spec ./tests.m_spec \
 		$(SOURCE_FILES)
-	python3.7 test_file.py all_ins.csv $(TESTS_DIR)
+	python3 test_file.py all_ins.csv $(TESTS_DIR)
