@@ -31,7 +31,6 @@ test_c_backend:
   stage: tests
   script:
     - make test_c_backend
-  allow_failure: true
 
 test_py_backend:
   stage: tests
