@@ -2,11 +2,7 @@ variables:
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
-image: ocaml/opam:ubuntu-20.04-ocaml-4.11
-
-before_script:
-  - sudo apt install -y -qq libgmp-dev libmpfr-dev m4 perl python3
-  - OPAMYES=TRUE make deps
+image: mlanguage/mlang:0.1
 
 stages:
   - build
