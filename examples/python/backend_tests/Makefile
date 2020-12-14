@@ -1,9 +1,20 @@
 SOURCE_DIR_2018 ?= ../../../ir-calcul/sources2018m_6_7/
-TESTS_DIR ?= ../../../tests/fuzzing/
+SOURCE_DIR_2019=../../../ir-calcul/sources2019m_8_0/
 
-SOURCE_FILES?=$(shell find $(SOURCE_DIR_2018) -name "*.m")
-MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
+YEAR?=2018
 
+ifeq ($(YEAR), 2018)
+	SOURCE_DIR?=$(SOURCE_DIR_2018)
+	MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
+	TESTS_DIR?=../../../tests/2018/fuzzing/
+else ifeq ($(YEAR), 2019)
+	SOURCE_DIR?=$(SOURCE_DIR_2019)
+	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
+else
+    $(error Unsupported year: $(YEAR))
+endif
+
+SOURCE_FILES?=$(shell find $(SOURCE_DIR) -name "*.m")
 
 MLANG=dune exec ../../../src/main.exe --
 
