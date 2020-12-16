@@ -296,10 +296,15 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     input_vars
 
 let sanitize_str (s, p) =
-  String.map (fun c -> if c >= Char.chr 128 then
-                         let () = Cli.warning_print "Replaced char code %d by space %a" (Char.code c) Pos.format_position p in
-                         ' '
-                       else c) s
+  String.map
+    (fun c ->
+      if c >= Char.chr 128 then
+        let () =
+          Cli.warning_print "Replaced char code %d by space %a" (Char.code c) Pos.format_position p
+        in
+        ' '
+      else c)
+    s
 
 let generate_var_cond cond oc =
   Format.fprintf oc
