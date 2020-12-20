@@ -15,7 +15,8 @@ open Mir
 
 let verbose_output = ref false
 
-let calculation_error_class: string = {|
+let calculation_error_class : string =
+  {|
   public class CalculationError {
     private final String name;
     private final String description;
@@ -35,7 +36,8 @@ let calculation_error_class: string = {|
   }
 |}
 
-let undefined_java_class_prelude : string = {|
+let undefined_java_class_prelude : string =
+  {|
   public class MValue {
     public static double m_div (Double value, Double value) {
       if ()
