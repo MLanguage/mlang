@@ -15,10 +15,30 @@ open Mir
 
 let verbose_output = ref false
 
-let undefined_java_class_prelude : string = {|
-  public class Undefined {
-    public static int add (double value) {
+let calculation_error_class: string = {|
+  public class CalculationError {
+    private final String name;
+    private final String description;
 
+    public CalculationError (String name, String description){
+      this.name = name;
+      this.description = description;
+    }
+
+    public String getName() {
+      return this.name;
+    }
+
+    public String getDescription(){
+      return this.description;
+    }
+  }
+|}
+
+let undefined_java_class_prelude : string = {|
+  public class MValue {
+    public static double m_div (Double value, Double value) {
+      if ()
     }
   }
 
@@ -122,7 +142,7 @@ let generate_binop (op : Mast.binop) : string =
   | Mast.Mul -> "*"
   | Mast.Div -> "/"
 
-let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "not" | Mast.Minus -> "-"
+let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "!" | Mast.Minus -> "-"
 
 let generate_variable fmt (var : Variable.t) : unit =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
@@ -147,27 +167,27 @@ let autograd_ref = ref false
 
 let autograd () : bool = !autograd_ref
 
-let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : unit =
+let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a) %s (%a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
         (generate_comp_op (Pos.unmark op))
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | Binop ((Mast.Div, _), e1, e2) ->
       Format.fprintf fmt "m_div(%a, %a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | Binop ((((Mast.Or | Mast.And) as f), _), e1, e2) when safe_bool_binops ->
       let f = match f with Mast.Or -> "m_or" | Mast.And -> "m_and" | _ -> assert false in
       Format.fprintf fmt "%s(%a, %a)" f
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | Binop ((op, _), e1, e2) ->
       let left fmt () =
@@ -179,9 +199,9 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
             in
             let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
             Format.fprintf fmt "%s%a%s" lleft_paren
-              (generate_python_expr safe_bool_binops)
+              (generate_java_expr safe_bool_binops)
               e1 rleft_paren
-        | _ -> (generate_python_expr safe_bool_binops) fmt e1
+        | _ -> (generate_java_expr safe_bool_binops) fmt e1
       in
       let right fmt () =
         match Pos.unmark e2 with
@@ -192,13 +212,13 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
             in
             let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
             Format.fprintf fmt "%s%a%s" lright_paren
-              (generate_python_expr safe_bool_binops)
+              (generate_java_expr safe_bool_binops)
               e2 rright_paren
-        | _ -> (generate_python_expr safe_bool_binops) fmt e2
+        | _ -> (generate_java_expr safe_bool_binops) fmt e2
       in
       Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
   | Unop (op, e) ->
-      Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_python_expr safe_bool_binops) e
+      Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_java_expr safe_bool_binops) e
   | Index (var, e) -> (
       match Pos.unmark e with
       | Literal (Float f) ->
@@ -207,45 +227,45 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
           (* FIXME: int cast hack *)
           Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
             generate_variable (Pos.unmark var)
-            (generate_python_expr safe_bool_binops)
+            (generate_java_expr safe_bool_binops)
             e
-            (generate_python_expr safe_bool_binops)
+            (generate_java_expr safe_bool_binops)
             e )
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e3
   | FunctionCall (PresentFunc, [ arg ]) ->
-      Format.fprintf fmt "m_present(%a)" (generate_python_expr safe_bool_binops) arg
+      Format.fprintf fmt "m_present(%a)" (generate_java_expr safe_bool_binops) arg
   | FunctionCall (NullFunc, [ arg ]) ->
-      Format.fprintf fmt "(%a == %s)" (generate_python_expr safe_bool_binops) arg none_value
+      Format.fprintf fmt "(%a == %s)" (generate_java_expr safe_bool_binops) arg none_value
   | FunctionCall (ArrFunc, [ arg ]) ->
-      if autograd () then (generate_python_expr safe_bool_binops) fmt arg
-      else Format.fprintf fmt "m_round(%a)" (generate_python_expr safe_bool_binops) arg
+      if autograd () then (generate_java_expr safe_bool_binops) fmt arg
+      else Format.fprintf fmt "m_round(%a)" (generate_java_expr safe_bool_binops) arg
   | FunctionCall (InfFunc, [ arg ]) ->
-      if autograd () then (generate_python_expr safe_bool_binops) fmt arg
-      else Format.fprintf fmt "m_floor(%a)" (generate_python_expr safe_bool_binops) arg
+      if autograd () then (generate_java_expr safe_bool_binops) fmt arg
+      else Format.fprintf fmt "m_floor(%a)" (generate_java_expr safe_bool_binops) arg
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       Format.fprintf fmt "m_max(%a, %a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       Format.fprintf fmt "m_min(%a, %a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | FunctionCall (Multimax, [ e1; e2 ]) ->
       Format.fprintf fmt "m_multimax(%a, %a)"
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
@@ -256,9 +276,9 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
       Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e2
-        (generate_python_expr safe_bool_binops)
+        (generate_java_expr safe_bool_binops)
         e1
 
 let generate_var_def var data (oc : Format.formatter) : unit =
@@ -266,17 +286,17 @@ let generate_var_def var data (oc : Format.formatter) : unit =
   | SimpleVar e ->
       if !verbose_output then
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
-      Format.fprintf oc "%a = %a@\n" generate_variable var (generate_python_expr false) e
+      Format.fprintf oc "%a = %a@\n" generate_variable var (generate_java_expr false) e
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a = [%a]@\n" generate_variable var
         (fun fmt ->
-          IndexMap.iter (fun _ v -> Format.fprintf fmt "%a, " (generate_python_expr false) v))
+          IndexMap.iter (fun _ v -> Format.fprintf fmt "%a, " (generate_java_expr false) v))
         es
   | TableVar (_, IndexGeneric e) ->
       if !verbose_output then
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
       Format.fprintf oc "%a = GenericIndex(lambda generic_index: %a)@\n@\n" generate_variable var
-        (generate_python_expr false) e
+        (generate_java_expr false) e
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
@@ -322,7 +342,7 @@ let generate_var_cond cond oc =
      if not(isinstance(cond, Undefined)) and cond:@\n\
     \    raise TypeError(\"Error triggered\\n%a\")@\n\
      @\n"
-    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
+    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_java_expr true)
     cond.cond_expr
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -347,7 +367,7 @@ and generate_stmt program oc stmt =
       in
       Format.fprintf oc
         "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\n" cond_name
-        (generate_python_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
+        (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
@@ -364,7 +384,7 @@ and generate_stmt program oc stmt =
          @[<h 4>    %a@]@\n\
          elif not(isinstance(%s, Undefined)):@\n\
          @[<h 4>    %a@]@\n"
-        cond_name (generate_python_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
+        cond_name (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
@@ -386,7 +406,7 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
     Format.fprintf oc "return out@\n@]\n"
   end
 
-let generate_python_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
+let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
