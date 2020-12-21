@@ -15,19 +15,14 @@ open Mir
 
 let verbose_output = ref false
 
+(* TODO: Should we use different files for java classes or a single file *)
 let calculation_error_class : string =
   {|
-  public class CalculationError {
-    private final String name;
+   class CalculationError {
     private final String description;
 
-    public CalculationError (String name, String description){
-      this.name = name;
+    public CalculationError (String description){
       this.description = description;
-    }
-
-    public String getName() {
-      return this.name;
     }
 
     public String getDescription(){
@@ -39,8 +34,11 @@ let calculation_error_class : string =
 let undefined_java_class_prelude : string =
   {|
   public class MValue {
-    public static double m_div (Double value, Double value) {
-      if ()
+
+    private Optional<Double> value;
+
+    public static double m_div (Mvalue numerator, Mvalue denominator) {
+      
     }
   }
 
@@ -124,7 +122,7 @@ let undefined_class_prelude : string =
   \    def __getitem__(self, x):\n\
   \      return self.l(x)"
 
-let none_value = "Undefined()"
+let none_value = "OptionalDouble.empty()"
 
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
@@ -288,7 +286,7 @@ let generate_var_def var data (oc : Format.formatter) : unit =
   | SimpleVar e ->
       if !verbose_output then
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
-      Format.fprintf oc "%a = %a@\n" generate_variable var (generate_java_expr false) e
+      Format.fprintf oc "%a = %a;@\n" generate_variable var (generate_java_expr false) e
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a = [%a]@\n" generate_variable var
         (fun fmt ->
@@ -302,28 +300,18 @@ let generate_var_def var data (oc : Format.formatter) : unit =
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "# -*- coding: utf-8 -*-\n";
-  Format.fprintf oc "# %s\n\n" Prelude.message;
-  if autograd () then Format.fprintf oc "import numpy as np\n\n"
-  else Format.fprintf oc "from math import floor, modf\n\n";
-  Format.fprintf oc "%s\n\n" undefined_class_prelude;
-  Format.fprintf oc "local_variables = dict()\n\n\n"
+  Format.fprintf oc "// %s\n\n" Prelude.message;
+  Format.fprintf oc "Map<String, Double> local_variables = new HashMap<>();\n\n\n"
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  if !verbose_output then
-    Format.fprintf oc "# The following keys must be present in the input:@\n%a@\n"
-      (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-         (fun fmt var ->
-           Format.fprintf fmt "# %s: %s" (generate_name var) (Pos.unmark var.Variable.descr)))
-      input_vars;
-  Format.fprintf oc "def extracted(input_variables):@\n@[<h 4>    @\n";
-  Format.fprintf oc "# First we extract the input variables from the dictionnary:@\n%a@\n@\n"
+  Format.fprintf oc "public void extracted(Map<String, Double> input_variables){@\n@[<h 4>    @\n";
+  Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_variable var (generate_name var)))
+         Format.fprintf fmt "%a = input_variables.get(\"%s\");" generate_variable var
+           (generate_name var)))
     input_vars
 
 let sanitize_str (s, p) =
@@ -339,10 +327,11 @@ let sanitize_str (s, p) =
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "# Verification condition %a@\n\
-     cond = %a@\n\
-     if not(isinstance(cond, Undefined)) and cond:@\n\
-    \    raise TypeError(\"Error triggered\\n%a\")@\n\
+    "// Verification condition %a@\n\
+     OptionalDouble cond = %a@\n\
+     if (!cond.isPresent() || (cond.getAsDouble() != 0)) { @\n\
+      raise TypeError(\"Error triggered\\n%a\")@\n\
+    }@\n\
      @\n"
     Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_java_expr true)
     cond.cond_expr
@@ -392,18 +381,12 @@ and generate_stmt program oc stmt =
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc
-    "# The following two lines help us keep all previously defined variable bindings@\n\
-     global local_variables@\n\
-     local_variables = locals()@\n\
-     @\n";
   if List.length returned_variables = 1 then
     Format.fprintf oc "return %a\n@]@\n" generate_variable (List.hd returned_variables)
   else begin
-    Format.fprintf oc "out = {}@\n";
     Format.pp_print_list
       (fun fmt var ->
-        Format.fprintf fmt "out[\"%a\"] = %a@\n" generate_variable var generate_variable var)
+        Format.fprintf fmt "out.put(\"%a\",%a)@\n" generate_variable var generate_variable var)
       oc returned_variables;
     Format.fprintf oc "return out@\n@]\n"
   end
