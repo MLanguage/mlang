@@ -327,11 +327,9 @@ module Make (N : Bir_number.NumberInterface) = struct
             | Mast.Div, Undefined, _ | Mast.Div, _, Undefined -> Undefined (* yes... *)
             | Mast.Div, _, l2 when is_zero l2 -> Number (N.zero ())
             | Mast.Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-            | Mast.And, Undefined, _
-            | Mast.And, _, Undefined
-            | Mast.Or, Undefined, _
-            | Mast.Or, _, Undefined ->
-                Undefined
+            | Mast.And, Undefined, _ | Mast.And, _, Undefined -> Undefined
+            | Mast.Or, Undefined, Undefined -> Undefined
+            | Mast.Or, Undefined, Number i | Mast.Or, Number i, Undefined -> Number i
             | Mast.And, Number i1, Number i2 ->
                 Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
             | Mast.Or, Number i1, Number i2 ->
