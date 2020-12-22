@@ -850,7 +850,7 @@ let rec translate_expression (ctx : translating_context) (f : Mast.expression Po
               Pos.same_pos_as
                 (Mir.Binop (Pos.same_pos_as Mast.Or f, Pos.same_pos_as equal_test f, or_chain))
                 f)
-            (Pos.same_pos_as (Mir.Literal Mir.false_literal) f)
+            (Pos.same_pos_as (Mir.Literal Mir.Undefined) f)
             values
         in
         let or_chain =
@@ -1304,7 +1304,7 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                          (fun err ->
                            match err with
                            | None -> false (* if the error is undefined then we take it anyway *)
-                           | Some err -> err.Mir.Error.typ = Mast.Information)
+                           | Some err -> err.Mir.Error.typ <> Mast.Anomaly)
                          errs
                   then
                     (* If all errors raised by this verification condition are informative, we don't
