@@ -1,1 +1,1 @@
-tests/** -text -diff
+tests/**/* binary
