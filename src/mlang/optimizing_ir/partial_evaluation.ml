@@ -254,13 +254,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               (* first all the combinations giving undefined *)
           | Mast.And, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
           | Mast.And, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
-          | Mast.Or, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
-          | Mast.Or, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
           | Mast.Mul, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
           | Mast.Mul, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
           | Mast.Div, (Literal Undefined, _ | _, Undefined), _ -> from_literal Undefined
           | Mast.Div, _, (Literal Undefined, _ | _, Undefined) -> from_literal Undefined
           (* logical or *)
+          | Mast.Or, (Literal Undefined, _ | _, Undefined), _ -> (Pos.unmark new_e2, d2)
+          | Mast.Or, _, (Literal Undefined, _ | _, Undefined) -> (Pos.unmark new_e1, d1)
           | Mast.Or, (Literal (Float f), _), (_, Float) when f <> 0. ->
               from_literal Mir.true_literal
           | Mast.Or, (_, Float), (Literal (Float f), _) when f <> 0. ->
