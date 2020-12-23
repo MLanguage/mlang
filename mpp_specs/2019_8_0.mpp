@@ -95,6 +95,7 @@ compute_double_liquidation_exit_taxe(outputs):
     outputs <- compute_double_liquidation3()
 
 compute_double_liquidation_pvro():
+  APPLI_OCEANS = 0
   V_IND_TRAIT = 4
   if present(COD3WG):
    FLAG_PVRO = 1

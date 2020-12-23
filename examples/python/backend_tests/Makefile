@@ -10,6 +10,7 @@ ifeq ($(YEAR), 2018)
 else ifeq ($(YEAR), 2019)
 	SOURCE_DIR?=$(SOURCE_DIR_2019)
 	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
+	TESTS_DIR?=../../../tests/2019/fuzzing/
 else
     $(error Unsupported year: $(YEAR))
 endif

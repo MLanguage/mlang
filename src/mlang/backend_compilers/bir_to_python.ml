@@ -70,8 +70,8 @@ let undefined_class_prelude : string =
    def m_min(lhs, rhs):\n\
   \    return min(lhs + 0, rhs + 0)\n\n\
    def m_or(lhs, rhs):\n\
-  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
-   or rhs\n\n\
+  \    return Undefined() if (isinstance(lhs, Undefined) and isinstance(rhs, Undefined)) else lhs \
+   + 0 or rhs + 0\n\n\
    def m_and(lhs, rhs):\n\
   \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
    and rhs\n\n\

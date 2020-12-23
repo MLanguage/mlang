@@ -157,7 +157,7 @@ m_value m_and(m_value x, m_value y)
 
 m_value m_or(m_value x, m_value y)
 {
-    if (x.undefined || y.undefined)
+    if (x.undefined && y.undefined)
     {
         return m_undefined;
     }
