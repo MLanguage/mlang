@@ -15,6 +15,178 @@ open Mir
 
 let verbose_output = ref false
 
+let m_operation_class: string = {|
+
+  private static OptionalDouble mGreaterThan(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() > secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mGreaterThanEqual(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() >= secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mLessThan(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() < secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mLessThanEqual(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() <= secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mEqual(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() == secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mNotEqual(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() != secondValue.getAsDouble();
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mAnd(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() != 0d && secondValue.getAsDouble() != 0d;
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mOr(OptionalDouble value1, OptionalDouble value2) {
+    return unopCondition((firstValue, secondValue) -> {
+      return firstValue.getAsDouble() != 0d || secondValue.getAsDouble() != 0d;
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mAdd(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() + secondValue.getAsDouble());
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mSubstract(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() - secondValue.getAsDouble());
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mMultiply(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() * secondValue.getAsDouble());
+    }, value1, value2);
+  }
+
+  private static OptionalDouble mDivide(OptionalDouble value1, OptionalDouble value2) {
+
+    if (valuesNotPresent(value1, value2)) {
+      return OptionalDouble.empty();
+    }
+
+    double denominateur = value2.getAsDouble();
+
+    if (denominateur == 0) {
+      return OptionalDouble.of(0);
+    }
+
+    return OptionalDouble.of(value1.getAsDouble() / denominateur);
+
+  }
+
+  private static OptionalDouble unopCondition(BiFunction<OptionalDouble, OptionalDouble, Boolean> condition,
+      OptionalDouble value1, OptionalDouble value2) {
+
+    if (valuesNotPresent(value1, value2)) {
+      return OptionalDouble.empty();
+    }
+
+    if (condition.apply(value1, value2)) {
+      return OptionalDouble.of(1);
+    } else {
+      return OptionalDouble.of(0);
+    }
+  }
+
+  private static OptionalDouble binopCondition(BiFunction<OptionalDouble, OptionalDouble, OptionalDouble> condition,
+      OptionalDouble value1, OptionalDouble value2) {
+
+    if (valuesNotPresent(value1, value2)) {
+      return OptionalDouble.empty();
+    }
+
+    return condition.apply(value1, value2);
+  }
+
+  private static boolean valuesNotPresent(OptionalDouble value1, OptionalDouble value2) {
+    return value1.isEmpty() || value2.isEmpty();
+  }
+
+  private static OptionalDouble m_round(OptionalDouble value) {
+    if (!value.isPresent()) {
+      return value;
+    }
+    double valueToRound = value.getAsDouble() + value.getAsDouble() < 0 ? -0.50005 : 0.50005;
+    return OptionalDouble.of(Math.round(valueToRound));
+  }
+
+    private static OptionalDouble m_floor(OptionalDouble value) {
+    if (!value.isPresent()) {
+      return value;
+    }
+    double valueToFloor = value.getAsDouble() + 0.000001;
+    return OptionalDouble.of(Math.floor(valueToFloor));
+  }
+
+   private static OptionalDouble m_cond(OptionalDouble value, OptionalDouble value2, OptionalDouble value3) {
+    if (!value.isPresent()) {
+      return value;
+    } else if (value.getAsDouble() != 0) {
+      return value2;
+    } else {
+      return value3;
+    }
+  }
+
+    private static OptionalDouble m_max(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() && value2.isPresent()) {
+      return value2;
+    } else if (value1.isPresent() && value2.isEmpty()) {
+      return value1;
+    } else if (value1.isEmpty() && value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      return OptionalDouble.of(Math.max(value1.getAsDouble(), value2.getAsDouble()));
+    }
+  }
+
+  private static OptionalDouble m_min(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() && value2.isPresent()) {
+      return value2;
+    } else if (value1.isPresent() && value2.isEmpty()) {
+      return value1;
+    } else if (value1.isEmpty() && value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      return OptionalDouble.of(Math.min(value1.getAsDouble(), value2.getAsDouble()));
+    }
+  }
+
+  private static OptionalDouble mNeg(OptionalDouble value) {
+    if (value.isEmpty()) {
+      return value;
+    }
+    return OptionalDouble.of(-value.getAsDouble());
+  }
+
+}
+|}
+
 (* TODO: Should we use different files for java classes or a single file *)
 let calculation_error_class : string =
   {|
@@ -31,118 +203,29 @@ let calculation_error_class : string =
   }
 |}
 
-let undefined_java_class_prelude : string =
-  {|
-  public class MValue {
 
-    private Optional<Double> value;
-
-    public static double m_div (Mvalue numerator, Mvalue denominator) {
-      
-    }
-  }
-
-|}
-
-let undefined_class_prelude : string =
-  "class Singleton(type):\n\
-  \    _instances = {}\n\
-  \    def __call__(cls, *args, **kwargs):\n\
-  \        if cls not in cls._instances:\n\
-  \            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)\n\
-  \        return cls._instances[cls]\n\n\n\
-   class Undefined(metaclass=Singleton):\n\
-  \    def __init__(self):\n\
-  \        pass\n\n\
-  \    def __add__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined): return self\n\
-  \        else: return rhs\n\n\
-  \    def __radd__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined): return self\n\
-  \        else: return rhs\n\n\
-  \    def __sub__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined): return self\n\
-  \        else: return -rhs\n\n\
-  \    def __rsub__(self, rhs):\n\
-  \        if isinstance(rhs, Undefined): return self\n\
-  \        else: return rhs\n\n\
-  \    def __mul__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __rmul__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __truediv__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __rtruediv__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __neg__(self):\n\
-  \        return 0\n\n\
-  \    def __lt__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __le__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __gt__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __ge__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __eq__(self, rhs):\n\
-  \        return self\n\n\
-  \    def __ne__(self, rhs):\n\
-  \        return self\n\n\
-   def m_cond(cond, true, false):\n\
-  \    if isinstance(cond, Undefined): return cond\n\
-  \    else: return true if cond else false\n\
-   def m_div(lhs, rhs):\n\
-  \   if not isinstance(rhs, Undefined) and rhs == 0: return 0\n\
-  \   else: return lhs / rhs\n\
-   def m_max(lhs, rhs):\n\
-  \    return max(lhs + 0, rhs + 0)\n\n\
-   def m_min(lhs, rhs):\n\
-  \    return min(lhs + 0, rhs + 0)\n\n\
-   def m_or(lhs, rhs):\n\
-  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
-   or rhs\n\n\
-   def m_and(lhs, rhs):\n\
-  \    return Undefined() if (isinstance(lhs, Undefined) or isinstance(rhs, Undefined)) else lhs \
-   and rhs\n\n\
-   def m_present(e): return isinstance(e, Undefined) == False\n\
-   def m_multimax(count, l):\n\
-  \    m = l[0] + 0\n\
-  \    for i in range(int(count)):\n\
-  \        m = max(m, l[i+1] + 0)\n\
-  \    return m\n\n\
-   def m_round(x):\n\
-  \    if isinstance(x, Undefined): return x\n\
-  \    else: return float(int(x + (-0.50005 if x < 0 else 0.50005)))\n\n\
-   def m_floor(x):\n\
-  \    if isinstance(x, Undefined): return x\n\
-  \    else: return floor(x + 0.000001)\n\n\
-   class GenericIndex:\n\
-  \    def __init__(self, lambda_function):\n\
-  \      self.l = lambda_function\n\
-  \    def __getitem__(self, x):\n\
-  \      return self.l(x)"
 
 let none_value = "OptionalDouble.empty()"
 
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
-  | Mast.Gt -> ">"
-  | Mast.Gte -> ">="
-  | Mast.Lt -> "<"
-  | Mast.Lte -> "<="
-  | Mast.Eq -> "=="
-  | Mast.Neq -> "!="
+  | Mast.Gt -> "mGreaterThan"
+  | Mast.Gte -> "mGreaterThanEqual"
+  | Mast.Lt -> "mLessThan"
+  | Mast.Lte -> "mLessThanEqual"
+  | Mast.Eq -> "mEqual"
+  | Mast.Neq -> "mNotEqual"
 
 let generate_binop (op : Mast.binop) : string =
   match op with
-  | Mast.And -> "&&"
-  | Mast.Or -> "||"
-  | Mast.Add -> "+"
-  | Mast.Sub -> "-"
-  | Mast.Mul -> "*"
-  | Mast.Div -> "/"
+  | Mast.And -> "mAnd"
+  | Mast.Or -> "mOr"
+  | Mast.Add -> "mAdd"
+  | Mast.Sub -> "mSubstract"
+  | Mast.Mul -> "mMultiply"
+  | Mast.Div -> "mDivide"
 
-let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "!" | Mast.Minus -> "-"
+let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
 let generate_variable fmt (var : Variable.t) : unit =
   let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
@@ -161,8 +244,6 @@ let generate_variable fmt (var : Variable.t) : unit =
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_typ (typ : typ) : string = match typ with Real -> "float"
-
 let autograd_ref = ref false
 
 let autograd () : bool = !autograd_ref
@@ -170,67 +251,27 @@ let autograd () : bool = !autograd_ref
 let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      Format.fprintf fmt "(%a) %s (%a)"
-        (generate_java_expr safe_bool_binops)
-        e1
+      Format.fprintf fmt "%s((%a),(%a))"
         (generate_comp_op (Pos.unmark op))
         (generate_java_expr safe_bool_binops)
-        e2
-  | Binop ((Mast.Div, _), e1, e2) ->
-      Format.fprintf fmt "m_div(%a, %a)"
-        (generate_java_expr safe_bool_binops)
-        e1
-        (generate_java_expr safe_bool_binops)
-        e2
-  | Binop ((((Mast.Or | Mast.And) as f), _), e1, e2) when safe_bool_binops ->
-      let f = match f with Mast.Or -> "m_or" | Mast.And -> "m_and" | _ -> assert false in
-      Format.fprintf fmt "%s(%a, %a)" f
-        (generate_java_expr safe_bool_binops)
-        e1
+        e1     
         (generate_java_expr safe_bool_binops)
         e2
   | Binop ((op, _), e1, e2) ->
-      let left fmt () =
-        match Pos.unmark e1 with
-        | Binop ((opl, _), _, _) ->
-            let left_paren =
-              Mast.has_priority opl op
-              || (Mast.precedence opl = Mast.precedence op && Mast.is_right_associative op)
-            in
-            let lleft_paren, rleft_paren = if left_paren then ("(", ")") else ("", "") in
-            Format.fprintf fmt "%s%a%s" lleft_paren
-              (generate_java_expr safe_bool_binops)
-              e1 rleft_paren
-        | _ -> (generate_java_expr safe_bool_binops) fmt e1
-      in
-      let right fmt () =
-        match Pos.unmark e2 with
-        | Binop ((opr, _), _, _) ->
-            let right_paren =
-              Mast.has_priority opr op
-              || (Mast.precedence op = Mast.precedence opr && Mast.is_left_associative op)
-            in
-            let lright_paren, rright_paren = if right_paren then ("(", ")") else ("", "") in
-            Format.fprintf fmt "%s%a%s" lright_paren
-              (generate_java_expr safe_bool_binops)
-              e2 rright_paren
-        | _ -> (generate_java_expr safe_bool_binops) fmt e2
-      in
-      Format.fprintf fmt "%a %s %a" left () (generate_binop op) right ()
+      Format.fprintf fmt "%s(%a,%a)" (generate_binop op)
+        (generate_java_expr safe_bool_binops) e1
+        (generate_java_expr safe_bool_binops) e2;
   | Unop (op, e) ->
       Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_java_expr safe_bool_binops) e
   | Index (var, e) -> (
       match Pos.unmark e with
       | Literal (Float f) ->
-          Format.fprintf fmt "%a[%d]" generate_variable (Pos.unmark var) (int_of_float f)
+          Format.fprintf fmt "%a.get(%d)" generate_variable (Pos.unmark var) (int_of_float f)
       | _ ->
-          (* FIXME: int cast hack *)
-          Format.fprintf fmt "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
+          Format.fprintf fmt "%a.get(%a)"
             generate_variable (Pos.unmark var)
             (generate_java_expr safe_bool_binops)
-            e
-            (generate_java_expr safe_bool_binops)
-            e )
+            e)
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)"
         (generate_java_expr safe_bool_binops)
@@ -268,14 +309,14 @@ let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : un
         (generate_java_expr safe_bool_binops)
         e2
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
+  | Literal (Float f) -> Format.fprintf fmt "OptionalDouble.of(%s)" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
   | Var var -> Format.fprintf fmt "%a" generate_variable var
   | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
-  | LocalLet (lvar, e1, e2) ->
-      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id
+  | LocalLet (_, e1, e2) ->
+      Format.fprintf fmt "%a(%a)"    
         (generate_java_expr safe_bool_binops)
         e2
         (generate_java_expr safe_bool_binops)
@@ -284,33 +325,31 @@ let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : un
 let generate_var_def var data (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      if !verbose_output then
-        Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
-      Format.fprintf oc "%a = %a;@\n" generate_variable var (generate_java_expr false) e
+      Format.fprintf oc "OptionalDouble %a = %a;@\n" generate_variable var (generate_java_expr false) e
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a = [%a]@\n" generate_variable var
+      Format.fprintf oc "List<OptionalDouble> %a = {%a}@\n" generate_variable var
         (fun fmt ->
           IndexMap.iter (fun _ v -> Format.fprintf fmt "%a, " (generate_java_expr false) v))
         es
   | TableVar (_, IndexGeneric e) ->
-      if !verbose_output then
-        Format.fprintf oc "# Defined %a@\n" Pos.format_position_short (Pos.get_position e);
-      Format.fprintf oc "%a = GenericIndex(lambda generic_index: %a)@\n@\n" generate_variable var
+      Format.fprintf oc "%a = %a;@\n@\n" generate_variable var
         (generate_java_expr false) e
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
-  Format.fprintf oc "Map<String, Double> local_variables = new HashMap<>();\n\n\n"
+  Format.fprintf oc "import java.util.Map;@\nimport java.util.OptionalDouble;@\nimport java.util.function.BiFunction;
+@\nimport java.util.HashMap;";
+  Format.fprintf oc "public class CalculImpot {@\n";
+  Format.fprintf oc "private Map<String, OptionalDouble> local_variables = new HashMap<>();\n\n\n"
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "public void extracted(Map<String, Double> input_variables){@\n@[<h 4>    @\n";
-  Format.fprintf oc "// First we extract the input variables from the dictionnary:@\n%a@\n@\n"
+  Format.fprintf oc "%a@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%a = input_variables.get(\"%s\");" generate_variable var
+         Format.fprintf fmt "OptionalDouble %a = input_variables.get(\"%s\");" generate_variable var
            (generate_name var)))
     input_vars
 
@@ -327,14 +366,12 @@ let sanitize_str (s, p) =
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "// Verification condition %a@\n\
-     OptionalDouble cond = %a@\n\
-     if (!cond.isPresent() || (cond.getAsDouble() != 0)) { @\n\
-      raise TypeError(\"Error triggered\\n%a\")@\n\
-    }@\n\
+    "cond = %a;@\n\
+     if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
+     \   throw new RuntimeException(\"Error triggered\\n%a\");@\n\
+     }@\n\
      @\n"
-    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_java_expr true)
-    cond.cond_expr
+    (generate_java_expr true) cond.cond_expr
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt err ->
@@ -357,7 +394,7 @@ and generate_stmt program oc stmt =
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       Format.fprintf oc
-        "%s = %a@\nif not(isinstance(%s, Undefined)) and %s != 0:@\n@[<h 4>    %a@]@\n" cond_name
+        "OptionalDouble %s = %a;@\nif (!%s.isPresent() || %s.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n" cond_name
         (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
@@ -371,10 +408,10 @@ and generate_stmt program oc stmt =
       in
       Format.fprintf oc
         "%s = %a@\n\
-         if not(isinstance(%s, Undefined)) and %s != 0:@\n\
-         @[<h 4>    %a@]@\n\
-         elif not(isinstance(%s, Undefined)):@\n\
-         @[<h 4>    %a@]@\n"
+         if (!%s.isPresent() && %s != 0){@\n\
+         @[<h 4>    %a@]}@\n\
+         else if (!%s.isPresent()){@\n\
+         @[<h 4>    %a@]}@\n"
         cond_name (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
@@ -389,12 +426,18 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
         Format.fprintf fmt "out.put(\"%a\",%a)@\n" generate_variable var generate_variable var)
       oc returned_variables;
     Format.fprintf oc "return out@\n@]\n"
-  end
+  end;
+  Format.fprintf oc "}"
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a" generate_header () generate_input_handling function_spec
-    (generate_stmts program) program.statements generate_return function_spec;
+  Format.fprintf oc "%a%s%a%a%s%s" 
+    generate_header () 
+    "public static void enchainerCalcul(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond;\n"
+    generate_input_handling function_spec
+    (generate_stmts program) program.statements 
+    "}\n"
+    m_operation_class; 
   close_out _oc
