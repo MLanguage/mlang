@@ -1,7 +1,7 @@
 SOURCE_DIR_2018 ?= ../../../ir-calcul/sources2018m_6_7/
 SOURCE_DIR_2019=../../../ir-calcul/sources2019m_8_0/
 
-YEAR?=2018
+YEAR?=2019
 
 ifeq ($(YEAR), 2018)
 	SOURCE_DIR?=$(SOURCE_DIR_2018)
