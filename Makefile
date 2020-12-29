@@ -8,7 +8,7 @@ SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
 SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
 SOURCE_DIR_2019=$(PWD)/ir-calcul/sources2019m_8_0/*.m
 
-YEAR?=2018
+YEAR?=2019
 
 ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(SOURCE_DIR_2018)
@@ -17,6 +17,7 @@ ifeq ($(YEAR), 2018)
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
+	TESTS_DIR?=tests/2019/fuzzing/
 else
     $(error Unsupported year: $(YEAR))
 endif
