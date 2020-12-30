@@ -210,18 +210,9 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
 let generate_variable fmt (var : Variable.t) : unit =
-  let v = match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name in
+  let v = Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
-  let v =
-    if
-      same_execution_number var.Variable.execution_number
-        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
-    then v
-    else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
-        var.Variable.execution_number.Mir.seq_number
-  in
-  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v else Format.fprintf fmt "%s" v
+  Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -400,26 +391,23 @@ and generate_stmt program oc stmt =
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  if List.length returned_variables = 1 then
-    Format.fprintf oc "return %a\n@]@\n" generate_variable (List.hd returned_variables)
-  else begin
     Format.pp_print_list
       (fun fmt var ->
         Format.fprintf fmt "out.put(\"%a\",%a)@\n" generate_variable var generate_variable var)
       oc returned_variables;
-    Format.fprintf oc "return out@\n@]\n"
-  end;
+    Format.fprintf oc "return out@\n@]\n";
   Format.fprintf oc "}"
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%s%a%a%s%s" 
+  Format.fprintf oc "%a%s%a%a%a%s%s" 
     generate_header () 
-    "public static void enchainerCalcul(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond;\n"
+    "public static void enchainerCalcul(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond; \n Map<String, OptionalDouble> out = new HashMap<>();\n"
     generate_input_handling function_spec
     (generate_stmts program) program.statements 
+    generate_return function_spec
     "}\n"
     m_operation_class; 
   close_out _oc
