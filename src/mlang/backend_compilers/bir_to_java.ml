@@ -349,8 +349,8 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "OptionalDouble %a = input_variables.get(\"%s\");" generate_variable var
-           (generate_name var)))
+         Format.fprintf fmt "OptionalDouble %a = input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty();" generate_variable var
+           (generate_name var) (generate_name var)))
     input_vars
 
 let sanitize_str (s, p) =
