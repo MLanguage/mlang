@@ -187,24 +187,6 @@ let m_operation_class: string = {|
 }
 |}
 
-(* TODO: Should we use different files for java classes or a single file *)
-let calculation_error_class : string =
-  {|
-   class CalculationError {
-    private final String description;
-
-    public CalculationError (String description){
-      this.description = description;
-    }
-
-    public String getDescription(){
-      return this.description;
-    }
-  }
-|}
-
-
-
 let none_value = "OptionalDouble.empty()"
 
 let generate_comp_op (op : Mast.comp_op) : string =
