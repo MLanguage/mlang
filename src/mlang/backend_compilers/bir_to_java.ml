@@ -194,6 +194,15 @@ let m_operation_class: string = {|
 }
 |}
 
+let calculateTax_method_header : string = {|
+
+public static Map<String, OptionalDouble> calculateTax(Map<String,OptionalDouble> input_variables) {
+  OptionalDouble cond; 
+  Map<String, OptionalDouble> out = new HashMap<>();
+  Map<String, OptionalDouble> calculationVariables = new HashMap<>();
+
+|}
+
 let none_value = "OptionalDouble.empty()"
 
 let generate_comp_op (op : Mast.comp_op) : string =
@@ -219,7 +228,7 @@ let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" |
 let generate_variable fmt (var : Variable.t) : unit =
   let v = Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
-  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "variable_%s" v else Format.fprintf fmt "%s" v
+  Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -291,7 +300,7 @@ let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : un
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.fprintf fmt "OptionalDouble.of(%s)" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
-  | Var var -> Format.fprintf fmt "%a" generate_variable var
+  | Var var -> Format.fprintf fmt "calculationVariables.get(\"%a\")" generate_variable var
   | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
@@ -305,7 +314,7 @@ let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : un
 let generate_var_def var data (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      Format.fprintf oc "OptionalDouble %a = %a;@\n" generate_variable var (generate_java_expr false) e
+      Format.fprintf oc "calculationVariables.put(\"%a\",%a);@\n" generate_variable var (generate_java_expr false) e
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "List<OptionalDouble> %a = {%a}@\n" generate_variable var
         (fun fmt ->
@@ -327,7 +336,7 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "OptionalDouble %a = input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty();" generate_variable var
+         Format.fprintf fmt "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty());" generate_variable var
            (generate_name var) (generate_name var)))
     input_vars
 
@@ -398,7 +407,7 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
     Format.pp_print_list
       (fun fmt var ->
-        Format.fprintf fmt "out.put(\"%a\",%a);@\n" generate_variable var generate_variable var)
+        Format.fprintf fmt "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" generate_variable var generate_variable var)
       oc returned_variables;
     Format.fprintf oc "return out;@\n@]\n";
   Format.fprintf oc "}"
@@ -409,7 +418,7 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%s%a%a%a%s" 
     generate_header () 
-    "public static void calculateTax(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond; \n Map<String, OptionalDouble> out = new HashMap<>();\n"
+    calculateTax_method_header
     generate_input_handling function_spec
     (generate_stmts program) program.statements 
     generate_return function_spec
