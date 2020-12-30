@@ -212,7 +212,7 @@ let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" |
 let generate_variable fmt (var : Variable.t) : unit =
   let v = Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
-  Format.fprintf fmt "%s" v
+  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v else Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
