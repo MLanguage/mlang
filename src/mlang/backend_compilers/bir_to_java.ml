@@ -15,6 +15,13 @@ open Mir
 
 let verbose_output = ref false
 
+let java_imports : string = {|
+  import java.util.Map;
+  import java.util.OptionalDouble;
+  import java.util.function.BiFunction;
+  import java.util.HashMap;
+|}
+
 let m_operation_class: string = {|
 
   private static OptionalDouble mGreaterThan(OptionalDouble value1, OptionalDouble value2) {
@@ -212,7 +219,7 @@ let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" |
 let generate_variable fmt (var : Variable.t) : unit =
   let v = Pos.unmark var.Variable.name in
   let v = String.lowercase_ascii v in
-  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v else Format.fprintf fmt "%s" v
+  if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "variable_%s" v else Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -311,10 +318,8 @@ let generate_var_def var data (oc : Format.formatter) : unit =
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
-  Format.fprintf oc "import java.util.Map;@\nimport java.util.OptionalDouble;@\nimport java.util.function.BiFunction;
-@\nimport java.util.HashMap;";
-  Format.fprintf oc "public class CalculImpot {@\n";
-  Format.fprintf oc "private Map<String, OptionalDouble> local_variables = new HashMap<>();\n\n\n"
+  Format.fprintf oc "%s\n\n" java_imports;
+  Format.fprintf oc "public class CalculImpot {@\n"
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
@@ -393,21 +398,20 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
     Format.pp_print_list
       (fun fmt var ->
-        Format.fprintf fmt "out.put(\"%a\",%a)@\n" generate_variable var generate_variable var)
+        Format.fprintf fmt "out.put(\"%a\",%a);@\n" generate_variable var generate_variable var)
       oc returned_variables;
-    Format.fprintf oc "return out@\n@]\n";
+    Format.fprintf oc "return out;@\n@]\n";
   Format.fprintf oc "}"
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%s%a%a%a%s%s" 
+  Format.fprintf oc "%a%s%a%a%a%s" 
     generate_header () 
-    "public static void enchainerCalcul(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond; \n Map<String, OptionalDouble> out = new HashMap<>();\n"
+    "public static void calculateTax(Map<String,OptionalDouble> input_variables) { \n OptionalDouble cond; \n Map<String, OptionalDouble> out = new HashMap<>();\n"
     generate_input_handling function_spec
     (generate_stmts program) program.statements 
     generate_return function_spec
-    "}\n"
     m_operation_class; 
   close_out _oc
