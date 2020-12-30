@@ -8,7 +8,7 @@ SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
 SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
 SOURCE_DIR_2019=$(PWD)/ir-calcul/sources2019m_8_0/*.m
 
-YEAR?=2019
+YEAR?=2018
 
 ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(SOURCE_DIR_2018)
@@ -91,6 +91,8 @@ M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2018.m_spec
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
+from_spec:
+	$(MLANG) -O --backend c --output $(M_SPEC_FILE).c --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 ##################################################
 # Doc and examples
 ##################################################
