@@ -44,7 +44,7 @@ tests.m_spec: gen_m_spec.py
 # Generating the C code
 ##################################################
 
-ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES) FORCE
+ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --output $@ \
 		--function_spec $< \
@@ -76,7 +76,7 @@ ir_%.o: ir_%.c
 	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
 %.o: %.c
-	$(CC) -I ../ -O1 -c -o $@ $<
+	$(CC) -I ../ -O3 -c -o $@ $<
 
 ##################################################
 # Building and running the test harness
@@ -89,6 +89,14 @@ run_tests: test_harness.exe FORCE
 	ulimit -s 65536; \
 	./$< $(TESTS_DIR)
 
+perf_harness.exe: TESTS_DIR=../../../tests/2018/only_one/
+perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
+	$(CC) -fPIE -lm -o $@ $^
+
+run_perf: TESTS_DIR=../../../tests/2018/only_one/
+run_perf: perf_harness.exe FORCE
+	ulimit -s 65536; \
+	time ./$< $(TESTS_DIR)
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
