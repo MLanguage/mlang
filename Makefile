@@ -102,7 +102,7 @@ from_spec:
 
 doc: FORCE
 	dune build @doc
-	ln -s _build/default/_doc/_html/index.html doc/doc.html
+	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 examples: FORCE
 	$(MAKE) -C examples/python
