@@ -116,7 +116,7 @@ let rec generate_c_expr (e : expression Pos.marked) (var_indexes : int Mir.Varia
   | Literal (Float f) -> (Format.asprintf "m_literal(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var -> (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
-  | LocalVar lvar -> (Format.asprintf "v_%d" lvar.LocalVariable.id, [])
+  | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
@@ -129,7 +129,7 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
   List.iter
     (fun (lvar, e) ->
       let se, _ = generate_c_expr e var_indexes in
-      Format.fprintf fmt "v_%d = %s;@\n" lvar.LocalVariable.id se)
+      Format.fprintf fmt "LOCAL[%d] = %s;@\n" lvar.LocalVariable.id se)
     defs
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
@@ -170,6 +170,8 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
     \    printf(\"Error triggered: %a\\n\");@\n\
     \    {@\n\
     \        output->is_error = true;@\n\
+    \        free(TGV);@\n\
+    \        free(LOCAL);@\n\
     \        return -1;@\n\
     \    }@\n\
      }@\n"
@@ -254,6 +256,19 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   Format.fprintf oc "%a {@\n@[<h 4>    @\n" generate_main_function_signature false;
   Format.fprintf oc "// First we initialize the table of all the variables used in the program@\n";
+  (* here, we need to generate a table that can host all the local vars. the index inside the table
+     will be the id of the local var so we generate a table big enough so that the highest id is
+     always in bounds *)
+  let size_locals =
+    List.hd
+      (List.rev
+         (List.sort compare
+            (List.map
+               (fun (x, _) -> x.LocalVariable.id)
+               (Mir.LocalVariableMap.bindings (Bir.get_local_variables p)))))
+    + 1
+  in
+  Format.fprintf oc "m_value *LOCAL = malloc(%d * sizeof(m_value));@\n@\n" size_locals;
   Format.fprintf oc "m_value *TGV = malloc(%d * sizeof(m_value));@\n@\n" var_table_size;
   Format.fprintf oc "// Then we extract the input variables from the dictionnary:@\n%a@\n@\n"
     (Format.pp_print_list
@@ -263,17 +278,14 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
            (generate_variable var_indexes None)
            var (generate_name var)))
     input_vars;
-  Format.fprintf oc "%a@\n@\n"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, ()) -> Format.fprintf fmt "m_value v_%d;" var.Mir.LocalVariable.id))
-    (Mir.LocalVariableMap.bindings (Bir.get_local_variables p));
+
   Format.fprintf oc "m_value cond;@\n@\n"
 
 let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc "%a@\n@\nfree(TGV);@\noutput->is_error = false;@\nreturn 0;@]@\n}"
+  Format.fprintf oc
+    "%a@\n@\nfree(TGV);@\nfree(LOCAL);@\noutput->is_error = false;@\nreturn 0;@]@\n}"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
