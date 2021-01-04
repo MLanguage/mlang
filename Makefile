@@ -95,7 +95,7 @@ quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 from_spec:
-	$(MLANG) -O --backend c --output $(M_SPEC_FILE).c --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
+	$(MLANG) -O --backend python --output /tmp/output_$(shell basename $(M_SPEC_FILE) .m_spec).py --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 ##################################################
 # Doc and examples
 ##################################################
