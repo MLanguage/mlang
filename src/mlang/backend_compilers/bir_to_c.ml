@@ -288,29 +288,27 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#include <m_value.h>\n\n"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "m_input m_empty_input()%s" (if add_semicolon then ";\n\n" else "")
+  Format.fprintf oc "void m_empty_input(m_input *input)%s" (if add_semicolon then ";\n\n" else "")
 
 let generate_empty_input_func (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "%a {@\n@[<h 4>    return (struct m_input){@\n@[<h 4>    %a@]@\n};@]@\n};@\n@\n"
-    generate_empty_input_prototype false
+  Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n" generate_empty_input_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
+       (fun fmt var -> Format.fprintf fmt "input->%s = m_undefined;" (generate_name var)))
     input_vars
 
 let generate_input_from_array_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "m_input m_input_from_array(m_value *array)%s"
+  Format.fprintf oc "void m_input_from_array(m_input* input, m_value *array)%s"
     (if add_semicolon then ";\n\n" else "")
 
 let generate_input_from_array_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "%a {@\n@[<h 4>    return (struct m_input){@\n@[<h 4>    %a@]@\n};@]@\n};@\n@\n"
-    generate_input_from_array_prototype false
+  Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n" generate_input_from_array_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, i) -> Format.fprintf fmt ".%s = array[%d]," (generate_name var) i))
+       (fun fmt (var, i) -> Format.fprintf fmt "input->%s = array[%d];" (generate_name var) i))
     (List.mapi (fun i x -> (x, i)) input_vars)
 
 let generate_get_input_index_prototype (oc : Format.formatter) (add_semicolon : bool) =
@@ -369,27 +367,20 @@ let generate_input_type (oc : Format.formatter) (function_spec : Bir_interface.b
     input_vars
 
 let generate_empty_output_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "m_output m_empty_output()%s" (if add_semicolon then ";\n\n" else "")
+  Format.fprintf oc "void m_empty_output(m_output* output)%s" (if add_semicolon then ";\n\n" else "")
 
 let generate_empty_output_func (oc : Format.formatter) (function_spec : Bir_interface.bir_function)
     =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  Format.fprintf oc
-    "%a {@\n\
-     @[<h 4>    return (struct m_output){@\n\
-     @[<h 4>    .is_error = false,@\n\
-     %a@]@\n\
-     };@]@\n\
-     };@\n\
-     @\n"
+  Format.fprintf oc "%a {@\n@[<h 4>    @\noutput->is_error = false;@\n%a@]@\n};@\n@\n"
     generate_empty_output_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var -> Format.fprintf fmt ".%s = m_undefined," (generate_name var)))
+       (fun fmt var -> Format.fprintf fmt "output->%s = m_undefined;" (generate_name var)))
     output_vars
 
 let generate_output_to_array_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "void m_output_to_array(m_value *array, m_output output)%s"
+  Format.fprintf oc "void m_output_to_array(m_value *array, m_output* output)%s"
     (if add_semicolon then ";\n\n" else "")
 
 let generate_output_to_array_func (oc : Format.formatter)
@@ -398,7 +389,7 @@ let generate_output_to_array_func (oc : Format.formatter)
   Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n" generate_output_to_array_prototype false
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, i) -> Format.fprintf fmt "array[%d] = output.%s;" i (generate_name var)))
+       (fun fmt (var, i) -> Format.fprintf fmt "array[%d] = output->%s;" i (generate_name var)))
     (List.mapi (fun i x -> (x, i)) output_vars)
 
 let generate_get_output_index_prototype (oc : Format.formatter) (add_semicolon : bool) =
