@@ -16,13 +16,13 @@ int main(int argc, char *argv[])
     char *separator = "/";
     char *tests_dir = argv[1];
     int state;
-    m_input input_for_m = m_empty_input();
+    m_input *input_for_m = malloc(sizeof(m_input));
     int num_inputs = m_num_inputs();
-    m_value input_array_for_m[num_inputs];
+    m_value *input_array_for_m = malloc(num_inputs * sizeof(m_value));
     int i;
     int num_outputs = m_num_inputs();
-    m_value outputs_array_for_m[num_outputs];
-    m_output output_for_m = m_empty_output();
+    m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
+    m_output *output_for_m = malloc(sizeof(m_input));
 
     char *name;
     char *value_s;
@@ -85,8 +85,8 @@ int main(int argc, char *argv[])
                         state = 2;
                         // Here we move to controlling the outputs, so we
                         // have to run the computation!
-                        input_for_m = m_input_from_array(input_array_for_m);
-                        m_extracted(&output_for_m, &input_for_m);
+                        m_input_from_array(input_for_m, input_array_for_m);
+                        m_extracted(output_for_m, input_for_m);
                         m_output_to_array(outputs_array_for_m, output_for_m);
                         break;
                     }
@@ -135,5 +135,9 @@ int main(int argc, char *argv[])
         }
         closedir(d);
     }
+    free(input_for_m);
+    free(input_array_for_m);
+    free(outputs_array_for_m);
+    free(output_for_m);
     return 0;
 }

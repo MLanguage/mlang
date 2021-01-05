@@ -140,20 +140,4 @@ clean_fuzz_tests:
 clean:
 	rm -f ir_tests.* ../m_value.o tests.m_spec *.exe *.tmp
 
-##################################################
-# Building and running the KLEE harness
-##################################################
-
-%.bc: C_COMPILER=clang
-%.bc: %.c
-	$(C_COMPILER) -I ../ -fbracket-depth=2048 -I $(KLEE_DIR)/include \
-		 -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -o $@ $<
-
-run_klee: ../m_value.bc ir_$(FUZZ_M_SPEC).bc klee_harness.bc
-	$(KLEE_DIR)/build/bin/klee \
-		-link-llvm-lib=ir_$(FUZZ_M_SPEC).bc \
-		-link-llvm-lib=../m_value.bc \
-		klee_harness.bc
-
-
 FORCE:

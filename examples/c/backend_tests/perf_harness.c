@@ -17,14 +17,12 @@ int main(int argc, char *argv[])
     char *tests_dir = argv[1];
     int state;
     m_input *input_for_m = malloc(sizeof(m_input));
-    m_empty_input(input_for_m);
     int num_inputs = m_num_inputs();
     m_value *input_array_for_m = malloc(num_inputs * sizeof(m_value));
     int i;
     int num_outputs = m_num_inputs();
     m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
     m_output *output_for_m = malloc(sizeof(m_output));
-    m_empty_output(output_for_m);
 
     char *name;
     char *value_s;
