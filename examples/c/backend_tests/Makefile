@@ -44,7 +44,7 @@ tests.m_spec: gen_m_spec.py
 # Generating the C code
 ##################################################
 
-ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES) FORCE
+ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --output $@ \
 		--function_spec $< \
@@ -76,7 +76,7 @@ ir_%.o: ir_%.c
 	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
 
 %.o: %.c
-	$(CC) -I ../ -O1 -c -o $@ $<
+	$(CC) -I ../ -O3 -c -o $@ $<
 
 ##################################################
 # Building and running the test harness
@@ -86,9 +86,17 @@ test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
 run_tests: test_harness.exe FORCE
-	ulimit -s 65536; \
+	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
+perf_harness.exe: TESTS_DIR=../../../tests/2018/only_one/
+perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
+	$(CC) -fPIE -lm -o $@ $^
+
+run_perf: TESTS_DIR=../../../tests/2018/only_one/
+run_perf: perf_harness.exe FORCE
+	ulimit -s 32768; \
+	time ./$< $(TESTS_DIR)
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
@@ -109,7 +117,7 @@ endif
 
 # Usage: NO_JOB=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
-	ulimit -s 65536; \
+	ulimit -s 32768; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
@@ -131,21 +139,5 @@ clean_fuzz_tests:
 
 clean:
 	rm -f ir_tests.* ../m_value.o tests.m_spec *.exe *.tmp
-
-##################################################
-# Building and running the KLEE harness
-##################################################
-
-%.bc: C_COMPILER=clang
-%.bc: %.c
-	$(C_COMPILER) -I ../ -fbracket-depth=2048 -I $(KLEE_DIR)/include \
-		 -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone -o $@ $<
-
-run_klee: ../m_value.bc ir_$(FUZZ_M_SPEC).bc klee_harness.bc
-	$(KLEE_DIR)/build/bin/klee \
-		-link-llvm-lib=ir_$(FUZZ_M_SPEC).bc \
-		-link-llvm-lib=../m_value.bc \
-		klee_harness.bc
-
 
 FORCE:

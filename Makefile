@@ -83,6 +83,9 @@ tests: build
 test_python_backend:
 	$(MAKE) -C examples/python/backend_tests all_tests
 
+test_c_backend_perf:
+	$(MAKE) -C examples/c/backend_tests run_perf
+
 test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
 
@@ -97,7 +100,7 @@ quick_test:
 
 doc: FORCE
 	dune build @doc
-	ln -s _build/default/_doc/_html/index.html doc/doc.html
+	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 examples: FORCE
 	$(MAKE) -C examples/python
