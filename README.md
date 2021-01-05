@@ -25,7 +25,7 @@ of OCaml that is at least 4.0.9. In order to support multi-precision floating-po
 computation, you will need also need to install the MPFR library. For Debian-based
 distributions, simply invoke
 
-    sudo apt install libmpfr-dev
+    sudo apt install libgmp-dev libmpfr-dev m4 perl python3 clang git opam
 
 Then, you can install Mlang's Ocaml dependencies using
 

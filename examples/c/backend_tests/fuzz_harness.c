@@ -30,14 +30,14 @@ int main(int argc, char *argv[])
     fclose(input_file);
 
     // First we fill the array with the contents of the fuzzing input
-    m_value input_array_for_m[num_inputs];
+    m_value *input_array_for_m = malloc(num_inputs * sizeof(m_value));
 
     for (int i = 0; i < num_inputs; i++)
     {
         char *undefined = input_string + size_per_value * i;
         char *value = input_string + size_per_value * i + (sizeof(char));
         bool undefined_v = ((uint16_t)*undefined > 32767) ? true : false;
-        // Values are seeded with a uint16_t, 
+        // Values are seeded with a uint16_t,
         // corresponding to a value no bigger than 65536
         uint16_t value_v = (*((uint16_t *)value));
         m_value input = (struct m_value){
@@ -47,18 +47,18 @@ int main(int argc, char *argv[])
         input_array_for_m[i] = input;
     }
     // Then we call the program
-    m_input input_for_m = m_input_from_array(input_array_for_m);
-    m_output output;
-    m_extracted(&output, &input_for_m);
+    m_input *input_for_m = malloc(sizeof(m_input));
+    m_input_from_array(input_for_m, input_array_for_m);
+    m_output *output = malloc(sizeof(m_output));
+    m_extracted(output, input_for_m);
     int num_outputs = m_num_outputs();
-    m_value output_array_for_m[num_outputs];
+    m_value *output_array_for_m = malloc(num_outputs * sizeof(m_value));
     m_output_to_array(output_array_for_m, output);
     // We don't want error cases or household whose revenue is astronomically high
-    bool keep_test_case = 
-        !output.is_error && // the test case should not be an error 
-        // output_array_for_m[m_get_output_index("REVKIRE")].value < 10000000.) && // the reference income should be low 
-        true
-    ;
+    bool keep_test_case =
+        !output->is_error && // the test case should not be an error
+        // output_array_for_m[m_get_output_index("REVKIRE")].value < 10000000.) && // the reference income should be low
+        true;
 
     if (!keep_test_case)
     {
@@ -100,4 +100,8 @@ int main(int argc, char *argv[])
         // Aborting to signal the fuzzer that this is a good one
         abort();
     }
+    free(input_array_for_m);
+    free(input_for_m);
+    free(output);
+    free(output_array_for_m);
 }
