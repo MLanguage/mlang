@@ -47,9 +47,10 @@ ir_%.py: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend python --output $@ \
 		--function_spec $^ \
+		--optimize \
 		$(SOURCE_FILES)
 
-run_%.py: ir_%.py
+run_%.py: ir_%.py FORCE
 	python3 $@
 
 ##################################################
