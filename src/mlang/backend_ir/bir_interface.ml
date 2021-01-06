@@ -133,6 +133,9 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_functio
   try
     let func_spec = Mparser.function_spec Mlexer.token filebuf in
     close_in input;
+    Cli.debug_print "M_spec has %d inputs and %d outputs"
+      (List.length func_spec.spec_inputs)
+      (List.length func_spec.spec_outputs);
     {
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Mast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Mast.spec_consts;
