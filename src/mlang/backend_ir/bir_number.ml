@@ -188,9 +188,11 @@ module IntervalNumber : NumberInterface = struct
     let fu = Mpfrf.to_float ~round:Up f.up in
     if fd = fu then fd
     else
+      let prec_diff = fu -. fd in
+      let digits = 1 - (Float.to_int @@ Float.log10 prec_diff) in
       Errors.raise_error
-        (Format.asprintf "Tried to convert interval to float, got two different bounds: [%f;%f]" fd
-           fu)
+        (Format.asprintf "Tried to convert interval to float, got two different bounds: [%.*f;%.*f]"
+           digits fd digits fu)
 
   let to_int (f : t) : Int64.t = Int64.of_float (to_float f)
 

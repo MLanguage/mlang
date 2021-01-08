@@ -25,7 +25,18 @@ of OCaml that is at least 4.0.9. In order to support multi-precision floating-po
 computation, you will need also need to install the MPFR library. For Debian-based
 distributions, simply invoke
 
-    sudo apt install libmpfr-dev
+    sudo apt install libgmp-dev libmpfr-dev m4 perl python3 clang git opam
+
+If you would like to generate tests using the fuzzer, you will need to install AFL:
+
+    sudo apt install afl++ afl++-clang
+
+We require OCaml >= 4.0.9. If you have not used opam before, run:
+
+    opam init
+    opam update -y
+    opam switch create 4.11.1 -y
+
 
 Then, you can install Mlang's Ocaml dependencies using
 

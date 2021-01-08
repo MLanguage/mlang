@@ -27,7 +27,7 @@ let print_done ?msg (init : int) (old : int) (new_ : int) : unit =
     (ANSITerminal.sprintf
        [ (if strict_reduction then ANSITerminal.green else ANSITerminal.yellow) ]
        "%s %.1f%%"
-       (if strict_reduction then "🡖" else "~")
+       (if strict_reduction then "↘" else "~")
        reduction_percent)
 
 let optimize (p : program) : program =
