@@ -6,7 +6,7 @@ image: mlanguage/mlang:0.3
 
 before_script:
   - eval $(opam env)
-
+  - git submodule update --init
 
 stages:
   - build

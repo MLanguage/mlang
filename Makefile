@@ -2,11 +2,11 @@
 # Variables
 ##################################################
 
-SOURCE_DIR_2015=$(PWD)/ir-calcul/sources2015m_4_6/*.m
-SOURCE_DIR_2016=$(PWD)/ir-calcul/sources2016m_4_5/*.m
-SOURCE_DIR_2017=$(PWD)/ir-calcul/sources2017m_6_10/*.m
-SOURCE_DIR_2018=$(PWD)/ir-calcul/sources2018m_6_7/*.m
-SOURCE_DIR_2019=$(PWD)/ir-calcul/sources2019m_8_0/*.m
+SOURCE_DIR_2015=$(wildcard $(PWD)/ir-calcul/sources2015m_4_6/*.m)
+SOURCE_DIR_2016=$(wildcard $(PWD)/ir-calcul/sources2016m_4_5/*.m)
+SOURCE_DIR_2017=$(wildcard $(PWD)/ir-calcul/sources2017m_6_10/*.m)
+SOURCE_DIR_2018=$(wildcard $(PWD)/ir-calcul/sources2018m_6_7/*.m)
+SOURCE_DIR_2019=$(wildcard $(PWD)/ir-calcul/sources2019m_8_0/*.m)
 
 YEAR?=2019
 
