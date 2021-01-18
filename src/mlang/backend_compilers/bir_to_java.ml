@@ -200,7 +200,7 @@ public static Map<String, OptionalDouble> calculateTax(Map<String,OptionalDouble
   OptionalDouble cond; 
   Map<String, OptionalDouble> out = new HashMap<>();
   Map<String, OptionalDouble> calculationVariables = new HashMap<>();
-
+  Map<Integer, OptionalDouble> localVariables = new HashMap<>();
 |}
 
 let none_value = "OptionalDouble.empty()"
@@ -225,9 +225,21 @@ let generate_binop (op : Mast.binop) : string =
 
 let generate_unop (op : Mast.unop) : string = match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
-let generate_variable fmt (var : Variable.t) : unit =
+let generate_variable (var_indexes : int Mir.VariableMap.t) 
+    (fmt : Format.formatter) (var : Variable.t) : unit =
+  let var_index =
+    match Mir.VariableMap.find_opt var var_indexes with
+    | Some i -> i
+    | None ->
+        Errors.raise_error
+          (Format.asprintf "Variable %s not found in TGV" (Pos.unmark var.Mir.Variable.name))
+  in
+      Format.fprintf fmt "TGV[%d]" var_index
+
+
+let generate_variable  (var : Variable.t) (fmt : Format.formatter) : unit =
   let v = Pos.unmark var.Variable.name in
-  let v = String.lowercase_ascii v in
+  let v = String.uppercase_ascii v in
   Format.fprintf fmt "%s" v
 
 let generate_name (v : Variable.t) : string =
@@ -237,92 +249,98 @@ let autograd_ref = ref false
 
 let autograd () : bool = !autograd_ref
 
-let rec generate_java_expr safe_bool_binops fmt (e : expression Pos.marked) : unit =
+let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.VariableMap.t) :
+    string * (LocalVariable.t * expression Pos.marked) list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      Format.fprintf fmt "%s((%a),(%a))"
-        (generate_comp_op (Pos.unmark op))
-        (generate_java_expr safe_bool_binops)
-        e1     
-        (generate_java_expr safe_bool_binops)
-        e2
-  | Binop ((op, _), e1, e2) ->
-      Format.fprintf fmt "%s(%a,%a)" (generate_binop op)
-        (generate_java_expr safe_bool_binops) e1
-        (generate_java_expr safe_bool_binops) e2;
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      (Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2, s1 @ s2)
+  | Binop (op, e1, e2) ->
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      (Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2, s1 @ s2)
   | Unop (op, e) ->
-      Format.fprintf fmt "%s (%a)" (generate_unop op) (generate_java_expr safe_bool_binops) e
-  | Index (var, e) -> (
-      match Pos.unmark e with
-      | Literal (Float f) ->
-          Format.fprintf fmt "%a.get(%d)" generate_variable (Pos.unmark var) (int_of_float f)
-      | _ ->
-          Format.fprintf fmt "%a.get(%a)"
-            generate_variable (Pos.unmark var)
-            (generate_java_expr safe_bool_binops)
-            e)
+      let se, s = generate_java_expr e var_indexes in
+      (Format.asprintf "%s(%s)" (generate_unop op) se, s)
+  | Index (_, _) ->
+      assert false
   | Conditional (e1, e2, e3) ->
-      Format.fprintf fmt "m_cond(%a, %a, %a)"
-        (generate_java_expr safe_bool_binops)
-        e1
-        (generate_java_expr safe_bool_binops)
-        e2
-        (generate_java_expr safe_bool_binops)
-        e3
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      let se3, s3 = generate_java_expr e3 var_indexes in
+      (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
   | FunctionCall (PresentFunc, [ arg ]) ->
-      Format.fprintf fmt "m_present(%a)" (generate_java_expr safe_bool_binops) arg
+      let se, s = generate_java_expr arg var_indexes in
+      (Format.asprintf "m_present(%s)" se, s)
   | FunctionCall (NullFunc, [ arg ]) ->
-      Format.fprintf fmt "(%a == %s)" (generate_java_expr safe_bool_binops) arg none_value
+      let se, s = generate_java_expr arg var_indexes in
+      (Format.asprintf "m_null(%s)" se, s)
   | FunctionCall (ArrFunc, [ arg ]) ->
-      if autograd () then (generate_java_expr safe_bool_binops) fmt arg
-      else Format.fprintf fmt "m_round(%a)" (generate_java_expr safe_bool_binops) arg
+      let se, s = generate_java_expr arg var_indexes in
+      (Format.asprintf "m_round(%s)" se, s)
   | FunctionCall (InfFunc, [ arg ]) ->
-      if autograd () then (generate_java_expr safe_bool_binops) fmt arg
-      else Format.fprintf fmt "m_floor(%a)" (generate_java_expr safe_bool_binops) arg
+      let se, s = generate_java_expr arg var_indexes in
+      (Format.asprintf "m_floor(%s)" se, s)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_max(%a, %a)"
-        (generate_java_expr safe_bool_binops)
-        e1
-        (generate_java_expr safe_bool_binops)
-        e2
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_min(%a, %a)"
-        (generate_java_expr safe_bool_binops)
-        e1
-        (generate_java_expr safe_bool_binops)
-        e2
-  | FunctionCall (Multimax, [ e1; e2 ]) ->
-      Format.fprintf fmt "m_multimax(%a, %a)"
-        (generate_java_expr safe_bool_binops)
-        e1
-        (generate_java_expr safe_bool_binops)
-        e2
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
+  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+      let se1, s1 = generate_java_expr e1 var_indexes in
+      (Format.asprintf "m_multimax(%s, %a)" se1 (generate_variable v2) v2, s1)
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> Format.fprintf fmt "OptionalDouble.of(%s)" (string_of_float f)
-  | Literal Undefined -> Format.fprintf fmt "%s" none_value
-  | Var var -> Format.fprintf fmt "calculationVariables.get(\"%a\")" generate_variable var
-  | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
-  | GenericTableIndex -> Format.fprintf fmt "generic_index"
-  | Error -> assert false (* TODO *)
-  | LocalLet (_, e1, e2) ->
-      Format.fprintf fmt "%a(%a)"    
-        (generate_java_expr safe_bool_binops)
-        e2
-        (generate_java_expr safe_bool_binops)
-        e1
+  | Literal (Float f) -> (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
+  | Literal Undefined -> (Format.asprintf "%s" none_value, [])
+  | Var var -> (Format.asprintf "%a" (generate_variable  var fmt), [])
+  | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
+  | GenericTableIndex -> (Format.asprintf "generic_index", [])
+  | Error -> assert false (* should not happen *)
+  | LocalLet (lvar, e1, e2) ->
+      let _, s1 = generate_java_expr e1 var_indexes in
+      let se2, s2 = generate_java_expr e2 var_indexes in
+      (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2))
 
-let generate_var_def var data (oc : Format.formatter) : unit =
+let format_local_vars_defs  (var_indexes : int Mir.VariableMap.t) (fmt : Format.formatter)
+    (defs : (LocalVariable.t * expression Pos.marked) list) =
+ List.iter
+    (fun (lvar, e) ->
+      let se, _ = generate_java_expr e var_indexes in
+      Format.fprintf fmt "localVariables.put(%d,%s);@\n" lvar.LocalVariable.id se)
+    defs
+
+let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
+    (data : Mir.variable_data) (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      Format.fprintf oc "calculationVariables.put(\"%a\",%a);@\n" generate_variable var (generate_java_expr false) e
+      let se, defs = generate_java_expr e var_indexes in
+      Format.fprintf oc "%a%a = %s;@\n"
+        (format_local_vars_defs var_indexes)
+        defs
+        (generate_variable var_indexes oc)
+        var
+        se
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "List<OptionalDouble> %a = {%a}@\n" generate_variable var
-        (fun fmt ->
-          IndexMap.iter (fun _ v -> Format.fprintf fmt "%a, " (generate_java_expr false) v))
-        es
-  | TableVar (_, IndexGeneric e) ->
-      Format.fprintf oc "%a = %a;@\n@\n" generate_variable var
-        (generate_java_expr false) e
+
+      Format.fprintf oc "/* TableVar */ @\n List<OptionalDouble> %a = {%s}@\n" 
+      (generate_variable var)
+      (String.concat ","  
+      (let array_of_variables =  ref [] in 
+      IndexMap.iter
+        (fun _ v ->  
+        let string_genere,_  = (generate_java_expr v) in 
+         array_of_variables := List.append !array_of_variables [string_genere]
+        ) 
+        es;
+      !array_of_variables))
+
+  | TableVar (_, IndexGeneric _) -> assert false
+      (*Format.fprintf oc "%a = %a;@\n@\n" generate_variable var
+        (generate_java_expr) e*)
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
@@ -336,7 +354,7 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty());" generate_variable var
+         Format.fprintf fmt "calculationVariables.put(\"%s\",input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty());" (generate_variable var)
            (generate_name var) (generate_name var)))
     input_vars
 
@@ -353,12 +371,13 @@ let sanitize_str (s, p) =
 
 let generate_var_cond cond oc =
   Format.fprintf oc
-    "cond = %a;@\n\
+    "cond = %s;@\n\
      if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
      \   throw new RuntimeException(\"Error triggered\\n%a\");@\n\
      }@\n\
      @\n"
-    (generate_java_expr true) cond.cond_expr
+    (let se, _ = generate_java_expr cond.cond_expr in
+    se)
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt err ->
@@ -370,7 +389,7 @@ let rec generate_stmts (program : Bir.program) oc stmts =
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
+  | Bir.SAssign (var, vdata) -> Format.fprintf oc "%s" (generate_var_def var vdata)
   | SConditional (cond, tt, []) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -381,8 +400,8 @@ and generate_stmt program oc stmt =
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       Format.fprintf oc
-        "OptionalDouble %s = %a;@\nif (!%s.isPresent() || %s.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n" cond_name
-        (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
+        "OptionalDouble %s = %s;@\nif (!%s.isPresent() || %s.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n" cond_name
+        (generate_java_expr (Pos.same_pos_as cond stmt)) cond_name cond_name
         (generate_stmts program) tt
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
@@ -394,12 +413,12 @@ and generate_stmt program oc stmt =
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       Format.fprintf oc
-        "%s = %a@\n\
+        "%s = %s@\n\
          if (!%s.isPresent() && %s != 0){@\n\
          @[<h 4>    %a@]}@\n\
          else if (!%s.isPresent()){@\n\
          @[<h 4>    %a@]}@\n"
-        cond_name (generate_java_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
+        cond_name (generate_java_expr  (Pos.same_pos_as cond stmt)) cond_name cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
 
@@ -407,7 +426,7 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
     Format.pp_print_list
       (fun fmt var ->
-        Format.fprintf fmt "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" generate_variable var generate_variable var)
+        Format.fprintf fmt "out.put(\"%s\",calculationVariables.get(\"%s\"));@\n" (generate_variable var) (generate_variable var))
       oc returned_variables;
     Format.fprintf oc "return out;@\n@]\n";
   Format.fprintf oc "}"
