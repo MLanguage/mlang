@@ -237,7 +237,7 @@ let generate_variable (var_indexes : int Mir.VariableMap.t)
       Format.fprintf fmt "TGV[%d]" var_index
 
 
-let generate_variable  (var : Variable.t) (fmt : Format.formatter) : unit =
+let generate_var_name (fmt : Format.formatter) (var : Variable.t) : unit =
   let v = Pos.unmark var.Variable.name in
   let v = String.uppercase_ascii v in
   Format.fprintf fmt "%s" v
@@ -292,11 +292,11 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
-      (Format.asprintf "m_multimax(%s, %a)" se1 (generate_variable v2) v2, s1)
+      (Format.asprintf "m_multimax(%s, %a)" se1 generate_var_name v2), s1
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (Format.asprintf "%a" (generate_variable  var fmt), [])
+  | Var var -> (Format.asprintf "%a" generate_var_name  var, [])
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
@@ -321,18 +321,16 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
       Format.fprintf oc "%a%a = %s;@\n"
         (format_local_vars_defs var_indexes)
         defs
-        (generate_variable var_indexes oc)
-        var
+        generate_var_name var
         se
   | TableVar (_, IndexTable es) ->
-
       Format.fprintf oc "/* TableVar */ @\n List<OptionalDouble> %a = {%s}@\n" 
-      (generate_variable var)
+      generate_var_name var
       (String.concat ","  
       (let array_of_variables =  ref [] in 
       IndexMap.iter
         (fun _ v ->  
-        let string_genere,_  = (generate_java_expr v) in 
+        let string_genere,_  = generate_java_expr v var_indexes in 
          array_of_variables := List.append !array_of_variables [string_genere]
         ) 
         es;
@@ -354,8 +352,10 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "calculationVariables.put(\"%s\",input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty());" (generate_variable var)
-           (generate_name var) (generate_name var)))
+         Format.fprintf fmt "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? input_variables.get(\"%s\") : OptionalDouble.empty());" 
+          generate_var_name var
+          (generate_name var) 
+          (generate_name var)))
     input_vars
 
 let sanitize_str (s, p) =
@@ -369,14 +369,14 @@ let sanitize_str (s, p) =
       else c)
     s
 
-let generate_var_cond cond oc =
+let generate_var_cond var_indexes cond oc =
   Format.fprintf oc
     "cond = %s;@\n\
      if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
      \   throw new RuntimeException(\"Error triggered\\n%a\");@\n\
      }@\n\
      @\n"
-    (let se, _ = generate_java_expr cond.cond_expr in
+    (let se, _ = generate_java_expr cond.cond_expr var_indexes  in 
     se)
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
@@ -384,12 +384,14 @@ let generate_var_cond cond oc =
          Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
     cond.cond_errors
 
-let rec generate_stmts (program : Bir.program) oc stmts =
-  Format.pp_print_list (generate_stmt program) oc stmts
+let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (stmts : Bir.stmt list) =
+  Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
-and generate_stmt program oc stmt =
+and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (stmt : Bir.stmt) =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> Format.fprintf oc "%s" (generate_var_def var vdata)
+  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
   | SConditional (cond, tt, []) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -400,9 +402,14 @@ and generate_stmt program oc stmt =
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       Format.fprintf oc
-        "OptionalDouble %s = %s;@\nif (!%s.isPresent() || %s.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n" cond_name
-        (generate_java_expr (Pos.same_pos_as cond stmt)) cond_name cond_name
-        (generate_stmts program) tt
+        "OptionalDouble %s = %s;@\nif (!%s.isPresent() || %s.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n" 
+        cond_name
+        ( let pos_expression = Pos.same_pos_as cond stmt in
+          let s,_ = generate_java_expr pos_expression var_indexes in
+        s)
+        cond_name 
+        cond_name
+        (generate_stmts program var_indexes) tt
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -418,18 +425,44 @@ and generate_stmt program oc stmt =
          @[<h 4>    %a@]}@\n\
          else if (!%s.isPresent()){@\n\
          @[<h 4>    %a@]}@\n"
-        cond_name (generate_java_expr  (Pos.same_pos_as cond stmt)) cond_name cond_name
-        (generate_stmts program) tt cond_name (generate_stmts program) ff
-  | SVerif v -> generate_var_cond v oc
+        cond_name 
+        (let s,_ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in 
+        s)
+         cond_name cond_name
+        (generate_stmts program var_indexes) tt cond_name (generate_stmts program var_indexes) ff
+  | SVerif v -> generate_var_cond var_indexes v oc
 
-let generate_return oc (function_spec : Bir_interface.bir_function) =
+let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
     Format.pp_print_list
-      (fun fmt var ->
-        Format.fprintf fmt "out.put(\"%s\",calculationVariables.get(\"%s\"));@\n" (generate_variable var) (generate_variable var))
+      (fun oc (var : Variable.t) ->
+        Format.fprintf oc "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" generate_var_name var generate_var_name var)
       oc returned_variables;
-    Format.fprintf oc "return out;@\n@]\n";
+  Format.fprintf oc "return out;@\n@]\n";
   Format.fprintf oc "}"
+
+let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
+    int Mir.VariableMap.t * int =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  let assigned_variables = List.map fst (Mir.VariableMap.bindings (Bir.get_assigned_variables p)) in
+  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
+  let all_relevant_variables =
+    List.fold_left
+      (fun acc var -> Mir.VariableMap.add var () acc)
+      Mir.VariableMap.empty
+      (input_vars @ assigned_variables @ output_vars)
+  in
+  let counter = ref 0 in
+  let var_indexes =
+    VariableMap.mapi
+      (fun var _ ->
+        let id = !counter in
+        let size = match var.Mir.Variable.is_table with None -> 1 | Some size -> size in
+        counter := !counter + size;
+        id)
+      all_relevant_variables
+  in
+  (var_indexes, !counter)
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -439,7 +472,8 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
     generate_header () 
     calculateTax_method_header
     generate_input_handling function_spec
-    (generate_stmts program) program.statements 
+    (let var_indexes,_ = get_variables_indexes program function_spec in
+    generate_stmts program var_indexes) program.statements
     generate_return function_spec
     m_operation_class; 
   close_out _oc
