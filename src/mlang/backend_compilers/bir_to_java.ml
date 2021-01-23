@@ -296,8 +296,8 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (Format.asprintf "%a" generate_var_name  var, [])
-  | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
+  | Var var -> (Format.asprintf "calculationVariables.get(\"%a\")" generate_var_name  var, [])
+  | LocalVar lvar -> (Format.asprintf "localVariables.get(%d)" lvar.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
@@ -318,10 +318,10 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%a%a = %s;@\n"
+      Format.fprintf oc "%a calculationVariables.put(\"%a\",%s);@\n"
         (format_local_vars_defs var_indexes)
         defs
-        generate_var_name var
+       generate_var_name var
         se
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "/* TableVar */ @\n List<OptionalDouble> %a = {%s}@\n" 
