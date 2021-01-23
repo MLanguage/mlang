@@ -39,15 +39,19 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
 all: backend_tests $(shell find . -name "run_*.py")
 
+clean: 
+	rm -rf *.java
+
 ##################################################
 # Generating and running Java files from Mlang
 ##################################################
 
-Ir_%.java: ../../m_specs/%.m_spec
+Ir_%.java: ../../m_specs/%.m_spec 
 	$(MLANG) \
 		--backend java --output $@ \
 		--function_spec $^ \
 		--optimize \
 		$(SOURCE_FILES)
+	sed -i '' -e 's/CalculImpot/$(shell echo $@ | cut -d "." -f 1)/g' $@
 
 
