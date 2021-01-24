@@ -53,5 +53,6 @@ Ir_%.java: ../../m_specs/%.m_spec
 		--optimize \
 		$(SOURCE_FILES)
 	sed -i '' -e 's/CalculImpot/$(shell echo $@ | cut -d "." -f 1)/g' $@
+	javac -cp . $@
 
 
