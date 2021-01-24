@@ -28,8 +28,6 @@ let java_imports : string =
   import static com.mlang.MValue.*;
 |}
 
-
-(* TODO: Remove hard coded VARTMPTAB1 and find one to generate list of lists to generate to generate *)
 let calculateTax_method_header : string =
   {|
 
@@ -39,7 +37,7 @@ public static Map<String, OptionalDouble> calculateTax(Map<String,OptionalDouble
   Map<String, OptionalDouble> calculationVariables = new HashMap<>();
   Map<Integer, OptionalDouble> localVariables = new HashMap<>();
 
-  List<OptionalDouble> VARTMPTAB1 = new ArrayList<>();
+  Map<String,List<OptionalDouble>> tableVariables = new HashMap<>();
 |}
 
 let none_value = "OptionalDouble.empty()"
@@ -100,7 +98,8 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Index (var, e) ->
       let _, s = generate_java_expr e var_indexes in
       let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
-      (Format.asprintf "%a.get(%d)" generate_variable (Pos.unmark var) size, s)
+      ( Format.asprintf "tableVariables.get(\"%a\").get(%d)" generate_variable (Pos.unmark var) size,
+        s )
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
@@ -128,7 +127,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
-      (Format.asprintf "m_multimax(%s, %a)" se1 format_var_name v2, s1)
+      (Format.asprintf "m_multimax(%s, tableVariables.get(\"%a\"))" se1 format_var_name v2, s1)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
@@ -152,7 +151,8 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
 let generate_method (oc : Format.formatter) ((rule_number : string), (expression : string)) : unit =
   Format.fprintf oc
     "private static OptionalDouble generate_%s(Map<String,OptionalDouble> calculationVariables, \
-     Map<Integer, OptionalDouble> localVariables, List<OptionalDouble> VARTMPTAB1) {return %s;} @\n"
+     Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> tableVariables) \
+     {return %s;} @\n"
     rule_number expression
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
@@ -171,13 +171,13 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
             var.Variable.execution_number.Mir.seq_number
       in
       Format.fprintf oc
-        "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, VARTMPTAB1));@\n"
+        "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
+         tableVariables));@\n"
         (format_local_vars_defs var_indexes)
         defs format_var_name var method_number;
       Hashtbl.replace methods_to_write method_number se
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "/* TableVar */ @\n  %a = Arrays.asList(%s);@\n"
-        format_var_name var
+      Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name var
         (String.concat ","
            (let array_of_variables = ref [] in
             IndexMap.iter
@@ -197,8 +197,10 @@ let generate_header (oc : Format.formatter) () : unit =
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "%s%a%s@\n@\n"
-  (Format.asprintf "%s" "private void loadInputVariables(Map<String, OptionalDouble> calculationVariables, Map<String, OptionalDouble> input_variables) {\n")
+  Format.fprintf oc "%s%a@\n@\n"
+    (Format.asprintf "%s"
+       "private static void loadInputVariables(Map<String, OptionalDouble> calculationVariables, \
+        Map<String, OptionalDouble> input_variables) {\n")
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
@@ -207,7 +209,6 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
             input_variables.get(\"%s\") : OptionalDouble.empty());"
            format_var_name var (generate_name var) (generate_name var)))
     input_vars
-  (Format.asprintf "%s" "}\n loadInputVariables(calculationVariables, input_variables);\n")
 
 let sanitize_str (s, p) =
   String.map
@@ -250,7 +251,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
       let fname =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
       in
-       let cond_name =
+      let cond_name =
         Format.asprintf "cond_%s_%d_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
           !fresh_cond_counter
@@ -299,8 +300,7 @@ let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_f
       Format.fprintf oc "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" format_var_name var
         format_var_name var)
     oc returned_variables;
-  Format.fprintf oc "return out;@\n@]\n";
-  Format.fprintf oc "}"
+  Format.fprintf oc "return out;@\n@]\n}"
 
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
@@ -333,9 +333,11 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let methods_to_write = Hashtbl.create 500 in
-  Format.fprintf oc "%a%s%a%a%a%a" generate_header () calculateTax_method_header
-    generate_input_handling function_spec
+  Format.fprintf oc "%a%s%s%a%a%a%a%s" generate_header () calculateTax_method_header
+    (Format.asprintf "%s" "loadInputVariables(calculationVariables, input_variables);\n")
     (let var_indexes, _ = get_variables_indexes program function_spec in
      generate_stmts program var_indexes methods_to_write)
-    program.statements generate_return function_spec generate_calculation_methods methods_to_write;
+    program.statements generate_return function_spec generate_calculation_methods methods_to_write
+    generate_input_handling function_spec
+    "\n}\n}";
   close_out _oc
