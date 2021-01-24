@@ -1,4 +1,10 @@
-public class MOperation {
+package com.mlang;
+
+import java.util.OptionalDouble;
+import java.util.List;
+import java.util.function.BiFunction;
+
+public class MValue {
 
   public static OptionalDouble mGreaterThan(
     OptionalDouble value1,

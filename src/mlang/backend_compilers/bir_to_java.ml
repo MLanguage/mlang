@@ -25,7 +25,7 @@ let java_imports : string =
   import java.util.ArrayList;
   import java.util.Arrays;
 
-  import static examples.java.MOperation.*;
+  import static com.mlang.MValue.*;
 |}
 
 
