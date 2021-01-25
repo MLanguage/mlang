@@ -195,6 +195,16 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "%s\n\n" java_imports;
   Format.fprintf oc "public class CalculImpot {@\n"
 
+let rec generate_input_list variables (input_methods : string list) =
+match variables with
+| [] -> input_methods
+| hd :: tl -> let current_method = Format.asprintf "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
+            input_variables.get(\"%s\") : OptionalDouble.empty());"
+           format_var_name hd (generate_name hd) (generate_name hd) in 
+           let updated_array = input_methods @ [current_method] in
+           generate_input_list tl updated_array
+
+
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   Format.fprintf oc "%s%a@\n@\n"
