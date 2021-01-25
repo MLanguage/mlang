@@ -195,6 +195,24 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "%s\n\n" java_imports;
   Format.fprintf oc "public class CalculImpot {@\n"
 
+let rec find_end_of_list list_to_search = 
+    match list_to_search with
+    | [] -> []
+    | [x] -> x
+    |  _ :: tl -> find_end_of_list tl
+
+let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) count :  'a list list =
+match list_to_split with 
+| [] -> split_lists
+| hd :: tl ->
+  if count mod 100 = 0 then
+    let new_list = split_lists @ [[hd]] in
+    split_list tl new_list (count + 1)
+ else 
+   let last_list = find_end_of_list split_lists in
+   let _ = last_list @ [hd] in
+   split_list tl split_lists (count + 1)
+
 let rec generate_input_list variables (input_methods : string list) =
 match variables with
 | [] -> input_methods
@@ -204,21 +222,25 @@ match variables with
            let updated_array = input_methods @ [current_method] in
            generate_input_list tl updated_array
 
+let rec write_input_methods (methods : string list list) count oc = 
+match methods with 
+| [] -> ()
+| hd :: tl -> 
+    Format.fprintf oc "private static void loadInputVariables_%d(Map<String, OptionalDouble> calculationVariables, \
+        Map<String, OptionalDouble> input_variables) {\n%a}\n" count 
+       (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+       (fun fmt var ->
+         Format.fprintf fmt "%s" var))
+    hd;
+    write_input_methods tl (count + 1) oc
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  Format.fprintf oc "%s%a@\n@\n"
-    (Format.asprintf "%s"
-       "private static void loadInputVariables(Map<String, OptionalDouble> calculationVariables, \
-        Map<String, OptionalDouble> input_variables) {\n")
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt
-           "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
-            input_variables.get(\"%s\") : OptionalDouble.empty());"
-           format_var_name var (generate_name var) (generate_name var)))
-    input_vars
+  let input_methods = generate_input_list input_vars []  in
+  let input_method_lists = split_list input_methods [] 0 in
+  write_input_methods input_method_lists 0 oc
+    
 
 let sanitize_str (s, p) =
   String.map
