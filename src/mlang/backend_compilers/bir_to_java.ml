@@ -191,27 +191,18 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "// %s\n\n" Prelude.message;
-  Format.fprintf oc "%s\n\n" java_imports;
-  Format.fprintf oc "public class CalculImpot {@\n"
+  Format.fprintf oc "// %s\n\n %s\n\n public class CalculImpot {@\n" Prelude.message java_imports  
 
-let rec find_end_of_list list_to_search = 
-    match list_to_search with
-    | [] -> []
-    | [x] -> x
-    |  _ :: tl -> find_end_of_list tl
-
-let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) count :  'a list list =
+let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) (current_list : 'a list) count :  'a list list =
 match list_to_split with 
 | [] -> split_lists
 | hd :: tl ->
   if count mod 100 = 0 then
-    let new_list = split_lists @ [[hd]] in
-    split_list tl new_list (count + 1)
+    let new_list =  current_list :: split_lists  in
+    split_list tl new_list [] (count + 1)
  else 
-   let last_list = find_end_of_list split_lists in
-   let _ = last_list @ [hd] in
-   split_list tl split_lists (count + 1)
+   let new_current_list = hd :: current_list in
+   split_list tl split_lists new_current_list (count + 1)
 
 let rec generate_input_list variables (input_methods : string list) =
 match variables with
@@ -222,7 +213,7 @@ match variables with
            let updated_array = input_methods @ [current_method] in
            generate_input_list tl updated_array
 
-let rec write_input_methods (methods : string list list) count oc = 
+let rec write_input_methods oc (methods : string list list) count  = 
 match methods with 
 | [] -> ()
 | hd :: tl -> 
@@ -233,14 +224,19 @@ match methods with
        (fun fmt var ->
          Format.fprintf fmt "%s" var))
     hd;
-    write_input_methods tl (count + 1) oc
+    write_input_methods oc tl (count + 1) 
 
-let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
+let generate_input_handling  (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let input_methods = generate_input_list input_vars []  in
-  let input_method_lists = split_list input_methods [] 0 in
-  write_input_methods input_method_lists 0 oc
+  split_list input_methods [] [] 0 
     
+let rec generate_input_calls count input_methods oc =  
+  match input_methods with 
+  | [] -> ()
+  | _::tl -> 
+      (Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables);\n" count);
+      generate_input_calls (count + 1) tl oc
 
 let sanitize_str (s, p) =
   String.map
@@ -365,11 +361,14 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let methods_to_write = Hashtbl.create 500 in
-  Format.fprintf oc "%a%s%s%a%a%a%a%s" generate_header () calculateTax_method_header
-    (Format.asprintf "%s" "loadInputVariables(calculationVariables, input_variables);\n")
+  let input_method_lists = generate_input_handling function_spec in
+  Format.fprintf oc "%a" generate_header ();
+  Format.fprintf oc "%s" calculateTax_method_header;
+  generate_input_calls 0 input_method_lists oc;
+  Format.fprintf oc "%a%a%a"
     (let var_indexes, _ = get_variables_indexes program function_spec in
      generate_stmts program var_indexes methods_to_write)
-    program.statements generate_return function_spec generate_calculation_methods methods_to_write
-    generate_input_handling function_spec
-    "\n}\n}";
+    program.statements generate_return function_spec generate_calculation_methods methods_to_write;
+    write_input_methods oc input_method_lists 0;
+  Format.fprintf oc "\n}\n}";
   close_out _oc
