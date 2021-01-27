@@ -149,11 +149,20 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
     defs
 
 let generate_method (oc : Format.formatter) ((rule_number : string), (expression : string)) : unit =
-  Format.fprintf oc
-    "private static OptionalDouble generate_%s(Map<String,OptionalDouble> calculationVariables, \
-     Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> tableVariables) \
-     {return %s;} @\n"
-    rule_number expression
+  let regex_cond = Re.Pcre.regexp "cond.*" in
+  match rule_number with
+  | _ when Re.Pcre.pmatch ~rex:regex_cond rule_number ->
+      Format.fprintf oc
+        "private static void generate_%s(OptionalDouble cond, Map<String,OptionalDouble> \
+         calculationVariables, Map<Integer, OptionalDouble> localVariables, \
+         Map<String,List<OptionalDouble>> tableVariables) { %s;} @\n"
+        rule_number expression
+  | _ ->
+      Format.fprintf oc
+        "private static OptionalDouble generate_%s(Map<String,OptionalDouble> \
+         calculationVariables, Map<Integer, OptionalDouble> localVariables, \
+         Map<String,List<OptionalDouble>> tableVariables) {return %s;} @\n"
+        rule_number expression
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
     (data : Mir.variable_data) (oc : Format.formatter) methods_to_write =
@@ -191,51 +200,58 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "// %s\n\n %s\n\n public class CalculImpot {@\n" Prelude.message java_imports  
+  Format.fprintf oc "// %s\n\n %s\n\n public class CalculImpot {@\n" Prelude.message java_imports
 
-let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) (current_list : 'a list) count :  'a list list =
-match list_to_split with 
-| [] -> split_lists
-| hd :: tl ->
-  if count mod 100 = 0 then
-    let new_list =  current_list :: split_lists  in
-    split_list tl new_list [] (count + 1)
- else 
-   let new_current_list = hd :: current_list in
-   split_list tl split_lists new_current_list (count + 1)
+let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) (current_list : 'a list)
+    count : 'a list list =
+  match list_to_split with
+  | [] -> split_lists
+  | hd :: tl ->
+      if count mod 100 = 0 then
+        let new_list = current_list :: split_lists in
+        split_list tl new_list [] (count + 1)
+      else
+        let new_current_list = hd :: current_list in
+        split_list tl split_lists new_current_list (count + 1)
 
 let rec generate_input_list variables (input_methods : string list) =
-match variables with
-| [] -> input_methods
-| hd :: tl -> let current_method = Format.asprintf "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
-            input_variables.get(\"%s\") : OptionalDouble.empty());"
-           format_var_name hd (generate_name hd) (generate_name hd) in 
-           let updated_array = input_methods @ [current_method] in
-           generate_input_list tl updated_array
+  match variables with
+  | [] -> input_methods
+  | hd :: tl ->
+      let current_method =
+        Format.asprintf
+          "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
+           input_variables.get(\"%s\") : OptionalDouble.empty());"
+          format_var_name hd (generate_name hd) (generate_name hd)
+      in
+      let updated_array = input_methods @ [ current_method ] in
+      generate_input_list tl updated_array
 
-let rec write_input_methods oc (methods : string list list) count  = 
-match methods with 
-| [] -> ()
-| hd :: tl -> 
-    Format.fprintf oc "private static void loadInputVariables_%d(Map<String, OptionalDouble> calculationVariables, \
-        Map<String, OptionalDouble> input_variables) {\n%a}\n" count 
-       (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt var ->
-         Format.fprintf fmt "%s" var))
-    hd;
-    write_input_methods oc tl (count + 1) 
-
-let generate_input_handling  (function_spec : Bir_interface.bir_function) =
-  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let input_methods = generate_input_list input_vars []  in
-  split_list input_methods [] [] 0 
-    
-let rec generate_input_calls count input_methods oc =  
-  match input_methods with 
+let rec write_input_methods oc (methods : string list list) count =
+  match methods with
   | [] -> ()
-  | _::tl -> 
-      (Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables);\n" count);
+  | hd :: tl ->
+      Format.fprintf oc
+        "private static void loadInputVariables_%d(Map<String, OptionalDouble> \
+         calculationVariables, Map<String, OptionalDouble> input_variables) {\n\
+         %a}\n"
+        count
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+           (fun fmt var -> Format.fprintf fmt "%s" var))
+        hd;
+      write_input_methods oc tl (count + 1)
+
+let generate_input_handling (function_spec : Bir_interface.bir_function) =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  let input_methods = generate_input_list input_vars [] in
+  split_list input_methods [] [] 0
+
+let rec generate_input_calls count input_methods oc =
+  match input_methods with
+  | [] -> ()
+  | _ :: tl ->
+      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables);\n" count;
       generate_input_calls (count + 1) tl oc
 
 let sanitize_str (s, p) =
@@ -286,16 +302,16 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
       Format.fprintf oc
-        "OptionalDouble %s = %s;@\n\
-         if (!%s.isPresent() || %s.getAsDouble() != 0){@\n\
-         @[<h 4>    %a@]}@\n"
+        "/*SConditional (cond, tt, [])*/generate_%s(%s, calculationVariables, localVariables, \
+         tableVariables);@\n"
         cond_name
         (let pos_expression = Pos.same_pos_as cond stmt in
          let s, _ = generate_java_expr pos_expression var_indexes in
-         s)
-        cond_name cond_name
-        (generate_stmts program var_indexes methods_to_write)
-        tt
+         s);
+      Hashtbl.replace methods_to_write cond_name
+        (Format.asprintf "if (!cond.isPresent() || cond.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n"
+           (generate_stmts program var_indexes methods_to_write)
+           tt)
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -306,7 +322,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       Format.fprintf oc
-        "OptionalDouble %s = %s;@\n\
+        "/*SConditional (cond, tt, ff)*/OptionalDouble %s = %s;@\n\
          if (!%s.isPresent() && %s.getAsDouble() != 0){@\n\
          @[<h 4>    %a@]}@\n\
          else if (!%s.isPresent()){@\n\
@@ -369,6 +385,6 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
     (let var_indexes, _ = get_variables_indexes program function_spec in
      generate_stmts program var_indexes methods_to_write)
     program.statements generate_return function_spec generate_calculation_methods methods_to_write;
-    write_input_methods oc input_method_lists 0;
-  Format.fprintf oc "\n}\n}";
+  write_input_methods oc input_method_lists 0;
+  Format.fprintf oc "\n}";
   close_out _oc
