@@ -150,12 +150,19 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
 
 let generate_method (oc : Format.formatter) ((rule_number : string), (expression : string)) : unit =
   let regex_cond = Re.Pcre.regexp "cond.*" in
+  let regex_assign = Re.Pcre.regexp "assign.*" in
   match rule_number with
   | _ when Re.Pcre.pmatch ~rex:regex_cond rule_number ->
       Format.fprintf oc
         "private static void generate_%s(OptionalDouble cond, Map<String,OptionalDouble> \
          calculationVariables, Map<Integer, OptionalDouble> localVariables, \
          Map<String,List<OptionalDouble>> tableVariables) { %s;} @\n"
+        rule_number expression
+  | _ when Re.Pcre.pmatch ~rex:regex_assign rule_number ->
+      Format.fprintf oc
+        "private static void generate_%s(Map<String,OptionalDouble> calculationVariables, \
+         Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> \
+         tableVariables) { %s;} @\n"
         rule_number expression
   | _ ->
       Format.fprintf oc
@@ -226,6 +233,19 @@ let rec generate_input_list variables (input_methods : string list) =
       in
       let updated_array = input_methods @ [ current_method ] in
       generate_input_list tl updated_array
+
+let rec add_assignements hashtable assignments count =
+  match assignments with
+  | [] -> count
+  | hd :: tl ->
+      Hashtbl.replace hashtable
+        (Format.asprintf "assign_%d" count)
+        (Format.asprintf "%a\n"
+           (Format.pp_print_list
+              ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+              (fun fmt var -> Format.fprintf fmt "%s" var))
+           hd);
+      add_assignements hashtable tl (count + 1)
 
 let rec write_input_methods oc (methods : string list list) count =
   match methods with
@@ -301,17 +321,28 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      Format.fprintf oc
-        "/*SConditional (cond, tt, [])*/generate_%s(%s, calculationVariables, localVariables, \
-         tableVariables);@\n"
+      Format.fprintf oc "generate_%s(%s, calculationVariables, localVariables, tableVariables);@\n"
         cond_name
         (let pos_expression = Pos.same_pos_as cond stmt in
          let s, _ = generate_java_expr pos_expression var_indexes in
          s);
       Hashtbl.replace methods_to_write cond_name
-        (Format.asprintf "if (!cond.isPresent() || cond.getAsDouble() != 0){@\n@[<h 4>    %a@]}@\n"
-           (generate_stmts program var_indexes methods_to_write)
-           tt)
+        (Format.asprintf "if (!cond.isPresent() || cond.getAsDouble() != 0){@\n@[<h 4>   @]}@\n");
+      let string_list =
+        String.split_on_char '\n'
+          (Format.asprintf "%a" (generate_stmts program var_indexes methods_to_write) tt)
+      in
+      let lists = split_list string_list [] [] 0 in
+      let number_of_blocks = add_assignements methods_to_write lists 0 in
+      let rec write_assignment_method_calls count inc =
+        match (count, inc) with
+        | _, _ when inc < count ->
+            Format.fprintf oc
+              "generate_assign_%d( calculationVariables,localVariables, tableVariables);\n" inc;
+            write_assignment_method_calls count (inc + 1)
+        | _, _ -> ()
+      in
+      write_assignment_method_calls number_of_blocks 0
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
