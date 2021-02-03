@@ -14,10 +14,12 @@ ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(SOURCE_DIR_2018)
 	MPP_FILE?=$(PWD)/mpp_specs/2018_6_7.mpp
 	TESTS_DIR?=tests/2018/fuzzing/
+	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2018.m_spec
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=tests/2019/fuzzing/
+	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
 else
     $(error Unsupported year: $(YEAR))
 endif
@@ -88,8 +90,6 @@ test_c_backend_perf:
 
 test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
-
-M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2018.m_spec
 
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
