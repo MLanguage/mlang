@@ -95,14 +95,11 @@ quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 ##################################################
-# Doc and examples
+# Doc
 ##################################################
 
 doc: FORCE
 	dune build @doc
 	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
-
-examples: FORCE
-	$(MAKE) -C examples/python
 
 FORCE:

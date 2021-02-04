@@ -37,8 +37,6 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-all: backend_tests $(shell find . -name "run_*.py")
-
 ##################################################
 # Generating and running Python files from Mlang
 ##################################################
