@@ -59,14 +59,20 @@ fault will disappear.
 ### Using the Makefile in this folder
 
 The Makefile in this folder contains rules for generating Python files from
-`.m_specs` in the `m_specs/` folder of this repository, using the 2018 code from
-`ir_calcul` and the canonical `.mpp` file for 2018 income tax. To use it,
+`.m_specs` in the `m_specs/` folder of this repository, using the 2019 code from
+`ir_calcul` and the canonical `.mpp` file for 2019 income tax. To use it,
 simply invoke:
 
     make ir_<name_of_the_m_spec_file>.c
 
 `make` will re-generate this file at each modification of the `.m_spec` file,
 otherwise use `-B` to force re-generation.
+
+If you have an error about unknown variables, then it probably means the
+example you're trying to build depends on the 2018 version of the tax code.
+To get it working, invoke the command by setting the year to 2018:
+
+    YEAR=2018 make ir_<name_of_the_m_spec_file>.py
 
 ### Testing the correctness of the Mlang backend
 
