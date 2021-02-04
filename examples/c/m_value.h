@@ -9,9 +9,9 @@ typedef struct m_value
 } m_value;
 // type invariant : if undefined, then value == 0
 
-const struct m_value m_undefined;
-const struct m_value m_zero;
-const struct m_value m_one;
+extern const struct m_value m_undefined;
+extern const struct m_value m_zero;
+extern const struct m_value m_one;
 
 m_value m_add(m_value x, m_value y);
 m_value m_sub(m_value x, m_value y);

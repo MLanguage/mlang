@@ -5,7 +5,7 @@ computation to C. This means that you can embark the computation as a
 regular C source code file in your application if you need it. This file
 is a guide about how to do it.
 
-### Generating the Python file
+### Generating the C file
 
 You have to invoke Python for that, with something like:
 
@@ -72,7 +72,11 @@ If you have an error about unknown variables, then it probably means the
 example you're trying to build depends on the 2018 version of the tax code.
 To get it working, invoke the command by setting the year to 2018:
 
-    YEAR=2018 make ir_<name_of_the_m_spec_file>.py
+    YEAR=2018 make ir_<name_of_the_m_spec_file>.c
+
+To produce the executables that link the generated .c with a small tester, use
+
+    make run_<name_of_the_m_spec_file>.exe
 
 ### Testing the correctness of the Mlang backend
 
