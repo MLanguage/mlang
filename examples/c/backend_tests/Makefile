@@ -14,10 +14,12 @@ ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(SOURCE_DIR_2018)
 	MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
 	TESTS_DIR?=../../../tests/2018/fuzzing/
+	ONE_TEST_FILE?=../../../tests/2018/fuzzing/fuzzer_14200.m_test
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=../../../mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=../../../tests/2019/fuzzing/
+	ONE_TEST_FILE?=../../../tests/2019/fuzzing/fuzzer_20741.m_test
 else
     $(error Unsupported year: $(YEAR))
 endif
@@ -89,14 +91,13 @@ run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
-perf_harness.exe: TESTS_DIR=../../../tests/2018/only_one/
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
-run_perf: TESTS_DIR=../../../tests/2018/only_one/
 run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
-	time ./$< $(TESTS_DIR)
+	time ./$< $(ONE_TEST_FILE)
+	
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
@@ -138,6 +139,6 @@ clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
 
 clean:
-	rm -f ir_tests.* ../m_value.o tests.m_spec *.exe *.tmp
+	rm -f ir_tests.* ../m_value.o *.o tests.m_spec *.exe *.tmp
 
 FORCE:

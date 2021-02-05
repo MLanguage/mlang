@@ -95,6 +95,9 @@ test_c_backend:
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
+all: tests test_python_backend test_c_backend_perf \
+	test_c_backend quick_test
+
 ##################################################
 # Doc
 ##################################################
@@ -102,5 +105,10 @@ quick_test:
 doc: FORCE
 	dune build @doc
 	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
+
+clean:
+	$(MAKE) -C examples/c clean
+	$(MAKE) -C examples/python clean
+	dune clean
 
 FORCE:
