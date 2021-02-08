@@ -29,3 +29,7 @@ all_tests:
                 --function_spec ./tests.m_spec \
 		$(SOURCE_FILES)
 	python3 test_file.py all_ins.csv $(TESTS_DIR)
+
+clean:
+	rm -f tests.m_spec tests.py all_ins.csv 
+	rm -rf __pycache__

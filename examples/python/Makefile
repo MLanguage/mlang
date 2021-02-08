@@ -37,8 +37,6 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-all: backend_tests $(shell find . -name "run_*.py")
-
 ##################################################
 # Generating and running Python files from Mlang
 ##################################################
@@ -53,13 +51,21 @@ ir_%.py: ../../m_specs/%.m_spec
 run_%.py: ir_%.py FORCE
 	python3 $@
 
+.SECONDARY: ir_%.py 
+.PRECIOUS: ir_%.py
+
 ##################################################
 # Running the tests
 ##################################################
 
 
 backend_tests: FORCE
-	$(MAKE) -C backend_tests
+	$(MAKE) -C backend_tests all_tests
 
+
+clean:
+	$(MAKE) -C backend_tests clean 
+	rm -f ir_*.py
+	rm -rf __pycache__
 
 FORCE:

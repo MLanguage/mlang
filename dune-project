@@ -31,5 +31,6 @@
    (dune-build-info (= 2.5.1))
    (num (>= 1.3))
    (mlgmpidl (>= 1.2.12))
+   (ocamlformat (>= 0.15.0))
  )
 )
