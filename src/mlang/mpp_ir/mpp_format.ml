@@ -6,7 +6,7 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
 
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
-    ( match f with
+    (match f with
     | Program -> "evaluate_program"
     | MppFunction m -> m
     | Present -> "present"
@@ -14,11 +14,11 @@ let format_callable (fmt : formatter) (f : mpp_callable) =
     | Cast -> "cast"
     | DepositDefinedVariables -> "DepositDefinedVariables"
     | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
-    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables" )
+    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables")
 
 let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
   fprintf fmt "%s"
-    ( match b with
+    (match b with
     | And -> "and"
     | Or -> "or"
     | Gt -> ">"
@@ -26,7 +26,7 @@ let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
     | Lt -> "<"
     | Lte -> "<="
     | Eq -> "=="
-    | Neq -> "!=" )
+    | Neq -> "!=")
 
 let format_filter (fmt : formatter) (f : mpp_filter) : unit =
   assert (f = VarIsTaxBenefit);

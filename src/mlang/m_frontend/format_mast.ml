@@ -168,21 +168,21 @@ let format_computed_typ fmt (t : computed_typ) =
 
 let format_input_variable_subtype fmt (t : input_variable_subtype) =
   Format.pp_print_string fmt
-    ( match t with
+    (match t with
     | Context -> "contexte"
     | Family -> "famille"
     | Penality -> "penalite"
-    | Income -> "revenu" )
+    | Income -> "revenu")
 
 let format_value_typ fmt (t : value_typ) =
   Format.pp_print_string fmt
-    ( match t with
+    (match t with
     | Boolean -> "BOOLEEN"
     | DateYear -> "DATE_AAAA"
     | DateDayMonthYear -> "DATE_JJMMAAAA"
     | DateMonth -> "DATE_MM"
     | Integer -> "ENTIER"
-    | Real -> "REEL" )
+    | Real -> "REEL")
 
 let format_input_attribute fmt ((n, v) : input_variable_attribute Pos.marked * literal Pos.marked) =
   Format.fprintf fmt "%s = %a" (Pos.unmark n) format_literal (Pos.unmark v)
@@ -228,10 +228,10 @@ let format_verification fmt (v : verification) =
 
 let format_error_typ fmt (e : error_typ) =
   Format.pp_print_string fmt
-    ( match e with
+    (match e with
     | Anomaly -> "anomalie"
     | Discordance -> "discordance"
-    | Information -> "information" )
+    | Information -> "information")
 
 let format_error_ fmt (e : error_) =
   Format.fprintf fmt "%a : %a : %a;" format_error_name (Pos.unmark e.error_name) format_error_typ

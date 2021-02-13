@@ -178,9 +178,9 @@ let info =
   in
   Term.info "mlang"
     ~version:
-      ( match Build_info.V1.version () with
+      (match Build_info.V1.version () with
       | None -> "n/a"
-      | Some v -> Build_info.V1.Version.to_string v )
+      | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
 
 (**{2 Flags and parameters}*)

@@ -125,9 +125,9 @@ let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id) (var : Mir.V
     ctx with
     ctx_vars =
       Mir.VariableMap.add var
-        ( match Mir.VariableMap.find_opt var ctx.ctx_vars with
+        (match Mir.VariableMap.find_opt var ctx.ctx_vars with
         | None -> BlockMap.singleton block_id var_lit
-        | Some defs -> BlockMap.add block_id var_lit defs )
+        | Some defs -> BlockMap.add block_id var_lit defs)
         ctx.ctx_vars;
   }
 
@@ -143,8 +143,8 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
              (fun def_block_id def ->
                Option.is_some def
                (* we only consider definitions that were partially evaluated to a literal *)
-               && ( def_block_id = Option.get ctx.ctx_inside_block
-                  || ctx.ctx_doms def_block_id curr_block ))
+               && (def_block_id = Option.get ctx.ctx_inside_block
+                  || ctx.ctx_doms def_block_id curr_block))
              previous_defs)
       in
       let sorted_dominating_defs =
@@ -186,12 +186,12 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
                         | UnknownFloat, PartialLiteral (Float _)
                         | UnknownFloat, UnknownFloat ->
                             Some (SimpleVar UnknownFloat)
-                        | _ -> None )
+                        | _ -> None)
                     | Some (TableVar _), _ | _, Some (TableVar _) -> assert false)
                   (Some def) defs
               in
               result
-            else Some def )
+            else Some def)
 
 let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) :
     Bir_interpreter.RegularFloatInterpreter.ctx =
@@ -328,7 +328,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 | Minus, Float -> Float
                 | Minus, Undefined -> Float
                 | Minus, Top -> Float
-                | _ -> assert false ) )
+                | _ -> assert false ))
         in
         (Pos.same_pos_as new_e e, d)
     | Conditional (e1, e2, e3) -> (
@@ -343,7 +343,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
             else
               ( Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e,
-                if maybe_undefined d1 then join Undefined (join d2 d3) else join d2 d3 ) )
+                if maybe_undefined d1 then join Undefined (join d2 d3) else join d2 d3 ))
     | Index (var, e1) ->
         let new_e1, d1 = partially_evaluate_expr ctx p e1 in
         let new_e, d =
@@ -372,12 +372,12 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                   else
                     match es'.(idx) with
                     | PartialLiteral e' -> from_literal e'
-                    | UnknownFloat -> (Mir.Index (var, new_e1), Float) )
-              | None -> (Mir.Index (var, new_e1), Top) )
+                    | UnknownFloat -> (Mir.Index (var, new_e1), Float))
+              | None -> (Mir.Index (var, new_e1), Top))
           | _ -> if d1 = Undefined then from_literal Undefined else (Mir.Index (var, new_e1), Top)
         in
         (Pos.same_pos_as new_e e, d)
-    | Literal l -> ( (e, match l with Undefined -> Undefined | Float _ -> Float) )
+    | Literal l -> ( (e, match l with Undefined -> Undefined | Float _ -> Float))
     | Var var -> (
         match get_closest_dominating_def var ctx with
         | Some (SimpleVar pexpr) ->
@@ -385,12 +385,12 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             let new_e = match oe with Some e' -> e' | None -> Pos.unmark e in
             (Pos.same_pos_as new_e e, d)
         | Some (TableVar _) -> (e, Top)
-        | _ -> (e, Top) )
+        | _ -> (e, Top))
     | LocalVar lvar -> (
         try
           let oe, d = partial_to_expr (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars) in
           match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
-        with Not_found -> (e, Top) )
+        with Not_found -> (e, Top))
     | GenericTableIndex -> (e, Float)
     | Error -> assert false
     (* (e, Top) *)
@@ -430,7 +430,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 | Literal l -> from_literal l
                 | _ -> (Mir.LocalLet (lvar, new_e1, new_e2), d2)
               in
-              (Pos.same_pos_as new_e e, d) )
+              (Pos.same_pos_as new_e e, d))
     (* max(0, -max(0, x)) = 0 *)
     | FunctionCall
         ( MaxFunc,
@@ -505,7 +505,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 match List.hd new_ds with
                 | Undefined -> from_literal Mir.false_literal
                 | Float -> from_literal Mir.true_literal
-                | _ -> (Pos.unmark new_e, Float) )
+                | _ -> (Pos.unmark new_e, Float))
             | MinFunc | MaxFunc | Multimax ->
                 (* in the functions, undef is implicitly cast to 0, so let's cast it! *)
                 let new_args =
@@ -577,7 +577,7 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
                                   Option.get (expr_to_partial (Pos.unmark e) d)) )))
                   else add_var_def_to_ctx ctx block_id var None
                 in
-                (TableVar (size, IndexTable (Mir.IndexMap.map fst es')), new_ctx) )
+                (TableVar (size, IndexTable (Mir.IndexMap.map fst es')), new_ctx))
       in
       let new_stmt = Pos.same_pos_as (SAssign (var, { def with var_definition = new_def })) stmt in
       (new_stmt :: new_block, new_ctx)
@@ -604,7 +604,7 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
             Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured err ctx
               p.mir_program
           else raise (Bir_interpreter.RegularFloatInterpreter.RuntimeError (err, ctx))
-      | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx) )
+      | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx))
   | _ -> (stmt :: new_block, ctx)
 
 let partial_evaluation (p : program) : program =
