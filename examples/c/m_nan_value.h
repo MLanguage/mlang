@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define undefined(x) isnan(x)
+#define M_NAN_UNDEFINED(x) isnan(x)
 
 typedef double m_nan_value;
 // type invariant : if undefined, then value == 0

@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
                     expected_value = atof(value_s);
                     name_index = m_get_output_index(name);
                     computed_value = outputs_array_for_m[name_index];
-                    if (undefined(computed_value))
+                    if (M_NAN_UNDEFINED(computed_value))
                     {
                         // Undefined values returned are interpreted as 0
                         computed_value = 0.0;
