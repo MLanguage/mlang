@@ -88,9 +88,11 @@ test_python_backend:
 
 test_c_backend_perf:
 	$(MAKE) -C examples/c/backend_tests run_perf
+	$(MAKE) -C examples/c/backend_tests run_nan_perf
 
 test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
+	$(MAKE) -C examples/c/backend_tests run_nan_tests
 
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
