@@ -56,6 +56,10 @@ let optimize_unsafe_float =
   let doc = "Activate unsafe floating point optimizations (such as x * 0 ~> 0)" in
   Arg.(value & flag & info [ "fast-math" ] ~doc)
 
+let optimize_c_nan =
+  let doc = "Activate optimization where C representation of undefined is NaN" in
+  Arg.(value & flag & info [ "c-nan-opt" ] ~doc)
+
 let backend =
   Arg.(
     value
@@ -141,8 +145,8 @@ let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
-    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin
-    $ m_clean_calls)
+    $ optimize $ optimize_unsafe_float $ optimize_c_nan $ code_coverage $ precision
+    $ test_error_margin $ m_clean_calls)
 
 let info =
   let doc =
@@ -220,9 +224,13 @@ let optimize_unsafe_float = ref false
 (* Clean regular variables between M calls *)
 let m_clean_calls = ref false
 
+(* Activate optimization where C representation of undefined is NaN *)
+let optimize_c_nan = ref false
+
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
     (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
-    (output_file_ : string option) (optimize_unsafe_float_ : bool) (m_clean_calls_ : bool) =
+    (output_file_ : string option) (optimize_unsafe_float_ : bool) (optimize_c_nan_ : bool)
+    (m_clean_calls_ : bool) =
   source_files := files_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
@@ -231,6 +239,7 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
   dep_graph_file := dep_graph_file_;
   print_cycles_flag := print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
+  optimize_c_nan := optimize_c_nan_;
   m_clean_calls := m_clean_calls_;
   match output_file_ with None -> () | Some o -> output_file := o
 
