@@ -57,8 +57,14 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 		--function_spec $< \
 		$(SOURCE_FILES)
 
-.SECONDARY: ir_%.c ir_%.h
-.PRECIOUS: ir_%.c ir_%.h
+ir_%.nan.c: %.m_spec $(SOURCE_FILES)
+	$(MLANG) \
+		--backend c --c-nan-opt --output $@ \
+		--function_spec $< \
+		$(SOURCE_FILES)
+
+.SECONDARY: ir_%.c ir_%.h ir_%.nan.c ir_%.nan.h
+.PRECIOUS: ir_%.c ir_%.h ir_%.nan.c ir_%.nan.h
 
 ##################################################
 # Compiling the generated C
@@ -91,13 +97,20 @@ run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
+test_harness.nan.exe: ir_tests.nan.o test_harness.nan.o ../m_nan_value.o
+	$(CC) -fPIE -lm -o $@ $^
+
+run_nan_tests: test_harness.nan.exe FORCE
+	ulimit -s 32768; \
+	./$< $(TESTS_DIR)
+
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
 run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
 	time ./$< $(ONE_TEST_FILE)
-	
+
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
