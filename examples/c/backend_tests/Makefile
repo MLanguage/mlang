@@ -111,6 +111,13 @@ run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
 	time ./$< $(ONE_TEST_FILE)
 
+perf_harness.nan.exe: ir_tests.nan.o perf_harness.nan.o ../m_nan_value.o
+	$(CC) -fPIE -lm -o $@ $^
+
+run_nan_perf: perf_harness.nan.exe FORCE
+	ulimit -s 32768; \
+	time ./$< $(ONE_TEST_FILE)
+
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
