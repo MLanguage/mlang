@@ -9,15 +9,15 @@ const m_nan_value m_nan_one = (m_nan_value)1.0;
 
 m_nan_value m_nan_add(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) && undefined(y))
+     if (M_NAN_UNDEFINED(x) && M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
-     else if (undefined(x))
+     else if (M_NAN_UNDEFINED(x))
      {
           return (m_nan_value)y;
      }
-     else if (undefined(y))
+     else if (M_NAN_UNDEFINED(y))
      {
           return (m_nan_value)x;
      }
@@ -29,15 +29,15 @@ m_nan_value m_nan_add(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_sub(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) && undefined(y))
+     if (M_NAN_UNDEFINED(x) && M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
-     else if (undefined(x))
+     else if (M_NAN_UNDEFINED(x))
      {
           return (m_nan_value)(-y);
      }
-     else if (undefined(y))
+     else if (M_NAN_UNDEFINED(y))
      {
           return (m_nan_value)x;
      }
@@ -71,7 +71,7 @@ m_nan_value m_nan_div(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_lt(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -83,7 +83,7 @@ m_nan_value m_nan_lt(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_lte(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -95,7 +95,7 @@ m_nan_value m_nan_lte(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_gt(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -107,7 +107,7 @@ m_nan_value m_nan_gt(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_gte(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -119,7 +119,7 @@ m_nan_value m_nan_gte(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_eq(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -131,7 +131,7 @@ m_nan_value m_nan_eq(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_neq(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -143,7 +143,7 @@ m_nan_value m_nan_neq(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_and(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) || undefined(y))
+     if (M_NAN_UNDEFINED(x) || M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
@@ -155,15 +155,15 @@ m_nan_value m_nan_and(m_nan_value x, m_nan_value y)
 
 m_nan_value m_nan_or(m_nan_value x, m_nan_value y)
 {
-     if (undefined(x) && undefined(y))
+     if (M_NAN_UNDEFINED(x) && M_NAN_UNDEFINED(y))
      {
           return m_nan_undefined;
      }
-     else if (undefined(x))
+     else if (M_NAN_UNDEFINED(x))
      {
           return (m_nan_value)y;
      }
-     else if (undefined(y))
+     else if (M_NAN_UNDEFINED(y))
      {
           return (m_nan_value)x;
      }
@@ -180,7 +180,7 @@ m_nan_value m_nan_not(m_nan_value x)
 
 m_nan_value m_nan_cond(m_nan_value c, m_nan_value t, m_nan_value f)
 {
-     if (undefined(c))
+     if (M_NAN_UNDEFINED(c))
      {
           return m_nan_undefined;
      }
@@ -199,17 +199,17 @@ m_nan_value m_nan_cond(m_nan_value c, m_nan_value t, m_nan_value f)
 
 m_nan_value m_nan_max(m_nan_value x, m_nan_value y)
 {
-     return (m_nan_value)fmax(undefined(x) ? 0.0 : x, undefined(y) ? 0.0 : y);
+     return (m_nan_value)fmax(M_NAN_UNDEFINED(x) ? 0.0 : x, M_NAN_UNDEFINED(y) ? 0.0 : y);
 }
 
 m_nan_value m_nan_min(m_nan_value x, m_nan_value y)
 {
-     return (m_nan_value)fmin(undefined(x) ? 0.0 : x, undefined(y) ? 0.0 : y);
+     return (m_nan_value)fmin(M_NAN_UNDEFINED(x) ? 0.0 : x, M_NAN_UNDEFINED(y) ? 0.0 : y);
 }
 
 m_nan_value m_nan_present(m_nan_value x)
 {
-     if (undefined(x))
+     if (M_NAN_UNDEFINED(x))
      {
           return m_nan_zero;
      }
@@ -221,7 +221,7 @@ m_nan_value m_nan_present(m_nan_value x)
 
 m_nan_value m_nan_null(m_nan_value x)
 {
-     if (undefined(x))
+     if (M_NAN_UNDEFINED(x))
      {
           return m_nan_one;
      }
@@ -233,7 +233,7 @@ m_nan_value m_nan_null(m_nan_value x)
 
 m_nan_value m_nan_round(m_nan_value x)
 {
-     if (undefined(x))
+     if (M_NAN_UNDEFINED(x))
      {
           return m_nan_undefined;
      }
@@ -251,7 +251,7 @@ m_nan_value m_nan_floor(m_nan_value x)
 
 bool m_nan_is_defined_true(m_nan_value x)
 {
-     if (undefined(x))
+     if (M_NAN_UNDEFINED(x))
      {
           return false;
      }
@@ -263,7 +263,7 @@ bool m_nan_is_defined_true(m_nan_value x)
 
 bool m_nan_is_defined_false(m_nan_value x)
 {
-     if (undefined(x))
+     if (M_NAN_UNDEFINED(x))
      {
           return false;
      }
@@ -280,7 +280,7 @@ m_nan_value m_nan_literal(double v)
 
 m_nan_value m_nan_array_index(m_nan_value *array, m_nan_value index, int array_size)
 {
-     if (undefined(index))
+     if (M_NAN_UNDEFINED(index))
      {
           return m_nan_undefined;
      }
@@ -303,7 +303,7 @@ m_nan_value m_nan_array_index(m_nan_value *array, m_nan_value index, int array_s
 
 m_nan_value m_nan_multimax(m_nan_value bound, m_nan_value *array)
 {
-     if (undefined(bound))
+     if (M_NAN_UNDEFINED(bound))
      {
           printf("Multimax bound undefined!");
           exit(-1);
