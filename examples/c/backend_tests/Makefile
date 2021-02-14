@@ -90,6 +90,8 @@ ir_%.o: ir_%.c
 # Building and running the test harness
 ##################################################
 
+test_harness.o: test_harness.c ir_tests.c
+
 test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
@@ -97,7 +99,10 @@ run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
-test_nan_harness.exe: ir_tests.nan.o test_nan_harness.o ../m_nan_value.o
+test_harness.nan.o: test_harness.c ir_tests.nan.c
+	$(CC) -DUSE_NAN_OPTIM -I ../ -O3 -c -o $@ $<
+
+test_nan_harness.exe: ir_tests.nan.o test_harness.nan.o ../m_nan_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
 run_nan_tests: test_nan_harness.exe FORCE
