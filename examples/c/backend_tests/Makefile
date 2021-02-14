@@ -51,13 +51,13 @@ ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
 		--backend c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
-ir_%.c: %.m_spec $(SOURCE_FILES)
+ir_%.c ir_%.h: %.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
 
-ir_%.nan.c: %.m_spec $(SOURCE_FILES)
+ir_%.nan.c ir_%.nan.h: %.m_spec $(SOURCE_FILES)
 	$(MLANG) \
 		--backend c --c-nan-opt --output $@ \
 		--function_spec $< \
@@ -90,7 +90,7 @@ ir_%.o: ir_%.c
 # Building and running the test harness
 ##################################################
 
-test_harness.o: test_harness.c ir_tests.c
+test_harness.o: test_harness.c ir_tests.h
 
 test_harness.exe: ir_tests.o test_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
@@ -99,7 +99,7 @@ run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
-test_harness.nan.o: test_harness.c ir_tests.nan.c
+test_harness.nan.o: test_harness.c ir_tests.nan.h
 	$(CC) -DUSE_NAN_OPTIM -I ../ -O3 -c -o $@ $<
 
 test_nan_harness.exe: ir_tests.nan.o test_harness.nan.o ../m_nan_value.o
@@ -109,7 +109,7 @@ run_nan_tests: test_nan_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
-test_harness.o: perf_harness.c ir_tests.c
+test_harness.o: perf_harness.c ir_tests.h
 
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
@@ -118,7 +118,7 @@ run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
 	time ./$< $(ONE_TEST_FILE)
 
-perf_harness.nan.o: perf_harness.c ir_tests.nan.c
+perf_harness.nan.o: perf_harness.c ir_tests.nan.h
 	$(CC) -DUSE_NAN_OPTIM -I ../ -O3 -c -o $@ $<
 
 perf_nan_harness.exe: ir_tests.nan.o perf_harness.nan.o ../m_nan_value.o
