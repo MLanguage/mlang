@@ -1,4 +1,19 @@
-#include "ir_tests.h"
+#ifdef USE_NAN_OPTIM
+  #include "ir_tests.nan.h"
+  #define M_VALUE m_nan_value
+  #define M_UNDEFINED m_nan_undefined
+  #define M_LITERAL(x) m_nan_literal(x)
+  #define UNDEFINED(x) M_NAN_UNDEFINED(x)
+  #define VALUE(x) (x)
+#else
+  #include "ir_tests.h"
+  #define M_VALUE m_value
+  #define M_UNDEFINED m_undefined
+  #define M_LITERAL(x) m_literal(x)
+  #define UNDEFINED(x) (x.undefined)
+  #define VALUE(x) (x.value)
+#endif
+
 #include <dirent.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,10 +32,10 @@ int main(int argc, char *argv[])
     int state;
     m_input *input_for_m = malloc(sizeof(m_input));
     int num_inputs = m_num_inputs();
-    m_value *input_array_for_m = malloc(num_inputs * sizeof(m_value));
+    M_VALUE *input_array_for_m = malloc(num_inputs * sizeof(M_VALUE));
     int i;
     int num_outputs = m_num_inputs();
-    m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
+    M_VALUE *outputs_array_for_m = malloc(num_outputs * sizeof(M_VALUE));
     m_output *output_for_m = malloc(sizeof(m_output));
 
     char *name;
@@ -28,7 +43,7 @@ int main(int argc, char *argv[])
     int value;
     double expected_value;
     int name_index;
-    m_value computed_value;
+    M_VALUE computed_value;
 
     FILE *fp = fopen(test_file, "r");
     if (fp == NULL)
@@ -40,11 +55,11 @@ int main(int argc, char *argv[])
     // Resetting the arrays
     for (i = 0; i < num_inputs; i++)
     {
-        input_array_for_m[i] = m_undefined;
+        input_array_for_m[i] = M_UNDEFINED;
     }
     for (i = 0; i < num_outputs; i++)
     {
-        outputs_array_for_m[i] = m_undefined;
+        outputs_array_for_m[i] = M_UNDEFINED;
     }
     state = 0;
     // 0 - before #ENTREES-PRIMITIF
@@ -83,7 +98,7 @@ int main(int argc, char *argv[])
             value_s = strtok(NULL, separator);
             value = atoi(value_s);
             name_index = m_get_input_index(name);
-            input_array_for_m[name_index] = m_literal(value);
+            input_array_for_m[name_index] = M_LITERAL(value);
             break;
 
         case 2:
@@ -102,15 +117,16 @@ int main(int argc, char *argv[])
             expected_value = atof(value_s);
             name_index = m_get_output_index(name);
             computed_value = outputs_array_for_m[name_index];
-            if (computed_value.undefined)
+            if (UNDEFINED(computed_value))
             {
                 // Undefined values returned are interpreted as 0
-                computed_value.value = 0;
+                VALUE(computed_value) = 0;
             }
-            if (computed_value.value != expected_value)
+            if (VALUE(computed_value) != expected_value)
             {
                 printf("Testing file: %s\n", test_file);
-                printf("Expected value for %s : %.4f, computed %.4f!\n", name, expected_value, computed_value.value);
+                printf("Expected value for %s : %.4f, computed %.4f!\n", name, expected_value,
+                       VALUE(computed_value));
                 exit(-1);
             }
             break;

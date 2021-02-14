@@ -109,6 +109,8 @@ run_nan_tests: test_nan_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
+test_harness.o: perf_harness.c ir_tests.c
+
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
@@ -116,7 +118,10 @@ run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
 	time ./$< $(ONE_TEST_FILE)
 
-perf_nan_harness.exe: ir_tests.nan.o perf_nan_harness.o ../m_nan_value.o
+perf_harness.nan.o: perf_harness.c ir_tests.nan.c
+	$(CC) -DUSE_NAN_OPTIM -I ../ -O3 -c -o $@ $<
+
+perf_nan_harness.exe: ir_tests.nan.o perf_harness.nan.o ../m_nan_value.o
 	$(CC) -fPIE -lm -o $@ $^
 
 run_nan_perf: perf_nan_harness.exe FORCE
