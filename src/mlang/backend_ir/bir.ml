@@ -106,8 +106,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                           (get_local_vars_expr e) acc)
                       es acc
                 | Mir.IndexGeneric e ->
-                    Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc)
-            | _ -> acc)
+                    Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc )
+            | _ -> acc )
         | SConditional (cond, s1, s2) ->
             Mir.LocalVariableMap.union
               (fun _ _ _ -> Some ())

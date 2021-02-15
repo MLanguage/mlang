@@ -110,15 +110,15 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
                 var_data with
                 var_io = Regular;
                 var_definition =
-                  (match var_data.var_definition with
+                  ( match var_data.var_definition with
                   | InputVar -> SimpleVar (Pos.same_pos_as (Literal Undefined) var.Variable.name)
                   | SimpleVar old -> SimpleVar old
-                  | TableVar (size, old) -> TableVar (size, old));
+                  | TableVar (size, old) -> TableVar (size, old) );
               }
             in
             match new_var_data.var_definition with
             | InputVar -> None
-            | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt))
+            | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt) )
         | _ -> Some stmt)
       p.Bir.statements
   in
@@ -235,7 +235,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                 match bindings with
                 | [ (v, Bir_interpreter.RegularFloatInterpreter.SimpleVar l1) ] ->
                     Some (v, Bir_interpreter.RegularFloatInterpreter.value_to_literal l1)
-                | _ -> None ))
+                | _ -> None ) )
           | _ -> assert false
           (* should not happen *)
         in
@@ -249,7 +249,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                 match bindings with
                 | [ (v, Bir_interpreter.MPFRInterpreter.SimpleVar l1) ] ->
                     Some (v, Bir_interpreter.MPFRInterpreter.value_to_literal l1)
-                | _ -> None ))
+                | _ -> None ) )
           | _ -> assert false
           (* should not happen *)
         in
@@ -263,7 +263,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                 match bindings with
                 | [ (v, Bir_interpreter.BigIntInterpreter.SimpleVar l1) ] ->
                     Some (v, Bir_interpreter.BigIntInterpreter.value_to_literal l1)
-                | _ -> None ))
+                | _ -> None ) )
           | _ -> assert false
           (* should not happen *)
         in
@@ -277,7 +277,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                 match bindings with
                 | [ (v, Bir_interpreter.IntervalInterpreter.SimpleVar l1) ] ->
                     Some (v, Bir_interpreter.IntervalInterpreter.value_to_literal l1)
-                | _ -> None ))
+                | _ -> None ) )
           | _ -> assert false
           (* should not happen *)
         in
@@ -291,7 +291,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                 match bindings with
                 | [ (v, Bir_interpreter.RationalInterpreter.SimpleVar l1) ] ->
                     Some (v, Bir_interpreter.RationalInterpreter.value_to_literal l1)
-                | _ -> None ))
+                | _ -> None ) )
           | _ -> assert false
           (* should not happen *)
         in
@@ -355,7 +355,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           | Some used_code_locs -> (
               match Bir_instrumentation.CodeLocationMap.find_opt code_loc used_code_locs with
               | None -> NotCovered
-              | Some def -> Covered (Bir_instrumentation.VarLiteralSet.cardinal def)))
+              | Some def -> Covered (Bir_instrumentation.VarLiteralSet.cardinal def) ))
         all_code_locs
     in
     let all_code_locs_num =

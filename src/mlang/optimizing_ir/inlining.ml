@@ -93,8 +93,8 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
             BlockMap.filter
               (fun previous_x_def_block_id (previous_x_def, previous_x_def_pos) ->
                 (* first we pick dominating definitions *)
-                (previous_x_def_block_id = current_block
-                || ctx.ctx_doms previous_x_def_block_id current_block)
+                ( previous_x_def_block_id = current_block
+                || ctx.ctx_doms previous_x_def_block_id current_block )
                 &&
                 match previous_x_def with
                 | Mir.SimpleVar previous_e ->
@@ -136,9 +136,9 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
           | Some (_, previous_def) -> (
               match fst previous_def with
               | SimpleVar previous_e -> Pos.unmark previous_e
-              | _ -> assert false (* should not happen *))
-          | None -> e)
-      | None -> e)
+              | _ -> assert false (* should not happen *) )
+          | None -> e )
+      | None -> e )
   | Mir.Comparison (op, e1, e2) ->
       let new_e1 =
         Pos.same_pos_as (inline_in_expr (Pos.unmark e1) ctx current_block current_pos) e1
@@ -188,7 +188,7 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
       in
       if has_this_local_var new_e2 l then Mir.LocalLet (l, new_e1, new_e2) else Pos.unmark new_e2
   | Mir.LocalVar l -> (
-      match Mir.LocalVariableMap.find_opt l ctx.ctx_local_vars with None -> e | Some e' -> e')
+      match Mir.LocalVariableMap.find_opt l ctx.ctx_local_vars with None -> e | Some e' -> e' )
   | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> e
   | Mir.Index (v, e2) ->
       let new_e2 =
@@ -242,7 +242,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current
                 Pos.same_pos_as (SAssign (var, { data with var_definition = new_defs })) stmt
               in
               let new_ctx = add_var_def_to_ctx var new_defs current_block current_stmt_pos ctx in
-              (new_stmt, new_ctx)))
+              (new_stmt, new_ctx) ) )
   | SVerif cond ->
       let new_e = inline_in_expr (Pos.unmark cond.cond_expr) ctx current_block current_stmt_pos in
       let new_stmt =

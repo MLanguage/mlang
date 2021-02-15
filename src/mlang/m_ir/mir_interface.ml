@@ -26,7 +26,7 @@ let reset_all_outputs (p : program) : program =
                 var_data with
                 var_io = Input;
                 var_definition =
-                  (match var_data.var_definition with
+                  ( match var_data.var_definition with
                   | InputVar | SimpleVar _ -> var_data.var_definition
                   | TableVar _ ->
                       Errors.raise_spanned_error
@@ -34,17 +34,17 @@ let reset_all_outputs (p : program) : program =
                            "Defining a\n\
                            \             variable input for a table variable %s is not supported"
                            (Pos.unmark var.Variable.name))
-                        (Pos.get_position var.Variable.name));
+                        (Pos.get_position var.Variable.name) );
               }
           | _ ->
               {
                 var_data with
                 var_io = Regular;
                 var_definition =
-                  (match var_data.var_definition with
+                  ( match var_data.var_definition with
                   | InputVar -> assert false
                   | SimpleVar old -> SimpleVar old
-                  | TableVar (size, old) -> TableVar (size, old));
+                  | TableVar (size, old) -> TableVar (size, old) );
               })
         p.program_vars;
   }

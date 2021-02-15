@@ -52,7 +52,7 @@ module VarLiteralSet = Set.Make (struct
           Array.iter2
             (fun t1i t2i -> if t1i = t2i then () else different := Some (compare t1i t2i))
             t1 t2;
-          match !different with None -> 0 | Some i -> i)
+          match !different with None -> 0 | Some i -> i )
     | _ -> compare x y
 end)
 

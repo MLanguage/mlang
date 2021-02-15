@@ -68,7 +68,7 @@ let const_var_set_from_list (p : Bir.program)
           with Errors.StructuredError _ ->
             Errors.raise_spanned_error
               (Format.asprintf "unknown variable %s" (Pos.unmark name))
-              (Pos.get_position e))
+              (Pos.get_position e) )
       in
       let new_e =
         Mast_to_mvg.translate_expression

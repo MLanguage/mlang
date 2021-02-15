@@ -201,7 +201,7 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) : 
             (generate_python_expr safe_bool_binops)
             e
             (generate_python_expr safe_bool_binops)
-            e)
+            e )
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "m_cond(%a, %a, %a)"
         (generate_python_expr safe_bool_binops)

@@ -55,7 +55,7 @@ let parse_variable sloc (s : string) =
   try Mast.Normal (parse_variable_name sloc s)
   with E.StructuredError _ -> (
     try Mast.Generic (parse_variable_generic_name sloc s)
-    with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc))
+    with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc) )
 
 (** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Mast.variable | ParseInt of int
@@ -66,7 +66,7 @@ let parse_variable_or_int sloc (s : string) : parse_val =
     try ParseVar (Mast.Normal (parse_variable_name sloc s))
     with E.StructuredError _ -> (
       try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
-      with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc)))
+      with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc) ) )
 
 (** Table index can be integer or [X], the generic table index variable *)
 let parse_table_index sloc (s : string) : Mast.table_index =
@@ -74,7 +74,7 @@ let parse_table_index sloc (s : string) : Mast.table_index =
   with Failure _ -> (
     try Mast.SymbolIndex (parse_variable sloc s)
     with E.StructuredError _ ->
-      E.raise_spanned_error "table index should be an integer" (mk_position sloc))
+      E.raise_spanned_error "table index should be an integer" (mk_position sloc) )
 
 (**{1 Literal parsing}*)
 

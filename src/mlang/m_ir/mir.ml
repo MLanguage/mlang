@@ -329,4 +329,4 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
         (List.sort
            (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
            (Pos.VarNameToID.find name p.program_idmap))
-    with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
+    with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name) )

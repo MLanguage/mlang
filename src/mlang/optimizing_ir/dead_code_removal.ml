@@ -32,7 +32,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
             | Some used -> (
                 match BlockMap.find_opt id used with
                 | None -> Some (BlockMap.add id (PosSet.singleton pos) used)
-                | Some old_pos -> Some (BlockMap.add id (PosSet.add pos old_pos) used)))
+                | Some old_pos -> Some (BlockMap.add id (PosSet.add pos old_pos) used) ))
           used_vars)
       stmt_used_vars used_vars
   in
@@ -106,7 +106,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
                         Mir.IndexMap.fold
                           (fun _ e used_vars ->
                             Mir_dependency_graph.get_used_variables_ e used_vars)
-                          es Mir.VariableMap.empty)
+                          es Mir.VariableMap.empty )
                 | Mir.InputVar -> assert false
                 (* should not happen *)
               in

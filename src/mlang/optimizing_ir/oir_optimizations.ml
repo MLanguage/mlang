@@ -36,25 +36,25 @@ let optimize (p : program) : program =
   let p = Dead_code_removal.dead_code_removal p in
   print_done start_instrs start_instrs (count_instr p);
   let p = ref p in
-  (try
-     while true do
-       Cli.debug_print "Partial evaluation...";
-       let old_instrs = count_instr !p in
-       p := Partial_evaluation.partial_evaluation !p;
-       p := Dead_code_removal.dead_code_removal !p;
-       let intermediate_instrs = count_instr !p in
-       print_done start_instrs old_instrs intermediate_instrs;
-       if intermediate_instrs = old_instrs then raise Exit
-       else begin
-         Cli.debug_print "Inlining...";
-         p := Inlining.inlining !p;
-         p := Dead_code_removal.dead_code_removal !p;
-         let end_instrs = count_instr !p in
-         print_done start_instrs intermediate_instrs end_instrs;
-         if end_instrs = intermediate_instrs then raise Exit
-       end
-     done
-   with Exit -> ());
+  ( try
+      while true do
+        Cli.debug_print "Partial evaluation...";
+        let old_instrs = count_instr !p in
+        p := Partial_evaluation.partial_evaluation !p;
+        p := Dead_code_removal.dead_code_removal !p;
+        let intermediate_instrs = count_instr !p in
+        print_done start_instrs old_instrs intermediate_instrs;
+        if intermediate_instrs = old_instrs then raise Exit
+        else begin
+          Cli.debug_print "Inlining...";
+          p := Inlining.inlining !p;
+          p := Dead_code_removal.dead_code_removal !p;
+          let end_instrs = count_instr !p in
+          print_done start_instrs intermediate_instrs end_instrs;
+          if end_instrs = intermediate_instrs then raise Exit
+        end
+      done
+    with Exit -> () );
   let p = !p in
   let end_instrs = count_instr p in
   print_done ~msg:"Optimizations done! Total effect" start_instrs start_instrs end_instrs;
