@@ -163,6 +163,21 @@ sanitize_crash_names:
 
 transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
 
+##################################################
+# Building and running unit tests
+##################################################
+
+nan_unit_tests.exe: nan_unit_tests.o ../m_value.o ../m_nan_value.o
+	$(C_COMPILER) -lm -o $@ $^
+
+unit_tests: nan_unit_tests.exe
+	./nan_unit_tests.exe
+
+
+##################################################
+# Clean
+##################################################
+
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*
 clean_fuzz_tests:
