@@ -138,7 +138,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2))
+      (Format.asprintf "%s" se2, s1 @ (lvar, e1) :: s2)
 
 let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.formatter)
     (defs : (LocalVariable.t * expression Pos.marked) list) =
@@ -172,7 +172,7 @@ let generate_method (oc : Format.formatter) ((rule_number : string), (expression
         rule_number expression
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
-    (data : Mir.variable_data) (oc : Format.formatter) methods_to_write =
+    (data : Mir.variable_data) methods_to_write java_stmts =
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
@@ -186,14 +186,18 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
           Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
             var.Variable.execution_number.Mir.seq_number
       in
-      Format.fprintf oc
-        "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
-         tableVariables));@\n"
-        (format_local_vars_defs var_indexes)
-        defs format_var_name var method_number;
-      Hashtbl.replace methods_to_write method_number se
+      let new_java_stmts =
+        Format.asprintf
+          "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
+           tableVariables));@\n"
+          (format_local_vars_defs var_indexes)
+          defs format_var_name var method_number
+        :: java_stmts
+      in
+      Hashtbl.replace methods_to_write method_number se;
+      new_java_stmts
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name var
+      Format.asprintf "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name var
         (String.concat ","
            (let array_of_variables = ref [] in
             IndexMap.iter
@@ -202,6 +206,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
                 array_of_variables := List.append !array_of_variables [ string_genere ])
               es;
             !array_of_variables))
+      :: java_stmts
   | TableVar (_, IndexGeneric _) -> assert false
   (*Format.fprintf oc "%a = %a;@\n@\n" generate_variable var (generate_java_expr) e*)
   | InputVar -> assert false
@@ -285,31 +290,36 @@ let sanitize_str (s, p) =
       else c)
     s
 
-let generate_var_cond var_indexes cond oc =
-  Format.fprintf oc
+let generate_var_cond var_indexes cond (java_stmts : string list) =
+  Format.asprintf
     "cond = %s;@\n\
      if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
-    \   throw new RuntimeException(\"Error triggered\\n%a\");@\n\
+    \   throw new RuntimeException(\"Error triggered\\n%s\");@\n\
      }@\n\
      @\n"
     (let se, _ = generate_java_expr cond.cond_expr var_indexes in
      se)
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt err ->
-         Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
-    cond.cond_errors
+    (let cond_error = List.hd cond.cond_errors in
+     Format.asprintf "%s: %s"
+       (sanitize_str cond_error.Error.name)
+       (sanitize_str cond_error.Error.descr))
+  :: java_stmts
 
 let fresh_cond_counter = ref 0
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    methods_to_write (oc : Format.formatter) (stmts : Bir.stmt list) =
-  Format.pp_print_list (generate_stmt program var_indexes methods_to_write) oc stmts
+    methods_to_write (java_stmts : string list) (stmts : Bir.stmt list) =
+  let local_generate stmt = generate_stmt program var_indexes methods_to_write java_stmts stmt in
+  match stmts with
+  | hd :: tl ->
+      let list = local_generate hd in
+      generate_stmts program var_indexes methods_to_write list tl
+  | [] -> java_stmts
 
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) methods_to_write
-    (oc : Format.formatter) (stmt : Bir.stmt) =
+    (java_stmts : string list) (stmt : Bir.stmt) =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc methods_to_write
+  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata methods_to_write java_stmts
   | SConditional (cond, tt, []) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -321,28 +331,32 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      Format.fprintf oc "generate_%s(%s, calculationVariables, localVariables, tableVariables);@\n"
+      let x = Format.asprintf "generate_%s(%s, calculationVariables, localVariables, tableVariables);@\n"
         cond_name
         (let pos_expression = Pos.same_pos_as cond stmt in
          let s, _ = generate_java_expr pos_expression var_indexes in
-         s);
+         s) in
       Hashtbl.replace methods_to_write cond_name
         (Format.asprintf "if (!cond.isPresent() || cond.getAsDouble() != 0){@\n@[<h 4>   @]}@\n");
       let string_list =
         String.split_on_char '\n'
-          (Format.asprintf "%a" (generate_stmts program var_indexes methods_to_write) tt)
+          (Format.asprintf "%a" generate_stmts program var_indexes methods_to_write java_stmts tt)
       in
       let lists = split_list string_list [] [] 0 in
       let number_of_blocks = add_assignements methods_to_write lists 0 in
       let rec write_assignment_method_calls count inc =
         match (count, inc) with
         | _, _ when inc < count ->
-            Format.fprintf oc
-              "generate_assign_%d( calculationVariables,localVariables, tableVariables);\n" inc;
+            let _ =
+              Format.asprintf
+                "generate_assign_%d( calculationVariables,localVariables, tableVariables);\n" inc
+              :: java_stmts
+            in
             write_assignment_method_calls count (inc + 1)
         | _, _ -> ()
       in
-      write_assignment_method_calls number_of_blocks 0
+      write_assignment_method_calls number_of_blocks 0;
+      []
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -352,21 +366,26 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
-      Format.fprintf oc
-        "/*SConditional (cond, tt, ff)*/OptionalDouble %s = %s;@\n\
+      let generated_if_stmts = generate_stmts program var_indexes methods_to_write java_stmts tt in
+      let generated_else_stmts =
+        (generate_stmts program var_indexes methods_to_write java_stmts) ff
+      in
+      let format_print x _ =
+        (Format.pp_print_list (fun fmt item -> Format.fprintf fmt "%s" item)) x generated_if_stmts
+      in
+      Format.asprintf
+        "/*SConditional (cond, tt, ff)*/@\n\n\
+        \        OptionalDouble %s = %s;@\n\
          if (!%s.isPresent() && %s.getAsDouble() != 0){@\n\
          @[<h 4>    %a@]}@\n\
          else if (!%s.isPresent()){@\n\
-         @[<h 4>    %a@]}@\n"
+         @[<h 4>    %s@]}@\n"
         cond_name
         (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
          s)
-        cond_name cond_name
-        (generate_stmts program var_indexes methods_to_write)
-        tt cond_name
-        (generate_stmts program var_indexes methods_to_write)
-        ff
-  | SVerif v -> generate_var_cond var_indexes v oc
+        cond_name cond_name format_print () cond_name ""
+      :: java_stmts
+  | SVerif v -> generate_var_cond var_indexes v java_stmts
 
 let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
@@ -407,15 +426,18 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let methods_to_write = Hashtbl.create 500 in
+  let methods_to_write = Hashtbl.create 1 in
   let input_method_lists = generate_input_handling function_spec in
+  let var_indexes, _ = get_variables_indexes program function_spec in
+  let _ = generate_stmts program var_indexes methods_to_write [] program.statements in
+  let x _ _ = () in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
   generate_input_calls 0 input_method_lists oc;
-  Format.fprintf oc "%a%a%a"
-    (let var_indexes, _ = get_variables_indexes program function_spec in
-     generate_stmts program var_indexes methods_to_write)
-    program.statements generate_return function_spec generate_calculation_methods methods_to_write;
+  Format.fprintf oc "/*GENERATE STATEMENTS*/\n%a" x oc;
+  Format.fprintf oc "/* GENERATE RETURN */ \n %a\n" generate_return function_spec;
+  Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n %a\n" generate_calculation_methods
+    methods_to_write;
   write_input_methods oc input_method_lists 0;
   Format.fprintf oc "\n}";
   close_out _oc
