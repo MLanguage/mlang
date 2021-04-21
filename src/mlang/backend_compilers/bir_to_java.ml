@@ -32,7 +32,7 @@ let calculateTax_method_header : string =
   {|
 
 public static Map<String, OptionalDouble> calculateTax(Map<String,OptionalDouble> input_variables) {
-  OptionalDouble cond; 
+  OptionalDouble cond = OptionalDouble.empty(); 
   Map<String, OptionalDouble> out = new HashMap<>();
   Map<String, OptionalDouble> calculationVariables = new HashMap<>();
   Map<Integer, OptionalDouble> localVariables = new HashMap<>();
@@ -151,6 +151,7 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
 let generate_method (oc : Format.formatter) ((rule_number : string), (expression : string)) : unit =
   let regex_cond = Re.Pcre.regexp "cond.*" in
   let regex_assign = Re.Pcre.regexp "assign.*" in
+  let regex_stmt = Re.Pcre.regexp "stmtMethod.*" in
   match rule_number with
   | _ when Re.Pcre.pmatch ~rex:regex_cond rule_number ->
       Format.fprintf oc
@@ -162,13 +163,19 @@ let generate_method (oc : Format.formatter) ((rule_number : string), (expression
       Format.fprintf oc
         "private static void generate_%s(Map<String,OptionalDouble> calculationVariables, \
          Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> \
-         tableVariables) { %s;} @\n"
+         tableVariables, OptionalDouble cond) { %s;} @\n"
+        rule_number expression
+  | _ when Re.Pcre.pmatch ~rex:regex_stmt rule_number ->
+      Format.fprintf oc
+        "private static void generate_%s(Map<String,OptionalDouble> calculationVariables, \
+         Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> \
+         tableVariables, OptionalDouble cond) { %s;} @\n"
         rule_number expression
   | _ ->
       Format.fprintf oc
         "private static OptionalDouble generate_%s(Map<String,OptionalDouble> \
          calculationVariables, Map<Integer, OptionalDouble> localVariables, \
-         Map<String,List<OptionalDouble>> tableVariables) {return %s;} @\n"
+         Map<String,List<OptionalDouble>> tableVariables, OptionalDouble cond) {return (%s);} @\n"
         rule_number expression
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
@@ -189,7 +196,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
       let new_java_stmts =
         Format.asprintf
           "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
-           tableVariables));@\n"
+           tableVariables, cond));@\n"
           (format_local_vars_defs var_indexes)
           defs format_var_name var method_number
         :: java_stmts
@@ -212,7 +219,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "// %s\n\n %s\n\n public class CalculImpot {@\n" Prelude.message java_imports
+  Format.fprintf oc "// %s\n\n %s\n\npublic class CalculImpot {@\n" Prelude.message java_imports
 
 let rec split_list (list_to_split : 'a list) (split_lists : 'a list list) (current_list : 'a list)
     count : 'a list list =
@@ -258,7 +265,7 @@ let rec write_input_methods oc (methods : string list list) count =
   | hd :: tl ->
       Format.fprintf oc
         "private static void loadInputVariables_%d(Map<String, OptionalDouble> \
-         calculationVariables, Map<String, OptionalDouble> input_variables) {\n\
+         calculationVariables, Map<String, OptionalDouble> input_variables, OptionalDouble cond) {\n\
          %a}\n"
         count
         (Format.pp_print_list
@@ -276,7 +283,7 @@ let rec generate_input_calls count input_methods oc =
   match input_methods with
   | [] -> ()
   | _ :: tl ->
-      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables);\n" count;
+      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n" count;
       generate_input_calls (count + 1) tl oc
 
 let sanitize_str (s, p) =
@@ -331,17 +338,16 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      let x = Format.asprintf "generate_%s(%s, calculationVariables, localVariables, tableVariables);@\n"
-        cond_name
-        (let pos_expression = Pos.same_pos_as cond stmt in
-         let s, _ = generate_java_expr pos_expression var_indexes in
-         s) in
+      let _ =
+        Format.asprintf "generate_%s(%s, calculationVariables, localVariables, tableVariables);@\n"
+          cond_name
+          (let pos_expression = Pos.same_pos_as cond stmt in
+           let s, _ = generate_java_expr pos_expression var_indexes in
+           s)
+      in
       Hashtbl.replace methods_to_write cond_name
         (Format.asprintf "if (!cond.isPresent() || cond.getAsDouble() != 0){@\n@[<h 4>   @]}@\n");
-      let string_list =
-        String.split_on_char '\n'
-          (Format.asprintf "%a" generate_stmts program var_indexes methods_to_write java_stmts tt)
-      in
+      let string_list = generate_stmts program var_indexes methods_to_write java_stmts tt in
       let lists = split_list string_list [] [] 0 in
       let number_of_blocks = add_assignements methods_to_write lists 0 in
       let rec write_assignment_method_calls count inc =
@@ -349,7 +355,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         | _, _ when inc < count ->
             let _ =
               Format.asprintf
-                "generate_assign_%d( calculationVariables,localVariables, tableVariables);\n" inc
+                "generate_assign_%d( calculationVariables,localVariables, tableVariables, cond);\n" inc
               :: java_stmts
             in
             write_assignment_method_calls count (inc + 1)
@@ -367,9 +373,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
       let generated_if_stmts = generate_stmts program var_indexes methods_to_write java_stmts tt in
-      let generated_else_stmts =
-        (generate_stmts program var_indexes methods_to_write java_stmts) ff
-      in
+      let _ = (generate_stmts program var_indexes methods_to_write java_stmts) ff in
       let format_print x _ =
         (Format.pp_print_list (fun fmt item -> Format.fprintf fmt "%s" item)) x generated_if_stmts
       in
@@ -429,14 +433,22 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let methods_to_write = Hashtbl.create 1 in
   let input_method_lists = generate_input_handling function_spec in
   let var_indexes, _ = get_variables_indexes program function_spec in
-  let _ = generate_stmts program var_indexes methods_to_write [] program.statements in
-  let x _ _ = () in
+  let statements = generate_stmts program var_indexes methods_to_write [] program.statements in
+  let split_statements = split_list statements [] [] 0 in
+  let rec pp_split_statements (ss: string list list) count  fmt = match ss with 
+  | [] -> ()
+  | hd :: tl -> if hd != [] then (
+                Format.fprintf fmt "generate_stmtMethod%d(calculationVariables, localVariables,tableVariables, cond);\n" count;
+                (Hashtbl.add methods_to_write (Format.asprintf "stmtMethod%d" count ) (String.concat "\n" hd))
+                );  pp_split_statements tl (count + 1) fmt
+  
+   in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
   generate_input_calls 0 input_method_lists oc;
-  Format.fprintf oc "/*GENERATE STATEMENTS*/\n%a" x oc;
-  Format.fprintf oc "/* GENERATE RETURN */ \n %a\n" generate_return function_spec;
-  Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n %a\n" generate_calculation_methods
+  Format.fprintf oc "/*GENERATE STATEMENTS*/\n"; (pp_split_statements split_statements 0 oc);
+  Format.fprintf oc "/* GENERATE RETURN */ \n%a\n" generate_return function_spec;
+  Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n%a\n" generate_calculation_methods
     methods_to_write;
   write_input_methods oc input_method_lists 0;
   Format.fprintf oc "\n}";
