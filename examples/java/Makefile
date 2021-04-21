@@ -40,7 +40,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 all: backend_tests $(shell find . -name "run_*.py")
 
 clean: 
-	rm -rf *.java
+	rm -rf *.java *.class
 
 ##################################################
 # Generating and running Java files from Mlang
