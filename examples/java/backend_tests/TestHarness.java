@@ -48,8 +48,6 @@ public class TestHarness {
 
             TestData td = new TestData();
 
-            List<String> variables = new ArrayList<>();
-
             IntStream.range(0, lines.size()).forEach(pos -> {
                 String line = lines.get(pos);
                 switch(line) {
@@ -77,10 +75,13 @@ public class TestHarness {
             lines.subList(tp.getEntreesPrimitif() + 1, tp.getControlesPrimitif())
                 .stream()
                 .forEach(variableLine -> {
-                    String[] variableLineArray = variableLine.split(SEPERATOR);
-                    String code = variableLineArray[0];
-                    OptionalDouble value = OptionalDouble.of(Double.parseDouble(variableLineArray[1]));
-                    td.addVariable(code, value);
+                    addExpectedVariableToTestData(variableLine, td);
+                });
+
+                lines.subList(tp.getResultatsCorrectifs() + 1, tp.getEntreesCorrectif())
+                .stream()
+                .forEach(variableLine -> {
+                    addInputVariableToTestData(variableLine, td);
                 });
 
         } catch (IOException e) {
@@ -89,14 +90,55 @@ public class TestHarness {
             e.printStackTrace();
         }
     }
+
+    private static void addInputVariableToTestData(String variableLine, TestData td){
+        Variable var = createVariable(variableLine);
+        td.addInputVariable(var.getCode(), var.getValue());
+    }
+
+    private static void addExpectedVariableToTestData(String variableLine, TestData td){
+        Variable var = createVariable(variableLine);
+        td.addExpectedVariable(var.getCode(), var.getValue());
+    }
+
+    private static Variable createVariable(String variableLine){
+        String[] variableLineArray = variableLine.split(SEPERATOR);
+        String code = variableLineArray[0];
+        OptionalDouble value = OptionalDouble.of(Double.parseDouble(variableLineArray[1]));
+        return new Variable(code, value);
+    }
 }
 
 class TestData {
-    private Map<String, OptionalDouble> calculationVariables = new HashMap<>();
+    private final Map<String, OptionalDouble> inputVariables = new HashMap<>();
+    private final Map<String, OptionalDouble> expectedVariables = new HashMap<>();
 
-    public void addVariable(String code, OptionalDouble value){
-        calculationVariables.put(code, value);
+    public void addInputVariable(String code, OptionalDouble value){
+        inputVariables.put(code, value);
     }
+
+    public void addExpectedVariable(String code, OptionalDouble value){
+        expectedVariables.put(code, value);
+    }
+}
+
+class Variable {
+    private final String code;
+    private final OptionalDouble value;
+
+    public Variable(String code, OptionalDouble value){
+        this.code = code;
+        this.value = value;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public OptionalDouble getValue() {
+        return value;
+    }
+    
 }
 
 class TestPosition {
