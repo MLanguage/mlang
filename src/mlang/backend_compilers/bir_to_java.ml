@@ -11,18 +11,20 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+(* TODO: Refactor multiple method splitting functions *)
+
 open Mir
 
 let verbose_output = ref false
 
 let java_imports : string =
   {|
+  package com.mlang;
+
   import java.util.Map;
   import java.util.OptionalDouble;
-  import java.util.function.BiFunction;
   import java.util.HashMap;
   import java.util.List;
-  import java.util.ArrayList;
   import java.util.Arrays;
 
   import static com.mlang.MValue.*;
@@ -283,7 +285,8 @@ let rec generate_input_calls count input_methods oc =
   match input_methods with
   | [] -> ()
   | _ :: tl ->
-      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n" count;
+      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n"
+        count;
       generate_input_calls (count + 1) tl oc
 
 let sanitize_str (s, p) =
@@ -355,7 +358,8 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         | _, _ when inc < count ->
             let _ =
               Format.asprintf
-                "generate_assign_%d( calculationVariables,localVariables, tableVariables, cond);\n" inc
+                "generate_assign_%d( calculationVariables,localVariables, tableVariables, cond);\n"
+                inc
               :: java_stmts
             in
             write_assignment_method_calls count (inc + 1)
@@ -435,18 +439,25 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let var_indexes, _ = get_variables_indexes program function_spec in
   let statements = generate_stmts program var_indexes methods_to_write [] program.statements in
   let split_statements = split_list statements [] [] 0 in
-  let rec pp_split_statements (ss: string list list) count  fmt = match ss with 
-  | [] -> ()
-  | hd :: tl -> if hd != [] then (
-                Format.fprintf fmt "generate_stmtMethod%d(calculationVariables, localVariables,tableVariables, cond);\n" count;
-                (Hashtbl.add methods_to_write (Format.asprintf "stmtMethod%d" count ) (String.concat "\n" hd))
-                );  pp_split_statements tl (count + 1) fmt
-  
-   in
+  let rec pp_split_statements (ss : string list list) count fmt =
+    match ss with
+    | [] -> ()
+    | hd :: tl ->
+        if hd != [] then (
+          Format.fprintf fmt
+            "generate_stmtMethod%d(calculationVariables, localVariables,tableVariables, cond);\n"
+            count;
+          Hashtbl.add methods_to_write
+            (Format.asprintf "stmtMethod%d" count)
+            (String.concat "\n" hd));
+        pp_split_statements tl (count + 1) fmt
+  in
+
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
   generate_input_calls 0 input_method_lists oc;
-  Format.fprintf oc "/*GENERATE STATEMENTS*/\n"; (pp_split_statements split_statements 0 oc);
+  Format.fprintf oc "/*GENERATE STATEMENTS*/\n";
+  pp_split_statements split_statements 0 oc;
   Format.fprintf oc "/* GENERATE RETURN */ \n%a\n" generate_return function_spec;
   Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n%a\n" generate_calculation_methods
     methods_to_write;
