@@ -1,8 +1,11 @@
+package com.mlang;
+
+import static java.util.stream.Collectors.toList;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,21 +35,24 @@ public class TestHarness {
         }
 
         try {
-            Files.list(testsDir).forEach(TestHarness::parseTest);
+            Files.list(testsDir)
+                .map(TestHarness::parseTest)
+                .forEach(test -> Ir_tests_2019.calculateTax(test.getExceptedVariables()));
         } catch (IOException ex) {
             System.err.println(ex.getMessage());
             return;
         }
     }
 
-    private static void parseTest(Path test){
+    private static TestData parseTest(Path test){
+        TestData td = new TestData();
+
         System.out.println("Test case : " + test);
         try {
             List<String> lines = Files.readAllLines(test);
 
             TestPosition tp = new TestPosition();
 
-            TestData td = new TestData();
 
             IntStream.range(0, lines.size()).forEach(pos -> {
                 String line = lines.get(pos);
@@ -78,17 +84,19 @@ public class TestHarness {
                     addExpectedVariableToTestData(variableLine, td);
                 });
 
-                lines.subList(tp.getResultatsCorrectifs() + 1, tp.getEntreesCorrectif())
-                .stream()
-                .forEach(variableLine -> {
-                    addInputVariableToTestData(variableLine, td);
-                });
+                // lines.subList(tp.getEntreesCorrectif() + 1, tp.getResultatsCorrectifs())
+                // .stream()
+                // .forEach(variableLine -> {
+                //     addInputVariableToTestData(variableLine, td);
+                // });
 
+                
         } catch (IOException e) {
             e.printStackTrace();
         } catch (NumberFormatException e ){
             e.printStackTrace();
         }
+        return td;
     }
 
     private static void addInputVariableToTestData(String variableLine, TestData td){
@@ -119,6 +127,14 @@ class TestData {
 
     public void addExpectedVariable(String code, OptionalDouble value){
         expectedVariables.put(code, value);
+    }
+
+    public Map<String, OptionalDouble> getInputVariables(){
+        return inputVariables;
+    }
+
+    public Map<String, OptionalDouble> getExceptedVariables(){
+        return expectedVariables;
     }
 }
 
