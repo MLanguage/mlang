@@ -53,6 +53,13 @@ Ir_%.java: ../../m_specs/%.m_spec
 		--optimize \
 		$(SOURCE_FILES)
 	sed -i '' -e 's/CalculImpot/$(shell echo $@ | cut -d "." -f 1)/g' $@
-	javac -cp . $@
+	mv $@ src/com/mlang
+	rm -rf target/*
+	mkdir -p target
+	javac -J-Xss10m  -d target -cp src src/com/mlang/*.java 
 
-
+backend_tests: Ir_tests_2019.java
+	rm -rf backend_tests/target/*
+	mkdir -p backend_tests/target/
+	javac -cp "backend_tests/src/:src" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
+	
