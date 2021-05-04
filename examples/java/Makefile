@@ -50,13 +50,13 @@ Ir_%.java: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend java --output $@ \
 		--function_spec $^ \
-		--optimize \
 		$(SOURCE_FILES)
 	sed -i '' -e 's/CalculImpot/$(shell echo $@ | cut -d "." -f 1)/g' $@
+	rm -rf src/com/mlang/Ir*.java
 	mv $@ src/com/mlang
 	rm -rf target/*
 	mkdir -p target
-	javac -J-Xss10m  -d target -cp src src/com/mlang/*.java 
+	javac -J-Xss10m -J-Xmx4096m -d target -cp src src/com/mlang/*.java 
 
 backend_tests: Ir_tests_2019.java
 	rm -rf backend_tests/target/*
