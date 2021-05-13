@@ -63,7 +63,7 @@ ir_%.o: ir_%.c
 ##################################################
 
 # To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
-run_%.exe: ir_%.o run_%.o m_value.o
+run_%.exe: ir_%.o run_%.o m_value.o m_nan_value.o
 	$(C_COMPILER) -lm -o $@ $^
 
 ##################################################
@@ -71,7 +71,7 @@ run_%.exe: ir_%.o run_%.o m_value.o
 ##################################################
 
 backend_tests: FORCE
-	$(MAKE) -C backend_tests run_tests
+	$(MAKE) -C unit_tests backend_tests run_tests
 
 clean:
 	$(MAKE) -C backend_tests clean
