@@ -1,3 +1,8 @@
+/* DISCLAIMER: this NaN code is probably buggy. The code below is not
+   well designed, without guarantee of covering correctly the different
+   cases. The testing work was never finished. Use at your own risk.
+ */
+
 #include <stdio.h>
 #include "m_value.h"
 #include "m_nan_value.h"
