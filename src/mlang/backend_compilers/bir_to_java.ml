@@ -17,11 +17,11 @@ open Mir
 
 type code_block = AtomicBlock of string | IndentedBlock of code_block list
 
-let pp_code_block cb =
+let pp_code_block oc cb =
   let rec pp_code_block_aux cb indent =
     match cb with
     | IndentedBlock cb -> List.iter (fun x -> pp_code_block_aux x (indent + 1)) (List.rev cb)
-    | AtomicBlock ab -> Printf.printf "@[<hov %d> %s" indent ab
+    | AtomicBlock ab -> Format.fprintf oc "@[<h %d> %s" indent ab
   in
   pp_code_block_aux cb 0
 
@@ -421,28 +421,12 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
     ("input_method_lists length in generate_java_expr = "
     ^ string_of_int (List.length input_method_lists));
   let var_indexes, _ = get_variables_indexes program function_spec in
-  let statements =
-    generate_stmts program var_indexes methods_to_write (IndentedBlock []) program.statements oc
-  in
-  let split_statements = split_list statements in
-  let rec pp_split_statements (ss : string list list) count fmt =
-    match ss with
-    | [] -> ()
-    | hd :: tl ->
-        if hd != [] then (
-          Format.fprintf fmt
-            "generate_stmtMethod%d(calculationVariables, localVariables,tableVariables, cond);\n"
-            count;
-          Hashtbl.add methods_to_write
-            (Format.asprintf "stmtMethod%d" count)
-            (String.concat "\n" hd));
-        pp_split_statements tl (count + 1) fmt
-  in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
   generate_input_calls 0 input_method_lists oc;
   Format.fprintf oc "/*GENERATE STATEMENTS*/\n";
-  pp_split_statements split_statements 0 oc;
+  generate_stmts program var_indexes methods_to_write (IndentedBlock []) program.statements oc
+  |> pp_code_block oc;
   Format.fprintf oc "/* GENERATE RETURN */ \n%a\n" generate_return function_spec;
   Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n%a\n" generate_calculation_methods
     methods_to_write;
