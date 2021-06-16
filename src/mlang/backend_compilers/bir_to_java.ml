@@ -346,20 +346,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
     (java_stmts : code_block) (stmt : Bir.stmt) oc =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata methods_to_write java_stmts
-  | SConditional (cond, tt, []) ->
-      let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
-      let cond_block =
-        add_el_hor
-          (Format.asprintf
-             "/*SConditional (cond,tt, [])*/\n\
-              cond = %s;\n\
-             \ if (!cond.isPresent() || cond.getAsDouble() != 0){@\n\
-              @[<h 4>  @]}@\n"
-             s)
-          java_stmts
-      in
-      generate_stmts program var_indexes methods_to_write cond_block tt oc
-  | SConditional (cond, tt, ff) ->
+  | SConditional (cond, tt, ff) -> (
       let pos = Pos.get_position stmt in
       let fname =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
