@@ -353,25 +353,37 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
-      let generated_if_stmts =
-        generate_stmts program var_indexes methods_to_write java_stmts tt oc
+      let true_case = generate_stmts program var_indexes methods_to_write java_stmts tt oc in
+      let false_case = (generate_stmts program var_indexes methods_to_write java_stmts) ff oc in
+      let if_begin =
+        add_el_hor
+          (Format.asprintf
+             {|
+          /* SConditional (cond, tt, ff) */
+          OptionalDouble %s = %s;
+          if (! %s.isPresent() && %s.getAsDouble() != 0) {
+        |}
+             cond_name
+             (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
+              s)
+             cond_name cond_name)
+          java_stmts
       in
-      let _ = (generate_stmts program var_indexes methods_to_write java_stmts) ff oc in
-      let format_print x _ =
-        (Format.pp_print_list (fun fmt item -> Format.fprintf fmt "%s" item)) x generated_if_stmts
+      let if_true_body =
+        match if_begin with
+        | IndentedBlock ib -> IndentedBlock [ IndentedBlock [ true_case ]; IndentedBlock ib ]
+        | _ -> assert false
       in
-      Format.asprintf
-        "/*SConditional (cond, tt, ff)*/@\n\n\
-        \        OptionalDouble %s = %s;@\n\
-         if (!%s.isPresent() && %s.getAsDouble() != 0){@\n\
-         @[<h 4>    %a@]}@\n\
-         else if (!%s.isPresent()){@\n\
-         @[<h 4>    %s@]}@\n"
-        cond_name
-        (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
-         s)
-        cond_name cond_name format_print () cond_name ""
-      :: java_stmts
+      let else_begin =
+        add_el_hor
+          (Format.asprintf {|
+           } else if (!%s.isPresent()) {
+        |} cond_name)
+          if_true_body
+      in
+      match else_begin with
+      | IndentedBlock ib -> IndentedBlock [ IndentedBlock [ false_case ]; IndentedBlock ib ]
+      | _ -> assert false)
   | SVerif v -> generate_var_cond var_indexes v java_stmts
 
 let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
