@@ -33,11 +33,9 @@ let add_el_hor (el : string) (cb : code_block) : code_block =
       let new_ab = AtomicBlock ab in
       IndentedBlock [ AtomicBlock el; new_ab ]
 
-let add_el_vert (el : string) (cb : code_block) : code_block =
-  match cb with
-  | IndentedBlock ib -> IndentedBlock [ AtomicBlock el; IndentedBlock ib ]
-  | AtomicBlock ab -> IndentedBlock [ AtomicBlock ab; IndentedBlock [ AtomicBlock ab ] ]
-
+(*let add_el_vert (el : string) (cb : code_block) : code_block = match cb with | IndentedBlock ib ->
+  IndentedBlock [ AtomicBlock el; IndentedBlock ib ] | AtomicBlock ab -> IndentedBlock [ AtomicBlock
+  ab; IndentedBlock [ AtomicBlock ab ] ] *)
 let java_imports : string =
   {|
   package com.mlang;
