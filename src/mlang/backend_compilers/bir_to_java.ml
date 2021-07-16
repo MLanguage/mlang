@@ -271,9 +271,11 @@ let split_list (list_to_split : 'a list) =
   List.length list_to_split |> Format.asprintf "Length of list_to_split %d" |> print_endline;
   split_list_aux list_to_split [] [] 0
 
-let rec generate_input_list variables (input_methods : string list) =
-  match variables with
-  | [] -> input_methods
+let generate_input_handling (function_spec : Bir_interface.bir_function) =
+  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
+  let rec generate_input_list input_vars  =
+  match input_vars with
+  | [] -> ()
   | hd :: tl ->
       let current_method =
         Format.asprintf
@@ -282,17 +284,10 @@ let rec generate_input_list variables (input_methods : string list) =
           \ System.out.println(calculationVariables.get(\"%a\"));" format_var_name hd
           (generate_name hd) (generate_name hd) format_var_name hd
       in
-      let updated_array = current_method :: input_methods in
-      generate_input_list tl updated_array
-
-
-let generate_input_handling (function_spec : Bir_interface.bir_function) =
-  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let input_methods = generate_input_list input_vars [] in
-  let debug_item = split_list input_methods in
-  print_endline
-    (Format.asprintf "generate_input_handling return length %d" (List.length debug_item));
-  input_methods
+      add_el_hor current_method;
+      generate_input_list tl
+    in 
+    generate_input_list input_vars 
 
 let sanitize_str (s, p) =
   String.map
@@ -402,13 +397,12 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let methods_to_write = Hashtbl.create 1 in
-  let input_method_lists = generate_input_handling function_spec in
   let var_indexes, _ = get_variables_indexes program function_spec in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
-  Format.fprintf oc "/* GENERATE INPUTS */\n";
-  Format.pp_print_list (fun oc item -> Format.fprintf oc "%s" item) oc input_method_lists;
-  Format.fprintf oc "/*GENERATE STATEMENTS*/\n";
+  add_el_hor "/* GENERATE INPUTS */\n";
+  generate_input_handling function_spec;
+  add_el_hor "/*GENERATE STATEMENTS*/\n";
   generate_stmts program var_indexes methods_to_write program.statements oc;
   Format.fprintf oc "/* GENERATE RETURN */ \n%a\n" generate_return function_spec;
   Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n%a\n" generate_calculation_methods
