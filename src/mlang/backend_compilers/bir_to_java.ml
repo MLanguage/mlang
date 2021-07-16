@@ -15,27 +15,14 @@
 
 open Mir
 
-type code_block = AtomicBlock of string | IndentedBlock of code_block list
+type code_block_struct = {block: string; indentation: int}
 
-let pp_code_block oc cb =
-  let rec pp_code_block_aux cb indent =
-    match cb with
-    | IndentedBlock cb -> List.iter (fun x -> pp_code_block_aux x (indent + 1)) (List.rev cb)
-    | AtomicBlock ab -> Format.fprintf oc "@[<h %d> %s" indent ab
-  in
-  pp_code_block_aux cb 0
+let java_program : code_block_struct list ref = ref []
 
 (** Add element to code_block type horizontally *)
-let add_el_hor (el : string) (cb : code_block) : code_block =
-  match cb with
-  | IndentedBlock ib -> IndentedBlock (AtomicBlock el :: ib)
-  | AtomicBlock ab ->
-      let new_ab = AtomicBlock ab in
-      IndentedBlock [ AtomicBlock el; new_ab ]
+let add_el_hor (el : string)  =
+  java_program := { block = el; indentation = 0} :: !java_program
 
-(*let add_el_vert (el : string) (cb : code_block) : code_block = match cb with | IndentedBlock ib ->
-  IndentedBlock [ AtomicBlock el; IndentedBlock ib ] | AtomicBlock ab -> IndentedBlock [ AtomicBlock
-  ab; IndentedBlock [ AtomicBlock ab ] ] *)
 let java_imports : string =
   {|
   package com.mlang;
@@ -98,64 +85,94 @@ let generate_variable (fmt : Format.formatter) (var : Variable.t) : unit =
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
+let add_expr_code_block (se, s) =
+  add_el_hor se;
+  (se, s)
+
 let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.VariableMap.t) :
     string * (LocalVariable.t * expression Pos.marked) list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2, s1 @ s2)
+      let se3, s3 =
+        (Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2, s1 @ s2)
+      in
+      add_expr_code_block (se3, s3)
   | Binop (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2, s1 @ s2)
+      let se3, s3 =
+        (Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2, s1 @ s2)
+      in
+      add_expr_code_block (se3, s3)
   | Unop (op, e) ->
       let se, s = generate_java_expr e var_indexes in
-      (Format.asprintf "%s(%s)" (generate_unop op) se, s)
+      let se2, s2 = (Format.asprintf "%s(%s)" (generate_unop op) se, s) in
+      add_expr_code_block (se2, s2)
   | Index (var, e) ->
       let _, s = generate_java_expr e var_indexes in
       let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
-      ( Format.asprintf "tableVariables.get(\"%a\").get(%d)" generate_variable (Pos.unmark var) size,
-        s )
+      let se2, s2 =
+        ( Format.asprintf "tableVariables.get(\"%a\").get(%d)" generate_variable (Pos.unmark var)
+            size,
+          s )
+      in
+      add_expr_code_block (se2, s2)
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 = generate_java_expr e3 var_indexes in
-      (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
+      let se4, s4 = (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3) in
+      add_expr_code_block (se4, s4)
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
-      (Format.asprintf "mPresent(%s)" se, s)
+      let se2, s2 = (Format.asprintf "mPresent(%s)" se, s) in
+      add_expr_code_block (se2, s2)
   | FunctionCall (NullFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
-      (Format.asprintf "m_null(%s)" se, s)
+      let se2, s2 = (Format.asprintf "m_null(%s)" se, s) in
+      add_expr_code_block (se2, s2)
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
-      (Format.asprintf "m_round(%s)" se, s)
+      let se2, s2 = (Format.asprintf "m_round(%s)" se, s) in
+      add_expr_code_block (se2, s2)
   | FunctionCall (InfFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
-      (Format.asprintf "m_floor(%s)" se, s)
+      let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
+      add_expr_code_block (se2, s2)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2)
+      let se3, s3 = (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2) in
+      add_expr_code_block (se3, s3)
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
+      let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
+      add_expr_code_block (se3, s3)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
-      (Format.asprintf "m_multimax(%s, tableVariables.get(\"%a\"))" se1 format_var_name v2, s1)
+      let se2, s2 =
+        (Format.asprintf "m_multimax(%s, tableVariables.get(\"%a\"))" se1 format_var_name v2, s1)
+      in
+      add_expr_code_block (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
-  | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (Format.asprintf "calculationVariables.get(\"%a\")" format_var_name var, [])
-  | LocalVar lvar -> (Format.asprintf "localVariables.get(%d)" lvar.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "generic_index", [])
+  | Literal (Float f) ->
+      add_expr_code_block (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
+  | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
+  | Var var ->
+      add_expr_code_block
+        (Format.asprintf "calculationVariables.get(\"%a\")" format_var_name var, [])
+  | LocalVar lvar ->
+      add_expr_code_block (Format.asprintf "localVariables.get(%d)" lvar.LocalVariable.id, [])
+  | GenericTableIndex -> add_expr_code_block (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2))
+      let se3, s3 = (Format.asprintf "%s" se2, s1 @ (lvar, e1) :: s2) in
+      add_expr_code_block (se3, s3)
 
 let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.formatter)
     (defs : (LocalVariable.t * expression Pos.marked) list) =
@@ -180,7 +197,7 @@ let generate_method (oc : Format.formatter) ((rule_number : string), (expression
       Format.fprintf oc
         "private static void generate_%s(Map<String,OptionalDouble> calculationVariables, \
          Map<Integer, OptionalDouble> localVariables, Map<String,List<OptionalDouble>> \
-         tableVariables, OptionalDouble cond) { %s;} @\n"
+         tableVariables, OptionalDouble cond) { %s; } @\n"
         rule_number expression
   | _ when Re.Pcre.pmatch ~rex:regex_stmt rule_number ->
       Format.fprintf oc
@@ -196,7 +213,7 @@ let generate_method (oc : Format.formatter) ((rule_number : string), (expression
         rule_number expression
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
-    (data : Mir.variable_data) methods_to_write java_stmts =
+    (data : Mir.variable_data) methods_to_write  =
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
@@ -210,17 +227,15 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
           Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
             var.Variable.execution_number.Mir.seq_number
       in
-      let new_java_stmts =
-        add_el_hor
-          (Format.asprintf
-             "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
-              tableVariables, cond));@\n"
-             (format_local_vars_defs var_indexes)
-             defs format_var_name var method_number)
-          java_stmts
-      in
-      Hashtbl.replace methods_to_write method_number se;
-      new_java_stmts
+      add_el_hor
+        (Format.asprintf
+           "%a calculationVariables.put(\"%a\",generate_%s(calculationVariables, localVariables, \
+            tableVariables, cond));@\n\n\
+           \              System.out.println(\"%a : \" + calculationVariables.get(\"%a\"));"
+           (format_local_vars_defs var_indexes)
+           defs format_var_name var method_number format_var_name var format_var_name var)
+        ;
+      Hashtbl.replace methods_to_write method_number se
   | TableVar (_, IndexTable es) ->
       add_el_hor
         (Format.asprintf "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name
@@ -233,8 +248,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
                    array_of_variables := List.append !array_of_variables [ string_genere ])
                  es;
                !array_of_variables)))
-        java_stmts
-  | TableVar (_, IndexGeneric _) -> java_stmts
+  | TableVar (_, IndexGeneric _) -> ()
   (*Format.asprintf "%a = %a;@\n@\n" generate_variable var (generate_java_expr) e :: java_stmts*)
   | InputVar -> assert false
 
@@ -264,45 +278,31 @@ let rec generate_input_list variables (input_methods : string list) =
       let current_method =
         Format.asprintf
           "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
-           input_variables.get(\"%s\") : OptionalDouble.empty());"
-          format_var_name hd (generate_name hd) (generate_name hd)
+           input_variables.get(\"%s\") : OptionalDouble.empty()); \n\n\
+          \ System.out.println(calculationVariables.get(\"%a\"));" format_var_name hd
+          (generate_name hd) (generate_name hd) format_var_name hd
       in
       let updated_array = current_method :: input_methods in
       generate_input_list tl updated_array
 
-let rec write_input_methods oc (methods : string list list) count =
-  match methods with
-  | [] -> ()
-  | hd :: tl ->
-      print_endline ("write_input_methods count = " ^ string_of_int count);
-      Format.fprintf oc
-        "private static void loadInputVariables_%d(Map<String, OptionalDouble> \
-         calculationVariables, Map<String, OptionalDouble> input_variables, OptionalDouble cond) {\n\
-         %a}\n"
-        count
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-           (fun fmt var ->
-             print_endline ("write_input_methods" ^ var);
-             Format.fprintf fmt "%s" var))
-        hd;
-      write_input_methods oc tl (count + 1)
-
+(*let rec write_input_methods oc (methods : string list list) count = match methods with | [] -> ()
+  | hd :: tl -> print_endline ("write_input_methods count = " ^ string_of_int count); Format.fprintf
+  oc "private static void loadInputVariables_%d(Map<String, OptionalDouble> \ calculationVariables,
+  Map<String, OptionalDouble> input_variables, OptionalDouble cond) {\n\ %a}\n" count
+  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") (fun fmt var ->
+  print_endline ("write_input_methods" ^ var); Format.fprintf fmt "%s" var)) hd; write_input_methods
+  oc tl (count + 1) *)
 let generate_input_handling (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let input_methods = generate_input_list input_vars [] in
   let debug_item = split_list input_methods in
   print_endline
     (Format.asprintf "generate_input_handling return length %d" (List.length debug_item));
-  debug_item
+  input_methods
 
-let rec generate_input_calls count input_methods oc =
-  match input_methods with
-  | [] -> ()
-  | _ :: tl ->
-      Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n"
-        count;
-      generate_input_calls (count + 1) tl oc
+(*let rec generate_input_calls count input_methods oc = match input_methods with | [] -> () | _ ::
+  tl -> Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n"
+  count; generate_input_calls (count + 1) tl oc *)
 
 let sanitize_str (s, p) =
   String.map
@@ -315,7 +315,8 @@ let sanitize_str (s, p) =
       else c)
     s
 
-let generate_var_cond var_indexes cond java_stmts =
+let generate_var_cond var_indexes cond =
+  add_el_hor "cond = ";
   add_el_hor
     (Format.asprintf
        "cond = %s;@\n\
@@ -329,22 +330,21 @@ let generate_var_cond var_indexes cond java_stmts =
         Format.asprintf "%s: %s"
           (sanitize_str cond_error.Error.name)
           (sanitize_str cond_error.Error.descr)))
-    java_stmts
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    methods_to_write (java_stmts : code_block) (stmts : Bir.stmt list) oc =
-  let local_generate stmt = generate_stmt program var_indexes methods_to_write java_stmts stmt oc in
+    methods_to_write (stmts : Bir.stmt list) oc =
+  let local_generate stmt = generate_stmt program var_indexes methods_to_write  stmt oc in
   match stmts with
   | hd :: tl ->
-      let list = local_generate hd in
-      generate_stmts program var_indexes methods_to_write list tl oc
-  | [] -> java_stmts
+      local_generate hd;
+      generate_stmts program var_indexes methods_to_write tl oc
+  | [] -> ()
 
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) methods_to_write
-    (java_stmts : code_block) (stmt : Bir.stmt) oc =
+     (stmt : Bir.stmt) oc : unit =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata methods_to_write java_stmts
-  | SConditional (cond, tt, ff) -> (
+  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata methods_to_write
+  | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
@@ -353,38 +353,24 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
-      let true_case = generate_stmts program var_indexes methods_to_write java_stmts tt oc in
-      let false_case = (generate_stmts program var_indexes methods_to_write java_stmts) ff oc in
-      let if_begin =
-        add_el_hor
-          (Format.asprintf
-             {|
+      add_el_hor
+        (Format.asprintf
+           {|
           /* SConditional (cond, tt, ff) */
           OptionalDouble %s = %s;
           if (! %s.isPresent() && %s.getAsDouble() != 0) {
         |}
-             cond_name
-             (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
-              s)
-             cond_name cond_name)
-          java_stmts
-      in
-      let if_true_body =
-        match if_begin with
-        | IndentedBlock ib -> IndentedBlock [ IndentedBlock [ true_case ]; IndentedBlock ib ]
-        | _ -> assert false
-      in
-      let else_begin =
-        add_el_hor
-          (Format.asprintf {|
+           cond_name
+           (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
+            s)
+           cond_name cond_name);
+      generate_stmts program var_indexes methods_to_write  tt oc;
+      generate_stmts program var_indexes methods_to_write  ff oc;
+      add_el_hor
+        (Format.asprintf {|
            } else if (!%s.isPresent()) {
-        |} cond_name)
-          if_true_body
-      in
-      match else_begin with
-      | IndentedBlock ib -> IndentedBlock [ IndentedBlock [ false_case ]; IndentedBlock ib ]
-      | _ -> assert false)
-  | SVerif v -> generate_var_cond var_indexes v java_stmts
+  |} cond_name)
+  | SVerif v -> generate_var_cond var_indexes v 
 
 let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
@@ -427,19 +413,15 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let oc = Format.formatter_of_out_channel _oc in
   let methods_to_write = Hashtbl.create 1 in
   let input_method_lists = generate_input_handling function_spec in
-  print_endline
-    ("input_method_lists length in generate_java_expr = "
-    ^ string_of_int (List.length input_method_lists));
   let var_indexes, _ = get_variables_indexes program function_spec in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
-  generate_input_calls 0 input_method_lists oc;
+  Format.fprintf oc "/* GENERATE INPUTS */\n";
+  Format.pp_print_list (fun oc item -> Format.fprintf oc "%s" item) oc input_method_lists;
   Format.fprintf oc "/*GENERATE STATEMENTS*/\n";
-  generate_stmts program var_indexes methods_to_write (IndentedBlock []) program.statements oc
-  |> pp_code_block oc;
+  generate_stmts program var_indexes methods_to_write program.statements oc;
   Format.fprintf oc "/* GENERATE RETURN */ \n%a\n" generate_return function_spec;
   Format.fprintf oc "/* GENERATE CALCULATION METHODS */\n%a\n" generate_calculation_methods
     methods_to_write;
-  write_input_methods oc input_method_lists 0;
   Format.fprintf oc "\n}";
   close_out _oc
