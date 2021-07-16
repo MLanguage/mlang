@@ -255,22 +255,6 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n %s\n\npublic class CalculImpot {@\n" Prelude.message java_imports
 
-let split_list (list_to_split : 'a list) =
-  let rec split_list_aux (list_to_split : 'a list) (split_lists : 'a list list)
-      (current_list : 'a list) count : 'a list list =
-    match list_to_split with
-    | [] -> split_lists
-    | hd :: tl ->
-        if count mod 100 = 0 then
-          let new_list = current_list :: split_lists in
-          split_list_aux tl new_list [] (count + 1)
-        else
-          let new_current_list = hd :: current_list in
-          split_list_aux tl split_lists new_current_list (count + 1)
-  in
-  List.length list_to_split |> Format.asprintf "Length of list_to_split %d" |> print_endline;
-  split_list_aux list_to_split [] [] 0
-
 let generate_input_handling (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let rec generate_input_list input_vars  =
