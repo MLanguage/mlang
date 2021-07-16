@@ -17,11 +17,11 @@ open Mir
 
 type code_block_struct = {block: string; indentation: int}
 
-let java_program : code_block_struct list ref = ref []
+let java_program : code_block_struct Queue.t  = Queue.create ()
 
 (** Add element to code_block type horizontally *)
 let add_el_hor (el : string)  =
-  java_program := { block = el; indentation = 0} :: !java_program
+  Queue.push { block = el; indentation = 0} java_program
 
 let java_imports : string =
   {|
