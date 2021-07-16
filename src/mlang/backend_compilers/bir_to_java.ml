@@ -12,6 +12,8 @@
    not, see <https://www.gnu.org/licenses/>. *)
 
 (* TODO: Refactor multiple method splitting functions *)
+(* TODO: Use an array for calculation rather than a map to improve performance*)
+(* TODO: Keep splitting for java compiler without holding whole program in memory *)
 
 open Mir
 
