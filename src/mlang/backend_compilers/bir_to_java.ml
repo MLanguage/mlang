@@ -285,13 +285,7 @@ let rec generate_input_list variables (input_methods : string list) =
       let updated_array = current_method :: input_methods in
       generate_input_list tl updated_array
 
-(*let rec write_input_methods oc (methods : string list list) count = match methods with | [] -> ()
-  | hd :: tl -> print_endline ("write_input_methods count = " ^ string_of_int count); Format.fprintf
-  oc "private static void loadInputVariables_%d(Map<String, OptionalDouble> \ calculationVariables,
-  Map<String, OptionalDouble> input_variables, OptionalDouble cond) {\n\ %a}\n" count
-  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") (fun fmt var ->
-  print_endline ("write_input_methods" ^ var); Format.fprintf fmt "%s" var)) hd; write_input_methods
-  oc tl (count + 1) *)
+
 let generate_input_handling (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let input_methods = generate_input_list input_vars [] in
@@ -299,10 +293,6 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) =
   print_endline
     (Format.asprintf "generate_input_handling return length %d" (List.length debug_item));
   input_methods
-
-(*let rec generate_input_calls count input_methods oc = match input_methods with | [] -> () | _ ::
-  tl -> Format.fprintf oc "loadInputVariables_%d(calculationVariables, input_variables, cond);\n"
-  count; generate_input_calls (count + 1) tl oc *)
 
 let sanitize_str (s, p) =
   String.map
