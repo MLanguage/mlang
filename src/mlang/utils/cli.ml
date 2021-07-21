@@ -178,9 +178,9 @@ let info =
   in
   Term.info "mlang"
     ~version:
-      ( match Build_info.V1.version () with
+      (match Build_info.V1.version () with
       | None -> "n/a"
-      | Some v -> Build_info.V1.Version.to_string v )
+      | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
 
 (**{2 Flags and parameters}*)
@@ -292,11 +292,7 @@ let warning_marker () = ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.ye
 (** Prints [\[RESULT\]] in green on the terminal standard output *)
 let result_marker () = ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
 
-let clocks =
-  Array.of_list
-    [
-      "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚";
-    ]
+let clocks = Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
 (** Prints [\[🕛\]] in blue on the terminal standard output *)
 let clock_marker i =

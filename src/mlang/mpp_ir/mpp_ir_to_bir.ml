@@ -33,7 +33,7 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
   match l with
   | [] -> []
   | hd :: tl -> (
-      match f hd with None -> list_map_opt f tl | Some fhd -> fhd :: list_map_opt f tl )
+      match f hd with None -> list_map_opt f tl | Some fhd -> fhd :: list_map_opt f tl)
 
 let generate_input_condition (crit : Mir.Variable.t -> bool) (p : Mir_interface.full_program)
     (pos : Pos.t) =
@@ -151,7 +151,7 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
       try Var (StringMap.find l ctx.new_variables)
       with Not_found ->
         Cli.error_print "Local Variable %s not found in ctx" l;
-        assert false )
+        assert false)
   | Unop (Minus, e) -> Mir.Unop (Mast.Minus, (translate_mpp_expr p ctx e, pos))
   | Binop (e1, ((And | Or) as b), e2) ->
       Mir.Binop

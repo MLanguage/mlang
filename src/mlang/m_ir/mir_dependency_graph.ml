@@ -68,7 +68,7 @@ let create_dependency_graph (p : Mir.program) : G.t =
         | Mir.TableVar (_, def) -> (
             match def with
             | Mir.IndexGeneric e -> add_usages var e acc
-            | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc ))
+            | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc))
       p.program_vars G.empty
   in
   (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
@@ -121,9 +121,9 @@ module Dot = Graph.Graphviz.Dot (struct
                 `Fontcolor text_color;
                 `Label
                   (Format.asprintf "%s\n%s"
-                     ( match v.Mir.Variable.alias with
+                     (match v.Mir.Variable.alias with
                      | Some s -> s
-                     | None -> Pos.unmark v.Mir.Variable.name )
+                     | None -> Pos.unmark v.Mir.Variable.name)
                      (Pos.unmark v.Mir.Variable.descr));
               ]
           | Mir.Regular ->
@@ -156,7 +156,7 @@ module Dot = Graph.Graphviz.Dot (struct
             `Label
               (Format.asprintf "%s\n%s" (Pos.unmark v.Mir.Variable.name)
                  (Pos.unmark v.Mir.Variable.descr));
-          ] )
+          ])
 
   let vertex_name v = "\"" ^ Pos.unmark v.Mir.Variable.name ^ "\""
 
@@ -270,7 +270,7 @@ class ['self] program_iter =
             try
               let cond = Mir.VariableMap.find var this.program_conds in
               self#visit_condition_data env cond
-            with Not_found -> assert false ))
+            with Not_found -> assert false))
         exec_order
   end
 
