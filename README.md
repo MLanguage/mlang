@@ -184,7 +184,7 @@ Don't forget format to use `make format` before you commit to ensure a uniform s
 The `formal_semantics` folder contains the formalization for the core of the
 M language, that roughly corresponds to the `Mir` internal representation in Mlang.
 The reference formalization is written in Coq, in file `semantique.v`.
-See [the research paper](https://hal.inria.fr/hal-02320347) for
+See [the research paper](https://hal.inria.fr/hal-03002266) for
 more details.
 
 ## License
