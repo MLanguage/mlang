@@ -53,7 +53,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %type<Mast.literal> literal_input
 
 %nonassoc SEMICOLON
-%left OR AND
+%left OR
+%left AND
 %nonassoc NOT
 %nonassoc SYMBOL
 
@@ -395,10 +396,9 @@ expression:
 | FOR le =  loop_expression { let (l1, l2, loc) = le in (Loop(l1,l2), loc) }
 | NOT e = expression { (Unop (Not, e), mk_position $sloc) }
 
-logical_binop:
+%inline logical_binop:
 | AND { (And, mk_position $sloc) }
 | OR { (Or, mk_position $sloc) }
-
 
 sum_expression:
 | e = diff_expression { e }
@@ -442,7 +442,8 @@ factor:
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
-| lvs = loop_variables COLON e = expression { (lvs, e, mk_position $sloc) }
+| lvs = loop_variables COLON e = expression
+  { (lvs, e, mk_position $sloc) } %prec SEMICOLON
 
 ternary_operator:
 | IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF
