@@ -20,7 +20,7 @@ open Mir
 let java_program : (Format.formatter -> unit) list ref = ref []
 
 (** Add element to code_block type horizontally *)
-let add_el_hor (el : (Format.formatter -> unit)) =  java_program := el :: !java_program
+let add_el_hor (el : Format.formatter -> unit) = java_program := el :: !java_program
 
 let java_imports : string =
   {|
@@ -168,7 +168,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
-      let se3, s3 = (Format.asprintf "%s" se2, s1 @ (lvar, e1) :: s2) in
+      let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
       add_expr_code_block (se3, s3)
 
 let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.formatter)
@@ -185,21 +185,21 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
       add_el_hor (fun oc ->
-        (Format.fprintf oc "%a calculationVariables.put(\"%a\", %s); \n"
-           (format_local_vars_defs var_indexes)
-           defs format_var_name var se))
+          Format.fprintf oc "%a calculationVariables.put(\"%a\", %s); \n"
+            (format_local_vars_defs var_indexes)
+            defs format_var_name var se)
   | TableVar (_, IndexTable es) ->
       add_el_hor (fun oc ->
-        (Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name
-           var
-           (String.concat ","
-              (let array_of_variables = ref [] in
-               IndexMap.iter
-                 (fun _ v ->
-                   let string_genere, _ = generate_java_expr v var_indexes in
-                   array_of_variables := List.append !array_of_variables [ string_genere ])
-                 es;
-               !array_of_variables))))
+          Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name
+            var
+            (String.concat ","
+               (let array_of_variables = ref [] in
+                IndexMap.iter
+                  (fun _ v ->
+                    let string_genere, _ = generate_java_expr v var_indexes in
+                    array_of_variables := List.append !array_of_variables [ string_genere ])
+                  es;
+                !array_of_variables)))
   | TableVar (_, IndexGeneric _) -> ()
   (*Format.asprintf "%a = %a;@\n@\n" generate_variable var (generate_java_expr) e :: java_stmts*)
   | InputVar -> assert false
@@ -239,19 +239,19 @@ let sanitize_str (s, p) =
 
 let generate_var_cond var_indexes cond =
   add_el_hor (fun oc -> Format.fprintf oc "cond = ");
-  add_el_hor (fun oc -> Format.fprintf oc 
-
-       "cond = %s;@\n\
-        if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
-       \   throw new RuntimeException(\"Error triggered\\n%s\");@\n\
-        }@\n\
-        @\n"
-       (let se, _ = generate_java_expr cond.cond_expr var_indexes in
-        se)
-       (let cond_error = List.hd cond.cond_errors in
-        Format.asprintf "%s: %s"
-          (sanitize_str cond_error.Error.name)
-          (sanitize_str cond_error.Error.descr)))
+  add_el_hor (fun oc ->
+      Format.fprintf oc
+        "cond = %s;@\n\
+         if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
+        \   throw new RuntimeException(\"Error triggered\\n%s\");@\n\
+         }@\n\
+         @\n"
+        (let se, _ = generate_java_expr cond.cond_expr var_indexes in
+         se)
+        (let cond_error = List.hd cond.cond_errors in
+         Format.asprintf "%s: %s"
+           (sanitize_str cond_error.Error.name)
+           (sanitize_str cond_error.Error.descr)))
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (stmts : Bir.stmt list) oc =
@@ -275,35 +275,35 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
       in
-       add_el_hor (fun oc ->
-        Format.fprintf oc
-           {|
+      add_el_hor (fun oc ->
+          Format.fprintf oc
+            {|
           /* SConditional (cond, tt, ff) */
           OptionalDouble %s = %s;
           if (! %s.isPresent() && %s.getAsDouble() != 0) {
         |}
-           cond_name
-           (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
-            s)
-           cond_name cond_name);
+            cond_name
+            (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
+             s)
+            cond_name cond_name);
       generate_stmts program var_indexes tt oc;
       add_el_hor (fun oc -> Format.fprintf oc "}");
-  add_el_hor (fun oc -> Format.fprintf oc 
-      {|
+      add_el_hor (fun oc ->
+          Format.fprintf oc {|
             else if (!%s.isPresent()) {
   |} cond_name);
 
       generate_stmts program var_indexes ff oc;
       add_el_hor (fun oc -> Format.fprintf oc "}")
-      | SVerif v -> generate_var_cond var_indexes v
+  | SVerif v -> generate_var_cond var_indexes v
 
 let generate_return (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   List.iter
     (fun var ->
-      add_el_hor 
-        (fun oc -> Format.fprintf oc "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" format_var_name var
-           format_var_name var))
+      add_el_hor (fun oc ->
+          Format.fprintf oc "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" format_var_name
+            var format_var_name var))
     returned_variables;
   add_el_hor (fun oc -> Format.fprintf oc "return out;\n}")
 
@@ -333,27 +333,28 @@ let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_f
 let split_list list bucket_size =
   let rec aux list new_list previous_list bucket_size count =
     match list with
-    | hd :: tl -> 
-      if count mod bucket_size = 0 then
-        let updated_new_list =  (List.rev (hd::previous_list)) :: new_list in
-        aux tl updated_new_list [] bucket_size (count + 1) 
-      else 
-        aux tl new_list (hd :: previous_list) bucket_size (count + 1)   
+    | hd :: tl ->
+        if count mod bucket_size = 0 then
+          let updated_new_list = List.rev (hd :: previous_list) :: new_list in
+          aux tl updated_new_list [] bucket_size (count + 1)
+        else aux tl new_list (hd :: previous_list) bucket_size (count + 1)
     | [] -> new_list
   in
   aux list [] [] bucket_size 0
 
 let print_queue (lines : (Format.formatter -> unit) list list) fmt =
-  let lines_count = List.length lines in 
+  let lines_count = List.length lines in
   let rec aux count =
-  match count with
-  | count when count <= lines_count ->  
-    Format.fprintf fmt "tax_calculation_part%d(calculationVariables, localVariables, tableVariables);\n" count;
-    aux (count + 1)
-  | count when count > lines_count -> ()
-  | _ -> () (* Keep compiler happy *)
-  in 
-  aux 0 
+    match count with
+    | count when count <= lines_count ->
+        Format.fprintf fmt
+          "tax_calculation_part%d(calculationVariables, localVariables, tableVariables);\n" count;
+        aux (count + 1)
+    | count when count > lines_count -> ()
+    | _ -> ()
+    (* Keep compiler happy *)
+  in
+  aux 0
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -366,23 +367,25 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   generate_input_handling function_spec;
   add_el_hor (fun oc -> Format.fprintf oc "/*GENERATE STATEMENTS*/\n");
   generate_stmts program var_indexes program.statements oc;
-  add_el_hor (fun oc -> Format.fprintf oc"/* GENERATE RETURN */\n");
+  add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
   let split_java_program = split_list !java_program 100 in
   print_queue split_java_program oc;
   Format.fprintf oc "\n}";
 
-  List.iteri (fun i (sl : ((Format.formatter -> unit) list)) -> 
-    Format.fprintf oc {| 
+  List.iteri
+    (fun i (sl : (Format.formatter -> unit) list) ->
+      Format.fprintf oc
+        {| 
       public static void tax_calculation_part%d( 
             Map<String, OptionalDouble> calculationVariables, 
             Map<Integer, OptionalDouble> localVariables, 
             Map<String,List<OptionalDouble>> tableVariables) {
-        |} i ;
-     List.iter (fun line -> line oc ) sl;
-    Format.fprintf oc {| } |}
-     ) 
-  split_java_program;
+        |}
+        i;
+      List.iter (fun line -> line oc) sl;
+      Format.fprintf oc {| } |})
+    split_java_program;
 
   Format.fprintf oc "\n}";
-  close_out _oc;
+  close_out _oc
