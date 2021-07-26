@@ -71,6 +71,10 @@ format:
 build: format
 	dune build
 
+# Run only in an opam switch with musl and static options activated
+build-static: format
+	dune build --profile=static
+
 ##################################################
 # Testing the compiler
 ##################################################
