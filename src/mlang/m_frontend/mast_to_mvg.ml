@@ -148,7 +148,7 @@ let rec list_max_execution_number (l : Mir.Variable.t list) : Mir.Variable.t =
         Mir.(max_exec_number v.Mir.Variable.execution_number max_rest.Mir.Variable.execution_number)
       with
       | Mir.Left -> v
-      | Mir.Right -> max_rest )
+      | Mir.Right -> max_rest)
 
 (** Given a list of candidates for an SSA variable query, returns the correct one: the maximum in
     the same rule or if no candidates in the same rule, the maximum in other rules. *)
@@ -218,7 +218,7 @@ let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
         Errors.raise_spanned_error
           (Format.asprintf "variable %s is not an integer constant and cannot be used here"
              (Mast.get_variable_name v))
-          (Pos.get_position l) )
+          (Pos.get_position l))
   | Mast.Float f -> int_of_float f
 
 (** This function is the workhorse of loop unrolling : it takes a loop prefix containing the set of
@@ -378,8 +378,8 @@ let get_constants (p : Mast.program) :
                         | Mast.Float f -> (new_var, int_of_float f) :: int_const_list
                         | _ -> int_const_list
                       in
-                      (new_vars, new_idmap, new_int_const_list) )
-                | _ -> (vars, idmap, int_const_list) )
+                      (new_vars, new_idmap, new_int_const_list))
+                | _ -> (vars, idmap, int_const_list))
             | _ -> (vars, idmap, int_const_list))
           (vars, idmap, int_const_list) source_file)
       (Mir.VariableMap.empty, Pos.VarNameToID.empty, [])
@@ -464,7 +464,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                         then cvar.Mast.comp_name :: out_list
                         else out_list
                       in
-                      (new_vars, new_idmap, errors, new_out_list) )
+                      (new_vars, new_idmap, errors, new_out_list))
                 | Mast.InputVar ivar -> (
                     let ivar = Pos.unmark ivar in
                     try
@@ -499,7 +499,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                               | None -> (
                                   match Pos.unmark ivar.Mast.input_subtyp with
                                   | Mast.Income -> Some Mast.Real
-                                  | _ -> None )
+                                  | _ -> None)
                             end;
                           var_decl_is_table = None;
                           var_decl_descr = Some (Pos.unmark ivar.Mast.input_description);
@@ -511,9 +511,9 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                       let new_idmap =
                         Pos.VarNameToID.add (Pos.unmark ivar.Mast.input_name) [ new_var ] idmap
                       in
-                      (new_vars, new_idmap, errors, out_list) )
+                      (new_vars, new_idmap, errors, out_list))
                 | Mast.ConstVar (_, _) ->
-                    (vars, idmap, errors, out_list) (* already treated before *) )
+                    (vars, idmap, errors, out_list) (* already treated before *))
             | Mast.Output out_name -> (vars, idmap, errors, out_name :: out_list)
             | Mast.Error err ->
                 let err =
@@ -580,7 +580,7 @@ let rec translate_variable (idmap : Mir.idmap) (exec_number : Mir.execution_numb
               (Pos.get_position var)
         | Some _ ->
             instantiate_generic_variables_parameters idmap exec_number table_definition lc gen_name
-              current_lvalue (Pos.get_position var) lax )
+              current_lvalue (Pos.get_position var) lax)
 
 (** The following function deal with the "trying all cases" pragma *)
 and instantiate_generic_variables_parameters (idmap : Mir.idmap)
@@ -597,11 +597,11 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
   try
     match
       ParamsMap.choose_opt
-        ( match lc with
+        (match lc with
         | None ->
             Errors.raise_spanned_error
               "variable contains loop parameters but is not used inside a loop context" pos
-        | Some lc -> lc )
+        | Some lc -> lc)
     with
     | None ->
         translate_variable idmap exec_number table_definition lc (Mast.Normal var_name, pos)
@@ -634,11 +634,11 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
         instantiate_generic_variables_parameters_aux idmap exec_number table_definition
           (Some
              (ParamsMap.remove param
-                ( match lc with
+                (match lc with
                 | None ->
                     Errors.raise_spanned_error
                       "variable contains loop parameters but is not used inside a loop context" pos
-                | Some lc -> lc )))
+                | Some lc -> lc)))
           new_var_name current_lvalue pad_zero pos lax
   with
   | err
@@ -702,9 +702,8 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                              let new_idmap =
                                Pos.VarNameToID.add
                                  (Pos.unmark lvar.Mir.Variable.name)
-                                 ( new_var
-                                 :: Pos.VarNameToID.find (Pos.unmark lvar.Mir.Variable.name) idmap
-                                 )
+                                 (new_var
+                                 :: Pos.VarNameToID.find (Pos.unmark lvar.Mir.Variable.name) idmap)
                                  idmap
                              in
                              (new_idmap, seq_number + 1)
@@ -803,7 +802,7 @@ let translate_function_name (f_name : string Pos.marked) =
 let rec translate_expression (ctx : translating_context) (f : Mast.expression Pos.marked) :
     Mir.expression Pos.marked =
   Pos.same_pos_as
-    ( match Pos.unmark f with
+    (match Pos.unmark f with
     | Mast.TestInSet (positive, e, values) ->
         let new_e = translate_expression ctx e in
         let local_var = Mir.LocalVariable.new_var () in
@@ -876,9 +875,9 @@ let rec translate_expression (ctx : translating_context) (f : Mast.expression Po
         in
         let new_i = translate_table_index ctx i in
         Mir.Index
-          ( ( match Pos.unmark t_var with
+          ( (match Pos.unmark t_var with
             | Mir.Var v -> Pos.same_pos_as v t_var
-            | _ -> assert false (* should not happen *) ),
+            | _ -> assert false (* should not happen *)),
             new_i )
     | Mast.Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression ctx e1 in
@@ -902,7 +901,7 @@ let rec translate_expression (ctx : translating_context) (f : Mast.expression Po
                 (Pos.same_pos_as var f) ctx.current_lvalue false
             in
             Pos.unmark new_var
-        | Mast.Float f -> Mir.Literal (Mir.Float f) )
+        | Mast.Float f -> Mir.Literal (Mir.Float f))
     (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
     | Mast.Loop (lvs, e) ->
         let loop_context_provider = translate_loop_variables lvs ctx in
@@ -914,7 +913,7 @@ let rec translate_expression (ctx : translating_context) (f : Mast.expression Po
         List.fold_left
           (fun acc loop_expr ->
             Mir.Binop (Pos.same_pos_as Mast.Or e, Pos.same_pos_as acc e, loop_expr))
-          (Mir.Literal Mir.false_literal) loop_exprs )
+          (Mir.Literal Mir.false_literal) loop_exprs)
     f
 
 (** Mutually recursive with {!val: translate_expression} *)
@@ -942,8 +941,7 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
     match
       Pos.unmark
         (translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc
-           (Pos.unmark lval).Mast.var ""
-           (* dummy lvalue since we are translating the lvalue *) true)
+           (Pos.unmark lval).Mast.var "" (* dummy lvalue since we are translating the lvalue *) true)
     with
     | Mir.Var (var : Mir.Variable.t) -> var
     | _ -> assert false
@@ -969,19 +967,20 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
             var_or_int_value ctx
               (Pos.same_pos_as
                  (Mast.Variable
-                    ( match Pos.unmark mvg_v with
+                    (match Pos.unmark mvg_v with
                     | Mir.Var v -> Mast.Normal (Pos.unmark v.Mir.Variable.name)
-                    | _ -> assert false (* should not happen*) ))
+                    | _ -> assert false (* should not happen*)))
                  ti)
           in
-          ({ ctx with current_lvalue = Pos.unmark var.Mir.Variable.name }, var, SingleIndex i) )
+          ({ ctx with current_lvalue = Pos.unmark var.Mir.Variable.name }, var, SingleIndex i))
   | None -> ({ ctx with current_lvalue = Pos.unmark var.Mir.Variable.name }, var, NoIndex)
 
 (** Date types are not supported *)
 let translate_value_typ (typ : Mast.value_typ Pos.marked option) : Mir.typ option =
   match typ with
   | Some (Mast.Boolean, _) -> Some Mir.Real
-  (* Indeed, the BOOLEEN annotations are useless because they feed it to functions that expect reals *)
+  (* Indeed, the BOOLEEN annotations are useless because they feed it to functions that expect
+     reals *)
   | Some (Mast.Real, _) -> Some Mir.Real
   | Some (_, _) -> Some Mir.Real
   | None -> None
@@ -1008,48 +1007,47 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t) (var_lvalue : M
       (match decl_data.var_decl_typ with Some x -> Some (x, decl_data.var_pos) | None -> None)
   in
   Mir.VariableMap.add var_lvalue
-    ( try
-        let io =
-          match decl_data.var_decl_io with
-          | Input -> Mir.Input
-          | Constant | Regular -> Mir.Regular
-          | Output -> Mir.Output
-        in
-        if def_kind = NoIndex then
-          { Mir.var_definition = Mir.SimpleVar var_expr; Mir.var_typ; Mir.var_io = io }
-        else
-          match decl_data.var_decl_is_table with
-          | Some size -> (
-              match def_kind with
-              | NoIndex -> assert false (* should not happen*)
-              | SingleIndex i ->
-                  {
-                    Mir.var_definition =
-                      Mir.TableVar (size, Mir.IndexTable (Mir.IndexMap.singleton i var_expr));
-                    Mir.var_typ;
-                    Mir.var_io = io;
-                  }
-              | GenericIndex ->
-                  {
-                    Mir.var_definition = Mir.TableVar (size, Mir.IndexGeneric var_expr);
-                    Mir.var_typ;
-                    Mir.var_io = io;
-                  } )
-          | None ->
-              Errors.raise_multispanned_error
-                (Format.asprintf
-                   "variable %s is defined as a table but has been declared as a non-table"
-                   (Pos.unmark var_lvalue.Mir.Variable.name))
-                [
-                  (Some "variable definition", Pos.get_position var_expr);
-                  ( Some "variable declaration",
-                    (Mir.VariableMap.find var_lvalue var_decl_data).var_pos );
-                ]
-      with Not_found ->
-        assert false
-        (* should not happen *)
-        (* should not happen since we already looked into idmap to get the var value from its name *)
-    )
+    (try
+       let io =
+         match decl_data.var_decl_io with
+         | Input -> Mir.Input
+         | Constant | Regular -> Mir.Regular
+         | Output -> Mir.Output
+       in
+       if def_kind = NoIndex then
+         { Mir.var_definition = Mir.SimpleVar var_expr; Mir.var_typ; Mir.var_io = io }
+       else
+         match decl_data.var_decl_is_table with
+         | Some size -> (
+             match def_kind with
+             | NoIndex -> assert false (* should not happen*)
+             | SingleIndex i ->
+                 {
+                   Mir.var_definition =
+                     Mir.TableVar (size, Mir.IndexTable (Mir.IndexMap.singleton i var_expr));
+                   Mir.var_typ;
+                   Mir.var_io = io;
+                 }
+             | GenericIndex ->
+                 {
+                   Mir.var_definition = Mir.TableVar (size, Mir.IndexGeneric var_expr);
+                   Mir.var_typ;
+                   Mir.var_io = io;
+                 })
+         | None ->
+             Errors.raise_multispanned_error
+               (Format.asprintf
+                  "variable %s is defined as a table but has been declared as a non-table"
+                  (Pos.unmark var_lvalue.Mir.Variable.name))
+               [
+                 (Some "variable definition", Pos.get_position var_expr);
+                 ( Some "variable declaration",
+                   (Mir.VariableMap.find var_lvalue var_decl_data).var_pos );
+               ]
+     with Not_found ->
+       assert false
+       (* should not happen *)
+       (* should not happen since we already looked into idmap to get the var value from its name *))
     var_data
 
 (** Main translation pass that deal with regular variable definition; returns a map whose keys are
@@ -1144,14 +1142,14 @@ let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.Variable
                 add_var_def var_data var
                   (Pos.same_pos_as
                      (Mir.Literal
-                        ( match Pos.unmark lit with
+                        (match Pos.unmark lit with
                         | Mast.Variable var ->
                             Errors.raise_spanned_error
                               (Format.asprintf
                                  "const variable %a cannot be defined by using another variable"
                                  Format_mast.format_variable var)
                               (Pos.get_position source_file_item)
-                        | Mast.Float f -> Mir.Float f ))
+                        | Mast.Float f -> Mir.Float f))
                      lit)
                   NoIndex var_decl_data idmap
             | Mast.VariableDecl (Mast.InputVar (var, pos)) ->
@@ -1164,9 +1162,9 @@ let get_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.Variable
                 in
                 let typ =
                   translate_value_typ
-                    ( match var_decl.var_decl_typ with
+                    (match var_decl.var_decl_typ with
                     | Some x -> Some (x, Pos.get_position var.Mir.Variable.name)
-                    | None -> None )
+                    | None -> None)
                 in
                 Mir.VariableMap.add var
                   { Mir.var_definition = Mir.InputVar; Mir.var_typ = typ; Mir.var_io = Mir.Input }
@@ -1217,9 +1215,9 @@ let add_dummy_definition_for_variable_declaration (var_data : Mir.variable_data 
                           (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name) );
                   Mir.var_typ =
                     translate_value_typ
-                      ( match decl.var_decl_typ with
+                      (match decl.var_decl_typ with
                       | None -> None
-                      | Some typ -> Some (Pos.same_pos_as typ var.name) );
+                      | Some typ -> Some (Pos.same_pos_as typ var.name));
                   Mir.var_io = io;
                 }
                 var_data
@@ -1231,21 +1229,21 @@ let add_dummy_definition_for_variable_declaration (var_data : Mir.variable_data 
                       (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name);
                   Mir.var_typ =
                     translate_value_typ
-                      ( match decl.var_decl_typ with
+                      (match decl.var_decl_typ with
                       | None -> None
-                      | Some typ -> Some (Pos.same_pos_as typ var.name) );
+                      | Some typ -> Some (Pos.same_pos_as typ var.name));
                   Mir.var_io = io;
                 }
-                var_data )
+                var_data)
       | Input ->
           Mir.VariableMap.add var
             {
               Mir.var_definition = Mir.InputVar;
               Mir.var_typ =
                 translate_value_typ
-                  ( match decl.var_decl_typ with
+                  (match decl.var_decl_typ with
                   | None -> None
-                  | Some typ -> Some (Pos.same_pos_as typ var.name) );
+                  | Some typ -> Some (Pos.same_pos_as typ var.name));
               Mir.var_io = Mir.Input;
             }
             var_data

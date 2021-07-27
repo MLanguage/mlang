@@ -32,7 +32,7 @@ let format_io fmt (io : io) =
 
 let format_func fmt (f : func) =
   Format.pp_print_string fmt
-    ( match f with
+    (match f with
     | SumFunc -> "somme"
     | AbsFunc -> "abs"
     | MinFunc -> "min"
@@ -44,7 +44,7 @@ let format_func fmt (f : func) =
     | InfFunc -> "inf"
     | PresentFunc -> "present"
     | Multimax -> "multimax"
-    | Supzero -> "supzero" )
+    | Supzero -> "supzero")
 
 let format_literal fmt (l : literal) =
   Format.pp_print_string fmt (match l with Float f -> string_of_float f | Undefined -> "indéfini")

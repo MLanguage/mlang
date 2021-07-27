@@ -53,10 +53,10 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
   | _ ->
       Format.fprintf fmt "TGV[%d/*%s*/%s]" var_index
         (Pos.unmark var.Mir.Variable.name)
-        ( match offset with
+        (match offset with
         | None -> ""
         | GetValue offset -> " + " ^ string_of_int offset
-        | PassPointer -> assert false )
+        | PassPointer -> assert false)
 
 let generate_raw_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -379,7 +379,8 @@ let generate_input_type (oc : Format.formatter) (function_spec : Bir_interface.b
     input_vars
 
 let generate_empty_output_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "void m_empty_output(m_output* output)%s" (if add_semicolon then ";\n\n" else "")
+  Format.fprintf oc "void m_empty_output(m_output* output)%s"
+    (if add_semicolon then ";\n\n" else "")
 
 let generate_empty_output_func (oc : Format.formatter) (function_spec : Bir_interface.bir_function)
     =

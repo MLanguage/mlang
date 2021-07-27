@@ -70,7 +70,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
               (Some "variable access", var_pos);
               (Some "variable definition", Pos.get_position var.Variable.name);
             ]
-      | TableVar _ -> ctx )
+      | TableVar _ -> ctx)
 
 and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.marked list -> ctx =
   match f with
@@ -94,29 +94,30 @@ and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.mar
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ -> Errors.raise_spanned_error "function abs should have only one argument" pos )
+        | _ -> Errors.raise_spanned_error "function abs should have only one argument" pos)
   | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero -> (
-      fun (* These functions return a integer value encoding a boolean; 0 for false and 1 for true *)
+      fun (* These functions return a integer value encoding a boolean; 0 for false and 1 for
+             true *)
             ctx args ->
         match args with
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ -> Errors.raise_spanned_error "function should have only one argument" pos )
+        | _ -> Errors.raise_spanned_error "function should have only one argument" pos)
   | ArrFunc | InfFunc -> (
       fun ctx args ->
         match args with
         | [ arg ] ->
             let ctx = typecheck_top_down ctx arg in
             ctx
-        | _ -> Errors.raise_spanned_error "function should have only one argument" pos )
+        | _ -> Errors.raise_spanned_error "function should have only one argument" pos)
   | Mir.Multimax -> (
       fun ctx args ->
         match args with
         | [ bound; table ] ->
             let ctx = typecheck_top_down ctx bound in
             typecheck_top_down ctx table
-        | _ -> Errors.raise_spanned_error "function %a should have two arguments" pos )
+        | _ -> Errors.raise_spanned_error "function %a should have two arguments" pos)
 
 let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (defs : (int * Pos.t) list) : int list =
@@ -222,7 +223,7 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
                     new_ctx,
                     Mir.VariableMap.add var
                       { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) }
-                      p_vars ) )
+                      p_vars ))
         | InputVar ->
             if VariableMap.mem var acc then (acc, ctx, p_vars)
             else (VariableMap.add var false acc, ctx, p_vars))
@@ -385,7 +386,7 @@ let expand_functions (p : Mir_interface.full_program) : Mir_interface.full_progr
                         var_definition =
                           TableVar
                             (size, IndexTable (IndexMap.map (fun e -> expand_functions_expr e) es));
-                      } ))
+                      }))
             p.program.program_vars;
         program_conds =
           VariableMap.map
