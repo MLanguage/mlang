@@ -53,6 +53,8 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
 
+DUNE_OPTIONS?=
+
 default: build
 
 ##################################################
@@ -69,7 +71,11 @@ format:
 	dune build @fmt --auto-promote | true
 
 build: format
-	dune build
+	dune build $(DUNE_OPTIONS)
+
+# Run only in an opam switch with musl and static options activated
+build-static: DUNE_OPTIONS+=--profile=static
+build-static: build
 
 ##################################################
 # Testing the compiler

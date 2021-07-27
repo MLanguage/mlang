@@ -1,3 +1,8 @@
+(env
+ (static
+  (flags
+   (-cclib -lstdc++ -ccopt -static))))
+
 (executable
  (name main)
  (package mlang)
