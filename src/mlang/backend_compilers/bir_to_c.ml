@@ -297,7 +297,7 @@ let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
   Format.fprintf oc "#include <stdio.h>\n";
-  Format.fprintf oc "#include <m_value.h>\n\n"
+  Format.fprintf oc "#include \"m_value.h\"\n\n"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "void m_empty_input(m_input *input)%s" (if add_semicolon then ";\n\n" else "")
