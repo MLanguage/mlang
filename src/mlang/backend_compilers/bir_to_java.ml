@@ -20,7 +20,8 @@ open Mir
 let java_program : (Format.formatter -> unit) list ref = ref []
 
 (** Add element to code_block type horizontally *)
-let add_el_hor (el : Format.formatter -> unit) = java_program := el :: !java_program
+let add_el_hor (el : Format.formatter -> unit) =
+  java_program := el :: !java_program
 
 let java_imports : string =
   {|
@@ -209,7 +210,6 @@ let generate_header (oc : Format.formatter) () : unit =
 
 let generate_input_handling (function_spec : Bir_interface.bir_function) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  "input_vars length: " ^ Int.to_string (List.length input_vars) |> print_endline;
   let rec generate_input_list input_vars =
     match input_vars with
     | [] -> ()
@@ -219,7 +219,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) =
             "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
              input_variables.get(\"%s\") : OptionalDouble.empty()); \n\n\
             \ System.out.println(calculationVariables.get(\"%a\"));" format_var_name hd
-            (generate_name hd) (generate_name hd) format_var_name hd
+            (generate_name hd) (generate_name hd) format_var_name hd;
         in
         add_el_hor current_method;
         generate_input_list tl
@@ -238,7 +238,6 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond var_indexes cond =
-  add_el_hor (fun oc -> Format.fprintf oc "cond = ");
   add_el_hor (fun oc ->
       Format.fprintf oc
         "cond = %s;@\n\
@@ -254,16 +253,16 @@ let generate_var_cond var_indexes cond =
            (sanitize_str cond_error.Error.descr)))
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    (stmts : Bir.stmt list) oc =
-  let local_generate stmt = generate_stmt program var_indexes stmt oc in
+    (stmts : Bir.stmt list) =
+  let local_generate stmt = generate_stmt program var_indexes stmt in
   match stmts with
   | hd :: tl ->
       local_generate hd;
-      generate_stmts program var_indexes tl oc
+      generate_stmts program var_indexes tl
   | [] -> ()
 
-and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt) oc
-    : unit =
+and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt) :
+    unit =
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata
   | SConditional (cond, tt, ff) ->
@@ -285,16 +284,14 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
             cond_name
             (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
              s)
-            cond_name cond_name);
-      generate_stmts program var_indexes tt oc;
-      add_el_hor (fun oc -> Format.fprintf oc "}");
-      add_el_hor (fun oc ->
+            cond_name cond_name;
+          generate_stmts program var_indexes tt;
+          Format.fprintf oc "} /* End of condition: %s */" cond_name;
           Format.fprintf oc {|
             else if (!%s.isPresent()) {
-  |} cond_name);
-
-      generate_stmts program var_indexes ff oc;
-      add_el_hor (fun oc -> Format.fprintf oc "}")
+  |} cond_name;
+          generate_stmts program var_indexes ff;
+          Format.fprintf oc "}")
   | SVerif v -> generate_var_cond var_indexes v
 
 let generate_return (function_spec : Bir_interface.bir_function) =
@@ -304,8 +301,7 @@ let generate_return (function_spec : Bir_interface.bir_function) =
       add_el_hor (fun oc ->
           Format.fprintf oc "out.put(\"%a\",calculationVariables.get(\"%a\"));@\n" format_var_name
             var format_var_name var))
-    returned_variables;
-  add_el_hor (fun oc -> Format.fprintf oc "return out;\n}")
+    returned_variables
 
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
@@ -333,11 +329,12 @@ let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_f
 let split_list list bucket_size =
   let rec aux list new_list previous_list bucket_size count =
     match list with
-    | hd :: tl ->
-        if count mod bucket_size = 0 then
-          let updated_new_list = List.rev (hd :: previous_list) :: new_list in
-          aux tl updated_new_list [] bucket_size (count + 1)
-        else aux tl new_list (hd :: previous_list) bucket_size (count + 1)
+    | hd :: tl -> (
+        match count with
+        | count when count mod bucket_size = 0 && count <> 0 ->
+            let updated_new_list = List.rev (hd :: previous_list) :: new_list in
+            aux tl updated_new_list [] bucket_size (count + 1)
+        | _ -> aux tl new_list (hd :: previous_list) bucket_size (count + 1))
     | [] -> new_list
   in
   aux list [] [] bucket_size 0
@@ -345,14 +342,12 @@ let split_list list bucket_size =
 let print_queue (lines : (Format.formatter -> unit) list list) fmt =
   let lines_count = List.length lines in
   let rec aux count =
-    match count with
-    | count when count <= lines_count ->
-        Format.fprintf fmt
-          "tax_calculation_part%d(calculationVariables, localVariables, tableVariables);\n" count;
-        aux (count + 1)
-    | count when count > lines_count -> ()
-    | _ -> ()
-    (* Keep compiler happy *)
+    if count <= lines_count then
+        (Format.fprintf fmt
+          "tax_calculation_part%d(calculationVariables, localVariables, tableVariables, cond, out, input_variables);\n"
+          count;
+        aux (count + 1);)
+    else ()
   in
   aux 0
 
@@ -366,26 +361,34 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE INPUTS */\n");
   generate_input_handling function_spec;
   add_el_hor (fun oc -> Format.fprintf oc "/*GENERATE STATEMENTS*/\n");
-  generate_stmts program var_indexes program.statements oc;
+  generate_stmts program var_indexes program.statements;
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
   let split_java_program = split_list !java_program 100 in
   print_queue split_java_program oc;
+  Format.fprintf oc "return out;\n";
   Format.fprintf oc "\n}";
 
   List.iteri
-    (fun i (sl : (Format.formatter -> unit) list) ->
-      Format.fprintf oc
+    (fun i (sl : (Format.formatter -> unit)) ->
+      if i mod 100 = 0 && i <> 0 then Format.fprintf oc "}\n";
+      if i mod 100 = 0 then 
+      (Format.fprintf oc
         {| 
       public static void tax_calculation_part%d( 
             Map<String, OptionalDouble> calculationVariables, 
             Map<Integer, OptionalDouble> localVariables, 
-            Map<String,List<OptionalDouble>> tableVariables) {
+            Map<String,List<OptionalDouble>> tableVariables,
+            OptionalDouble cond,
+            Map<String, OptionalDouble> out,
+            Map<String, OptionalDouble> input_variables) {
         |}
-        i;
-      List.iter (fun line -> line oc) sl;
-      Format.fprintf oc {| } |})
-    split_java_program;
-
-  Format.fprintf oc "\n}";
+        (i / 100));
+        sl oc;) 
+    (List.rev !java_program);
+  Format.fprintf oc 
+  {|    
+      }
+    } 
+  |};
   close_out _oc
