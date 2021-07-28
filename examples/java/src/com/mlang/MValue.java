@@ -1,169 +1,124 @@
 package com.mlang;
 
 import java.util.OptionalDouble;
+import java.lang.StackWalker.Option;
 import java.util.List;
 import java.util.function.BiFunction;
 
 public class MValue {
 
-  public static OptionalDouble mGreaterThan(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() > secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mGreaterThan(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() > value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mGreaterThanEqual(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() >= secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mGreaterThanEqual(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() >= value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mLessThan(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() < secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mLessThan(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() < value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mLessThanEqual(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() <= secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mLessThanEqual(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() <= value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mEqual(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() == secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mEqual(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() == value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mNotEqual(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return firstValue.getAsDouble() != secondValue.getAsDouble();
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mNotEqual(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else {
+      if (value1.getAsDouble() != value2.getAsDouble()) {
+        return OptionalDouble.of(1.);
+      } else {
+        return OptionalDouble.of(0.);
+      }
+    }
   }
 
-  public static OptionalDouble mAnd(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return (
-          firstValue.getAsDouble() != 0d && secondValue.getAsDouble() != 0d
-        );
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mAnd(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else if ((!value1.isEmpty() && value1.getAsDouble() != 0) && (!value2.isEmpty() && value2.getAsDouble() != 0)) {
+      return OptionalDouble.of(1.);
+    } else {
+      return OptionalDouble.of(0.);
+    }
   }
 
-  public static OptionalDouble mOr(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return unopCondition(
-      (firstValue, secondValue) -> {
-        return (
-          firstValue.getAsDouble() != 0d || secondValue.getAsDouble() != 0d
-        );
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mOr(OptionalDouble value1, OptionalDouble value2) {
+    if (value1.isEmpty() && value2.isEmpty()) {
+      return OptionalDouble.empty();
+    } else if ((!value1.isEmpty() && value1.getAsDouble() != 0) || (!value2.isEmpty() && value2.getAsDouble() != 0)) {
+      return OptionalDouble.of(1.);
+    } else {
+      return OptionalDouble.of(0.);
+    }
   }
 
-  public static OptionalDouble mAdd(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return binopCondition(
-      (firstValue, secondValue) -> {
-        return OptionalDouble.of(
-          firstValue.getAsDouble() + secondValue.getAsDouble()
-        );
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mAdd(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() + secondValue.getAsDouble());
+    }, value1, value2);
   }
 
-  public static OptionalDouble mSubstract(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return binopCondition(
-      (firstValue, secondValue) -> {
-        return OptionalDouble.of(
-          firstValue.getAsDouble() - secondValue.getAsDouble()
-        );
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mSubstract(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() - secondValue.getAsDouble());
+    }, value1, value2);
   }
 
-  public static OptionalDouble mMultiply(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    return binopCondition(
-      (firstValue, secondValue) -> {
-        return OptionalDouble.of(
-          firstValue.getAsDouble() * secondValue.getAsDouble()
-        );
-      },
-      value1,
-      value2
-    );
+  public static OptionalDouble mMultiply(OptionalDouble value1, OptionalDouble value2) {
+    return binopCondition((firstValue, secondValue) -> {
+      return OptionalDouble.of(firstValue.getAsDouble() * secondValue.getAsDouble());
+    }, value1, value2);
   }
 
-  public static OptionalDouble mDivide(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    if (valuesNotPresent(value1, value2)) {
+  public static OptionalDouble mDivide(OptionalDouble value1, OptionalDouble value2) {
+    if (firstOrSecond(value1, value2)) {
       return OptionalDouble.empty();
     }
 
@@ -176,12 +131,9 @@ public class MValue {
     return OptionalDouble.of(value1.getAsDouble() / denominateur);
   }
 
-  public static OptionalDouble unopCondition(
-    BiFunction<OptionalDouble, OptionalDouble, Boolean> condition,
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    if (valuesNotPresent(value1, value2)) {
+  public static OptionalDouble unopCondition(BiFunction<OptionalDouble, OptionalDouble, Boolean> condition,
+      OptionalDouble value1, OptionalDouble value2) {
+    if (firstOrSecond(value1, value2)) {
       return OptionalDouble.empty();
     }
 
@@ -192,22 +144,16 @@ public class MValue {
     }
   }
 
-  public static OptionalDouble binopCondition(
-    BiFunction<OptionalDouble, OptionalDouble, OptionalDouble> condition,
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    if (valuesNotPresent(value1, value2)) {
+  public static OptionalDouble binopCondition(BiFunction<OptionalDouble, OptionalDouble, OptionalDouble> condition,
+      OptionalDouble value1, OptionalDouble value2) {
+    if (firstOrSecond(value1, value2)) {
       return OptionalDouble.empty();
     }
 
     return condition.apply(value1, value2);
   }
 
-  public static boolean valuesNotPresent(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
+  public static boolean firstOrSecond(OptionalDouble value1, OptionalDouble value2) {
     return value1.isEmpty() || value2.isEmpty();
   }
 
@@ -215,9 +161,7 @@ public class MValue {
     if (!value.isPresent()) {
       return value;
     }
-    double valueToRound = value.getAsDouble() + value.getAsDouble() < 0
-      ? -0.50005
-      : 0.50005;
+    double valueToRound = value.getAsDouble() + (value.getAsDouble() < 0 ? -0.50005 : 0.50005);
     return OptionalDouble.of(Math.round(valueToRound));
   }
 
@@ -229,52 +173,44 @@ public class MValue {
     return OptionalDouble.of(Math.floor(valueToFloor));
   }
 
-  public static OptionalDouble m_cond(
-    OptionalDouble value,
-    OptionalDouble value2,
-    OptionalDouble value3
-  ) {
-    if (!value.isPresent()) {
-      return value;
-    } else if (value.getAsDouble() != 0) {
-      return value2;
+  public static OptionalDouble m_cond(OptionalDouble cond, OptionalDouble trueVal, OptionalDouble falseVal) {
+    if (!cond.isPresent()) {
+      return cond;
+    } else if (cond.getAsDouble() != 0) {
+      return trueVal;
     } else {
-      return value3;
+      return falseVal;
     }
   }
 
-  public static OptionalDouble m_max(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    if (value1.isEmpty() && value2.isPresent()) {
-      return value2;
-    } else if (value1.isPresent() && value2.isEmpty()) {
-      return value1;
-    } else if (value1.isEmpty() && value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      return OptionalDouble.of(
-        Math.max(value1.getAsDouble(), value2.getAsDouble())
-      );
+  public static OptionalDouble m_max(OptionalDouble value1, OptionalDouble value2) {
+    double localValue1 = 0.;
+    double localValue2 = 0.;
+
+    if (!value1.isEmpty()) {
+      localValue1 = value1.getAsDouble();
     }
+
+    if (!value2.isEmpty()) {
+      localValue2 = value2.getAsDouble();
+    }
+
+    return OptionalDouble.of(Math.max(localValue1, localValue2));
   }
 
-  public static OptionalDouble m_min(
-    OptionalDouble value1,
-    OptionalDouble value2
-  ) {
-    if (value1.isEmpty() && value2.isPresent()) {
-      return value2;
-    } else if (value1.isPresent() && value2.isEmpty()) {
-      return value1;
-    } else if (value1.isEmpty() && value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      return OptionalDouble.of(
-        Math.min(value1.getAsDouble(), value2.getAsDouble())
-      );
+  public static OptionalDouble m_min(OptionalDouble value1, OptionalDouble value2) {
+    double localValue1 = 0.;
+    double localValue2 = 0.;
+
+    if (!value1.isEmpty()) {
+      localValue1 = value1.getAsDouble();
     }
+
+    if (!value2.isEmpty()) {
+      localValue2 = value2.getAsDouble();
+    }
+    
+    return OptionalDouble.of(Math.min(localValue1, localValue2));
   }
 
   public static OptionalDouble mNeg(OptionalDouble value) {
@@ -285,7 +221,7 @@ public class MValue {
   }
 
   public static OptionalDouble mPresent(OptionalDouble value) {
-    if (!value.isPresent()) {
+    if (value.isEmpty()) {
       return OptionalDouble.of(0.);
     } else {
       return OptionalDouble.of(1.);
@@ -302,10 +238,7 @@ public class MValue {
     }
   }
 
-  public static OptionalDouble m_multimax(
-    OptionalDouble bound,
-    List<OptionalDouble> array
-  ) {
+  public static OptionalDouble m_multimax(OptionalDouble bound, List<OptionalDouble> array) {
     if (!bound.isPresent()) {
       throw new RuntimeException("Multimax bound undefined!");
     } else {
