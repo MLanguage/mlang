@@ -201,7 +201,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
                     array_of_variables := List.append !array_of_variables [ string_genere ])
                   es;
                 !array_of_variables)))
-  | TableVar (_, IndexGeneric _) -> ()
+  | TableVar (_, IndexGeneric _) -> assert false
   (*Format.asprintf "%a = %a;@\n@\n" generate_variable var (generate_java_expr) e :: java_stmts*)
   | InputVar -> assert false
 
@@ -353,6 +353,7 @@ let print_queue (lines : (Format.formatter -> unit) list list) fmt =
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
+  let bs = 50 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, _ = get_variables_indexes program function_spec in
@@ -364,15 +365,15 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   generate_stmts program var_indexes program.statements;
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
-  let split_java_program = split_list !java_program 100 in
+  let split_java_program = split_list !java_program bs in
   print_queue split_java_program oc;
   Format.fprintf oc "return out;\n";
   Format.fprintf oc "\n}";
 
   List.iteri
     (fun i (sl : (Format.formatter -> unit)) ->
-      if i mod 100 = 0 && i <> 0 then Format.fprintf oc "}\n";
-      if i mod 100 = 0 then 
+      if i mod bs = 0 && i <> 0 then Format.fprintf oc "}\n";
+      if i mod bs = 0 then 
       (Format.fprintf oc
         {| 
       public static void tax_calculation_part%d( 
@@ -383,7 +384,7 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
             Map<String, OptionalDouble> out,
             Map<String, OptionalDouble> input_variables) {
         |}
-        (i / 100));
+        (i / bs));
         sl oc;) 
     (List.rev !java_program);
   Format.fprintf oc 
