@@ -113,7 +113,7 @@ public class MValue {
     }
 
     if(!value2.isEmpty()) {
-      localValue1 = value2.getAsDouble();
+      localValue2 = value2.getAsDouble();
     }
     
     return OptionalDouble.of(localValue1 + localValue2);
@@ -127,12 +127,12 @@ public class MValue {
     double localValue1 = 0.;
     double localValue2 = 0.;
 
-    if(!value1.isEmpty()) {
+    if(value1.isPresent()) {
       localValue1 = value1.getAsDouble();
     }
 
-    if(!value2.isEmpty()) {
-      localValue1 = value2.getAsDouble();
+    if(value2.isPresent()) {
+      localValue2 = value2.getAsDouble();
     }
     
     return OptionalDouble.of(localValue1 - localValue2);
