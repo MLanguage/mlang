@@ -190,7 +190,7 @@ public class MValue {
       return value;
     }
     double valueToRound = value.getAsDouble() + (value.getAsDouble() < 0 ? -0.50005 : 0.50005);
-    return OptionalDouble.of(Math.round(valueToRound));
+    return OptionalDouble.of(Math.floor(valueToRound));
   }
 
   public static OptionalDouble m_floor(OptionalDouble value) {
