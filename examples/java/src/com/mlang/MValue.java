@@ -100,21 +100,49 @@ public class MValue {
   }
 
   public static OptionalDouble mAdd(OptionalDouble value1, OptionalDouble value2) {
-    return binopCondition((firstValue, secondValue) -> {
-      return OptionalDouble.of(firstValue.getAsDouble() + secondValue.getAsDouble());
-    }, value1, value2);
+
+    if(value1.isEmpty() && value2.isEmpty()) {
+      return OptionalDouble.empty();
+    }
+
+    double localValue1 = 0.;
+    double localValue2 = 0.;
+
+    if(!value1.isEmpty()) {
+      localValue1 = value1.getAsDouble();
+    }
+
+    if(!value2.isEmpty()) {
+      localValue1 = value2.getAsDouble();
+    }
+    
+    return OptionalDouble.of(localValue1 + localValue2);
   }
 
   public static OptionalDouble mSubstract(OptionalDouble value1, OptionalDouble value2) {
-    return binopCondition((firstValue, secondValue) -> {
-      return OptionalDouble.of(firstValue.getAsDouble() - secondValue.getAsDouble());
-    }, value1, value2);
+    if(value1.isEmpty() && value2.isEmpty()) {
+      return OptionalDouble.empty();
+    }
+
+    double localValue1 = 0.;
+    double localValue2 = 0.;
+
+    if(!value1.isEmpty()) {
+      localValue1 = value1.getAsDouble();
+    }
+
+    if(!value2.isEmpty()) {
+      localValue1 = value2.getAsDouble();
+    }
+    
+    return OptionalDouble.of(localValue1 - localValue2);
   }
 
   public static OptionalDouble mMultiply(OptionalDouble value1, OptionalDouble value2) {
-    return binopCondition((firstValue, secondValue) -> {
-      return OptionalDouble.of(firstValue.getAsDouble() * secondValue.getAsDouble());
-    }, value1, value2);
+    if(value1.isEmpty() || value2.isEmpty()) {
+      return OptionalDouble.empty();
+    }
+    return OptionalDouble.of(value1.getAsDouble() * value2.getAsDouble());
   }
 
   public static OptionalDouble mDivide(OptionalDouble value1, OptionalDouble value2) {
