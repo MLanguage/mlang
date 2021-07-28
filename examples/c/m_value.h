@@ -1,3 +1,6 @@
+#ifndef M_VALUE_
+#define M_VALUE_
+
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -39,3 +42,5 @@ bool m_is_defined_false(m_value x);
 m_value m_literal(double v);
 m_value m_array_index(m_value *array, m_value index, int array_size);
 m_value m_multimax(m_value bound, m_value *array);
+
+#endif /* M_VALUE_ */ 
