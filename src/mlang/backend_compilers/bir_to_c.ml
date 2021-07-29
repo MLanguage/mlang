@@ -296,8 +296,13 @@ let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "// %s\n\n" Prelude.message;
+  Format.fprintf oc "#ifndef IR_HEADER_ \n";
+  Format.fprintf oc "#define IR_HEADER_ \n";
   Format.fprintf oc "#include <stdio.h>\n";
-  Format.fprintf oc "#include <m_value.h>\n\n"
+  Format.fprintf oc "#include \"m_value.h\"\n\n"
+
+let generate_footer (oc: Format.formatter) () : unit =
+  Format.fprintf oc "\n#endif /* IR_HEADER_ */"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "void m_empty_input(m_input *input)%s" (if add_semicolon then ";\n\n" else "")
@@ -482,13 +487,14 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" 
+    generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
     generate_get_input_index_prototype true generate_get_input_num_prototype true
     generate_get_input_name_from_index_prototype true generate_output_type function_spec
     generate_output_to_array_prototype true generate_get_output_index_prototype true
     generate_get_output_name_from_index_prototype true generate_get_output_num_prototype true
-    generate_empty_output_prototype true generate_main_function_signature true;
+    generate_empty_output_prototype true generate_main_function_signature true generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
