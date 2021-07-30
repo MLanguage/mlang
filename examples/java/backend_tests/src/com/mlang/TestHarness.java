@@ -37,7 +37,7 @@ public class TestHarness {
         try {
             Files.list(testsDir)
                 .map(TestHarness::parseTest)
-                .forEach(test -> Ir_tests_2019.calculateTax(test.getExceptedVariables()));
+                .forEach(test -> Ir_tests_2019.calculateTax(test.getInputVariables()));
         } catch (IOException ex) {
             System.err.println(ex.getMessage());
             return;
@@ -81,21 +81,20 @@ public class TestHarness {
             lines.subList(tp.getEntreesPrimitif() + 1, tp.getControlesPrimitif())
                 .stream()
                 .forEach(variableLine -> {
+                    addInputVariableToTestData(variableLine, td);
+                });
+            
+              lines.subList(tp.getResultatsPrimtifs() + 1, tp.getEntreesCorrectif())
+                .stream()
+                .forEach(variableLine -> {
                     addExpectedVariableToTestData(variableLine, td);
                 });
 
-                // lines.subList(tp.getEntreesCorrectif() + 1, tp.getResultatsCorrectifs())
-                // .stream()
-                // .forEach(variableLine -> {
-                //     addInputVariableToTestData(variableLine, td);
-                // });
-
                 
-        } catch (IOException e) {
+        } catch (IOException | NumberFormatException e) {
             e.printStackTrace();
-        } catch (NumberFormatException e ){
-            e.printStackTrace();
-        }
+        } 
+
         return td;
     }
 
