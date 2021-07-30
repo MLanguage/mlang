@@ -84,7 +84,7 @@ le [README dédié](m_specs/README_fr.md) pour plus de détails.
 Mlang a aussi besoin d'un fichier M++ afin de gérer le mécanisme
 des "liquidations multiples" qui est nécessaire afin de calculer correctement 
 l'impôt sur le recenu. Le fichier `mpp_specs/2018_6_7.mpp` correspond à la partie 
-non publiée du code DGFiP pour la version 2018 des sources publiées dans `ir-calcul``.
+non publiée du code DGFiP pour la version 2018 des sources publiées dans `ir-calcul`.
 
 Si vous voulez vérifier la sortie de l'interprétateur pour une situation donnée,
 vous pouvez créer votre propre `.m_spec`et le lancer avec la commande :
@@ -102,39 +102,42 @@ pour les tests de leur outillage interne. Les options `--run_test` et
 `--run_all` facilitent le processus de test avec l'interprétateur (avec ou 
 sans optimisations) et rapportent les erreurs dans un format pratique.
 
-Mlang backends are also tested using the same `FIP` format, see for instance
-`examples/python/backend_test`.
+Les modules de génération de code Mlang sont aussi testés avec ce même format
+`FIP`, voir par exemple `examples/python/backend_test`
 
-When running `--run_all_tests`, you can enable code coverage instrumentation
-with the `--code_coverage` option. Another interesting option is `--precision`,
-which lets you choose how numbers are represented for the tax computation.
-The default is `--precision double`, that uses the 64-bits IEEE754 floating-point
-representation and associated operations. This is what the DGFiP uses. The
-`--precision mpfr` option lets you use 1024-bits floating point numbers for
-virtually infinite precision. Finally, `--precision fixed<n>` uses
-fixed-point arithmetic with GMP-provided big integers. The fixed-point numbers
-are represented with the [Q number format](https://en.wikipedia.org/wiki/Q_(number_format))
-and `<n>` is the number of fractional bits. The integer bits are unbounded.
+Quand on lance `--run_all_tests`, vous pouvez activer la mesure de la couverture
+de code avec le paramètre `--code_coverage`. Une autre option intéressante est 
+`--precision`, qui permet de choisir la représentation des nombre lors du calcul 
+de l'impôt. Par défaut c'est `--precision double`, qui utilise la représentation 
+64 bits IEEE754 de virgule flottante et les opérations associées. C'est ce qui 
+est utilisé par la DGFiP. Le paramètre `--precision mpfr` permet d'utiliser des 
+nombres à virgule flottant de 1024 bits pour une précision quasi-infini. Enfin,
+la précision, `--precision fixed<n>` utilise de l'arthmétique à virgule fixe
+avec de grands entiers fournis par GMP. Les nombres à virgule fixe sont 
+représentés au [format de nombre Q](https://en.wikipedia.org/wiki/Q_(number_format) 
+et `<n>` est le nombre de bits fractionnelles. Les bits d'entiers sont sans limite.
 
-The DGFiP does not publish its internal test base. However, randomized test
-cases have been created for the 2018 income version of the software, in the
-folder `random_tests`. The fact that Mlang passes these tests only means that
-it faithfully reproduces the computation done by the DGFiP using unpublished
-software. Notably, it does not mean that the M sources (published by the
-DGFiP) and the M++ sources (recreated from unpublished sources) are faithful to
-the way the law says taxes should be computed.
+La DGFiP ne publie pas sa base de tests interne. Toutefois des tests aléatoires 
+ont été générés pour la version du logiciel qui traite des revenus de 2018 dans
+le répertoire `random_tests`. Le fait que Mlang réussit ces tests signifie 
+seulement qu'il reproduit fidèlement le calcul de la DGFiP en utilisant des
+le logiciel non-publié. Notamment, cela ne signifie pas que les sources M 
+(publiés par la DGFiP) et les sources M++ (recréés depuis les sources non 
+publiés) sont fidèles à la législative en matière de calcul de l'impôt.
 
-To check that Mlang passes all the randomized tests, simply invoke
+Pour vérifier que Mlang réussit tous les tests aléatoires, lancez simplement
 
     make tests
 
-Some tests might fail using non-default precision settings, even if the error
-message shows no difference between the expected value and the computed value.
-This is because we control a difference of 0 between the computed and the
-expected, but when doing computations with a higher precision, a difference
-lower than the smallest representable float value might appear. To pass the test,
-we have provided the command line option `--test_error_margin=0.0000001` to
-let you define how much error margin you want to tolerate when running tests.
+Quelques tests pourraient échouer en utilisant des valeurs de précision autres
+que ceux par défaut, même si le message d'erreur n'affiche aucune différence entre
+la valeur attendue et la valeur obtenue. Cela arrive car nous vérifions un écart 
+de 0 entre l'attendue et l'obtenue mais quand on fait des calculs à plus haute 
+précision, une différence inférieur au plus petit montant à virgule flottant qui
+peut être représenté peut apparaître. Pour passer le test, nous avons fourni 
+le paramètre de ligne de commande `--test_error_margin=0.0000001` afin de vous 
+permettre de définir la marge d'erreur que vous souhaitez tolérer pendant les 
+tests. 
 
 ## Documentation
 
