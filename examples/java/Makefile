@@ -61,5 +61,5 @@ Ir_%.java: ../../m_specs/%.m_spec
 backend_tests: Ir_tests_2019.java
 	rm -rf backend_tests/target/*
 	mkdir -p backend_tests/target/
-	javac -cp "backend_tests/src/:src" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
+	javac -J-Xss10m -J-Xmx4096m -cp "backend_tests/src/:src" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
 	
