@@ -17,11 +17,12 @@
 
 open Mir
 
-let java_program : (Format.formatter -> unit) list ref = ref []
+type print_block = (Format.formatter -> unit) list
+
+let java_program : print_block ref = ref []
 
 (** Add element to code_block type horizontally *)
-let add_el_hor (el : Format.formatter -> unit) =
-  java_program := el :: !java_program
+let add_el_hor (el : Format.formatter -> unit) = java_program := el :: !java_program
 
 let java_imports : string =
   {|
@@ -181,28 +182,31 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (fmt : Format.f
     defs
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
-    (data : Mir.variable_data) =
+    (data : Mir.variable_data) (pbl : print_block) =
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      add_el_hor (fun oc ->
-          Format.fprintf oc "%a calculationVariables.put(\"%a\", %s); \n"
-            (format_local_vars_defs var_indexes)
-            defs format_var_name var se)
+      (fun oc ->
+        Format.fprintf oc "%a calculationVariables.put(\"%a\", %s); \n"
+          (format_local_vars_defs var_indexes)
+          defs format_var_name var se)
+      :: pbl
   | TableVar (_, IndexTable es) ->
-      add_el_hor (fun oc ->
-          Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name
-            var
-            (String.concat ","
-               (let array_of_variables = ref [] in
-                IndexMap.iter
-                  (fun _ v ->
-                    let string_genere, _ = generate_java_expr v var_indexes in
-                    array_of_variables := List.append !array_of_variables [ string_genere ])
-                  es;
-                !array_of_variables)))
-  | TableVar (_, IndexGeneric _) -> assert false
-  (*Format.asprintf "%a = %a;@\n@\n" generate_variable var (generate_java_expr) e :: java_stmts*)
+      (fun oc ->
+        Format.fprintf oc "@\n   tableVariables.put(\"%a\",Arrays.asList(%s));@\n" format_var_name
+          var
+          (String.concat ","
+             (let array_of_variables = ref [] in
+              IndexMap.iter
+                (fun _ v ->
+                  let string_genere, _ = generate_java_expr v var_indexes in
+                  array_of_variables := List.append !array_of_variables [ string_genere ])
+                es;
+              !array_of_variables)))
+      :: pbl
+  | TableVar (_, IndexGeneric e) ->
+      Errors.raise_spanned_error "generic index table definitions not supported in java the backend"
+        (Pos.get_position e)
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
@@ -217,9 +221,8 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) =
         let current_method oc =
           Format.fprintf oc
             "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
-             input_variables.get(\"%s\") : OptionalDouble.empty()); \n\n\
-            \ System.out.println(calculationVariables.get(\"%a\"));" format_var_name hd
-            (generate_name hd) (generate_name hd) format_var_name hd;
+             input_variables.get(\"%s\") : OptionalDouble.empty()); \n\n"
+            format_var_name hd (generate_name hd) (generate_name hd)
         in
         add_el_hor current_method;
         generate_input_list tl
@@ -252,47 +255,63 @@ let generate_var_cond var_indexes cond =
            (sanitize_str cond_error.Error.name)
            (sanitize_str cond_error.Error.descr)))
 
+let fresh_cond_counter = ref 0
+
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    (stmts : Bir.stmt list) =
-  let local_generate stmt = generate_stmt program var_indexes stmt in
+    (stmts : Bir.stmt list) (ol : print_block) =
+  let local_generate stmt = generate_stmt program var_indexes stmt ol in
+  (* Printf.printf "generate_stmts smts length %d\n" (List.length stmts); *)
   match stmts with
   | hd :: tl ->
-      local_generate hd;
-      generate_stmts program var_indexes tl
-  | [] -> ()
+      let nl = local_generate hd in
+      generate_stmts program var_indexes tl nl
+  | [] -> ol
 
-and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt) :
-    unit =
+and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt)
+    (ol : print_block) : print_block =
+  let len = ol |> List.length in
+  if len mod 1000 = 0 then Printf.printf "length of ol : %d \n%!" len;
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata
+  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata ol
   | SConditional (cond, tt, ff) ->
+      (* Printf.printf "SConditional\n"; *)
       let pos = Pos.get_position stmt in
       let fname =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
       in
       let cond_name =
-        Format.asprintf "cond_%s_%d_%d_%d_%d" fname (Pos.get_start_line pos)
+        Format.asprintf "cond_%s_%d_%d_%d_%d_%d" fname (Pos.get_start_line pos)
           (Pos.get_start_column pos) (Pos.get_end_line pos) (Pos.get_end_column pos)
+          !fresh_cond_counter
       in
-      add_el_hor (fun oc ->
-          Format.fprintf oc
-            {|
-          /* SConditional (cond, tt, ff) */
-          OptionalDouble %s = %s;
-          if (! %s.isPresent() && %s.getAsDouble() != 0) {
-        |}
-            cond_name
-            (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
-             s)
-            cond_name cond_name;
-          generate_stmts program var_indexes tt;
-          Format.fprintf oc "} /* End of condition: %s */" cond_name;
-          Format.fprintf oc {|
-            else if (!%s.isPresent()) {
-  |} cond_name;
-          generate_stmts program var_indexes ff;
-          Format.fprintf oc "}")
-  | SVerif v -> generate_var_cond var_indexes v
+      fresh_cond_counter := !fresh_cond_counter + 1;
+      (fun oc ->
+        Format.fprintf oc
+          {|
+    /* SConditional (cond, tt, ff) */
+    OptionalDouble %s = %s;
+    if (! %s.isPresent() && %s.getAsDouble() != 0) {
+|}
+          cond_name
+          (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
+           s)
+          cond_name cond_name;
+        Printf.printf "before is_true\n";
+        List.iter (fun i -> i oc) (generate_stmts program var_indexes tt []);
+
+        Printf.printf "after is_true List.iter\n";
+        Format.fprintf oc "} /* End of condition: %s */" cond_name;
+        Format.fprintf oc {|
+    else if (!%s.isPresent()) {
+|} cond_name;
+        let is_false = generate_stmts program var_indexes ff [] in
+        List.iter (fun item -> item oc) is_false;
+        Format.fprintf oc "}")
+      :: ol
+  | SVerif v ->
+      (* Printf.printf "SVerif\n"; *)
+      generate_var_cond var_indexes v;
+      ol
 
 let generate_return (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
@@ -342,40 +361,50 @@ let split_list list bucket_size =
 let print_queue (lines : (Format.formatter -> unit) list list) fmt =
   let lines_count = List.length lines in
   let rec aux count =
-    if count <= lines_count then
-        (Format.fprintf fmt
-          "tax_calculation_part%d(calculationVariables, localVariables, tableVariables, cond, out, input_variables);\n"
-          count;
-        aux (count + 1);)
+    if count <= lines_count then (
+      Format.fprintf fmt
+        "tax_calculation_part%d(calculationVariables, localVariables, tableVariables, cond, out, \
+         input_variables);\n"
+        count;
+      aux (count + 1))
     else ()
   in
   aux 0
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
-  let bs = 50 in
+  Printf.printf "generate_java_program\n";
+  let bs = 1 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
+  Printf.printf "generate_java_program second attempt\n%!";
   let var_indexes, _ = get_variables_indexes program function_spec in
   Format.fprintf oc "%a" generate_header ();
   Format.fprintf oc "%s" calculateTax_method_header;
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE INPUTS */\n");
   generate_input_handling function_spec;
   add_el_hor (fun oc -> Format.fprintf oc "/*GENERATE STATEMENTS*/\n");
-  generate_stmts program var_indexes program.statements;
+  Printf.printf "before let stmts\n%!";
+  java_program := !java_program @ generate_stmts program var_indexes program.statements [];
+  Printf.printf "after let stmts\n%!";
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
+  Printf.printf "before split_java_program\n%!";
   let split_java_program = split_list !java_program bs in
+  Printf.printf "after split_java_program\n%!";
   print_queue split_java_program oc;
+  Printf.printf "after print_queue\n%!";
   Format.fprintf oc "return out;\n";
   Format.fprintf oc "\n}";
+  Printf.printf "after \\n} \n%!";
 
   List.iteri
-    (fun i (sl : (Format.formatter -> unit)) ->
+    (fun i (sl : Format.formatter -> unit) ->
+      Printf.printf "pos %d of %d\n%!" i (List.length !java_program);
       if i mod bs = 0 && i <> 0 then Format.fprintf oc "}\n";
-      if i mod bs = 0 then 
-      (Format.fprintf oc
-        {| 
+      if i mod bs = 0 then
+        Format.fprintf oc
+          {| 
       public static void tax_calculation_part%d( 
             Map<String, OptionalDouble> calculationVariables, 
             Map<Integer, OptionalDouble> localVariables, 
@@ -384,11 +413,12 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
             Map<String, OptionalDouble> out,
             Map<String, OptionalDouble> input_variables) {
         |}
-        (i / bs));
-        sl oc;) 
+          (i / bs);
+      sl oc)
     (List.rev !java_program);
-  Format.fprintf oc 
-  {|    
+  Printf.printf "after List.iteri \n%!";
+
+  Format.fprintf oc {|    
       }
     } 
   |};
