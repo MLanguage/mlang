@@ -141,22 +141,24 @@ tests.
 
 ## Documentation
 
-The OCaml code is self-documented using `ocamldoc` style. You can generate the HTML
-documentation using
+Le code OCaml s'autodocumente avec le format `ocamldoc`. Vous pouvez générer la documentation
+en html avec la commande 
 
-    make doc
+    make doc 
 
-To browse the documentation, just open the file `doc.html` with your browser. Here
-is a high-level picture describing the architecture of the compiler:
+Afin de parcourir la documentation, il suffit d'ouvrir le fichier `doc.html` avec 
+votre navigateur. Voici un schéma de haut-niveau décrivant l'architecture du 
+compilateur:
 
 <center>
 <img src="doc/architecture.png" alt="Architecture" height="300"/>
 </center>
 
-First, the code is parsed into AST (both for M and M++). Then, the AST are
-desugared into M and M++ intermediate representations. BIR stands for Backend
-IR, and collects the result of inlining the M code inside M++. OIR is the
-Optimization IR, which is a CFG-form of BIR.
+D'abord, le code est traduit dans un AST - Arbre de la Syntaxe Abstraite (à la fois
+pour le M et le M++). Ensuite, les AST sont désucrés dans des représentations
+intermédiaires M et M++. BIR signifie Backend IR et résulte de l'extension inline
+du code M dans le M++. OIR signifie Optimisation IR, est une forme CFG (grammaire non 
+contextuelle) du BIR.
 
 ## Known Limitations
 
