@@ -29,7 +29,7 @@ let java_imports : string =
   package com.mlang;
 
   import java.util.Map;
-  import java.util.OptionalDouble;
+  import com.mlang.MValue;
   import java.util.HashMap;
   import java.util.List;
   import java.util.Arrays;
@@ -40,16 +40,16 @@ let java_imports : string =
 let calculateTax_method_header : string =
   {|
 
-public static Map<String, OptionalDouble> calculateTax(Map<String,OptionalDouble> input_variables) {
-  OptionalDouble cond = OptionalDouble.empty(); 
-  Map<String, OptionalDouble> out = new HashMap<>();
-  Map<String, OptionalDouble> calculationVariables = new HashMap<>();
-  Map<Integer, OptionalDouble> localVariables = new HashMap<>();
+public static Map<String, MValue> calculateTax(Map<String,MValue> input_variables) {
+  MValue cond = MValue.mUndefined; 
+  Map<String, MValue> out = new HashMap<>();
+  Map<String, MValue> calculationVariables = new HashMap<>();
+  Map<Integer, MValue> localVariables = new HashMap<>();
 
-  Map<String,List<OptionalDouble>> tableVariables = new HashMap<>();
+  Map<String,List<MValue>> tableVariables = new HashMap<>();
 |}
 
-let none_value = "OptionalDouble.empty()"
+let none_value = "MValue.mUndefined"
 
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
@@ -158,7 +158,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       add_expr_code_block (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) ->
-      add_expr_code_block (Format.asprintf "OptionalDouble.of(%s)" (string_of_float f), [])
+      add_expr_code_block (Format.asprintf "new MValue(%s)" (string_of_float f), [])
   | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
   | Var var ->
       add_expr_code_block
@@ -205,7 +205,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
               !array_of_variables)))
       :: pbl
   | TableVar (_, IndexGeneric e) ->
-      Errors.raise_spanned_error "generic index table definitions not supported in java the backend"
+      Errors.raise_spanned_error "generic index table definitions not supported in the java backend"
         (Pos.get_position e)
   | InputVar -> assert false
 
@@ -221,7 +221,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) =
         let current_method oc =
           Format.fprintf oc
             "calculationVariables.put(\"%a\",input_variables.get(\"%s\") != null ? \
-             input_variables.get(\"%s\") : OptionalDouble.empty()); \n\n"
+             input_variables.get(\"%s\") : MValue.mUndefined); \n\n"
             format_var_name hd (generate_name hd) (generate_name hd)
         in
         add_el_hor current_method;
@@ -244,7 +244,7 @@ let generate_var_cond var_indexes cond =
   add_el_hor (fun oc ->
       Format.fprintf oc
         "cond = %s;@\n\
-         if (cond.isPresent() && (cond.getAsDouble() != 0)) { @\n\
+         if (m_is_defined_true(cond)) { @\n\
         \   throw new RuntimeException(\"Error triggered\\n%s\");@\n\
          }@\n\
          @\n"
@@ -285,28 +285,30 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
+      let pt x () = List.iter (fun i -> i x) (generate_stmts program var_indexes tt []) in
       (fun oc ->
         Format.fprintf oc
           {|
     /* SConditional (cond, tt, ff) */
-    OptionalDouble %s = %s;
-    if (! %s.isPresent() && %s.getAsDouble() != 0) {
+    MValue %s = %s;
+    if (m_is_defined_true(%s)) {
+      %a
+    }
 |}
           cond_name
           (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
            s)
-          cond_name cond_name;
-        Printf.printf "before is_true\n";
-        List.iter (fun i -> i oc) (generate_stmts program var_indexes tt []);
-
-        Printf.printf "after is_true List.iter\n";
-        Format.fprintf oc "} /* End of condition: %s */" cond_name;
-        Format.fprintf oc {|
-    else if (!%s.isPresent()) {
-|} cond_name;
-        let is_false = generate_stmts program var_indexes ff [] in
-        List.iter (fun item -> item oc) is_false;
-        Format.fprintf oc "}")
+          cond_name pt ();
+        let is_false oc () =
+          List.iter (fun item -> item oc) (generate_stmts program var_indexes ff [])
+        in
+        Format.fprintf oc
+          {|
+   if (m_is_defined_false(%s)) {
+      %a
+    }
+|}
+          cond_name is_false ())
       :: ol
   | SVerif v ->
       (* Printf.printf "SVerif\n"; *)
@@ -385,7 +387,7 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   generate_input_handling function_spec;
   add_el_hor (fun oc -> Format.fprintf oc "/*GENERATE STATEMENTS*/\n");
   Printf.printf "before let stmts\n%!";
-  java_program := !java_program @ generate_stmts program var_indexes program.statements [];
+  java_program := generate_stmts program var_indexes program.statements [] @ !java_program;
   Printf.printf "after let stmts\n%!";
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
@@ -406,12 +408,12 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
         Format.fprintf oc
           {| 
       public static void tax_calculation_part%d( 
-            Map<String, OptionalDouble> calculationVariables, 
-            Map<Integer, OptionalDouble> localVariables, 
-            Map<String,List<OptionalDouble>> tableVariables,
-            OptionalDouble cond,
-            Map<String, OptionalDouble> out,
-            Map<String, OptionalDouble> input_variables) {
+            Map<String, MValue> calculationVariables, 
+            Map<Integer, MValue> localVariables, 
+            Map<String,List<MValue>> tableVariables,
+            MValue cond,
+            Map<String, MValue> out,
+            Map<String, MValue> input_variables) {
         |}
           (i / bs);
       sl oc)

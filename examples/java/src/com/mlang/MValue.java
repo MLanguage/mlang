@@ -1,284 +1,218 @@
 package com.mlang;
 
-import java.util.OptionalDouble;
-import java.lang.StackWalker.Option;
 import java.util.List;
 import java.util.function.BiFunction;
 
 public class MValue {
 
-  public static OptionalDouble mGreaterThan(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() > value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+
+  public static final MValue mUndefined = new MValue(0., true);
+  public static final MValue zero = new MValue(0., false);
+  public static final MValue one = new MValue(1., false);
+
+  private final double value;
+  private final boolean undefined;
+
+   public MValue(double value, boolean isDefined){
+     this.value = value;
+     this.undefined = isDefined;
   }
 
-  public static OptionalDouble mGreaterThanEqual(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() >= value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+public MValue(double value){
+     this.value = value;
+     this.undefined = false;
   }
 
-  public static OptionalDouble mLessThan(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() < value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+  public double getValue() {
+    return this.value;
+  } 
+
+  public boolean isUndefined() {
+    return this.undefined;
   }
 
-  public static OptionalDouble mLessThanEqual(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() <= value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+  private static MValue boolToMValue(boolean b){
+   return b ? one : zero;
   }
 
-  public static OptionalDouble mEqual(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() == value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+  public static MValue mGreaterThan(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() > y.getValue()); 
   }
 
-  public static OptionalDouble mNotEqual(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else {
-      if (value1.getAsDouble() != value2.getAsDouble()) {
-        return OptionalDouble.of(1.);
-      } else {
-        return OptionalDouble.of(0.);
-      }
-    }
+  public static MValue mGreaterThanEqual(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+   return boolToMValue(x.getValue() >= y.getValue()); 
   }
 
-  public static OptionalDouble mAnd(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else if ((!value1.isEmpty() && value1.getAsDouble() != 0) && (!value2.isEmpty() && value2.getAsDouble() != 0)) {
-      return OptionalDouble.of(1.);
-    } else {
-      return OptionalDouble.of(0.);
-    }
+  public static MValue mLessThan(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() < y.getValue());
   }
 
-  public static OptionalDouble mOr(OptionalDouble value1, OptionalDouble value2) {
-    if (value1.isEmpty() && value2.isEmpty()) {
-      return OptionalDouble.empty();
-    } else if ((!value1.isEmpty() && value1.getAsDouble() != 0) || (!value2.isEmpty() && value2.getAsDouble() != 0)) {
-      return OptionalDouble.of(1.);
-    } else {
-      return OptionalDouble.of(0.);
-    }
+  public static MValue mLessThanEqual(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() <= y.getValue());
   }
 
-  public static OptionalDouble mAdd(OptionalDouble value1, OptionalDouble value2) {
+  public static MValue mEqual(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() == y.getValue());
+  }
 
-    if(value1.isEmpty() && value2.isEmpty()) {
-      return OptionalDouble.empty();
-    }
+  public static MValue mNotEqual(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() != y.getValue());
+  }
 
-    double localValue1 = 0.;
-    double localValue2 = 0.;
+  public static MValue mAnd(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() != 0 && y.getValue() != 0);
+  }
 
-    if(!value1.isEmpty()) {
-      localValue1 = value1.getAsDouble();
-    }
+  public static MValue mOr(MValue x, MValue y) {
+    if(x.isUndefined() && y.isUndefined())  {
+      return mUndefined;
+    } 
+    return boolToMValue(x.getValue() != 0 || y.getValue() != 0);
+  }
 
-    if(!value2.isEmpty()) {
-      localValue2 = value2.getAsDouble();
-    }
+  public static MValue mAdd(MValue x, MValue y) {
+
+    if(x.isUndefined() && y.isUndefined())  {
+      return mUndefined;
+    } 
     
-    return OptionalDouble.of(localValue1 + localValue2);
+    return new MValue(x.getValue() + y.getValue());
   }
 
-  public static OptionalDouble mSubstract(OptionalDouble value1, OptionalDouble value2) {
-    if(value1.isEmpty() && value2.isEmpty()) {
-      return OptionalDouble.empty();
-    }
+  public static MValue mSubstract(MValue x, MValue y) {
+    if(x.isUndefined() && y.isUndefined())  {
+      return mUndefined;
+    } 
 
-    double localValue1 = 0.;
-    double localValue2 = 0.;
-
-    if(value1.isPresent()) {
-      localValue1 = value1.getAsDouble();
-    }
-
-    if(value2.isPresent()) {
-      localValue2 = value2.getAsDouble();
-    }
-    
-    return OptionalDouble.of(localValue1 - localValue2);
+    return new MValue(x.getValue() - y.getValue());
   }
 
-  public static OptionalDouble mMultiply(OptionalDouble value1, OptionalDouble value2) {
-    if(value1.isEmpty() || value2.isEmpty()) {
-      return OptionalDouble.empty();
+  public static MValue mMultiply(MValue x, MValue y) {
+    if(x.isUndefined() || y.isUndefined()) {
+      return mUndefined;
     }
-    return OptionalDouble.of(value1.getAsDouble() * value2.getAsDouble());
+    return new MValue(x.getValue() * y.getValue());
   }
 
-  public static OptionalDouble mDivide(OptionalDouble value1, OptionalDouble value2) {
-    if (firstOrSecond(value1, value2)) {
-      return OptionalDouble.empty();
+  public static MValue mDivide(MValue x, MValue y) {
+   
+    if(x.isUndefined() || y.isUndefined()) {
+      return mUndefined;
     }
 
-    double denominateur = value2.getAsDouble();
+    double denominateur = y.getValue();
 
     if (denominateur == 0) {
-      return OptionalDouble.of(0);
+      return zero;
     }
 
-    return OptionalDouble.of(value1.getAsDouble() / denominateur);
+    return new MValue(x.getValue() / denominateur);
   }
 
-  public static OptionalDouble unopCondition(BiFunction<OptionalDouble, OptionalDouble, Boolean> condition,
-      OptionalDouble value1, OptionalDouble value2) {
-    if (firstOrSecond(value1, value2)) {
-      return OptionalDouble.empty();
+
+  public static MValue m_round(MValue x) {
+    if (x.isUndefined()) {
+      return mUndefined;
     }
+    double dValue = x.getValue();
+    double valueToRound = dValue + (dValue < 0 ? -0.50005 : 0.50005);
+    return new MValue(Math.floor(valueToRound));
+  }
 
-    if (condition.apply(value1, value2)) {
-      return OptionalDouble.of(1);
-    } else {
-      return OptionalDouble.of(0);
+  public static MValue m_floor(MValue x) {
+    if (x.isUndefined()) {
+      return mUndefined;
     }
+    double valueToFloor = x.getValue()+ 0.000001;
+    return new MValue(Math.floor(valueToFloor));
   }
 
-  public static OptionalDouble binopCondition(BiFunction<OptionalDouble, OptionalDouble, OptionalDouble> condition,
-      OptionalDouble value1, OptionalDouble value2) {
-    if (firstOrSecond(value1, value2)) {
-      return OptionalDouble.empty();
-    }
-
-    return condition.apply(value1, value2);
-  }
-
-  public static boolean firstOrSecond(OptionalDouble value1, OptionalDouble value2) {
-    return value1.isEmpty() || value2.isEmpty();
-  }
-
-  public static OptionalDouble m_round(OptionalDouble value) {
-    if (!value.isPresent()) {
-      return value;
-    }
-    double valueToRound = value.getAsDouble() + (value.getAsDouble() < 0 ? -0.50005 : 0.50005);
-    return OptionalDouble.of(Math.floor(valueToRound));
-  }
-
-  public static OptionalDouble m_floor(OptionalDouble value) {
-    if (!value.isPresent()) {
-      return value;
-    }
-    double valueToFloor = value.getAsDouble() + 0.000001;
-    return OptionalDouble.of(Math.floor(valueToFloor));
-  }
-
-  public static OptionalDouble m_cond(OptionalDouble cond, OptionalDouble trueVal, OptionalDouble falseVal) {
-    if (!cond.isPresent()) {
-      return cond;
-    } else if (cond.getAsDouble() != 0) {
+  public static MValue m_cond(MValue cond, MValue trueVal, MValue falseVal) {
+    if (cond.isUndefined()) {
+      return mUndefined;
+    } else if (cond.getValue() != 0) {
       return trueVal;
     } else {
       return falseVal;
     }
   }
 
-  public static OptionalDouble m_max(OptionalDouble value1, OptionalDouble value2) {
-    double localValue1 = 0.;
-    double localValue2 = 0.;
-
-    if (!value1.isEmpty()) {
-      localValue1 = value1.getAsDouble();
-    }
-
-    if (!value2.isEmpty()) {
-      localValue2 = value2.getAsDouble();
-    }
-
-    return OptionalDouble.of(Math.max(localValue1, localValue2));
+  public static MValue m_max(MValue x, MValue y) {
+    return new MValue(Math.max(x.getValue(), y.getValue()));
   }
 
-  public static OptionalDouble m_min(OptionalDouble value1, OptionalDouble value2) {
-    double localValue1 = 0.;
-    double localValue2 = 0.;
-
-    if (!value1.isEmpty()) {
-      localValue1 = value1.getAsDouble();
-    }
-
-    if (!value2.isEmpty()) {
-      localValue2 = value2.getAsDouble();
-    }
-    
-    return OptionalDouble.of(Math.min(localValue1, localValue2));
+  public static MValue m_min(MValue x, MValue y) { 
+    return new MValue(Math.min(x.getValue(), y.getValue()));
   }
 
-  public static OptionalDouble mNeg(OptionalDouble value) {
-    if (value.isEmpty()) {
-      return value;
+  public static MValue mNeg(MValue x) {
+    if(x.isUndefined()) {
+      return mUndefined;
     }
-    return OptionalDouble.of(-value.getAsDouble());
+    return new MValue(-x.getValue());
   }
 
-  public static OptionalDouble mPresent(OptionalDouble value) {
-    if (value.isEmpty()) {
-      return OptionalDouble.of(0.);
-    } else {
-      return OptionalDouble.of(1.);
-    }
+  public static MValue mPresent(MValue value) {
+   return value.isUndefined() ? zero : one;
   }
 
-  public static OptionalDouble mNot(OptionalDouble value) {
-    if (!value.isPresent()) {
-      return OptionalDouble.of(0.);
-    } else if (value.getAsDouble() == 0) {
-      return OptionalDouble.of(1.);
-    } else {
-      return OptionalDouble.of(0.);
+  public static MValue mNot(MValue value) {
+    if(value.isUndefined()) {
+      return mUndefined;
     }
+    return value.getValue() == 0 ? one : zero;
   }
 
-  public static OptionalDouble m_multimax(OptionalDouble bound, List<OptionalDouble> array) {
-    if (!bound.isPresent()) {
+  public static MValue m_multimax(MValue bound, List<MValue> array) {
+    if (bound.isUndefined()) {
       throw new RuntimeException("Multimax bound undefined!");
     } else {
-      double max_index = Math.floor(bound.getAsDouble());
-      OptionalDouble max = mAdd(array.get(0), OptionalDouble.of(0.));
+      double max_index = Math.floor(bound.getValue());
+      MValue max = mAdd(array.get(0), zero);
       for (int i = 0; i <= max_index; i++) {
-        OptionalDouble challenger = mAdd(array.get(i), OptionalDouble.of(0.));
-        if (challenger.getAsDouble() > max.getAsDouble()) {
+        MValue challenger = mAdd(array.get(i), zero);
+        if (challenger.getValue() > max.getValue()) {
           max = challenger;
         }
       }
       return max;
+    }
+  }
+
+  public static boolean m_is_defined_true(MValue x) {
+    if (x.isUndefined()) {
+      return false;
+    } else {
+      return x.getValue() != 0;
+    }
+  }
+
+  public static boolean m_is_defined_false(MValue x) {
+    if (x.isUndefined()) {
+      return false;
+    } else {
+      return x.getValue() == 0;
     }
   }
 }
