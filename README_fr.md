@@ -190,12 +190,12 @@ garantir un formattage uniforme.
 
 ## Formal semantics
 
-The `formal_semantics` folder contains the formalization for the core of the
-M language, that roughly corresponds to the `Mir` internal representation in Mlang.
-The reference formalization is written in Coq, in file `semantique.v`.
-See [the research paper](https://hal.inria.fr/hal-03002266) for
-more details.
+Le répertoire `formal_semantics` contient la formalisation du noyau du langage
+M, cela correspond approximativement à la représentation interne `Mir` dans Mlang.
+La formalisation de référence est écrite en Coq dans le fichier `semantique.v`.
+Voir [l'article de recherche](https://hal.inria.fr/hal-03002266) pour plus 
+de détails.
 
-## License
+## Licence
 
-The compiler is released under the GPL license (version 3).
+Ce compilateur est publié sous licence GPL (3e version).
