@@ -160,18 +160,18 @@ intermédiaires M et M++. BIR signifie Backend IR et résulte de l'extension inl
 du code M dans le M++. OIR signifie Optimisation IR, est une forme CFG (grammaire non 
 contextuelle) du BIR.
 
-## Known Limitations
+## Limitations connues
 
-The code released by the DGFiP is not complete as of September 2020. Indeed,
-in order to correctly compute the amount of taxes for a fiscal household, the DGFiP
-executes the M program several times, each time changing the values of some variables
-to enable or disable parts of the computation.
+Le code publié par la DGFiP n'est pas complète courant septembre 2020. En effet,
+afin de calculer correctement le montant d'impôt pour un foyer fiscal, la 
+DGFiP exécute le logiciel M plusieurs fois, en modifiant à chaque fois la valeur
+de certaines variables afin d'activer ou désactiver certaines parties du calcul.
 
-The DGFiP has not published the source code of this iterative computation. However,
-the authors of Mlang have come up with a new DSL called M++, used for describing
-the logic of this iterative computation. Currently, the authors have transcribed
-the unpublished source code into the `mpp_specs/2018_6_7.mpp` file, which has been tested only
-for the computation of taxes for the 2018 income.
+La DGFiP n'a pas publié le code source de ce calcul itératif. Toutefois, les auteurs de Mlang
+ont inventé un nouveau langage dédié appellé M++, qui est sert à décrire la logique
+du calcul itératif. Actuellement, les auteurs ont retranscrit le code non-publié
+dans le fichier `mpp_specs/2018_6_7.mpp`, qui a été testé uniquement pour calcul de 
+l'impôt sur les revenus de 2018.
 
 ## Contributions
 
