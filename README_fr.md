@@ -175,17 +175,18 @@ l'impôt sur les revenus de 2018.
 
 ## Contributions
 
-The project accepts pull requests. There is currently no formalized contribution
-guide or centralized discussion place about the project. Please email the authors
-if you are interested:
+Ce projet accepte des pull requests. Il n'y a actuellement aucune guide de contribution 
+formalisée ou lieu de discussion centralisé au sujet du projet. Si vous êtes
+intéressé(e) 
 
   denis DOT merigoux AT inria DOT fr
   raphael DOT monat AT lip6 DOT fr
 
-Please note that the copyright of this code is owned by Inria; by contributing,
-you disclaim all copyright interests in favor of Inria.
+Veuillez noter que les droits d'auteur de ce code sont détenus par l'Inria, 
+en y contribuant vous renoncez à tous vos droits d'auteur au profit de l'Inria.
 
-Don't forget format to use `make format` before you commit to ensure a uniform style.
+N'oubliez pas d'utiliser la commande `make format` avant de faire un commit afin de 
+garantir un formattage uniforme.
 
 ## Formal semantics
 
