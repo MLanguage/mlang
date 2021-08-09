@@ -26,27 +26,26 @@ let add_el_hor (el : Format.formatter -> unit) = java_program := el :: !java_pro
 
 let java_imports : string =
   {|
-  package com.mlang;
+package com.mlang;
 
-  import java.util.Map;
-  import com.mlang.MValue;
-  import java.util.HashMap;
-  import java.util.List;
-  import java.util.Arrays;
+import java.util.Map;
+import com.mlang.MValue;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Arrays;
 
-  import static com.mlang.MValue.*;
+import static com.mlang.MValue.*;
 |}
 
 let calculateTax_method_header : string =
   {|
+  public static Map<String, MValue> calculateTax(Map<String,MValue> input_variables) {
+    MValue cond = MValue.mUndefined; 
+    Map<String, MValue> out = new HashMap<>();
+    Map<String, MValue> calculationVariables = new HashMap<>();
+    Map<Integer, MValue> localVariables = new HashMap<>();
 
-public static Map<String, MValue> calculateTax(Map<String,MValue> input_variables) {
-  MValue cond = MValue.mUndefined; 
-  Map<String, MValue> out = new HashMap<>();
-  Map<String, MValue> calculationVariables = new HashMap<>();
-  Map<Integer, MValue> localVariables = new HashMap<>();
-
-  Map<String,List<MValue>> tableVariables = new HashMap<>();
+    Map<String,List<MValue>> tableVariables = new HashMap<>();
 |}
 
 let none_value = "MValue.mUndefined"
@@ -157,8 +156,11 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       in
       add_expr_code_block (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) ->
-      add_expr_code_block (Format.asprintf "new MValue(%s)" (string_of_float f), [])
+  | Literal (Float f) -> (
+      match f with
+      | 0. -> add_expr_code_block (Format.asprintf "MValue.zero", [])
+      | 1. -> add_expr_code_block (Format.asprintf "MValue.one", [])
+      | _ -> add_expr_code_block (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
   | Var var ->
       add_expr_code_block
@@ -260,7 +262,6 @@ let fresh_cond_counter = ref 0
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (stmts : Bir.stmt list) (ol : print_block) =
   let local_generate stmt = generate_stmt program var_indexes stmt ol in
-  (* Printf.printf "generate_stmts smts length %d\n" (List.length stmts); *)
   match stmts with
   | hd :: tl ->
       let nl = local_generate hd in
@@ -269,12 +270,9 @@ let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMa
 
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt)
     (ol : print_block) : print_block =
-  let len = ol |> List.length in
-  if len mod 1000 = 0 then Printf.printf "length of ol : %d \n%!" len;
   match Pos.unmark stmt with
   | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata ol
   | SConditional (cond, tt, ff) ->
-      (* Printf.printf "SConditional\n"; *)
       let pos = Pos.get_position stmt in
       let fname =
         String.map (fun c -> if c = '.' then '_' else c) (Filename.basename (Pos.get_file pos))
@@ -311,7 +309,6 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           cond_name is_false ())
       :: ol
   | SVerif v ->
-      (* Printf.printf "SVerif\n"; *)
       generate_var_cond var_indexes v;
       ol
 
@@ -360,8 +357,7 @@ let split_list list bucket_size =
   in
   aux list [] [] bucket_size 0
 
-let print_queue (lines : (Format.formatter -> unit) list list) fmt =
-  let lines_count = List.length lines in
+let print_queue lines_count fmt =
   let rec aux count =
     if count <= lines_count then (
       Format.fprintf fmt
@@ -375,53 +371,43 @@ let print_queue (lines : (Format.formatter -> unit) list list) fmt =
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
-  Printf.printf "generate_java_program\n";
-  let bs = 1 in
+  let bs = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Printf.printf "generate_java_program second attempt\n%!";
   let var_indexes, _ = get_variables_indexes program function_spec in
-  Format.fprintf oc "%a" generate_header ();
-  Format.fprintf oc "%s" calculateTax_method_header;
+  Format.fprintf oc "%a%s" generate_header () calculateTax_method_header;
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE INPUTS */\n");
   generate_input_handling function_spec;
   add_el_hor (fun oc -> Format.fprintf oc "/*GENERATE STATEMENTS*/\n");
-  Printf.printf "before let stmts\n%!";
   java_program := generate_stmts program var_indexes program.statements [] @ !java_program;
-  Printf.printf "after let stmts\n%!";
   add_el_hor (fun oc -> Format.fprintf oc "/* GENERATE RETURN */\n");
   generate_return function_spec;
-  Printf.printf "before split_java_program\n%!";
-  let split_java_program = split_list !java_program bs in
-  Printf.printf "after split_java_program\n%!";
-  print_queue split_java_program oc;
-  Printf.printf "after print_queue\n%!";
+  let lists = split_list !java_program bs in
+  print_queue (List.length !java_program / bs) oc;
   Format.fprintf oc "return out;\n";
   Format.fprintf oc "\n}";
-  Printf.printf "after \\n} \n%!";
 
-  List.iteri
-    (fun i (sl : Format.formatter -> unit) ->
-      Printf.printf "pos %d of %d\n%!" i (List.length !java_program);
-      if i mod bs = 0 && i <> 0 then Format.fprintf oc "}\n";
-      if i mod bs = 0 then
-        Format.fprintf oc
-          {| 
-      public static void tax_calculation_part%d( 
-            Map<String, MValue> calculationVariables, 
-            Map<Integer, MValue> localVariables, 
-            Map<String,List<MValue>> tableVariables,
-            MValue cond,
-            Map<String, MValue> out,
-            Map<String, MValue> input_variables) {
-        |}
-          (i / bs);
-      sl oc)
-    (List.rev !java_program);
-  Printf.printf "after List.iteri \n%!";
+  List.iteri (fun i sl  -> 
+    Format.fprintf oc
+    {| 
+  public static void tax_calculation_part%d( 
+        Map<String, MValue> calculationVariables, 
+        Map<Integer, MValue> localVariables, 
+        Map<String,List<MValue>> tableVariables,
+        MValue cond,
+        Map<String, MValue> out,
+        Map<String, MValue> input_variables) {
+          %a
+        }
+    |} i (fun fmt () -> List.iter (fun item -> item fmt)  (List.rev sl) ) ();
+    ) lists;
 
   Format.fprintf oc {|    
-      }
     } 
   |};
+
+  (* let count = ref 0 in let print_class count = if count < bs then Format.fprintf oc "class
+     TaxCalculation%d {\n %a \n} \n" count else ()
+
+     Format.fprintf oc {| %a |} ; *)
   close_out _oc
