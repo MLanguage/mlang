@@ -387,9 +387,10 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   Format.fprintf oc "return out;\n";
   Format.fprintf oc "\n}";
 
-  List.iteri (fun i sl  -> 
-    Format.fprintf oc
-    {| 
+  List.iteri
+    (fun i sl ->
+      Format.fprintf oc
+        {| 
   public static void tax_calculation_part%d( 
         Map<String, MValue> calculationVariables, 
         Map<Integer, MValue> localVariables, 
@@ -399,8 +400,11 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
         Map<String, MValue> input_variables) {
           %a
         }
-    |} i (fun fmt () -> List.iter (fun item -> item fmt)  (List.rev sl) ) ();
-    ) lists;
+    |}
+        i
+        (fun fmt () -> List.iter (fun item -> item fmt) (List.rev sl))
+        ())
+    lists;
 
   Format.fprintf oc {|    
     } 
