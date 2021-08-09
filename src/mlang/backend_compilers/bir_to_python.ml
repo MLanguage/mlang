@@ -307,11 +307,7 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond cond oc =
-  if
-    List.fold_left
-      (fun acc (item : Error.t) -> if acc = true then true else item.typ = Mast.Anomaly)
-      false cond.cond_errors
-  then
+  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
     Format.fprintf oc
       "# Verification condition %a@\n\
        cond = %a@\n\

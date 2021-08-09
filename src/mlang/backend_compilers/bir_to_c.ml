@@ -162,11 +162,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
-  if
-    List.fold_left
-      (fun acc (item : Error.t) -> if acc = true then true else item.typ = Mast.Anomaly)
-      false cond.cond_errors
-  then
+  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
     let scond, defs = generate_c_expr cond.cond_expr var_indexes in
     let percent = Re.Pcre.regexp "%" in
     Format.fprintf oc
