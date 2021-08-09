@@ -162,28 +162,33 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
-  let scond, defs = generate_c_expr cond.cond_expr var_indexes in
-  let percent = Re.Pcre.regexp "%" in
-  Format.fprintf oc
-    "%acond = %s;@\n\
-     if (m_is_defined_true(cond)) {@\n\
-    \    printf(\"Error triggered: %a\\n\");@\n\
-    \    {@\n\
-    \        output->is_error = true;@\n\
-    \        free(TGV);@\n\
-    \        free(LOCAL);@\n\
-    \        return -1;@\n\
-    \    }@\n\
-     }@\n"
-    (format_local_vars_defs var_indexes)
-    defs scond
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-       (fun fmt err ->
-         let error_descr = Pos.unmark err.Error.descr in
-         let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
-         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
-    cond.cond_errors
+  if
+    List.fold_left
+      (fun acc (item : Error.t) -> if acc = true then true else item.typ = Mast.Anomaly)
+      false cond.cond_errors
+  then
+    let scond, defs = generate_c_expr cond.cond_expr var_indexes in
+    let percent = Re.Pcre.regexp "%" in
+    Format.fprintf oc
+      "%acond = %s;@\n\
+       if (m_is_defined_true(cond)) {@\n\
+      \    printf(\"Error triggered: %a\\n\");@\n\
+      \    {@\n\
+      \        output->is_error = true;@\n\
+      \        free(TGV);@\n\
+      \        free(LOCAL);@\n\
+      \        return -1;@\n\
+      \    }@\n\
+       }@\n"
+      (format_local_vars_defs var_indexes)
+      defs scond
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+         (fun fmt err ->
+           let error_descr = Pos.unmark err.Error.descr in
+           let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
+           Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
+      cond.cond_errors
 
 let fresh_cond_counter = ref 0
 
@@ -301,7 +306,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#include <stdio.h>\n";
   Format.fprintf oc "#include \"m_value.h\"\n\n"
 
-let generate_footer (oc: Format.formatter) () : unit =
+let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
@@ -487,8 +492,7 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" 
-    generate_header () generate_input_type
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
     generate_get_input_index_prototype true generate_get_input_num_prototype true
     generate_get_input_name_from_index_prototype true generate_output_type function_spec
