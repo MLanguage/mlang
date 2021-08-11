@@ -48,12 +48,12 @@ tests.m_spec: gen_m_spec.py
 
 ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
-		--backend c --output $@ \
+		--backend dgfip_c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
 ir_%.c: %.m_spec $(SOURCE_FILES)
 	$(MLANG) \
-		--backend c --output $@ \
+		--backend dgfip_c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
 
