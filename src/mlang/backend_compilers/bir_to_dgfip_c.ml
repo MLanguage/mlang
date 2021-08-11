@@ -162,28 +162,29 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
-  let scond, defs = generate_c_expr cond.cond_expr var_indexes in
-  let percent = Re.Pcre.regexp "%" in
-  Format.fprintf oc
-    "%acond = %s;@\n\
-     if (m_is_defined_true(cond)) {@\n\
-    \    printf(\"Error triggered: %a\\n\");@\n\
-    \    {@\n\
-    \        output->is_error = true;@\n\
-    \        free(TGV);@\n\
-    \        free(LOCAL);@\n\
-    \        return -1;@\n\
-    \    }@\n\
-     }@\n"
-    (format_local_vars_defs var_indexes)
-    defs scond
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-       (fun fmt err ->
-         let error_descr = Pos.unmark err.Error.descr in
-         let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
-         Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
-    cond.cond_errors
+  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
+    let scond, defs = generate_c_expr cond.cond_expr var_indexes in
+    let percent = Re.Pcre.regexp "%" in
+    Format.fprintf oc
+      "%acond = %s;@\n\
+       if (m_is_defined_true(cond)) {@\n\
+      \    printf(\"Error triggered: %a\\n\");@\n\
+      \    {@\n\
+      \        output->is_error = true;@\n\
+      \        free(TGV);@\n\
+      \        free(LOCAL);@\n\
+      \        return -1;@\n\
+      \    }@\n\
+       }@\n"
+      (format_local_vars_defs var_indexes)
+      defs scond
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+         (fun fmt err ->
+           let error_descr = Pos.unmark err.Error.descr in
+           let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
+           Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
+      cond.cond_errors
 
 let fresh_cond_counter = ref 0
 
