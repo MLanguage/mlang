@@ -15,13 +15,19 @@ open Mir
 
 let none_value = "m_undefined"
 
-type m_error = {
-  kind : string;
-  major_code : string;
-  minor_code : string;
-  description : string;
-  isisf : string;
-}
+module Error = struct
+  type t = {
+    kind : string;
+    major_code : string;
+    minor_code : string;
+    description : string;
+    isisf : string;
+  }
+
+  let compare = compare
+end
+
+module ErrorSet = Set.Make (Error)
 
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
@@ -170,7 +176,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
-  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
+  if List.exists (fun (item : Mir.Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
     let scond, defs = generate_c_expr cond.cond_expr var_indexes in
     let percent = Re.Pcre.regexp "%" in
     Format.fprintf oc
@@ -190,9 +196,9 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
          (fun fmt err ->
-           let error_descr = Pos.unmark err.Error.descr in
+           let error_descr = Pos.unmark err.Mir.Error.descr in
            let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
-           Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
+           Format.fprintf fmt "%s: %s" (Pos.unmark err.Mir.Error.name) error_descr))
       cond.cond_errors
 
 let fresh_cond_counter = ref 0
