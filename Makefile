@@ -98,11 +98,14 @@ test_c_backend_perf:
 test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
 
+test_dgfip_c_backend:
+	$(MAKE) -C examples/dgfip_c/backend_tests run_tests
+
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 all: tests test_python_backend test_c_backend_perf \
-	test_c_backend quick_test
+	test_c_backend test_c_dgfip_backend quick_test
 
 ##################################################
 # Doc

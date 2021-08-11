@@ -32,6 +32,11 @@ test_c_backend:
   script:
     - make test_c_backend
 
+test_dgfip_c_backend:
+  stage: tests
+  script:
+    - make test_dgfip_c_backend
+
 test_py_backend:
   stage: tests
   script:
