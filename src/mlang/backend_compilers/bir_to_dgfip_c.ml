@@ -465,13 +465,6 @@ let generate_get_output_num_func (oc : Format.formatter)
   Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n};@\n@\n" generate_get_output_num_prototype
     false (List.length output_vars)
 
-let generate_error_kind (oc : Format.formatter) () =
-  Format.fprintf oc
-    "@[<v 2>typedef enum error_kind {Anomaly, Discordance, Information} error_kind;@]@\n@\n"
-
-let generate_error_type (oc : Format.formatter) () =
-  Format.fprintf oc "@[<v 2>typedef struct m_error {@,error_kind kind;@.@[<h>}@ m_error;@]@]@\n@\n"
-
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
@@ -496,14 +489,13 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
     generate_get_input_index_prototype true generate_get_input_num_prototype true
-    generate_get_input_name_from_index_prototype true generate_error_kind () generate_error_type ()
-    generate_output_type function_spec generate_output_to_array_prototype true
-    generate_get_output_index_prototype true generate_get_output_name_from_index_prototype true
-    generate_get_output_num_prototype true generate_empty_output_prototype true
-    generate_main_function_signature true generate_footer ();
+    generate_get_input_name_from_index_prototype true generate_output_type function_spec
+    generate_output_to_array_prototype true generate_get_output_index_prototype true
+    generate_get_output_name_from_index_prototype true generate_get_output_num_prototype true
+    generate_empty_output_prototype true generate_main_function_signature true generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
