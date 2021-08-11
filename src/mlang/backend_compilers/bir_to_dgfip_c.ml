@@ -496,13 +496,14 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include <string.h>\n"
 
 let generate_m_error (split_descr : string list) =
-  {
-    kind = List.nth split_descr 0;
-    major_code = List.nth split_descr 1;
-    minor_code = List.nth split_descr 2;
-    description = List.nth split_descr 3;
-    isisf = List.nth split_descr 4;
-  }
+  Error.
+    {
+      kind = List.nth split_descr 0;
+      major_code = List.nth split_descr 1;
+      minor_code = List.nth split_descr 2;
+      description = List.nth split_descr 3;
+      isisf = List.nth split_descr 4;
+    }
 
 let generate_cond_table (oc : Format.formatter) _ v =
   List.iter
@@ -513,7 +514,8 @@ let generate_cond_table (oc : Format.formatter) _ v =
       Format.fprintf oc
         {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s"},
           |}
-        m_error.kind m_error.major_code m_error.minor_code m_error.description m_error.isisf)
+        m_error.Error.kind m_error.Error.major_code m_error.Error.minor_code
+        m_error.Error.description m_error.Error.isisf)
     v.cond_errors
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
