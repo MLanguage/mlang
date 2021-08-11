@@ -15,6 +15,14 @@ open Mir
 
 let none_value = "m_undefined"
 
+type m_error = {
+  kind : string;
+  major_code : string;
+  minor_code : string;
+  description : string;
+  isisf : string;
+}
+
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
   | Mast.Gt -> "m_gt"
@@ -301,6 +309,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#ifndef IR_HEADER_ \n";
   Format.fprintf oc "#define IR_HEADER_ \n";
   Format.fprintf oc "#include \"m_value.h\"\n";
+  Format.fprintf oc "#include \"m_error.h\"\n";
   Format.fprintf oc "#include <stdio.h>\n\n"
 
 let generate_footer (oc : Format.formatter) () : unit =
@@ -480,6 +489,27 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
+let generate_m_error (split_descr : string list) =
+  {
+    kind = List.nth split_descr 0;
+    major_code = List.nth split_descr 1;
+    minor_code = List.nth split_descr 2;
+    description = List.nth split_descr 3;
+    isisf = List.nth split_descr 4;
+  }
+
+let generate_cond_table (oc : Format.formatter) _ v =
+  List.iter
+    (fun x ->
+      let descr = Pos.unmark x.Mir.Error.descr in
+      let descr_split = String.split_on_char ':' descr in
+      let m_error = generate_m_error descr_split in
+      Format.fprintf oc
+        {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s"},
+          |}
+        m_error.kind m_error.major_code m_error.minor_code m_error.description m_error.isisf)
+    v.cond_errors
+
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   if Filename.extension filename <> ".c" then
@@ -489,13 +519,19 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
-    function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
-    generate_get_input_index_prototype true generate_get_input_num_prototype true
-    generate_get_input_name_from_index_prototype true generate_output_type function_spec
-    generate_output_to_array_prototype true generate_get_output_index_prototype true
-    generate_get_output_name_from_index_prototype true generate_get_output_num_prototype true
-    generate_empty_output_prototype true generate_main_function_signature true generate_footer ();
+  let conds oc () =
+    Format.fprintf oc "m_error m_error_table[] = { @\n";
+    VariableMap.iter (generate_cond_table oc) program.mir_program.program_conds;
+    Format.fprintf oc "} @\n"
+  in
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
+    generate_input_type function_spec generate_empty_input_prototype true
+    generate_input_from_array_prototype true generate_get_input_index_prototype true
+    generate_get_input_num_prototype true generate_get_input_name_from_index_prototype true
+    generate_output_type function_spec generate_output_to_array_prototype true
+    generate_get_output_index_prototype true generate_get_output_name_from_index_prototype true
+    generate_get_output_num_prototype true generate_empty_output_prototype true
+    generate_main_function_signature true generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
