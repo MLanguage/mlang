@@ -178,6 +178,7 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
        }@\n"
       (format_local_vars_defs var_indexes)
       defs scond
+      (* A019:anomalie :"A":"019":"00":"ATTENTION CALCUL NON EFFECTUE PAR L'ESI":"N"; *)
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
          (fun fmt err ->
@@ -474,7 +475,7 @@ let generate_error_type (oc : Format.formatter) () =
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "@[<v 2>typedef struct m_output {@,m_error *errors;@,%a@.@[<h>}@ m_output;@]@]@\n@\n"
+    "@[<v 2>typedef struct m_output {@,bool is_error;@,%a@.@[<h>}@ m_output;@]@]@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
