@@ -39,7 +39,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
 ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
-		--backend c --output $@ \
+		--backend dgfip_c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
 
