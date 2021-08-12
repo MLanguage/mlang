@@ -495,28 +495,32 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
-let generate_m_error (split_descr : string list) =
+let generate_m_error (split_descr : Re.Group.t) =
   Error.
     {
-      kind = List.nth split_descr 0;
-      major_code = List.nth split_descr 1;
-      minor_code = List.nth split_descr 2;
-      description = List.nth split_descr 3;
-      isisf = List.nth split_descr 4;
+      kind = Re.Group.get split_descr 1;
+      major_code = Re.Group.get split_descr 2;
+      minor_code = Re.Group.get split_descr 3;
+      description = Re.Group.get split_descr 4;
+      isisf = Re.Group.get split_descr 5;
     }
 
-let generate_cond_table (oc : Format.formatter) _ v =
-  List.iter
-    (fun x ->
-      let descr = Pos.unmark x.Mir.Error.descr in
-      let descr_split = String.split_on_char ':' descr in
-      let m_error = generate_m_error descr_split in
-      Format.fprintf oc
-        {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s"},
+let print_error oc m_error =
+  Format.fprintf oc
+    {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s"},
           |}
-        m_error.Error.kind m_error.Error.major_code m_error.Error.minor_code
-        m_error.Error.description m_error.Error.isisf)
-    v.cond_errors
+    m_error.Error.kind m_error.Error.major_code m_error.Error.minor_code m_error.Error.description
+    m_error.Error.isisf
+
+let generate_cond_table _ v error_set =
+  List.fold_left
+    (fun acc x ->
+      let descr = Pos.unmark x.Mir.Error.descr in
+      let re = Re.Posix.re "([ADI]):([DSM0-9][0-9]{2}):([0-9]{2}):(.*):([ON])$" in
+      let line = Re.exec (Re.compile re) descr in
+      let m_error = generate_m_error line in
+      ErrorSet.add m_error acc)
+    error_set v.cond_errors
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -527,10 +531,14 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
+  let error_set = ErrorSet.empty in
   let conds oc () =
     Format.fprintf oc "m_error m_error_table[] = { @\n";
-    VariableMap.iter (generate_cond_table oc) program.mir_program.program_conds;
-    Format.fprintf oc "} @\n"
+    let error_set =
+      VariableMap.fold generate_cond_table program.mir_program.program_conds error_set
+    in
+    ErrorSet.iter (fun item -> print_error oc item) error_set;
+    Format.fprintf oc "}; @\n"
   in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
     generate_input_type function_spec generate_empty_input_prototype true
