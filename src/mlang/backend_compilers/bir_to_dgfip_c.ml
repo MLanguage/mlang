@@ -315,7 +315,6 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#ifndef IR_HEADER_ \n";
   Format.fprintf oc "#define IR_HEADER_ \n";
   Format.fprintf oc "#include \"m_value.h\"\n";
-  Format.fprintf oc "#include \"m_error.h\"\n";
   Format.fprintf oc "#include <stdio.h>\n\n"
 
 let generate_footer (oc : Format.formatter) () : unit =
@@ -533,12 +532,13 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  let error_set = ErrorSet.empty in
-  let conds oc () =
-    let error_set =
-      VariableMap.fold generate_cond_table program.mir_program.program_conds error_set
-    in
-    Format.fprintf oc "typedef m_error Errors[%d] ; @\n@\n" (ErrorSet.cardinal error_set)
+  (* let error_set = ErrorSet.empty in *)
+  let conds _ () =
+    (*   let error_set = *)
+    (*     VariableMap.fold generate_cond_table program.mir_program.program_conds error_set *)
+    (*   in *)
+    (*   Format.fprintf oc "typedef m_error Errors[%d] ; @\n@\n" (ErrorSet.cardinal error_set) *)
+    ()
   in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
     generate_input_type function_spec generate_empty_input_prototype true
