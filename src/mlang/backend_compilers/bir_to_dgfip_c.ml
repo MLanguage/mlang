@@ -483,7 +483,11 @@ let generate_get_output_num_func (oc : Format.formatter)
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "@[<v 2>typedef struct m_output {@,bool is_error;@,%a@.@[<h>}@ m_output;@]@]@\n@\n"
+    "@[<v 2>typedef struct m_output {@,\
+     Errors errors;@,\
+     bool is_error;@,\
+     %a@.@[<h>}@ m_output;@]@]@\n\
+     @\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
@@ -533,12 +537,10 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let oc = Format.formatter_of_out_channel _oc in
   let error_set = ErrorSet.empty in
   let conds oc () =
-    Format.fprintf oc "m_error m_error_table[] = { @\n";
     let error_set =
       VariableMap.fold generate_cond_table program.mir_program.program_conds error_set
     in
-    ErrorSet.iter (fun item -> print_error oc item) error_set;
-    Format.fprintf oc "}; @\n"
+    Format.fprintf oc "typedef m_error Errors[%d] ; @\n@\n" (ErrorSet.cardinal error_set)
   in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
     generate_input_type function_spec generate_empty_input_prototype true
