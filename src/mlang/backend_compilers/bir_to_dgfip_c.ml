@@ -482,11 +482,7 @@ let generate_get_output_num_func (oc : Format.formatter)
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "@[<v 2>typedef struct m_output {@,\
-     Errors errors;@,\
-     bool is_error;@,\
-     %a@.@[<h>}@ m_output;@]@]@\n\
-     @\n"
+    "@[<v 2>typedef struct m_output {@,bool is_error;@,%a@.@[<h>}@ m_output;@]@]@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
