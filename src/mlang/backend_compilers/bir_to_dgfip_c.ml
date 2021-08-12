@@ -315,6 +315,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#ifndef IR_HEADER_ \n";
   Format.fprintf oc "#define IR_HEADER_ \n";
   Format.fprintf oc "#include \"m_value.h\"\n";
+  Format.fprintf oc "#include \"m_error.h\"\n";
   Format.fprintf oc "#include <stdio.h>\n\n"
 
 let generate_footer (oc : Format.formatter) () : unit =
@@ -482,7 +483,11 @@ let generate_get_output_num_func (oc : Format.formatter)
 let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
-    "@[<v 2>typedef struct m_output {@,bool is_error;@,%a@.@[<h>}@ m_output;@]@]@\n@\n"
+    "@[<v 2>typedef struct m_output {@,\
+     m_error *errors;@,\
+     bool is_error;@,\
+     %a@.@[<h>}@ m_output;@]@]@\n\
+     @\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
