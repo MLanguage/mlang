@@ -196,7 +196,7 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
          (fun fmt err ->
-           let error_descr = Pos.unmark err.Mir.Error.descr in
+           let error_descr = Pos.unmark @@ Mir.Error.err_descr_string err in
            let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
            Format.fprintf fmt "%s: %s" (Pos.unmark err.Mir.Error.name) error_descr))
       cond.cond_errors
@@ -499,14 +499,15 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
-let generate_m_error (split_descr : Re.Group.t) =
+let generate_m_error (mir_error : Mir.Error.t) =
+  let mir_error = mir_error.descr in
   Error.
     {
-      kind = Re.Group.get split_descr 1;
-      major_code = Re.Group.get split_descr 2;
-      minor_code = Re.Group.get split_descr 3;
-      description = Re.Group.get split_descr 4;
-      isisf = Re.Group.get split_descr 5;
+      kind = List.nth mir_error 1 |> Pos.unmark;
+      major_code = List.nth mir_error 2 |> Pos.unmark;
+      minor_code = List.nth mir_error 3 |> Pos.unmark;
+      description = List.nth mir_error 4 |> Pos.unmark;
+      isisf = (match List.nth_opt mir_error 5 with Some v -> v |> Pos.unmark | None -> "");
     }
 
 let print_error oc m_error =
@@ -519,10 +520,7 @@ let print_error oc m_error =
 let generate_cond_table _ v error_set =
   List.fold_left
     (fun acc x ->
-      let descr = Pos.unmark x.Mir.Error.descr in
-      let re = Re.Posix.re "([ADI]):([DSM0-9][0-9]{2}):([0-9]{2}):(.*):([ON])$" in
-      let line = Re.exec (Re.compile re) descr in
-      let m_error = generate_m_error line in
+      let m_error = generate_m_error x in
       ErrorSet.add m_error acc)
     error_set v.cond_errors
 

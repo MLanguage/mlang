@@ -181,7 +181,7 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
          (fun fmt err ->
-           let error_descr = Pos.unmark err.Error.descr in
+           let error_descr = Mir.Error.err_descr_string err |> Pos.unmark in
            let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
            Format.fprintf fmt "%s: %s" (Pos.unmark err.Error.name) error_descr))
       cond.cond_errors

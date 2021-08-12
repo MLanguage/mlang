@@ -517,10 +517,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
             | Mast.Output out_name -> (vars, idmap, errors, out_name :: out_list)
             | Mast.Error err ->
                 let err =
-                  Mir.Error.new_error err.Mast.error_name
-                    (Pos.same_pos_as
-                       (String.concat ":" (List.map (fun s -> Pos.unmark s) err.Mast.error_descr))
-                       err.Mast.error_name)
+                  Mir.Error.new_error err.Mast.error_name err.Mast.error_descr
                     (Pos.unmark err.error_typ)
                 in
                 (vars, idmap, err :: errors, out_list)

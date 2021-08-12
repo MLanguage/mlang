@@ -102,7 +102,8 @@ let format_program_vars fmt (p : variable_data VariableMap.t) =
     format_variable_data fmt p
 
 let format_error fmt (e : Error.t) =
-  Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name) (Pos.unmark e.Error.descr)
+  Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)
+    (Error.err_descr_string e |> Pos.unmark)
 
 let format_precondition fmt (precond : condition_data) =
   Format.fprintf fmt "Précondition : %a\nSinon %a" format_expression (Pos.unmark precond.cond_expr)

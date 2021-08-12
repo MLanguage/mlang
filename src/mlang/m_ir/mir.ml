@@ -250,7 +250,7 @@ module Error = struct
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
-    descr : string Pos.marked;  (** Description taken from the variable declaration *)
+    descr : string Pos.marked list;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
@@ -261,9 +261,12 @@ module Error = struct
     counter := !counter + 1;
     v
 
-  let new_error (name : string Pos.marked) (descr : string Pos.marked) (error_typ : Mast.error_typ)
-      : t =
+  let new_error (name : string Pos.marked) (descr : string Pos.marked list)
+      (error_typ : Mast.error_typ) : t =
     { name; id = fresh_id (); descr; typ = error_typ }
+
+  let err_descr_string (err : t) =
+    Pos.same_pos_as (String.concat ":" (List.map (fun s -> Pos.unmark s) err.descr)) err.name
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end

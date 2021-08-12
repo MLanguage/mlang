@@ -263,7 +263,7 @@ module Make (N : Bir_number.NumberInterface) = struct
               %a"
              (Format_mast.pp_print_list_endline (fun fmt err ->
                   Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
-                    (Pos.unmark err.Error.descr)))
+                    (Pos.unmark @@ Error.err_descr_string err)))
              errors Format_mir.format_expression (Pos.unmark condition)
              (Format_mast.pp_print_list_endline (fun fmt v ->
                   Format.fprintf fmt "  * %a" format_var_value_with_var v))

@@ -319,7 +319,8 @@ let generate_var_cond cond oc =
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
          (fun fmt err ->
-           Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
+           Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
+             (Error.err_descr_string err |> sanitize_str)))
       cond.cond_errors
 
 let rec generate_stmts (program : Bir.program) oc stmts =
