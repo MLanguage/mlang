@@ -225,9 +225,18 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
         Format.fprintf oc
           {|
         output->is_error = true;
+        #ifndef ANOMALY_LIMIT
         free(TGV);
         free(LOCAL);
-        return -1;|})
+        return -1;
+        #else /* ANOMALY_LIMIT */
+        if (anomaly_count >= max_anomalies) {
+            free(TGV);
+            free(LOCAL);
+            return -1;
+        } 
+        #endif /* ANOMALY_LIMIT */
+  |})
     ()
 
 let fresh_cond_counter = ref 0
@@ -324,7 +333,14 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
            var (generate_name var)))
     input_vars;
 
-  Format.fprintf oc "m_value cond;@\n@\n"
+  Format.fprintf oc "m_value cond;@\n@\n";
+  Format.fprintf oc
+    {|
+    #ifdef ANOMALY_LIMIT
+    int anomaly_count = 0;
+    int max_anomalies = ANOMALY_LIMIT;
+    #endif /* ANOMALY_LIMIT */
+  |}
 
 let generate_return (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
