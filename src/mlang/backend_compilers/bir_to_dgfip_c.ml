@@ -194,35 +194,41 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
-  if List.exists (fun (item : Mir.Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
-    let scond, defs = generate_c_expr cond.cond_expr var_indexes in
-    let percent = Re.Pcre.regexp "%" in
-    Format.fprintf oc
-      "%acond = %s;@\n\
-       if (m_is_defined_true(cond)) {@\n\
-      \       %a@\n\
-      \          {@\n\
-      \        output->is_error = true;@\n\
-      \        free(TGV);@\n\
-      \        free(LOCAL);@\n\
-      \        return -1;@\n\
-      \    }@\n\
-       }@\n"
-      (format_local_vars_defs var_indexes)
-      defs scond
-      (* A019:anomalie :"A":"019":"00":"ATTENTION CALCUL NON EFFECTUE PAR L'ESI":"N"; *)
-      (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-         (fun fmt err ->
-           let error_descr =
-             (Pos.unmark @@ List.nth err.Mir.Error.descr 0)
-             ^ (Pos.unmark @@ List.nth err.Mir.Error.descr 1)
-             ^ Pos.unmark @@ List.nth err.Mir.Error.descr 2
-           in
-           let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
-           Format.fprintf fmt "output->errors[m_get_error_index(\"%s\")].has_occurred = true;"
-             error_descr))
-      cond.cond_errors
+  let scond, defs = generate_c_expr cond.cond_expr var_indexes in
+  let percent = Re.Pcre.regexp "%" in
+  Format.fprintf oc
+    {|
+    %acond = %s;
+    if (m_is_defined_true(cond)) 
+    {%a%a
+    } 
+|}
+    (format_local_vars_defs var_indexes)
+    defs scond
+    (* A019:anomalie :"A":"019":"00":"ATTENTION CALCUL NON EFFECTUE PAR L'ESI":"N"; *)
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+       (fun fmt err ->
+         let error_descr =
+           (Pos.unmark @@ List.nth err.Mir.Error.descr 0)
+           ^ (Pos.unmark @@ List.nth err.Mir.Error.descr 1)
+           ^ Pos.unmark @@ List.nth err.Mir.Error.descr 2
+         in
+         let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
+         Format.fprintf fmt
+           {|
+        output->errors[m_get_error_index("%s")].has_occurred = true;|}
+           error_descr))
+    cond.cond_errors
+    (fun oc () ->
+      if List.exists (fun err -> err.Mir.Error.typ = Mast.Anomaly) cond.cond_errors then
+        Format.fprintf oc
+          {|
+        output->is_error = true;
+        free(TGV);
+        free(LOCAL);
+        return -1;|})
+    ()
 
 let fresh_cond_counter = ref 0
 
