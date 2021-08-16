@@ -371,16 +371,30 @@ let generate_get_error_index_prototype (oc : Format.formatter) (add_semicolon : 
 
 let generate_get_error_index_func (oc : Format.formatter) (errors : ErrorSet.t) =
   let error_counter = ref 0 in
-  Format.fprintf oc "%a {@\n%a @\n printf(\"Error %%s not found!\", name);@\n exit(-1); @\n }@\n@\n"
+  Format.fprintf oc
+    "%a {@\n%a @\n    printf(\"Error %%s not found!\", name);@\n    exit(-1); @\n}@\n"
     generate_get_error_index_prototype false
     (fun oc () ->
       ErrorSet.iter
         (fun (error : Error.t) ->
-          Format.fprintf oc "if (strcmp(\"%s%s%s\", name) == 0) { return %d; } \n" error.kind
+          Format.fprintf oc "    if (strcmp(\"%s%s%s\", name) == 0) { return %d; } \n" error.kind
             error.major_code error.minor_code !error_counter;
           error_counter := !error_counter + 1)
         errors)
     ()
+
+let generate_get_error_count_prototype (oc : Format.formatter) (add_semicolon : bool) =
+  Format.fprintf oc "int m_num_errors()%s" (if add_semicolon then ";\n\n" else "")
+
+let generate_get_error_count_func (oc : Format.formatter) (errors : ErrorSet.t) =
+  Format.fprintf oc
+    {|
+%a {
+    return %d;
+}  
+
+|}
+    generate_get_error_count_prototype false (ErrorSet.cardinal errors)
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "void m_empty_input(m_input *input)%s" (if add_semicolon then ";\n\n" else "")
@@ -582,22 +596,24 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let conds oc () =
     Format.fprintf oc "typedef m_error Errors[%d]; @\n@\n" (ErrorSet.cardinal error_set)
   in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
     generate_input_type function_spec generate_empty_input_prototype true
     generate_input_from_array_prototype true generate_get_input_index_prototype true
     generate_get_input_num_prototype true generate_get_input_name_from_index_prototype true
     generate_output_type function_spec generate_output_to_array_prototype true
     generate_get_output_index_prototype true generate_get_output_name_from_index_prototype true
     generate_get_output_num_prototype true generate_empty_output_prototype true
-    generate_get_error_index_prototype true generate_main_function_signature true generate_footer ();
+    generate_get_error_index_prototype true generate_get_error_count_prototype true
+    generate_main_function_signature true generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
-    generate_get_error_index_func error_set generate_empty_input_func function_spec
-    generate_input_from_array_func function_spec generate_get_input_index_func function_spec
-    generate_get_input_name_from_index_func function_spec generate_get_input_num_func function_spec
-    generate_output_to_array_func function_spec generate_get_output_index_func function_spec
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
+    generate_get_error_index_func error_set generate_get_error_count_func error_set
+    generate_empty_input_func function_spec generate_input_from_array_func function_spec
+    generate_get_input_index_func function_spec generate_get_input_name_from_index_func
+    function_spec generate_get_input_num_func function_spec generate_output_to_array_func
+    function_spec generate_get_output_index_func function_spec
     generate_get_output_name_from_index_func function_spec generate_get_output_num_func
     function_spec generate_empty_output_func function_spec
     (generate_main_function_signature_and_var_decls program var_indexes var_table_size)

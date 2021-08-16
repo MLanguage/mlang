@@ -1,6 +1,7 @@
 #ifndef M_ERROR_
 #define M_ERROR_
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,5 +16,10 @@ typedef struct m_error {
   char isisf[2];
   bool has_occurred;
 } m_error;
+
+int get_occurred_errors(m_error *errors, int size);
+
+m_error *get_occurred_errors_items(int full_list_count, m_error *full_list,
+                                   m_error *filtered_errors);
 
 #endif /* M_ERROR_ */
