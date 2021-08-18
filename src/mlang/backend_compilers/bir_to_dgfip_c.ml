@@ -15,18 +15,6 @@ open Mir
 
 let none_value = "m_undefined"
 
-module Error = struct
-  type t = {
-    kind : string;
-    major_code : string;
-    minor_code : string;
-    description : string;
-    isisf : string;
-  }
-
-  let compare = compare
-end
-
 module ErrorSet = Set.Make (Error)
 
 let generate_comp_op (op : Mast.comp_op) : string =
@@ -72,23 +60,15 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         | GetValue offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
 
-let generate_m_error (mir_error : Mir.Error.t) =
-  let mir_error = mir_error.descr in
-  Error.
-    {
-      kind = List.nth mir_error 0 |> Pos.unmark;
-      major_code = List.nth mir_error 1 |> Pos.unmark;
-      minor_code = List.nth mir_error 2 |> Pos.unmark;
-      description = List.nth mir_error 3 |> Pos.unmark;
-      isisf = (match List.nth_opt mir_error 4 with Some v -> v |> Pos.unmark | None -> "");
-    }
-
-let print_error oc m_error =
+let print_error oc (m_error : Mir.Error.t) =
   Format.fprintf oc
     {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s", .has_occurred = false},
           |}
-    m_error.Error.kind m_error.Error.major_code m_error.Error.minor_code m_error.Error.description
-    m_error.Error.isisf
+    (Pos.unmark m_error.descr.kind)
+    (Pos.unmark m_error.descr.major_code)
+    (Pos.unmark m_error.descr.minor_code)
+    (Pos.unmark m_error.descr.description)
+    (Pos.unmark m_error.descr.isisf)
 
 let generate_raw_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -210,9 +190,9 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
        (fun fmt err ->
          let error_descr =
-           (Pos.unmark @@ List.nth err.Mir.Error.descr 0)
-           ^ (Pos.unmark @@ List.nth err.Mir.Error.descr 1)
-           ^ Pos.unmark @@ List.nth err.Mir.Error.descr 2
+           (Pos.unmark @@ err.Mir.Error.descr.kind)
+           ^ (Pos.unmark @@ err.Mir.Error.descr.major_code)
+           ^ Pos.unmark @@ err.Mir.Error.descr.minor_code
          in
          let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
          Format.fprintf fmt
@@ -377,8 +357,11 @@ let generate_get_error_index_func (oc : Format.formatter) (errors : ErrorSet.t) 
     (fun oc () ->
       ErrorSet.iter
         (fun (error : Error.t) ->
-          Format.fprintf oc "    if (strcmp(\"%s%s%s\", name) == 0) { return %d; } \n" error.kind
-            error.major_code error.minor_code !error_counter;
+          Format.fprintf oc "    if (strcmp(\"%s%s%s\", name) == 0) { return %d; } \n"
+            (Pos.unmark error.descr.kind)
+            (Pos.unmark error.descr.major_code)
+            (Pos.unmark error.descr.minor_code)
+            !error_counter;
           error_counter := !error_counter + 1)
         errors)
     ()
@@ -575,11 +558,7 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include <string.h>\n"
 
 let generate_cond_table _ v error_set =
-  List.fold_left
-    (fun acc x ->
-      let m_error = generate_m_error x in
-      ErrorSet.add m_error acc)
-    error_set v.cond_errors
+  List.fold_left (fun acc err -> ErrorSet.add err acc) error_set v.cond_errors
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =

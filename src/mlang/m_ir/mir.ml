@@ -246,11 +246,22 @@ type variable_data = {
 (**{1 Verification conditions}*)
 
 (** Errors are first-class objects *)
+
 module Error = struct
+  module ErrorDesc = struct
+    type t = {
+      kind : string Pos.marked;
+      major_code : string Pos.marked;
+      minor_code : string Pos.marked;
+      description : string Pos.marked;
+      isisf : string Pos.marked;
+    }
+  end
+
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
-    descr : string Pos.marked list;  (** Description taken from the variable declaration *)
+    descr : ErrorDesc.t;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
@@ -261,12 +272,31 @@ module Error = struct
     counter := !counter + 1;
     v
 
-  let new_error (name : string Pos.marked) (descr : string Pos.marked list)
-      (error_typ : Mast.error_typ) : t =
-    { name; id = fresh_id (); descr; typ = error_typ }
+  let mast_error_desc_to_ErrorDesc (error : Mast.error_) =
+    ErrorDesc.
+      {
+        kind = List.nth error.error_descr 0;
+        major_code = List.nth error.error_descr 1;
+        minor_code = List.nth error.error_descr 2;
+        description = List.nth error.error_descr 3;
+        isisf =
+          (match List.nth_opt error.error_descr 4 with Some s -> s | None -> ("", Pos.no_pos));
+      }
+
+  let new_error (name : string Pos.marked) (error : Mast.error_) (error_typ : Mast.error_typ) : t =
+    { name; id = fresh_id (); descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
 
   let err_descr_string (err : t) =
-    Pos.same_pos_as (String.concat ":" (List.map (fun s -> Pos.unmark s) err.descr)) err.name
+    Pos.same_pos_as
+      (String.concat ":"
+         [
+           err.descr.kind |> Pos.unmark;
+           err.descr.major_code |> Pos.unmark;
+           err.descr.minor_code |> Pos.unmark;
+           err.descr.description |> Pos.unmark;
+           err.descr.isisf |> Pos.unmark;
+         ])
+      err.name
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end

@@ -516,10 +516,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                     (vars, idmap, errors, out_list) (* already treated before *))
             | Mast.Output out_name -> (vars, idmap, errors, out_name :: out_list)
             | Mast.Error err ->
-                let err =
-                  Mir.Error.new_error err.Mast.error_name err.Mast.error_descr
-                    (Pos.unmark err.error_typ)
-                in
+                let err = Mir.Error.new_error err.Mast.error_name err (Pos.unmark err.error_typ) in
                 (vars, idmap, err :: errors, out_list)
             | _ -> (vars, idmap, errors, out_list))
           (vars, idmap, errors, out_list) source_file)
