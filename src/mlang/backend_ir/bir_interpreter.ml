@@ -524,6 +524,9 @@ module Make (N : Bir_number.NumberInterface) = struct
         match evaluate_expr ctx p.mir_program data.cond_expr with
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
+    | Bir.SRuleCall _ ->
+        (* removed with [Bir.get_all_statements] below *)
+        assert false
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
       (start_value : int) : ctx =
@@ -536,7 +539,8 @@ module Make (N : Bir_number.NumberInterface) = struct
 
   let evaluate_program (p : Bir.program) (ctx : ctx) (code_loc_start_value : int) : ctx =
     try
-      let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
+      let statements = Bir.get_all_statements p in
+      let ctx = evaluate_stmts p ctx statements [] code_loc_start_value in
       ctx
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program

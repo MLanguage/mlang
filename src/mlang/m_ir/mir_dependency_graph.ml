@@ -25,6 +25,16 @@ module G = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   let equal v1 v2 = v1.Mir.Variable.id = v2.Mir.Variable.id
 end)
 
+module RG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
+  type t = Mir.rule_id
+
+  let hash v = v
+
+  let compare = compare
+
+  let equal = ( = )
+end)
+
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
 let rec get_used_variables_ (e : Mir.expression Pos.marked) (acc : unit Mir.VariableMap.t) :
     unit Mir.VariableMap.t =
@@ -57,20 +67,36 @@ let add_usages (lvar : Mir.Variable.t) (e : Mir.expression Pos.marked) (acc : G.
   let usages = get_used_variables_ e Mir.VariableMap.empty in
   Mir.VariableMap.fold (fun var _ acc -> add_edge acc var lvar) usages acc
 
+let create_vars_dependency_graph (vars : Mir.variable_data Mir.VariableMap.t) : G.t =
+  Mir.VariableMap.fold
+    (fun var def acc ->
+      match def.Mir.var_definition with
+      | Mir.InputVar -> G.add_vertex acc var
+      | Mir.SimpleVar e -> add_usages var e acc
+      | Mir.TableVar (_, def) -> (
+          match def with
+          | Mir.IndexGeneric e -> add_usages var e acc
+          | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc))
+    vars G.empty
+
+let create_rules_dependency_graph (program : Mir.program)
+    (vars_to_rules : Mir.rule_id Mir.VariableMap.t) (var_dep_graph : G.t) : RG.t =
+  Mir.RuleMap.fold
+    (fun rule_id { Mir.rule_vars; _ } g ->
+      List.fold_left
+        (fun g var ->
+          let succs = G.succ var_dep_graph var in
+          List.fold_left
+            (fun g succ ->
+              try RG.add_edge g rule_id (Mir.VariableMap.find succ vars_to_rules)
+              with Not_found -> g)
+            g succs)
+        g rule_vars)
+    program.program_rules RG.empty
+
 (** The dependency graph also includes nodes for the conditions to be checked at execution *)
-let create_dependency_graph (p : Mir.program) : G.t =
-  let g =
-    Mir.VariableMap.fold
-      (fun var def acc ->
-        match def.Mir.var_definition with
-        | Mir.InputVar -> G.add_vertex acc var
-        | Mir.SimpleVar e -> add_usages var e acc
-        | Mir.TableVar (_, def) -> (
-            match def with
-            | Mir.IndexGeneric e -> add_usages var e acc
-            | Mir.IndexTable es -> Mir.IndexMap.fold (fun _ e acc -> add_usages var e acc) es acc))
-      p.program_vars G.empty
-  in
+let create_program_dependency_graph (p : Mir.program) : G.t =
+  let g = create_vars_dependency_graph p.program_vars in
   (* FIXME: for ocamlgraph to work, output nodes should not have any successors... *)
   let g =
     G.fold_vertex
@@ -243,12 +269,18 @@ module OutputToInputReachability =
 
 module TopologicalOrder = Graph.Topological.Make (G)
 module ExecutionOrder = Graph.Topological.Make (G)
+module RuleExecutionOrder = Graph.Topological.Make (RG)
 
 type execution_order = Mir.Variable.t list
+
+type rule_execution_order = Mir.rule_id list
 (** Each map is the set of variables defined circularly in this strongly connected component *)
 
 let get_execution_order (dep_graph : G.t) : execution_order =
   List.rev (ExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph [])
+
+let get_rules_execution_order (dep_graph : RG.t) : rule_execution_order =
+  List.rev (RuleExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph [])
 
 (** This custom visitor uses [get_execution_order] to visit all the expressions in the program in
     the correct order. *)
@@ -259,7 +291,7 @@ class ['self] program_iter =
     inherit [_] Mir.condition_data_iter [@@warning "-7"]
 
     method visit_program env (this : Mir.program) =
-      let dep_graph = create_dependency_graph this in
+      let dep_graph = create_program_dependency_graph this in
       let exec_order = get_execution_order dep_graph in
       List.iter
         (fun var ->

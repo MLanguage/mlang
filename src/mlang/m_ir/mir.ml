@@ -175,6 +175,8 @@ module VariableMap = struct
       map
 end
 
+module VariableSet = Set.Make (Variable)
+
 module LocalVariableMap = struct
   include Map.Make (LocalVariable)
 
@@ -243,6 +245,23 @@ type variable_data = {
       name = "variable_data_iter";
     }]
 
+type rule_id = int
+
+let fresh_rule_id =
+  let count = ref 0 in
+  fun () ->
+    let n = !count in
+    incr count;
+    n
+
+type rule_data = { rule_vars : Variable.t list; rule_name : Mast.rule_name }
+
+module RuleMap = Map.Make (struct
+  type t = rule_id
+
+  let compare = compare
+end)
+
 (**{1 Verification conditions}*)
 
 (** Errors are first-class objects *)
@@ -287,6 +306,7 @@ type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_vars : variable_data VariableMap.t;
+  program_rules : rule_data RuleMap.t;
   program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;

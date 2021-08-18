@@ -28,18 +28,14 @@ let initialize_block (bid : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
     Oir.block Oir.BlockMap.t =
   Oir.BlockMap.add bid [] blocks
 
-let rec translate_statement_list (l : Bir.stmt list) (curr_block_id : Oir.block_id)
-    (blocks : Oir.block Oir.BlockMap.t) : Oir.block_id * Oir.block Oir.BlockMap.t =
-  let blocks, last_block_id =
-    List.fold_left
-      (fun (blocks, current_block_id) stmt ->
-        let new_current_block_id, new_blocks = translate_statement stmt current_block_id blocks in
-        (new_blocks, new_current_block_id))
-      (blocks, curr_block_id) l
-  in
-  (last_block_id, blocks)
+let rec translate_statement_list (p : Bir.program) (l : Bir.stmt list)
+    (curr_block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block_id * Oir.block Oir.BlockMap.t =
+  List.fold_left
+    (fun (current_block_id, blocks) stmt -> translate_statement p stmt current_block_id blocks)
+    (curr_block_id, blocks) l
 
-and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
+and translate_statement (p : Bir.program) (s : Bir.stmt) (curr_block_id : Oir.block_id)
     (blocks : Oir.block Oir.BlockMap.t) : Oir.block_id * Oir.block Oir.BlockMap.t =
   match Pos.unmark s with
   | Bir.SAssign (var, data) ->
@@ -59,16 +55,21 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
           (Pos.same_pos_as (Oir.SConditional (e, b1id, b2id, join_block)) s)
           curr_block_id blocks
       in
-      let last_b1id, blocks = translate_statement_list l1 b1id blocks in
+      let last_b1id, blocks = translate_statement_list p l1 b1id blocks in
       let blocks = append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b1id blocks in
-      let last_b2id, blocks = translate_statement_list l2 b2id blocks in
+      let last_b2id, blocks = translate_statement_list p l2 b2id blocks in
       let blocks = append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b2id blocks in
       (join_block, blocks)
+  | Bir.SRuleCall _rule_id -> assert false
+(* let rule = Bir.RuleMap.find rule_id p.Bir.rules in
+ * translate_statement_list p rule.Bir.rule_stmts curr_block_id blocks *)
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
   let blocks = initialize_block entry_block Oir.BlockMap.empty in
-  let exit_block, blocks = translate_statement_list p.statements entry_block blocks in
+  (* CR Keryan: this completely remove rules when optimizing, needs patching *)
+  let statements = Bir.get_all_statements p in
+  let exit_block, blocks = translate_statement_list p statements entry_block blocks in
   let blocks = Oir.BlockMap.map (fun stmts -> List.rev stmts) blocks in
   {
     blocks;
@@ -119,12 +120,10 @@ and re_translate_block (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMa
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   let statements = re_translate_blocks_until p.entry_block p.blocks None in
-  let p =
-    {
-      Bir.statements = Bir.remove_empty_conditionals statements;
-      idmap = p.idmap;
-      mir_program = p.mir_program;
-      outputs = p.outputs;
-    }
-  in
-  p
+  {
+    statements = Bir.remove_empty_conditionals statements;
+    rules = Bir.RuleMap.empty;
+    idmap = p.idmap;
+    mir_program = p.mir_program;
+    outputs = p.outputs;
+  }

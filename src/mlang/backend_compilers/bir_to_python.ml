@@ -358,6 +358,8 @@ and generate_stmt program oc stmt =
         cond_name (generate_python_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
+  | SRuleCall _ -> assert false
+(* Removed with [Bir.get_all_statements] below *)
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
@@ -382,5 +384,5 @@ let generate_python_program (program : Bir.program) (function_spec : Bir_interfa
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a" generate_header () generate_input_handling function_spec
-    (generate_stmts program) program.statements generate_return function_spec;
+    (generate_stmts program) (Bir.get_all_statements program) generate_return function_spec;
   close_out _oc
