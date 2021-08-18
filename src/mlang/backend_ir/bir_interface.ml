@@ -100,12 +100,14 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
   let mk_neg (mexpr : Mast.expression Pos.marked) =
     Pos.same_pos_as (Mast.Unop (Mast.Not, mexpr)) mexpr
   in
+  let dummy_entry = ("", Pos.no_pos) in
   let test_error =
     Mir.Error.new_error ("-1", Pos.no_pos)
       {
         error_name = ("", Pos.no_pos);
         error_typ = (Mast.Anomaly, Pos.no_pos);
-        error_descr = [ ("Condition error in tests", Pos.no_pos) ];
+        error_descr =
+          [ ("Condition error in tests", Pos.no_pos); dummy_entry; dummy_entry; dummy_entry ];
       }
       Mast.Anomaly
   in
