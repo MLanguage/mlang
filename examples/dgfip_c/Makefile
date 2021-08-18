@@ -10,7 +10,12 @@ SOURCE_DIR_2019=$(wildcard ../../ir-calcul/sources2019m_8_0/*.m)
 
 YEAR?=2019
 
-ifeq ($(YEAR), 2019)
+ifeq ($(YEAR), 2018)
+	SOURCE_FILES?=$(SOURCE_DIR_2018)
+	MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
+	TESTS_DIR?=../../../tests/2018/fuzzing/
+	ONE_TEST_FILE?=../../../tests/2018/fuzzing/fuzzer_14200.m_test
+else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=../../mpp_specs/dgfip_base.mpp
 	TESTS_DIR?=../../tests/2019/fuzzing/
@@ -25,7 +30,7 @@ MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--mpp_file=$(MPP_FILE) \
-	--mpp_function=compute_double_liquidation_pvro
+	--mpp_function=dgfip_calculation
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
