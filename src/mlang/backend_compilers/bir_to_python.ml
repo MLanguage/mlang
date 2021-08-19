@@ -307,19 +307,21 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond cond oc =
-  Format.fprintf oc
-    "# Verification condition %a@\n\
-     cond = %a@\n\
-     if not(isinstance(cond, Undefined)) and cond:@\n\
-    \    raise TypeError(\"Error triggered\\n%a\")@\n\
-     @\n"
-    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
-    cond.cond_expr
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt err ->
-         Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
-    cond.cond_errors
+  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
+    Format.fprintf oc
+      "# Verification condition %a@\n\
+       cond = %a@\n\
+       if not(isinstance(cond, Undefined)) and cond:@\n\
+      \    raise TypeError(\"Error triggered\\n%a\")@\n\
+       @\n"
+      Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
+      cond.cond_expr
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+         (fun fmt err ->
+           Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
+             (Error.err_descr_string err |> sanitize_str)))
+      cond.cond_errors
 
 let rec generate_stmts (program : Bir.program) oc stmts =
   Format.pp_print_list (generate_stmt program) oc stmts
