@@ -516,13 +516,7 @@ let get_variables_decl (p : Mast.program) (vars : var_decl_data Mir.VariableMap.
                     (vars, idmap, errors, out_list) (* already treated before *))
             | Mast.Output out_name -> (vars, idmap, errors, out_name :: out_list)
             | Mast.Error err ->
-                let err =
-                  Mir.Error.new_error err.Mast.error_name
-                    (Pos.same_pos_as
-                       (String.concat ":" (List.map (fun s -> Pos.unmark s) err.Mast.error_descr))
-                       err.Mast.error_name)
-                    (Pos.unmark err.error_typ)
-                in
+                let err = Mir.Error.new_error err.Mast.error_name err (Pos.unmark err.error_typ) in
                 (vars, idmap, err :: errors, out_list)
             | _ -> (vars, idmap, errors, out_list))
           (vars, idmap, errors, out_list) source_file)
@@ -1296,51 +1290,32 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                           None)
                       (Pos.unmark verif_cond).Mast.verif_cond_errors
                   in
-                  if
-                    List.length errs > 0
-                    && List.for_all
-                         (fun err ->
-                           match err with
-                           | None -> false (* if the error is undefined then we take it anyway *)
-                           | Some err -> err.Mir.Error.typ <> Mast.Anomaly)
-                         errs
-                  then
-                    (* If all errors raised by this verification condition are informative, we don't
-                       need it! *)
-                    conds
-                  else
-                    let dummy_var =
-                      Mir.Variable.new_var
-                        (Pos.same_pos_as
-                           (Format.sprintf "verification_condition_%d" (Mir.Variable.fresh_id ()))
-                           e)
-                        None
-                        (Pos.same_pos_as
-                           (let () =
-                              Pos.format_position Format.str_formatter (Pos.get_position e)
-                            in
-                            Format.flush_str_formatter ())
-                           e)
-                        {
-                          Mir.rule_number;
-                          Mir.seq_number = 0;
-                          Mir.pos = Pos.get_position verif_cond;
-                        }
-                        ~attributes:[] ~is_income:false ~is_table:None
-                    in
-                    Mir.VariableMap.add dummy_var
-                      {
-                        Mir.cond_expr = e;
-                        Mir.cond_errors =
-                          List.map
-                            (fun x ->
-                              match x with Some x -> x | None -> assert false
-                              (* should not happen *))
-                            (List.filter
-                               (fun x -> match x with Some _ -> true | None -> false)
-                               errs);
-                      }
-                      conds)
+                  let dummy_var =
+                    Mir.Variable.new_var
+                      (Pos.same_pos_as
+                         (Format.sprintf "verification_condition_%d" (Mir.Variable.fresh_id ()))
+                         e)
+                      None
+                      (Pos.same_pos_as
+                         (let () = Pos.format_position Format.str_formatter (Pos.get_position e) in
+                          Format.flush_str_formatter ())
+                         e)
+                      { Mir.rule_number; Mir.seq_number = 0; Mir.pos = Pos.get_position verif_cond }
+                      ~attributes:[] ~is_income:false ~is_table:None
+                  in
+                  Mir.VariableMap.add dummy_var
+                    {
+                      Mir.cond_expr = e;
+                      Mir.cond_errors =
+                        List.map
+                          (fun x ->
+                            match x with Some x -> x | None -> assert false
+                            (* should not happen *))
+                          (List.filter
+                             (fun x -> match x with Some _ -> true | None -> false)
+                             errs);
+                    }
+                    conds)
                 conds verif.Mast.verif_conditions
           | _ -> conds)
         conds source_file)

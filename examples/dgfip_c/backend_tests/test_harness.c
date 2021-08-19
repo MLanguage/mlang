@@ -1,4 +1,6 @@
 #include "ir_tests.h"
+#include "m_error.h"
+#include "m_value.h"
 #include <dirent.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,6 +25,7 @@ int main(int argc, char *argv[])
     int num_outputs = m_num_inputs();
     m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
     m_output *output_for_m = malloc(sizeof(m_input));
+    m_error *errors;
 
     char *name;
     char *value_s;
@@ -86,7 +89,10 @@ int main(int argc, char *argv[])
                         // Here we move to controlling the outputs, so we
                         // have to run the computation!
                         m_input_from_array(input_for_m, input_array_for_m);
+                        errors = malloc(sizeof(Errors));
+                        output_for_m->errors = errors;
                         m_extracted(output_for_m, input_for_m);
+                        free(output_for_m->errors);
                         m_output_to_array(outputs_array_for_m, output_for_m);
                         break;
                     }
