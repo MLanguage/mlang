@@ -248,20 +248,18 @@ type variable_data = {
 (** Errors are first-class objects *)
 
 module Error = struct
-  module ErrorDesc = struct
-    type t = {
-      kind : string Pos.marked;
-      major_code : string Pos.marked;
-      minor_code : string Pos.marked;
-      description : string Pos.marked;
-      isisf : string Pos.marked;
-    }
-  end
+  type descr = {
+    kind : string Pos.marked;
+    major_code : string Pos.marked;
+    minor_code : string Pos.marked;
+    description : string Pos.marked;
+    isisf : string Pos.marked;
+  }
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
-    descr : ErrorDesc.t;  (** Description taken from the variable declaration *)
+    descr : descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
@@ -273,15 +271,13 @@ module Error = struct
     v
 
   let mast_error_desc_to_ErrorDesc (error : Mast.error_) =
-    ErrorDesc.
-      {
-        kind = List.nth error.error_descr 0;
-        major_code = List.nth error.error_descr 1;
-        minor_code = List.nth error.error_descr 2;
-        description = List.nth error.error_descr 3;
-        isisf =
-          (match List.nth_opt error.error_descr 4 with Some s -> s | None -> ("", Pos.no_pos));
-      }
+    {
+      kind = List.nth error.error_descr 0;
+      major_code = List.nth error.error_descr 1;
+      minor_code = List.nth error.error_descr 2;
+      description = List.nth error.error_descr 3;
+      isisf = (match List.nth_opt error.error_descr 4 with Some s -> s | None -> ("", Pos.no_pos));
+    }
 
   let new_error (name : string Pos.marked) (error : Mast.error_) (error_typ : Mast.error_typ) : t =
     { name; id = fresh_id (); descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
