@@ -1,1 +1,2 @@
-outputs <- call_m()
+dgfip_calculation():  
+  outputs <- call_m()
