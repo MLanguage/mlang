@@ -359,3 +359,8 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
            (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
            (Pos.VarNameToID.find name p.program_idmap))
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
+
+let find_vars_by_io (p : program) (io_to_find : io) : Variable.t list =
+  VariableMap.fold
+    (fun k v acc -> if v.var_io = io_to_find then k :: acc else acc)
+    p.program_vars []
