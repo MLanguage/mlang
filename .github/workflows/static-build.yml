@@ -40,7 +40,7 @@ jobs:
         uses: avsm/setup-ocaml@v1
         with:
           # Version of the OCaml compiler to initialise
-          ocaml-version: ocaml-variants.4.11.1+options,ocaml-option-flambda,ocaml-option-musl,ocaml-option-static
+          ocaml-version: 4.11.2+musl+static+flambda
 
       - name: Install dependencies
         run: |
