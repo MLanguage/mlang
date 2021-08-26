@@ -46,12 +46,13 @@ jobs:
         run: |
           sudo apt update
           sudo apt install m4 perl python3 clang git build-essential lzip
-          mkdir /tmp/gmp-prefix
-          cd /tmp/gmp-prefix
+          mkdir gmp-prefix
+          cd gmp-prefix
           ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
           wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
+          cd ..
           MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps
         
       - name: Make mlang binary
