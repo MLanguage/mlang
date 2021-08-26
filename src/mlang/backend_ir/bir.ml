@@ -12,13 +12,9 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_id = int
+type rule_id = Mir.rule_id
 
-module RuleMap = Map.Make (struct
-  type t = rule_id
-
-  let compare = compare
-end)
+module RuleMap = Mir.RuleMap
 
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 
@@ -65,20 +61,20 @@ let count_instructions (p : program) : int =
   in
   cond_instr_blocks p.statements
 
-let get_assigned_variables (p : program) : unit Mir.VariableMap.t =
-  let rec get_assigned_variables_block acc (stmts : stmt list) : unit Mir.VariableMap.t =
+let get_assigned_variables (p : program) : Mir.VariableDict.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) : Mir.VariableDict.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif _ -> acc
-        | SAssign (var, _) -> Mir.VariableMap.add var () acc
+        | SAssign (var, _) -> Mir.VariableDict.add var acc
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
         | SRuleCall _ -> assert false)
       acc stmts
   in
-  get_assigned_variables_block Mir.VariableMap.empty (get_all_statements p)
+  get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
   let rec get_local_vars_expr acc (e : Mir.expression Pos.marked) : unit Mir.LocalVariableMap.t =

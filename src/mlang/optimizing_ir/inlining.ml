@@ -124,8 +124,8 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
                             && Paths.check_path ctx.ctx_paths intermediate_block current_block)
                         var_defs
                     in
-                    Mir.VariableMap.for_all
-                      (fun var _ -> not (exists_def_between_previous_x_def_and_here var))
+                    Mir.VariableDict.for_all
+                      (fun var -> not (exists_def_between_previous_x_def_and_here var))
                       vars_used_in_previous_x_def
                     && not (exists_def_between_previous_x_def_and_here var_x)
                 | _ -> false)

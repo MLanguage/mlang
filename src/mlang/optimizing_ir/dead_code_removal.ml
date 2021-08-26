@@ -21,10 +21,10 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
     pos_map * pos_map * stmt list =
   (* used_vars contains, for each variable, the location of the top-most use of this variables in
      every basic block *)
-  let update_used_vars (stmt_used_vars : unit Mir.VariableMap.t) (pos : int) (used_vars : pos_map) :
+  let update_used_vars (stmt_used_vars : Mir.VariableDict.t) (pos : int) (used_vars : pos_map) :
       pos_map =
-    Mir.VariableMap.fold
-      (fun stmt_used_var _ (used_vars : pos_map) ->
+    Mir.VariableDict.fold
+      (fun stmt_used_var (used_vars : pos_map) ->
         Mir.VariableMap.update stmt_used_var
           (fun old_entry ->
             match old_entry with
@@ -42,7 +42,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
         match Pos.unmark stmt with
         | SAssign (var, var_def) ->
             let used_defs_returned =
-              update_used_vars (Mir.VariableMap.singleton var ()) pos used_defs
+              update_used_vars (Mir.VariableDict.singleton var) pos used_defs
             in
             if
               (* here we determine whether this definition is useful or not*)
@@ -106,7 +106,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
                         Mir.IndexMap.fold
                           (fun _ e used_vars ->
                             Mir_dependency_graph.get_used_variables_ e used_vars)
-                          es Mir.VariableMap.empty)
+                          es Mir.VariableDict.empty)
                 | Mir.InputVar -> assert false
                 (* should not happen *)
               in

@@ -144,29 +144,14 @@ module Make (N : Bir_number.NumberInterface) = struct
      variable whose I/O type was not properly set to InputVariable. This function is precisely for
      these cases, it set the I/O flag properly for execution. Not that such a change to the program
      does not require to recompute the dependency graph and the execution order. *)
-  let replace_undefined_with_input_variables (p : program) (input_values : literal VariableMap.t) :
-      program =
-    VariableMap.fold
-      (fun var _ p ->
-        try
-          let old_var_data = VariableMap.find var p.program_vars in
-          {
-            p with
-            program_vars =
-              VariableMap.add var
-                { old_var_data with var_definition = InputVar; var_io = Input }
-                p.program_vars;
-          }
-        with Not_found ->
-          raise
-            (RuntimeError
-               ( UnknownInputVariable
-                   ( Format.asprintf "%s (%s)"
-                       (Pos.unmark var.Mir.Variable.name)
-                       (Pos.unmark var.Mir.Variable.descr),
-                     Pos.get_position var.Mir.Variable.name ),
-                 empty_ctx )))
-      input_values p
+  let replace_undefined_with_input_variables (p : program) (input_values : VariableDict.t) : program
+      =
+    Mir.map_vars
+      (fun var def ->
+        match VariableDict.find var.id input_values with
+        | _input -> { def with var_definition = InputVar; var_io = Input }
+        | exception Not_found -> def)
+      p
 
   let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
     Mir.VariableMap.iter
@@ -202,8 +187,9 @@ module Make (N : Bir_number.NumberInterface) = struct
                 var.Variable.execution_number Pos.format_position var.Variable.execution_number.pos
                 (fun fmt () ->
                   try
-                    Format_mir.format_variable_def fmt
-                      (VariableMap.find var p.program_vars).Mir.var_definition
+                    let rule, def = Mir.find_var_definition p var in
+                    Format.fprintf fmt "rule %a, %a" Format_mast.format_rule_name rule.rule_name
+                      Format_mir.format_variable_def def.var_definition
                   with Not_found -> Format.fprintf fmt "unused definition")
                 ())
             vars
@@ -487,8 +473,8 @@ module Make (N : Bir_number.NumberInterface) = struct
                     (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
                     []
                     (List.map
-                       (fun (x, _) -> x)
-                       (Mir.VariableMap.bindings
+                       (fun (_, x) -> x)
+                       (Mir.VariableDict.bindings
                           (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
            ctx ))
 

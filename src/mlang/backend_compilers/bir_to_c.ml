@@ -259,7 +259,9 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let assigned_variables = List.map fst (Mir.VariableMap.bindings (Bir.get_assigned_variables p)) in
+  let assigned_variables =
+    List.map snd (Mir.VariableDict.bindings (Bir.get_assigned_variables p))
+  in
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   let all_relevant_variables =
     List.fold_left
@@ -330,7 +332,7 @@ let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "#include <stdio.h>\n";
   Format.fprintf oc "#include \"m_value.h\"\n\n"
 
-let generate_footer (oc: Format.formatter) () : unit =
+let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
@@ -516,8 +518,7 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" 
-    generate_header () generate_input_type
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
     generate_get_input_index_prototype true generate_get_input_num_prototype true
     generate_get_input_name_from_index_prototype true generate_output_type function_spec

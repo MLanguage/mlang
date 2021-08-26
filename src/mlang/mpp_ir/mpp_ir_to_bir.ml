@@ -10,14 +10,14 @@ end)
 
 type translation_ctx = {
   new_variables : Mir.Variable.t StringMap.t;
-  variables_used_as_inputs : unit Mir.VariableMap.t;
+  variables_used_as_inputs : Mir.VariableDict.t;
   rule_instances : Bir.rule Bir.RuleMap.t;
 }
 
 let emtpy_translation_ctx : translation_ctx =
   {
     new_variables = StringMap.empty;
-    variables_used_as_inputs = Mir.VariableMap.empty;
+    variables_used_as_inputs = Mir.VariableDict.empty;
     rule_instances = Bir.RuleMap.empty;
   }
 
@@ -28,13 +28,8 @@ let ctx_join ctx1 ctx2 =
          [translate_mpp_stmt:SConditional] just in case, which could erase [ctx1] by [ctx2] *)
       StringMap.union (fun _ _ v2 -> Some v2) ctx1.new_variables ctx2.new_variables;
     variables_used_as_inputs =
-      Mir.VariableMap.union
-        (fun _ _ _ -> Some ())
-        ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
-    rule_instances =
-      Bir.RuleMap.union
-        (fun _ r1 _r2 -> (* if r1 = r2 then *) Some r1 (* else assert false *))
-        ctx1.rule_instances ctx2.rule_instances;
+      Mir.VariableDict.union ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
+    rule_instances = Bir.RuleMap.union (fun _ r _ -> Some r) ctx1.rule_instances ctx2.rule_instances;
   }
 
 let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
@@ -58,13 +53,11 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
 
 let generate_input_condition (crit : Mir.Variable.t -> bool) (p : Mir_interface.full_program)
     (pos : Pos.t) =
-  let variables_to_check = Mir.VariableMap.filter (fun var _ -> crit var) p.program.program_vars in
+  let variables_to_check = Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars in
   let mk_call_present x = (Mir.FunctionCall (PresentFunc, [ (Mir.Var x, pos) ]), pos) in
   let mk_or e1 e2 = (Mir.Binop ((Or, pos), e1, e2), pos) in
   let mk_false = (Mir.Literal (Float 0.), pos) in
-  Mir.VariableMap.fold
-    (fun var _ acc -> mk_or (mk_call_present var) acc)
-    variables_to_check mk_false
+  Mir.VariableDict.fold (fun var acc -> mk_or (mk_call_present var) acc) variables_to_check mk_false
 
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
@@ -128,66 +121,46 @@ let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos
     Mir_interface.full_program =
   let outputs = List.map (fun out -> Mir.find_var_by_name p.program out) outputs in
   let program =
-    {
-      p.program with
-      program_vars =
-        Mir.VariableMap.mapi
-          (fun var data ->
-            if List.mem var outputs then
-              match data.Mir.var_io with
-              | Input ->
-                  raise
-                    (Bir_interpreter.RegularFloatInterpreter.RuntimeError
-                       ( Bir_interpreter.RegularFloatInterpreter.IncorrectOutputVariable
-                           ( Format.asprintf "%a is an input" Format_mir.format_variable var,
-                             Pos.get_position var.Mir.Variable.name ),
-                         Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
-              | Output -> data
-              | Regular -> { data with var_io = Output }
-            else
-              match data.Mir.var_io with
-              | Input | Regular -> data
-              | Output -> { data with var_io = Regular })
-          p.program.program_vars;
-    }
+    Mir.map_vars
+      (fun var data ->
+        if List.mem var outputs then
+          match data.Mir.var_io with
+          | Input ->
+              raise
+                (Bir_interpreter.RegularFloatInterpreter.RuntimeError
+                   ( Bir_interpreter.RegularFloatInterpreter.IncorrectOutputVariable
+                       ( Format.asprintf "%a is an input" Format_mir.format_variable var,
+                         Pos.get_position var.Mir.Variable.name ),
+                     Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
+          | Output -> data
+          | Regular -> { data with var_io = Output }
+        else
+          match data.Mir.var_io with
+          | Input | Regular -> data
+          | Output -> { data with var_io = Regular })
+      p.program
   in
   { p with program }
 
-let translate_m_code (m_program : Mir_interface.full_program) execution_order =
+let translate_m_code (m_program : Mir_interface.full_program)
+    (vars : (Mir.Variable.id * Mir.variable_data) list) =
   list_map_opt
-    (fun var ->
+    (fun (vid, (vdef : Mir.variable_data)) ->
       try
-        let vdef = Mir.VariableMap.find var m_program.program.program_vars in
+        let var = Mir.VariableDict.find vid m_program.program.program_vars in
         match vdef.var_definition with
         | InputVar -> None
         | _ ->
             (* variables used in the context should not be reassigned *)
             Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
       with Not_found -> None)
-    execution_order
-
-(* let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : Mir.rule_id)
- *     (rule_stmts : Bir.stmt list) (ctx : translation_ctx)
- *   : Mir.rule_id * Pos.t * translation_ctx =
- *   Printf.eprintf "generate_instance \n%!";
- *   let instance_id = Mir.fresh_rule_id () in
- *   let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
- *   let pos, rule_name =
- *     let pos = List.hd rule.Mir.rule_name |> Pos.get_position in
- *     let name = List.map Pos.unmark rule.Mir.rule_name |> String.concat "_" in
- *     (pos, name ^ "_i" ^ string_of_int instance_id)
- *   in
- *   let instance = Bir.{ rule_id = instance_id; rule_name; rule_stmts } in
- *   ( instance_id,
- *     pos,
- *     { ctx with rule_instances = Bir.RuleMap.add instance_id instance ctx.rule_instances } ) *)
+    vars
 
 let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : Mir.rule_id)
     (ctx : translation_ctx) : Mir.rule_id * Pos.t * translation_ctx =
   let instance_id = Mir.fresh_rule_id () in
   let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
-  let exec_order = Mir.RuleMap.find rule_id m_program.rules_execution_order in
-  let rule_stmts = translate_m_code m_program exec_order in
+  let rule_stmts = translate_m_code m_program rule.rule_vars in
   let pos, rule_name =
     let pos = List.hd rule.Mir.rule_name |> Pos.get_position in
     let name = List.map Pos.unmark rule.Mir.rule_name |> String.concat "_" in
@@ -199,7 +172,7 @@ let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : M
     { ctx with rule_instances = Bir.RuleMap.add instance_id instance ctx.rule_instances } )
 
 let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
-    (defined_vars : Mir.Variable.t list) (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
+    (_defined_vars : Mir.Variable.t list) (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
   let m_program =
     reset_and_add_outputs m_program
@@ -212,28 +185,9 @@ let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
       m_program with
       program =
         Bir_interpreter.RegularFloatInterpreter.replace_undefined_with_input_variables
-          m_program.program
-          (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
+          m_program.program ctx.variables_used_as_inputs;
     }
   in
-  (* let rules_stmts =
-   *   List.map (fun rule_id ->
-   *       let exec_order = Mir.RuleMap.find rule_id m_program.rules_execution_order in
-   *       Printf.eprintf "before_translate \n%!";
-   *       let rule_stmts = translate_m_code m_program exec_order in
-   *       Printf.eprintf "after_translate \n%!";
-   *       (rule_id, rule_stmts))
-   *     execution_order
-   * in
-   * let ctx, program_stmts =
-   *   List.fold_left_map
-   *     (fun ctx (rule_id, rule_stmts) ->
-   *       let instance_id, pos, ctx =
-   *         generate_rule_instance m_program rule_id rule_stmts ctx
-   *       in
-   *       (ctx, (Bir.SRuleCall instance_id, pos)))
-   *     ctx rules_stmts
-   * in *)
   let program_stmts, ctx =
     List.fold_left
       (fun (stmts, ctx) rule_id ->
@@ -242,33 +196,7 @@ let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
       ([], ctx) execution_order
   in
   let program_stmts = List.rev program_stmts in
-  let clean_state =
-    (* no cleaning or no arguments: we may want anything afterwards, so no cleaning *)
-    if (not !Cli.m_clean_calls) || args = [] then []
-    else
-      list_map_opt
-        (fun var ->
-          try
-            let vdef = Mir.VariableMap.find var m_program.program.program_vars in
-            match (vdef.var_definition, vdef.var_io) with
-            | InputVar, _ -> None
-            | _, Regular ->
-                let pos = var.Mir.Variable.execution_number.pos in
-                Some
-                  ( Bir.SAssign
-                      ( var,
-                        {
-                          var_definition = SimpleVar (Mir.Literal Undefined, pos);
-                          var_typ = vdef.var_typ;
-                          var_io = vdef.var_io;
-                        } ),
-                    pos )
-            | _ -> None
-          with Not_found -> None)
-        defined_vars
-  in
-  Cli.var_info_print "|clean_state| += %d" (List.length clean_state);
-  (ctx, program_stmts @ clean_state)
+  (ctx, program_stmts)
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
@@ -353,10 +281,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             stmt;
         ] )
   | Mpp_ir.Assign (Mbased (var, _), expr) ->
-      ( {
-          ctx with
-          variables_used_as_inputs = Mir.VariableMap.add var () ctx.variables_used_as_inputs;
-        },
+      ( { ctx with variables_used_as_inputs = Mir.VariableDict.add var ctx.variables_used_as_inputs },
         [
           Pos.same_pos_as
             (Bir.SAssign
@@ -364,7 +289,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  {
                    var_definition = SimpleVar (translate_mpp_expr m_program ctx expr, pos);
                    var_typ = None;
-                   var_io = (Mir.VariableMap.find var m_program.program.program_vars).var_io;
+                   var_io = (snd (Mir.find_var_definition m_program.program var)).var_io;
                  } ))
             stmt;
         ] )
@@ -382,7 +307,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
-                   var_io = (Mir.VariableMap.find var m_program.program.program_vars).var_io;
+                   var_io = (snd (Mir.find_var_definition m_program.program var)).var_io;
                  } ))
             stmt;
         ] )
@@ -430,8 +355,8 @@ and translate_mpp_stmts (mpp_program : Mpp_ir.mpp_compute list)
 and generate_partition mpp_program m_program func_args (filter : Mir.Variable.t -> bool)
     (pos : Pos.t) (ctx : translation_ctx) : translation_ctx * Bir.stmt list * Bir.stmt list =
   let vars_to_move =
-    Mir.VariableMap.fold
-      (fun var _ acc -> if filter var then var :: acc else acc)
+    Mir.VariableDict.fold
+      (fun var acc -> if filter var then var :: acc else acc)
       m_program.program.program_vars []
   in
   let mpp_pre, mpp_post =
@@ -476,20 +401,6 @@ let create_combined_program (m_program : Mir_interface.full_program)
     let conds_verif =
       generate_verif_conds m_program.vars_execution_order m_program.program.program_conds
     in
-    (* let rules =
-     *   Bir.RuleMap.fold
-     *     (fun instance_id rule_id rules ->
-     *       let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
-     *       let exec_order = Mir.RuleMap.find rule_id m_program.rules_execution_order in
-     *       let rule_stmts = translate_m_code m_program exec_order in
-     *       let rule_name =
-     *         let name = List.map Pos.unmark rule.Mir.rule_name |> String.concat "_" in
-     *         name ^ "_i" ^ string_of_int instance_id
-     *       in
-     *       let rule = Bir.{ rule_id = instance_id; rule_name; rule_stmts } in
-     *       Bir.RuleMap.add instance_id rule rules)
-     *     ctx.rule_instances Bir.RuleMap.empty
-     * in *)
     {
       rules = ctx.rule_instances;
       statements = statements @ conds_verif;
