@@ -172,8 +172,7 @@ let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : M
     { ctx with rule_instances = Bir.RuleMap.add instance_id instance ctx.rule_instances } )
 
 let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
-    (_defined_vars : Mir.Variable.t list) (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
-    translation_ctx * Bir.stmt list =
+    (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
   let m_program =
     reset_and_add_outputs m_program
       (List.map
@@ -333,7 +332,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
   | Mpp_ir.Expr (Call (Program, args), _) ->
       let real_args = match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args in
       let exec_order = m_program.main_execution_order in
-      wrap_m_code_call m_program exec_order m_program.vars_execution_order real_args ctx
+      wrap_m_code_call m_program exec_order real_args ctx
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
       let ctx, partition_pre, partition_post =
@@ -375,15 +374,10 @@ and generate_partition mpp_program m_program func_args (filter : Mir.Variable.t 
   let ctx, post = translate_mpp_stmts mpp_program m_program func_args ctx mpp_post in
   (ctx, pre, post)
 
-let generate_verif_conds (exec_order : Mir_dependency_graph.execution_order)
-    (conds : Mir.condition_data Mir.VariableMap.t) : Bir.stmt list =
-  List.rev
-    (List.fold_left
-       (fun acc var ->
-         match Mir.VariableMap.find_opt var conds with
-         | None -> acc
-         | Some data -> (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
-       [] exec_order)
+let generate_verif_conds (conds : Mir.condition_data Mir.VariableMap.t) : Bir.stmt list =
+  Mir.VariableMap.fold
+    (fun _var data acc -> (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
+    conds []
 
 let create_combined_program (m_program : Mir_interface.full_program)
     (mpp_program : Mpp_ir.mpp_program) (mpp_function_to_extract : string) : Bir.program =
@@ -398,9 +392,7 @@ let create_combined_program (m_program : Mir_interface.full_program)
     let ctx, statements =
       translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx
     in
-    let conds_verif =
-      generate_verif_conds m_program.vars_execution_order m_program.program.program_conds
-    in
+    let conds_verif = generate_verif_conds m_program.program.program_conds in
     {
       rules = ctx.rule_instances;
       statements = statements @ conds_verif;

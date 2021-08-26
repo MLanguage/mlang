@@ -34,12 +34,13 @@ type program = {
   outputs : unit Mir.VariableMap.t;
 }
 
-let get_all_statements program =
+(** Returns program statements with all rules inlined *)
+let get_all_statements (p : program) : stmt list =
   let rec get_block_statements stmts =
     List.fold_left
       (fun stmts stmt ->
         match Pos.unmark stmt with
-        | SRuleCall r -> List.rev (RuleMap.find r program.rules).rule_stmts @ stmts
+        | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
         | SConditional (e, t, f) ->
             let t = get_block_statements t in
             let f = get_block_statements f in
@@ -48,7 +49,7 @@ let get_all_statements program =
       [] stmts
     |> List.rev
   in
-  get_block_statements program.statements
+  get_block_statements p.statements
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =

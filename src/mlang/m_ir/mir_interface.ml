@@ -48,33 +48,20 @@ let reset_all_outputs (p : program) : program =
 type full_program = {
   dep_graph : Mir_dependency_graph.RG.t;
   main_execution_order : Mir.rule_id list;
-  vars_execution_order : Mir_dependency_graph.execution_order;
   program : Mir.program;
 }
 
 let to_full_program (program : program) : full_program =
-  let vars_to_rules, rules_execution_order =
+  let vars_to_rules =
     Mir.RuleMap.fold
-      (fun rule_id { rule_vars; _ } (conv, orders) ->
-        let conv, order =
-          List.fold_left
-            (fun (conv, order) (vid, _def) ->
-              let var = VariableDict.find vid program.program_vars in
-              let conv = VariableMap.add var rule_id conv in
-              (conv, var :: order))
-            (conv, []) rule_vars
-        in
-        let order = List.rev order in
-        let orders = Mir.RuleMap.add rule_id order orders in
-        (conv, orders))
-      program.program_rules
-      (VariableMap.empty, Mir.RuleMap.empty)
+      (fun rule_id { rule_vars; _ } conv ->
+        List.fold_left
+          (fun conv (vid, _def) ->
+            let var = VariableDict.find vid program.program_vars in
+            VariableMap.add var rule_id conv)
+          conv rule_vars)
+      program.program_rules VariableMap.empty
   in
   let dep_graph = Mir_dependency_graph.create_rules_dependency_graph program vars_to_rules in
   let main_execution_order = Mir_dependency_graph.get_rules_execution_order dep_graph in
-  let vars_execution_order =
-    List.concat_map
-      (fun rule_id -> Mir.RuleMap.find rule_id rules_execution_order)
-      main_execution_order
-  in
-  { program; dep_graph; main_execution_order; vars_execution_order }
+  { program; dep_graph; main_execution_order }
