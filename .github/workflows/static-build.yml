@@ -54,7 +54,7 @@ jobs:
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
           cd ..
-          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps
+          MPFR_PREFIX=gmp-prefix GMP_PREFIX=gmp-prefix make deps
         
       - name: Make mlang binary
         run: |
