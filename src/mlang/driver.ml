@@ -56,6 +56,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       !Cli.source_files;
     finish "completed!";
     Cli.debug_print "Elaborating...";
+    let source_m_program = !m_program in
     let m_program = Mast_to_mvg.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
@@ -159,6 +160,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
+            Dgfip_gen_files.generate_auxiliary_files source_m_program;
             Bir_to_dgfip_c.generate_c_program combined_program function_spec !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
