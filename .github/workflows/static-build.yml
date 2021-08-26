@@ -6,8 +6,8 @@ name: static-build
 # events but only for the master branch
 on:
   push:
-    # TODO: Remove static-build branch here after testing complete
-    branches: [master, static-build]
+    # TODO: Remove '**' here after testing complete builds should only be done on master
+    branches: '**'
   pull_request:
     branches: [master]
 
