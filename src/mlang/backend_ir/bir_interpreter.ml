@@ -15,12 +15,16 @@ open Mir
 
 type var_literal = SimpleVar of literal | TableVar of int * literal array
 
-type code_location_segment = InsideBlock of int | ConditionalBranch of bool
+type code_location_segment =
+  | InsideBlock of int
+  | ConditionalBranch of bool
+  | InsideRule of Bir.rule_id
 
 let format_code_location_segment (fmt : Format.formatter) (s : code_location_segment) =
   match s with
   | InsideBlock i -> Format.fprintf fmt "#%d" i
   | ConditionalBranch b -> Format.fprintf fmt "?%b" b
+  | InsideRule r -> Format.fprintf fmt "R_%d" r
 
 type code_location = code_location_segment list
 
@@ -510,9 +514,9 @@ module Make (N : Bir_number.NumberInterface) = struct
         match evaluate_expr ctx p.mir_program data.cond_expr with
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
-    | Bir.SRuleCall _ ->
-        (* removed with [Bir.get_all_statements] below *)
-        assert false
+    | Bir.SRuleCall r ->
+        let rule = Bir.RuleMap.find r p.rules in
+        evaluate_stmts p ctx rule.rule_stmts (InsideRule r :: loc) 0
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list) (loc : code_location)
       (start_value : int) : ctx =
@@ -525,8 +529,7 @@ module Make (N : Bir_number.NumberInterface) = struct
 
   let evaluate_program (p : Bir.program) (ctx : ctx) (code_loc_start_value : int) : ctx =
     try
-      let statements = Bir.get_all_statements p in
-      let ctx = evaluate_stmts p ctx statements [] code_loc_start_value in
+      let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
       ctx
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
