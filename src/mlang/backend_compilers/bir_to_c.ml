@@ -36,7 +36,7 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "m_not" | Mast.Minus -> "m_neg"
 
-type offset = GetValue of int | PassPointer | None
+type offset = GetValueConst of int | GetValueVar of string | PassPointer | None
 
 let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
     (fmt : Format.formatter) (var : Variable.t) : unit =
@@ -55,7 +55,8 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         (Pos.unmark var.Mir.Variable.name)
         (match offset with
         | None -> ""
-        | GetValue offset -> " + " ^ string_of_int offset
+        | GetValueVar offset -> " + " ^ offset
+        | GetValueConst offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
 
 let generate_raw_name (v : Variable.t) : string =
@@ -117,7 +118,7 @@ let rec generate_c_expr (e : expression Pos.marked) (var_indexes : int Mir.Varia
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var -> (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "generic_index", [])
+  | GenericTableIndex -> (Format.asprintf "m_literal(generic_index)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_c_expr e1 var_indexes in
@@ -150,17 +151,20 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
               Format.fprintf fmt "%a%a = %s;@\n"
                 (format_local_vars_defs var_indexes)
                 defs
-                (generate_variable var_indexes (GetValue i))
+                (generate_variable var_indexes (GetValueConst i))
                 var sv))
         es
-  | TableVar (_size, IndexGeneric _e) ->
-      (* Format.asprintf
-       *   "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
-       *   \ @[<h\n\
-       *   \         4> %a = %a;@]@\n\
-       *   \ }@\n"
-       *   size generate_variable var generate_c_expr e *)
-      Format.fprintf oc "/* table def*/"
+  | TableVar (size, IndexGeneric e) ->
+      let sv, defs = generate_c_expr e var_indexes in
+      Format.fprintf oc
+        "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
+        \ @[<h 4> %a%a = %s;@]@\n\
+        \ }@\n"
+        size
+        (format_local_vars_defs var_indexes)
+        defs
+        (generate_variable var_indexes (GetValueVar "generic_index"))
+        var sv
       (* Errors.raise_spanned_error "generic index table definitions not supported in C the backend"
        *   (Pos.get_position e) *)
   | InputVar -> assert false
