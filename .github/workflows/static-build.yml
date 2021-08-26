@@ -42,30 +42,6 @@ jobs:
           # Version of the OCaml compiler to initialise
           ocaml-version: 4.11.2+musl+static+flambda
 
-      - name: GMP cache
-        uses: actions/cache@v1
-        env:
-          cache-name: cache-opam-modules
-        with:
-          path: gmp-6.2.1
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-            
-      - name: MPFR cache
-        uses: actions/cache@v1
-        env:
-          cache-name: cache-opam-modules
-        with:
-          path: mpfr-4.1.0
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
       - name: Install dependencies
         run: |
           sudo apt update
