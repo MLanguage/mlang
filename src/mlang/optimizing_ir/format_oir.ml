@@ -16,16 +16,19 @@ open Oir
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdata) ->
-      Format.fprintf fmt "%s = %a" (Pos.unmark v.Mir.Variable.name) Format_mir.format_variable_def
+      Format.fprintf fmt "%s = %a@," (Pos.unmark v.Mir.Variable.name) Format_mir.format_variable_def
         vdata.var_definition
   | SConditional (cond, b1, b2, _) ->
-      Format.fprintf fmt "if(%a) then goto %d else goto %d" Format_mir.format_expression cond b1 b2
+      Format.fprintf fmt "if(%a) then goto %d else goto %d@," Format_mir.format_expression cond b1
+        b2
   | SVerif cond_data ->
-      Format.fprintf fmt "assert (%a) or raise %a" Format_mir.format_expression
+      Format.fprintf fmt "assert (%a) or raise %a@," Format_mir.format_expression
         (Pos.unmark cond_data.cond_expr)
         (Format_mast.pp_print_list_comma Format_mir.format_error)
         cond_data.cond_errors
-  | SGoto b -> Format.fprintf fmt "goto %d" b
+  | SGoto b -> Format.fprintf fmt "goto %d@," b
+  | SRuleCall (_rid, name, stmts) ->
+      Format.fprintf fmt "call(%s)@[<v 3>{@,%a@]}@," name format_stmts stmts
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

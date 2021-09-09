@@ -36,7 +36,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
           used_vars)
       stmt_used_vars used_vars
   in
-  let used_vars, used_defs, new_stmts, _ =
+  let rec remove_dead_stmts_of stmts used_vars used_defs pos =
     List.fold_right
       (fun stmt ((used_vars : pos_map), (used_defs : pos_map), acc, pos) ->
         match Pos.unmark stmt with
@@ -92,7 +92,6 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
                                  intermediate_pos)
                              defs_blocks)
                       in
-
                       is_later_use && not_superceding_dominating_definition)
                     used_blocks
             then
@@ -121,9 +120,18 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
         | SConditional (cond, _, _, _) ->
             let stmt_used_vars = Mir_dependency_graph.get_used_variables (cond, Pos.no_pos) in
             (update_used_vars stmt_used_vars pos used_vars, used_defs, stmt :: acc, pos - 1)
-        | SGoto _ -> (used_vars, used_defs, stmt :: acc, pos - 1))
-      stmts
-      (used_vars, used_defs, [], List.length stmts - 1)
+        | SGoto _ -> (used_vars, used_defs, stmt :: acc, pos - 1)
+        | SRuleCall (rule_id, name, stmts) ->
+            let used_vars, used_defs, new_stmts, pos =
+              remove_dead_stmts_of stmts used_vars used_defs pos
+            in
+            let rule_call = Pos.same_pos_as (SRuleCall (rule_id, name, new_stmts)) stmt in
+            (used_vars, used_defs, rule_call :: acc, pos - 1))
+      stmts (used_vars, used_defs, [], pos)
+  in
+  let used_vars, used_defs, new_stmts, _ =
+    remove_dead_stmts_of stmts used_vars used_defs 0
+    (* actual [pos] number irrelevant, no problem to have only negative values *)
   in
   (used_vars, used_defs, new_stmts)
 
@@ -147,9 +155,7 @@ let dead_code_removal (p : program) : program =
           (used_vars, defs_vars, p)
         with Not_found -> (used_vars, defs_vars, p))
       ( Mir.VariableMap.map
-          (fun () ->
-            BlockMap.singleton p.exit_block
-              (PosSet.singleton (List.length (BlockMap.find p.exit_block p.blocks))))
+          (fun () -> BlockMap.singleton p.exit_block (PosSet.singleton 1))
           p.outputs,
         Mir.VariableMap.empty,
         p )

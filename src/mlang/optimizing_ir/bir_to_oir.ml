@@ -60,16 +60,25 @@ and translate_statement (p : Bir.program) (s : Bir.stmt) (curr_block_id : Oir.bl
       let last_b2id, blocks = translate_statement_list p l2 b2id blocks in
       let blocks = append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b2id blocks in
       (join_block, blocks)
-  | Bir.SRuleCall _rule_id -> assert false
-(* let rule = Bir.RuleMap.find rule_id p.Bir.rules in
- * translate_statement_list p rule.Bir.rule_stmts curr_block_id blocks *)
+  | Bir.SRuleCall rule_id ->
+      let rule = Bir.RuleMap.find rule_id p.Bir.rules in
+      let stmts =
+        let dummy = fresh_block_id () in
+        let dummy_blocks = initialize_block dummy Oir.BlockMap.empty in
+        let dummy, dummy_blocks = translate_statement_list p rule.rule_stmts dummy dummy_blocks in
+        Oir.BlockMap.find dummy dummy_blocks
+      in
+      let blocks =
+        append_to_block
+          (Pos.same_pos_as (Oir.SRuleCall (rule_id, rule.rule_name, stmts)) s)
+          curr_block_id blocks
+      in
+      (curr_block_id, blocks)
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
   let blocks = initialize_block entry_block Oir.BlockMap.empty in
-  (* CR Keryan: this completely remove rules when optimizing, needs patching *)
-  let statements = Bir.get_all_statements p in
-  let exit_block, blocks = translate_statement_list p statements entry_block blocks in
+  let exit_block, blocks = translate_statement_list p p.statements entry_block blocks in
   let blocks = Oir.BlockMap.map (fun stmts -> List.rev stmts) blocks in
   {
     blocks;
@@ -80,49 +89,62 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
     outputs = p.outputs;
   }
 
-let rec re_translate_statement (s : Oir.stmt) (blocks : Oir.block Oir.BlockMap.t) :
-    Oir.block_id option * Bir.stmt option =
+let rec re_translate_statement (s : Oir.stmt) (rules : Bir.rule Bir.RuleMap.t)
+    (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block_id option * Bir.stmt option * Bir.rule Bir.RuleMap.t =
   match Pos.unmark s with
-  | Oir.SAssign (var, data) -> (None, Some (Pos.same_pos_as (Bir.SAssign (var, data)) s))
-  | Oir.SVerif cond -> (None, Some (Pos.same_pos_as (Bir.SVerif cond) s))
+  | Oir.SAssign (var, data) -> (None, Some (Pos.same_pos_as (Bir.SAssign (var, data)) s), rules)
+  | Oir.SVerif cond -> (None, Some (Pos.same_pos_as (Bir.SVerif cond) s), rules)
   | Oir.SConditional (e, b1, b2, join_block) ->
-      let b1 = re_translate_blocks_until b1 blocks (Some join_block) in
-      let b2 = re_translate_blocks_until b2 blocks (Some join_block) in
-      (Some join_block, Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s))
-  | Oir.SGoto b -> (Some b, None)
+      let b1, rules = re_translate_blocks_until b1 blocks rules (Some join_block) in
+      let b2, rules = re_translate_blocks_until b2 blocks rules (Some join_block) in
+      (Some join_block, Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s), rules)
+  | Oir.SGoto b -> (Some b, None, rules)
+  | Oir.SRuleCall (rule_id, rule_name, stmts) ->
+      let _, rule_stmts, rules = re_translate_statement_list stmts rules blocks in
+      if rule_stmts = [] then (None, None, rules)
+      else
+        let rule = Bir.{ rule_id; rule_name; rule_stmts } in
+        (None, Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s), Bir.RuleMap.add rule_id rule rules)
+
+and re_translate_statement_list (stmts : Oir.stmt list) (rules : Bir.rule Bir.RuleMap.t)
+    (blocks : Oir.block Oir.BlockMap.t) =
+  List.fold_left
+    (fun (_, acc, rules) s ->
+      let next_block, stmt, rules = re_translate_statement s rules blocks in
+      (next_block, (match stmt with None -> acc | Some s -> s :: acc), rules))
+    (None, [], rules) stmts
 
 and re_translate_blocks_until (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t)
-    (stop : Oir.block_id option) : Bir.stmt list =
-  let next_block, stmts = re_translate_block block_id blocks in
-  stmts
-  @
-  match (next_block, stop) with
-  | None, Some _ -> assert false (* should not happen *)
-  | None, None -> []
-  | Some next_block, None -> re_translate_blocks_until next_block blocks stop
-  | Some next_block, Some stop ->
-      if next_block = stop then [] else re_translate_blocks_until next_block blocks (Some stop)
+    (rules : Bir.rule Bir.RuleMap.t) (stop : Oir.block_id option) :
+    Bir.stmt list * Bir.rule Bir.RuleMap.t =
+  let next_block, stmts, rules = re_translate_block block_id rules blocks in
+  let next_stmts, rules =
+    match (next_block, stop) with
+    | None, Some _ -> assert false (* should not happen *)
+    | None, None -> ([], rules)
+    | Some next_block, None -> re_translate_blocks_until next_block blocks rules stop
+    | Some next_block, Some stop ->
+        if next_block = stop then ([], rules)
+        else re_translate_blocks_until next_block blocks rules (Some stop)
+  in
+  (stmts @ next_stmts, rules)
 
-and re_translate_block (block_id : Oir.block_id) (blocks : Oir.block Oir.BlockMap.t) :
-    Oir.block_id option * Bir.stmt list =
+and re_translate_block (block_id : Oir.block_id) (rules : Bir.rule Bir.RuleMap.t)
+    (blocks : Oir.block Oir.BlockMap.t) :
+    Oir.block_id option * Bir.stmt list * Bir.rule Bir.RuleMap.t =
   match Oir.BlockMap.find_opt block_id blocks with
   | None -> assert false (* should not happen *)
   | Some block ->
-      let next_block_id, stmts =
-        List.fold_left
-          (fun (_, acc) s ->
-            let next_block, stmt = re_translate_statement s blocks in
-            (next_block, match stmt with None -> acc | Some s -> s :: acc))
-          (None, []) block
-      in
+      let next_block_id, stmts, rules = re_translate_statement_list block rules blocks in
       let stmts = List.rev stmts in
-      (next_block_id, stmts)
+      (next_block_id, stmts, rules)
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
-  let statements = re_translate_blocks_until p.entry_block p.blocks None in
+  let statements, rules = re_translate_blocks_until p.entry_block p.blocks Bir.RuleMap.empty None in
   {
     statements = Bir.remove_empty_conditionals statements;
-    rules = Bir.RuleMap.empty;
+    rules;
     idmap = p.idmap;
     mir_program = p.mir_program;
     outputs = p.outputs;
