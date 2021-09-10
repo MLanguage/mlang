@@ -70,7 +70,7 @@ and translate_statement (p : Bir.program) (s : Bir.stmt) (curr_block_id : Oir.bl
       in
       let blocks =
         append_to_block
-          (Pos.same_pos_as (Oir.SRuleCall (rule_id, rule.rule_name, stmts)) s)
+          (Pos.same_pos_as (Oir.SRuleCall (rule_id, rule.rule_name, List.rev stmts)) s)
           curr_block_id blocks
       in
       (curr_block_id, blocks)
@@ -101,7 +101,8 @@ let rec re_translate_statement (s : Oir.stmt) (rules : Bir.rule Bir.RuleMap.t)
       (Some join_block, Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s), rules)
   | Oir.SGoto b -> (Some b, None, rules)
   | Oir.SRuleCall (rule_id, rule_name, stmts) ->
-      let _, rule_stmts, rules = re_translate_statement_list stmts rules blocks in
+      let _, stmts, rules = re_translate_statement_list stmts rules blocks in
+      let rule_stmts = List.rev stmts in
       if rule_stmts = [] then (None, None, rules)
       else
         let rule = Bir.{ rule_id; rule_name; rule_stmts } in

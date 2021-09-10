@@ -114,6 +114,7 @@ let remove_dead_statements (stmts : block) (id : block_id) (path_checker : Paths
                 stmt :: acc,
                 pos - 1 )
             else (used_vars, used_defs_returned, acc, pos - 1)
+        (* CR Keryan: why updated [used_defs] here ? This definition is removed *)
         | SVerif cond ->
             let stmt_used_vars = Mir_dependency_graph.get_used_variables cond.cond_expr in
             (update_used_vars stmt_used_vars pos used_vars, used_defs, stmt :: acc, pos - 1)
