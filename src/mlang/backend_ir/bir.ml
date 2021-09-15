@@ -12,115 +12,115 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-type stmt = stmt_kind Pos.marked
+type rule_id = Mir.rule_id
+
+module RuleMap = Mir.RuleMap
+
+type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
+
+and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
   | SAssign of Mir.Variable.t * Mir.variable_data
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
+  | SRuleCall of rule_id
 
 type program = {
+  rules : rule RuleMap.t;
   statements : stmt list;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
 
+(** Returns program statements with all rules inlined *)
+let get_all_statements (p : program) : stmt list =
+  let rec get_block_statements stmts =
+    List.fold_left
+      (fun stmts stmt ->
+        match Pos.unmark stmt with
+        | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
+        | SConditional (e, t, f) ->
+            let t = get_block_statements t in
+            let f = get_block_statements f in
+            Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
+        | _ -> stmt :: stmts)
+      [] stmts
+    |> List.rev
+  in
+  get_block_statements p.statements
+
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
-        | SAssign _ | SVerif _ -> acc + 1
+        | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
         | SConditional (_, s1, s2) -> acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
   cond_instr_blocks p.statements
 
-let get_assigned_variables (p : program) : unit Mir.VariableMap.t =
-  let rec get_assigned_variables_block (stmts : stmt list) : unit Mir.VariableMap.t =
+let get_assigned_variables (p : program) : Mir.VariableDict.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) : Mir.VariableDict.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif _ -> acc
-        | SAssign (var, _) -> Mir.VariableMap.add var () acc
+        | SAssign (var, _) -> Mir.VariableDict.add var acc
         | SConditional (_, s1, s2) ->
-            Mir.VariableMap.union
-              (fun _ _ _ -> Some ())
-              acc
-              (Mir.VariableMap.union
-                 (fun _ _ _ -> Some ())
-                 (get_assigned_variables_block s1) (get_assigned_variables_block s2)))
-      Mir.VariableMap.empty stmts
+            let acc = get_assigned_variables_block acc s1 in
+            get_assigned_variables_block acc s2
+        | SRuleCall _ -> assert false)
+      acc stmts
   in
-  get_assigned_variables_block p.statements
+  get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
-  let rec get_local_vars_expr (e : Mir.expression Pos.marked) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_expr acc (e : Mir.expression Pos.marked) : unit Mir.LocalVariableMap.t =
     match Pos.unmark e with
-    | Mir.Unop (_, e) | Mir.Index (_, e) -> get_local_vars_expr e
+    | Mir.Unop (_, e) | Mir.Index (_, e) -> get_local_vars_expr acc e
     | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) ->
-        Mir.LocalVariableMap.union
-          (fun _ _ _ -> Some ())
-          (get_local_vars_expr e1) (get_local_vars_expr e2)
+        let acc = get_local_vars_expr acc e1 in
+        get_local_vars_expr acc e2
     | Mir.Conditional (e1, e2, e3) ->
-        Mir.LocalVariableMap.union
-          (fun _ _ _ -> Some ())
-          (Mir.LocalVariableMap.union
-             (fun _ _ _ -> Some ())
-             (get_local_vars_expr e1) (get_local_vars_expr e2))
-          (get_local_vars_expr e3)
+        let acc = get_local_vars_expr acc e1 in
+        let acc = get_local_vars_expr acc e2 in
+        get_local_vars_expr acc e3
     | Mir.FunctionCall (_, args) ->
         List.fold_left
-          (fun (acc : unit Mir.LocalVariableMap.t) arg ->
-            Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr arg) acc)
-          Mir.LocalVariableMap.empty args
-    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error -> Mir.LocalVariableMap.empty
-    | Mir.LocalVar lvar -> Mir.LocalVariableMap.singleton lvar ()
+          (fun (acc : unit Mir.LocalVariableMap.t) arg -> get_local_vars_expr acc arg)
+          acc args
+    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error -> acc
+    | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
-        Mir.LocalVariableMap.add lvar ()
-          (Mir.LocalVariableMap.union
-             (fun _ _ _ -> Some ())
-             (get_local_vars_expr e1) (get_local_vars_expr e2))
+        let acc = get_local_vars_expr acc e1 in
+        let acc = get_local_vars_expr acc e2 in
+        Mir.LocalVariableMap.add lvar () acc
   in
-  let rec get_local_vars_block (stmts : stmt list) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_block acc (stmts : stmt list) : unit Mir.LocalVariableMap.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
-        | SVerif cond ->
-            Mir.LocalVariableMap.union
-              (fun _ _ _ -> Some ())
-              (get_local_vars_expr cond.Mir.cond_expr)
-              acc
+        | SVerif cond -> get_local_vars_expr acc cond.Mir.cond_expr
         | SAssign (_, data) -> (
             match data.Mir.var_definition with
-            | Mir.SimpleVar e ->
-                Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc
+            | Mir.SimpleVar e -> get_local_vars_expr acc e
             | Mir.TableVar (_, defs) -> (
                 match defs with
                 | Mir.IndexTable es ->
-                    Mir.IndexMap.fold
-                      (fun _ e acc ->
-                        Mir.LocalVariableMap.union
-                          (fun _ _ _ -> Some ())
-                          (get_local_vars_expr e) acc)
-                      es acc
-                | Mir.IndexGeneric e ->
-                    Mir.LocalVariableMap.union (fun _ _ _ -> Some ()) (get_local_vars_expr e) acc)
+                    Mir.IndexMap.fold (fun _ e acc -> get_local_vars_expr acc e) es acc
+                | Mir.IndexGeneric e -> get_local_vars_expr acc e)
             | _ -> acc)
         | SConditional (cond, s1, s2) ->
-            Mir.LocalVariableMap.union
-              (fun _ _ _ -> Some ())
-              acc
-              (Mir.LocalVariableMap.union
-                 (fun _ _ _ -> Some ())
-                 (get_local_vars_expr (cond, Pos.no_pos))
-                 (Mir.LocalVariableMap.union
-                    (fun _ _ _ -> Some ())
-                    (get_local_vars_block s1) (get_local_vars_block s2))))
-      Mir.LocalVariableMap.empty stmts
+            let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
+            let acc = get_local_vars_block acc s1 in
+            get_local_vars_block acc s2
+        | SRuleCall _ -> assert false)
+      acc stmts
   in
-  get_local_vars_block p.statements
+  get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
 
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev

@@ -30,8 +30,19 @@ let rec format_stmt fmt (stmt : stmt) =
         (Pos.unmark cond_data.cond_expr)
         (Format_mast.pp_print_list_comma Format_mir.format_error)
         cond_data.cond_errors
+  | SRuleCall r -> Format.fprintf fmt "call_rule(%d)@\n" r
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
-let format_program fmt (p : program) = Format.fprintf fmt "%a" format_stmts p.statements
+let format_rule fmt rule =
+  Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n" rule.rule_id format_stmts rule.rule_stmts
+
+let format_rules fmt rules =
+  Format.pp_print_list
+    ~pp_sep:(fun _ () -> ())
+    format_rule fmt
+    (Bir.RuleMap.bindings rules |> List.map snd)
+
+let format_program fmt (p : program) =
+  Format.fprintf fmt "%a%a" format_rules p.rules format_stmts p.statements

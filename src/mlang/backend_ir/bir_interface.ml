@@ -189,7 +189,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
       f.func_constant_inputs []
   in
   let unused_input_stmts =
-    Mir.VariableMap.fold
+    Mir.fold_vars
       (fun var def acc ->
         match def.Mir.var_definition with
         | Mir.InputVar ->
@@ -206,7 +206,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
                 pos )
               :: acc
         | _ -> acc)
-      p.mir_program.program_vars []
+      p.mir_program []
   in
   let conds_stmts =
     Mir.VariableMap.fold
