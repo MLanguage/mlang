@@ -24,9 +24,11 @@ let emtpy_translation_ctx : translation_ctx =
 let ctx_join ctx1 ctx2 =
   {
     new_variables =
-      (* CR keryan : I assume there shouldn't be conflict there, kept the behavior of
-         [translate_mpp_stmt:SConditional] just in case, which could erase [ctx1] by [ctx2] *)
-      StringMap.union (fun _ _ v2 -> Some v2) ctx1.new_variables ctx2.new_variables;
+      StringMap.union
+        (fun _ v1 v2 ->
+          assert (Mir.Variable.compare v1 v2 = 0);
+          Some v2)
+        ctx1.new_variables ctx2.new_variables;
     variables_used_as_inputs =
       Mir.VariableDict.union ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
     rule_instances = Bir.RuleMap.union (fun _ r _ -> Some r) ctx1.rule_instances ctx2.rule_instances;
