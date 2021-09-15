@@ -179,9 +179,9 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
   Format.fprintf oc
     {|
     %acond = %s;
-    if (m_is_defined_true(cond)) 
+    if (m_is_defined_true(cond))
     {%a%a
-    } 
+    }
 |}
     (format_local_vars_defs var_indexes)
     defs scond
@@ -214,7 +214,7 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
             free(TGV);
             free(LOCAL);
             return -1;
-        } 
+        }
         #endif /* ANOMALY_LIMIT */
   |})
     ()
@@ -252,6 +252,7 @@ let rec generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap
         (generate_stmts program var_indexes)
         ff
   | SVerif v -> generate_var_cond var_indexes v oc
+  | SRuleCall _ -> failwith "unimplemented!"
 
 and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (stmts : Bir.stmt list) =
@@ -264,7 +265,9 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let assigned_variables = List.map fst (Mir.VariableMap.bindings (Bir.get_assigned_variables p)) in
+  let assigned_variables =
+    List.map snd (Mir.VariableDict.bindings (Bir.get_assigned_variables p))
+  in
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   let all_relevant_variables =
     List.fold_left
@@ -374,7 +377,7 @@ let generate_get_error_count_func (oc : Format.formatter) (errors : ErrorSet.t) 
     {|
 %a {
     return %d;
-}  
+}
 
 |}
     generate_get_error_count_prototype false (ErrorSet.cardinal errors)
