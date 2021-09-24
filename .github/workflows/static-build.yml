@@ -1,0 +1,76 @@
+# This is a basic workflow to help you get started with Actions
+
+name: static-build
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [master]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Opam modules cache
+        uses: actions/cache@v1
+        env:
+          cache-name: cache-opam-modules
+        with:
+          # OCaml cache files are stored in `~/.opam` on Linux/macOS
+          path: ~/.opam
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Set up OCaml
+        uses: avsm/setup-ocaml@v1
+        with:
+          # Version of the OCaml compiler to initialise
+          ocaml-version: 4.11.2+musl+static+flambda
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev 
+          wget https://gmplib.org/download/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
+          ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
+          wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
+          ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
+          eval $(opam env)
+          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps
+        
+      - name: Make mlang binary
+        run: |
+          eval $(opam env)
+          make build-static
+      
+      - name: Create GitHub release
+        id: create-new-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-new-release.outputs.upload_url }}
+          asset_path: ./_build/default/src/main.exe
+          asset_name: mlang-linux-v${{ github.run_number }}.exe
+          asset_content_type: application/octet-stream
+          

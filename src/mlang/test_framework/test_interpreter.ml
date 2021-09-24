@@ -100,7 +100,7 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
     Bir.program =
   (* because evaluate_program redefines everything each time, we have to make sure that the
      redefinitions of our constant inputs are removed from the main list of statements *)
-  let new_stmts =
+  let filter_stmts stmts =
     List.filter_map
       (fun stmt ->
         match Pos.unmark stmt with
@@ -120,8 +120,9 @@ let add_test_conds_to_combined_program (p : Bir.program) (conds : condition_data
             | InputVar -> None
             | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt))
         | _ -> Some stmt)
-      p.Bir.statements
+      stmts
   in
+  let new_stmts = filter_stmts p.Bir.statements in
   let conditions_stmts =
     VariableMap.fold
       (fun _ cond stmts -> (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)

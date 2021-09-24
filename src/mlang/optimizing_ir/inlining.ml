@@ -124,8 +124,8 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
                             && Paths.check_path ctx.ctx_paths intermediate_block current_block)
                         var_defs
                     in
-                    Mir.VariableMap.for_all
-                      (fun var _ -> not (exists_def_between_previous_x_def_and_here var))
+                    Mir.VariableDict.for_all
+                      (fun var -> not (exists_def_between_previous_x_def_and_here var))
                       vars_used_in_previous_x_def
                     && not (exists_def_between_previous_x_def_and_here var_x)
                 | _ -> false)
@@ -204,12 +204,12 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx) (current_block : block_i
       in
       Mir.FunctionCall (f, new_args)
 
-let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current_stmt_pos : int) :
-    stmt * ctx =
+let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current_stmt_pos : int)
+    : stmt * ctx * int =
   match Pos.unmark stmt with
   | SAssign (var, data) -> (
       match data.var_definition with
-      | InputVar -> (stmt, ctx)
+      | InputVar -> (stmt, ctx, current_stmt_pos)
       | SimpleVar def ->
           let new_def = inline_in_expr (Pos.unmark def) ctx current_block current_stmt_pos in
           let new_def = Mir.SimpleVar (Pos.same_pos_as new_def def) in
@@ -217,7 +217,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current
             Pos.same_pos_as (SAssign (var, { data with var_definition = new_def })) stmt
           in
           let new_ctx = add_var_def_to_ctx var new_def current_block current_stmt_pos ctx in
-          (new_stmt, new_ctx)
+          (new_stmt, new_ctx, current_stmt_pos)
       | TableVar (size, defs) -> (
           match defs with
           | IndexGeneric def ->
@@ -227,7 +227,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current
                 Pos.same_pos_as (SAssign (var, { data with var_definition = new_def })) stmt
               in
               let new_ctx = add_var_def_to_ctx var new_def current_block current_stmt_pos ctx in
-              (new_stmt, new_ctx)
+              (new_stmt, new_ctx, current_stmt_pos)
           | IndexTable defs ->
               let new_defs =
                 Mir.IndexMap.map
@@ -242,18 +242,28 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id) (current
                 Pos.same_pos_as (SAssign (var, { data with var_definition = new_defs })) stmt
               in
               let new_ctx = add_var_def_to_ctx var new_defs current_block current_stmt_pos ctx in
-              (new_stmt, new_ctx)))
+              (new_stmt, new_ctx, current_stmt_pos)))
   | SVerif cond ->
       let new_e = inline_in_expr (Pos.unmark cond.cond_expr) ctx current_block current_stmt_pos in
       let new_stmt =
         Pos.same_pos_as (SVerif { cond with cond_expr = Pos.same_pos_as new_e cond.cond_expr }) stmt
       in
-      (new_stmt, ctx)
+      (new_stmt, ctx, current_stmt_pos)
   | SConditional (cond, b1, b2, join) ->
       let new_cond = inline_in_expr cond ctx current_block current_stmt_pos in
       let new_stmt = Pos.same_pos_as (SConditional (new_cond, b1, b2, join)) stmt in
-      (new_stmt, ctx)
-  | _ -> (stmt, ctx)
+      (new_stmt, ctx, current_stmt_pos)
+  | SGoto _ -> (stmt, ctx, current_stmt_pos)
+  | SRuleCall (rule_id, name, stmts) ->
+      let new_stmts, ctx, new_pos =
+        List.fold_left
+          (fun (stmts, ctx, stmt_pos) stmt ->
+            let new_stmt, new_ctx, new_pos = inline_in_stmt stmt ctx current_block stmt_pos in
+            (new_stmt :: stmts, new_ctx, new_pos + 1))
+          ([], ctx, current_stmt_pos) stmts
+      in
+      let new_stmt = Pos.same_pos_as (SRuleCall (rule_id, name, List.rev new_stmts)) stmt in
+      (new_stmt, ctx, new_pos)
 
 let inlining (p : program) : program =
   let g = get_cfg p in
@@ -264,8 +274,8 @@ let inlining (p : program) : program =
         let new_block, ctx, _ =
           List.fold_left
             (fun (new_block, ctx, stmt_pos) stmt ->
-              let new_stmt, new_ctx = inline_in_stmt stmt ctx block_id stmt_pos in
-              (new_stmt :: new_block, new_ctx, stmt_pos + 1))
+              let new_stmt, new_ctx, new_pos = inline_in_stmt stmt ctx block_id stmt_pos in
+              (new_stmt :: new_block, new_ctx, new_pos + 1))
             ([], ctx, 0) block
         in
         ({ p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks }, ctx))

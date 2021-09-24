@@ -102,6 +102,7 @@ let rec get_code_locs_stmt (stmt : Bir.stmt) (loc : Bir_interpreter.code_locatio
         (get_code_locs_stmts f (Bir_interpreter.ConditionalBranch false :: loc))
   | Bir.SVerif _ -> CodeLocationMap.empty
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
+  | Bir.SRuleCall _ -> CodeLocationMap.empty
 
 and get_code_locs_stmts (stmts : Bir.stmt list) (loc : Bir_interpreter.code_location) : code_locs =
   let locs, _ =
@@ -116,4 +117,6 @@ and get_code_locs_stmts (stmts : Bir.stmt list) (loc : Bir_interpreter.code_loca
   in
   locs
 
-let get_code_locs (p : Bir.program) : code_locs = get_code_locs_stmts p.statements []
+let get_code_locs (p : Bir.program) : code_locs =
+  let statements = Bir.get_all_statements p in
+  get_code_locs_stmts statements []

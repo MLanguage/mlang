@@ -38,7 +38,7 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "m_not" | Mast.Minus -> "m_neg"
 
-type offset = GetValue of int | PassPointer | None
+type offset = GetValueConst of int | GetValueVar of string | PassPointer | None
 
 let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
     (fmt : Format.formatter) (var : Variable.t) : unit =
@@ -57,7 +57,8 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         (Pos.unmark var.Mir.Variable.name)
         (match offset with
         | None -> ""
-        | GetValue offset -> " + " ^ string_of_int offset
+        | GetValueVar offset -> " + " ^ offset
+        | GetValueConst offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
 
 let print_error oc (m_error : Mir.Error.t) =
@@ -129,7 +130,7 @@ let rec generate_c_expr (e : expression Pos.marked) (var_indexes : int Mir.Varia
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var -> (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "generic_index", [])
+  | GenericTableIndex -> (Format.asprintf "m_literal(generic_index)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_c_expr e1 var_indexes in
@@ -162,14 +163,22 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
               Format.fprintf fmt "%a%a = %s;@\n"
                 (format_local_vars_defs var_indexes)
                 defs
-                (generate_variable var_indexes (GetValue i))
+                (generate_variable var_indexes (GetValueConst i))
                 var sv))
         es
-  | TableVar (_size, IndexGeneric e) ->
-      (* Format.asprintf "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\ @[<h
-         4> %a = %a;@]@\n\ }@\n" size generate_variable var generate_c_expr e *)
-      Errors.raise_spanned_error "generic index table definitions not supported in C the backend"
-        (Pos.get_position e)
+  | TableVar (size, IndexGeneric e) ->
+      let sv, defs = generate_c_expr e var_indexes in
+      Format.fprintf oc
+        "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
+        \ @[<h 4> %a%a = %s;@]@\n\
+        \ }@\n"
+        size
+        (format_local_vars_defs var_indexes)
+        defs
+        (generate_variable var_indexes (GetValueVar "generic_index"))
+        var sv
+      (* Errors.raise_spanned_error "generic index table definitions not supported in C the backend"
+       *   (Pos.get_position e) *)
   | InputVar -> assert false
 
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
@@ -179,9 +188,9 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
   Format.fprintf oc
     {|
     %acond = %s;
-    if (m_is_defined_true(cond)) 
+    if (m_is_defined_true(cond))
     {%a%a
-    } 
+    }
 |}
     (format_local_vars_defs var_indexes)
     defs scond
@@ -214,7 +223,7 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
             free(TGV);
             free(LOCAL);
             return -1;
-        } 
+        }
         #endif /* ANOMALY_LIMIT */
   |})
     ()
@@ -252,10 +261,34 @@ let rec generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap
         (generate_stmts program var_indexes)
         ff
   | SVerif v -> generate_var_cond var_indexes v oc
+  | SRuleCall r ->
+      let rule = Bir.RuleMap.find r program.rules in
+      generate_rule_function_header ~definition:false oc rule
 
 and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (stmts : Bir.stmt list) =
   Format.pp_print_list (generate_stmt program var_indexes) oc stmts
+
+and generate_rule_function_header ~(definition : bool) (oc : Format.formatter) (rule : Bir.rule) =
+  let arg_type = if definition then "m_value *" else "" in
+  let ret_type = if definition then "void " else "" in
+  Format.fprintf oc "%sm_rule_%s(%sTGV, %sLOCAL)%s@\n" ret_type rule.rule_name arg_type arg_type
+    (if definition then "" else ";")
+
+let generate_rule_function (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (rule : Bir.rule) =
+  Format.fprintf oc "%a@[<v 2>{@ %a@]@;}@\n"
+    (generate_rule_function_header ~definition:true)
+    rule
+    (generate_stmts program var_indexes)
+    rule.rule_stmts
+
+let generate_rule_functions (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
+    (oc : Format.formatter) (rules : Bir.rule Bir.RuleMap.t) =
+  Format.pp_print_list ~pp_sep:Format.pp_print_cut
+    (generate_rule_function program var_indexes)
+    oc
+    (Bir.RuleMap.bindings rules |> List.map snd)
 
 let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
@@ -264,7 +297,9 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let assigned_variables = List.map fst (Mir.VariableMap.bindings (Bir.get_assigned_variables p)) in
+  let assigned_variables =
+    List.map snd (Mir.VariableDict.bindings (Bir.get_assigned_variables p))
+  in
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   let all_relevant_variables =
     List.fold_left
@@ -374,7 +409,7 @@ let generate_get_error_count_func (oc : Format.formatter) (errors : ErrorSet.t) 
     {|
 %a {
     return %d;
-}  
+}
 
 |}
     generate_get_error_count_prototype false (ErrorSet.cardinal errors)
@@ -587,7 +622,7 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
     generate_get_error_index_func error_set generate_get_error_count_func error_set
     generate_empty_input_func function_spec generate_input_from_array_func function_spec
     generate_get_input_index_func function_spec generate_get_input_name_from_index_func
@@ -595,6 +630,8 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
     function_spec generate_get_output_index_func function_spec
     generate_get_output_name_from_index_func function_spec generate_get_output_num_func
     function_spec generate_empty_output_func function_spec
+    (generate_rule_functions program var_indexes)
+    program.rules
     (generate_main_function_signature_and_var_decls program var_indexes var_table_size)
     function_spec
     (generate_stmts program var_indexes)

@@ -23,6 +23,7 @@ and stmt_kind =
       (** The first two block ids are the true and false branch, the third is the join point after *)
   | SVerif of Mir.condition_data
   | SGoto of block_id
+  | SRuleCall of Bir.rule_id * string * stmt list
 
 type block = stmt list
 
@@ -36,15 +37,16 @@ type program = {
 }
 
 let count_instr (p : program) : int =
-  BlockMap.fold
-    (fun _ block acc ->
-      List.fold_left
-        (fun acc s ->
-          match Pos.unmark s with
-          | SConditional _ | SAssign _ | SVerif _ -> acc + 1
-          | SGoto _ -> acc)
-        acc block)
-    p.blocks 0
+  let rec aux acc stmts =
+    List.fold_left
+      (fun acc s ->
+        match Pos.unmark s with
+        | SConditional _ | SAssign _ | SVerif _ -> acc + 1
+        | SGoto _ -> acc
+        | SRuleCall (_, _, stmts) -> aux acc stmts)
+      acc stmts
+  in
+  BlockMap.fold (fun _ block acc -> aux acc block) p.blocks 0
 
 module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   type t = block_id
