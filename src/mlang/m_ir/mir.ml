@@ -59,25 +59,28 @@ let same_execution_number (en1 : execution_number) (en2 : execution_number) : bo
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
 module Variable = struct
+  type id = int
+  (** Each variable has an unique ID *)
+
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     execution_number : execution_number;
         (** The number associated with the rule of verification condition in which the variable is
             defined *)
     alias : string option;  (** Input variable have an alias *)
-    id : int;  (** Each variable has an unique ID *)
+    id : id;
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
     attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
     is_table : int option;
   }
 
-  let counter : int ref = ref 0
-
-  let fresh_id () : int =
-    let v = !counter in
-    counter := !counter + 1;
-    v
+  let fresh_id : unit -> id =
+    let counter : int ref = ref 0 in
+    fun () ->
+      let v = !counter in
+      counter := !counter + 1;
+      v
 
   let new_var (name : string Pos.marked) (alias : string option) (descr : string Pos.marked)
       (execution_number : execution_number)
@@ -175,6 +178,33 @@ module VariableMap = struct
       map
 end
 
+(** Variable dictionary, act as a set but refered by keys *)
+module VariableDict = struct
+  module Map = Map.Make (struct
+    type t = Variable.id
+
+    let compare = compare
+  end)
+
+  include Map
+
+  type t = Variable.t Map.t
+
+  let singleton v = singleton v.Variable.id v
+
+  let add v t = add v.Variable.id v t
+
+  let mem v t = mem v.Variable.id t
+
+  let fold f t acc = fold (fun _ v acc -> f v acc) t acc
+
+  let union t1 t2 = union (fun _ v _ -> Some v) t1 t2
+
+  let for_all f t = for_all (fun _ v -> f v) t
+end
+
+module VariableSet = Set.Make (Variable)
+
 module LocalVariableMap = struct
   include Map.Make (LocalVariable)
 
@@ -243,14 +273,43 @@ type variable_data = {
       name = "variable_data_iter";
     }]
 
+type rule_id = int
+
+let fresh_rule_id =
+  let count = ref 0 in
+  fun () ->
+    let n = !count in
+    incr count;
+    n
+
+(** Special rule id for initial definition of variables *)
+let initial_undef_rule_id = -1
+
+type rule_data = { rule_vars : (Variable.id * variable_data) list; rule_name : Mast.rule_name }
+
+module RuleMap = Map.Make (struct
+  type t = rule_id
+
+  let compare = compare
+end)
+
 (**{1 Verification conditions}*)
 
 (** Errors are first-class objects *)
+
 module Error = struct
+  type descr = {
+    kind : string Pos.marked;
+    major_code : string Pos.marked;
+    minor_code : string Pos.marked;
+    description : string Pos.marked;
+    isisf : string Pos.marked;
+  }
+
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
-    descr : string Pos.marked;  (** Description taken from the variable declaration *)
+    descr : descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
@@ -261,9 +320,29 @@ module Error = struct
     counter := !counter + 1;
     v
 
-  let new_error (name : string Pos.marked) (descr : string Pos.marked) (error_typ : Mast.error_typ)
-      : t =
-    { name; id = fresh_id (); descr; typ = error_typ }
+  let mast_error_desc_to_ErrorDesc (error : Mast.error_) =
+    {
+      kind = List.nth error.error_descr 0;
+      major_code = List.nth error.error_descr 1;
+      minor_code = List.nth error.error_descr 2;
+      description = List.nth error.error_descr 3;
+      isisf = (match List.nth_opt error.error_descr 4 with Some s -> s | None -> ("", Pos.no_pos));
+    }
+
+  let new_error (name : string Pos.marked) (error : Mast.error_) (error_typ : Mast.error_typ) : t =
+    { name; id = fresh_id (); descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
+
+  let err_descr_string (err : t) =
+    Pos.same_pos_as
+      (String.concat ":"
+         [
+           err.descr.kind |> Pos.unmark;
+           err.descr.major_code |> Pos.unmark;
+           err.descr.minor_code |> Pos.unmark;
+           err.descr.description |> Pos.unmark;
+           err.descr.isisf |> Pos.unmark;
+         ])
+      err.name
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
@@ -286,7 +365,8 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_vars : variable_data VariableMap.t;
+  program_vars : VariableDict.t;
+  program_rules : rule_data RuleMap.t;
   program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
@@ -297,8 +377,8 @@ type program = {
 (** Throws an error in case of alias not found *)
 let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   let v =
-    VariableMap.fold
-      (fun v _ acc ->
+    VariableDict.fold
+      (fun v acc ->
         match (acc, v.Variable.alias) with
         | Some _, _ | None, None -> acc
         | None, Some v_alias ->
@@ -330,3 +410,46 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
            (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
            (Pos.VarNameToID.find name p.program_idmap))
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
+
+(** Explores the rules to find rule and variable data *)
+let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_data =
+  (* using exceptions to cut short exploration *)
+  let exception Found_rule of rule_data * variable_data in
+  let exception Found_var of variable_data in
+  try
+    RuleMap.iter
+      (fun _ rule_data ->
+        try
+          List.iter
+            (fun (vid, def) -> if var.id = vid then raise (Found_var def))
+            rule_data.rule_vars
+        with Found_var def -> raise (Found_rule (rule_data, def)))
+      p.program_rules;
+    raise Not_found
+  with Found_rule (rule, var) -> (rule, var)
+
+let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) : program =
+  let program_rules =
+    RuleMap.map
+      (fun rule_data ->
+        let rule_vars =
+          List.map
+            (fun (vid, def) ->
+              let var = VariableDict.find vid p.program_vars in
+              (vid, f var def))
+            rule_data.rule_vars
+        in
+        { rule_data with rule_vars })
+      p.program_rules
+  in
+  { p with program_rules }
+
+let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program) (acc : 'a) : 'a =
+  RuleMap.fold
+    (fun _ rule_data acc ->
+      List.fold_left
+        (fun acc (vid, def) ->
+          let var = VariableDict.find vid p.program_vars in
+          f var def acc)
+        acc rule_data.rule_vars)
+    p.program_rules acc

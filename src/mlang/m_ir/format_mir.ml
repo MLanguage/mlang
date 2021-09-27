@@ -94,7 +94,7 @@ let format_variable_data fmt (def : variable_data) =
       match def.var_typ with None -> Format.fprintf fmt "unknown" | Some t -> format_typ fmt t)
     () format_io def.var_io format_variable_def def.var_definition
 
-let format_program_vars fmt (p : variable_data VariableMap.t) =
+let format_variables fmt (p : variable_data VariableMap.t) =
   VariableMap.map_printer
     (fun fmt var ->
       Format.fprintf fmt "Variable %s%s" (Pos.unmark var.Variable.name)
@@ -102,12 +102,27 @@ let format_program_vars fmt (p : variable_data VariableMap.t) =
     format_variable_data fmt p
 
 let format_error fmt (e : Error.t) =
-  Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name) (Pos.unmark e.Error.descr)
+  Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)
+    (Error.err_descr_string e |> Pos.unmark)
 
 let format_precondition fmt (precond : condition_data) =
   Format.fprintf fmt "Précondition : %a\nSinon %a" format_expression (Pos.unmark precond.cond_expr)
     (Format_mast.pp_print_list_comma format_error)
     precond.cond_errors
+
+let format_program_rules fmt (vars : VariableDict.t) (rules : rule_data RuleMap.t) =
+  RuleMap.iter
+    (fun _ { rule_vars; rule_name } ->
+      let var_defs =
+        List.fold_left
+          (fun var_defs (vid, def) ->
+            let var = VariableDict.find vid vars in
+            VariableMap.add var def var_defs)
+          VariableMap.empty rule_vars
+      in
+      Format.fprintf fmt "Regle %a\n%a\n" Format_mast.format_rule_name rule_name format_variables
+        var_defs)
+    rules
 
 let format_program_conds fmt (conds : condition_data VariableMap.t) =
   Format_mast.pp_print_list_endline
@@ -115,8 +130,9 @@ let format_program_conds fmt (conds : condition_data VariableMap.t) =
     fmt (VariableMap.bindings conds)
 
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a\n\n%a" format_program_vars p.program_vars format_program_conds
-    p.program_conds
+  Format.fprintf fmt "%a\n\n%a"
+    (fun fmt -> format_program_rules fmt p.program_vars)
+    p.program_rules format_program_conds p.program_conds
 
 let format_variable fmt (v : Variable.t) =
   Format.fprintf fmt "%s: %s" (Pos.unmark v.Variable.name) (Pos.unmark v.Variable.descr)

@@ -528,9 +528,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       (Pos.get_position e) Format_mir.format_expression (Pos.unmark e) format_definedness d;
   (new_e, d)
 
-let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
+let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_ev_ctx)
     (new_block : stmt list) (p : program) : stmt list * partial_ev_ctx =
-  let ctx = reset_ctx ctx block_id in
   match Pos.unmark stmt with
   | SAssign (var, def) ->
       let peval_debug = List.mem (Pos.unmark var.name) !Cli.var_info_debug in
@@ -606,7 +605,15 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : partial_e
               p.mir_program
           else raise (Bir_interpreter.RegularFloatInterpreter.RuntimeError (err, ctx))
       | _ -> (Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt :: new_block, ctx))
-  | _ -> (stmt :: new_block, ctx)
+  | SGoto _ -> (stmt :: new_block, ctx)
+  | SRuleCall (rule_id, name, stmts) ->
+      let stmts, ctx =
+        List.fold_left
+          (fun (new_block, ctx) stmt -> partially_evaluate_stmt stmt block_id ctx new_block p)
+          ([], ctx) stmts
+      in
+      let stmt = Pos.same_pos_as (SRuleCall (rule_id, name, List.rev stmts)) stmt in
+      (stmt :: new_block, ctx)
 
 let partial_evaluation (p : program) : program =
   let g = get_cfg p in
@@ -616,7 +623,9 @@ let partial_evaluation (p : program) : program =
         let block = BlockMap.find block_id p.blocks in
         let new_block, ctx =
           List.fold_left
-            (fun (new_block, ctx) stmt -> partially_evaluate_stmt stmt block_id ctx new_block p)
+            (fun (new_block, ctx) stmt ->
+              let ctx = reset_ctx ctx block_id in
+              partially_evaluate_stmt stmt block_id ctx new_block p)
             ([], ctx) block
         in
         ({ p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks }, ctx))

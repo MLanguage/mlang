@@ -10,11 +10,29 @@ end)
 
 type translation_ctx = {
   new_variables : Mir.Variable.t StringMap.t;
-  variables_used_as_inputs : unit Mir.VariableMap.t;
+  variables_used_as_inputs : Mir.VariableDict.t;
+  rule_instances : Bir.rule Bir.RuleMap.t;
 }
 
 let emtpy_translation_ctx : translation_ctx =
-  { new_variables = StringMap.empty; variables_used_as_inputs = Mir.VariableMap.empty }
+  {
+    new_variables = StringMap.empty;
+    variables_used_as_inputs = Mir.VariableDict.empty;
+    rule_instances = Bir.RuleMap.empty;
+  }
+
+let ctx_join ctx1 ctx2 =
+  {
+    new_variables =
+      StringMap.union
+        (fun _ v1 v2 ->
+          assert (Mir.Variable.compare v1 v2 = 0);
+          Some v2)
+        ctx1.new_variables ctx2.new_variables;
+    variables_used_as_inputs =
+      Mir.VariableDict.union ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
+    rule_instances = Bir.RuleMap.union (fun _ r _ -> Some r) ctx1.rule_instances ctx2.rule_instances;
+  }
 
 let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
   match b with And -> And | Or -> Or | _ -> assert false
@@ -37,13 +55,11 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
 
 let generate_input_condition (crit : Mir.Variable.t -> bool) (p : Mir_interface.full_program)
     (pos : Pos.t) =
-  let variables_to_check = Mir.VariableMap.filter (fun var _ -> crit var) p.program.program_vars in
+  let variables_to_check = Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars in
   let mk_call_present x = (Mir.FunctionCall (PresentFunc, [ (Mir.Var x, pos) ]), pos) in
   let mk_or e1 e2 = (Mir.Binop ((Or, pos), e1, e2), pos) in
   let mk_false = (Mir.Literal (Float 0.), pos) in
-  Mir.VariableMap.fold
-    (fun var _ acc -> mk_or (mk_call_present var) acc)
-    variables_to_check mk_false
+  Mir.VariableDict.fold (fun var acc -> mk_or (mk_call_present var) acc) variables_to_check mk_false
 
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
@@ -107,30 +123,81 @@ let reset_and_add_outputs (p : Mir_interface.full_program) (outputs : string Pos
     Mir_interface.full_program =
   let outputs = List.map (fun out -> Mir.find_var_by_name p.program out) outputs in
   let program =
-    {
-      p.program with
-      program_vars =
-        Mir.VariableMap.mapi
-          (fun var data ->
-            if List.mem var outputs then
-              match data.Mir.var_io with
-              | Input ->
-                  raise
-                    (Bir_interpreter.RegularFloatInterpreter.RuntimeError
-                       ( Bir_interpreter.RegularFloatInterpreter.IncorrectOutputVariable
-                           ( Format.asprintf "%a is an input" Format_mir.format_variable var,
-                             Pos.get_position var.Mir.Variable.name ),
-                         Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
-              | Output -> data
-              | Regular -> { data with var_io = Output }
-            else
-              match data.Mir.var_io with
-              | Input | Regular -> data
-              | Output -> { data with var_io = Regular })
-          p.program.program_vars;
-    }
+    Mir.map_vars
+      (fun var data ->
+        if List.mem var outputs then
+          match data.Mir.var_io with
+          | Input ->
+              raise
+                (Bir_interpreter.RegularFloatInterpreter.RuntimeError
+                   ( Bir_interpreter.RegularFloatInterpreter.IncorrectOutputVariable
+                       ( Format.asprintf "%a is an input" Format_mir.format_variable var,
+                         Pos.get_position var.Mir.Variable.name ),
+                     Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
+          | Output -> data
+          | Regular -> { data with var_io = Output }
+        else
+          match data.Mir.var_io with
+          | Input | Regular -> data
+          | Output -> { data with var_io = Regular })
+      p.program
   in
   { p with program }
+
+let translate_m_code (m_program : Mir_interface.full_program)
+    (vars : (Mir.Variable.id * Mir.variable_data) list) =
+  list_map_opt
+    (fun (vid, (vdef : Mir.variable_data)) ->
+      try
+        let var = Mir.VariableDict.find vid m_program.program.program_vars in
+        match vdef.var_definition with
+        | InputVar -> None
+        | _ ->
+            (* variables used in the context should not be reassigned *)
+            Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
+      with Not_found -> None)
+    vars
+
+let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : Mir.rule_id)
+    (ctx : translation_ctx) : Mir.rule_id * Pos.t * translation_ctx =
+  let instance_id = Mir.fresh_rule_id () in
+  let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
+  let rule_stmts = translate_m_code m_program rule.rule_vars in
+  let pos, rule_name =
+    let pos = List.hd rule.Mir.rule_name |> Pos.get_position in
+    let name = List.map Pos.unmark rule.Mir.rule_name |> String.concat "_" in
+    (pos, name ^ "_i" ^ string_of_int instance_id)
+  in
+  let instance = Bir.{ rule_id = instance_id; rule_name; rule_stmts } in
+  ( instance_id,
+    pos,
+    { ctx with rule_instances = Bir.RuleMap.add instance_id instance ctx.rule_instances } )
+
+let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
+    (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
+  let m_program =
+    reset_and_add_outputs m_program
+      (List.map
+         (function Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name | Local l -> (l, Pos.no_pos))
+         args)
+  in
+  let m_program =
+    {
+      m_program with
+      program =
+        Bir_interpreter.RegularFloatInterpreter.replace_undefined_with_input_variables
+          m_program.program ctx.variables_used_as_inputs;
+    }
+  in
+  let program_stmts, ctx =
+    List.fold_left
+      (fun (stmts, ctx) rule_id ->
+        let instance_id, pos, ctx = generate_rule_instance m_program rule_id ctx in
+        ((Bir.SRuleCall instance_id, pos) :: stmts, ctx))
+      ([], ctx) execution_order
+  in
+  let program_stmts = List.rev program_stmts in
+  (ctx, program_stmts)
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
@@ -215,10 +282,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             stmt;
         ] )
   | Mpp_ir.Assign (Mbased (var, _), expr) ->
-      ( {
-          ctx with
-          variables_used_as_inputs = Mir.VariableMap.add var () ctx.variables_used_as_inputs;
-        },
+      ( { ctx with variables_used_as_inputs = Mir.VariableDict.add var ctx.variables_used_as_inputs },
         [
           Pos.same_pos_as
             (Bir.SAssign
@@ -226,26 +290,15 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  {
                    var_definition = SimpleVar (translate_mpp_expr m_program ctx expr, pos);
                    var_typ = None;
-                   var_io = (Mir.VariableMap.find var m_program.program.program_vars).var_io;
+                   var_io = (snd (Mir.find_var_definition m_program.program var)).var_io;
                  } ))
             stmt;
         ] )
   | Mpp_ir.Conditional (e, t, f) ->
       let e' = translate_mpp_expr m_program ctx e in
       let ctx1, rt' = translate_mpp_stmts mpp_program m_program func_args ctx t in
-      let ctx2, rf' =
-        translate_mpp_stmts mpp_program m_program func_args
-          { ctx with new_variables = ctx1.new_variables }
-          f
-      in
-      ( {
-          ctx2 with
-          variables_used_as_inputs =
-            Mir.VariableMap.union
-              (fun _ _ _ -> Some ())
-              ctx1.variables_used_as_inputs ctx2.variables_used_as_inputs;
-        },
-        [ Pos.same_pos_as (Bir.SConditional (e', rt', rf')) stmt ] )
+      let ctx2, rf' = translate_mpp_stmts mpp_program m_program func_args ctx f in
+      (ctx_join ctx1 ctx2, [ Pos.same_pos_as (Bir.SConditional (e', rt', rf')) stmt ])
   | Mpp_ir.Delete (Mbased (var, _)) ->
       ( ctx,
         [
@@ -255,7 +308,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
-                   var_io = (Mir.VariableMap.find var m_program.program.program_vars).var_io;
+                   var_io = (snd (Mir.find_var_definition m_program.program var)).var_io;
                  } ))
             stmt;
         ] )
@@ -280,62 +333,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         real_args ctx
   | Mpp_ir.Expr (Call (Program, args), _) ->
       let real_args = match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args in
-      let m_program =
-        reset_and_add_outputs m_program
-          (List.map
-             (function Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name | Local l -> (l, Pos.no_pos))
-             real_args)
-      in
-      let m_program =
-        {
-          m_program with
-          program =
-            Bir_interpreter.RegularFloatInterpreter.replace_undefined_with_input_variables
-              m_program.program
-              (Mir.VariableMap.map (fun () -> Mir.Undefined) ctx.variables_used_as_inputs);
-        }
-      in
-      let exec_order = m_program.execution_order in
-      let inlined_program =
-        list_map_opt
-          (fun var ->
-            try
-              let vdef = Mir.VariableMap.find var m_program.program.program_vars in
-              match vdef.var_definition with
-              | InputVar -> None
-              | _ ->
-                  (* variables used in the context should not be reassigned *)
-                  Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
-            with Not_found -> None)
-          exec_order
-      in
-      let clean_state =
-        (* no cleaning or no arguments: we may want anything afterwards, so no cleaning *)
-        if (not !Cli.m_clean_calls) || real_args = [] then []
-        else
-          list_map_opt
-            (fun var ->
-              try
-                let vdef = Mir.VariableMap.find var m_program.program.program_vars in
-                match (vdef.var_definition, vdef.var_io) with
-                | InputVar, _ -> None
-                | _, Regular ->
-                    let pos = var.Mir.Variable.execution_number.pos in
-                    Some
-                      ( Bir.SAssign
-                          ( var,
-                            {
-                              var_definition = SimpleVar (Mir.Literal Undefined, pos);
-                              var_typ = vdef.var_typ;
-                              var_io = vdef.var_io;
-                            } ),
-                        pos )
-                | _ -> None
-              with Not_found -> None)
-            exec_order
-      in
-      Cli.var_info_print "|clean_state| += %d" (List.length clean_state);
-      (ctx, inlined_program @ clean_state)
+      let exec_order = m_program.main_execution_order in
+      wrap_m_code_call m_program exec_order real_args ctx
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter = match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc" in
       let ctx, partition_pre, partition_post =
@@ -357,36 +356,30 @@ and translate_mpp_stmts (mpp_program : Mpp_ir.mpp_compute list)
 and generate_partition mpp_program m_program func_args (filter : Mir.Variable.t -> bool)
     (pos : Pos.t) (ctx : translation_ctx) : translation_ctx * Bir.stmt list * Bir.stmt list =
   let vars_to_move =
-    Mir.VariableMap.fold
-      (fun var _ acc -> if filter var then var :: acc else acc)
+    Mir.VariableDict.fold
+      (fun var acc -> if filter var then var :: acc else acc)
       m_program.program.program_vars []
   in
-  let ctx, mpp_pre, mpp_post =
+  let mpp_pre, mpp_post =
     List.fold_left
-      (fun (ctx, stmts_pre, stmts_post) var ->
+      (fun (stmts_pre, stmts_post) var ->
         let shadow_var_name = "_" ^ Pos.unmark var.Mir.Variable.name in
         let open Mpp_ir in
         let shadow_var = Local shadow_var_name in
         let var = Mbased (var, Output) in
-        ( ctx,
-          (Assign (shadow_var, (Variable var, pos)), pos) :: (Delete var, pos) :: stmts_pre,
+        ( (Assign (shadow_var, (Variable var, pos)), pos) :: (Delete var, pos) :: stmts_pre,
           (Assign (var, (Variable shadow_var, pos)), pos) :: (Delete shadow_var, pos) :: stmts_post
         ))
-      (ctx, [], []) vars_to_move
+      ([], []) vars_to_move
   in
   let ctx, pre = translate_mpp_stmts mpp_program m_program func_args ctx mpp_pre in
   let ctx, post = translate_mpp_stmts mpp_program m_program func_args ctx mpp_post in
   (ctx, pre, post)
 
-let generate_verif_conds (exec_order : Mir_dependency_graph.execution_order)
-    (conds : Mir.condition_data Mir.VariableMap.t) : Bir.stmt list =
-  List.rev
-    (List.fold_left
-       (fun acc var ->
-         match Mir.VariableMap.find_opt var conds with
-         | None -> acc
-         | Some data -> (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
-       [] exec_order)
+let generate_verif_conds (conds : Mir.condition_data Mir.VariableMap.t) : Bir.stmt list =
+  Mir.VariableMap.fold
+    (fun _var data acc -> (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
+    conds []
 
 let create_combined_program (m_program : Mir_interface.full_program)
     (mpp_program : Mpp_ir.mpp_program) (mpp_function_to_extract : string) : Bir.program =
@@ -398,15 +391,13 @@ let create_combined_program (m_program : Mir_interface.full_program)
         Errors.raise_error
           (Format.asprintf "M++ function %s not found in M++ file!" mpp_function_to_extract)
     in
-    let stmts =
-      snd @@ translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx
+    let ctx, statements =
+      translate_mpp_function mpp_program m_program decl_to_extract [] emtpy_translation_ctx
     in
-    let stmts_verif =
-      generate_verif_conds m_program.execution_order m_program.program.program_conds
-    in
-
+    let conds_verif = generate_verif_conds m_program.program.program_conds in
     {
-      statements = stmts @ stmts_verif;
+      rules = ctx.rule_instances;
+      statements = statements @ conds_verif;
       (* we append the M verification conditions at the end, when everything has already been
          computed *)
       idmap = m_program.program.program_idmap;

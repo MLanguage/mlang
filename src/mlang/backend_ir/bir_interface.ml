@@ -100,8 +100,16 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
   let mk_neg (mexpr : Mast.expression Pos.marked) =
     Pos.same_pos_as (Mast.Unop (Mast.Not, mexpr)) mexpr
   in
+  let dummy_entry = ("", Pos.no_pos) in
   let test_error =
-    Mir.Error.new_error ("-1", Pos.no_pos) ("Condition error in tests", Pos.no_pos) Mast.Anomaly
+    Mir.Error.new_error ("-1", Pos.no_pos)
+      {
+        error_name = ("", Pos.no_pos);
+        error_typ = (Mast.Anomaly, Pos.no_pos);
+        error_descr =
+          [ ("Condition error in tests", Pos.no_pos); dummy_entry; dummy_entry; dummy_entry ];
+      }
+      Mast.Anomaly
   in
   let verif_conds =
     List.fold_left
@@ -181,7 +189,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
       f.func_constant_inputs []
   in
   let unused_input_stmts =
-    Mir.VariableMap.fold
+    Mir.fold_vars
       (fun var def acc ->
         match def.Mir.var_definition with
         | Mir.InputVar ->
@@ -198,7 +206,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
                 pos )
               :: acc
         | _ -> acc)
-      p.mir_program.program_vars []
+      p.mir_program []
   in
   let conds_stmts =
     Mir.VariableMap.fold

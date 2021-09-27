@@ -16,7 +16,11 @@
 
 open Mir
 
-type ctx = { ctx_program : program; ctx_is_generic_table : bool }
+type ctx = { ctx_table_vars : VariableDict.t; ctx_is_generic_table : bool }
+
+let add_table_var var ctx = { ctx with ctx_table_vars = VariableDict.add var ctx.ctx_table_vars }
+
+let is_table_var var ctx = VariableDict.mem var ctx.ctx_table_vars
 
 let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
   match Pos.unmark e with
@@ -57,20 +61,18 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
       else
         Errors.raise_spanned_error "Generic table index appears outside of table"
           (Pos.get_position e)
-  | Index ((var, var_pos), e') -> (
+  | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
       let ctx = typecheck_top_down ctx e' in
-      let var_data = VariableMap.find var ctx.ctx_program.program_vars in
-      match var_data.Mir.var_definition with
-      | SimpleVar _ | InputVar ->
-          Errors.raise_multispanned_error
-            (Format.asprintf "variable %s is accessed as a table but it is not defined as one"
-               (Pos.unmark var.Variable.name))
-            [
-              (Some "variable access", var_pos);
-              (Some "variable definition", Pos.get_position var.Variable.name);
-            ]
-      | TableVar _ -> ctx)
+      if is_table_var var ctx then ctx
+      else
+        Errors.raise_multispanned_error
+          (Format.asprintf "variable %s is accessed as a table but it is not defined as one"
+             (Pos.unmark var.Variable.name))
+          [
+            (Some "variable access", var_pos);
+            (Some "variable definition", Pos.get_position var.Variable.name);
+          ]
 
 and typecheck_func_args (f : func) (pos : Pos.t) : ctx -> Mir.expression Pos.marked list -> ctx =
   match f with
@@ -174,67 +176,76 @@ let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_de
 
 (* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
-  let _are_tables, ctx, p_vars =
-    Mir.VariableMap.fold
-      (fun var def (acc, ctx, p_vars) ->
-        check_non_recursivity_of_variable_defs var def.var_definition;
-        (* All top-level variables are og type Real *)
-        match def.var_definition with
-        | SimpleVar e ->
-            let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e in
-            (VariableMap.add var false acc, new_ctx, p_vars)
-        | TableVar (size, defs) -> (
-            match defs with
-            | IndexGeneric e ->
-                let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = true } e in
-                (VariableMap.add var true acc, new_ctx, p_vars)
-            | IndexTable es ->
-                let new_ctx =
-                  IndexMap.fold
-                    (fun _ e ctx -> typecheck_top_down { ctx with ctx_is_generic_table = false } e)
-                    es ctx
-                in
-                let undefined_indexes =
-                  determine_def_complete_cover var size
-                    (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
-                in
-                if List.length undefined_indexes = 0 then
-                  (VariableMap.add var true acc, new_ctx, p_vars)
-                else
-                  let previous_var_def =
-                    Mast_to_mvg.get_var_from_name p.program.program_idmap var.Variable.name
-                      var.Variable.execution_number false
-                  in
-                  let new_es =
-                    List.fold_left
-                      (fun es undef_index ->
-                        Mir.IndexMap.add undef_index
-                          (Pos.same_pos_as
-                             (Mir.Index
-                                ( Pos.same_pos_as previous_var_def var.Mir.Variable.name,
-                                  Pos.same_pos_as
-                                    (Mir.Literal (Float (float_of_int undef_index)))
-                                    var.Mir.Variable.name ))
-                             var.Mir.Variable.name)
-                          es)
-                      es undefined_indexes
-                  in
-                  ( VariableMap.add var true acc,
-                    new_ctx,
-                    Mir.VariableMap.add var
-                      { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) }
-                      p_vars ))
-        | InputVar ->
-            if VariableMap.mem var acc then (acc, ctx, p_vars)
-            else (VariableMap.add var false acc, ctx, p_vars))
-      p.program.program_vars
-      ( Mir.VariableMap.empty,
-        { ctx_program = p.program; ctx_is_generic_table = false },
-        p.program.program_vars )
+  let check_var_def ctx vid def =
+    let var = VariableDict.find vid p.program.program_vars in
+    check_non_recursivity_of_variable_defs var def.var_definition;
+    (* All top-level variables are og type Real *)
+    match def.var_definition with
+    | SimpleVar e ->
+        let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e in
+        (new_ctx, def)
+    | TableVar (size, defs) -> (
+        match defs with
+        | IndexGeneric e ->
+            let new_ctx =
+              typecheck_top_down { ctx with ctx_is_generic_table = true } e |> add_table_var var
+            in
+            (new_ctx, def)
+        | IndexTable es ->
+            let new_ctx =
+              IndexMap.fold
+                (fun _ e ctx -> typecheck_top_down { ctx with ctx_is_generic_table = false } e)
+                es ctx
+            in
+            let undefined_indexes =
+              determine_def_complete_cover var size
+                (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
+            in
+            if List.length undefined_indexes = 0 then (add_table_var var new_ctx, def)
+            else
+              let previous_var_def =
+                Mast_to_mvg.get_var_from_name p.program.program_idmap var.Variable.name
+                  var.Variable.execution_number false
+              in
+              let new_es =
+                List.fold_left
+                  (fun es undef_index ->
+                    Mir.IndexMap.add undef_index
+                      (Pos.same_pos_as
+                         (Mir.Index
+                            ( Pos.same_pos_as previous_var_def var.Mir.Variable.name,
+                              Pos.same_pos_as
+                                (Mir.Literal (Float (float_of_int undef_index)))
+                                var.Mir.Variable.name ))
+                         var.Mir.Variable.name)
+                      es)
+                  es undefined_indexes
+              in
+              ( add_table_var var new_ctx,
+                { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) } ))
+    | InputVar -> if is_table_var var ctx then (ctx, def) else (add_table_var var ctx, def)
+  in
+  let ctx, program_rules =
+    List.fold_left
+      (fun (ctx, rules) rule_id ->
+        let rule_data = RuleMap.find rule_id p.program.program_rules in
+        let ctx, rule_data =
+          let ctx, rule_vars =
+            List.fold_left
+              (fun (ctx, vars) (vid, def) ->
+                let ctx, def = check_var_def ctx vid def in
+                (ctx, (vid, def) :: vars))
+              (ctx, []) (List.rev rule_data.rule_vars)
+          in
+          (ctx, { rule_data with rule_vars })
+        in
+        (ctx, RuleMap.add rule_id rule_data rules))
+      ({ ctx_is_generic_table = false; ctx_table_vars = VariableDict.empty }, Mir.RuleMap.empty)
+      p.main_execution_order
   in
   let _ = typecheck_program_conds ctx p.program.program_conds in
   (* the typechecking modifications do not change the dependency graph *)
-  { p with program = { p.program with program_vars = p_vars } }
+  { p with program = { p.program with program_rules } }
 
 (* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
@@ -365,32 +376,33 @@ let expand_functions (p : Mir_interface.full_program) : Mir_interface.full_progr
     (* this expansion does not modify the dependency graph *)
     p with
     program =
-      {
-        p.program with
-        program_vars =
-          VariableMap.map
-            (fun def ->
-              match def.var_definition with
-              | InputVar -> def
-              | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
-              | TableVar (size, defg) -> (
-                  match defg with
-                  | IndexGeneric e ->
-                      {
-                        def with
-                        var_definition = TableVar (size, IndexGeneric (expand_functions_expr e));
-                      }
-                  | IndexTable es ->
-                      {
-                        def with
-                        var_definition =
-                          TableVar
-                            (size, IndexTable (IndexMap.map (fun e -> expand_functions_expr e) es));
-                      }))
-            p.program.program_vars;
-        program_conds =
-          VariableMap.map
-            (fun cond -> { cond with cond_expr = expand_functions_expr cond.cond_expr })
-            p.program.program_conds;
-      };
+      (let program =
+         map_vars
+           (fun _var def ->
+             match def.var_definition with
+             | InputVar -> def
+             | SimpleVar e -> { def with var_definition = SimpleVar (expand_functions_expr e) }
+             | TableVar (size, defg) -> (
+                 match defg with
+                 | IndexGeneric e ->
+                     {
+                       def with
+                       var_definition = TableVar (size, IndexGeneric (expand_functions_expr e));
+                     }
+                 | IndexTable es ->
+                     {
+                       def with
+                       var_definition =
+                         TableVar
+                           (size, IndexTable (IndexMap.map (fun e -> expand_functions_expr e) es));
+                     }))
+           p.program
+       in
+       {
+         program with
+         program_conds =
+           VariableMap.map
+             (fun cond -> { cond with cond_expr = expand_functions_expr cond.cond_expr })
+             p.program.program_conds;
+       });
   }

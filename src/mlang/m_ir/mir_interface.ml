@@ -15,46 +15,53 @@
 open Mir
 
 let reset_all_outputs (p : program) : program =
-  {
-    p with
-    program_vars =
-      VariableMap.mapi
-        (fun var var_data ->
-          match var_data.var_io with
-          | Input ->
-              {
-                var_data with
-                var_io = Input;
-                var_definition =
-                  (match var_data.var_definition with
-                  | InputVar | SimpleVar _ -> var_data.var_definition
-                  | TableVar _ ->
-                      Errors.raise_spanned_error
-                        (Format.asprintf
-                           "Defining a\n\
-                           \             variable input for a table variable %s is not supported"
-                           (Pos.unmark var.Variable.name))
-                        (Pos.get_position var.Variable.name));
-              }
-          | _ ->
-              {
-                var_data with
-                var_io = Regular;
-                var_definition =
-                  (match var_data.var_definition with
-                  | InputVar -> assert false
-                  | SimpleVar old -> SimpleVar old
-                  | TableVar (size, old) -> TableVar (size, old));
-              })
-        p.program_vars;
-  }
+  map_vars
+    (fun var var_data ->
+      match var_data.var_io with
+      | Input ->
+          {
+            var_data with
+            var_io = Input;
+            var_definition =
+              (match var_data.var_definition with
+              | InputVar | SimpleVar _ -> var_data.var_definition
+              | TableVar _ ->
+                  Errors.raise_spanned_error
+                    (Format.asprintf
+                       "Defining a\n\
+                       \             variable input for a table variable %s is not supported"
+                       (Pos.unmark var.Variable.name))
+                    (Pos.get_position var.Variable.name));
+          }
+      | _ ->
+          {
+            var_data with
+            var_io = Regular;
+            var_definition =
+              (match var_data.var_definition with
+              | InputVar -> assert false
+              | SimpleVar old -> SimpleVar old
+              | TableVar (size, old) -> TableVar (size, old));
+          })
+    p
 
 type full_program = {
-  dep_graph : Mir_dependency_graph.G.t;
-  execution_order : Mir_dependency_graph.execution_order;
+  dep_graph : Mir_dependency_graph.RG.t;
+  main_execution_order : Mir.rule_id list;
   program : Mir.program;
 }
 
 let to_full_program (program : program) : full_program =
-  let dep_graph = Mir_dependency_graph.create_dependency_graph program in
-  { program; dep_graph; execution_order = Mir_dependency_graph.get_execution_order dep_graph }
+  let vars_to_rules =
+    Mir.RuleMap.fold
+      (fun rule_id { rule_vars; _ } conv ->
+        List.fold_left
+          (fun conv (vid, _def) ->
+            let var = VariableDict.find vid program.program_vars in
+            VariableMap.add var rule_id conv)
+          conv rule_vars)
+      program.program_rules VariableMap.empty
+  in
+  let dep_graph = Mir_dependency_graph.create_rules_dependency_graph program vars_to_rules in
+  let main_execution_order = Mir_dependency_graph.get_rules_execution_order dep_graph in
+  { program; dep_graph; main_execution_order }

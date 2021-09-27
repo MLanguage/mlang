@@ -307,19 +307,21 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond cond oc =
-  Format.fprintf oc
-    "# Verification condition %a@\n\
-     cond = %a@\n\
-     if not(isinstance(cond, Undefined)) and cond:@\n\
-    \    raise TypeError(\"Error triggered\\n%a\")@\n\
-     @\n"
-    Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
-    cond.cond_expr
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt err ->
-         Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name) (sanitize_str err.Error.descr)))
-    cond.cond_errors
+  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
+    Format.fprintf oc
+      "# Verification condition %a@\n\
+       cond = %a@\n\
+       if not(isinstance(cond, Undefined)) and cond:@\n\
+      \    raise TypeError(\"Error triggered\\n%a\")@\n\
+       @\n"
+      Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
+      cond.cond_expr
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+         (fun fmt err ->
+           Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
+             (Error.err_descr_string err |> sanitize_str)))
+      cond.cond_errors
 
 let rec generate_stmts (program : Bir.program) oc stmts =
   Format.pp_print_list (generate_stmt program) oc stmts
@@ -358,6 +360,8 @@ and generate_stmt program oc stmt =
         cond_name (generate_python_expr false) (Pos.same_pos_as cond stmt) cond_name cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
+  | SRuleCall _ -> assert false
+(* Removed with [Bir.get_all_statements] below *)
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
@@ -382,5 +386,5 @@ let generate_python_program (program : Bir.program) (function_spec : Bir_interfa
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a" generate_header () generate_input_handling function_spec
-    (generate_stmts program) program.statements generate_return function_spec;
+    (generate_stmts program) (Bir.get_all_statements program) generate_return function_spec;
   close_out _oc
