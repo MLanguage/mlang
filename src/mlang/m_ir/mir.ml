@@ -411,10 +411,13 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
            (Pos.VarNameToID.find name p.program_idmap))
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
-let find_vars_by_io (p : program) (io_to_find : io) : Variable.t list =
-  VariableMap.fold
-    (fun k v acc -> if v.var_io = io_to_find then k :: acc else acc)
-    p.program_vars []
+let find_vars_by_io (p : program) (io_to_find : io) : rule_data RuleMap.t =
+  let is_var_io (_, var_data) = var_data.var_io = io_to_find in
+  RuleMap.filter_map
+    (fun _ y ->
+      let rule_vars = List.filter is_var_io y.rule_vars in
+      Some { y with rule_vars })
+    p.program_rules
 
 (** Explores the rules to find rule and variable data *)
 let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_data =
