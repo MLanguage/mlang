@@ -109,13 +109,11 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let spec_file =
+      let function_spec =
         match function_spec with
-        | None ->
-            Errors.raise_error "function specification file is not specified using --function_spec"
-        | Some f -> f
+        | None -> Bir_interface.generate_function_all_vars combined_program
+        | Some spec_file -> Bir_interface.read_function_from_spec combined_program spec_file
       in
-      let function_spec = Bir_interface.read_function_from_spec combined_program spec_file in
       let combined_program, _ =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in
