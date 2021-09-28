@@ -13,7 +13,7 @@
 
 open Oir
 
-type partial_expr = PartialLiteral of Mir.literal | UnknownFloat [@@deriving ord]
+type partial_expr = PartialLiteral of Mir.literal | UnknownFloat
 
 let format_partial_expr fmt pe =
   match pe with
@@ -72,7 +72,6 @@ let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
   | _ -> None
 
 type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
-[@@deriving ord]
 
 let format_var_literal fmt v =
   match v with
@@ -168,7 +167,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
                     Paths.check_path ctx.ctx_paths def_block intermediate_block
                     && Paths.check_path ctx.ctx_paths intermediate_block curr_block
                     (* if the definition is the same, this is not an issue *)
-                    && (Option.compare compare_var_literal) ov (Some def) <> 0)
+                    && (Option.compare Stdlib.compare) ov (Some def) <> 0)
                 defs
             in
             if BlockMap.cardinal exists_other_def_in_between > 0 then
