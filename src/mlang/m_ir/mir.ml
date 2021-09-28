@@ -412,13 +412,17 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
 let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
-  (* TODO: Implement filtering of p.program_vars based on discovered output variables *)
   let rules_as_list = RuleMap.bindings p.program_rules in
   let rule_vars =
-    List.flatten (List.map (fun x -> x.rule_vars) (List.map (fun (_, y) -> y) rules_as_list))
+    List.flatten (List.map (fun rd -> rd.rule_vars) (List.map (fun (_, rd) -> rd) rules_as_list))
   in
-  let _ = List.filter (fun (_, y) -> y.var_io = io_to_find) rule_vars in
-  VariableDict.filter (fun _ _ -> true) p.program_vars
+  let filtered_list =
+    List.filter (fun (_, y) -> y.var_io = io_to_find) rule_vars
+    |> List.map (fun (var_id, _) -> var_id)
+  in
+  VariableDict.filter
+    (fun vid _ -> List.exists (fun list_vid -> list_vid = vid) filtered_list)
+    p.program_vars
 
 (** Explores the rules to find rule and variable data *)
 let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_data =
