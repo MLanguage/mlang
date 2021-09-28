@@ -253,9 +253,12 @@ let generate_var_cond var_indexes cond =
         (let se, _ = generate_java_expr cond.cond_expr var_indexes in
          se)
         (let cond_error = List.hd cond.cond_errors in
-         Format.asprintf "%s: %s"
+         Format.asprintf "%s: %s%s%s%s"
            (sanitize_str cond_error.Error.name)
-           (sanitize_str cond_error.Error.descr)))
+           (sanitize_str cond_error.Error.descr.kind)
+           (sanitize_str cond_error.Error.descr.major_code)
+           (sanitize_str cond_error.Error.descr.minor_code)
+           (sanitize_str cond_error.Error.descr.description)))
 
 let fresh_cond_counter = ref 0
 
@@ -271,6 +274,7 @@ let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMa
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt)
     (ol : print_block) : print_block =
   match Pos.unmark stmt with
+  | SRuleCall _ -> []
   | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata ol
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
