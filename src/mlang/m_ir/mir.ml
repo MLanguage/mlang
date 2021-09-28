@@ -111,9 +111,8 @@ end
 
 (** Type of MVG values *)
 type typ = Real
-[@@deriving visitors { variety = "iter"; nude = true; polymorphic = true; name = "typ_iter" }]
 
-type literal = Float of float | Undefined [@@deriving eq, ord]
+type literal = Float of float | Undefined
 
 let false_literal = Float 0.
 
@@ -141,17 +140,6 @@ type func =
     Because translating to MVG requires a lot of unrolling and expansion, we introduce a [LocalLet]
     construct to avoid code duplication. *)
 
-let current_visitor_pos : Pos.t ref = ref Pos.no_pos
-
-(** Custom visitor for the [Pos.marked] type *)
-class ['self] marked_iter =
-  object
-    method visit_marked : 'env 'a. ('env -> 'a -> unit) -> 'env -> 'a Pos.marked -> unit =
-      fun f env x ->
-        current_visitor_pos := Pos.get_position x;
-        f env (Pos.unmark x)
-  end
-
 type expression =
   | Unop of (Mast.unop[@opaque]) * expression Pos.marked
   | Comparison of (Mast.comp_op[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
@@ -165,7 +153,6 @@ type expression =
   | GenericTableIndex
   | Error
   | LocalLet of (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
-[@@deriving visitors { variety = "iter"; ancestors = [ "marked_iter" ]; name = "expression_iter" }]
 
 (** MVG programs are just mapping from variables to their definitions, and make a massive use of
     [VariableMap]. *)
@@ -229,34 +216,15 @@ module IndexMap = struct
       map
 end
 
-(** Custom visitor for the [IndexMap.t] type *)
-class ['self] index_map_iter =
-  object
-    method visit_index_map : 'env 'a. ('env -> 'a -> unit) -> 'env -> 'a IndexMap.t -> unit =
-      fun f env x -> IndexMap.iter (fun _ x -> f env x) x
-  end
-
 type index_def =
   | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
   | IndexGeneric of expression Pos.marked
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "index_map_iter"; "expression_iter" ];
-      nude = true;
-      name = "index_def_iter";
-    }]
 
 (** The definitions here are modeled closely to the source M language. One could also adopt a more
     lambda-calculus-compatible model with functions used to model tables. *)
 type variable_def = SimpleVar of expression Pos.marked | TableVar of int * index_def | InputVar
-[@@deriving
-  visitors
-    { variety = "iter"; ancestors = [ "index_def_iter" ]; nude = true; name = "variable_def_iter" }]
 
 type io = Input | Output | Regular
-[@@deriving visitors { variety = "iter"; nude = true; name = "io_iter" }]
 
 type variable_data = {
   var_definition : variable_def;
@@ -264,14 +232,6 @@ type variable_data = {
       (** The typing info here comes from the variable declaration in the source program *)
   var_io : io;
 }
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "variable_def_iter"; "io_iter"; "typ_iter" ];
-      nude = true;
-      name = "variable_data_iter";
-    }]
 
 type rule_id = int
 
@@ -348,14 +308,6 @@ module Error = struct
 end
 
 type condition_data = { cond_expr : expression Pos.marked; cond_errors : (Error.t[@opaque]) list }
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "expression_iter" ];
-      nude = true;
-      name = "condition_data_iter";
-    }]
 
 type idmap = Variable.t list Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type: Mir.Variable.t}, so we need to

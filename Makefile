@@ -62,8 +62,8 @@ default: build
 ##################################################
 
 deps:
-	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
-		cmdliner dune-build-info visitors parmap num ocamlformat mlgmpidl \
+	opam install ANSITerminal re ocamlgraph dune menhir \
+		cmdliner dune-build-info parmap num ocamlformat mlgmpidl \
 		ocamlformat
 	git submodule update --init --recursive
 
