@@ -36,7 +36,7 @@
   (re
    (= 1.9.0))
   (ppx_deriving
-   (= 4.4))
+   (= 4.5))
   (visitors
    (>= 20200210))
   (ocamlgraph
