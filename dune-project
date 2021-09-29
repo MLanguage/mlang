@@ -37,6 +37,8 @@
    (= 1.9.0))
   (ocamlgraph
    (= 1.8.8))
+  (odoc
+  (= 1.5.3))
   (dune-build-info
    (= 2.5.1))
   (num
