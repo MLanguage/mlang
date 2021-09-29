@@ -61,10 +61,14 @@ default: build
 # Building the compiler
 ##################################################
 
-deps:
+manual-deps:
 	opam install ANSITerminal re ocamlgraph dune menhir \
 		cmdliner dune-build-info parmap num ocamlformat mlgmpidl \
 		ocamlformat
+	git submodule update --init --recursive
+
+deps:
+	opam switch create . --deps-only
 	git submodule update --init --recursive
 
 format:
