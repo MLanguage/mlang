@@ -687,7 +687,7 @@ let generate_cond_table _ v error_set =
 
 let generate_c_program (program : Bir.program)
     (function_spec : Bir_interface.bir_function) (filename : string)
-    (_vm: Dgfip_varid.var_id_map) (_vma: Dgfip_varid.var_id_map) : unit =
+    (_vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"

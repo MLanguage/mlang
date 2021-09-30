@@ -12,6 +12,7 @@
    not, see <https://www.gnu.org/licenses/>. *)
 
 module StringSet = Set.Make (String)
+module StringMap = Map.Make (String)
 
 type flags = {
   (* -A *) nom_application : string;
@@ -185,11 +186,9 @@ let new_idx () =
     pen = ref 0;
   }
 
-(* Compute the variable indices in the different arrays according to its type *
-(* Returns 3 indices :
-   1 - Index in the Computed/Base/Input arrays of the TGV
-   2 - Index in the Context/Family/Income/... arrays *)
-   3 - Index in the Restituee array *)
+(* Compute the variable indices in the different arrays according to its type * (* Returns 3 indices
+   : 1 - Index in the Computed/Base/Input arrays of the TGV 2 - Index in the
+   Context/Family/Income/... arrays *) 3 - Index in the Restituee array *)
 let next_idx idx kind output size =
   let idxr1, idxr2 =
     match (kind : var_subtype) with
@@ -947,50 +946,42 @@ let gen_conf_h fmt flags vars =
 
   Format.fprintf fmt "#endif _CONF_H_\n"
 
-
-let extract_var_ids vars =
+let extract_var_ids (cprog : Bir.program) vars =
+  let open Mir in
   let open Dgfip_varid in
+  let pvars = cprog.mir_program.program_vars in
+  let vars_map =
+    VariableDict.fold
+      (fun v vm ->
+        let vm = StringMap.add (Pos.unmark v.Variable.name) v vm in
+        match v.Variable.alias with Some a -> StringMap.add a v vm | None -> vm)
+      pvars StringMap.empty
+  in
   let process_var ~alias
       (tvar, idx1, _idx2, _idxo_opt, name, alias_opt, _desc, _typ_opt, _attributes, _size) =
     let v =
       match (tvar : var_subtype) with
-      | Computed -> VarComputed idx1
+      | Computed -> Dgfip_varid.VarComputed idx1
       | Base -> VarBase idx1
       | _ -> VarInput idx1
     in
-    let name =
-      if alias then
-        match alias_opt with
-        | Some alias -> alias
-        | None -> name
-      else
-        name
-    in
-    name, v
+    let name = if alias then match alias_opt with Some alias -> alias | None -> name else name in
+    (name, v)
   in
-  let vm =
-    List.fold_left (fun vm vd ->
-        let name, v = process_var ~alias:false vd in
-        StringMap.add name v vm
-    ) StringMap.empty vars
-  in
-  let vam =
-    List.fold_left (fun vm vd ->
-        let name, v = process_var ~alias:true vd in
-        StringMap.add name v vm
-    ) StringMap.empty vars
-  in
-  vm, vam
+  List.fold_left
+    (fun vm vd ->
+      let name, v = process_var ~alias:false vd in
+      VariableMap.add (StringMap.find name vars_map) v vm)
+    VariableMap.empty vars
 
 let open_file filename =
   let oc = open_out filename in
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-(* Generate the auxiliary files AND return two maps:
-   1 - map of variables names to TGV ids
-   2 - map of variables aliases (or names when unavailable) to TGV ids *)
-let generate_auxiliary_files prog : Dgfip_varid.var_id_map * Dgfip_varid.var_id_map =
+(* Generate the auxiliary files AND return two maps: 1 - map of variables names to TGV ids 2 - map
+   of variables aliases (or names when unavailable) to TGV ids *)
+let generate_auxiliary_files prog cprog : Dgfip_varid.var_id_map =
   let flags =
     {
       default_flags with
@@ -1086,6 +1077,6 @@ let generate_auxiliary_files prog : Dgfip_varid.var_id_map * Dgfip_varid.var_id_
   gen_conf_h fmt flags vars;
   close_out oc;
 
-  let vm, vma = extract_var_ids vars in
+  let vm = extract_var_ids cprog vars in
 
-  vm, vma
+  vm
