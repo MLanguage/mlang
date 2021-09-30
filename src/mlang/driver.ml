@@ -160,8 +160,8 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Dgfip_gen_files.generate_auxiliary_files source_m_program;
-            Bir_to_dgfip_c.generate_c_program combined_program function_spec !Cli.output_file;
+            let vm, vma = Dgfip_gen_files.generate_auxiliary_files source_m_program in
+            Bir_to_dgfip_c.generate_c_program combined_program function_spec !Cli.output_file vm vma;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
