@@ -48,7 +48,7 @@ jobs:
           wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
-          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps
+          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix opam switch create . 4.11.2+musl+static+flambda --deps-only
         
       - name: Make mlang binary
         run: |
