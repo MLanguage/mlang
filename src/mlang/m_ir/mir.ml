@@ -43,10 +43,11 @@ let max_exec_number (left : execution_number) (right : execution_number) : max_r
 
 (** This is the operator used to determine the if a candidate definition is valid at a given point *)
 let is_candidate_valid (candidate : execution_number) (current : execution_number)
-    (using_var_in_def : bool) : bool =
-  if using_var_in_def then
-    (* This is the case where we are using variable [VAR] while defining [VAR]. The valid
-       definitions here are either the declaration or earlier definitions in the same rules. *)
+    (is_lvalue : bool) : bool =
+  if is_lvalue then
+    (* This is the case where we are using variable [VAR] while defining [VAR]: i.e we are querying
+       the left hand side of the assignation. The valid definitions here are either the declaration
+       or earlier definitions in the same rules. *)
     candidate.rule_number = -1
     || (candidate.rule_number = current.rule_number && candidate.seq_number < current.seq_number)
   else

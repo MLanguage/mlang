@@ -78,7 +78,6 @@ let const_var_set_from_list (p : Bir.program)
             lc = None;
             int_const_values = Mir.VariableMap.empty;
             exec_number = Mast_to_mvg.dummy_exec_number Pos.no_pos;
-            current_lvalue = Pos.unmark name;
           }
           e
       in
