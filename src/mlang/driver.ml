@@ -65,8 +65,12 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     ignore
       (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
     let mpp = Mpp_frontend.process mpp_file full_m_program in
-    let m_program = Mir_interface.reset_all_outputs full_m_program.program in
-    let full_m_program = Mir_interface.to_full_program m_program in
+    let full_m_program =
+      Mir_interface.to_full_program
+        (match function_spec with
+        | Some _ -> Mir_interface.reset_all_outputs full_m_program.program
+        | None -> full_m_program.program)
+    in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
     let value_sort =
