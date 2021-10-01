@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019 Inria, contributor: David Declerck <david.declerck@ocamlpro.com>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -11,8 +11,10 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+(* ID of a variable in its sub-array of the TGV *)
 type var_id = VarInput of int | VarBase of int | VarComputed of int
 
+(* Map from variables to their TGV ID *)
 type var_id_map = var_id Mir.VariableMap.t
 
 let gen_access_def vm v =

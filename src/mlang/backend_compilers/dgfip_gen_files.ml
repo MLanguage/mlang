@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019 Inria, contributor: David Declerck <david.declerck@ocamlpro.com>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -14,6 +14,7 @@
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
+(* Flags inherited from the old comiler *)
 type flags = {
   (* -A *) nom_application : string;
   (* iliad, pro, oceans, bareme, batch *)
@@ -55,6 +56,7 @@ type flags = {
          cvt_file -g flg_debug -a flg_api -T flg_trace_irdata *)
 }
 
+(* Various flags used to control wicch data to put in each variable array *)
 type gen_opt = {
   with_verif : bool;
   with_classe : bool;
@@ -76,6 +78,7 @@ type gen_opt = {
   with_primrest : bool;
 }
 
+(* Used to compute array indices for each category of variable *)
 type idx = {
   out : int ref;
   comp : int ref;
@@ -91,6 +94,7 @@ type idx = {
 
 type var_subtype = Context | Family | Income | CorrIncome | Variation | Penality | Base | Computed
 
+(* Used to specify the type of array to generate *)
 type gen_type =
   | Computed of var_subtype option
   | Input of var_subtype option
@@ -150,6 +154,7 @@ let computed_var_is_output cv =
     (fun st -> match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
     cv.Mast.comp_subtyp
 
+(* Used to generated the array names *)
 let subtype_name subtyp =
   match subtyp with
   | Context -> "contexte"
@@ -162,6 +167,7 @@ let subtype_name subtyp =
   | Computed -> assert false
 (* never used *)
 
+(* Used to generated the array names *)
 let req_type_name req_type =
   match req_type with
   | Computed (Some typ) -> subtype_name typ
@@ -186,9 +192,9 @@ let new_idx () =
     pen = ref 0;
   }
 
-(* Compute the variable indices in the different arrays according to its type * (* Returns 3 indices
-   : 1 - Index in the Computed/Base/Input arrays of the TGV 2 - Index in the
-   Context/Family/Income/... arrays *) 3 - Index in the Restituee array *)
+(* Compute the variable indices in the different arrays according to its type *)
+(* Returns 3 indices: 1 - Index in the Computed/Base/Input arrays of the TGV 2 - Index in the
+   Context/Family/Income/... arrays 3 - Index in the Restituee array *)
 let next_idx idx kind output size =
   let idxr1, idxr2 =
     match (kind : var_subtype) with
@@ -235,6 +241,7 @@ let sort_vars_by_name vars =
       String.compare name1 name2)
     vars
 
+(* Retrieve all the variables, sorted by alias, and compute their IDs *)
 let get_vars prog =
   let open Mast in
   let idx = new_idx () in
@@ -296,6 +303,7 @@ let get_vars prog =
       (tvar, idx1, idx2, idxo_opt, name, alias_opt, desc, typ_opt, attributes, size))
     vars
 
+(* Retrieve the variables for the debug array; variables with aliases are duplicated *)
 let get_vars_debug vars =
   sort_vars_by_name
   @@ List.fold_left
@@ -308,6 +316,7 @@ let get_vars_debug vars =
          | None -> var :: vars)
        [] vars
 
+(* Split a list in approximately equal chunks into a list of lists *)
 let split_list lst cnt =
   let size = List.length lst in
   let rec aux l nl s sz nll c =
@@ -340,6 +349,7 @@ let gen_header fmt =
 
 |}
 
+(* Print a variable's description *)
 let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes ~desc ~alias_opt =
   let open Mast in
   let var_name = if opt.with_alias then get_name name alias_opt else name in
@@ -387,6 +397,7 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes ~d
   end;
   Format.fprintf fmt " },\n"
 
+(* Check if a variable matches requested selection critaria *)
 let var_matches req_type var_type is_output =
   match req_type with
   | Computed (Some rt) -> is_computed var_type && rt = var_type
@@ -396,6 +407,7 @@ let var_matches req_type var_type is_output =
   | Output -> is_output
   | Debug _i -> true
 
+(* Print the specified variable table *)
 let gen_table fmt _flags vars req_type opt =
   gen_header fmt;
 
@@ -678,6 +690,7 @@ let gen_table_debug fmt flags vars i =
 
 let is_valid_app al = List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al
 
+(* Retrieve rules, verifications, errors and chainings from a program *)
 let get_rules_verif_etc prog =
   let open Mast in
   let rules, verifs, errors, chainings =
@@ -722,6 +735,7 @@ let get_rules_verif_etc prog =
   (* let chainings = List.fast_sort compare chainings in *)
   (rules, verifs, errors, chainings)
 
+(* Print the table of rule functions, and then the table of errors (tableg.c) *)
 let gen_table_call fmt flags vars_debug rules chainings errors =
   let open Mast in
   gen_header fmt;
@@ -750,6 +764,7 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
   StringSet.iter (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn) chainings;
   Format.fprintf fmt "};\n"
 
+(* Print the table of verification functions (tablev.c) *)
 let gen_table_verif fmt flags verifs =
   gen_header fmt;
 
@@ -762,6 +777,7 @@ let gen_table_verif fmt flags verifs =
     Format.fprintf fmt "};\n\n"
   end
 
+(* Count variables in a specific category *)
 let count vars req_type =
   List.fold_left
     (fun cpt (tvar, _, _, idxo_opt, _, _, _, _, _, size) ->
@@ -899,6 +915,7 @@ let gen_annee_h fmt flags =
 
   Format.pp_print_flush fmt ()
 
+(* Print #defines corresponding to generation options *)
 let gen_conf_h fmt flags vars =
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
@@ -946,6 +963,7 @@ let gen_conf_h fmt flags vars =
 
   Format.fprintf fmt "#endif _CONF_H_\n"
 
+(* Generate a map from variables to array indices *)
 let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
   let open Dgfip_varid in
@@ -979,8 +997,7 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-(* Generate the auxiliary files AND return two maps: 1 - map of variables names to TGV ids 2 - map
-   of variables aliases (or names when unavailable) to TGV ids *)
+(* Generate the auxiliary files AND return the map of variables names to TGV ids *)
 let generate_auxiliary_files prog cprog : Dgfip_varid.var_id_map =
   let flags =
     {
@@ -1077,6 +1094,4 @@ let generate_auxiliary_files prog cprog : Dgfip_varid.var_id_map =
   gen_conf_h fmt flags vars;
   close_out oc;
 
-  let vm = extract_var_ids cprog vars in
-
-  vm
+  extract_var_ids cprog vars
