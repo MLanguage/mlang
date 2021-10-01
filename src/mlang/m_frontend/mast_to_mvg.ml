@@ -62,10 +62,10 @@ type loop_context = loop_param_value ParamsMap.t
 type loop_domain = loop_param_value list ParamsMap.t
 (** Loops can have multiple loop parameters *)
 
-let format_loop_context fmt (ld : loop_context) =
+let _format_loop_context fmt (ld : loop_context) =
   ParamsMap.map_printer format_loop_param_value fmt ld
 
-let format_loop_domain fmt (ld : loop_domain) =
+let _format_loop_domain fmt (ld : loop_domain) =
   ParamsMap.map_printer (Format_mast.pp_print_list_comma format_loop_param_value) fmt ld
 
 (** From a loop domain of varying loop parameters, builds by cartesian product the list of all
@@ -322,7 +322,7 @@ let get_var_or_x (d : Mir.Variable.t list Pos.VarNameToID.t) (exec_number : Mir.
 (** To try everything, we have to cover all cases concerning trailing zeroes *)
 type zero_padding = ZPNone | ZPAdd | ZPRemove
 
-let format_zero_padding (zp : zero_padding) : string =
+let _format_zero_padding (zp : zero_padding) : string =
   match zp with
   | ZPNone -> "no zero padding"
   | ZPAdd -> "add zero padding"
