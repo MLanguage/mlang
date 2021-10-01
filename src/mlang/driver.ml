@@ -62,8 +62,8 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
     Cli.debug_print "Checking for circular variable definitions...";
-    ignore
-      (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
+    if Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true
+    then Errors.raise_error "Cycles between rules.";
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let m_program = Mir_interface.reset_all_outputs full_m_program.program in
     let full_m_program = Mir_interface.to_full_program m_program in
