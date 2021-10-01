@@ -490,8 +490,7 @@ module Make (N : Bir_number.NumberInterface) = struct
             ctx
         | Mast.Information ->
             Cli.debug_print "Information: %s" (Pos.unmark (Error.err_descr_string err));
-            ctx
-        | _ -> ctx)
+            ctx)
       ctx cond.cond_errors
 
   let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_value =
