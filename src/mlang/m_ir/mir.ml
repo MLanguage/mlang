@@ -366,7 +366,9 @@ type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_vars : VariableDict.t;
+      (** A static register of all variables that can be used during a calculation *)
   program_rules : rule_data RuleMap.t;
+      (** Definitions of variables, some may be removed during optimization passes *)
   program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
