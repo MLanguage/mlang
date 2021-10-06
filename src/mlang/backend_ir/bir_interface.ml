@@ -136,8 +136,13 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
 (** Function used to generate a [bir_function] that includes all possible inputs and outputs *)
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let open Mir in
-  let output_vars = find_vars_by_io p.mir_program Output in
-  Cli.debug_print "Using all %d outputs from m sources" (VariableDict.cardinal output_vars);
+  let output_vars =
+    Mir.VariableDict.fold
+      (fun k acc -> Mir.VariableMap.add k () acc)
+      (find_vars_by_io p.mir_program Output)
+      Mir.VariableMap.empty
+  in
+  Cli.debug_print "Using all %d outputs from m sources" (VariableMap.cardinal output_vars);
   {
     func_variable_inputs = VariableMap.empty;
     func_constant_inputs = VariableMap.empty;
