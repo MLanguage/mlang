@@ -414,12 +414,9 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
 let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
   let rules_as_list = RuleMap.bindings p.program_rules in
   let rule_vars =
-    List.flatten (List.map (fun rd -> rd.rule_vars) (List.map (fun (_, rd) -> rd) rules_as_list))
-  in
+    List.concat_map (fun (_,rd) -> rd.rule_vars) rules_as_list in
   let filtered_list =
-    List.filter (fun (_, y) -> y.var_io = io_to_find) rule_vars
-    |> List.map (fun (var_id, _) -> var_id)
-  in
+    List.filter_map  (fun (var_id, var_data) -> if var_data.var_io = io_to_find then Some var_id else None) rule_vars in
   VariableDict.filter
     (fun vid _ -> List.exists (fun list_vid -> list_vid = vid) filtered_list)
     p.program_vars
