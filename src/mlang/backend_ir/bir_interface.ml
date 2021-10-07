@@ -86,7 +86,7 @@ let const_var_set_from_list (p : Bir.program)
       Mir.VariableMap.add var new_e acc)
     Mir.VariableMap.empty names
 
-let translate_cond idmap (conds : Mast.expression Pos.marked list) :
+let translate_external_conditions idmap (conds : Mast.expression Pos.marked list) :
     Mir.condition_data Mir.VariableMap.t =
   let check_boolean (mexpr : Mast.expression Pos.marked) =
     match Pos.unmark mexpr with
@@ -148,7 +148,7 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_functio
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Mast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Mast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
-      func_conds = translate_cond p.idmap func_spec.Mast.spec_conditions;
+      func_conds = translate_external_conditions p.idmap func_spec.Mast.spec_conditions;
     }
   with
   | Errors.StructuredError e ->

@@ -62,7 +62,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file) (test_err
   let func_outputs = VariableMap.empty in
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    Bir_interface.translate_cond program.idmap
+    Bir_interface.translate_external_conditions program.idmap
       (List.map
          (fun (var, value, pos) ->
            (* sometimes test outputs mention aliases so we have to catch thos two using the line
