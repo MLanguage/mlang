@@ -11,10 +11,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(** Defines the dependency graph of an M program *)
-
-(** Each node corresponds to a rule, each edge to variables use. The edges in the graph go from
-    input to outputs. *)
 module RG =
   Graph.Persistent.Digraph.ConcreteBidirectionalLabeled
     (struct
@@ -108,7 +104,6 @@ let create_rules_dependency_graph (program : Mir.program)
 module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
-(** Outputs [true] and a warning in case of cycles. *)
 let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
@@ -145,10 +140,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
 
 module RuleExecutionOrder = Graph.Topological.Make (RG)
 
-type execution_order = Mir.Variable.t list
-
 type rule_execution_order = Mir.rule_id list
-(** Each map is the set of variables defined circularly in this strongly connected component *)
 
 let get_rules_execution_order (dep_graph : RG.t) : rule_execution_order =
   RuleExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph []

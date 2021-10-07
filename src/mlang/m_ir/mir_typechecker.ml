@@ -11,9 +11,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(** This modules defines M's static semantic. There is only one type: float. The typechecking is
-    mostly about differentiating table from non-tables variables *)
-
 open Mir
 
 type ctx = { ctx_table_vars : VariableDict.t; ctx_is_generic_table : bool }
@@ -174,7 +171,6 @@ let rec check_non_recursivity_expr (e : expression Pos.marked) (lvar : Variable.
 let check_non_recursivity_of_variable_defs (var : Variable.t) (def : variable_def) : unit =
   match def with SimpleVar e -> check_non_recursivity_expr e var | TableVar _ | InputVar -> ()
 
-(* The typechecker returns a new program because it defines missing table entries as "undefined" *)
 let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
   let check_var_def ctx vid def =
     let var = VariableDict.find vid p.program.program_vars in
@@ -246,22 +242,6 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
   let _ = typecheck_program_conds ctx p.program.program_conds in
   (* the typechecking modifications do not change the dependency graph *)
   { p with program = { p.program with program_rules } }
-
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
-
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
-
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
-
-(** Most functions are just syntactic sugar for operations expressible with the rest of the
-    language, so we expand these. *)
 
 let rec expand_functions_expr (e : expression Pos.marked) : expression Pos.marked =
   match Pos.unmark e with
