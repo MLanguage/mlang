@@ -184,41 +184,28 @@ let info =
       | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
 
-(**{2 Flags and parameters}*)
-
-(** M source files to be compiled *)
 let source_files : string list ref = ref []
 
-(** Prefix for dependency graph output files *)
 let dep_graph_file : string ref = ref "dep_graph.dot"
 
-(** Use Z3 to check if verif rules hold all the time *)
 let verify_flag = ref false
 
-(** Prints debug information *)
 let debug_flag = ref false
 
-(** Print infomation about variables declared, defined ou used incorrectly *)
 let var_info_flag = ref false
 
 let var_info_debug = ref []
 
-(** Print warning info *)
 let warning_flag = ref true
 
-(** Dump circular definitions of variables *)
 let print_cycles_flag = ref false
 
-(** Displays timing information *)
 let display_time = ref false
 
-(** Output file *)
 let output_file = ref ""
 
-(* Activate unsafe floating point optimizations *)
 let optimize_unsafe_float = ref false
 
-(* Clean regular variables between M calls *)
 let m_clean_calls = ref false
 
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
@@ -251,7 +238,6 @@ let concat_with_line_depending_prefix_and_suffix (prefix : int -> string) (suffi
       out
   | [] -> prefix 0
 
-(** The int argument of the prefix corresponds to the line number, starting at 0 *)
 let add_prefix_to_each_line (s : string) (prefix : int -> string) =
   concat_with_line_depending_prefix_and_suffix
     (fun i -> prefix i)
@@ -308,8 +294,6 @@ let clock_marker i =
 
 (**{2 Printers}*)
 
-(** All the printers below print their argument after the correct marker *)
-
 let debug_print ?(endline = "\n") kont =
   ANSITerminal.erase ANSITerminal.Eol;
   if !debug_flag then
@@ -328,8 +312,6 @@ let error_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
   Format.kasprintf (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str) kont
 
-(** Returns two functions: the first one, [current_progress], has to be called during the progress
-    loop and the other one, [finish], has to be called at the end of the progressive task. *)
 let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let step_ticks = 5 in
   let ticks = ref 0 in
