@@ -35,11 +35,6 @@ type var_decl_data = {
 
 (** {2 Loop translation context} *)
 
-(** The M language has a strange way of doing loops. We translate them by unrolling; but for that we
-    need a context to hold the loop parameters, which consists of a mapping from characters to
-    integers or other characters. *)
-
-(** Map whose keys are loop parameters *)
 module ParamsMap = struct
   include Map.Make (Char)
 
@@ -49,15 +44,12 @@ module ParamsMap = struct
       map
 end
 
-(** The values of the map can be either strings of integers *)
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
 let format_loop_param_value fmt (v : loop_param_value) =
   match v with VarName v -> Format.fprintf fmt "%s" v | RangeInt i -> Format.fprintf fmt "%d" i
 
 type loop_context = loop_param_value ParamsMap.t
-(** This is the context when iterating a loop : for each loop parameter, we have access to the
-    current value of this loop parameter in this iteration. *)
 
 type loop_domain = loop_param_value list ParamsMap.t
 (** Loops can have multiple loop parameters *)
@@ -110,7 +102,6 @@ type translating_context = {
 }
 (** This context will be passed along during the translation *)
 
-(** Dummy execution number used for variable declarations *)
 let dummy_exec_number (pos : Pos.t) : Mir.execution_number =
   { Mir.rule_number = -1; Mir.seq_number = 0; pos }
 
@@ -162,9 +153,6 @@ let find_var_among_candidates (exec_number : Mir.execution_number) (l : Mir.Vari
   if List.length same_rule = 0 then list_max_execution_number l
   else list_max_execution_number same_rule
 
-(** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a variable and the
-    rule number from which the variable is requested. Returns the variable with the same name and
-    highest rule number that is below the current rule number from where this variable is requested *)
 let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
     (name : Mast.variable_name Pos.marked) (exec_number : Mir.execution_number)
     (using_var_in_def : bool) : Mir.Variable.t =
@@ -792,7 +780,6 @@ let translate_function_name (f_name : string Pos.marked) =
   | x ->
       Errors.raise_spanned_error (Format.asprintf "unknown function %s" x) (Pos.get_position f_name)
 
-(** Main translation function for expressions *)
 let rec translate_expression (ctx : translating_context) (f : Mast.expression Pos.marked) :
     Mir.expression Pos.marked =
   Pos.same_pos_as
@@ -1257,7 +1244,6 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
       (* the variable's definition has already been inserted in [var_data] *))
     var_decl_data var_data
 
-(** Returns a map whose keys are dummy variables and whose values are the verification conditions. *)
 let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.program) :
     Mir.condition_data Mir.VariableMap.t =
   List.fold_left
@@ -1345,21 +1331,6 @@ let remove_corrective_rules (p : Mast.program) : Mast.program =
         source_file)
     p
 
-(** Main translation function from the M AST to the M Variable Graph. This function performs 6
-    linear passes on the input code:
-
-    - [remove_corrective_rules] removes all the rules that are not necessary for the computation of
-      the "primitive" income tax;
-    - [get_constants] gets the value of all constant variables, the values of which are needed to
-      compute certain loop bounds;
-    - [get_variables_decl] retrieves the declarations of all other variables and errors;
-    - [get_var_redefinitions] incorporates into [idmap] all definitions inside rules along with
-      their execution number;
-    - [get_var_data] is the workhorse pass that translates all the expressions corresponding to the
-      definitions;
-    - [add_dummy_definition_for_variable_declaration] adds [Undefined] definitions placeholder for
-      all variables declarations;
-    - [get_errors_conds] parses the verification conditions definitions. *)
 let translate (p : Mast.program) : Mir.program =
   let p = remove_corrective_rules p in
   let var_decl_data, idmap, int_const_vals = get_constants p in

@@ -11,23 +11,34 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+(** Helpers for parsing *)
+
+(** {1 Frontend variable names}*)
+
 (** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Mast.variable | ParseInt of int
 
 val mk_position : Lexing.position * Lexing.position -> Pos.t
 
 val parse_variable : Lexing.position * Lexing.position -> string -> Mast.variable
+(** Checks whether the variable contains parameters *)
 
 val parse_variable_name : Lexing.position * Lexing.position -> string -> string
+(** Checks whether the string is entirely capitalized *)
 
 val parse_string : string -> string
-
-val parse_int : Lexing.position * Lexing.position -> string -> int
-
-val parse_literal : Lexing.position * Lexing.position -> string -> Mast.literal
+(** Removes the quotes *)
 
 val parse_variable_or_int : Lexing.position * Lexing.position -> string -> parse_val
 
 val parse_table_index : Lexing.position * Lexing.position -> string -> Mast.table_index
+(** Table index can be integer or [X], the generic table index variable *)
 
 val parse_func_name : 'a -> string -> string
+
+(**{1 Literal parsing}*)
+
+val parse_int : Lexing.position * Lexing.position -> string -> int
+(** Checks whether is it actually an integer*)
+
+val parse_literal : Lexing.position * Lexing.position -> string -> Mast.literal
