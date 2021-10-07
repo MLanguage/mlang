@@ -73,7 +73,7 @@ let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
 
 type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
 
-let format_var_literal fmt v =
+let _format_var_literal fmt v =
   match v with
   | SimpleVar pe -> Format.fprintf fmt "SimpleVar %a" format_partial_expr pe
   | TableVar (i, a) ->
@@ -81,12 +81,12 @@ let format_var_literal fmt v =
         (Format.pp_print_list format_partial_expr)
         (Array.to_list a)
 
-let format_block fmt (id, ov) =
+let _format_block fmt (id, ov) =
   Format.fprintf fmt "%d: %a" id
     (fun fmt ov ->
       match ov with
       | None -> Format.fprintf fmt "None"
-      | Some v -> Format.fprintf fmt "Some %a" format_var_literal v)
+      | Some v -> Format.fprintf fmt "Some %a" _format_var_literal v)
     ov
 
 type partial_ev_ctx = {
