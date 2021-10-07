@@ -132,8 +132,6 @@ let generate_variable fmt (var : Variable.t) : unit =
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_typ (typ : typ) : string = match typ with Real -> "float"
-
 let autograd_ref = ref false
 
 let autograd () : bool = !autograd_ref

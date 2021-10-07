@@ -61,16 +61,6 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         | GetValueConst offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
 
-let print_error oc (m_error : Mir.Error.t) =
-  Format.fprintf oc
-    {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s", .has_occurred = false},
-          |}
-    (Pos.unmark m_error.descr.kind)
-    (Pos.unmark m_error.descr.major_code)
-    (Pos.unmark m_error.descr.minor_code)
-    (Pos.unmark m_error.descr.description)
-    (Pos.unmark m_error.descr.isisf)
-
 let generate_raw_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
