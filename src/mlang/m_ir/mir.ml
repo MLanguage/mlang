@@ -1,5 +1,5 @@
-(* Copyright (C) 2019 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël Monat
-   <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+   Monat <raphael.monat@lip6.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -92,7 +92,7 @@ module Variable = struct
 end
 
 (** Local variables don't appear in the M source program but can be introduced by let bindings when
-    translating to MVG. They should be De Bruijn indices but instead are unique globals identifiers
+    translating to MIR. They should be De Bruijn indices but instead are unique globals identifiers
     out of laziness. *)
 module LocalVariable = struct
   type t = { id : int }
@@ -109,7 +109,7 @@ module LocalVariable = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-(** Type of MVG values *)
+(** Type of MIR values *)
 type typ = Real
 
 type literal = Float of float | Undefined
@@ -118,7 +118,7 @@ let false_literal = Float 0.
 
 let true_literal = Float 1.
 
-(** MVg only supports a restricted set of functions *)
+(** MIR only supports a restricted set of functions *)
 type func =
   | SumFunc  (** Sums the arguments *)
   | AbsFunc  (** Absolute value *)
@@ -133,11 +133,11 @@ type func =
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
 
-(** MVG expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
+(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
     define conditional without an else branch although it is an expression-based language, we
     include an [Error] constructor to which the missing else branch is translated to.
 
-    Because translating to MVG requires a lot of unrolling and expansion, we introduce a [LocalLet]
+    Because translating to MIR requires a lot of unrolling and expansion, we introduce a [LocalLet]
     construct to avoid code duplication. *)
 
 type expression =
@@ -154,7 +154,7 @@ type expression =
   | Error
   | LocalLet of (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
 
-(** MVG programs are just mapping from variables to their definitions, and make a massive use of
+(** MIR programs are just mapping from variables to their definitions, and make a massive use of
     [VariableMap]. *)
 module VariableMap = struct
   include Map.Make (Variable)

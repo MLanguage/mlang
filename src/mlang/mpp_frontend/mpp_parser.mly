@@ -2,8 +2,7 @@
 %{
   open Mpp_ast
 
-  let mk_position loc = { Pos.pos_filename = (fst loc).Lexing.pos_fname;
-                          Pos.pos_loc = loc }
+  let mk_position loc = Pos.make_position ((fst loc).Lexing.pos_fname) loc
 %}
 
 %token <string> IDENT

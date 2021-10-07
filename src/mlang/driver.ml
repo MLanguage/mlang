@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -56,7 +56,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       !Cli.source_files;
     finish "completed!";
     Cli.debug_print "Elaborating...";
-    let m_program = Mast_to_mvg.translate !m_program in
+    let m_program = Mast_to_mir.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
