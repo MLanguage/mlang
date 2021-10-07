@@ -968,28 +968,38 @@ let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
   let open Dgfip_varid in
   let pvars = cprog.mir_program.program_vars in
+  let add vn v vm =
+    let vs = match StringMap.find_opt vn vm with None -> VariableSet.empty | Some vs -> vs in
+    StringMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
+  in
+  (* Build a map from variable names to all their definitions (with different ids) *)
   let vars_map =
     VariableDict.fold
       (fun v vm ->
-        let vm = StringMap.add (Pos.unmark v.Variable.name) v vm in
-        match v.Variable.alias with Some a -> StringMap.add a v vm | None -> vm)
+        let vm = add (Pos.unmark v.Variable.name) v vm in
+        match v.Variable.alias with Some a -> add a v vm | None -> vm)
       pvars StringMap.empty
   in
   let process_var ~alias
       (tvar, idx1, _idx2, _idxo_opt, name, alias_opt, _desc, _typ_opt, _attributes, _size) =
-    let v =
+    let vid =
       match (tvar : var_subtype) with
       | Computed -> Dgfip_varid.VarComputed idx1
       | Base -> VarBase idx1
       | _ -> VarInput idx1
     in
     let name = if alias then match alias_opt with Some alias -> alias | None -> name else name in
-    (name, v)
+    (name, vid)
   in
+  (* Build a map from variable definitions (with different ids) to their array indices *)
   List.fold_left
     (fun vm vd ->
-      let name, v = process_var ~alias:false vd in
-      VariableMap.add (StringMap.find name vars_map) v vm)
+      let name, vid = process_var ~alias:false vd in
+      let vs =
+        try StringMap.find name vars_map
+        with Not_found -> Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
+      in
+      VariableSet.fold (fun v vm -> VariableMap.add v vid vm) vs vm)
     VariableMap.empty vars
 
 let open_file filename =
