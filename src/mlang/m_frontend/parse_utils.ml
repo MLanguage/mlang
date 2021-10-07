@@ -15,7 +15,7 @@ module E = Errors
 
 (** Helpers for parsing *)
 
-let mk_position sloc = { Pos.pos_filename = (fst sloc).Lexing.pos_fname; Pos.pos_loc = sloc }
+let mk_position sloc = Pos.make_position (fst sloc).Lexing.pos_fname sloc
 
 (** {1 Frontend variable names}*)
 
