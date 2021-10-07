@@ -65,7 +65,7 @@ val var_info_debug : string list ref
 val warning_flag : bool ref
 (** Print warning info *)
 
-val print_cycles_flag : bool ref
+val no_print_cycles_flag : bool ref
 (** Dump circular definitions of variables *)
 
 val display_time : bool ref

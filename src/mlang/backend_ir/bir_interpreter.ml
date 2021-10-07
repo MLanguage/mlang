@@ -467,20 +467,31 @@ module Make (N : Bir_number.NumberInterface) = struct
     else out
 
   let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
-    raise
-      (RuntimeError
-         ( ConditionViolated
-             ( cond.cond_errors,
-               cond.cond_expr,
-               List.rev
-               @@ List.fold_left
-                    (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
-                    []
-                    (List.map
-                       (fun (_, x) -> x)
-                       (Mir.VariableDict.bindings
-                          (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
-           ctx ))
+    List.fold_left
+      (fun ctx err ->
+        match err.Error.typ with
+        | Mast.Anomaly ->
+            raise
+              (RuntimeError
+                 ( ConditionViolated
+                     ( cond.cond_errors,
+                       cond.cond_expr,
+                       List.rev
+                       @@ List.fold_left
+                            (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
+                            []
+                            (List.map
+                               (fun (_, x) -> x)
+                               (Mir.VariableDict.bindings
+                                  (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
+                   ctx ))
+        | Mast.Discordance ->
+            Cli.warning_print "Anomaly: %s" (Pos.unmark (Error.err_descr_string err));
+            ctx
+        | Mast.Information ->
+            Cli.debug_print "Information: %s" (Pos.unmark (Error.err_descr_string err));
+            ctx)
+      ctx cond.cond_errors
 
   let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_value =
     match vdef with

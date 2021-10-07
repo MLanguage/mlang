@@ -115,11 +115,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
   if List.length sccs < RG.nb_vertex g then begin
     let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
     let cycles_strings = ref [] in
-    let dir = "variable_cycles" in
-    begin
-      try Unix.mkdir dir 0o750 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
-    end;
-    if !Cli.print_cycles_flag && print_debug then begin
+    if (not !Cli.no_print_cycles_flag) && print_debug then begin
       List.iter
         (fun scc ->
           let edges =
@@ -131,7 +127,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
             get_edges [] loop |> List.rev
           in
           cycles_strings :=
-            Format.asprintf "The following rules contain circular definitions: %s\n"
+            Format.asprintf "The following rules contain circular definitions:\n%s\n"
               (String.concat "\n^\n|\nv\n"
                  (List.map
                     (fun (rule_id, edge) ->
@@ -141,12 +137,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
                     edges))
             :: !cycles_strings)
         sccs;
-      let oc = open_out (dir ^ "/variable_cycles.txt") in
-      Format.fprintf
-        (Format.formatter_of_out_channel oc)
-        "%s"
-        (String.concat "\n\n" !cycles_strings);
-      close_out oc
+      Format.eprintf "%s" (String.concat "\n\n" !cycles_strings)
     end;
     true
   end

@@ -41,12 +41,9 @@ let dep_graph_file =
   in
   Arg.(value & opt file "dep_graph.dot" & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
 
-let print_cycles =
-  let doc =
-    "If set, the eventual circular dependencies in variables definition willbe output to the \
-     \"variable_cycles\" directory"
-  in
-  Arg.(value & flag & info [ "print_cycles"; "c" ] ~doc)
+let no_print_cycles =
+  let doc = "If set, disable the eventual circular dependencies repport" in
+  Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
 
 let optimize =
   let doc = "Applies dead code removal and partial evaluation to the generated code" in
@@ -140,7 +137,7 @@ let m_clean_calls =
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ print_cycles
+    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ no_print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
     $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin
     $ m_clean_calls)
@@ -198,7 +195,7 @@ let var_info_debug = ref []
 
 let warning_flag = ref true
 
-let print_cycles_flag = ref false
+let no_print_cycles_flag = ref false
 
 let display_time = ref false
 
@@ -209,7 +206,7 @@ let optimize_unsafe_float = ref false
 let m_clean_calls = ref false
 
 let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
-    (display_time_ : bool) (dep_graph_file_ : string) (print_cycles_ : bool)
+    (display_time_ : bool) (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool) (m_clean_calls_ : bool) =
   source_files := files_;
   debug_flag := debug_;
@@ -217,7 +214,7 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
   var_info_flag := !var_info_debug <> [];
   display_time := display_time_;
   dep_graph_file := dep_graph_file_;
-  print_cycles_flag := print_cycles_;
+  no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
   match output_file_ with None -> () | Some o -> output_file := o
