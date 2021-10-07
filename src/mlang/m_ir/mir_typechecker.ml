@@ -204,7 +204,7 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
             if List.length undefined_indexes = 0 then (add_table_var var new_ctx, def)
             else
               let previous_var_def =
-                Mast_to_mvg.get_var_from_name p.program.program_idmap var.Variable.name
+                Mast_to_mir.get_var_from_name p.program.program_idmap var.Variable.name
                   var.Variable.execution_number false
               in
               let new_es =

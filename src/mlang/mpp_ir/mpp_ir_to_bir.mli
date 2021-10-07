@@ -12,6 +12,10 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+(* Compiles the MPP IR and the M codebase into an MIR program. Partitioning can be done by putting
+   excluded inputs to undef and storing them into an auxiliary variable (which is merged back
+   afterwards) *)
+
 val create_combined_program :
   Mir_interface.full_program ->
   Mpp_ir.mpp_program ->

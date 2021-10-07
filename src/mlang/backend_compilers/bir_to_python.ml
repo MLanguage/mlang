@@ -121,7 +121,7 @@ let generate_variable fmt (var : Variable.t) : unit =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mir.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
       Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number

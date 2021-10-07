@@ -938,7 +938,7 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
           let i = var_or_int_value ctx (Pos.same_pos_as (Mast.Variable v) ti) in
           (ctx, var, SingleIndex i)
       | Mast.SymbolIndex (Mast.Generic _ as v) ->
-          let mvg_v =
+          let mir_v =
             translate_variable ctx.idmap ctx.exec_number ctx.table_definition ctx.lc
               (Pos.same_pos_as v ti)
               (Pos.unmark var.Mir.Variable.name)
@@ -948,7 +948,7 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
             var_or_int_value ctx
               (Pos.same_pos_as
                  (Mast.Variable
-                    (match Pos.unmark mvg_v with
+                    (match Pos.unmark mir_v with
                     | Mir.Var v -> Mast.Normal (Pos.unmark v.Mir.Variable.name)
                     | _ -> assert false (* should not happen*)))
                  ti)
@@ -966,7 +966,7 @@ let translate_value_typ (typ : Mast.value_typ Pos.marked option) : Mir.typ optio
   | Some (_, _) -> Some Mir.Real
   | None -> None
 
-(** Main toplevel declaration translator that adds a variable definition to the MVG program *)
+(** Main toplevel declaration translator that adds a variable definition to the MIR program *)
 let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t) (var_lvalue : Mir.Variable.t)
     (var_expr : Mir.expression Pos.marked) (def_kind : index_def)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (idmap : Mir.idmap) :

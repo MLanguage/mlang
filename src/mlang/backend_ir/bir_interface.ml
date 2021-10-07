@@ -28,7 +28,7 @@ let var_set_from_variable_name_list (p : Bir.program) (names : string Pos.marked
         with Errors.StructuredError _ -> Pos.unmark alias
       in
       let var =
-        try Mast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.idmap)
+        try Mast_to_mir.list_max_execution_number (Pos.VarNameToID.find name p.idmap)
         with Not_found ->
           Errors.raise_spanned_error
             (Format.asprintf "unknown variable %s" name)
@@ -71,13 +71,13 @@ let const_var_set_from_list (p : Bir.program)
               (Pos.get_position e))
       in
       let new_e =
-        Mast_to_mvg.translate_expression
+        Mast_to_mir.translate_expression
           {
             table_definition = false;
             idmap = p.idmap;
             lc = None;
             int_const_values = Mir.VariableMap.empty;
-            exec_number = Mast_to_mvg.dummy_exec_number Pos.no_pos;
+            exec_number = Mast_to_mir.dummy_exec_number Pos.no_pos;
             current_lvalue = Pos.unmark name;
           }
           e
@@ -131,7 +131,7 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
         verif_conditions = verif_conds;
       }
   in
-  Mast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
+  Mast_to_mir.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_function =
   let input = open_in spec_file in

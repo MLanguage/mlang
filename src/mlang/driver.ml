@@ -56,7 +56,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       !Cli.source_files;
     finish "completed!";
     Cli.debug_print "Elaborating...";
-    let m_program = Mast_to_mvg.translate !m_program in
+    let m_program = Mast_to_mir.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";

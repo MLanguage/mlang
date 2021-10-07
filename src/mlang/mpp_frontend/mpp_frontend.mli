@@ -12,4 +12,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
+(** Parses an MPP file into an MPP IR program *)
+
 val process : (* mpp_file *) string -> Mir_interface.full_program -> Mpp_ir.mpp_program
