@@ -44,11 +44,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update
           sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
-          make deps
+          make manual-deps
 
-      - name: Make mlang binary
+      - name: Build Mlang
         run: |
           eval $(opam env)
           make build
