@@ -35,3 +35,5 @@ else ifeq ($(YEAR), 2020)
 else
     $(error Unsupported year: $(YEAR))
 endif
+
+C_COMPILER?=clang

@@ -40,7 +40,6 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
-C_COMPILER?=clang
 CC=$(C_COMPILER)
 
 ifeq ($(C_COMPILER), clang)
@@ -61,14 +60,14 @@ ir_%.o: ir_%.c
 ##################################################
 
 test_harness.exe: ir_tests.o test_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^
+	$(CC) -fPIE -o $@ $^ -lm
 
 run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^
+	$(CC) -fPIE -o $@ $^ -lm
 
 run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
