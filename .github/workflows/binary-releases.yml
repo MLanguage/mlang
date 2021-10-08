@@ -81,7 +81,7 @@ jobs:
           cache-name: cache-opam-modules
         with:
           # OCaml cache files are stored in `~/.opam` on Linux/macOS
-          path: ~/.opam
+          path: $GITHUB_WORKSPACE/_opam
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
