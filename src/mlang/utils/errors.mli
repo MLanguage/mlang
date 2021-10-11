@@ -26,3 +26,7 @@ val raise_error : string -> 'a
 
 val raise_spanned_error_with_continuation :
   string -> ?span_msg:string -> Pos.t -> (unit -> unit) -> 'a
+
+(* {2 Prints warnings with useful error messages }*)
+
+val print_spanned_warning : string -> ?span_msg:string -> Pos.t -> unit

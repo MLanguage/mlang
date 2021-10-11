@@ -13,11 +13,9 @@
 
 open Mir
 
-type ctx = { ctx_table_vars : VariableDict.t; ctx_is_generic_table : bool }
+type ctx = { ctx_is_generic_table : bool }
 
-let add_table_var var ctx = { ctx with ctx_table_vars = VariableDict.add var ctx.ctx_table_vars }
-
-let is_table_var var ctx = VariableDict.mem var ctx.ctx_table_vars
+let is_table_var var = match var.Variable.is_table with Some _ -> true | None -> false
 
 let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
   match Pos.unmark e with
@@ -61,7 +59,7 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
       let ctx = typecheck_top_down ctx e' in
-      if is_table_var var ctx then ctx
+      if is_table_var var then ctx
       else
         Errors.raise_multispanned_error
           (Format.asprintf "variable %s is accessed as a table but it is not defined as one"
@@ -178,26 +176,24 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
     (* All top-level variables are og type Real *)
     match def.var_definition with
     | SimpleVar e ->
-        let new_ctx = typecheck_top_down { ctx with ctx_is_generic_table = false } e in
+        let new_ctx = typecheck_top_down { ctx_is_generic_table = false } e in
         (new_ctx, def)
     | TableVar (size, defs) -> (
         match defs with
         | IndexGeneric e ->
-            let new_ctx =
-              typecheck_top_down { ctx with ctx_is_generic_table = true } e |> add_table_var var
-            in
+            let new_ctx = typecheck_top_down { ctx_is_generic_table = true } e in
             (new_ctx, def)
         | IndexTable es ->
             let new_ctx =
               IndexMap.fold
-                (fun _ e ctx -> typecheck_top_down { ctx with ctx_is_generic_table = false } e)
+                (fun _ e _ctx -> typecheck_top_down { ctx_is_generic_table = false } e)
                 es ctx
             in
             let undefined_indexes =
               determine_def_complete_cover var size
                 (List.map (fun (x, e) -> (x, Pos.get_position e)) (IndexMap.bindings es))
             in
-            if List.length undefined_indexes = 0 then (add_table_var var new_ctx, def)
+            if List.length undefined_indexes = 0 then (new_ctx, def)
             else
               let previous_var_def =
                 Mast_to_mir.get_var_from_name p.program.program_idmap var.Variable.name
@@ -217,9 +213,9 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
                       es)
                   es undefined_indexes
               in
-              ( add_table_var var new_ctx,
-                { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) } ))
-    | InputVar -> if is_table_var var ctx then (ctx, def) else (add_table_var var ctx, def)
+              (new_ctx, { def with Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es) })
+        )
+    | InputVar -> (ctx, def)
   in
   let ctx, program_rules =
     List.fold_left
@@ -236,7 +232,7 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
           (ctx, { rule_data with rule_vars })
         in
         (ctx, RuleMap.add rule_id rule_data rules))
-      ({ ctx_is_generic_table = false; ctx_table_vars = VariableDict.empty }, Mir.RuleMap.empty)
+      ({ ctx_is_generic_table = false }, Mir.RuleMap.empty)
       p.main_execution_order
   in
   let _ = typecheck_program_conds ctx p.program.program_conds in

@@ -41,7 +41,6 @@ type translating_context = {
   int_const_values : int Mir.VariableMap.t;  (** Mapping from constant variables to their value *)
   exec_number : Mir.execution_number;
       (** Number of the rule of verification condition being translated *)
-  current_lvalue : Mast.variable_name;
 }
 
 (** {1 Translation helpers} *)

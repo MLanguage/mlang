@@ -166,7 +166,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       | None -> Errors.raise_error "No backend specified!"
     end
   with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "Error: %a" Errors.format_structured_error (msg, pos);
+    Cli.error_print "%a" Errors.format_structured_error (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit (-1)
 
