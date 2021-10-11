@@ -28,8 +28,8 @@ jobs:
         env:
           cache-name: cache-opam-modules
         with:
-          # OCaml cache files are stored in `~/.opam` on Linux/macOS
-          path: ~/.opam
+          # The opam files are in a local switch
+          path: $GITHUB_WORKSPACE/_opam
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
-          make manual-deps
+          make deps
 
       - name: Build Mlang
         run: |
