@@ -1,6 +1,16 @@
-(* Compile the mpp ast and the m codebase into an mvg program. Partitioning can be done by putting
-   excluded inputs to undef and storing them into an auxiliary variable (which is merged back
-   afterwards) *)
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+   Monat <raphael.monat@lip6.fr>
+
+   This program is free software: you can redistribute it and/or modify it under the terms of the
+   GNU General Public License as published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along with this program. If
+   not, see <https://www.gnu.org/licenses/>. *)
 
 module StringMap = Map.Make (struct
   type t = string
@@ -262,7 +272,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               Mir.Variable.new_var
                 ("mpp_" ^ l, pos)
                 None ("", pos)
-                (Mast_to_mvg.dummy_exec_number pos)
+                (Mast_to_mir.dummy_exec_number pos)
                 ~attributes:[] ~is_income:false ~is_table:None
             in
             let ctx = { ctx with new_variables = StringMap.add l new_l ctx.new_variables } in

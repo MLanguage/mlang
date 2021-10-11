@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -11,10 +11,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(** Defines the dependency graph of an M program *)
-
-(** Each node corresponds to a rule, each edge to variables use. The edges in the graph go from
-    input to outputs. *)
 module RG =
   Graph.Persistent.Digraph.ConcreteBidirectionalLabeled
     (struct
@@ -108,18 +104,13 @@ let create_rules_dependency_graph (program : Mir.program)
 module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
-(** Outputs [true] and a warning in case of cycles. *)
 let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
   if List.length sccs < RG.nb_vertex g then begin
     let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
     let cycles_strings = ref [] in
-    let dir = "variable_cycles" in
-    begin
-      try Unix.mkdir dir 0o750 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
-    end;
-    if !Cli.print_cycles_flag && print_debug then begin
+    if (not !Cli.no_print_cycles_flag) && print_debug then begin
       List.iter
         (fun scc ->
           let edges =
@@ -131,7 +122,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
             get_edges [] loop |> List.rev
           in
           cycles_strings :=
-            Format.asprintf "The following rules contain circular definitions: %s\n"
+            Format.asprintf "The following rules contain circular definitions:\n%s\n"
               (String.concat "\n^\n|\nv\n"
                  (List.map
                     (fun (rule_id, edge) ->
@@ -141,12 +132,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
                     edges))
             :: !cycles_strings)
         sccs;
-      let oc = open_out (dir ^ "/variable_cycles.txt") in
-      Format.fprintf
-        (Format.formatter_of_out_channel oc)
-        "%s"
-        (String.concat "\n\n" !cycles_strings);
-      close_out oc
+      Format.eprintf "%s" (String.concat "\n\n" !cycles_strings)
     end;
     true
   end
@@ -154,10 +140,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
 
 module RuleExecutionOrder = Graph.Topological.Make (RG)
 
-type execution_order = Mir.Variable.t list
-
 type rule_execution_order = Mir.rule_id list
-(** Each map is the set of variables defined circularly in this strongly connected component *)
 
 let get_rules_execution_order (dep_graph : RG.t) : rule_execution_order =
   RuleExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph []

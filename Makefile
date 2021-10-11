@@ -117,7 +117,7 @@ all: tests test_python_backend test_c_backend_perf \
 
 doc: FORCE
 	dune build @doc
-	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
+	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 clean:
 	$(MAKE) -C examples/c clean

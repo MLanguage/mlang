@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -13,13 +13,10 @@
 
 module E = Errors
 
-(** Helpers for parsing *)
-
-let mk_position sloc = { Pos.pos_filename = (fst sloc).Lexing.pos_fname; Pos.pos_loc = sloc }
+let mk_position sloc = Pos.make_position (fst sloc).Lexing.pos_fname sloc
 
 (** {1 Frontend variable names}*)
 
-(** Checks whether the string is entirely capitalized *)
 let parse_variable_name sloc (s : string) : Mast.variable_name =
   if not (String.equal (String.uppercase_ascii s) s) then
     E.raise_spanned_error "invalid variable name" (mk_position sloc)
@@ -50,14 +47,12 @@ let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
     E.raise_spanned_error "variable parameters should have distinct names" (mk_position sloc);
   { Mast.parameters = !parameters; Mast.base = s }
 
-(** Checks whether the variable contains parameters *)
 let parse_variable sloc (s : string) =
   try Mast.Normal (parse_variable_name sloc s)
   with E.StructuredError _ -> (
     try Mast.Generic (parse_variable_generic_name sloc s)
     with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc))
 
-(** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Mast.variable | ParseInt of int
 
 let parse_variable_or_int sloc (s : string) : parse_val =
@@ -68,7 +63,6 @@ let parse_variable_or_int sloc (s : string) : parse_val =
       try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
       with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc)))
 
-(** Table index can be integer or [X], the generic table index variable *)
 let parse_table_index sloc (s : string) : Mast.table_index =
   try Mast.LiteralIndex (int_of_string s)
   with Failure _ -> (

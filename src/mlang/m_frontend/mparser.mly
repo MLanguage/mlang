@@ -1,5 +1,5 @@
 (*
-Copyright (C) 2019 Inria, contributor:
+Copyright (C) 2019-2021 Inria, contributor:
     Denis Merigoux <denis.merigoux@inria.fr>
     Raphël Monat <raphael.monat@lip6.fr>
 

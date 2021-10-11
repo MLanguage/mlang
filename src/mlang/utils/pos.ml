@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
    in compliance with the License. You may obtain a copy of the License at
@@ -14,6 +14,9 @@
 
 type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
 (** A position in the source code is a file, as well as begin and end location of the form col:line *)
+
+let make_position (f : string) (loc : Lexing.position * Lexing.position) =
+  { pos_filename = f; pos_loc = loc }
 
 let format_position_short fmt pos =
   let s, e = pos.pos_loc in

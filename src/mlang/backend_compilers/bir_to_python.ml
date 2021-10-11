@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -121,7 +121,7 @@ let generate_variable fmt (var : Variable.t) : unit =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mir.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
       Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
@@ -131,8 +131,6 @@ let generate_variable fmt (var : Variable.t) : unit =
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
-
-let generate_typ (typ : typ) : string = match typ with Real -> "float"
 
 let autograd_ref = ref false
 
