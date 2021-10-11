@@ -366,16 +366,6 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
            (Pos.VarNameToID.find name p.program_idmap))
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
-let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
-  let rules_as_list = RuleMap.bindings p.program_rules in
-  let rule_vars =
-    List.concat_map (fun (_,rd) -> rd.rule_vars) rules_as_list in
-  let filtered_list =
-    List.filter_map  (fun (var_id, var_data) -> if var_data.var_io = io_to_find then Some var_id else None) rule_vars in
-  VariableDict.filter
-    (fun vid _ -> List.exists (fun list_vid -> list_vid = vid) filtered_list)
-    p.program_vars
-
 (** Explores the rules to find rule and variable data *)
 let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_data =
   (* using exceptions to cut short exploration *)
@@ -418,3 +408,18 @@ let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program) (acc :
           f var def acc)
         acc rule_data.rule_vars)
     p.program_rules acc
+
+let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
+  fold_vars
+    (fun var var_data acc ->
+      if
+        var_data.var_io = io_to_find
+        && var
+           = List.hd
+               (Pos.VarNameToID.find (Pos.unmark var.name) p.program_idmap
+               |> List.sort (fun v1 v2 ->
+                      -compare_execution_number v1.Variable.execution_number
+                         v2.Variable.execution_number))
+      then VariableDict.add var acc
+      else acc)
+    p VariableDict.empty
