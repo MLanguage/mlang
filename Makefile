@@ -61,10 +61,8 @@ default: build
 # Building the compiler
 ##################################################
 
-manual-deps:
-	opam install ANSITerminal re ocamlgraph dune menhir \
-		cmdliner dune-build-info parmap num ocamlformat mlgmpidl \
-		ocamlformat
+deps-without-ocaml:
+	opam install . --deps-only
 	git submodule update --init --recursive
 
 deps:
@@ -78,7 +76,7 @@ build: format
 	dune build $(DUNE_OPTIONS)
 
 # Run only in an opam switch with musl and static options activated
-build-static: DUNE_OPTIONS+=--profile=static
+build-static: DUNE_OPTIONS+=--profile=static --profile=release
 build-static: build
 
 ##################################################
