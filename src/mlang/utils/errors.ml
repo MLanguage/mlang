@@ -36,3 +36,6 @@ let raise_error (msg : string) : 'a = raise (StructuredError (msg, [], None))
 let raise_spanned_error_with_continuation (msg : string) ?(span_msg : string option) (span : Pos.t)
     (kont : unit -> unit) : 'a =
   raise (StructuredError (msg, [ (span_msg, span) ], Some kont))
+
+let print_spanned_warning (msg : string) ?(span_msg : string option) (span : Pos.t) : unit =
+  Cli.warning_print "%a" format_structured_error (msg, [ (span_msg, span) ])

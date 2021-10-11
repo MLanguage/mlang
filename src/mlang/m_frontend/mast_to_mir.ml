@@ -183,12 +183,10 @@ let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
          IntMap.empty candidate_list
      in
      if IntMap.cardinal rules_containing_candidates > 2 then
-       Errors.raise_multispanned_error
-         "A variable is used with multiple candidates for its previous definition."
-         ([ (Some "Variable used here:", Pos.get_position name) ]
-         @ List.map
-             (fun (_, var) -> (Some "Value defined here:", var.Mir.Variable.execution_number.pos))
-             (IntMap.bindings rules_containing_candidates)));
+       Errors.print_spanned_warning
+         "A variable is used with multiple candidates for its previous definition. Please \
+          initialize the variable in the rule before using it."
+         (Pos.get_position name));
     (* If the above check passes, we select the right candidate *)
     find_var_among_candidates exec_number candidate_list
   with Not_found ->
