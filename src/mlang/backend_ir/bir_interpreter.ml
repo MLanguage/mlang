@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -40,8 +40,58 @@ let exit_on_rte = ref true
 
 let repl_debug = ref false
 
+module type S = sig
+  type custom_float
+
+  type value = Number of custom_float | Undefined
+
+  val format_value : Format.formatter -> value -> unit
+
+  type var_value = SimpleVar of value | TableVar of int * value array
+
+  val format_var_value : Format.formatter -> var_value -> unit
+
+  val format_var_value_with_var : Format.formatter -> Mir.Variable.t * var_value -> unit
+
+  type ctx = {
+    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
+    ctx_vars : var_value Mir.VariableMap.t;
+    ctx_generic_index : int option;
+  }
+
+  val empty_ctx : ctx
+
+  val literal_to_value : Mir.literal -> value
+
+  val var_literal_to_var_value : var_literal -> var_value
+
+  val value_to_literal : value -> Mir.literal
+
+  val var_value_to_var_literal : var_value -> var_literal
+
+  type run_error =
+    | ErrorValue of string * Pos.t
+    | FloatIndex of string * Pos.t
+    | IndexOutOfBounds of string * Pos.t
+    | IncorrectOutputVariable of string * Pos.t
+    | UnknownInputVariable of string * Pos.t
+    | ConditionViolated of
+        Mir.Error.t list * Mir.expression Pos.marked * (Mir.Variable.t * var_value) list
+    | NanOrInf of string * Mir.expression Pos.marked
+    | StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
+
+  exception RuntimeError of run_error * ctx
+
+  val replace_undefined_with_input_variables : Mir.program -> Mir.VariableDict.t -> Mir.program
+
+  val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
+end
+
 module Make (N : Bir_number.NumberInterface) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang compiler... *)
+
+  type custom_float = N.t
+
   let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float 0.000001)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use copysign here
@@ -262,8 +312,6 @@ module Make (N : Bir_number.NumberInterface) = struct
           (fun _ -> repl_debugguer ctx p)
     | StructuredError (msg, pos, kont) -> raise (Errors.StructuredError (msg, pos, kont))
 
-  let int_of_bool (b : bool) = if b then 1 else 0
-
   let is_zero (l : value) : bool = match l with Number z -> N.is_zero z | _ -> false
 
   let real_of_bool (b : bool) = if b then N.one () else N.zero ()
@@ -277,8 +325,6 @@ module Make (N : Bir_number.NumberInterface) = struct
     if N.(idx >=. N.of_int (Int64.of_int size)) then Undefined
     else if N.(idx <. N.zero ()) then Number (N.zero ())
     else values.(Int64.to_int (N.to_int idx))
-
-  let eval_debug = ref false
 
   let rec evaluate_expr (ctx : ctx) (p : Mir.program) (e : expression Pos.marked) : value =
     let out =
@@ -467,20 +513,31 @@ module Make (N : Bir_number.NumberInterface) = struct
     else out
 
   let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
-    raise
-      (RuntimeError
-         ( ConditionViolated
-             ( cond.cond_errors,
-               cond.cond_expr,
-               List.rev
-               @@ List.fold_left
-                    (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
-                    []
-                    (List.map
-                       (fun (_, x) -> x)
-                       (Mir.VariableDict.bindings
-                          (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
-           ctx ))
+    List.fold_left
+      (fun ctx err ->
+        match err.Error.typ with
+        | Mast.Anomaly ->
+            raise
+              (RuntimeError
+                 ( ConditionViolated
+                     ( cond.cond_errors,
+                       cond.cond_expr,
+                       List.rev
+                       @@ List.fold_left
+                            (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
+                            []
+                            (List.map
+                               (fun (_, x) -> x)
+                               (Mir.VariableDict.bindings
+                                  (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
+                   ctx ))
+        | Mast.Discordance ->
+            Cli.warning_print "Anomaly: %s" (Pos.unmark (Error.err_descr_string err));
+            ctx
+        | Mast.Information ->
+            Cli.debug_print "Information: %s" (Pos.unmark (Error.err_descr_string err));
+            ctx)
+      ctx cond.cond_errors
 
   let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_value =
     match vdef with
@@ -547,12 +604,7 @@ module BigIntInterpreter = Make (Bir_number.BigIntFixedPointNumber (BigIntPrecis
 module IntervalInterpreter = Make (Bir_number.IntervalNumber)
 module RationalInterpreter = Make (Bir_number.RationalNumber)
 
-type value_sort =
-  | RegularFloat
-  | MPFR of int  (** bitsize of the floats *)
-  | BigInt of int  (** precision of the fixed point *)
-  | Interval
-  | Rational
+type value_sort = RegularFloat | MPFR of int | BigInt of int | Interval | Rational
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
     (inputs : literal VariableMap.t) (code_loc_start_value : int) (sort : value_sort) : unit -> unit

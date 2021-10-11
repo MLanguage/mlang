@@ -28,19 +28,17 @@
   "The Direction G\195\169n\195\169rale des Finances Publiques (DGFiP)\nuses the M language to specify how French taxes are computed\nfrom the characteristics of a fiscal household. This compiler\nparser the M code into a formalized compact intermediate language\nbefore translating it into various backend languages.\n")
  (depends
   (ocaml
-   (>= 4.11.2))
+   (and(>= "4.11.2") (< "4.12.0")))
   (dune
    (and :build))
   (ANSITerminal
    (= 0.8.2))
   (re
    (= 1.9.0))
-  (ppx_deriving
-   (= 4.4))
-  (visitors
-   (>= 20200210))
   (ocamlgraph
    (= 1.8.8))
+  (odoc
+  (= 1.5.3))
   (dune-build-info
    (= 2.5.1))
   (num

@@ -47,7 +47,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
          (fun v1 v2 -> compare v1.Mir.Variable.execution_number v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) (test_error_margin : float) :
+let to_MIR_function_and_inputs (program : Bir.program) (t : test_file) (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
@@ -62,7 +62,7 @@ let to_mvg_function_and_inputs (program : Bir.program) (t : test_file) (test_err
   let func_outputs = VariableMap.empty in
   (* some output variables are actually input, so we don't declare any for now *)
   let func_conds =
-    Bir_interface.translate_cond program.idmap
+    Bir_interface.translate_external_conditions program.idmap
       (List.map
          (fun (var, value, pos) ->
            (* sometimes test outputs mention aliases so we have to catch thos two using the line
@@ -136,7 +136,7 @@ let check_test (combined_program : Bir.program) (test_name : string) (optimize :
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file = to_mvg_function_and_inputs combined_program t test_error_margin in
+  let f, input_file = to_MIR_function_and_inputs combined_program t test_error_margin in
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f

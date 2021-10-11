@@ -61,10 +61,12 @@ default: build
 # Building the compiler
 ##################################################
 
+deps-without-ocaml:
+	opam install . --deps-only
+	git submodule update --init --recursive
+
 deps:
-	opam install ppx_deriving ANSITerminal re ocamlgraph dune menhir \
-		cmdliner dune-build-info visitors parmap num ocamlformat mlgmpidl \
-		ocamlformat
+	opam switch create . --deps-only
 	git submodule update --init --recursive
 
 format:
@@ -74,7 +76,7 @@ build: format
 	dune build $(DUNE_OPTIONS)
 
 # Run only in an opam switch with musl and static options activated
-build-static: DUNE_OPTIONS+=--profile=static
+build-static: DUNE_OPTIONS+=--profile=static --profile=release
 build-static: build
 
 ##################################################
@@ -113,7 +115,7 @@ all: tests test_python_backend test_c_backend_perf \
 
 doc: FORCE
 	dune build @doc
-	ln -s $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
+	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 clean:
 	$(MAKE) -C examples/c clean

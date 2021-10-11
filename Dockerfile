@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 
 ENV APT_DEPS opam libgmp-dev libmpfr-dev m4 perl python3 clang git
 
-ENV OPAM_DEPS ppx_deriving ANSITerminal re ocamlgraph dune menhir cmdliner dune-build-info visitors parmap num ocamlformat mlgmpidl
+ENV OPAM_DEPS ANSITerminal re ocamlgraph dune menhir cmdliner dune-build-info parmap num ocamlformat mlgmpidl
 
 ENV TERM xterm-256color
 
