@@ -215,9 +215,10 @@ let format_variable_decl fmt (v : variable_decl) =
   | InputVar v -> format_input_variable fmt (Pos.unmark v)
 
 let format_verification_condition fmt (vc : verification_condition) =
-  Format.fprintf fmt "si %a\n alors erreur %a;" format_expression (Pos.unmark vc.verif_cond_expr)
-    (pp_print_list_space (pp_unmark format_error_name))
-    vc.verif_cond_errors
+  Format.fprintf fmt "si %a\n alors erreur %a %a;" format_expression (Pos.unmark vc.verif_cond_expr)
+    (pp_unmark format_error_name) (fst vc.verif_cond_error)
+    (Format.pp_print_option (pp_unmark format_variable_name))
+    (snd vc.verif_cond_error)
 
 let format_verification fmt (v : verification) =
   Format.fprintf fmt "verif %a : %a;\n%a" format_verification_name v.verif_name

@@ -191,7 +191,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   let process (name : string) ((successes, failures, code_coverage_acc) : process_acc) : process_acc
       =
     let report_violated_condition_error (bindings : (Variable.t * Mir.literal) option)
-        (expr : Mir.expression Pos.marked) (err : Error.t list) =
+        (expr : Mir.expression Pos.marked) (err : Error.t) =
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
       | ( Some (v, l1),
@@ -209,10 +209,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
           let errs_varname = try VariableMap.find v failures with Not_found -> [] in
           (successes, VariableMap.add v ((name, l1, l2) :: errs_varname) failures, code_coverage_acc)
       | _ ->
-          Cli.error_print "Test %s incorrect (error%s %a raised)" name
-            (if List.length err > 1 then "s" else "")
-            (Format.pp_print_list Format.pp_print_string)
-            (List.map (fun x -> Pos.unmark x.Error.name) err);
+          Cli.error_print "Test %s incorrect (error %s raised)" name (Pos.unmark err.Error.name);
           (successes, failures, code_coverage_acc)
     in
     try

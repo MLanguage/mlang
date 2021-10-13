@@ -308,7 +308,10 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type condition_data = { cond_expr : expression Pos.marked; cond_errors : (Error.t[@opaque]) list }
+type condition_data = {
+  cond_expr : expression Pos.marked;
+  cond_error : (Error.t[@opaque]) * Variable.t option;
+}
 
 type idmap = Variable.t list Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type: Mir.Variable.t}, so we need to
