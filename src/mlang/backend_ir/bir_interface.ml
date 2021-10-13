@@ -135,14 +135,19 @@ let translate_external_conditions idmap (conds : Mast.expression Pos.marked list
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let open Mir in
   let output_vars =
-    Mir.VariableDict.fold
-      (fun k acc -> Mir.VariableMap.add k () acc)
+    VariableDict.fold
+      (fun k acc -> VariableMap.add k () acc)
       (find_vars_by_io p.mir_program Output)
-      Mir.VariableMap.empty
+      VariableMap.empty
   in
-  Cli.debug_print "Using all %d outputs from m sources" (VariableMap.cardinal output_vars);
+  let input_vars =
+      (Pos.VarNameToID.fold
+         (fun _ v acc -> if not (VariableMap.mem (List.hd v) output_vars) then (Mir.VariableMap.add (Mast_to_mir.list_max_execution_number v) () acc) else acc)
+         p.idmap VariableMap.empty)
+  in
+  Cli.debug_print "Using all %d outputs and %d inputs from m sources" (VariableMap.cardinal output_vars) (VariableMap.cardinal input_vars);
   {
-    func_variable_inputs = VariableMap.empty;
+    func_variable_inputs = input_vars;
     func_constant_inputs = VariableMap.empty;
     func_outputs = output_vars;
     func_conds = VariableMap.empty;
