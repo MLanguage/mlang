@@ -81,13 +81,15 @@ jobs:
           cache-name: cache-opam-modules
         with:
           # OCaml cache files are stored in `~/.opam` on Linux/macOS
-          path: $GITHUB_WORKSPACE/_opam
+          path: ~/.opam
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
-
+            
+      # TODO : Cache gmp and mpfr builds
+      
       - name: Set up OCaml
         uses: avsm/setup-ocaml@v1
         with:
@@ -103,7 +105,7 @@ jobs:
           wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
-          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix opam switch create . 4.11.2+musl+static+flambda --deps-only
+          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps-without-ocaml
 
       - name: Make mlang binary
         run: |
