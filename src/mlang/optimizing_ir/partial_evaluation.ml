@@ -596,7 +596,7 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : parti
           Cli.error_print "Error during partial evaluation!";
           let err, ctx =
             ( Bir_interpreter.RegularFloatInterpreter.ConditionViolated
-                (cond.cond_errors, cond.cond_expr, []),
+                (fst cond.cond_error, cond.cond_expr, []),
               interpreter_ctx_from_partial_ev_ctx ctx )
           in
           if !Bir_interpreter.exit_on_rte then

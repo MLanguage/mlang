@@ -91,7 +91,7 @@ module type S = sig
     | IncorrectOutputVariable of string * Pos.t
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of
-        Mir.Error.t list * Mir.expression Pos.marked * (Mir.Variable.t * var_value) list
+        Mir.Error.t * Mir.expression Pos.marked * (Mir.Variable.t * var_value) list
     | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 

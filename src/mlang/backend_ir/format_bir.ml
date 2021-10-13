@@ -26,10 +26,11 @@ let rec format_stmt fmt (stmt : stmt) =
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
         Format_mir.format_expression cond format_stmts t format_stmts f
   | SVerif cond_data ->
-      Format.fprintf fmt "assert (%a) or raise %a" Format_mir.format_expression
-        (Pos.unmark cond_data.cond_expr)
-        (Format_mast.pp_print_list_comma Format_mir.format_error)
-        cond_data.cond_errors
+      Format.fprintf fmt "assert (%a) or raise %a%a" Format_mir.format_expression
+        (Pos.unmark cond_data.cond_expr) Format_mir.format_error (fst cond_data.cond_error)
+        (Format.pp_print_option (fun fmt v ->
+             Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
+        (snd cond_data.cond_error)
   | SRuleCall r -> Format.fprintf fmt "call_rule(%d)@\n" r
 
 and format_stmts fmt (stmts : stmt list) =
