@@ -107,8 +107,6 @@ launch_fuzz: fuzz_harness.exe
 sanitize_crash_names:
 	./sanitize_crash_names.sh
 
- to transform the crash inputs into proper
-
 # Then, you have to transform the renamed crash files into Mlang test cases
 # with the right format. For that use transform_crashes_into_tests
 FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
