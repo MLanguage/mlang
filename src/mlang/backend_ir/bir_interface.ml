@@ -142,7 +142,7 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
   in
   let input_vars =
       (Pos.VarNameToID.fold
-         (fun _ v acc -> if not (VariableMap.mem (List.hd v) output_vars) then (Mir.VariableMap.add (Mast_to_mir.list_max_execution_number v) () acc) else acc)
+         (fun _ v acc -> Mir.VariableMap.add (Mast_to_mir.list_max_execution_number v) () acc)
          p.idmap VariableMap.empty)
   in
   Cli.debug_print "Using all %d outputs and %d inputs from m sources" (VariableMap.cardinal output_vars) (VariableMap.cardinal input_vars);
