@@ -7,6 +7,7 @@ SOURCE_DIR_2016=$(wildcard $(PWD)/ir-calcul/sources2016m_4_5/*.m)
 SOURCE_DIR_2017=$(wildcard $(PWD)/ir-calcul/sources2017m_6_10/*.m)
 SOURCE_DIR_2018=$(wildcard $(PWD)/ir-calcul/sources2018m_6_7/*.m)
 SOURCE_DIR_2019=$(wildcard $(PWD)/ir-calcul/sources2019m_8_0/*.m)
+SOURCE_DIR_2020=$(wildcard $(PWD)/ir-calcul/sources2020m_6_5/*.m)
 
 YEAR?=2019
 
@@ -20,6 +21,11 @@ else ifeq ($(YEAR), 2019)
 	MPP_FILE?=$(PWD)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=tests/2019/fuzzing/
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
+else ifeq ($(YEAR), 2020)
+	SOURCE_FILES?=$(SOURCE_DIR_2020)
+	MPP_FILE?=$(PWD)/mpp_specs/2020_6_5.mpp
+	TESTS_DIR?=tests/2020/fuzzing/
+	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2020.m_spec
 else
     $(error Unsupported year: $(YEAR))
 endif

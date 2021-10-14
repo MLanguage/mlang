@@ -1,0 +1,106 @@
+compute_article1731bis():
+  ART1731BIS = 0
+  if CMAJ == 8 or CMAJ == 11:
+    ART1731BIS = 1
+    PREM8_11 = 1
+
+compute_benefits():
+ if exists_deposit_defined_variables() or exists_taxbenefit_ceiled_variables():
+    partition with var_is_taxbenefit:
+      V_INDTEO = 1
+      V_CALCUL_NAPS = 1
+      NAPSANSPENA, IAD11, INE, IRE, PREM8_11 <- call_m()
+      V_CALCUL_NAPS = 0
+      iad11 = cast(IAD11)
+      ire = cast(IRE)
+      ine = cast(INE)
+      prem = cast(PREM8_11)
+      PREM8_11 = prem
+    V_IAD11TEO = iad11
+    V_IRETEO = ire
+    V_INETEO = ine
+
+compute_double_liquidation3(outputs):
+  FLAG_ACO = 0
+  V_NEGACO = 0
+  V_AVFISCOPBIS = 0
+  V_DIFTEOREEL = 0
+  PREM8_11 = 0
+  compute_article1731bis()
+  calcul_avfisc = exists_taxbenefit_defined_variables()
+  v_8ZG = 8ZG
+  if present(8ZG) and calcul_avfisc:
+    del 8ZG
+  if calcul_avfisc:
+    V_AVFISCOPBIS = 0
+    V_DIFTEOREEL = 0
+    V_INDTEO = 1
+    compute_benefits()
+    V_INDTEO = 0
+    V_NEGREEl = 1
+    V_NAPREEL = 0
+  8ZG = v_8ZG
+  V_ACO_MTAP = 0
+  V_NEGACO = 0
+  outputs <- call_m()
+
+compute_double_liquidation_exit_taxe(outputs):
+  annee = 2018 # FIXME
+  if present(PVIMPOS) or present(CODRWB):
+    FLAG_EXIT = 1
+    FLAG_3WBNEG = 0
+    NAPTIR, IHAUTREVT, ID11, RASTXFOYER <- compute_double_liquidation3()
+    if present(NAPTIR):
+      if NAPTIR < 0:
+        FLAG_3WBNEG = 1
+      V_NAPTIR3WB = abs(NAPTIR)
+    if annee >= 2017 and present(IHAUTREVT):
+      V_CHR3WB = IHAUTREVT
+    if annee >= 2018 and present(ID11):
+      V_ID113WB = ID11
+    FLAG_EXIT = 0
+  if present(PVSURSI) or present(CODRWA):
+    FLAG_3WANEG = 0
+    FLAG_EXIT = 2
+    NAPTIR, IHAUTREVT, ID11 <-  compute_double_liquidation3()
+    if present(NAPTIR):
+      if NAPTIR < 0:
+        FLAG_3WANEG = 1
+      V_NAPTIR3WA = abs(NAPTIR)
+    if annee >= 2017 and present(IHAUTREVT):
+      V_CHR3WA = IHAUTREVT
+    if annee >= 2018 and present(ID11):
+      V_ID113WA = ID11
+    FLAG_EXIT = 0
+  if annee >= 2018:
+    FLAG_BAREM = 1
+    RASTXFOYER, RASTXDEC1, RASTXDEC2, INDTAZ, IITAZIR, IRTOTAL <- compute_double_liquidation3()
+    if present(RASTXFOYER):
+      V_BARTXFOYER = RASTXFOYER # I wonder if the conditional on the defined-ness is really useful
+    if present(RASTXDEC1):
+      V_BARTXDEC1 = RASTXDEC1
+    if present(RASTXDEC2):
+      V_BARTXDEC2 = RASTXDEC2
+    if present(INDTAZ):
+      V_BARINDTAZ = INDTAZ
+    if IITAZIR >= 0:
+      FLAG_BARIITANEG = 0
+      V_BARIITAZIR = IITAZIR
+    else: # semantics of command if/else: nothing happens if IITAZIR is undefined
+      FLAG_BARIITANEG = 1
+      V_BARIITAZIR = - IITAZIR
+    if present(IRTOTAL):
+      V_BARIRTOTAL = IRTOTAL
+    FLAG_BAREM = 0
+    outputs <- compute_double_liquidation3()
+
+compute_double_liquidation_pvro():
+  APPLI_OCEANS = 0
+  V_IND_TRAIT = 4
+  if present(COD3WG):
+   FLAG_PVRO = 1
+   IAD11 <- compute_double_liquidation_exit_taxe()
+   if present(IAD11):
+     V_IPVRO = IAD11
+  FLAG_PVRO = 0
+  compute_double_liquidation_exit_taxe()

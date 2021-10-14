@@ -22,25 +22,22 @@ V_0AM = 1;
 # These are the expected values of tax-related variables
 condition:
 # Base income tax
-IAN = 6461;
+IAN = 6182;
 # Total tax (income tax + social contributions)
-IINET = 6943;
+IINET = 6664;
 # Final income tax
-IRNET = 6461;
+IRNET = 6182;
 # Total of social constributions (CSG + CRDS + Social and solidarity contribution)
 NAPCR = 482;
 # Mean tax rate
-TXMOYIMP = 9.39;
+TXMOYIMP = 8.99;
 # Number of parts for the family quotient
 NBPT = 2.5;
 # Generalized Social Contribution
 CSG = 272;
 # Social and solidarity contribution
 PSOL = 210;
-# Special tax credit because 2018 was the transition to witholding taxation, only
-# exceptional income is taxed
-CIMR = 0;
-# Reference taxable income for 2019
+# Reference taxable income for 2020
 REVKIRE = 65800;
 
 
@@ -51,7 +48,6 @@ NBPT,
 REVKIRE,
 TXMOYIMP,
 IINET,
-CIMR,
 CSG,
 RDSN,
 PSOL,
