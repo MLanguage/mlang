@@ -201,7 +201,17 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
                     {
                       Mir.var_typ = None;
                       Mir.var_io = Regular;
-                      Mir.var_definition = Mir.SimpleVar (Mir.Literal Mir.Undefined, pos);
+                      Mir.var_definition =
+                        begin
+                          match var.Mir.Variable.is_table with
+                          | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
+                          | Some size ->
+                              Mir.TableVar
+                                ( size,
+                                  Mir.IndexGeneric
+                                    (Pos.same_pos_as (Mir.Literal Mir.Undefined)
+                                       var.Mir.Variable.name) )
+                        end;
                     } ),
                 pos )
               :: acc

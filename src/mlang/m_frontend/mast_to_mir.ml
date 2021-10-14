@@ -1205,8 +1205,8 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
           (* This is the case where the variable is not defined. *)
           let io =
             match decl.var_decl_io with
-            | Output -> Mir.Output
-            | Regular | Constant -> Mir.Regular
+            | Output | Regular -> Mir.Input
+            | Constant -> Mir.Regular
             | Input -> assert false
             (* should not happen *)
           in
@@ -1216,10 +1216,16 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
               Mir.VariableMap.add var
                 {
                   Mir.var_definition =
-                    Mir.TableVar
-                      ( size,
-                        Mir.IndexGeneric
-                          (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name) );
+                    begin
+                      match io with
+                      | Mir.Input -> Mir.InputVar
+                      | _ ->
+                          Mir.TableVar
+                            ( size,
+                              Mir.IndexGeneric
+                                (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
+                            )
+                    end;
                   Mir.var_typ =
                     translate_value_typ
                       (match decl.var_decl_typ with
@@ -1232,8 +1238,13 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
               Mir.VariableMap.add var
                 {
                   Mir.var_definition =
-                    Mir.SimpleVar
-                      (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name);
+                    begin
+                      match io with
+                      | Mir.Input -> Mir.InputVar
+                      | _ ->
+                          Mir.SimpleVar
+                            (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
+                    end;
                   Mir.var_typ =
                     translate_value_typ
                       (match decl.var_decl_typ with
