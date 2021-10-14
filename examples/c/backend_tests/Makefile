@@ -93,22 +93,37 @@ else
 	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
 endif
 
-# Usage: NO_JOB=<0,1,2...> make launch_fuzz
+# First, you launch the fuzzerrs
+# Usage: JOB_NO=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
 	ulimit -s 32768; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
-FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
-
+# When they're done, you have to rename all crashes found into more
+# palatable names.
+#Usage: make sanitize_crash_names
 sanitize_crash_names:
 	./sanitize_crash_names.sh
+
+ to transform the crash inputs into proper
+
+# Then, you have to transform the renamed crash files into Mlang test cases
+# with the right format. For that use transform_crashes_into_tests
+FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
 
 %.m_test: %.m_crash FORCE
 	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
 
+# Usage: make transform_crashes_into_tests
 transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+
+# As a final step, you can minimize the test corpus to only keep a minimal
+# amount of test cases with an optimal coverage
+minimize_test_corpus:
+	mkdir -p fuzz_tests_minimized
+	afl-cmin -i fuzz_tests -o fuzz_tests_minimized
 
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*
