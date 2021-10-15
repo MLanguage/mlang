@@ -35,7 +35,7 @@ m_value m_neg(m_value x)
 {
     if (x.undefined)
     {
-        return m_undefined;
+        return m_zero;
     }
     else
     {

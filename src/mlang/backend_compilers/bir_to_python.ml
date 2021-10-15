@@ -37,6 +37,8 @@ let undefined_class_prelude : string =
   \    def __rsub__(self, rhs):\n\
   \        if isinstance(rhs, Undefined): return self\n\
   \        else: return rhs\n\n\
+  \    def __neg__(self):\n\
+  \        return 0\n\n\
   \    def __mul__(self, rhs):\n\
   \        return self\n\n\
   \    def __rmul__(self, rhs):\n\
