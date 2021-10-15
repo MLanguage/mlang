@@ -14,8 +14,8 @@ released by the DGFiP.
 There is currently no legal guarantee of any kind about the correctness of the code
 produced by the Mlang compiler, or by the results produced by the interpreter of
 Mlang. However, authors have been in contact with DGFiP to validate Mlang, and
-the system passes all the private DGFiP tests as of Sept. 2020 for the version
-of the source files responsible for computing the tax on the 2018 income.
+the system passes all the private DGFiP tests as of Sept. 2021 for the version
+of the source files responsible for computing the tax on the 2018, 2019 and 2020 income.
 
 ## Installation
 
@@ -78,14 +78,14 @@ Mlang's run are configured by a specification file (`.m_spec`), see the
 [dedicated README](m_specs/README.md) for more details.
 
 Mlang also need an M++ file to know how to run the "liquidations multiples"
-mechanism that is necessary to compute the income tax correctly. The file
+mechanism that is necessary to compute the income tax correctly. For instance, the file
 `mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
 for version of the 2018 M sources published in `ir-calcul`.
 
 If you want to test the output of the interpreter on a situation you made up,
 edit your own `.m_spec` and run it with the command:
 
-    YEAR=<2018 or 2019> M_SPEC_FILE=<path to .m_spec> make quick_test
+    YEAR=<2018 or 2019 or 2020> M_SPEC_FILE=<path to .m_spec> make quick_test
 
 For how to produce ready-to-use income tax computation
 source files for your application, see the
@@ -114,8 +114,8 @@ are represented with the [Q number format](https://en.wikipedia.org/wiki/Q_(numb
 and `<n>` is the number of fractional bits. The integer bits are unbounded.
 
 The DGFiP does not publish its internal test base. However, randomized test
-cases have been created for the 2018 income version of the software, in the
-folder `random_tests`. The fact that Mlang passes these tests only means that
+cases have been created for the 2018, 2019 and 2020 income versions of the software, in the
+folder `tests`. The fact that Mlang passes these tests only means that
 it faithfully reproduces the computation done by the DGFiP using unpublished
 software. Notably, it does not mean that the M sources (published by the
 DGFiP) and the M++ sources (recreated from unpublished sources) are faithful to
@@ -162,8 +162,8 @@ to enable or disable parts of the computation.
 The DGFiP has not published the source code of this iterative computation. However,
 the authors of Mlang have come up with a new DSL called M++, used for describing
 the logic of this iterative computation. Currently, the authors have transcribed
-the unpublished source code into the `mpp_specs/2018_6_7.mpp` file, which has been tested only
-for the computation of taxes for the 2018 income.
+the unpublished source code into the `mpp_specs/*2018_6_7*.mpp` file, which has been tested only
+for the computation of taxes for the 2018, 2019 and 2020 income.
 
 ## Contributions
 
