@@ -40,7 +40,7 @@ PSOL = 210;
 # Special tax credit because 2018 was the transition to witholding taxation, only
 # exceptional income is taxed
 CIMR = 0;
-# Reference taxable income for 2018
+# Reference taxable income for 2019
 REVKIRE = 65800;
 
 

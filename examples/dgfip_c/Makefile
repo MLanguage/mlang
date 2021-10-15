@@ -1,27 +1,4 @@
-##################################################
-# Variables
-##################################################
-
-SOURCE_DIR_2015=$(wildcard ../../ir-calcul/sources2015m_4_6/*.m)
-SOURCE_DIR_2016=$(wildcard ../../ir-calcul/sources2016m_4_5/*.m)
-SOURCE_DIR_2017=$(wildcard ../../ir-calcul/sources2017m_6_10/*.m)
-SOURCE_DIR_2018=$(wildcard ../../ir-calcul/sources2018m_6_7/*.m)
-SOURCE_DIR_2019=$(wildcard ../../ir-calcul/sources2019m_8_0/*.m)
-
-YEAR?=2019
-
-ifeq ($(YEAR), 2018)
-	SOURCE_FILES?=$(SOURCE_DIR_2018)
-	MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
-	TESTS_DIR?=../../../tests/2018/fuzzing/
-	ONE_TEST_FILE?=../../../tests/2018/fuzzing/fuzzer_14200.m_test
-else ifeq ($(YEAR), 2019)
-	SOURCE_FILES?=$(SOURCE_DIR_2019)
-	MPP_FILE?=../../mpp_specs/dgfip_base.mpp
-	TESTS_DIR?=../../tests/2019/fuzzing/
-else
-    $(error Unsupported year: $(YEAR))
-endif
+-include ../../Makefile.config
 
 OPTIMIZE_FLAG=-O
 

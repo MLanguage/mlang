@@ -12,6 +12,7 @@ if __name__ == "__main__":
         total_entrees = f.read().split(", ")
     tests_dir = sys.argv[2]
     for f in os.listdir(tests_dir):
+        print(f"Testing {f}")
         entrees, sorties = parse_test(f"{tests_dir}/{f}")
         entrees_completees = {x:(entrees[x] if x in entrees else tests.Undefined()) for x in total_entrees}
         resultats_test = tests.extracted(entrees_completees)
@@ -20,4 +21,4 @@ if __name__ == "__main__":
             if initial_x in sorties and not(isinstance(r, tests.Undefined)) and r != sorties[initial_x]:
                 print(f"Error in {f}, on variable {x} computed output = {r}, expected {sorties[initial_x]}!")
                 sys.exit(-1)
-        print(f"Test {f} successfully passed!")
+

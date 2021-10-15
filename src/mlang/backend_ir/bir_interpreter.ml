@@ -376,7 +376,7 @@ module Make (N : Bir_number.NumberInterface) = struct
             | Mast.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
             | Mast.Minus, Number f1 -> Number N.(zero () -. f1)
             | Mast.Not, Undefined -> Undefined
-            | Mast.Minus, Undefined -> Number (N.zero ()))
+            | Mast.Minus, Undefined -> Undefined)
         | Conditional (e1, e2, e3) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
