@@ -93,30 +93,32 @@ let merge_code_coverage_acc (acc1 : code_coverage_acc) (acc2 : code_coverage_acc
 
 type code_locs = Mir.Variable.t CodeLocationMap.t
 
-let rec get_code_locs_stmt (stmt : Bir.stmt) (loc : Bir_interpreter.code_location) : code_locs =
+let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt) (loc : Bir_interpreter.code_location)
+    : code_locs =
   match Pos.unmark stmt with
   | Bir.SConditional (_, t, f) ->
       CodeLocationMap.union
         (fun _ _ _ -> assert false)
-        (get_code_locs_stmts t (Bir_interpreter.ConditionalBranch true :: loc))
-        (get_code_locs_stmts f (Bir_interpreter.ConditionalBranch false :: loc))
+        (get_code_locs_stmts p t (Bir_interpreter.ConditionalBranch true :: loc))
+        (get_code_locs_stmts p f (Bir_interpreter.ConditionalBranch false :: loc))
   | Bir.SVerif _ -> CodeLocationMap.empty
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
-  | Bir.SRuleCall _ -> CodeLocationMap.empty
+  | Bir.SRuleCall r ->
+      get_code_locs_stmts p (Bir.RuleMap.find r p.rules).rule_stmts
+        (Bir_interpreter.InsideRule r :: loc)
 
-and get_code_locs_stmts (stmts : Bir.stmt list) (loc : Bir_interpreter.code_location) : code_locs =
+and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
+    (loc : Bir_interpreter.code_location) : code_locs =
   let locs, _ =
     List.fold_left
       (fun (locs, i) stmt ->
         ( CodeLocationMap.union
             (fun _ _ _ -> assert false)
-            (get_code_locs_stmt stmt (Bir_interpreter.InsideBlock i :: loc))
+            (get_code_locs_stmt p stmt (Bir_interpreter.InsideBlock i :: loc))
             locs,
           i + 1 ))
       (CodeLocationMap.empty, 0) stmts
   in
   locs
 
-let get_code_locs (p : Bir.program) : code_locs =
-  let statements = Bir.get_all_statements p in
-  get_code_locs_stmts statements []
+let get_code_locs (p : Bir.program) : code_locs = get_code_locs_stmts p p.statements []
