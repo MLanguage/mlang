@@ -20,7 +20,10 @@ def parse_test(f):
         s = contents[i].split('/')
         entrees[s[0]] = float(s[1].strip())
         i += 1
-    i += 2
+    if contents[i+1].strip() == "":
+        i += 3
+    else:
+        i += 2
     while(contents[i] != "#ENTREES-CORRECTIF\n"):
         s = contents[i].split('/')
         resultats[s[0]] = float(s[1].strip())

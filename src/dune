@@ -9,6 +9,4 @@
  (public_name mlang)
  (ocamlopt_flags
   (-cclib -lstdc++))
- (libraries mlang)
- (preprocess
-  (pps ppx_deriving.std visitors.ppx)))
+ (libraries mlang))

@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -227,8 +227,8 @@ type variable_decl =
 
 type verification_condition = {
   verif_cond_expr : expression Pos.marked;
-  verif_cond_errors : error_name Pos.marked list;
-      (** A verification condition can trigger multiple errors *)
+  verif_cond_error : error_name Pos.marked * variable_name Pos.marked option;
+      (** A verification condition error can ba associated to a variable *)
 }
 
 type verification = {

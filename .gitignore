@@ -3,3 +3,5 @@ main.native
 src/**/.merlin
 *.install
 doc.html
+*~
+/_opam

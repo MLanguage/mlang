@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -56,14 +56,14 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       !Cli.source_files;
     finish "completed!";
     Cli.debug_print "Elaborating...";
-    let m_program = Mast_to_mvg.translate !m_program in
+    let m_program = Mast_to_mir.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
     Cli.debug_print "Checking for circular variable definitions...";
-    ignore
-      (Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true);
+    if Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true
+    then Errors.raise_error "Cycles between rules.";
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let m_program = Mir_interface.reset_all_outputs full_m_program.program in
     let full_m_program = Mir_interface.to_full_program m_program in
@@ -172,7 +172,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
       | None -> Errors.raise_error "No backend specified!"
     end
   with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "Error: %a" Errors.format_structured_error (msg, pos);
+    Cli.error_print "%a" Errors.format_structured_error (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit (-1)
 

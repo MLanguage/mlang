@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -106,9 +106,10 @@ let format_error fmt (e : Error.t) =
     (Error.err_descr_string e |> Pos.unmark)
 
 let format_precondition fmt (precond : condition_data) =
-  Format.fprintf fmt "Précondition : %a\nSinon %a" format_expression (Pos.unmark precond.cond_expr)
-    (Format_mast.pp_print_list_comma format_error)
-    precond.cond_errors
+  Format.fprintf fmt "Précondition : %a\nSinon %a%a" format_expression
+    (Pos.unmark precond.cond_expr) format_error (fst precond.cond_error)
+    (Format.pp_print_option (fun fmt v -> Format.fprintf fmt " (%s)" (Pos.unmark v.Variable.name)))
+    (snd precond.cond_error)
 
 let format_program_rules fmt (vars : VariableDict.t) (rules : rule_data RuleMap.t) =
   RuleMap.iter

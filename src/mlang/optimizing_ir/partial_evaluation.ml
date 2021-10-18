@@ -1,4 +1,4 @@
-(* Copyright (C) 2020 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -13,7 +13,7 @@
 
 open Oir
 
-type partial_expr = PartialLiteral of Mir.literal | UnknownFloat [@@deriving ord]
+type partial_expr = PartialLiteral of Mir.literal | UnknownFloat
 
 let format_partial_expr fmt pe =
   match pe with
@@ -72,9 +72,8 @@ let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
   | _ -> None
 
 type var_literal = SimpleVar of partial_expr | TableVar of int * partial_expr array
-[@@deriving ord]
 
-let format_var_literal fmt v =
+let _format_var_literal fmt v =
   match v with
   | SimpleVar pe -> Format.fprintf fmt "SimpleVar %a" format_partial_expr pe
   | TableVar (i, a) ->
@@ -82,12 +81,12 @@ let format_var_literal fmt v =
         (Format.pp_print_list format_partial_expr)
         (Array.to_list a)
 
-let format_block fmt (id, ov) =
+let _format_block fmt (id, ov) =
   Format.fprintf fmt "%d: %a" id
     (fun fmt ov ->
       match ov with
       | None -> Format.fprintf fmt "None"
-      | Some v -> Format.fprintf fmt "Some %a" format_var_literal v)
+      | Some v -> Format.fprintf fmt "Some %a" _format_var_literal v)
     ov
 
 type partial_ev_ctx = {
@@ -168,7 +167,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) : v
                     Paths.check_path ctx.ctx_paths def_block intermediate_block
                     && Paths.check_path ctx.ctx_paths intermediate_block curr_block
                     (* if the definition is the same, this is not an issue *)
-                    && (Option.compare compare_var_literal) ov (Some def) <> 0)
+                    && (Option.compare Stdlib.compare) ov (Some def) <> 0)
                 defs
             in
             if BlockMap.cardinal exists_other_def_in_between > 0 then
@@ -597,7 +596,7 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id) (ctx : parti
           Cli.error_print "Error during partial evaluation!";
           let err, ctx =
             ( Bir_interpreter.RegularFloatInterpreter.ConditionViolated
-                (cond.cond_errors, cond.cond_expr, []),
+                (fst cond.cond_error, cond.cond_expr, []),
               interpreter_ctx_from_partial_ev_ctx ctx )
           in
           if !Bir_interpreter.exit_on_rte then

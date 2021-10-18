@@ -1,5 +1,5 @@
-(* Copyright (C) 2020 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël Monat
-   <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+   Monat <raphael.monat@lip6.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -28,7 +28,7 @@ let var_set_from_variable_name_list (p : Bir.program) (names : string Pos.marked
         with Errors.StructuredError _ -> Pos.unmark alias
       in
       let var =
-        try Mast_to_mvg.list_max_execution_number (Pos.VarNameToID.find name p.idmap)
+        try Mast_to_mir.list_max_execution_number (Pos.VarNameToID.find name p.idmap)
         with Not_found ->
           Errors.raise_spanned_error
             (Format.asprintf "unknown variable %s" name)
@@ -71,14 +71,13 @@ let const_var_set_from_list (p : Bir.program)
               (Pos.get_position e))
       in
       let new_e =
-        Mast_to_mvg.translate_expression
+        Mast_to_mir.translate_expression
           {
             table_definition = false;
             idmap = p.idmap;
             lc = None;
             int_const_values = Mir.VariableMap.empty;
-            exec_number = Mast_to_mvg.dummy_exec_number Pos.no_pos;
-            current_lvalue = Pos.unmark name;
+            exec_number = Mast_to_mir.dummy_exec_number Pos.no_pos;
           }
           e
       in
@@ -86,7 +85,7 @@ let const_var_set_from_list (p : Bir.program)
       Mir.VariableMap.add var new_e acc)
     Mir.VariableMap.empty names
 
-let translate_cond idmap (conds : Mast.expression Pos.marked list) :
+let translate_external_conditions idmap (conds : Mast.expression Pos.marked list) :
     Mir.condition_data Mir.VariableMap.t =
   let check_boolean (mexpr : Mast.expression Pos.marked) =
     match Pos.unmark mexpr with
@@ -118,7 +117,7 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
           Errors.raise_spanned_error "condition should have type bool" (Pos.get_position cond)
         else
           Pos.same_pos_as
-            { Mast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
+            { Mast.verif_cond_expr = mk_neg cond; verif_cond_error = (("-1", Pos.no_pos), None) }
             cond
           :: acc)
       [] conds
@@ -131,7 +130,7 @@ let translate_cond idmap (conds : Mast.expression Pos.marked list) :
         verif_conditions = verif_conds;
       }
   in
-  Mast_to_mvg.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
+  Mast_to_mir.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_function =
   let input = open_in spec_file in
@@ -148,7 +147,7 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_functio
       func_variable_inputs = var_set_from_variable_name_list p func_spec.Mast.spec_inputs;
       func_constant_inputs = const_var_set_from_list p func_spec.Mast.spec_consts;
       func_outputs = var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
-      func_conds = translate_cond p.idmap func_spec.Mast.spec_conditions;
+      func_conds = translate_external_conditions p.idmap func_spec.Mast.spec_conditions;
     }
   with
   | Errors.StructuredError e ->
@@ -176,6 +175,7 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Mir.VariableMap.t =
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
+(** Add varibles, constants, conditions and outputs from [f] to [p] *)
 let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program * int =
   let const_input_stmts =
     Mir.VariableMap.fold

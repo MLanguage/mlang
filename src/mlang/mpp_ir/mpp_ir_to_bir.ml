@@ -1,6 +1,16 @@
-(* Compile the mpp ast and the m codebase into an mvg program. Partitioning can be done by putting
-   excluded inputs to undef and storing them into an auxiliary variable (which is merged back
-   afterwards) *)
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+   Monat <raphael.monat@lip6.fr>
+
+   This program is free software: you can redistribute it and/or modify it under the terms of the
+   GNU General Public License as published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along with this program. If
+   not, see <https://www.gnu.org/licenses/>. *)
 
 module StringMap = Map.Make (struct
   type t = string
@@ -78,9 +88,10 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
     Mir.expression Pos.marked =
   (* commented aliases do not exist in the 2018 version *)
   (* double-commented aliases do not exist in the 2019 version *)
+  (* triple-commented aliases do not exist in the 2020 version *)
   let aliases_list =
     [
-      "7QK";
+      (*(*(*"7QK";*)*)*)
       (*(* "7QD"; *)*)
       (*(* "7QB"; *)*)
       (*(* "7QC"; *)*)
@@ -89,14 +100,14 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
       "4BB";
       "4BC";
       "7CL";
-      "7CM";
+      (*(*(*"7CM";*)*)*)
       (*(* "7CN"; *)*)
       (*(* "7QE"; *)*)
       (*(* "7QF"; *)*)
       (*(* "7QG"; *)*)
       (*(* "7QH"; *)*)
-      "7QI";
-      "7QJ";
+      (*(*(*"7QI";*)*)*)
+      (*(*(*"7QJ";*)*)*)
       "7LG";
       (* "7MA"; *)
       "7QM";
@@ -107,7 +118,7 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
       "7QS";
       "7QN";
       "7QO";
-      "7QL";
+      (*(*(*"7QL";*)*)*)
       (*(* "7LS"; *)*)
     ]
   in
@@ -262,7 +273,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               Mir.Variable.new_var
                 ("mpp_" ^ l, pos)
                 None ("", pos)
-                (Mast_to_mvg.dummy_exec_number pos)
+                (Mast_to_mir.dummy_exec_number pos)
                 ~attributes:[] ~is_income:false ~is_table:None
             in
             let ctx = { ctx with new_variables = StringMap.add l new_l ctx.new_variables } in

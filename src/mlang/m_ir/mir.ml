@@ -1,5 +1,5 @@
-(* Copyright (C) 2019 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël Monat
-   <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+   Monat <raphael.monat@lip6.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -43,10 +43,11 @@ let max_exec_number (left : execution_number) (right : execution_number) : max_r
 
 (** This is the operator used to determine the if a candidate definition is valid at a given point *)
 let is_candidate_valid (candidate : execution_number) (current : execution_number)
-    (using_var_in_def : bool) : bool =
-  if using_var_in_def then
-    (* This is the case where we are using variable [VAR] while defining [VAR]. The valid
-       definitions here are either the declaration or earlier definitions in the same rules. *)
+    (is_lvalue : bool) : bool =
+  if is_lvalue then
+    (* This is the case where we are using variable [VAR] while defining [VAR]: i.e we are querying
+       the left hand side of the assignation. The valid definitions here are either the declaration
+       or earlier definitions in the same rules. *)
     candidate.rule_number = -1
     || (candidate.rule_number = current.rule_number && candidate.seq_number < current.seq_number)
   else
@@ -92,7 +93,7 @@ module Variable = struct
 end
 
 (** Local variables don't appear in the M source program but can be introduced by let bindings when
-    translating to MVG. They should be De Bruijn indices but instead are unique globals identifiers
+    translating to MIR. They should be De Bruijn indices but instead are unique globals identifiers
     out of laziness. *)
 module LocalVariable = struct
   type t = { id : int }
@@ -109,17 +110,16 @@ module LocalVariable = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-(** Type of MVG values *)
+(** Type of MIR values *)
 type typ = Real
-[@@deriving visitors { variety = "iter"; nude = true; polymorphic = true; name = "typ_iter" }]
 
-type literal = Float of float | Undefined [@@deriving eq, ord]
+type literal = Float of float | Undefined
 
 let false_literal = Float 0.
 
 let true_literal = Float 1.
 
-(** MVg only supports a restricted set of functions *)
+(** MIR only supports a restricted set of functions *)
 type func =
   | SumFunc  (** Sums the arguments *)
   | AbsFunc  (** Absolute value *)
@@ -134,23 +134,12 @@ type func =
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
 
-(** MVG expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
+(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
     define conditional without an else branch although it is an expression-based language, we
     include an [Error] constructor to which the missing else branch is translated to.
 
-    Because translating to MVG requires a lot of unrolling and expansion, we introduce a [LocalLet]
+    Because translating to MIR requires a lot of unrolling and expansion, we introduce a [LocalLet]
     construct to avoid code duplication. *)
-
-let current_visitor_pos : Pos.t ref = ref Pos.no_pos
-
-(** Custom visitor for the [Pos.marked] type *)
-class ['self] marked_iter =
-  object
-    method visit_marked : 'env 'a. ('env -> 'a -> unit) -> 'env -> 'a Pos.marked -> unit =
-      fun f env x ->
-        current_visitor_pos := Pos.get_position x;
-        f env (Pos.unmark x)
-  end
 
 type expression =
   | Unop of (Mast.unop[@opaque]) * expression Pos.marked
@@ -165,9 +154,8 @@ type expression =
   | GenericTableIndex
   | Error
   | LocalLet of (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
-[@@deriving visitors { variety = "iter"; ancestors = [ "marked_iter" ]; name = "expression_iter" }]
 
-(** MVG programs are just mapping from variables to their definitions, and make a massive use of
+(** MIR programs are just mapping from variables to their definitions, and make a massive use of
     [VariableMap]. *)
 module VariableMap = struct
   include Map.Make (Variable)
@@ -229,34 +217,15 @@ module IndexMap = struct
       map
 end
 
-(** Custom visitor for the [IndexMap.t] type *)
-class ['self] index_map_iter =
-  object
-    method visit_index_map : 'env 'a. ('env -> 'a -> unit) -> 'env -> 'a IndexMap.t -> unit =
-      fun f env x -> IndexMap.iter (fun _ x -> f env x) x
-  end
-
 type index_def =
   | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
   | IndexGeneric of expression Pos.marked
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "index_map_iter"; "expression_iter" ];
-      nude = true;
-      name = "index_def_iter";
-    }]
 
 (** The definitions here are modeled closely to the source M language. One could also adopt a more
     lambda-calculus-compatible model with functions used to model tables. *)
 type variable_def = SimpleVar of expression Pos.marked | TableVar of int * index_def | InputVar
-[@@deriving
-  visitors
-    { variety = "iter"; ancestors = [ "index_def_iter" ]; nude = true; name = "variable_def_iter" }]
 
 type io = Input | Output | Regular
-[@@deriving visitors { variety = "iter"; nude = true; name = "io_iter" }]
 
 type variable_data = {
   var_definition : variable_def;
@@ -264,14 +233,6 @@ type variable_data = {
       (** The typing info here comes from the variable declaration in the source program *)
   var_io : io;
 }
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "variable_def_iter"; "io_iter"; "typ_iter" ];
-      nude = true;
-      name = "variable_data_iter";
-    }]
 
 type rule_id = int
 
@@ -347,15 +308,10 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type condition_data = { cond_expr : expression Pos.marked; cond_errors : (Error.t[@opaque]) list }
-[@@deriving
-  visitors
-    {
-      variety = "iter";
-      ancestors = [ "expression_iter" ];
-      nude = true;
-      name = "condition_data_iter";
-    }]
+type condition_data = {
+  cond_expr : expression Pos.marked;
+  cond_error : (Error.t[@opaque]) * Variable.t option;
+}
 
 type idmap = Variable.t list Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type: Mir.Variable.t}, so we need to
@@ -366,7 +322,9 @@ type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_vars : VariableDict.t;
+      (** A static register of all variables that can be used during a calculation *)
   program_rules : rule_data RuleMap.t;
+      (** Definitions of variables, some may be removed during optimization passes *)
   program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;

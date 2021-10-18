@@ -1,28 +1,5 @@
-##################################################
-# Variables
-##################################################
+-include ../../../Makefile.config
 
-SOURCE_DIR_2015=$(wildcard ../../../ir-calcul/sources2015m_4_6/*.m)
-SOURCE_DIR_2016=$(wildcard ../../../ir-calcul/sources2016m_4_5/*.m)
-SOURCE_DIR_2017=$(wildcard ../../../ir-calcul/sources2017m_6_10/*.m)
-SOURCE_DIR_2018=$(wildcard ../../../ir-calcul/sources2018m_6_7/*.m)
-SOURCE_DIR_2019=$(wildcard ../../../ir-calcul/sources2019m_8_0/*.m)
-
-YEAR?=2019
-
-ifeq ($(YEAR), 2018)
-	SOURCE_FILES?=$(SOURCE_DIR_2018)
-	MPP_FILE?=../../../mpp_specs/2018_6_7.mpp
-	TESTS_DIR?=../../../tests/2018/fuzzing/
-	ONE_TEST_FILE?=../../../tests/2018/fuzzing/fuzzer_14200.m_test
-else ifeq ($(YEAR), 2019)
-	SOURCE_FILES?=$(SOURCE_DIR_2019)
-	MPP_FILE?=../../../mpp_specs/2019_8_0.mpp
-	TESTS_DIR?=../../../tests/2019/fuzzing/
-	ONE_TEST_FILE?=../../../tests/2019/fuzzing/fuzzer_20741.m_test
-else
-    $(error Unsupported year: $(YEAR))
-endif
 
 OPTIMIZE_FLAG=-O
 
@@ -97,7 +74,7 @@ perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
 	time ./$< $(ONE_TEST_FILE)
-	
+
 ##################################################
 # Building and running the fuzzing harness
 ##################################################
@@ -116,22 +93,37 @@ else
 	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
 endif
 
-# Usage: NO_JOB=<0,1,2...> make launch_fuzz
+# First, you launch the fuzzerrs
+# Usage: JOB_NO=<0,1,2...> make launch_fuzz
 launch_fuzz: fuzz_harness.exe
 	ulimit -s 32768; \
 	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
 		-m 500 -t 1000 $(AFL_JOB_FLAG) \
 		-- ./fuzz_harness.exe @@
 
-FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
-
-sanitize_crash_names:
+# When they're done, you have to rename all crashes found into more
+# palatable names. This creates the fuzz_tests directory.
+#Usage: make sanitize_crash_names
+sanitize_crash_names: FORCE
 	./sanitize_crash_names.sh
+
+# Then, you can minimize the test corpus to only keep a minimal
+# amount of test cases with an optimal coverage
+minimize_test_corpus: FORCE
+	mkdir -p fuzz_tests_minimized
+	afl-cmin -C -i fuzz_tests -o fuzz_tests_minimized -- ./fuzz_harness.exe @@
+
+# As a funal step, you have to transform the renamed crash files into Mlang test cases
+# with the right format. For that use transform_crashes_into_tests
+FUZZER_CRASHES=$(shell find fuzz_tests_minimized/ -name "*.m_crash" 2> /dev/null)
 
 %.m_test: %.m_crash FORCE
 	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
 
+# Usage: make transform_crashes_into_tests
 transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+
+process_fuzzer_results: sanitize_crash_names minimize_test_corpus transform_crashes_into_tests
 
 clean_fuzz_findings:
 	rm -rf fuzz_findings/*

@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -37,6 +37,8 @@ let undefined_class_prelude : string =
   \    def __rsub__(self, rhs):\n\
   \        if isinstance(rhs, Undefined): return self\n\
   \        else: return rhs\n\n\
+  \    def __neg__(self):\n\
+  \        return self\n\n\
   \    def __mul__(self, rhs):\n\
   \        return self\n\n\
   \    def __rmul__(self, rhs):\n\
@@ -121,7 +123,7 @@ let generate_variable fmt (var : Variable.t) : unit =
   let v =
     if
       same_execution_number var.Variable.execution_number
-        (Mast_to_mvg.dummy_exec_number (Pos.get_position var.Variable.name))
+        (Mast_to_mir.dummy_exec_number (Pos.get_position var.Variable.name))
     then v
     else
       Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
@@ -131,8 +133,6 @@ let generate_variable fmt (var : Variable.t) : unit =
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
-
-let generate_typ (typ : typ) : string = match typ with Real -> "float"
 
 let autograd_ref = ref false
 
@@ -307,7 +307,7 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond cond oc =
-  if List.exists (fun (item : Error.t) -> item.typ = Mast.Anomaly) cond.cond_errors then
+  if (fst cond.cond_error).typ = Mast.Anomaly then
     Format.fprintf oc
       "# Verification condition %a@\n\
        cond = %a@\n\
@@ -316,12 +316,10 @@ let generate_var_cond cond oc =
        @\n"
       Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
       cond.cond_expr
-      (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-         (fun fmt err ->
-           Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
-             (Error.err_descr_string err |> sanitize_str)))
-      cond.cond_errors
+      (fun fmt err ->
+        Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
+          (Error.err_descr_string err |> sanitize_str))
+      (fst cond.cond_error)
 
 let rec generate_stmts (program : Bir.program) oc stmts =
   Format.pp_print_list (generate_stmt program) oc stmts

@@ -1,4 +1,4 @@
-(* Copyright (C) 2019 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -60,16 +60,6 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         | GetValueVar offset -> " + " ^ offset
         | GetValueConst offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
-
-let print_error oc (m_error : Mir.Error.t) =
-  Format.fprintf oc
-    {|{.kind = "%s", .major_code = "%s", .minor_code = "%s", .description = "%s", .isisf = "%s", .has_occurred = false},
-          |}
-    (Pos.unmark m_error.descr.kind)
-    (Pos.unmark m_error.descr.major_code)
-    (Pos.unmark m_error.descr.minor_code)
-    (Pos.unmark m_error.descr.description)
-    (Pos.unmark m_error.descr.isisf)
 
 let generate_raw_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
@@ -195,22 +185,20 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
     (format_local_vars_defs var_indexes)
     defs scond
     (* A019:anomalie :"A":"019":"00":"ATTENTION CALCUL NON EFFECTUE PAR L'ESI":"N"; *)
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-       (fun fmt err ->
-         let error_descr =
-           (Pos.unmark @@ err.Mir.Error.descr.kind)
-           ^ (Pos.unmark @@ err.Mir.Error.descr.major_code)
-           ^ Pos.unmark @@ err.Mir.Error.descr.minor_code
-         in
-         let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
-         Format.fprintf fmt
-           {|
+      (fun fmt err ->
+      let error_descr =
+        (Pos.unmark @@ err.Mir.Error.descr.kind)
+        ^ (Pos.unmark @@ err.Mir.Error.descr.major_code)
+        ^ Pos.unmark @@ err.Mir.Error.descr.minor_code
+      in
+      let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
+      Format.fprintf fmt
+        {|
         output->errors[m_get_error_index("%s")].has_occurred = true;|}
-           error_descr))
-    cond.cond_errors
+        error_descr)
+    (fst cond.cond_error)
     (fun oc () ->
-      if List.exists (fun err -> err.Mir.Error.typ = Mast.Anomaly) cond.cond_errors then
+      if (fst cond.cond_error).Mir.Error.typ = Mast.Anomaly then
         Format.fprintf oc
           {|
         output->is_error = true;
@@ -592,8 +580,7 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
-let generate_cond_table _ v error_set =
-  List.fold_left (fun acc err -> ErrorSet.add err acc) error_set v.cond_errors
+let generate_cond_table _ v error_set = ErrorSet.add (fst v.cond_error) error_set
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =

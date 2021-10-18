@@ -1,5 +1,5 @@
 (*
-Copyright (C) 2019 Inria, contributor:
+Copyright (C) 2019-2021 Inria, contributor:
     Denis Merigoux <denis.merigoux@inria.fr>
     Raphël Monat <raphael.monat@lip6.fr>
 
@@ -280,9 +280,10 @@ verification:
 } }
 
 verification_condition:
-| IF e = expression THEN ERROR e_names = verification_name+ SEMICOLON { ({
+| IF e = expression THEN
+  ERROR e_name = verification_name var = output_name? SEMICOLON { ({
     verif_cond_expr = e;
-    verif_cond_errors = e_names;
+    verif_cond_error = e_name, var;
   }, mk_position $sloc) }
 
 error_name:
