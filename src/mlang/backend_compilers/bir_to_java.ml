@@ -37,7 +37,7 @@ import java.util.Arrays;
 import static com.mlang.MValue.*;
 |}
 
-let calculateTax_method_header oc () =
+let calculateTax_method_header oc (body : Format.formatter -> 'a -> unit) =
   Format.fprintf oc
  "@[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> input_variables) {@,\
 MValue cond = MValue.mUndefined;@,\
@@ -45,7 +45,8 @@ Map<String, MValue> out = new HashMap<>();@,\
 Map<String, MValue> calculationVariables = new HashMap<>();@,\
 Map<Integer, MValue> localVariables = new HashMap<>();@,\
 Map<String,List<MValue>> tableVariables = new HashMap<>();@]@,\
-@[}@]"
+%a@,\
+@[}@]" body ()
 
 let none_value = "MValue.mUndefined"
 
@@ -251,7 +252,7 @@ let generate_rule_header (oc: Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);@," rule.rule_name
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    (stmts : Bir.stmt list) (oc: Format.formatter)  =
+    (oc: Format.formatter) (stmts : Bir.stmt list)   =
   List.iter (fun stmt -> generate_stmt program var_indexes stmt oc) stmts
 
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) (stmt : Bir.stmt)
@@ -282,14 +283,14 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
            s)
           cond_name 
-      (generate_stmts program var_indexes tt); 
+      (generate_stmts program var_indexes) tt; 
         Format.fprintf oc
           {|
    if (m_is_defined_false(%s)) {
       %a
     }
 |}
-          cond_name (generate_stmts program var_indexes ff) []
+          cond_name (generate_stmts program var_indexes) ff
   | SVerif v ->
       generate_var_cond var_indexes v
 
@@ -304,7 +305,7 @@ let generate_return (oc: Format.formatter) (function_spec : Bir_interface.bir_fu
       returned_variables
     in
     Format.fprintf oc "@[<v 2>public static void loadOutputVariables(Map<String,MValue> outputVariables, Map<String,Value> calculationVariables)\
-                       {@,%a@]@,@[}@]" print_outputs returned_variables
+                       {@,%a@]@,@[}}@]" print_outputs returned_variables
 
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
@@ -329,79 +330,30 @@ let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_f
   in
   (var_indexes, !counter)
 
-let split_list list bucket_size =
-  let rec aux list new_list previous_list bucket_size count =
-    match list with
-    | hd :: tl -> (
-        match count with
-        | count when count mod bucket_size = 0 && count <> 0 ->
-            let updated_new_list = List.rev (hd :: previous_list) :: new_list in
-            aux tl updated_new_list [] bucket_size (count + 1)
-        | _ -> aux tl new_list (hd :: previous_list) bucket_size (count + 1))
-    | [] -> new_list
-  in
-  aux list [] [] bucket_size 0
-
-let print_queue lines_count fmt =
-  let rec aux count =
-    if count <= lines_count then (
-      Format.fprintf fmt ""
-      (*  "@[<hv>tax_calculation_part%d(calculationVariables, localVariables, tableVariables, cond, out, \
-          input_variables);@]@,"
-         count *);
-      aux (count + 1))
-    else ()
-  in
-  aux 0
-
 let generate_rule_method (program : Bir.program) (var_indexes: int Mir.VariableMap.t)
   (oc: Format.formatter) (rule: Bir.rule) =
-    Format.fprintf oc "@[public static void m_rule_%s{@,%a}@]" rule.rule_name (generate_stmts program var_indexes rule.rule_stmts) []
+    Format.fprintf oc "@[public static void m_rule_%s(Map<String, MValue> calculationVariables,  Map<Integer, MValue> localVariables, Map<String, List<MValue>> tableVariables){@,%a}@]" rule.rule_name (generate_stmts program var_indexes) rule.rule_stmts
+
+let generate_rule_methods (program: Bir.program) 
+  (oc: Format.formatter) (var_indexes: int Mir.VariableMap.t) : unit =
+    RuleMap.iter (fun _ rule -> Format.fprintf oc "@,%a@," (generate_rule_method program var_indexes) rule) program.rules
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
-  let bs = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, _ = get_variables_indexes program function_spec in
+  let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc "@[<hv 2>%a@,@,\
+                     %a@,\
                      %a@,@,\
                      /* GENERATE INPUTS*/@,\
                      %a@,\
-                     /* GENERATE STATEMENTS*/@,\
                      /* GENERATE RETURN */@,\
-                     %a@]"
+                     %a}}}}@]"
     generate_header ()
-    calculateTax_method_header ()
+    (generate_rule_methods program) var_indexes 
+    calculateTax_method_header stmts  
     generate_input_handling function_spec
     generate_return function_spec;
-    generate_stmts program var_indexes program.statements oc [] ;
-  
-  let lists = split_list !java_program bs in
-  print_queue (List.length !java_program / bs) oc;
-  Format.fprintf oc "\n}";
-
-  List.iteri
-    (fun i sl ->
-      Format.fprintf oc
-        {| 
-  public static void tax_calculation_part%d( 
-        Map<String, MValue> calculationVariables, 
-        Map<Integer, MValue> localVariables, 
-        Map<String,List<MValue>> tableVariables,
-        MValue cond,
-        Map<String, MValue> out,
-        Map<String, MValue> input_variables) {
-          %a
-        }
-    |}
-        i
-        (fun fmt () -> List.iter (fun item -> item fmt) (List.rev sl))
-        ())
-    lists;
-
-  Format.fprintf oc {|    
-    } 
-  |};
-
   close_out _oc
