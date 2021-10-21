@@ -100,7 +100,7 @@ public MValue(double value){
     return new MValue(x.getValue() + y.getValue());
   }
 
-  public static MValue mSubstract(MValue x, MValue y) {
+  public static MValue mSubtract(MValue x, MValue y) {
     if(x.isUndefined() && y.isUndefined())  {
       return mUndefined;
     } 

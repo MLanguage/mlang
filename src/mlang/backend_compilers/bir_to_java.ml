@@ -64,7 +64,7 @@ let generate_binop (op : Mast.binop) : string =
   | Mast.And -> "mAnd"
   | Mast.Or -> "mOr"
   | Mast.Add -> "mAdd"
-  | Mast.Sub -> "mSubstract"
+  | Mast.Sub -> "mSubtract"
   | Mast.Mul -> "mMultiply"
   | Mast.Div -> "mDivide"
 
