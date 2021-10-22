@@ -278,11 +278,11 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
       Format.fprintf oc
-    "@[<hv 2>/* SConditional (cond, tt, ff) */@,\
-    MValue %s = %s;@,\
-    if (m_is_defined_true(%s)) {@,\
-      @[<hv 2>%a@]@,\
-    }@]"
+        "@[<hv 2>/* SConditional (cond, tt, ff) */@,\
+         MValue %s = %s;@,\
+         if (m_is_defined_true(%s)) {@,\
+         @[<hv 2>%a@]@,\
+         }@]"
         cond_name
         (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
          s)
@@ -347,7 +347,9 @@ let generate_rule_method (program : Bir.program) (var_indexes : int Mir.Variable
   Format.fprintf oc
     "@[public static void m_rule_%s(Map<String, MValue> calculationVariables,  Map<Integer, \
      MValue> localVariables, Map<String, List<MValue>> tableVariables){@,\
-     @[<hv 2>MValue cond = MValue.mUndefined@,;%a@]}@]" rule.rule_name
+     @[<hv 2>MValue cond = MValue.mUndefined@,\
+     ;%a@]}@]"
+    rule.rule_name
     (generate_stmts program var_indexes)
     rule.rule_stmts
 
@@ -357,50 +359,12 @@ let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
     (fun _ rule -> Format.fprintf oc "@,%a@," (generate_rule_method program var_indexes) rule)
     program.rules
 
-let adapt_bir_to_java (program : Bir.program) =
-  let open Bir in
-  let threshold = 100 in
-  let rule_from_stmts stmts =
-    let id = fresh_rule_id () in
-    Bir.{ rule_id = id; rule_name = "java_rule_" ^ string_of_int id; rule_stmts = stmts }
-  in
-  let rec browse_bir old_stmts new_stmts curr_stmts rules =
-    match old_stmts with
-    | [] -> (rules, new_stmts)
-    | hd :: tl ->
-        let give_pos stmt = Pos.same_pos_as stmt hd in
-        let rules, curr_stmts =
-          match Pos.unmark hd with
-          | SConditional (expr, t, f) ->
-              let t_rules, t_curr_list = browse_bir t [] curr_stmts rules in
-              let f_rules, f_curr_list = browse_bir f [] t_curr_list t_rules in
-              let cond =
-                give_pos
-                  (SConditional
-                     ( expr,
-                       t_curr_list,
-                       f_curr_list ))
-              in
-              (f_rules, cond :: f_curr_list @ curr_stmts )
-          | _ -> (rules, hd :: curr_stmts)
-        in
-        if List.length curr_stmts < threshold then browse_bir tl new_stmts curr_stmts rules
-        else
-          let squish_rule = rule_from_stmts curr_stmts in
-          browse_bir tl
-            (give_pos (SRuleCall squish_rule.rule_id) :: new_stmts)
-            []
-            (RuleMap.add squish_rule.rule_id squish_rule rules)
-  in
-  let new_rules, new_stmts = browse_bir program.statements [] [] program.rules in
-  { program with statements = List.rev new_stmts; rules = new_rules }
-
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, _ = get_variables_indexes program function_spec in
-  let program = adapt_bir_to_java program in
+  let program = Bir.squish_statements program 100 "java_rule_" in
   let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc
     "@[<hv 2>%a@,\
