@@ -11,9 +11,7 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(* TODO: Refactor multiple method splitting functions *)
 (* TODO: Use an array for calculation rather than a map to improve performance*)
-(* TODO: Keep splitting for java compiler without holding whole program in memory *)
 
 open Mir
 
@@ -375,7 +373,6 @@ let adapt_bir_to_java (program : Bir.program) =
           match Pos.unmark hd with
           | SConditional (expr, t, f) ->
               let t_rules, t_curr_list = browse_bir t [] curr_stmts rules in
-              Printf.printf "t_curr_list length %d\n" (List.length t_curr_list);
               let f_rules, f_curr_list = browse_bir f [] t_curr_list t_rules in
               let cond =
                 give_pos
