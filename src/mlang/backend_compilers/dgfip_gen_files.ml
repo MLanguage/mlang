@@ -873,6 +873,9 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
+#ifndef _VAR_
+#define _VAR_
+
 #include "irdata.h"
 #include "desc_inv.h"
 #include "const.h"
@@ -957,7 +960,9 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
 
   (* TODO function declarations (seems to be no longer used) *)
   if flags.flg_pro then
-    Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n"
+    Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n";
+
+  Format.fprintf fmt "#endif /* _VAR_ */\n"
 
 let gen_var_c fmt flags errors =
   let open Mast in
@@ -1067,7 +1072,7 @@ let gen_conf_h fmt flags vars =
 (* Generate a map from variables to array indices *)
 let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
-  let open Dgfip_varid in
+  (* let open Dgfip_varid in *)
   let pvars = cprog.mir_program.program_vars in
   let add vn v vm =
     let vs =

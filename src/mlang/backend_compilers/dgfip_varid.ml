@@ -20,16 +20,23 @@ type var_id = VarInput of int | VarBase of int | VarComputed of int
 (* Map from variables to their TGV ID *)
 type var_id_map = var_id Mir.VariableMap.t
 
-let gen_access_def vm v =
+let gen_access_def vm v offset =
   let vn = Pos.unmark v.Mir.Variable.name in
   match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "DS_[%d /*%s*/]" i vn
-  | VarBase i -> Printf.sprintf "DB_[%d /*%s*/]" i vn
-  | VarComputed i -> Printf.sprintf "DC_[%d /*%s*/]" i vn
+  | VarInput i -> Printf.sprintf "DS_[%d/*%s*/%s]" i vn offset
+  | VarBase i -> Printf.sprintf "DB_[%d/*%s*/%s]" i vn offset
+  | VarComputed i -> Printf.sprintf "DC_[%d/*%s*/%s]" i vn offset
 
-let gen_access_val vm v =
+let gen_access_val vm v offset =
   let vn = Pos.unmark v.Mir.Variable.name in
   match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "S_[%d /*%s*/]" i vn
-  | VarBase i -> Printf.sprintf "B_[%d /*%s*/]" i vn
-  | VarComputed i -> Printf.sprintf "C_[%d /*%s*/]" i vn
+  | VarInput i -> Printf.sprintf "S_[%d/*%s*/%s]" i vn offset
+  | VarBase i -> Printf.sprintf "B_[%d/*%s*/%s]" i vn offset
+  | VarComputed i -> Printf.sprintf "C_[%d/*%s*/%s]" i vn offset
+
+let gen_access_pointer vm v =
+  let vn = Pos.unmark v.Mir.Variable.name in
+  match Mir.VariableMap.find v vm with
+  | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
+  | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
+  | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn

@@ -244,11 +244,7 @@ let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
     (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
-  List.fold_left
-    (fun (ctx, stmts) stmt ->
-      let ctx, stmt' = translate_mpp_stmt mpp_program m_program args ctx stmt in
-      (ctx, stmts @ stmt'))
-    (ctx, []) compute_decl.Mpp_ir.body
+  translate_mpp_stmts mpp_program m_program args ctx compute_decl.Mpp_ir.body
 
 and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
     (expr : Mpp_ir.mpp_expr_kind Pos.marked) : Mir.expression =
@@ -299,7 +295,7 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
 
 and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) func_args (ctx : translation_ctx)
-    stmt : translation_ctx * Bir.stmt list =
+    (stmt : Mpp_ir.mpp_stmt) : translation_ctx * Bir.stmt list =
   let pos = Pos.get_position stmt in
   match Pos.unmark stmt with
   | Mpp_ir.Assign (Local l, expr) ->
