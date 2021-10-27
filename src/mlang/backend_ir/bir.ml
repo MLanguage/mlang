@@ -53,6 +53,10 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
               (f_rules, (cond :: f_curr_list) @ curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
+        (* TODO: The following line works because of a low threshold. 
+        In order to make this robust, the length check should not be done on the curr_stmts list
+        but rather recursively on the number of statements inside the curr_stmts list.
+        *)
         if List.length curr_stmts < threshold then browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
