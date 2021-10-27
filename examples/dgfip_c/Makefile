@@ -1,5 +1,7 @@
 -include ../../Makefile.config
 
+MPP_FILE=../../../mpp_specs/dgfip_base.mpp
+
 OPTIMIZE_FLAG=-O
 
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
