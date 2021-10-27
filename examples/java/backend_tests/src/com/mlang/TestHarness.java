@@ -100,48 +100,48 @@ public class TestHarness {
 
     private static void addInputVariableToTestData(String variableLine, TestData td){
         Variable var = createVariable(variableLine);
-        td.addInputVariable(var.getCode(), var.getValue());
+        td.addInputVariable(var.getCode(), new MValue(var.getValue(), true));
     }
 
     private static void addExpectedVariableToTestData(String variableLine, TestData td){
         Variable var = createVariable(variableLine);
-        td.addExpectedVariable(var.getCode(), var.getValue());
+        td.addExpectedVariable(var.getCode(), new MValue(var.getValue(), true));
     }
 
     private static Variable createVariable(String variableLine){
         String[] variableLineArray = variableLine.split(SEPERATOR);
         String code = variableLineArray[0];
-        OptionalDouble value = OptionalDouble.of(Double.parseDouble(variableLineArray[1]));
+        double value = Double.parseDouble(variableLineArray[1]);
         return new Variable(code, value);
     }
 }
 
 class TestData {
-    private final Map<String, OptionalDouble> inputVariables = new HashMap<>();
-    private final Map<String, OptionalDouble> expectedVariables = new HashMap<>();
+    private final Map<String, MValue> inputVariables = new HashMap<>();
+    private final Map<String, MValue> expectedVariables = new HashMap<>();
 
-    public void addInputVariable(String code, OptionalDouble value){
+    public void addInputVariable(String code, MValue value){
         inputVariables.put(code, value);
     }
 
-    public void addExpectedVariable(String code, OptionalDouble value){
+    public void addExpectedVariable(String code, MValue value){
         expectedVariables.put(code, value);
     }
 
-    public Map<String, OptionalDouble> getInputVariables(){
+    public Map<String, MValue> getInputVariables(){
         return inputVariables;
     }
 
-    public Map<String, OptionalDouble> getExceptedVariables(){
+    public Map<String, MValue> getExceptedVariables(){
         return expectedVariables;
     }
 }
 
 class Variable {
     private final String code;
-    private final OptionalDouble value;
+    private final double value;
 
-    public Variable(String code, OptionalDouble value){
+    public Variable(String code, double value){
         this.code = code;
         this.value = value;
     }
@@ -150,7 +150,7 @@ class Variable {
         return code;
     }
 
-    public OptionalDouble getValue() {
+    public double getValue() {
         return value;
     }
     
