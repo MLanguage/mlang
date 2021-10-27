@@ -88,9 +88,10 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
     Mir.expression Pos.marked =
   (* commented aliases do not exist in the 2018 version *)
   (* double-commented aliases do not exist in the 2019 version *)
+  (* triple-commented aliases do not exist in the 2020 version *)
   let aliases_list =
     [
-      "7QK";
+      (*(*(*"7QK";*)*)*)
       (*(* "7QD"; *)*)
       (*(* "7QB"; *)*)
       (*(* "7QC"; *)*)
@@ -99,14 +100,14 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
       "4BB";
       "4BC";
       "7CL";
-      "7CM";
+      (*(*(*"7CM";*)*)*)
       (*(* "7CN"; *)*)
       (*(* "7QE"; *)*)
       (*(* "7QF"; *)*)
       (*(* "7QG"; *)*)
       (*(* "7QH"; *)*)
-      "7QI";
-      "7QJ";
+      (*(*(*"7QI";*)*)*)
+      (*(*(*"7QJ";*)*)*)
       "7LG";
       (* "7MA"; *)
       "7QM";
@@ -117,7 +118,7 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program) (pos : Pos.t
       "7QS";
       "7QN";
       "7QO";
-      "7QL";
+      (*(*(*"7QL";*)*)*)
       (*(* "7LS"; *)*)
     ]
   in

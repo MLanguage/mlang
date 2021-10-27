@@ -117,7 +117,7 @@ let translate_external_conditions idmap (conds : Mast.expression Pos.marked list
           Errors.raise_spanned_error "condition should have type bool" (Pos.get_position cond)
         else
           Pos.same_pos_as
-            { Mast.verif_cond_expr = mk_neg cond; verif_cond_errors = [ ("-1", Pos.no_pos) ] }
+            { Mast.verif_cond_expr = mk_neg cond; verif_cond_error = (("-1", Pos.no_pos), None) }
             cond
           :: acc)
       [] conds
@@ -222,7 +222,17 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
                     {
                       Mir.var_typ = None;
                       Mir.var_io = Regular;
-                      Mir.var_definition = Mir.SimpleVar (Mir.Literal Mir.Undefined, pos);
+                      Mir.var_definition =
+                        begin
+                          match var.Mir.Variable.is_table with
+                          | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
+                          | Some size ->
+                              Mir.TableVar
+                                ( size,
+                                  Mir.IndexGeneric
+                                    (Pos.same_pos_as (Mir.Literal Mir.Undefined)
+                                       var.Mir.Variable.name) )
+                        end;
                     } ),
                 pos )
               :: acc

@@ -1205,8 +1205,8 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
           (* This is the case where the variable is not defined. *)
           let io =
             match decl.var_decl_io with
-            | Output -> Mir.Output
-            | Regular | Constant -> Mir.Regular
+            | Output | Regular -> Mir.Input
+            | Constant -> Mir.Regular
             | Input -> assert false
             (* should not happen *)
           in
@@ -1216,10 +1216,16 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
               Mir.VariableMap.add var
                 {
                   Mir.var_definition =
-                    Mir.TableVar
-                      ( size,
-                        Mir.IndexGeneric
-                          (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name) );
+                    begin
+                      match io with
+                      | Mir.Input -> Mir.InputVar
+                      | _ ->
+                          Mir.TableVar
+                            ( size,
+                              Mir.IndexGeneric
+                                (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
+                            )
+                    end;
                   Mir.var_typ =
                     translate_value_typ
                       (match decl.var_decl_typ with
@@ -1232,8 +1238,13 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
               Mir.VariableMap.add var
                 {
                   Mir.var_definition =
-                    Mir.SimpleVar
-                      (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name);
+                    begin
+                      match io with
+                      | Mir.Input -> Mir.InputVar
+                      | _ ->
+                          Mir.SimpleVar
+                            (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
+                    end;
                   Mir.var_typ =
                     translate_value_typ
                       (match decl.var_decl_typ with
@@ -1285,19 +1296,25 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                       }
                       (Pos.unmark verif_cond).Mast.verif_cond_expr
                   in
-                  let errs =
-                    List.map
-                      (fun err_name ->
-                        try
-                          Some
-                            (List.find
-                               (fun e -> Pos.unmark e.Mir.Error.name = Pos.unmark err_name)
-                               error_decls)
-                        with Not_found ->
-                          Cli.var_info_print "undeclared error %s %a" (Pos.unmark err_name)
-                            Pos.format_position (Pos.get_position err_name);
-                          None)
-                      (Pos.unmark verif_cond).Mast.verif_cond_errors
+                  let err =
+                    let err_name, err_var = (Pos.unmark verif_cond).Mast.verif_cond_error in
+                    try
+                      ( List.find
+                          (fun e -> Pos.unmark e.Mir.Error.name = Pos.unmark err_name)
+                          error_decls,
+                        Option.map
+                          (fun v ->
+                            List.sort
+                              (fun v w ->
+                                -Mir.compare_execution_number v.Mir.Variable.execution_number
+                                   w.Mir.Variable.execution_number)
+                              (Pos.VarNameToID.find (Pos.unmark v) idmap)
+                            |> List.hd)
+                          err_var )
+                    with Not_found ->
+                      Errors.raise_error
+                        (Format.asprintf "undeclared error %s %a" (Pos.unmark err_name)
+                           Pos.format_position (Pos.get_position err_name))
                   in
                   let dummy_var =
                     Mir.Variable.new_var
@@ -1312,19 +1329,7 @@ let get_conds (error_decls : Mir.Error.t list) (idmap : Mir.idmap) (p : Mast.pro
                       { Mir.rule_number; Mir.seq_number = 0; Mir.pos = Pos.get_position verif_cond }
                       ~attributes:[] ~is_income:false ~is_table:None
                   in
-                  Mir.VariableMap.add dummy_var
-                    {
-                      Mir.cond_expr = e;
-                      Mir.cond_errors =
-                        List.map
-                          (fun x ->
-                            match x with Some x -> x | None -> assert false
-                            (* should not happen *))
-                          (List.filter
-                             (fun x -> match x with Some _ -> true | None -> false)
-                             errs);
-                    }
-                    conds)
+                  Mir.VariableMap.add dummy_var { Mir.cond_expr = e; Mir.cond_error = err } conds)
                 conds verif.Mast.verif_conditions
           | _ -> conds)
         conds source_file)

@@ -76,7 +76,7 @@ module type S = sig
     | IncorrectOutputVariable of string * Pos.t
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of
-        Mir.Error.t list * Mir.expression Pos.marked * (Mir.Variable.t * var_value) list
+        Mir.Error.t * Mir.expression Pos.marked * (Mir.Variable.t * var_value) list
     | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -187,7 +187,7 @@ module Make (N : Bir_number.NumberInterface) = struct
     | IndexOutOfBounds of string * Pos.t
     | IncorrectOutputVariable of string * Pos.t
     | UnknownInputVariable of string * Pos.t
-    | ConditionViolated of Error.t list * expression Pos.marked * (Variable.t * var_value) list
+    | ConditionViolated of Error.t * expression Pos.marked * (Variable.t * var_value) list
     | NanOrInf of string * expression Pos.marked
     | StructuredError of (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -292,7 +292,7 @@ module Make (N : Bir_number.NumberInterface) = struct
         Errors.raise_spanned_error (Format.asprintf "Unknown input variable: %s" s) pos
     | IncorrectOutputVariable (s, pos) ->
         Errors.raise_spanned_error (Format.asprintf "Incorrect output variable: %s" s) pos
-    | ConditionViolated (errors, condition, bindings) ->
+    | ConditionViolated (error, condition, bindings) ->
         Errors.raise_spanned_error_with_continuation
           (Format.asprintf
              "Verification condition failed! Errors thrown:\n\
@@ -301,10 +301,10 @@ module Make (N : Bir_number.NumberInterface) = struct
              \  * %a\n\
               Values of the relevant variables at this point:\n\
               %a"
-             (Format_mast.pp_print_list_endline (fun fmt err ->
-                  Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
-                    (Pos.unmark @@ Error.err_descr_string err)))
-             errors Format_mir.format_expression (Pos.unmark condition)
+             (fun fmt err ->
+               Format.fprintf fmt "Error %s [%s]" (Pos.unmark err.Error.name)
+                 (Pos.unmark @@ Error.err_descr_string err))
+             error Format_mir.format_expression (Pos.unmark condition)
              (Format_mast.pp_print_list_endline (fun fmt v ->
                   Format.fprintf fmt "  * %a" format_var_value_with_var v))
              bindings)
@@ -376,7 +376,7 @@ module Make (N : Bir_number.NumberInterface) = struct
             | Mast.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
             | Mast.Minus, Number f1 -> Number N.(zero () -. f1)
             | Mast.Not, Undefined -> Undefined
-            | Mast.Minus, Undefined -> Number (N.zero ()))
+            | Mast.Minus, Undefined -> Undefined)
         | Conditional (e1, e2, e3) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
@@ -513,31 +513,29 @@ module Make (N : Bir_number.NumberInterface) = struct
     else out
 
   let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
-    List.fold_left
-      (fun ctx err ->
-        match err.Error.typ with
-        | Mast.Anomaly ->
-            raise
-              (RuntimeError
-                 ( ConditionViolated
-                     ( cond.cond_errors,
-                       cond.cond_expr,
-                       List.rev
-                       @@ List.fold_left
-                            (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
-                            []
-                            (List.map
-                               (fun (_, x) -> x)
-                               (Mir.VariableDict.bindings
-                                  (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
-                   ctx ))
-        | Mast.Discordance ->
-            Cli.warning_print "Anomaly: %s" (Pos.unmark (Error.err_descr_string err));
-            ctx
-        | Mast.Information ->
-            Cli.debug_print "Information: %s" (Pos.unmark (Error.err_descr_string err));
-            ctx)
-      ctx cond.cond_errors
+    let err = fst cond.cond_error in
+    match err.Error.typ with
+    | Mast.Anomaly ->
+        raise
+          (RuntimeError
+             ( ConditionViolated
+                 ( fst cond.cond_error,
+                   cond.cond_expr,
+                   List.rev
+                   @@ List.fold_left
+                        (fun acc var -> (var, VariableMap.find var ctx.ctx_vars) :: acc)
+                        []
+                        (List.map
+                           (fun (_, x) -> x)
+                           (Mir.VariableDict.bindings
+                              (Mir_dependency_graph.get_used_variables cond.cond_expr))) ),
+               ctx ))
+    | Mast.Discordance ->
+        Cli.warning_print "Anomaly: %s" (Pos.unmark (Error.err_descr_string err));
+        ctx
+    | Mast.Information ->
+        Cli.debug_print "Information: %s" (Pos.unmark (Error.err_descr_string err));
+        ctx
 
   let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) : var_value =
     match vdef with
