@@ -1,5 +1,7 @@
 -include ../../../Makefile.config
 
+MPP_FILE=../../../mpp_specs/dgfip_base.mpp
+
 OPTIMIZE_FLAG=-O
 
 MLANG_BIN=dune exec --no-print-director ../../../src/main.exe --
@@ -35,6 +37,13 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 
 .SECONDARY: ir_%.c ir_%.h
 .PRECIOUS: ir_%.c ir_%.h
+
+enchain.c: tests.m_spec $(SOURCE_FILES)
+	$(MLANG) \
+		--backend dgfip_c --output $@ \
+		--function_spec $< \
+		$(SOURCE_FILES)
+
 
 ##################################################
 # Compiling the generated C
