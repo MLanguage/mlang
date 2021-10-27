@@ -28,7 +28,12 @@ import java.util.Arrays;
 import static com.mlang.MValue.*;
 |}
 
-let calculateTax_method_header oc (body : Format.formatter -> 'a -> unit) =
+let calculateTax_method_header (inputs_len : int) oc (body : Format.formatter -> 'a -> unit) =
+  let rec print_load_input curr oc len =
+    if curr < len then
+      (Format.fprintf oc "loadInputVariables_%d(outputVariables, calculationVariables);" curr;
+    print_load_input (curr + 1) oc len)
+  in
   Format.fprintf oc
     "@[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
      MValue cond = MValue.mUndefined;@,\
@@ -37,13 +42,13 @@ let calculateTax_method_header oc (body : Format.formatter -> 'a -> unit) =
      Map<Integer, MValue> localVariables = new HashMap<>();@,\
      Map<String,List<MValue>> tableVariables = new HashMap<>();@]@,\
      @,\
-     loadInputVariables(inputVariables, calculationVariables);@,\
      @,\
      %a@,\
-     loadOutputVariables(outputVariables, calculationVariables);@,\
+     %a@,\
+     loadOutputVariables(inputVariables, calculationVariables);@,\
      return outputVariables;@,\
      @[}@]"
-    body ()
+    (print_load_input 0) inputs_len body ()
 
 let none_value = "MValue.mUndefined"
 
@@ -203,20 +208,25 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "@[// %s@,%s@,public class CalculImpot {@]" Prelude.message java_imports
 
-let generate_input_handling (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+let generate_input_handling (function_spec : Bir_interface.bir_function) (oc : Format.formatter)
+    (split_threshold : int) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let format_input_var oc var =
+  let print_header count =
+    Format.fprintf oc
+      "@[<hv 2>public static void loadInputVariables_%d(Map<String, MValue> inputVariables, \
+       Map<String, MValue> calculationVariables){@,"
+      count 
+  in
+  let format_input_var oc var count =
+    if count mod split_threshold = 0 then print_header (if count > 0 then (count / split_threshold) else 0) ;
     Format.fprintf oc
       "calculationVariables.put(\"%a\",inputVariables.get(\"%s\") != null ? \
-       inputVariables.get(\"%s\") : MValue.mUndefined);"
-      format_var_name var (generate_name var) (generate_name var)
+       inputVariables.get(\"%s\") : MValue.mUndefined);@,"
+      format_var_name var (generate_name var) (generate_name var);
+    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]" 
   in
-  Format.fprintf oc
-    "@[<hv 2>public static void loadInputVariables(Map<String, MValue> inputVariables, Map<String, \
-     MValue> calculationVariables){@,\
-     %a@]@[}@]@,"
-    (Format.pp_print_list format_input_var)
-    input_vars
+  List.iteri (fun count assign -> format_input_var oc assign count) input_vars;
+  Format.fprintf oc "}@."
 
 let sanitize_str (s, p) =
   String.map
@@ -361,23 +371,25 @@ let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
+  let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, _ = get_variables_indexes program function_spec in
-  let program = Bir.squish_statements program 100 "java_rule_" in
+  let split_inputs_len = List.length (List.map fst (VariableMap.bindings function_spec.func_variable_inputs)) / split_treshold in 
+  let program = Bir.squish_statements program split_treshold "java_rule_" in
   let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc
-    "@[<hv 2>%a@,\
+    "%a@.@,\
      @,\
-     %a@,\
+     %a@.@,\
      %a@,\
      @,\
      %a@,\
      /* GENERATE RETURN */@,\
-     %a@]@,@[}@]@." 
+     %a}@." 
      generate_header () 
      (generate_rule_methods program) var_indexes
-      generate_input_handling function_spec 
-     calculateTax_method_header stmts 
+     (generate_input_handling function_spec) split_treshold 
+     (calculateTax_method_header split_inputs_len) stmts 
      generate_return function_spec;
   close_out _oc[@@ocamlformat "disable"]
