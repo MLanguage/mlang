@@ -1,7 +1,7 @@
 (*
 Copyright (C) 2019-2021 Inria, contributor:
     Denis Merigoux <denis.merigoux@inria.fr>
-    Raphël Monat <raphael.monat@lip6.fr>
+    Raphaël Monat <raphael.monat@lip6.fr>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

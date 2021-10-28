@@ -1,4 +1,4 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
    Monat <raphael.monat@lip6.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
@@ -59,17 +59,32 @@ let is_candidate_valid (candidate : execution_number) (current : execution_numbe
 let same_execution_number (en1 : execution_number) (en2 : execution_number) : bool =
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
-module Variable = struct
-  type id = int
-  (** Each variable has an unique ID *)
+type variable_id = int
+(** Each variable has an unique ID *)
 
-  type t = {
+type variable = {
+  name : string Pos.marked;  (** The position is the variable declaration *)
+  execution_number : execution_number;
+      (** The number associated with the rule of verification condition in which the variable is
+          defined *)
+  alias : string option;  (** Input variable have an alias *)
+  id : variable_id;
+  descr : string Pos.marked;  (** Description taken from the variable declaration *)
+  attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  is_income : bool;
+  is_table : int option;
+}
+
+module Variable = struct
+  type id = variable_id
+
+  type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     execution_number : execution_number;
         (** The number associated with the rule of verification condition in which the variable is
             defined *)
     alias : string option;  (** Input variable have an alias *)
-    id : id;
+    id : variable_id;
     descr : string Pos.marked;  (** Description taken from the variable declaration *)
     attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
@@ -95,8 +110,11 @@ end
 (** Local variables don't appear in the M source program but can be introduced by let bindings when
     translating to MIR. They should be De Bruijn indices but instead are unique globals identifiers
     out of laziness. *)
+
+type local_variable = { id : int }
+
 module LocalVariable = struct
-  type t = { id : int }
+  type t = local_variable = { id : int }
 
   let counter : int ref = ref 0
 
@@ -166,29 +184,37 @@ module VariableMap = struct
       map
 end
 
+module VariableDictMap = Map.Make (struct
+  type t = Variable.id
+
+  let compare = compare
+end)
+
+type variable_dict = variable VariableDictMap.t
+
 (** Variable dictionary, act as a set but refered by keys *)
 module VariableDict = struct
-  module Map = Map.Make (struct
-    type t = Variable.id
+  type t = variable_dict
 
-    let compare = compare
-  end)
+  let find = VariableDictMap.find
 
-  include Map
+  let filter = VariableDictMap.filter
 
-  type t = Variable.t Map.t
+  let empty = VariableDictMap.empty
 
-  let singleton v = singleton v.Variable.id v
+  let bindings = VariableDictMap.bindings
 
-  let add v t = add v.Variable.id v t
+  let singleton v = VariableDictMap.singleton v.Variable.id v
 
-  let mem v t = mem v.Variable.id t
+  let add v t = VariableDictMap.add v.Variable.id v t
 
-  let fold f t acc = fold (fun _ v acc -> f v acc) t acc
+  let mem v t = VariableDictMap.mem v.Variable.id t
 
-  let union t1 t2 = union (fun _ v _ -> Some v) t1 t2
+  let fold f t acc = VariableDictMap.fold (fun _ v acc -> f v acc) t acc
 
-  let for_all f t = for_all (fun _ v -> f v) t
+  let union t1 t2 = VariableDictMap.union (fun _ v _ -> Some v) t1 t2
+
+  let for_all f t = VariableDictMap.for_all (fun _ v -> f v) t
 end
 
 module VariableSet = Set.Make (Variable)
@@ -343,10 +369,24 @@ end)
 
 (**{1 Verification conditions}*)
 
+type error_descr = {
+  kind : string Pos.marked;
+  major_code : string Pos.marked;
+  minor_code : string Pos.marked;
+  description : string Pos.marked;
+  isisf : string Pos.marked;
+}
 (** Errors are first-class objects *)
 
+type error = {
+  name : string Pos.marked;  (** The position is the variable declaration *)
+  id : int;  (** Each variable has an unique ID *)
+  descr : error_descr;  (** Description taken from the variable declaration *)
+  typ : Mast.error_typ;
+}
+
 module Error = struct
-  type descr = {
+  type descr = error_descr = {
     kind : string Pos.marked;
     major_code : string Pos.marked;
     minor_code : string Pos.marked;
@@ -354,10 +394,10 @@ module Error = struct
     isisf : string Pos.marked;
   }
 
-  type t = {
+  type t = error = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : int;  (** Each variable has an unique ID *)
-    descr : descr;  (** Description taken from the variable declaration *)
+    descr : error_descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
