@@ -1,5 +1,4 @@
--include ../../../Makefile.config
-
+include ../../../Makefile.include
 
 OPTIMIZE_FLAG=-O
 

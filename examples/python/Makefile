@@ -1,4 +1,4 @@
--include ../../Makefile.config
+include ../../Makefile.include
 
 ifeq ($(OPTIMIZE), 1)
     OPTIMIZE_FLAG=-O
