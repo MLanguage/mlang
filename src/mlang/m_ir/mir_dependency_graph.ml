@@ -88,14 +88,18 @@ let create_rules_dependency_graph (program : Mir.program)
           Mir.RuleMap.fold
             (fun succ vsuccs g ->
               try
-                let label =
-                  Format.fprintf Format.str_formatter "%a"
-                    (Format.pp_print_list ~pp_sep:Format.pp_print_space Format_mir.format_variable)
-                    (Mir.VariableDict.bindings vsuccs |> List.map snd);
-                  Format.flush_str_formatter ()
-                in
-                let edge = RG.E.create rule_id label succ in
-                RG.add_edge_e g edge
+                if rule_id = succ then g
+                else
+                  let label =
+                    Format.fprintf Format.str_formatter "  %a"
+                      (Format.pp_print_list
+                         ~pp_sep:(fun fmt () -> Format.fprintf fmt "\n  ")
+                         Format_mir.format_variable)
+                      (Mir.VariableDict.bindings vsuccs |> List.map snd);
+                    Format.flush_str_formatter ()
+                  in
+                  let edge = RG.E.create rule_id label succ in
+                  RG.add_edge_e g edge
               with Not_found -> g)
             var_deps g)
         g rule_vars)
@@ -105,6 +109,34 @@ module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
 let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
+  (* Find a cycle within a list of strongly connected components. Depth first traversal *)
+  let cycle_within g vtx =
+    let exception Found of (RG.V.t * RG.E.t) list in
+    (* Find an already passed vertex. Return all vertexes passed from that point *)
+    let rec find_seen_suffix v seen =
+      match seen with
+      | [] -> None
+      | (v', _) :: _ when v = v' -> Some seen
+      | _ :: seen -> find_seen_suffix v seen
+    in
+    (* DFS. Never returns, raise an exception on cycle find *)
+    let rec aux seen v =
+      Printf.eprintf "loop %d %d\n%!" (List.length seen) v;
+      match find_seen_suffix v seen with
+      | Some seen -> raise (Found seen)
+      | None ->
+          let succs = RG.succ g v |> List.filter (fun x -> List.mem x vtx) in
+          List.iter
+            (fun succ ->
+              let seen = (v, RG.find_edge g v succ) :: seen in
+              aux seen succ)
+            succs
+    in
+    try
+      aux [] (List.hd vtx);
+      assert false
+    with Found cycle -> cycle
+  in
   (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
   let sccs = SCC.scc_list g in
   if List.length sccs < RG.nb_vertex g then begin
@@ -113,17 +145,10 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
     if (not !Cli.no_print_cycles_flag) && print_debug then begin
       List.iter
         (fun scc ->
-          let edges =
-            let loop = scc @ [ List.hd scc ] in
-            let rec get_edges acc = function
-              | [] | [ _ ] -> acc
-              | v1 :: v2 :: vtx -> get_edges ((v1, RG.find_edge g v1 v2) :: acc) (v2 :: vtx)
-            in
-            get_edges [] loop |> List.rev
-          in
+          let edges = cycle_within g scc in
           cycles_strings :=
             Format.asprintf "The following rules contain circular definitions:\n%s\n"
-              (String.concat "\n^\n|\nv\n"
+              (String.concat "\n"
                  (List.map
                     (fun (rule_id, edge) ->
                       let rule = Mir.RuleMap.find rule_id p.Mir.program_rules in
