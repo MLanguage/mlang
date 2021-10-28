@@ -127,7 +127,7 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
                  (List.map
                     (fun (rule_id, edge) ->
                       let rule = Mir.RuleMap.find rule_id p.Mir.program_rules in
-                      Format.asprintf "%a with vars: %s" Format_mast.format_rule_name rule.rule_name
+                      Format.asprintf "%d with vars: %s" (Pos.unmark rule.rule_number)
                         (RG.E.label edge))
                     edges))
             :: !cycles_strings)
