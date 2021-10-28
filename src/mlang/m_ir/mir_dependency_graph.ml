@@ -109,14 +109,17 @@ module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
 let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
+  (* Find a cycle within a list of strongly connected components. Depth first traversal *)
   let cycle_within g vtx =
     let exception Found of (RG.V.t * RG.E.t) list in
+    (* Find an already passed vertex. Return all vertexes passed from that point *)
     let rec find_seen_suffix v seen =
       match seen with
       | [] -> None
       | (v', _) :: _ when v = v' -> Some seen
       | _ :: seen -> find_seen_suffix v seen
     in
+    (* DFS. Never returns, raise an exception on cycle find *)
     let rec aux seen v =
       Printf.eprintf "loop %d %d\n%!" (List.length seen) v;
       match find_seen_suffix v seen with
