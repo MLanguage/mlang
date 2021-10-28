@@ -48,7 +48,9 @@ deps:
 format:
 	dune build @fmt --auto-promote | true
 
-build: format
+build: format dune
+
+dune:
 	dune build $(DUNE_OPTIONS)
 
 # Run only in an opam switch with musl and static options activated
