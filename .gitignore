@@ -5,3 +5,4 @@ src/**/.merlin
 doc.html
 *~
 /_opam
+/Makefile.config
