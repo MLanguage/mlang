@@ -37,26 +37,25 @@ type program = {
 let squish_statements (program : program) (threshold : int) (rule_suffix : string) =
   let rule_from_stmts stmts =
     let id = Mir.fresh_rule_id () in
-    { rule_id = id; rule_name = rule_suffix ^ string_of_int id; rule_stmts = stmts }
+    { rule_id = id; rule_name = rule_suffix ^ string_of_int id; rule_stmts = List.rev stmts }
   in
   let rec browse_bir old_stmts new_stmts curr_stmts rules =
     match old_stmts with
-    | [] -> (rules, new_stmts)
+    | [] -> (rules, List.rev new_stmts)
     | hd :: tl ->
         let give_pos stmt = Pos.same_pos_as stmt hd in
         let rules, curr_stmts =
           match Pos.unmark hd with
           | SConditional (expr, t, f) ->
-              let t_rules, t_curr_list = browse_bir t [] curr_stmts rules in
-              let f_rules, f_curr_list = browse_bir f [] t_curr_list t_rules in
+              let t_rules, t_curr_list = browse_bir t [] [] rules in
+              let f_rules, f_curr_list = browse_bir f [] [] t_rules in
               let cond = give_pos (SConditional (expr, t_curr_list, f_curr_list)) in
               (f_rules, (cond :: f_curr_list) @ curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
-        (* TODO: The following line works because of a low threshold. 
-        In order to make this robust, the length check should not be done on the curr_stmts list
-        but rather recursively on the number of statements inside the curr_stmts list.
-        *)
+        (* TODO: The following line works because of a low threshold. In order to make this robust,
+           the length check should not be done on the curr_stmts list but rather recursively on the
+           number of statements inside the curr_stmts list. *)
         if List.length curr_stmts < threshold then browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
@@ -66,7 +65,7 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
   let new_rules, new_stmts = browse_bir program.statements [] [] program.rules in
-  { program with statements = List.rev new_stmts; rules = new_rules }
+  { program with statements = new_stmts; rules = new_rules }
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =

@@ -37,7 +37,17 @@ public class TestHarness {
         try {
             Files.list(testsDir)
                 .map(TestHarness::parseTest)
-                .forEach(test -> Ir_tests_2019.calculateTax(test.getInputVariables()));
+                .forEach(test -> {
+                    Map<String, MValue> realOutputs = Ir_tests_2020
+                                                    .calculateTax(test.getInputVariables());
+
+                    test.getExceptedVariables().forEach((name, value) -> {
+                            if(!realOutputs.get(name).equals(value)) {
+                                System.err.println("Code " + name + ", expected: " +  value + ", got: " + realOutputs.get(name) );
+                            }
+                        } );
+                    
+                });
         } catch (IOException ex) {
             System.err.println(ex.getMessage());
             return;
@@ -100,12 +110,12 @@ public class TestHarness {
 
     private static void addInputVariableToTestData(String variableLine, TestData td){
         Variable var = createVariable(variableLine);
-        td.addInputVariable(var.getCode(), new MValue(var.getValue(), true));
+        td.addInputVariable(var.getCode(), new MValue(var.getValue(), false));
     }
 
     private static void addExpectedVariableToTestData(String variableLine, TestData td){
         Variable var = createVariable(variableLine);
-        td.addExpectedVariable(var.getCode(), new MValue(var.getValue(), true));
+        td.addExpectedVariable(var.getCode(), new MValue(var.getValue(), false));
     }
 
     private static Variable createVariable(String variableLine){

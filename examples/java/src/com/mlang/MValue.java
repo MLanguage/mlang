@@ -188,10 +188,10 @@ public MValue(double value){
     if (bound.isUndefined()) {
       throw new RuntimeException("Multimax bound undefined!");
     } else {
-      double max_index = Math.floor(bound.getValue());
-      MValue max = mAdd(array.get(0), zero);
+      int max_index = (int)Math.floor(bound.getValue());
+      MValue max = mAdd(m_array_index(array, zero), zero);
       for (int i = 0; i <= max_index; i++) {
-        MValue challenger = mAdd(array.get(i), zero);
+        MValue challenger = mAdd(m_array_index(array, new MValue(i)), zero);
         if (challenger.getValue() > max.getValue()) {
           max = challenger;
         }
@@ -214,5 +214,38 @@ public MValue(double value){
     } else {
       return x.getValue() == 0;
     }
+  }
+
+  public static MValue m_array_index(List<MValue> array, MValue index)
+{
+    if (index.isUndefined())
+    {
+        return mUndefined;
+    }
+    else
+    {
+        if (index.getValue() < 0)
+        {
+            return zero;
+        }
+        else if (index.getValue() >= array.size() - 1)
+        {
+            return mUndefined;
+        }
+        else
+        {
+            return array.get((int)(index.getValue()));
+        }
+    }
+}
+
+  @Override
+  public boolean equals(Object o) {
+    return o != null && o instanceof MValue && ((MValue)o).getValue() == this.getValue() && ((MValue)o).isUndefined() == this.isUndefined();
+  }
+
+  @Override
+  public String toString() {
+    return "Value: " + this.getValue() + " undefined: " + this.isUndefined(); 
   }
 }

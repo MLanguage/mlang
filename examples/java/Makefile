@@ -7,8 +7,9 @@ SOURCE_DIR_2016=$(wildcard ../../ir-calcul/sources2016m_4_5/*.m)
 SOURCE_DIR_2017=$(wildcard ../../ir-calcul/sources2017m_6_10/*.m)
 SOURCE_DIR_2018=$(wildcard ../../ir-calcul/sources2018m_6_7/*.m)
 SOURCE_DIR_2019=$(wildcard ../../ir-calcul/sources2019m_8_0/*.m)
+SOURCE_DIR_2020=$(wildcard ../../ir-calcul/sources2020m_6_5/*.m)
 
-YEAR?=2019
+YEAR?=2020
 
 ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(SOURCE_DIR_2018)
@@ -18,6 +19,10 @@ else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=../../mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=../../tests/2019/fuzzing/
+else ifeq ($(YEAR), 2020)
+	SOURCE_FILES?=$(SOURCE_DIR_2020)
+	MPP_FILE?=../../mpp_specs/2020_6_5.mpp
+	TESTS_DIR?=../../tests/2020/fuzzing/
 else
     $(error Unsupported year: $(YEAR))
 endif
@@ -40,26 +45,23 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 all: backend_tests $(shell find . -name "run_*.py")
 
 clean: 
-	rm -rf *.java *.class
+	rm -f src/com/mlang/Ir_*.java target/com/mlang/*.class backend_tests/target/com/mlang/*.class
 
 ##################################################
 # Generating and running Java files from Mlang
 ##################################################
 
-Ir_%.java: ../../m_specs/%.m_spec 
+src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 	$(MLANG) \
-		--backend java --output $@ \
+		--backend java --output src/com/mlang/Ir_tests_2020.java \
 		--function_spec $^ \
 		$(SOURCE_FILES)
-	sed -i '' -e 's/CalculImpot/$(shell echo $@ | cut -d "." -f 1)/g' $@
-	rm -rf src/com/mlang/Ir*.java
-	mv $@ src/com/mlang
-	rm -rf target/*
-	mkdir -p target
+
+target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java
 	javac -J-Xss10m -J-Xmx4096m -d target -cp src src/com/mlang/*.java 
 
-backend_tests: Ir_tests_2019.java
-	rm -rf backend_tests/target/*
-	mkdir -p backend_tests/target/
-	javac -J-Xss10m -J-Xmx4096m -cp "backend_tests/src/:src" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
+backend_tests/target/TestHarness.class: target/com/mlang/Ir_tests_2020.class
+	javac -J-Xss10m -cp "backend_tests/src/:target" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
 	
+run_tests: backend_tests/target/TestHarness.class
+	java -cp "target:backend_tests/target" com.mlang.TestHarness $(TESTS_DIR)

@@ -30,9 +30,9 @@ import static com.mlang.MValue.*;
 
 let calculateTax_method_header (inputs_len : int) oc (body : Format.formatter -> 'a -> unit) =
   let rec print_load_input curr oc len =
-    if curr < len then
-      (Format.fprintf oc "loadInputVariables_%d(outputVariables, calculationVariables);" curr;
-    print_load_input (curr + 1) oc len)
+    if curr <= len then (
+      Format.fprintf oc "loadInputVariables_%d(inputVariables, calculationVariables);@," curr;
+      print_load_input (curr + 1) oc len)
   in
   Format.fprintf oc
     "@[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
@@ -40,13 +40,14 @@ let calculateTax_method_header (inputs_len : int) oc (body : Format.formatter ->
      Map<String, MValue> outputVariables = new HashMap<>();@,\
      Map<String, MValue> calculationVariables = new HashMap<>();@,\
      Map<Integer, MValue> localVariables = new HashMap<>();@,\
-     Map<String,List<MValue>> tableVariables = new HashMap<>();@]@,\
+     Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
      @,\
      @,\
      %a@,\
      %a@,\
-     loadOutputVariables(inputVariables, calculationVariables);@,\
+     loadOutputVariables(outputVariables, calculationVariables);@,\
      return outputVariables;@,\
+     @]@,\
      @[}@]"
     (print_load_input 0) inputs_len body ()
 
@@ -110,11 +111,10 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       let se2, s2 = (Format.asprintf "%s(%s)" (generate_unop op) se, s) in
       add_expr_code_block (se2, s2)
   | Index (var, e) ->
-      let _, s = generate_java_expr e var_indexes in
-      let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
+      let se, s = generate_java_expr e var_indexes in
       let se2, s2 =
-        ( Format.asprintf "tableVariables.get(\"%a\").get(%d)" generate_variable (Pos.unmark var)
-            size,
+        ( Format.asprintf "m_array_index(tableVariables.get(\"%a\"),%s)" generate_variable
+            (Pos.unmark var) se,
           s )
       in
       add_expr_code_block (se2, s2)
@@ -189,7 +189,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%a@,@[<hv 2>calculationVariables.put(\"%a\", @[<hov 2>%s@]);@]@,"
+      Format.fprintf oc "%acalculationVariables.put(\"%a\", %s);@,"
         (format_local_vars_defs var_indexes)
         defs format_var_name var se
   | TableVar (_, IndexTable es) ->
@@ -205,8 +205,8 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
         (Pos.get_position e)
   | InputVar -> assert false
 
-let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc "@[// %s@,%s@,public class CalculImpot {@]" Prelude.message java_imports
+let generate_header (oc : Format.formatter) (class_name : string) : unit =
+  Format.fprintf oc "@[// %s@,%s@,public class %s {@]" Prelude.message java_imports class_name
 
 let generate_input_handling (function_spec : Bir_interface.bir_function) (oc : Format.formatter)
     (split_threshold : int) =
@@ -215,18 +215,19 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) (oc : F
     Format.fprintf oc
       "@[<hv 2>public static void loadInputVariables_%d(Map<String, MValue> inputVariables, \
        Map<String, MValue> calculationVariables){@,"
-      count 
+      count
   in
   let format_input_var oc var count =
-    if count mod split_threshold = 0 then print_header (if count > 0 then (count / split_threshold) else 0) ;
+    if count mod split_threshold = 0 then
+      print_header (if count > 0 then count / split_threshold else 0);
     Format.fprintf oc
       "calculationVariables.put(\"%a\",inputVariables.get(\"%s\") != null ? \
        inputVariables.get(\"%s\") : MValue.mUndefined);@,"
       format_var_name var (generate_name var) (generate_name var);
-    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]" 
+    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]"
   in
   List.iteri (fun count assign -> format_input_var oc assign count) input_vars;
-  Format.fprintf oc "}@."
+  Format.fprintf oc "}"
 
 let sanitize_str (s, p) =
   String.map
@@ -240,29 +241,31 @@ let sanitize_str (s, p) =
     s
 
 let generate_var_cond var_indexes oc cond =
-  Format.fprintf oc
-    "cond = %s;@\n\
-     if (m_is_defined_true(cond)) { @\n\
-    \   throw new RuntimeException(\"Error triggered\\n%s\");@\n\
-     }@\n\
-     @\n"
+  Format.fprintf oc "cond = %s;@,"
     (let se, _ = generate_java_expr cond.cond_expr var_indexes in
-     se)
-    (let cond_error, var = cond.cond_error in
-     Format.asprintf "%s: %s%s%s%s%s"
-       (sanitize_str cond_error.Error.name)
-       (sanitize_str cond_error.Error.descr.kind)
-       (sanitize_str cond_error.Error.descr.major_code)
-       (sanitize_str cond_error.Error.descr.minor_code)
-       (sanitize_str cond_error.Error.descr.description)
-       (match var with
-       | Some v -> ( match v.Variable.alias with Some alias -> alias | None -> "")
-       | None -> ""))
+     se);
+  let cond_error, var = cond.cond_error in
+  let error_message =
+    Format.asprintf "%s: %s%s%s%s%s"
+      (sanitize_str cond_error.Error.name)
+      (sanitize_str cond_error.Error.descr.kind)
+      (sanitize_str cond_error.Error.descr.major_code)
+      (sanitize_str cond_error.Error.descr.minor_code)
+      (sanitize_str cond_error.Error.descr.description)
+      (match var with
+      | Some v -> ( match v.Variable.alias with Some alias -> alias | None -> "")
+      | None -> "")
+  in
+  Format.fprintf oc "if (m_is_defined_true(cond)) { @,";
+  if cond_error.Error.typ = Anomaly then
+    Format.fprintf oc "throw new RuntimeException(\"Error triggered\\n%s\");@," error_message
+  else Format.fprintf oc "System.out.println(\"Error occurred : %s\");" error_message;
+  Format.fprintf oc "}@,@,"
 
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
-  Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);@,"
+  Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
@@ -288,12 +291,9 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
       Format.fprintf oc
-        "@[<hv 2>/* SConditional (cond, tt, ff) */@,\
-         MValue %s = %s;@,\
+        "/* SConditional (cond, tt, ff) */MValue %s = %s;@,\
          if (m_is_defined_true(%s)) {@,\
-         @[<hv 2>%a@]@,\
-         }@]"
-        cond_name
+         @[<hv 2>%a@]}" cond_name
         (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
          s)
         cond_name
@@ -355,10 +355,11 @@ let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_f
 let generate_rule_method (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
-    "@[public static void m_rule_%s(Map<String, MValue> calculationVariables,  Map<Integer, \
+    "@[<hv 2>public static void m_rule_%s(Map<String, MValue> calculationVariables,  Map<Integer, \
      MValue> localVariables, Map<String, List<MValue>> tableVariables){@,\
-     @[<hv 2>MValue cond = MValue.mUndefined@,\
-     ;%a@]}@]"
+     MValue cond = MValue.mUndefined;@,\
+     %a@,\
+     @]@[}@]@,"
     rule.rule_name
     (generate_stmts program var_indexes)
     rule.rule_stmts
@@ -366,7 +367,7 @@ let generate_rule_method (program : Bir.program) (var_indexes : int Mir.Variable
 let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
     (var_indexes : int Mir.VariableMap.t) : unit =
   RuleMap.iter
-    (fun _ rule -> Format.fprintf oc "@,%a@," (generate_rule_method program var_indexes) rule)
+    (fun _ rule -> Format.fprintf oc "%a" (generate_rule_method program var_indexes) rule)
     program.rules
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
@@ -379,15 +380,14 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let program = Bir.squish_statements program split_treshold "java_rule_" in
   let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc
-    "%a@.@,\
+    "@[<hv 2>%a@,\
      @,\
      %a@.@,\
      %a@,\
      @,\
      %a@,\
-     /* GENERATE RETURN */@,\
-     %a}@." 
-     generate_header () 
+     %a}@]@." 
+     generate_header (String.split_on_char '.' filename |> List.hd |> String.split_on_char '/' |> fun list -> List.nth list (List.length list -1))
      (generate_rule_methods program) var_indexes
      (generate_input_handling function_spec) split_treshold 
      (calculateTax_method_header split_inputs_len) stmts 
