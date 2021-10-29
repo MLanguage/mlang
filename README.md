@@ -91,6 +91,10 @@ For how to produce ready-to-use income tax computation
 source files for your application, see the
 [dedicated README](examples/README.md).
 
+Some of the `Makefile` flags can be permanently configured by creating
+a file `Makefile.config` in the top directory. Check the file
+`Makefile.config.template` to see some of the options that can be
+configured in that way.
 
 ## Testing
 
