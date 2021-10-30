@@ -27,6 +27,8 @@ else
     $(error Unsupported year: $(YEAR))
 endif
 
+OPTIMIZE?=1
+
 ifeq ($(OPTIMIZE), 1)
     OPTIMIZE_FLAG=-O
 else
