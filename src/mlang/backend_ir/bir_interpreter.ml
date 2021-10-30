@@ -242,7 +242,7 @@ module Make (N : Bir_number.NumberInterface) = struct
                 (fun fmt () ->
                   try
                     let rule, def = Mir.find_var_definition p var in
-                    Format.fprintf fmt "rule %a, %a" Format_mast.format_rule_name rule.rule_name
+                    Format.fprintf fmt "rule %d, %a" (Pos.unmark rule.rule_number)
                       Format_mir.format_variable_def def.var_definition
                   with Not_found -> Format.fprintf fmt "unused definition")
                 ())

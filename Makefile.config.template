@@ -1,0 +1,13 @@
+# Copy this file as Makefile.config to change some of these variables
+
+# YEAR=2018
+
+# SOURCE_FILES=$(SOURCE_DIR_2018)
+
+# MPP_FILE=$(SELF_DIR)/mpp_specs/2018_6_7.mpp
+
+# TESTS_DIR=$(SELF_DIR)/tests/2018/fuzzing/
+
+# M_SPEC_FILE=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
+
+# CC:=gcc

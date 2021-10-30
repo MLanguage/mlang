@@ -9,13 +9,12 @@ compute_benefits():
     partition with var_is_taxbenefit:
       V_INDTEO = 1
       V_CALCUL_NAPS = 1
-      NAPSANSPENA, IAD11, INE, IRE, PREM8_11 <- call_m()
+      IAD11, INE, IRE <- call_m()
       V_CALCUL_NAPS = 0
       iad11 = cast(IAD11)
       ire = cast(IRE)
       ine = cast(INE)
-      prem = cast(PREM8_11)
-      PREM8_11 = prem
+      PREM8_11 = cast(PREM8_11)
     V_IAD11TEO = iad11
     V_IRETEO = ire
     V_INETEO = ine

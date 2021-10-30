@@ -1,8 +1,12 @@
+# Create this file to overwrite typical variables (see Makefile.config.template)
+
 ##################################################
 # Variables
 ##################################################
 
 SELF_DIR=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
+
+-include $(SELF_DIR)/Makefile.config
 
 SOURCE_DIR_2015=$(wildcard $(SELF_DIR)/ir-calcul/sources2015m_4_6/*.m)
 SOURCE_DIR_2016=$(wildcard $(SELF_DIR)/ir-calcul/sources2016m_4_5/*.m)

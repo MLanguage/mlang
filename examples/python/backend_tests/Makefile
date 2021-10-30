@@ -1,4 +1,4 @@
--include ../../../Makefile.config
+include ../../../Makefile.include
 
 SOURCE_FILES?=$(shell find $(SOURCE_DIR) -name "*.m")
 
