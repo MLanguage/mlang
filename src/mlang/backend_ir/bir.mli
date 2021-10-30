@@ -34,6 +34,8 @@ type program = {
   outputs : unit Mir.VariableMap.t;
 }
 
+val squish_statements : program -> int -> string -> program
+
 val get_all_statements : program -> stmt list
 
 val count_instructions : program -> int
