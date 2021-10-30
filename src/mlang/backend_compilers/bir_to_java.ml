@@ -290,25 +290,24 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
           !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
+      if List.length tt = 0 then assert false;
       Format.fprintf oc
-        "/* SConditional (cond, tt, ff) */MValue %s = %s;@,\
-         if (m_is_defined_true(%s)) {@,\
-         @[<hv 2>%a@]}" cond_name
+        "/* SConditional (cond, tt, ff) */MValue %s = %s;@,if (m_is_defined_true(%s)) {@,%a}"
+        cond_name
         (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) var_indexes in
          s)
         cond_name
         (generate_stmts program var_indexes)
         tt;
-      if List.length ff <> 0 then
-        Format.fprintf oc
-          {|
+      Format.fprintf oc
+        {|
    if (m_is_defined_false(%s)) {
       %a
     }
 |}
-          cond_name
-          (generate_stmts program var_indexes)
-          ff
+        cond_name
+        (generate_stmts program var_indexes)
+        ff
   | SVerif v -> generate_var_cond var_indexes oc v
 
 let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =

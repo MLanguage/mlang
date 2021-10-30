@@ -137,7 +137,7 @@ public MValue(double value){
     }
     double dValue = x.getValue();
     double valueToRound = dValue + (dValue < 0 ? -0.50005 : 0.50005);
-    return new MValue(Math.floor(valueToRound));
+    return new MValue((double)(int)(valueToRound));
   }
 
   public static MValue m_floor(MValue x) {
@@ -238,6 +238,10 @@ public MValue(double value){
         }
     }
 }
+
+  public boolean equalsWithThreshold(MValue toCompare, double withThreshold) {
+    return Math.abs(this.getValue() - toCompare.getValue()) < withThreshold; 
+  }
 
   @Override
   public boolean equals(Object o) {

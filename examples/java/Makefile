@@ -51,6 +51,7 @@ clean:
 # Generating and running Java files from Mlang
 ##################################################
 
+.PRECIOUS: src/com/mlang/Ir_%.java
 src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend java --output src/com/mlang/Ir_tests_2020.java \

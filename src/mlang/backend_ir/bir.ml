@@ -41,7 +41,7 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
   in
   let rec browse_bir old_stmts new_stmts curr_stmts rules =
     match old_stmts with
-    | [] -> (rules, List.rev new_stmts)
+    | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->
         let give_pos stmt = Pos.same_pos_as stmt hd in
         let rules, curr_stmts =
@@ -50,7 +50,7 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
               let t_rules, t_curr_list = browse_bir t [] [] rules in
               let f_rules, f_curr_list = browse_bir f [] [] t_rules in
               let cond = give_pos (SConditional (expr, t_curr_list, f_curr_list)) in
-              (f_rules, (cond :: f_curr_list) @ curr_stmts)
+              (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
         (* TODO: The following line works because of a low threshold. In order to make this robust,
