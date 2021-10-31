@@ -22,6 +22,8 @@ type bir_function = {
 }
 (** Input-output data necessary to interpret a BIR program*)
 
+val get_variables_indexes : Bir.program -> bir_function -> int Mir.VariableMap.t * int
+
 val translate_external_conditions :
   Mir.idmap -> Mast.expression Pos.marked list -> Mir.condition_data Mir.VariableMap.t
 (** [translate_external_conditions idmap conditions] translates a series of boolean expressions

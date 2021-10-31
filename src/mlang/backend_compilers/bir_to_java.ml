@@ -326,31 +326,6 @@ let generate_return (oc : Format.formatter) (function_spec : Bir_interface.bir_f
      @[}@]"
     print_outputs returned_variables
 
-let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
-    int Mir.VariableMap.t * int =
-  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let assigned_variables =
-    List.map snd (Mir.VariableDict.bindings (Bir.get_assigned_variables p))
-  in
-  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  let all_relevant_variables =
-    List.fold_left
-      (fun acc var -> VariableMap.add var () acc)
-      VariableMap.empty
-      (input_vars @ assigned_variables @ output_vars)
-  in
-  let counter = ref 0 in
-  let var_indexes =
-    VariableMap.mapi
-      (fun var _ ->
-        let id = !counter in
-        let size = match var.Mir.Variable.is_table with None -> 1 | Some size -> size in
-        counter := !counter + size;
-        id)
-      all_relevant_variables
-  in
-  (var_indexes, !counter)
-
 let generate_rule_method (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
