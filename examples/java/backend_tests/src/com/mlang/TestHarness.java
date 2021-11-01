@@ -36,37 +36,57 @@ public class TestHarness {
 
     Map<String, List<String>> errorTestMap = new HashMap<>();
 
+    runTests(testsDir, errorTestMap);
+  }
+
+  private static void runTests(Path testsDir, Map<String, List<String>> errorTestMap) {
     try {
       List<TestData> testsData = Files.list(testsDir).map(TestHarness::parseTest).collect(Collectors.toList());
-
-      for (TestData test : testsData) {
-        List<String> errorsWithVars = new ArrayList<>();
-        Map<String, MValue> realOutputs = Ir_tests_2020.calculateTax(test.getInputVariables());
-        test.getExceptedVariables().forEach((name, value) -> {
-          if (!realOutputs.get(name).equals(value)) {
-            errorsWithVars.add("Code " + name + ", expected: " + value + ", got: " + realOutputs.get(name));
-          }
-        });
-
-        if (!errorsWithVars.isEmpty()) {
-          errorTestMap.put(test.getTestName(), errorsWithVars);
-        }
-      }
-
-      if (!errorTestMap.isEmpty()) {
-        for (Entry<String, List<String>> entry : errorTestMap.entrySet()) {
-          System.err.println("Error with test " + entry.getKey());
-          for (String error : entry.getValue()) {
-            System.err.println(error);
-          }
-        }
-        System.exit(-1);
-      }
-
+      analyzeTestResults(testsData);
     } catch (IOException ex) {
       System.err.println(ex.getMessage());
       return;
     }
+  }
+
+  private static void analyzeTestResults(List<TestData> testsData) {
+    Map<String, List<String>> errorTestMap = findTestErrors(testsData);
+    displayTestErrorsExit(errorTestMap);
+  }
+
+  private static void displayTestErrorsExit(Map<String, List<String>> errorTestMap) {
+    if (!errorTestMap.isEmpty()) {
+      for (Entry<String, List<String>> entry : errorTestMap.entrySet()) {
+        System.err.println("Error with test " + entry.getKey());
+        for (String error : entry.getValue()) {
+          System.err.println(error);
+        }
+      }
+      System.exit(-1);
+    }
+  }
+
+  private static Map<String, List<String>> findTestErrors(List<TestData> testsData) {
+    Map<String, List<String>> errorTestMap = new HashMap<>();
+    for (TestData test : testsData) {
+      Map<String, MValue> realOutputs = Ir_tests_2020.calculateTax(test.getInputVariables());
+      List<String> errorsWithVars = extractTestErrorsFromData(test, realOutputs);
+
+      if (!errorsWithVars.isEmpty()) {
+        errorTestMap.put(test.getTestName(), errorsWithVars);
+      }
+    }
+    return errorTestMap;
+  }
+
+  private static List<String> extractTestErrorsFromData(TestData test, Map<String, MValue> realOutputs) {
+    List<String> errorsWithVars = new ArrayList<>();
+    test.getExceptedVariables().forEach((name, value) -> {
+      if (!realOutputs.get(name).equals(value)) {
+        errorsWithVars.add("Code " + name + ", expected: " + value + ", got: " + realOutputs.get(name));
+      }
+    });
+    return errorsWithVars;
   }
 
   private static TestData parseTest(Path test) {
