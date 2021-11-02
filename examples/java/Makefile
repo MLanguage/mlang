@@ -61,7 +61,7 @@ src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 		$(SOURCE_FILES)
 
 target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java
-	javac -J-Xss10m -J-Xmx4096m -d target -cp src src/com/mlang/*.java 
+	javac -target 1.7 -source 1.7 -J-Xss10m -J-Xmx4096m -d target -cp src src/com/mlang/*.java 
 
 backend_tests/target/TestHarness.class: target/com/mlang/Ir_tests_2020.class
 	javac -J-Xss10m -cp "backend_tests/src/:target" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
