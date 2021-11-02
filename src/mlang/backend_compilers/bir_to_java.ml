@@ -214,14 +214,14 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) (class_name : string) : unit =
-  Format.fprintf oc "@[// %s@,%s@,public class %s {@]" Prelude.message java_imports class_name
+  Format.fprintf oc "@[// %s@,%s@,/**@,* Main class containing calculation logic@,*/@,public class %s {@]" Prelude.message java_imports class_name
 
 let generate_input_handling (function_spec : Bir_interface.bir_function) (var_indexes: variable_id VariableMap.t) (oc : Format.formatter)
     (split_threshold : int)  =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let print_header count =
     Format.fprintf oc
-      "@[<hv 2>public static void loadInputVariables_%d(Map<String, MValue> inputVariables, \
+      "@[<hv 2>private static void loadInputVariables_%d(Map<String, MValue> inputVariables, \
        MValue[] calculationVariables){@,"
       count
   in
@@ -328,7 +328,7 @@ let generate_return (var_indexes: variable_id VariableMap.t) (oc : Format.format
       oc returned_variables
   in
   Format.fprintf oc
-    "@[<v 2>public static void loadOutputVariables(Map<String,MValue> outputVariables, MValue[] \
+    "@[<v 2>private static void loadOutputVariables(Map<String,MValue> outputVariables, MValue[] \
      calculationVariables){@,\
      %a@]@,\
      @[}@]"
@@ -337,7 +337,7 @@ let generate_return (var_indexes: variable_id VariableMap.t) (oc : Format.format
 let generate_rule_method (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<hv 2>public static void m_rule_%s(MValue[] calculationVariables,  Map<Integer, MValue> \
+    "@[<hv 2>private static void m_rule_%s(MValue[] calculationVariables,  Map<Integer, MValue> \
      localVariables, Map<String, List<MValue>> tableVariables){@,\
      MValue cond = MValue.mUndefined;@,\
      %a@,\
