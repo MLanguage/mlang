@@ -2,29 +2,49 @@ package com.mlang;
 
 import java.util.List;
 
+/**
+ * MValue is the representation of a variable used during a tax calculation,
+ * either as input, output or an intermediate value.
+ */
 public class MValue {
 
-  public static final MValue mUndefined = new MValue(0., true);
-  public static final MValue zero = new MValue(0., false);
-  public static final MValue one = new MValue(1., false);
+  static final MValue mUndefined = new MValue(0., true);
+  static final MValue zero = new MValue(0., false);
+  static final MValue one = new MValue(1., false);
 
   private final double value;
   private final boolean undefined;
 
-  public MValue(double value, boolean isDefined) {
+  MValue(double value, boolean isDefined) {
     this.value = value;
     this.undefined = isDefined;
   }
 
+  /**
+   * Create an MValue with a double value, by default MValues are created as
+   * defined
+   * 
+   * @param value the value to be used with this variable
+   */
   public MValue(double value) {
     this.value = value;
     this.undefined = false;
   }
 
+  /**
+   * Getter for value Field
+   * 
+   * @return the double value of the MValue
+   */
   public double getValue() {
     return this.value;
   }
 
+  /**
+   * Getter for undefined field
+   * 
+   * @return boolean, whether the value has been defined during calculation
+   */
   public boolean isUndefined() {
     return this.undefined;
   }
@@ -33,63 +53,63 @@ public class MValue {
     return b ? one : zero;
   }
 
-  public static MValue mGreaterThan(MValue x, MValue y) {
+  static MValue mGreaterThan(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() > y.getValue());
   }
 
-  public static MValue mGreaterThanEqual(MValue x, MValue y) {
+  static MValue mGreaterThanEqual(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() >= y.getValue());
   }
 
-  public static MValue mLessThan(MValue x, MValue y) {
+  static MValue mLessThan(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() < y.getValue());
   }
 
-  public static MValue mLessThanEqual(MValue x, MValue y) {
+  static MValue mLessThanEqual(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() <= y.getValue());
   }
 
-  public static MValue mEqual(MValue x, MValue y) {
+  static MValue mEqual(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() == y.getValue());
   }
 
-  public static MValue mNotEqual(MValue x, MValue y) {
+  static MValue mNotEqual(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() != y.getValue());
   }
 
-  public static MValue mAnd(MValue x, MValue y) {
+  static MValue mAnd(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() != 0 && y.getValue() != 0);
   }
 
-  public static MValue mOr(MValue x, MValue y) {
+  static MValue mOr(MValue x, MValue y) {
     if (x.isUndefined() && y.isUndefined()) {
       return mUndefined;
     }
     return boolToMValue(x.getValue() != 0 || y.getValue() != 0);
   }
 
-  public static MValue mAdd(MValue x, MValue y) {
+  static MValue mAdd(MValue x, MValue y) {
 
     if (x.isUndefined() && y.isUndefined()) {
       return mUndefined;
@@ -98,7 +118,7 @@ public class MValue {
     return new MValue(x.getValue() + y.getValue());
   }
 
-  public static MValue mSubtract(MValue x, MValue y) {
+  static MValue mSubtract(MValue x, MValue y) {
     if (x.isUndefined() && y.isUndefined()) {
       return mUndefined;
     }
@@ -106,14 +126,14 @@ public class MValue {
     return new MValue(x.getValue() - y.getValue());
   }
 
-  public static MValue mMultiply(MValue x, MValue y) {
+  static MValue mMultiply(MValue x, MValue y) {
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
     }
     return new MValue(x.getValue() * y.getValue());
   }
 
-  public static MValue mDivide(MValue x, MValue y) {
+  static MValue mDivide(MValue x, MValue y) {
 
     if (x.isUndefined() || y.isUndefined()) {
       return mUndefined;
@@ -128,7 +148,7 @@ public class MValue {
     return new MValue(x.getValue() / denominateur);
   }
 
-  public static MValue m_round(MValue x) {
+  static MValue m_round(MValue x) {
     if (x.isUndefined()) {
       return mUndefined;
     }
@@ -137,7 +157,7 @@ public class MValue {
     return new MValue((double) (int) (valueToRound));
   }
 
-  public static MValue m_floor(MValue x) {
+  static MValue m_floor(MValue x) {
     if (x.isUndefined()) {
       return mUndefined;
     }
@@ -145,7 +165,7 @@ public class MValue {
     return new MValue(Math.floor(valueToFloor));
   }
 
-  public static MValue m_cond(MValue cond, MValue trueVal, MValue falseVal) {
+  static MValue m_cond(MValue cond, MValue trueVal, MValue falseVal) {
     if (cond.isUndefined()) {
       return mUndefined;
     } else if (cond.getValue() != 0) {
@@ -155,33 +175,33 @@ public class MValue {
     }
   }
 
-  public static MValue m_max(MValue x, MValue y) {
+  static MValue m_max(MValue x, MValue y) {
     return new MValue(Math.max(x.getValue(), y.getValue()));
   }
 
-  public static MValue m_min(MValue x, MValue y) {
+  static MValue m_min(MValue x, MValue y) {
     return new MValue(Math.min(x.getValue(), y.getValue()));
   }
 
-  public static MValue mNeg(MValue x) {
+  static MValue mNeg(MValue x) {
     if (x.isUndefined()) {
       return mUndefined;
     }
     return new MValue(-x.getValue());
   }
 
-  public static MValue mPresent(MValue value) {
+  static MValue mPresent(MValue value) {
     return value.isUndefined() ? zero : one;
   }
 
-  public static MValue mNot(MValue value) {
+  static MValue mNot(MValue value) {
     if (value.isUndefined()) {
       return mUndefined;
     }
     return value.getValue() == 0 ? one : zero;
   }
 
-  public static MValue m_multimax(MValue bound, List<MValue> array) {
+  static MValue m_multimax(MValue bound, List<MValue> array) {
     if (bound.isUndefined()) {
       throw new RuntimeException("Multimax bound undefined!");
     } else {
@@ -197,7 +217,7 @@ public class MValue {
     }
   }
 
-  public static boolean m_is_defined_true(MValue x) {
+  static boolean m_is_defined_true(MValue x) {
     if (x.isUndefined()) {
       return false;
     } else {
@@ -205,7 +225,7 @@ public class MValue {
     }
   }
 
-  public static boolean m_is_defined_false(MValue x) {
+  static boolean m_is_defined_false(MValue x) {
     if (x.isUndefined()) {
       return false;
     } else {
@@ -213,7 +233,7 @@ public class MValue {
     }
   }
 
-  public static MValue m_array_index(List<MValue> array, MValue index) {
+  static MValue m_array_index(List<MValue> array, MValue index) {
     if (index.isUndefined()) {
       return mUndefined;
     } else {
@@ -227,10 +247,27 @@ public class MValue {
     }
   }
 
+  /**
+   * Compare two MValues based on their value alone taking into account a
+   * threshold of precision (e.g. 0.001). This threshold is useful as comparing
+   * floats with the == operator can lead to false negatives, especially with
+   * large numbers
+   * 
+   * @param toCompare     MValue to be compared with current MValue
+   * @param withThreshold double representing threshold
+   * @return boolean true if MValues are equal
+   */
   public boolean equalsWithThreshold(MValue toCompare, double withThreshold) {
     return Math.abs(this.getValue() - toCompare.getValue()) < withThreshold;
   }
 
+  /**
+   * Compare two MValues based on their value and definedness, beware that
+   * comparaison of float values is done with == operator
+   * 
+   * @param o Java Object to be compared with current MValue
+   * @return boolean true if objects are equal
+   */
   @Override
   public boolean equals(Object o) {
     return o != null && o instanceof MValue && ((MValue) o).getValue() == this.getValue()

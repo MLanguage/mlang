@@ -36,7 +36,15 @@ let calculateTax_method_header (inputs_len : int) (calculation_vars_len : int) o
       print_load_input (curr + 1) oc len)
   in
   Format.fprintf oc
-    "@[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
+    "@[<hv 0>/**@,\
+    * Main calculation method for determining tax @,\
+    * @param inputVariables Map of variables to be used for calculation, the key is the variable name and the value is the variable value@,\
+    * @return  Map of variables returned after calculation, the key is the variable name and the value is the variable value@,\
+    * @,\
+    * @,\
+    * @,\
+    */@]@,\
+    @[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
      MValue cond = MValue.mUndefined;@,\
      Map<String, MValue> outputVariables = new HashMap<>();@,\
      MValue[] calculationVariables = new MValue[%d];@,\
