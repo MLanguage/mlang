@@ -69,7 +69,7 @@ public class TestHarness {
   private static Map<String, List<String>> findTestErrors(List<TestData> testsData) {
     Map<String, List<String>> errorTestMap = new HashMap<>();
     for (TestData test : testsData) {
-      Map<String, MValue> realOutputs = Ir_tests_2020.calculateTax(test.getInputVariables());
+      Map<String, MValue> realOutputs = Ir_tests_2020.calculateTax(test.getInputVariables()).getOutputValues();
       List<String> errorsWithVars = extractTestErrorsFromData(test, realOutputs);
 
       if (!errorsWithVars.isEmpty()) {
