@@ -28,7 +28,6 @@ import java.util.List;
 import static com.mlang.MValue.*;
 |}
 
-
 let none_value = "MValue.mUndefined"
 
 let generate_comp_op (op : Mast.comp_op) : string =
@@ -96,7 +95,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Index (var, e) ->
       let se, s = generate_java_expr e var_indexes in
       let se2, s2 =
-        ( Format.asprintf "m_array_index(tableVariables.get(\"%a\"),%s)" generate_variable
+        ( Format.asprintf "m_array_index(mCalculation.getTableVariables().get(\"%a\"),%s)" generate_variable
             (Pos.unmark var) se,
           s )
       in
@@ -136,7 +135,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 =
-        (Format.asprintf "m_multimax(%s, tableVariables.get(\"%a\"))" se1 format_var_name v2, s1)
+        (Format.asprintf "m_multimax(%s, mCalculation.getTableVariables().get(\"%a\"))" se1 format_var_name v2, s1)
       in
       add_expr_code_block (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
@@ -148,11 +147,11 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
   | Var var ->
       add_expr_code_block
-        ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
+        ( Format.asprintf "mCalculation.getCalculationVariables()[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
             format_var_name var,
           [] )
   | LocalVar lvar ->
-      add_expr_code_block (Format.asprintf "localVariables.get(%d)" lvar.LocalVariable.id, [])
+      add_expr_code_block (Format.asprintf "mCalculation.getLocalVariables().get(%d)" lvar.LocalVariable.id, [])
   | GenericTableIndex -> add_expr_code_block (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
@@ -166,7 +165,7 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (oc : Format.fo
   Format.pp_print_list
     (fun fmt (lvar, expr) ->
       let se, _ = generate_java_expr expr var_indexes in
-      Format.fprintf fmt "localVariables.put(%d,%s);@," lvar.LocalVariable.id se)
+      Format.fprintf fmt "mCalculation.getLocalVariables().put(%d,%s);@," lvar.LocalVariable.id se)
     oc defs
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
@@ -174,11 +173,11 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%acalculationVariables[%d /*\"%a\"*/] = %s;@,"
+      Format.fprintf oc "%amCalculation.getCalculationVariables()[%d /*\"%a\"*/] = %s;@,"
         (format_local_vars_defs var_indexes)
         defs (get_var_pos var var_indexes) format_var_name var se
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "tableVariables.put(\"%a\",Arrays.asList(%a));@," format_var_name var
+      Format.fprintf oc "mCalculation.getTableVariables().put(\"%a\",Arrays.asList(%a));@," format_var_name var
         (Format.pp_print_list
            ~pp_sep:(fun oc _ -> Format.fprintf oc ", ")
            (fun oc (_, var) ->
@@ -251,27 +250,27 @@ let generate_var_cond var_indexes oc cond =
   let error_description = sanitize_str cond_error.Error.descr.description in
   let error_alias =
     match var with
-    | Some v -> ( match v.Variable.alias with Some alias -> alias | None -> "")
+    | Some v -> ( match v.Variable.alias with Some alias -> "(( " ^ alias ^ " ))" | None -> "")
     | None -> ""
   in
   let error_message =
-    Format.asprintf "%s: %s%s%s%s%s" error_name error_kind error_major_code error_minor_code
+    Format.asprintf "%s: %s%s%s %s%s" error_name error_kind error_major_code error_minor_code
       error_description error_alias
   in
-  Format.fprintf oc "if (m_is_defined_true(cond)) { @,";
+  Format.fprintf oc "@[<hv 2>if (m_is_defined_true(cond)) {@,";
   if cond_error.Error.typ = Anomaly then
-    Format.fprintf oc "throw new RuntimeException(\"Error triggered: %s\");@," error_message
+    Format.fprintf oc "throw new RuntimeException(\"Error triggered: %s\");" error_message
   else
     Format.fprintf oc
-      "calculationErrors.add(new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"));@,"
+      "calculationErrors.add(new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"));"
       error_name error_kind error_major_code error_minor_code error_description error_alias;
-  Format.fprintf oc "}@,@,"
+  Format.fprintf oc "@]@,@[}@]@,"
 
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
-    "m_rule_%s(calculationVariables, localVariables, tableVariables, calculationErrors);@,"
+    "m_rule_%s(mCalculation, calculationErrors);@,"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
@@ -336,23 +335,21 @@ let generate_return (var_indexes : variable_id VariableMap.t) (oc : Format.forma
 let generate_rule_method (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<hv 2>private static void m_rule_%s(MValue[] calculationVariables,  Map<Integer, MValue> \
-     localVariables, Map<String, List<MValue>> tableVariables, List<MError> calculationErrors){@,\
+    "@[<hv 2>private static void m_rule_%s(MCalculation mCalculation, List<MError> calculationErrors){@,\
      MValue cond = MValue.mUndefined;@,\
-     %a@,\
-     @]@[}@]@,"
+     %a@]}"
     rule.rule_name
     (generate_stmts program var_indexes)
     rule.rule_stmts
 
 let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
     (var_indexes : int Mir.VariableMap.t) : unit =
-  RuleMap.iter
-    (fun _ rule -> Format.fprintf oc "%a" (generate_rule_method program var_indexes) rule)
+   RuleMap.iter
+    (fun _ rule -> Format.fprintf oc "%a@," (generate_rule_method program var_indexes) rule)
     program.rules
 
-let calculateTax_method_header (calculation_vars_len : int) 
-    (program: Bir.program) (oc : Format.formatter) (var_indexes: variable_id VariableMap.t) =
+let calculateTax_method_header (calculation_vars_len : int) (program : Bir.program)
+    (oc : Format.formatter) (var_indexes : variable_id VariableMap.t) =
   Format.fprintf oc
     "@[<hv 0>/**@,\
      * Main calculation method for determining tax @,\
@@ -362,19 +359,22 @@ let calculateTax_method_header (calculation_vars_len : int)
      value is the variable value@,\
      */@]@,\
      @[<hv 2>public static MOutput calculateTax(Map<String,MValue> inputVariables) {@,\
+     return calculateTax(inputVariables, 0);
+     @]}@,\
+     @[<hv 2>public static MOutput calculateTax(Map<String,MValue> inputVariables, int maxAnomalies) {@,\
      MValue cond = MValue.mUndefined;@,\
      List<MError> calculationErrors = new ArrayList<>();@,\
      Map<String, MValue> outputVariables = new HashMap<>();@,\
-     MValue[] calculationVariables = new MValue[%d];@,\
-     Map<Integer, MValue> localVariables = new HashMap<>();@,\
-     Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
+     MCalculation mCalculation = new MCalculation(new MValue[%d], maxAnomalies);@,\
      @,\
-     InputHandler.loadInputVariables(inputVariables, calculationVariables);%a@,\
-     loadOutputVariables(outputVariables, calculationVariables);@,\
+     InputHandler.loadInputVariables(inputVariables, mCalculation.getCalculationVariables());%a@,\
+     loadOutputVariables(outputVariables, mCalculation.getCalculationVariables());@,\
      return new MOutput(outputVariables, calculationErrors);@,\
      @]@,\
      @[}@]"
-    calculation_vars_len (generate_stmts program var_indexes) program.statements
+    calculation_vars_len
+    (generate_stmts program var_indexes)
+    program.statements
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
