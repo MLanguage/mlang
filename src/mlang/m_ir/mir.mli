@@ -318,5 +318,7 @@ val initial_undef_rule_id : rule_id
 
 val find_var_by_name : program -> string Pos.marked -> variable
 
+val find_vars_by_io : program -> io -> VariableDict.t
+
 val rule_number_and_tags_of_rule_name :
   Mast.rule_name -> rule_id Pos.marked * rule_tag Pos.marked list
