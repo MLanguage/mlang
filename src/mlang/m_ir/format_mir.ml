@@ -113,7 +113,7 @@ let format_precondition fmt (precond : condition_data) =
 
 let format_program_rules fmt (vars : VariableDict.t) (rules : rule_data RuleMap.t) =
   RuleMap.iter
-    (fun _ { rule_vars; rule_name } ->
+    (fun _ { rule_vars; rule_number; _ } ->
       let var_defs =
         List.fold_left
           (fun var_defs (vid, def) ->
@@ -121,8 +121,7 @@ let format_program_rules fmt (vars : VariableDict.t) (rules : rule_data RuleMap.
             VariableMap.add var def var_defs)
           VariableMap.empty rule_vars
       in
-      Format.fprintf fmt "Regle %a\n%a\n" Format_mast.format_rule_name rule_name format_variables
-        var_defs)
+      Format.fprintf fmt "Regle %d\n%a\n" (Pos.unmark rule_number) format_variables var_defs)
     rules
 
 let format_program_conds fmt (conds : condition_data VariableMap.t) =

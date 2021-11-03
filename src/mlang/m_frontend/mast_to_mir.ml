@@ -1364,7 +1364,8 @@ let translate (p : Mast.program) : Mir.program =
                 Mir.VariableDict.add var vars ))
             ([], vars) (List.rev rule_vars)
         in
-        (Mir.RuleMap.add rule_id Mir.{ rule_vars; rule_name } rules, vars))
+        let rule_number, rule_tags = Mir.rule_number_and_tags_of_rule_name rule_name in
+        (Mir.RuleMap.add rule_id Mir.{ rule_vars; rule_number; rule_tags } rules, vars))
       rule_data
       (Mir.RuleMap.empty, Mir.VariableDict.empty)
   in
@@ -1380,7 +1381,7 @@ let translate (p : Mast.program) : Mir.program =
   in
   let rules =
     Mir.RuleMap.add Mir.initial_undef_rule_id
-      Mir.{ rule_vars = orphans; rule_name = [ ("var_init", Pos.no_pos) ] }
+      Mir.{ rule_vars = orphans; rule_number = (0, Pos.no_pos); rule_tags = [] }
       rules
   in
   let conds = get_conds error_decls idmap p in

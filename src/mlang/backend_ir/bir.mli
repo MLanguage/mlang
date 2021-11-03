@@ -12,12 +12,34 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-val format_stmt : Format.formatter -> Bir.stmt -> unit
+type rule_id = Mir.rule_id
 
-val format_stmts : Format.formatter -> Bir.stmt list -> unit
+module RuleMap = Mir.RuleMap
 
-val format_rule : Format.formatter -> Bir.rule -> unit
+type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 
-val format_rules : Format.formatter -> Bir.rule Bir.RuleMap.t -> unit
+and stmt = stmt_kind Pos.marked
 
-val format_program : Format.formatter -> Bir.program -> unit
+and stmt_kind =
+  | SAssign of Mir.Variable.t * Mir.variable_data
+  | SConditional of Mir.expression * stmt list * stmt list
+  | SVerif of Mir.condition_data
+  | SRuleCall of rule_id
+
+type program = {
+  rules : rule RuleMap.t;
+  statements : stmt list;
+  idmap : Mir.idmap;
+  mir_program : Mir.program;
+  outputs : unit Mir.VariableMap.t;
+}
+
+val get_all_statements : program -> stmt list
+
+val count_instructions : program -> int
+
+val get_assigned_variables : program -> Mir.VariableDict.t
+
+val get_local_variables : program -> unit Mir.LocalVariableMap.t
+
+val remove_empty_conditionals : stmt list -> stmt list

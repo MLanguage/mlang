@@ -1,4 +1,4 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphël
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
    Monat <raphael.monat@lip6.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
@@ -175,8 +175,8 @@ let generate_rule_instance (m_program : Mir_interface.full_program) (rule_id : M
   let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
   let rule_stmts = translate_m_code m_program rule.rule_vars in
   let pos, rule_name =
-    let pos = List.hd rule.Mir.rule_name |> Pos.get_position in
-    let name = List.map Pos.unmark rule.Mir.rule_name |> String.concat "_" in
+    let pos = Pos.get_position rule.Mir.rule_number in
+    let name = string_of_int (Pos.unmark rule.Mir.rule_number) in
     (pos, name ^ "_i" ^ string_of_int instance_id)
   in
   let instance = Bir.{ rule_id = instance_id; rule_name; rule_stmts } in
