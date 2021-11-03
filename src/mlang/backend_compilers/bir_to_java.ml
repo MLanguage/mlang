@@ -28,23 +28,24 @@ import java.util.Arrays;
 import static com.mlang.MValue.*;
 |}
 
-let calculateTax_method_header  (calculation_vars_len : int) oc
+let calculateTax_method_header (calculation_vars_len : int) oc
     (body : Format.formatter -> 'a -> unit) =
-    Format.fprintf oc
+  Format.fprintf oc
     "@[<hv 0>/**@,\
-    * Main calculation method for determining tax @,\
-    * @param inputVariables Map of variables to be used for calculation, the key is the variable name and the value is the variable value@,\
-    * @return  Map of variables returned after calculation, the key is the variable name and the value is the variable value@,\
-    */@]@,\
-    @[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
+     * Main calculation method for determining tax @,\
+     * @param inputVariables Map of variables to be used for calculation, the key is the variable \
+     name and the value is the variable value@,\
+     * @return  Map of variables returned after calculation, the key is the variable name and the \
+     value is the variable value@,\
+     */@]@,\
+     @[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
      MValue cond = MValue.mUndefined;@,\
      Map<String, MValue> outputVariables = new HashMap<>();@,\
      MValue[] calculationVariables = new MValue[%d];@,\
      Map<Integer, MValue> localVariables = new HashMap<>();@,\
      Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
      @,\
-     InputHandler.loadInputVariables(inputVariables, calculationVariables);\
-     %a@,\
+     InputHandler.loadInputVariables(inputVariables, calculationVariables);%a@,\
      loadOutputVariables(outputVariables, calculationVariables);@,\
      return outputVariables;@,\
      @]@,\
@@ -87,10 +88,10 @@ let generate_variable (fmt : Format.formatter) (var : Variable.t) : unit =
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let get_var_pos (var : Variable.t) (var_indexes) : int = 
-            match Mir.VariableMap.find_opt var var_indexes with
-            | Some i -> i
-            | None -> Errors.raise_error "Variable not found"
+let get_var_pos (var : Variable.t) var_indexes : int =
+  match Mir.VariableMap.find_opt var var_indexes with
+  | Some i -> i
+  | None -> Errors.raise_error "Variable not found"
 
 let add_expr_code_block (se, s) = (se, s)
 
@@ -170,8 +171,8 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
   | Var var ->
       add_expr_code_block
-        ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]"
-               (get_var_pos var var_indexes) format_var_name var,
+        ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
+            format_var_name var,
           [] )
   | LocalVar lvar ->
       add_expr_code_block (Format.asprintf "localVariables.get(%d)" lvar.LocalVariable.id, [])
@@ -213,10 +214,12 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) (class_name : string) : unit =
-  Format.fprintf oc "@[// %s@,%s@,/**@,* Main class containing calculation logic@,*/@,public class %s {@]" Prelude.message java_imports class_name
+  Format.fprintf oc
+    "@[// %s@,%s@,/**@,* Main class containing calculation logic@,*/@,public class %s {@]"
+    Prelude.message java_imports class_name
 
-let generate_input_handling (function_spec : Bir_interface.bir_function) (var_indexes: variable_id VariableMap.t) (oc : Format.formatter)
-    (split_threshold : int)  =
+let generate_input_handling (function_spec : Bir_interface.bir_function)
+    (var_indexes : variable_id VariableMap.t) (oc : Format.formatter) (split_threshold : int) =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
   let print_header count =
     Format.fprintf oc
@@ -241,9 +244,13 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) (var_in
     count + 1
   in
   let count = List.fold_left (fun count assign -> format_input_var assign count) 0 input_vars in
-  Format.fprintf oc "}@,static void loadInputVariables(Map<String, MValue> inputVariables, \
-       MValue[] calculationVariables) {@,%a@,}"
-  (print_load_input 0) (count / split_threshold)
+  Format.fprintf oc
+    "}@,\
+     static void loadInputVariables(Map<String, MValue> inputVariables, MValue[] \
+     calculationVariables) {@,\
+     %a@,\
+     }"
+    (print_load_input 0) (count / split_threshold)
 
 let sanitize_str (s, p) =
   String.map
@@ -281,7 +288,7 @@ let generate_var_cond var_indexes oc cond =
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
-  Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);"
+  Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);@,"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
@@ -326,7 +333,8 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t) 
         ff
   | SVerif v -> generate_var_cond var_indexes oc v
 
-let generate_return (var_indexes: variable_id VariableMap.t) (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+let generate_return (var_indexes : variable_id VariableMap.t) (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
   let returned_variables = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   let print_outputs oc returned_variables =
     Format.pp_print_list
