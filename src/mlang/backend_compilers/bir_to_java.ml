@@ -19,38 +19,15 @@ let java_imports : string =
   {|
 package com.mlang;
 
-import java.util.Map;
-import com.mlang.MValue;
-import java.util.HashMap;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 
 import static com.mlang.MValue.*;
 |}
 
-let calculateTax_method_header (calculation_vars_len : int) oc
-    (body : Format.formatter -> 'a -> unit) =
-  Format.fprintf oc
-    "@[<hv 0>/**@,\
-     * Main calculation method for determining tax @,\
-     * @param inputVariables Map of variables to be used for calculation, the key is the variable \
-     name and the value is the variable value@,\
-     * @return  Map of variables returned after calculation, the key is the variable name and the \
-     value is the variable value@,\
-     */@]@,\
-     @[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
-     MValue cond = MValue.mUndefined;@,\
-     Map<String, MValue> outputVariables = new HashMap<>();@,\
-     MValue[] calculationVariables = new MValue[%d];@,\
-     Map<Integer, MValue> localVariables = new HashMap<>();@,\
-     Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
-     @,\
-     InputHandler.loadInputVariables(inputVariables, calculationVariables);%a@,\
-     loadOutputVariables(outputVariables, calculationVariables);@,\
-     return outputVariables;@,\
-     @]@,\
-     @[}@]"
-    calculation_vars_len body ()
 
 let none_value = "MValue.mUndefined"
 
@@ -232,7 +209,6 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
       Format.fprintf oc "loadInputVariables_%d(inputVariables, calculationVariables);@," curr;
       print_load_input (curr + 1) oc len)
   in
-
   let format_input_var var count =
     if count mod split_threshold = 0 then
       print_header (if count > 0 then count / split_threshold else 0);
@@ -268,27 +244,34 @@ let generate_var_cond var_indexes oc cond =
     (let se, _ = generate_java_expr cond.cond_expr var_indexes in
      se);
   let cond_error, var = cond.cond_error in
+  let error_name = sanitize_str cond_error.Error.name in
+  let error_kind = sanitize_str cond_error.Error.descr.kind in
+  let error_major_code = sanitize_str cond_error.Error.descr.major_code in
+  let error_minor_code = sanitize_str cond_error.Error.descr.minor_code in
+  let error_description = sanitize_str cond_error.Error.descr.description in
+  let error_alias =
+    match var with
+    | Some v -> ( match v.Variable.alias with Some alias -> alias | None -> "")
+    | None -> ""
+  in
   let error_message =
-    Format.asprintf "%s: %s%s%s%s%s"
-      (sanitize_str cond_error.Error.name)
-      (sanitize_str cond_error.Error.descr.kind)
-      (sanitize_str cond_error.Error.descr.major_code)
-      (sanitize_str cond_error.Error.descr.minor_code)
-      (sanitize_str cond_error.Error.descr.description)
-      (match var with
-      | Some v -> ( match v.Variable.alias with Some alias -> alias | None -> "")
-      | None -> "")
+    Format.asprintf "%s: %s%s%s%s%s" error_name error_kind error_major_code error_minor_code
+      error_description error_alias
   in
   Format.fprintf oc "if (m_is_defined_true(cond)) { @,";
   if cond_error.Error.typ = Anomaly then
-    Format.fprintf oc "throw new RuntimeException(\"Error triggered\\n%s\");@," error_message
-  else Format.fprintf oc "//System.out.println(\"Error occurred : %s\");@," error_message;
+    Format.fprintf oc "throw new RuntimeException(\"Error triggered: %s\");@," error_message
+  else
+    Format.fprintf oc
+      "calculationErrors.add(new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"));@,"
+      error_name error_kind error_major_code error_minor_code error_description error_alias;
   Format.fprintf oc "}@,@,"
 
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
-  Format.fprintf oc "m_rule_%s(calculationVariables, localVariables, tableVariables);@,"
+  Format.fprintf oc
+    "m_rule_%s(calculationVariables, localVariables, tableVariables, calculationErrors);@,"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
@@ -344,7 +327,7 @@ let generate_return (var_indexes : variable_id VariableMap.t) (oc : Format.forma
       oc returned_variables
   in
   Format.fprintf oc
-    "@[<v 2>private static void loadOutputVariables(Map<String,MValue> outputVariables, MValue[] \
+    "@[<v 2>private static void loadOutputVariables(Map<String, MValue> outputVariables, MValue[] \
      calculationVariables){@,\
      %a@]@,\
      @[}@]"
@@ -354,7 +337,7 @@ let generate_rule_method (program : Bir.program) (var_indexes : int Mir.Variable
     (oc : Format.formatter) (rule : Bir.rule) =
   Format.fprintf oc
     "@[<hv 2>private static void m_rule_%s(MValue[] calculationVariables,  Map<Integer, MValue> \
-     localVariables, Map<String, List<MValue>> tableVariables){@,\
+     localVariables, Map<String, List<MValue>> tableVariables, List<MError> calculationErrors){@,\
      MValue cond = MValue.mUndefined;@,\
      %a@,\
      @]@[}@]@,"
@@ -368,15 +351,38 @@ let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
     (fun _ rule -> Format.fprintf oc "%a" (generate_rule_method program var_indexes) rule)
     program.rules
 
+let calculateTax_method_header (calculation_vars_len : int) 
+    (program: Bir.program) (oc : Format.formatter) (var_indexes: variable_id VariableMap.t) =
+  Format.fprintf oc
+    "@[<hv 0>/**@,\
+     * Main calculation method for determining tax @,\
+     * @param inputVariables Map of variables to be used for calculation, the key is the variable \
+     name and the value is the variable value@,\
+     * @return  Map of variables returned after calculation, the key is the variable name and the \
+     value is the variable value@,\
+     */@]@,\
+     @[<hv 2>public static MOutput calculateTax(Map<String,MValue> inputVariables) {@,\
+     MValue cond = MValue.mUndefined;@,\
+     List<MError> calculationErrors = new ArrayList<>();@,\
+     Map<String, MValue> outputVariables = new HashMap<>();@,\
+     MValue[] calculationVariables = new MValue[%d];@,\
+     Map<Integer, MValue> localVariables = new HashMap<>();@,\
+     Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
+     @,\
+     InputHandler.loadInputVariables(inputVariables, calculationVariables);%a@,\
+     loadOutputVariables(outputVariables, calculationVariables);@,\
+     return new MOutput(outputVariables, calculationErrors);@,\
+     @]@,\
+     @[}@]"
+    calculation_vars_len (generate_stmts program var_indexes) program.statements
+
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
-  Printf.printf "var_table_size %d\n" var_table_size;
   let program = Bir.squish_statements program split_treshold "java_rule_" in
-  let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc
     "@[<hv 2>%a@,\
      @,\
@@ -394,7 +400,7 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
           |> String.split_on_char '/' 
           |> fun list -> List.nth list (List.length list -1))
      (generate_rule_methods program) var_indexes
-     (calculateTax_method_header var_table_size) stmts 
+     (calculateTax_method_header var_table_size program) var_indexes 
      (generate_return var_indexes) function_spec
      (generate_input_handling function_spec var_indexes) split_treshold;
   close_out _oc[@@ocamlformat "disable"]
