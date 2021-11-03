@@ -28,21 +28,13 @@ import java.util.Arrays;
 import static com.mlang.MValue.*;
 |}
 
-let calculateTax_method_header (inputs_len : int) (calculation_vars_len : int) oc
+let calculateTax_method_header  (calculation_vars_len : int) oc
     (body : Format.formatter -> 'a -> unit) =
-  let rec print_load_input curr oc len =
-    if curr <= len then (
-      Format.fprintf oc "loadInputVariables_%d(inputVariables, calculationVariables);@," curr;
-      print_load_input (curr + 1) oc len)
-  in
-  Format.fprintf oc
+    Format.fprintf oc
     "@[<hv 0>/**@,\
     * Main calculation method for determining tax @,\
     * @param inputVariables Map of variables to be used for calculation, the key is the variable name and the value is the variable value@,\
     * @return  Map of variables returned after calculation, the key is the variable name and the value is the variable value@,\
-    * @,\
-    * @,\
-    * @,\
     */@]@,\
     @[<hv 2>public static Map<String, MValue> calculateTax(Map<String,MValue> inputVariables) {@,\
      MValue cond = MValue.mUndefined;@,\
@@ -51,14 +43,13 @@ let calculateTax_method_header (inputs_len : int) (calculation_vars_len : int) o
      Map<Integer, MValue> localVariables = new HashMap<>();@,\
      Map<String,List<MValue>> tableVariables = new HashMap<>();@,\
      @,\
-     @,\
-     %a@,\
+     InputHandler.loadInputVariables(inputVariables, calculationVariables);\
      %a@,\
      loadOutputVariables(outputVariables, calculationVariables);@,\
      return outputVariables;@,\
      @]@,\
      @[}@]"
-    calculation_vars_len (print_load_input 0) inputs_len body ()
+    calculation_vars_len body ()
 
 let none_value = "MValue.mUndefined"
 
@@ -233,17 +224,26 @@ let generate_input_handling (function_spec : Bir_interface.bir_function) (var_in
        MValue[] calculationVariables){@,"
       count
   in
-  let format_input_var oc var count =
+  let rec print_load_input curr oc len =
+    if curr <= len then (
+      Format.fprintf oc "loadInputVariables_%d(inputVariables, calculationVariables);@," curr;
+      print_load_input (curr + 1) oc len)
+  in
+
+  let format_input_var var count =
     if count mod split_threshold = 0 then
       print_header (if count > 0 then count / split_threshold else 0);
     Format.fprintf oc
       "calculationVariables[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null ? \
        inputVariables.get(\"%s\") : MValue.mUndefined;@,"
       format_var_name var (get_var_pos var var_indexes) (generate_name var) (generate_name var);
-    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]"
+    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]";
+    count + 1
   in
-  List.iteri (fun count assign -> format_input_var oc assign count) input_vars;
-  Format.fprintf oc "}"
+  let count = List.fold_left (fun count assign -> format_input_var assign count) 0 input_vars in
+  Format.fprintf oc "}@,static void loadInputVariables(Map<String, MValue> inputVariables, \
+       MValue[] calculationVariables) {@,%a@,}"
+  (print_load_input 0) (count / split_threshold)
 
 let sanitize_str (s, p) =
   String.map
@@ -367,7 +367,6 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let oc = Format.formatter_of_out_channel _oc in
   let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
   Printf.printf "var_table_size %d\n" var_table_size;
-  let split_inputs_len = List.length (List.map fst (VariableMap.bindings function_spec.func_variable_inputs)) / split_treshold in 
   let program = Bir.squish_statements program split_treshold "java_rule_" in
   let stmts oc () = generate_stmts program var_indexes oc program.statements in
   Format.fprintf oc
@@ -376,11 +375,18 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
      %a@.@,\
      %a@,\
      @,\
-     %a@,\
-     %a}@]@." 
-     generate_header (String.split_on_char '.' filename |> List.hd |> String.split_on_char '/' |> fun list -> List.nth list (List.length list -1))
+     %a}@]@,\
+     @[<hv 2>class InputHandler {@,\
+     %a\
+     }\
+     @]@." 
+     generate_header (
+       String.split_on_char '.' filename 
+          |> List.hd 
+          |> String.split_on_char '/' 
+          |> fun list -> List.nth list (List.length list -1))
      (generate_rule_methods program) var_indexes
-     (generate_input_handling function_spec var_indexes) split_treshold  
-     (calculateTax_method_header split_inputs_len var_table_size) stmts 
-     (generate_return var_indexes) function_spec;
+     (calculateTax_method_header var_table_size) stmts 
+     (generate_return var_indexes) function_spec
+     (generate_input_handling function_spec var_indexes) split_treshold;
   close_out _oc[@@ocamlformat "disable"]
