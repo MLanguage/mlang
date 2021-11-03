@@ -34,6 +34,23 @@ let process_dgfip_options (backend : string option)
     end
   | _ -> Dgfip_options.default_flags
 
+let build_m_program_of_tag (mast : Mast.source_file list) (tag : Mast.chain_tag)
+    : Mir_interface.full_program =
+  Cli.debug_print "Builing M program for %s..."
+    (Format.asprintf "%a" Format_mast.format_chain_tag tag);
+  Cli.debug_print "Elaborating...";
+  let m_program = Mast_to_mir.translate mast tag in
+  let full_m_program = Mir_interface.to_full_program m_program in
+  let full_m_program = Mir_typechecker.expand_functions full_m_program in
+  Cli.debug_print "Typechecking...";
+  let full_m_program = Mir_typechecker.typecheck full_m_program in
+  Cli.debug_print "Checking for circular variable definitions...";
+  if
+    Mir_dependency_graph.check_for_cycle full_m_program.dep_graph
+      full_m_program.program true
+  then Errors.raise_error "Cycles between rules.";
+  full_m_program
+
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
 let driver (files : string list) (debug : bool) (var_info_debug : string list)
@@ -58,8 +75,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         let filebuf, input =
           if source_file <> "" then
             let input = open_in source_file in
-            (Lexing.from_channel input, Some input)
-          else if source_file <> "" then (Lexing.from_string source_file, None)
+            (Lexing.from_channel input, input)
           else failwith "You have to specify at least one file!"
         in
         current_progress source_file;
@@ -73,27 +89,13 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
           let commands = Mparser.source_file token filebuf in
           m_program := commands :: !m_program
         with Mparser.Error ->
-          begin
-            match input with
-            | Some input -> close_in input
-            | None -> ()
-          end;
+          close_in input;
           Errors.raise_spanned_error "M syntax error"
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
-    Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
-    let m_program = Mast_to_mir.translate !m_program in
-    let full_m_program = Mir_interface.to_full_program m_program in
-    let full_m_program = Mir_typechecker.expand_functions full_m_program in
-    Cli.debug_print "Typechecking...";
-    let full_m_program = Mir_typechecker.typecheck full_m_program in
-    Cli.debug_print "Checking for circular variable definitions...";
-    if
-      Mir_dependency_graph.check_for_cycle full_m_program.dep_graph
-        full_m_program.program true
-    then Errors.raise_error "Cycles between rules.";
+    let full_m_program = build_m_program_of_tag !m_program Mast.Primitif in
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let full_m_program =
       Mir_interface.to_full_program

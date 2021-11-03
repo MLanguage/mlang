@@ -233,8 +233,11 @@ rule:
 | RULE name = rule_name_symbol+ COLON apps = application_reference
   SEMICOLON c = chaining_reference?
   formulaes = formula_list
-  { {
-      rule_name = name;
+  {
+    let rule_number, rule_tags = Mast.number_and_tags_of_name name in
+    {
+      rule_number;
+      rule_tags;
       rule_applications = apps;
       rule_chaining = c;
       rule_formulaes = formulaes;
@@ -277,11 +280,14 @@ verification_name:
 
 verification:
 | VERIFICATION name = verification_name+ COLON apps = application_reference
-  SEMICOLON conds = verification_condition* { {
-  verif_name = name;
-  verif_applications = apps;
-  verif_conditions = conds;
-} }
+  SEMICOLON conds = verification_condition* {
+    let verif_number, verif_tags = Mast.number_and_tags_of_name name in
+    {
+      verif_number;
+      verif_tags;
+      verif_applications = apps;
+      verif_conditions = conds;
+    } }
 
 verification_condition:
 | IF e = expression THEN

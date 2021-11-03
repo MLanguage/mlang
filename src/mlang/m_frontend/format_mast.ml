@@ -39,8 +39,39 @@ let format_application fmt (app : application) = Format.fprintf fmt "%s" app
 
 let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
-let format_rule_name fmt (rn : rule_name) =
-  (pp_print_list_space (pp_unmark Format.pp_print_string)) fmt rn
+let format_chain_tag fmt (t : chain_tag) =
+  Format.pp_print_string fmt
+    (match t with
+    | Primitif -> "primitif"
+    | Corrective -> "corrective"
+    | Isf -> "isf"
+    | Taux -> "taux"
+    | Irisf -> "irisf"
+    | Base_hr -> "base_HR"
+    | Base_tl -> "base_tl"
+    | Base_tl_init -> "base_tl_init"
+    | Base_tl_rect -> "base_tl_rect"
+    | Base_inr -> "base_INR"
+    | Base_inr_ref -> "base_inr_ref"
+    | Base_inr_tl -> "base_inr_tl"
+    | Base_inr_tl22 -> "base_inr_tl22"
+    | Base_inr_tl24 -> "base_inr_tl24"
+    | Base_inr_ntl -> "base_inr_ntl"
+    | Base_inr_ntl22 -> "base_inr_ntl22"
+    | Base_inr_ntl24 -> "base_inr_ntl24"
+    | Base_inr_inter22 -> "base_inr_inter22"
+    | Base_inr_intertl -> "base_inr_intertl"
+    | Base_inr_r9901 -> "base_inr_r9901"
+    | Base_abat98 -> "base_ABAT98"
+    | Base_abat99 -> "base_ABAT99"
+    | Base_initial -> "base_INITIAL"
+    | Base_premier -> "base_premier"
+    | Base_anterieure -> "base_anterieure"
+    | Base_anterieure_cor -> "base_anterieure_cor"
+    | Base_majo -> "base_MAJO"
+    | Base_stratemajo -> "base_stratemajo"
+    | Non_auto_cc -> "non_auto_cc"
+    | Horizontale -> "horizontale")
 
 let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
 
@@ -53,9 +84,6 @@ let format_variable fmt (v : variable) =
   match v with
   | Normal v -> format_variable_name fmt v
   | Generic v -> format_variable_generic_name fmt v
-
-let format_verification_name fmt (n : verification_name) =
-  (pp_print_list_space (pp_unmark Format.pp_print_string)) fmt n
 
 let format_error_name fmt (e : error_name) = Format.fprintf fmt "%s" e
 
@@ -191,9 +219,8 @@ let format_formula fmt (f : formula) =
         format_formula_decl f
 
 let format_rule fmt (r : rule) =
-  Format.fprintf fmt "regle %a:\napplication %a;\n%a;\n"
-    (pp_print_list_space (pp_unmark Format.pp_print_string))
-    r.rule_name
+  Format.fprintf fmt "regle %d:\napplication %a;\n%a;\n"
+    (Pos.unmark r.rule_number)
     (pp_print_list_comma (pp_unmark Format.pp_print_string))
     r.rule_applications
     (Format.pp_print_list
@@ -267,7 +294,8 @@ let format_verification_condition fmt (vc : verification_condition) =
     (snd vc.verif_cond_error)
 
 let format_verification fmt (v : verification) =
-  Format.fprintf fmt "verif %a : %a;\n%a" format_verification_name v.verif_name
+  Format.fprintf fmt "verif %d : %a;\n%a"
+    (Pos.unmark v.verif_number)
     (pp_print_list_space (pp_unmark format_application))
     v.verif_applications
     (pp_print_list_space (pp_unmark format_verification_condition))

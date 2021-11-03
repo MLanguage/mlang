@@ -772,7 +772,7 @@ let get_rules_verif_etc prog =
             | Rule r ->
                 let rules, chainings =
                   if is_valid_app r.rule_applications then
-                    ( rule_number r.rule_name :: rules,
+                    ( Pos.unmark r.rule_number :: rules,
                       match r.rule_chaining with
                       | None -> chainings
                       | Some cn -> StringSet.add (Pos.unmark cn) chainings )
@@ -785,7 +785,7 @@ let get_rules_verif_etc prog =
                     fst
                     @@ List.fold_left
                          (fun (verifs, vn) _vc -> (vn :: verifs, vn + 1))
-                         (verifs, verification_number v.verif_name)
+                         (verifs, Pos.unmark v.verif_number)
                          v.verif_conditions
                   else verifs
                 in

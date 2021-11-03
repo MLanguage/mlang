@@ -760,7 +760,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
           (fun (idmap : Mir.idmap) source_file_item ->
             match Pos.unmark source_file_item with
             | Mast.Rule r ->
-                let rule_number = Mast.rule_number r.Mast.rule_name in
+                let rule_number = Pos.unmark r.Mast.rule_number in
                 if not (belongs_to_iliad_app r.Mast.rule_applications) then
                   idmap
                 else
@@ -1176,7 +1176,6 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
                ]
      with Not_found ->
        assert false
-       (* should not happen *)
        (* should not happen since we already looked into idmap to get the var
           value from its name *))
     var_data
@@ -1188,7 +1187,8 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
 let get_rules_and_var_data (idmap : Mir.idmap)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
-    (Mir.Variable.t list * Mast.rule_name) Mir.RuleMap.t
+    (Mir.Variable.t list * int Pos.marked * Mast.chain_tag Pos.marked list)
+    Mir.RuleMap.t
     * Mir.variable_data Mir.VariableMap.t =
   List.fold_left
     (fun (rule_data, var_data) source_file ->
@@ -1196,7 +1196,7 @@ let get_rules_and_var_data (idmap : Mir.idmap)
         (fun (rule_data, var_data) source_file_item ->
           match Pos.unmark source_file_item with
           | Mast.Rule r ->
-              let rule_number = Mast.rule_number r.Mast.rule_name in
+              let rule_number = Pos.unmark r.Mast.rule_number in
               if not (belongs_to_iliad_app r.Mast.rule_applications) then
                 (rule_data, var_data)
               else
@@ -1284,7 +1284,7 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                             data_to_add)
                     ([], var_data, 0) r.Mast.rule_formulaes
                 in
-                let rule = (List.rev rule_vars, r.rule_name) in
+                let rule = (List.rev rule_vars, r.rule_number, r.rule_tags) in
                 (Mir.RuleMap.add (Mir.fresh_rule_id ()) rule rule_data, var_data)
           | Mast.VariableDecl (Mast.ConstVar _) ->
               (* constant variables occurences are substituted by their
@@ -1371,7 +1371,7 @@ let get_conds (error_decls : Mir.Error.t list)
           match Pos.unmark source_file_item with
           | Mast.Verification verif
             when belongs_to_iliad_app verif.Mast.verif_applications ->
-              let rule_number = Mast.verification_number verif.verif_name in
+              let rule_number = Pos.unmark verif.verif_number in
               List.fold_left
                 (fun conds verif_cond ->
                   let e =
@@ -1445,23 +1445,22 @@ let get_conds (error_decls : Mir.Error.t list)
         conds source_file)
     Mir.VariableMap.empty p
 
-let remove_corrective_rules (p : Mast.program) : Mast.program =
+let filter_by_tag (p : Mast.program) (tag : Mast.chain_tag) : Mast.program =
   List.map
     (fun source_file ->
       List.filter
         (fun source_file_item ->
           match Pos.unmark source_file_item with
           | Mast.Rule rule ->
-              not
-                (List.exists
-                   (fun part -> Pos.unmark part = "corrective")
-                   rule.rule_name)
+              List.exists (fun part -> Pos.unmark part = tag) rule.rule_tags
+          | Mast.Verification verif ->
+              List.exists (fun part -> Pos.unmark part = tag) verif.verif_tags
           | _ -> true)
         source_file)
     p
 
-let translate (p : Mast.program) : Mir.program =
-  let p = remove_corrective_rules p in
+let translate (p : Mast.program) (tag : Mast.chain_tag) : Mir.program =
+  let p = filter_by_tag p tag in
   let const_map = get_constants p in
   let var_decl_data, error_decls, idmap = get_variables_decl p const_map in
   let idmap = get_var_redefinitions p idmap const_map in
@@ -1473,7 +1472,7 @@ let translate (p : Mast.program) : Mir.program =
   in
   let rules, rule_vars =
     Mir.RuleMap.fold
-      (fun rule_id (rule_vars, rule_name) (rules, vars) ->
+      (fun rule_id (rule_vars, rule_number, rule_tags) (rules, vars) ->
         let rule_vars, vars =
           List.fold_left
             (fun (rule_vars, vars) var ->
@@ -1481,9 +1480,6 @@ let translate (p : Mast.program) : Mir.program =
                 :: rule_vars,
                 Mir.VariableDict.add var vars ))
             ([], vars) (List.rev rule_vars)
-        in
-        let rule_number, rule_tags =
-          Mir.rule_number_and_tags_of_rule_name rule_name
         in
         ( Mir.RuleMap.add rule_id Mir.{ rule_vars; rule_number; rule_tags } rules,
           vars ))
