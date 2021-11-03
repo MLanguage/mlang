@@ -141,11 +141,22 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
       VariableMap.empty
   in
   let input_vars =
-      (Pos.VarNameToID.fold
-         (fun _ v acc -> Mir.VariableMap.add (Mast_to_mir.list_max_execution_number v) () acc)
-         p.idmap VariableMap.empty)
+    let program_input_vars = find_vars_by_io p.mir_program Input in
+    let max_exec_vars =
+      Pos.VarNameToID.fold
+        (fun _ v acc ->
+          let max_exec_var = Mast_to_mir.list_max_execution_number v in
+          Mir.VariableDict.add max_exec_var acc)
+        p.idmap VariableDict.empty
+    in
+    VariableDict.fold
+      (fun k acc -> VariableMap.add k () acc)
+      (VariableDict.inter program_input_vars max_exec_vars)
+      VariableMap.empty
   in
-  Cli.debug_print "Using all %d outputs and %d inputs from m sources" (VariableMap.cardinal output_vars) (VariableMap.cardinal input_vars);
+  Cli.debug_print "Using all %d outputs and %d inputs from m sources"
+    (VariableMap.cardinal output_vars)
+    (VariableMap.cardinal input_vars);
   {
     func_variable_inputs = input_vars;
     func_constant_inputs = VariableMap.empty;

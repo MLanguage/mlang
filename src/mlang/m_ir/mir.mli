@@ -283,6 +283,8 @@ module VariableDict : sig
 
   val union : t -> t -> t
 
+  val inter : t -> t -> t
+
   val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
 
   val singleton : variable -> t

@@ -214,6 +214,11 @@ module VariableDict = struct
 
   let union t1 t2 = VariableDictMap.union (fun _ v _ -> Some v) t1 t2
 
+  let inter t1 t2 =
+    VariableDictMap.merge
+      (fun _ v1 v2 -> match (v1, v2) with Some _, Some _ -> v1 | _ -> None)
+      t1 t2
+
   let for_all f t = VariableDictMap.for_all (fun _ v -> f v) t
 end
 
