@@ -23,6 +23,7 @@ public class MCalculation {
   private final MValue[] localVariables;
   private final Map<String, List<MValue>> tableVariables = new HashMap<>();
   private final int maxAnomalies;
+  private int currentAnomalies = 0;
 
   public MCalculation(MValue[] calculationVariables, MValue[] localVariables, int maxAnomalies) {
     this.calculationVariables = calculationVariables;
@@ -44,6 +45,14 @@ public class MCalculation {
 
   public int getMaxAnomalies() {
     return maxAnomalies;
+  }
+
+  public int getCurrentAnomalies() {
+    return currentAnomalies;
+  }
+
+  public void setCurrentAnomalies(int currentAnomalies) {
+    this.currentAnomalies = currentAnomalies;
   }
 
 }
