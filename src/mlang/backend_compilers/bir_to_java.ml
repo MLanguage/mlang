@@ -149,12 +149,11 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
   | Var var ->
       add_expr_code_block
-        ( Format.asprintf "mCalculation.getCalculationVariables()[%d/*\"%a\"*/]"
-            (get_var_pos var var_indexes) format_var_name var,
+        ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
+            format_var_name var,
           [] )
   | LocalVar lvar ->
-      add_expr_code_block
-        (Format.asprintf "mCalculation.getLocalVariables()[%d]" lvar.LocalVariable.id, [])
+      add_expr_code_block (Format.asprintf "localVariables[%d]" lvar.LocalVariable.id, [])
   | GenericTableIndex -> add_expr_code_block (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
@@ -168,7 +167,7 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (oc : Format.fo
   Format.pp_print_list
     (fun fmt (lvar, expr) ->
       let se, _ = generate_java_expr expr var_indexes in
-      Format.fprintf fmt "mCalculation.getLocalVariables()[%d] = %s;@," lvar.LocalVariable.id se)
+      Format.fprintf fmt "localVariables[%d] = %s;@," lvar.LocalVariable.id se)
     oc defs
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t)
@@ -176,7 +175,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%amCalculation.getCalculationVariables()[%d /*\"%a\"*/] = %s;@,"
+      Format.fprintf oc "%acalculationVariables[%d /*\"%a\"*/] = %s;@,"
         (format_local_vars_defs var_indexes)
         defs (get_var_pos var var_indexes) format_var_name var se
   | TableVar (_, IndexTable es) ->
@@ -328,9 +327,11 @@ let generate_return (var_indexes : variable_id VariableMap.t) (oc : Format.forma
       oc returned_variables
   in
   Format.fprintf oc
-    "@[<v 2>private static void loadOutputVariables(Map<String, MValue> outputVariables, MValue[] \
-     calculationVariables){@,\
-     %a@]@,\
+    "@[<v 2>private static Map<String, MValue> loadOutputVariables(MValue[] calculationVariables){@,\
+     Map<String, MValue> outputVariables = new HashMap<>();@,\
+    \ \n\
+    \     %a@,\
+     return outputVariables;@]@,\
      @[}@]"
     print_outputs returned_variables
 
@@ -340,6 +341,9 @@ let generate_rule_method (program : Bir.program) (var_indexes : int Mir.Variable
     "@[<hv 2>private static void m_rule_%s(MCalculation mCalculation, List<MError> \
      calculationErrors){@,\
      MValue cond = MValue.mUndefined;@,\
+     MValue[] calculationVariables = mCalculation.getCalculationVariables();@,\
+     MValue[] localVariables = mCalculation.getLocalVariables();@,\
+     Map<String, List<MValue>> tableVariables = mCalculation.getTableVariables();@,\
      %a@]}"
     rule.rule_name
     (generate_stmts program var_indexes)
@@ -368,11 +372,14 @@ let calculateTax_method_header (calculation_vars_len : int) (program : Bir.progr
      maxAnomalies) {@,\
      MValue cond = MValue.mUndefined;@,\
      List<MError> calculationErrors = new ArrayList<>();@,\
-     Map<String, MValue> outputVariables = new HashMap<>();@,\
-     MCalculation mCalculation = new MCalculation(new MValue[%d], new MValue[%d], maxAnomalies);@,\
+     MValue[] calculationVariables = new MValue[%d];@,\
+     MValue[] localVariables = new MValue[%d];@,\
+     MCalculation mCalculation = new MCalculation(calculationVariables, localVariables, \
+     maxAnomalies);@,\
      @,\
      InputHandler.loadInputVariables(inputVariables, mCalculation.getCalculationVariables());%a@,\
-     loadOutputVariables(outputVariables, mCalculation.getCalculationVariables());@,\
+     Map<String, MValue> outputVariables = \
+     loadOutputVariables(mCalculation.getCalculationVariables());@,\
      return new MOutput(outputVariables, calculationErrors);@,\
      @]@,\
      @[}@]"
