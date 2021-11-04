@@ -52,10 +52,10 @@ let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
 let float_literal_to_int e =
-        (match Pos.unmark e with
-        | Literal l -> ( match l with Float f -> f | _ -> assert false)
-        | _ -> assert false)
-        |> int_of_float
+  (match Pos.unmark e with
+  | Literal l -> ( match l with Float f -> f | _ -> assert false)
+  | _ -> assert false)
+  |> int_of_float
 
 let generate_var_name (var : Variable.t) : string =
   let v = Pos.unmark var.Variable.name in
@@ -95,7 +95,7 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       (se2, s2)
   | Index (var, e) ->
       let _, s = generate_java_expr e var_indexes in
-      let index = float_literal_to_int e in 
+      let index = float_literal_to_int e in
       let unmarked_var = Pos.unmark var in
       let size = Option.get unmarked_var.Mir.Variable.is_table in
       let se2, s2 =
@@ -265,17 +265,16 @@ let generate_var_cond var_indexes oc cond =
     | Some v -> ( match v.Variable.alias with Some alias -> "(( " ^ alias ^ " ))" | None -> "")
     | None -> ""
   in
-  let error_message =
-    Format.asprintf "%s: %s%s%s %s%s" error_name error_kind error_major_code error_minor_code
-      error_description error_alias
-  in
-  Format.fprintf oc "@[<hv 2>if (m_is_defined_true(cond)) {@,";
+  Format.fprintf oc
+    "@[<hv 2>if (m_is_defined_true(cond)) {@,\
+     MError error = new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\");@,\
+     calculationErrors.add(error);@,"
+    error_name error_kind error_major_code error_minor_code error_description error_alias;
   if cond_error.Error.typ = Anomaly then
-    Format.fprintf oc "throw new RuntimeException(\"Error triggered: %s\");" error_message
-  else
     Format.fprintf oc
-      "calculationErrors.add(new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"));"
-      error_name error_kind error_major_code error_minor_code error_description error_alias;
+      "mCalculation.setCurrentAnomalies(mCalculation.getCurrentAnomalies() + 1);@,\
+       if (mCalculation.getCurrentAnomalies() >= mCalculation.getMaxAnomalies()) throw new \
+       MException(calculationErrors);";
   Format.fprintf oc "@]@,@[}@]@,"
 
 let fresh_cond_counter = ref 0
