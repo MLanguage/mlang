@@ -259,7 +259,6 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
   Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
     (if add_semicolon then ";" else "")
 
-
 let generate_main_function_signature_and_var_decls (p : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (var_table_size : int) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
@@ -269,15 +268,7 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
   (* here, we need to generate a table that can host all the local vars. the index inside the table
      will be the id of the local var so we generate a table big enough so that the highest id is
      always in bounds *)
-  let size_locals =
-    List.hd
-      (List.rev
-         (List.sort compare
-            (List.map
-               (fun (x, _) -> x.LocalVariable.id)
-               (Mir.LocalVariableMap.bindings (Bir.get_local_variables p)))))
-    + 1
-  in
+  let size_locals = Bir.get_locals_size p + 1 in
   Format.fprintf oc "m_value *LOCAL = malloc(%d * sizeof(m_value));@\n@\n" size_locals;
   Format.fprintf oc "m_value *TGV = malloc(%d * sizeof(m_value));@\n@\n" var_table_size;
   Format.fprintf oc "// Then we extract the input variables from the dictionnary:@\n%a@\n@\n"

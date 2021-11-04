@@ -44,4 +44,6 @@ val get_assigned_variables : program -> Mir.VariableDict.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t
 
+val get_locals_size : program -> int
+
 val remove_empty_conditionals : stmt list -> stmt list

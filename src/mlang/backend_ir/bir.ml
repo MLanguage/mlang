@@ -155,6 +155,14 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
   in
   get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
 
+let get_locals_size (p : program) : int =
+  List.hd
+    (List.rev
+       (List.sort compare
+          (List.map
+             (fun (x, _) -> x.Mir.LocalVariable.id)
+             (Mir.LocalVariableMap.bindings (get_local_variables p)))))
+
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev
     (List.fold_left

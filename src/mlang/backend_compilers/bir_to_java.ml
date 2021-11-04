@@ -385,16 +385,7 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let locals_size =
-    List.hd
-      (List.rev
-         (List.sort compare
-            (List.map
-               (fun (x, _) -> x.LocalVariable.id)
-               (Mir.LocalVariableMap.bindings (Bir.get_local_variables program)))))
-    + 1
-  in
-
+  let locals_size = Bir.get_locals_size program |> (+) 1 in
   let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
   let program = Bir.squish_statements program split_treshold "java_rule_" in
   Format.fprintf oc
