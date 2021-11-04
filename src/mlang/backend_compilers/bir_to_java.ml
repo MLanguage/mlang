@@ -58,9 +58,6 @@ let generate_var_name (var : Variable.t) : string =
 let format_var_name (fmt : Format.formatter) (var : Variable.t) : unit =
   Format.fprintf fmt "%s" (generate_var_name var)
 
-let generate_variable (fmt : Format.formatter) (var : Variable.t) : unit =
-  Format.fprintf fmt "%s" (generate_var_name var)
-
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
@@ -68,8 +65,6 @@ let get_var_pos (var : Variable.t) var_indexes : int =
   match Mir.VariableMap.find_opt var var_indexes with
   | Some i -> i
   | None -> Errors.raise_error "Variable not found"
-
-let add_expr_code_block (se, s) = (se, s)
 
 let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.VariableMap.t) :
     string * (LocalVariable.t * expression Pos.marked) list =
@@ -80,87 +75,87 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       let se3, s3 =
         (Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2, s1 @ s2)
       in
-      add_expr_code_block (se3, s3)
+      (se3, s3)
   | Binop (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 =
         (Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2, s1 @ s2)
       in
-      add_expr_code_block (se3, s3)
+      (se3, s3)
   | Unop (op, e) ->
       let se, s = generate_java_expr e var_indexes in
       let se2, s2 = (Format.asprintf "%s(%s)" (generate_unop op) se, s) in
-      add_expr_code_block (se2, s2)
+      se2, s2
   | Index (var, e) ->
       let se, s = generate_java_expr e var_indexes in
+      let unmarked_var = Pos.unmark var in
+      let size = Option.get unmarked_var.Mir.Variable.is_table in
       let se2, s2 =
-        ( Format.asprintf "m_array_index(mCalculation.getTableVariables().get(\"%a\"),%s)"
-            generate_variable (Pos.unmark var) se,
-          s )
+        ( Format.asprintf "m_array_index(calculationVariables, %d ,%s, %d)"
+            (get_var_pos unmarked_var var_indexes) se
+           size ), s
       in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 = generate_java_expr e3 var_indexes in
       let se4, s4 = (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3) in
-      add_expr_code_block (se4, s4)
+      (se4, s4)
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
       let se2, s2 = (Format.asprintf "mPresent(%s)" se, s) in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | FunctionCall (NullFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
       let se2, s2 = (Format.asprintf "m_null(%s)" se, s) in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
       let se2, s2 = (Format.asprintf "m_round(%s)" se, s) in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | FunctionCall (InfFunc, [ arg ]) ->
       let se, s = generate_java_expr arg var_indexes in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 = (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2) in
-      add_expr_code_block (se3, s3)
+      (se3, s3)
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
-      add_expr_code_block (se3, s3)
+      (se3, s3)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 =
-        ( Format.asprintf "m_multimax(%s, mCalculation.getTableVariables().get(\"%a\"))" se1
-            format_var_name v2,
+        ( Format.asprintf "m_multimax(%s, calculationVariables, %d)" se1
+            (get_var_pos v2 var_indexes),
           s1 )
       in
-      add_expr_code_block (se2, s2)
+      (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
-      | 0. -> add_expr_code_block (Format.asprintf "MValue.zero", [])
-      | 1. -> add_expr_code_block (Format.asprintf "MValue.one", [])
-      | _ -> add_expr_code_block (Format.asprintf "new MValue(%s)" (string_of_float f), []))
-  | Literal Undefined -> add_expr_code_block (Format.asprintf "%s" none_value, [])
+      | 0. -> (Format.asprintf "MValue.zero", [])
+      | 1. -> (Format.asprintf "MValue.one", [])
+      | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
+  | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
-      add_expr_code_block
-        ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
-            format_var_name var,
-          [] )
-  | LocalVar lvar ->
-      add_expr_code_block (Format.asprintf "localVariables[%d]" lvar.LocalVariable.id, [])
-  | GenericTableIndex -> add_expr_code_block (Format.asprintf "generic_index", [])
+      ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]" (get_var_pos var var_indexes)
+          format_var_name var,
+        [] )
+  | LocalVar lvar -> (Format.asprintf "localVariables[%d]" lvar.LocalVariable.id, [])
+  | GenericTableIndex -> (Format.asprintf "generic_index", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 = generate_java_expr e2 var_indexes in
       let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
-      add_expr_code_block (se3, s3)
+      (se3, s3)
 
 let format_local_vars_defs (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (defs : (LocalVariable.t * expression Pos.marked) list) =
@@ -179,14 +174,21 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
         (format_local_vars_defs var_indexes)
         defs (get_var_pos var var_indexes) format_var_name var se
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "mCalculation.getTableVariables().put(\"%a\",Arrays.asList(%a));@,"
-        format_var_name var
-        (Format.pp_print_list
-           ~pp_sep:(fun oc _ -> Format.fprintf oc ", ")
-           (fun oc (_, var) ->
-             let var, _ = generate_java_expr var var_indexes in
-             Format.fprintf oc "%s" var))
-        (IndexMap.bindings es)
+      Format.fprintf oc "%a"
+        (fun fmt ->
+          IndexMap.iter (fun i v ->
+              let sv, defs = generate_java_expr v var_indexes in
+              Format.fprintf fmt "%acalculationVariables[%d /* %a */] = %s;@,"
+                (format_local_vars_defs var_indexes)
+                defs
+                (get_var_pos var var_indexes |> (+) i)
+                format_var_name var
+                sv))
+        es
+      (* Format.fprintf oc "mCalculation.getTableVariables().put(\"%a\",Arrays.asList(%a));@,"
+         format_var_name var (Format.pp_print_list ~pp_sep:(fun oc _ -> Format.fprintf oc ", ") (fun
+         oc (_, var) -> let var, _ = generate_java_expr var var_indexes in Format.fprintf oc "%s"
+         var)) (IndexMap.bindings es) *)
   | TableVar (_, IndexGeneric e) ->
       Errors.raise_spanned_error "generic index table definitions not supported in the java backend"
         (Pos.get_position e)

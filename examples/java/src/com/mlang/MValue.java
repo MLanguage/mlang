@@ -13,8 +13,6 @@
 
 package com.mlang;
 
-import java.util.List;
-
 /**
  * MValue is the representation of a variable used during a tax calculation,
  * either as input, output or an intermediate value.
@@ -214,14 +212,14 @@ public class MValue {
     return value.getValue() == 0 ? one : zero;
   }
 
-  static MValue m_multimax(MValue bound, List<MValue> array) {
+  static MValue m_multimax(MValue bound, MValue[] array, int position) {
     if (bound.isUndefined()) {
       throw new RuntimeException("Multimax bound undefined!");
     } else {
-      int max_index = (int) Math.floor(bound.getValue());
-      MValue max = mAdd(m_array_index(array, zero), zero);
+      int max_index = (int) bound.getValue();
+      MValue max = mAdd(array[position], zero);
       for (int i = 0; i <= max_index; i++) {
-        MValue challenger = mAdd(m_array_index(array, new MValue(i)), zero);
+        MValue challenger = mAdd(array[position + i], zero);
         if (challenger.getValue() > max.getValue()) {
           max = challenger;
         }
@@ -246,16 +244,17 @@ public class MValue {
     }
   }
 
-  static MValue m_array_index(List<MValue> array, MValue index) {
+  static MValue m_array_index(MValue[] array, int tableStart, MValue index, int size) {
     if (index.isUndefined()) {
       return mUndefined;
     } else {
-      if (index.getValue() < 0) {
+      int intIndex = (int)index.getValue();
+      if ( intIndex < 0) {
         return zero;
-      } else if (index.getValue() >= array.size() - 1) {
+      } else if ( intIndex >= size) {
         return mUndefined;
       } else {
-        return array.get((int) (index.getValue()));
+        return array[tableStart + intIndex];
       }
     }
   }
