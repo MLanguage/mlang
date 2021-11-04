@@ -212,20 +212,15 @@ public class MValue {
     return value.getValue() == 0 ? one : zero;
   }
 
-  static MValue m_multimax(MValue bound, MValue[] array, int position) {
-    if (bound.isUndefined()) {
-      throw new RuntimeException("Multimax bound undefined!");
-    } else {
-      int max_index = (int) bound.getValue();
-      MValue max = mAdd(array[position], zero);
-      for (int i = 0; i <= max_index; i++) {
-        MValue challenger = mAdd(array[position + i], zero);
-        if (challenger.getValue() > max.getValue()) {
-          max = challenger;
-        }
+  static MValue m_multimax(int bound, MValue[] array, int position) {
+    MValue max = mAdd(array[position], zero);
+    for (int i = 0; i <= bound; i++) {
+      MValue challenger = mAdd(array[position + i], zero);
+      if (challenger.getValue() > max.getValue()) {
+        max = challenger;
       }
-      return max;
     }
+    return max;
   }
 
   static boolean m_is_defined_true(MValue x) {
@@ -244,18 +239,13 @@ public class MValue {
     }
   }
 
-  static MValue m_array_index(MValue[] array, int tableStart, MValue index, int size) {
-    if (index.isUndefined()) {
+  static MValue m_array_index(MValue[] array, int tableStart, int index, int size) {
+    if (index < 0) {
+      return zero;
+    } else if (index >= size) {
       return mUndefined;
     } else {
-      int intIndex = (int)index.getValue();
-      if ( intIndex < 0) {
-        return zero;
-      } else if ( intIndex >= size) {
-        return mUndefined;
-      } else {
-        return array[tableStart + intIndex];
-      }
+      return array[tableStart + index];
     }
   }
 

@@ -51,6 +51,12 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
+let float_literal_to_int e =
+        (match Pos.unmark e with
+        | Literal l -> ( match l with Float f -> f | _ -> assert false)
+        | _ -> assert false)
+        |> int_of_float
+
 let generate_var_name (var : Variable.t) : string =
   let v = Pos.unmark var.Variable.name in
   String.uppercase_ascii v
@@ -86,15 +92,17 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
   | Unop (op, e) ->
       let se, s = generate_java_expr e var_indexes in
       let se2, s2 = (Format.asprintf "%s(%s)" (generate_unop op) se, s) in
-      se2, s2
+      (se2, s2)
   | Index (var, e) ->
-      let se, s = generate_java_expr e var_indexes in
+      let _, s = generate_java_expr e var_indexes in
+      let index = float_literal_to_int e in 
       let unmarked_var = Pos.unmark var in
       let size = Option.get unmarked_var.Mir.Variable.is_table in
       let se2, s2 =
-        ( Format.asprintf "m_array_index(calculationVariables, %d ,%s, %d)"
-            (get_var_pos unmarked_var var_indexes) se
-           size ), s
+        ( Format.asprintf "m_array_index(calculationVariables, %d ,%d, %d)"
+            (get_var_pos unmarked_var var_indexes)
+            index size,
+          s )
       in
       (se2, s2)
   | Conditional (e1, e2, e3) ->
@@ -130,11 +138,11 @@ let rec generate_java_expr (e : expression Pos.marked) (var_indexes : int Mir.Va
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
-      let se1, s1 = generate_java_expr e1 var_indexes in
+      let bound = float_literal_to_int e1 in
       let se2, s2 =
-        ( Format.asprintf "m_multimax(%s, calculationVariables, %d)" se1
+        ( Format.asprintf "m_multimax(%d, calculationVariables, %d)" bound
             (get_var_pos v2 var_indexes),
-          s1 )
+          [] )
       in
       (se2, s2)
   | FunctionCall _ -> assert false (* should not happen *)
@@ -181,9 +189,8 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
               Format.fprintf fmt "%acalculationVariables[%d /* %a */] = %s;@,"
                 (format_local_vars_defs var_indexes)
                 defs
-                (get_var_pos var var_indexes |> (+) i)
-                format_var_name var
-                sv))
+                (get_var_pos var var_indexes |> ( + ) i)
+                format_var_name var sv))
         es
       (* Format.fprintf oc "mCalculation.getTableVariables().put(\"%a\",Arrays.asList(%a));@,"
          format_var_name var (Format.pp_print_list ~pp_sep:(fun oc _ -> Format.fprintf oc ", ") (fun
