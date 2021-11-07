@@ -295,17 +295,6 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
          Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_variable var (generate_name var)))
     input_vars
 
-let sanitize_str (s, p) =
-  String.map
-    (fun c ->
-      if c >= Char.chr 128 then
-        let () =
-          Cli.warning_print "Replaced char code %d by space %a" (Char.code c) Pos.format_position p
-        in
-        ' '
-      else c)
-    s
-
 let generate_var_cond cond oc =
   if (fst cond.cond_error).typ = Mast.Anomaly then
     Format.fprintf oc
@@ -317,8 +306,9 @@ let generate_var_cond cond oc =
       Pos.format_position_short (Pos.get_position cond.cond_expr) (generate_python_expr true)
       cond.cond_expr
       (fun fmt err ->
-        Format.fprintf fmt "%s: %s" (sanitize_str err.Error.name)
-          (Error.err_descr_string err |> sanitize_str))
+        Format.fprintf fmt "%s: %s"
+          (Strings.sanitize_str err.Error.name)
+          (Error.err_descr_string err |> Strings.sanitize_str))
       (fst cond.cond_error)
 
 let rec generate_stmts (program : Bir.program) oc stmts =

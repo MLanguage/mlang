@@ -234,18 +234,8 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
      }"
     (print_load_input 0) (count / split_threshold)
 
-let sanitize_str (s, p) =
-  String.map
-    (fun c ->
-      if c >= Char.chr 128 then
-        let () =
-          Cli.warning_print "Replaced char code %d by space %a" (Char.code c) Pos.format_position p
-        in
-        ' '
-      else c)
-    s
-
 let generate_var_cond var_indexes oc cond =
+  let open Strings in
   Format.fprintf oc "cond = %s;@,"
     (let se, _ = generate_java_expr cond.cond_expr var_indexes in
      se);
