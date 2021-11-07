@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MCalculation {
+class MCalculation {
 
   private final MValue[] calculationVariables;
   private final MValue[] localVariables;
@@ -25,33 +25,33 @@ public class MCalculation {
   private final int maxAnomalies;
   private int currentAnomalies = 0;
 
-  public MCalculation(MValue[] calculationVariables, MValue[] localVariables, int maxAnomalies) {
+  MCalculation(MValue[] calculationVariables, MValue[] localVariables, int maxAnomalies) {
     this.calculationVariables = calculationVariables;
     this.maxAnomalies = maxAnomalies;
     this.localVariables = localVariables;
   }
 
-  public MValue[] getCalculationVariables() {
+  MValue[] getCalculationVariables() {
     return calculationVariables;
   }
 
-  public MValue[] getLocalVariables() {
+  MValue[] getLocalVariables() {
     return localVariables;
   }
 
-  public Map<String, List<MValue>> getTableVariables() {
+  Map<String, List<MValue>> getTableVariables() {
     return tableVariables;
   }
 
-  public int getMaxAnomalies() {
+  int getMaxAnomalies() {
     return maxAnomalies;
   }
 
-  public int getCurrentAnomalies() {
+  int getCurrentAnomalies() {
     return currentAnomalies;
   }
 
-  public void setCurrentAnomalies(int currentAnomalies) {
+  void setCurrentAnomalies(int currentAnomalies) {
     this.currentAnomalies = currentAnomalies;
   }
 
