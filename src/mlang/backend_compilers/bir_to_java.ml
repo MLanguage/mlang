@@ -1,4 +1,5 @@
-(* Copyright (C) 2021 Inria, contributor: James Barnes <bureau.si-part-ircalcul@dgfip.finances.gouv.fr> 
+(* Copyright (C) 2021 Inria, contributor: James Barnes
+   <bureau.si-part-ircalcul@dgfip.finances.gouv.fr>
 
    This program is free software: you can redistribute it and/or modify it under the terms of the
    GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -192,10 +193,6 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
                 (get_var_pos var var_indexes |> ( + ) i)
                 format_var_name var sv))
         es
-      (* Format.fprintf oc "mCalculation.getTableVariables().put(\"%a\",Arrays.asList(%a));@,"
-         format_var_name var (Format.pp_print_list ~pp_sep:(fun oc _ -> Format.fprintf oc ", ") (fun
-         oc (_, var) -> let var, _ = generate_java_expr var var_indexes in Format.fprintf oc "%s"
-         var)) (IndexMap.bindings es) *)
   | TableVar (_, IndexGeneric e) ->
       Errors.raise_spanned_error "generic index table definitions not supported in the java backend"
         (Pos.get_position e)

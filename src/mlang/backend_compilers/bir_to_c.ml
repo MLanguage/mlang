@@ -487,7 +487,6 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
-  Printf.printf "var_table_size %d\n" var_table_size;
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
