@@ -39,7 +39,8 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
     let id = Mir.fresh_rule_id () in
     { rule_id = id; rule_name = rule_suffix ^ string_of_int id; rule_stmts = List.rev stmts }
   in
-  let rec browse_bir old_stmts new_stmts curr_stmts rules =
+  let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list) (curr_stmts : stmt list)
+      (rules : rule RuleMap.t) =
     match old_stmts with
     | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->
