@@ -12,8 +12,6 @@
    You should have received a copy of the GNU General Public License along with this program. If
    not, see <https://www.gnu.org/licenses/>. *)
 
-(* TODO: Use an array for calculation rather than a map to improve performance*)
-
 open Mir
 
 let java_imports : string =
