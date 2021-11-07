@@ -29,15 +29,15 @@ clean:
 .PRECIOUS: src/com/mlang/Ir_%.java
 src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 	$(MLANG) \
-		--backend java --output src/com/mlang/Ir_tests_2020.java \
+		--backend java --output $@ \
 		--function_spec $^ \
 		$(SOURCE_FILES)
 
 target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java
-	javac -target 1.7 -source 1.7 -J-Xss10m -d target -cp src src/com/mlang/*.java 
+	javac -target 1.7 -source 1.7 -d target -cp src src/com/mlang/*.java 
 
 backend_tests/target/TestHarness.class: target/com/mlang/Ir_tests_2020.class
-	javac -J-Xss10m -cp "backend_tests/src/:target" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
+	javac -cp "backend_tests/src/:target" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java 
 	
 run_tests: backend_tests/target/TestHarness.class
 	java -cp "target:backend_tests/target" com.mlang.TestHarness $(TESTS_DIR)
