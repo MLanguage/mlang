@@ -34,6 +34,22 @@ type program = {
   outputs : unit Mir.VariableMap.t;
 }
 
+let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) : stmt list =
+  List.fold_left
+    (fun stmts stmt ->
+      match Pos.unmark stmt with
+      | SRuleCall r -> List.rev (RuleMap.find r rules).rule_stmts @ stmts
+      | SConditional (e, t, f) ->
+          let t = get_block_statements rules t in
+          let f = get_block_statements rules f in
+          Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
+      | _ -> stmt :: stmts)
+    [] stmts
+  |> List.rev
+
+(** Returns program statements with all rules inlined *)
+let get_all_statements (p : program) : stmt list = get_block_statements p.rules p.statements
+
 let squish_statements (program : program) (threshold : int) (rule_suffix : string) =
   let rule_from_stmts stmts =
     let id = Mir.fresh_rule_id () in
@@ -53,10 +69,8 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
               (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
-        (* TODO: The following line works because of a low threshold. In order to make this robust,
-           the length check should not be done on the curr_stmts list but rather recursively on the
-           number of statements inside the curr_stmts list. *)
-        if List.length curr_stmts < threshold then browse_bir tl new_stmts curr_stmts rules
+        if List.length (get_block_statements rules curr_stmts) < threshold then
+          browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
@@ -66,23 +80,6 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
   in
   let new_rules, new_stmts = browse_bir program.statements [] [] program.rules in
   { program with statements = new_stmts; rules = new_rules }
-
-(** Returns program statements with all rules inlined *)
-let get_all_statements (p : program) : stmt list =
-  let rec get_block_statements stmts =
-    List.fold_left
-      (fun stmts stmt ->
-        match Pos.unmark stmt with
-        | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
-        | SConditional (e, t, f) ->
-            let t = get_block_statements t in
-            let f = get_block_statements f in
-            Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
-        | _ -> stmt :: stmts)
-      [] stmts
-    |> List.rev
-  in
-  get_block_statements p.statements
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
