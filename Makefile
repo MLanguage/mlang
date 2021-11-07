@@ -1,3 +1,6 @@
+# Check Makefile.config.template if you want to override some of the flags
+# in this Makefile.
+
 include Makefile.include
 
 ifeq ($(OPTIMIZE), 1)
@@ -28,8 +31,6 @@ MLANG_DEFAULT_OPTS=\
 	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
-
-DUNE_OPTIONS?=
 
 default: build
 

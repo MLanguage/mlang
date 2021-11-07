@@ -78,6 +78,11 @@ To produce the executables that link the generated .c with a small tester, use
 
     make run_<name_of_the_m_spec_file>.exe
 
+You can also set the `YEAR` variable in a file `Makefile.config` in the
+top-directory of the project (see the `Makefile.config.template` file
+in that directory). The `C_COMPILER` variable can also be used to use
+in a different C compiler.
+
 ### Testing the correctness of the Mlang backend
 
 The `backend_tests` folder contains a small utility that compares the output

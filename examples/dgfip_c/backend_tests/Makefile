@@ -49,7 +49,6 @@ enchain.c: tests.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
-C_COMPILER?=clang
 CC=$(C_COMPILER)
 
 ifeq ($(C_COMPILER), clang)

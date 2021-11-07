@@ -28,10 +28,14 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
-C_COMPILER=clang
+ifeq ($(C_COMPILER), clang)
+    F_BRACKET_OPT=-fbracket-depth=2048
+else
+    F_BRACKET_OPT=
+endif
 
 ir_%.o: ir_%.c
-	$(C_COMPILER) -fbracket-depth=2048 $(C_OPT) -c $< m_value.c
+	$(C_COMPILER) $(F_BRACKET_OPT) $(C_OPT) -c $< m_value.c
 
 %.o: %.c
 	$(C_COMPILER) -c $<
@@ -42,7 +46,7 @@ ir_%.o: ir_%.c
 
 # To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
 run_%.exe: ir_%.o run_%.o m_value.o
-	$(C_COMPILER) -lm -o $@ $^
+	$(C_COMPILER) -o $@ $^ -lm
 
 ##################################################
 # Running the tests
