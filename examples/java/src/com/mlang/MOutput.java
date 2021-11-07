@@ -21,7 +21,7 @@ public class MOutput {
   private final Map<String, MValue> outputValues;
   private final List<MError> calculationErrors;
 
-  public MOutput(Map<String, MValue> outputValues, List<MError> calculationErrors) {
+  MOutput(Map<String, MValue> outputValues, List<MError> calculationErrors) {
     this.outputValues = outputValues;
     this.calculationErrors = calculationErrors;
   }
