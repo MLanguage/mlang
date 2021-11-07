@@ -20,7 +20,7 @@ public class MException extends RuntimeException {
   private final List<MError> calculationErrors;
   private static final String MESSAGE = "Max number of anomalies occurred before end of calculation";
 
-  public MException(List<MError> calculationErrors){
+  MException(List<MError> calculationErrors){
     super(MESSAGE);
     this.calculationErrors = calculationErrors;
   }
