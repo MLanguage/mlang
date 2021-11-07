@@ -22,7 +22,7 @@ public class MError {
   private final String description;
   private final String alias;
 
-  public MError(String name, String kind, String majorCode, String minorCode, String description, String alias) {
+  MError(String name, String kind, String majorCode, String minorCode, String description, String alias) {
     this.name = name;
     this.kind = kind;
     this.majorCode = majorCode;
