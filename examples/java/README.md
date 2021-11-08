@@ -67,7 +67,7 @@ If you have an error about unknown variables, then it probably means the
 example you're trying to build depends on a different year of the tax code.
 To get it working, invoke the command by setting the year to another year:
 
-    YEAR=<year> make ir_<name_of_the_m_spec_file>.py
+    YEAR=<year> make ir_<name_of_the_m_spec_file>.java
 
 ### Testing the correctness of the Mlang backend
 
