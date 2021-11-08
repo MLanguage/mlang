@@ -67,6 +67,9 @@ jobs:
           eval $(opam env)
           make test_python_backend
 
-
+      - name: Test Java backend
+        run: |
+          eval $(opam env)
+          make test_java_backend
 
 

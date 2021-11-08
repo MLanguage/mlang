@@ -34,22 +34,53 @@ type program = {
   outputs : unit Mir.VariableMap.t;
 }
 
+let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) : stmt list =
+  List.fold_left
+    (fun stmts stmt ->
+      match Pos.unmark stmt with
+      | SRuleCall r -> List.rev (RuleMap.find r rules).rule_stmts @ stmts
+      | SConditional (e, t, f) ->
+          let t = get_block_statements rules t in
+          let f = get_block_statements rules f in
+          Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
+      | _ -> stmt :: stmts)
+    [] stmts
+  |> List.rev
+
 (** Returns program statements with all rules inlined *)
-let get_all_statements (p : program) : stmt list =
-  let rec get_block_statements stmts =
-    List.fold_left
-      (fun stmts stmt ->
-        match Pos.unmark stmt with
-        | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
-        | SConditional (e, t, f) ->
-            let t = get_block_statements t in
-            let f = get_block_statements f in
-            Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
-        | _ -> stmt :: stmts)
-      [] stmts
-    |> List.rev
+let get_all_statements (p : program) : stmt list = get_block_statements p.rules p.statements
+
+let squish_statements (program : program) (threshold : int) (rule_suffix : string) =
+  let rule_from_stmts stmts =
+    let id = Mir.fresh_rule_id () in
+    { rule_id = id; rule_name = rule_suffix ^ string_of_int id; rule_stmts = List.rev stmts }
   in
-  get_block_statements p.statements
+  let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list) (curr_stmts : stmt list)
+      (rules : rule RuleMap.t) =
+    match old_stmts with
+    | [] -> (rules, List.rev (curr_stmts @ new_stmts))
+    | hd :: tl ->
+        let give_pos stmt = Pos.same_pos_as stmt hd in
+        let rules, curr_stmts =
+          match Pos.unmark hd with
+          | SConditional (expr, t, f) ->
+              let t_rules, t_curr_list = browse_bir t [] [] rules in
+              let f_rules, f_curr_list = browse_bir f [] [] t_rules in
+              let cond = give_pos (SConditional (expr, t_curr_list, f_curr_list)) in
+              (f_rules, cond :: curr_stmts)
+          | _ -> (rules, hd :: curr_stmts)
+        in
+        if List.length (get_block_statements rules curr_stmts) < threshold then
+          browse_bir tl new_stmts curr_stmts rules
+        else
+          let squish_rule = rule_from_stmts curr_stmts in
+          browse_bir tl
+            (give_pos (SRuleCall squish_rule.rule_id) :: new_stmts)
+            []
+            (RuleMap.add squish_rule.rule_id squish_rule rules)
+  in
+  let new_rules, new_stmts = browse_bir program.statements [] [] program.rules in
+  { program with statements = new_stmts; rules = new_rules }
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
@@ -121,6 +152,14 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
       acc stmts
   in
   get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
+
+let get_locals_size (p : program) : int =
+  List.hd
+    (List.rev
+       (List.sort compare
+          (List.map
+             (fun (x, _) -> x.Mir.LocalVariable.id)
+             (Mir.LocalVariableMap.bindings (get_local_variables p)))))
 
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev

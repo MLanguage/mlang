@@ -11,6 +11,7 @@ To know more about using a particular Mlang backend, please read the dedicated
 `README.md` inside the correct folder:
 
 * [C](c/README.md)
+* [Java](java/README.md)
 * [Python](python/README.md)
 
 ### Configuring the generated file

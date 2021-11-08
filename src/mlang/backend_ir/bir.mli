@@ -36,10 +36,19 @@ type program = {
 
 val get_all_statements : program -> stmt list
 
+val squish_statements : program -> int -> string -> program
+(** In order to handle backends with limited function / method capacity, such as Java's 64kB of
+    bytecode per method, class, etc, this funciton allows a [program] to be split into chunks of an
+    arbitrary size using the string argument as a suffix to the new function / method name. We
+    piggyback on the existing rules semantics, with these chunks being rule definitions and
+    inserting rule calls in their place*)
+
 val count_instructions : program -> int
 
 val get_assigned_variables : program -> Mir.VariableDict.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t
+
+val get_locals_size : program -> int
 
 val remove_empty_conditionals : stmt list -> stmt list

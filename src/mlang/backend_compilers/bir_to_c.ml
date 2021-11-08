@@ -259,31 +259,6 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
   Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
     (if add_semicolon then ";" else "")
 
-let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
-    int Mir.VariableMap.t * int =
-  let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
-  let assigned_variables =
-    List.map snd (Mir.VariableDict.bindings (Bir.get_assigned_variables p))
-  in
-  let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
-  let all_relevant_variables =
-    List.fold_left
-      (fun acc var -> Mir.VariableMap.add var () acc)
-      Mir.VariableMap.empty
-      (input_vars @ assigned_variables @ output_vars)
-  in
-  let counter = ref 0 in
-  let var_indexes =
-    VariableMap.mapi
-      (fun var _ ->
-        let id = !counter in
-        let size = match var.Mir.Variable.is_table with None -> 1 | Some size -> size in
-        counter := !counter + size;
-        id)
-      all_relevant_variables
-  in
-  (var_indexes, !counter)
-
 let generate_main_function_signature_and_var_decls (p : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (var_table_size : int) (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
@@ -293,15 +268,7 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
   (* here, we need to generate a table that can host all the local vars. the index inside the table
      will be the id of the local var so we generate a table big enough so that the highest id is
      always in bounds *)
-  let size_locals =
-    List.hd
-      (List.rev
-         (List.sort compare
-            (List.map
-               (fun (x, _) -> x.LocalVariable.id)
-               (Mir.LocalVariableMap.bindings (Bir.get_local_variables p)))))
-    + 1
-  in
+  let size_locals = Bir.get_locals_size p + 1 in
   Format.fprintf oc "m_value *LOCAL = malloc(%d * sizeof(m_value));@\n@\n" size_locals;
   Format.fprintf oc "m_value *TGV = malloc(%d * sizeof(m_value));@\n@\n" var_table_size;
   Format.fprintf oc "// Then we extract the input variables from the dictionnary:@\n%a@\n@\n"
@@ -519,7 +486,7 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
       (Format.asprintf "Output file should have a .c extension (currently %s)" filename);
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
-  let var_indexes, var_table_size = get_variables_indexes program function_spec in
+  let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () generate_input_type
     function_spec generate_empty_input_prototype true generate_input_from_array_prototype true
