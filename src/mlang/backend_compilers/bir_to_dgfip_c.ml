@@ -174,7 +174,6 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
   let scond, defs = generate_c_expr cond.cond_expr var_indexes in
-  let percent = Re.Pcre.regexp "%" in
   Format.fprintf oc
     {|
     %acond = %s;
@@ -191,7 +190,6 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
         ^ (Pos.unmark @@ err.Mir.Error.descr.major_code)
         ^ Pos.unmark @@ err.Mir.Error.descr.minor_code
       in
-      let error_descr = Re.Pcre.substitute ~rex:percent ~subst:(fun _ -> "%%") error_descr in
       Format.fprintf fmt
         {|
         output->errors[m_get_error_index("%s")].has_occurred = true;|}
