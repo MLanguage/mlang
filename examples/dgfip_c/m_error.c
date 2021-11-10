@@ -1,6 +1,6 @@
 #include "m_error.h"
 
-int get_occurred_errors_count(m_error *errors, int size) {
+int get_occurred_errors_count(m_error_occurrence* errors, int size) {
   int count = 0;
 
   for (int i = 0; i < size; i++) {
@@ -12,8 +12,8 @@ int get_occurred_errors_count(m_error *errors, int size) {
   return count;
 }
 
-m_error *get_occurred_errors_items(int full_list_count, m_error *full_list,
-                                   m_error *filtered_errors) {
+m_error_occurrence* get_occurred_errors_items(int full_list_count, m_error_occurrence* full_list,
+                                   m_error_occurrence* filtered_errors) {
   int count = 0;
 
   for (int i = 0; i < full_list_count; i++) {
