@@ -68,8 +68,8 @@ let function_spec =
         ~doc:
           "M function specification file (extension .m_spec).$(i, SPEC) should define the expected \
            inputs, outputs and constant values. This information will be used to select the \
-           relevant computational rules from the M code corpus. \
-           If no function_spec is specified, all available inputs and outputs are used for the calculation.")
+           relevant computational rules from the M code corpus. If no function_spec is specified, \
+           all available inputs and outputs are used for the calculation.")
 
 let mpp_file =
   Arg.(
