@@ -1184,15 +1184,30 @@ let get_rules_and_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mi
 
 (** At this point [var_data] contains the definition data for all the times a variable is defined.
     However the M language deals with undefined variable, so for each variable we have to insert a
-    dummy definition corresponding to the declaration and whose value is [Undefined]. *)
+    dummy definition corresponding to the declaration and whose value is the starting value of their
+    position in the TGV. *)
 let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_data Mir.VariableMap.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (idmap : Mir.idmap) :
     Mir.variable_data Mir.VariableMap.t =
   Mir.VariableMap.fold
     (fun var decl (var_data : Mir.variable_data Mir.VariableMap.t) ->
+      let add_var var decl var_data =
+        Mir.VariableMap.add var
+          {
+            Mir.var_definition = Mir.InputVar;
+            Mir.var_typ =
+              translate_value_typ
+                (match decl.var_decl_typ with
+                | None -> None
+                | Some typ -> Some (Pos.same_pos_as typ var.name));
+            Mir.var_io = Mir.Input;
+          }
+          var_data
+      in
       (* The variable has not been defined in a rule *)
       match decl.var_decl_io with
-      | Output | Regular -> (
+      | Input -> add_var var decl var_data
+      | Output | Regular ->
           if
             List.for_all
               (fun var' -> var'.Mir.Variable.execution_number.Mir.rule_number = -1)
@@ -1202,69 +1217,7 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
               (Pos.unmark var.Mir.Variable.name)
               Pos.format_position
               (Pos.get_position var.Mir.Variable.name);
-          (* This is the case where the variable is not defined. *)
-          let io =
-            match decl.var_decl_io with
-            | Output | Regular -> Mir.Input
-            | Constant -> Mir.Regular
-            | Input -> assert false
-            (* should not happen *)
-          in
-          (* We insert the Undef expr *)
-          match decl.var_decl_is_table with
-          | Some size ->
-              Mir.VariableMap.add var
-                {
-                  Mir.var_definition =
-                    begin
-                      match io with
-                      | Mir.Input -> Mir.InputVar
-                      | _ ->
-                          Mir.TableVar
-                            ( size,
-                              Mir.IndexGeneric
-                                (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
-                            )
-                    end;
-                  Mir.var_typ =
-                    translate_value_typ
-                      (match decl.var_decl_typ with
-                      | None -> None
-                      | Some typ -> Some (Pos.same_pos_as typ var.name));
-                  Mir.var_io = io;
-                }
-                var_data
-          | None ->
-              Mir.VariableMap.add var
-                {
-                  Mir.var_definition =
-                    begin
-                      match io with
-                      | Mir.Input -> Mir.InputVar
-                      | _ ->
-                          Mir.SimpleVar
-                            (Pos.same_pos_as (Mir.Literal Mir.Undefined) var.Mir.Variable.name)
-                    end;
-                  Mir.var_typ =
-                    translate_value_typ
-                      (match decl.var_decl_typ with
-                      | None -> None
-                      | Some typ -> Some (Pos.same_pos_as typ var.name));
-                  Mir.var_io = io;
-                }
-                var_data)
-      | Input ->
-          Mir.VariableMap.add var
-            {
-              Mir.var_definition = Mir.InputVar;
-              Mir.var_typ =
-                translate_value_typ
-                  (match decl.var_decl_typ with
-                  | None -> None
-                  | Some typ -> Some (Pos.same_pos_as typ var.name));
-              Mir.var_io = Mir.Input;
-            }
-            var_data
+          add_var var decl var_data
       | Constant -> var_data
       (* the variable's definition has already been inserted in [var_data] *))
     var_decl_data var_data
