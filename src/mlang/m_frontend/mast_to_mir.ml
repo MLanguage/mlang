@@ -1184,8 +1184,8 @@ let get_rules_and_var_data (idmap : Mir.idmap) (var_decl_data : var_decl_data Mi
 
 (** At this point [var_data] contains the definition data for all the times a variable is defined.
     However the M language deals with undefined variable, so for each variable we have to insert a
-    dummy definition corresponding to the declaration and whose value is the starting value of their
-    position in the TGV. *)
+    dummy definition corresponding to the declaration and whose value and whose value is found in
+    the TGV at the beginning of the execution *)
 let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_data Mir.VariableMap.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (idmap : Mir.idmap) :
     Mir.variable_data Mir.VariableMap.t =
