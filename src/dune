@@ -1,12 +1,10 @@
 (env
  (static
   (flags
-   (-cclib -lstdc++ -ccopt -static))))
+   (-ccopt -static -O3))))
 
 (executable
  (name main)
  (package mlang)
  (public_name mlang)
- (ocamlopt_flags
-  (-cclib -lstdc++))
  (libraries mlang))
