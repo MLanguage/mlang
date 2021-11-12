@@ -1,9 +1,12 @@
+(env
+  (static
+    (flags
+      (-O3 -ccopt -static))))
+
 (include_subdirs unqualified)
 
 (library
  (public_name mlang)
- (ocamlopt_flags
-  (-cclib -lstdc++))
  (libraries ocamlgraph re ANSITerminal parmap cmdliner threads
    dune-build-info num gmp))
 

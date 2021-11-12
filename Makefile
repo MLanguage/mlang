@@ -55,7 +55,7 @@ dune:
 	dune build $(DUNE_OPTIONS)
 
 # Run only in an opam switch with musl and static options activated
-build-static: DUNE_OPTIONS+=--profile=static --profile=release
+build-static: DUNE_OPTIONS+=--profile=static 
 build-static: build
 
 ##################################################
