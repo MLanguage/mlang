@@ -65,8 +65,12 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     if Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true
     then Errors.raise_error "Cycles between rules.";
     let mpp = Mpp_frontend.process mpp_file full_m_program in
-    let m_program = Mir_interface.reset_all_outputs full_m_program.program in
-    let full_m_program = Mir_interface.to_full_program m_program in
+    let full_m_program =
+      Mir_interface.to_full_program
+        (match function_spec with
+        | Some _ -> Mir_interface.reset_all_outputs full_m_program.program
+        | None -> full_m_program.program)
+    in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
     let value_sort =
@@ -109,13 +113,11 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     end
     else begin
       Cli.debug_print "Extracting the desired function from the whole program...";
-      let spec_file =
+      let function_spec =
         match function_spec with
-        | None ->
-            Errors.raise_error "function specification file is not specified using --function_spec"
-        | Some f -> f
+        | None -> Bir_interface.generate_function_all_vars combined_program
+        | Some spec_file -> Bir_interface.read_function_from_spec combined_program spec_file
       in
-      let function_spec = Bir_interface.read_function_from_spec combined_program spec_file in
       let combined_program, _ =
         Bir_interface.adapt_program_to_function combined_program function_spec
       in

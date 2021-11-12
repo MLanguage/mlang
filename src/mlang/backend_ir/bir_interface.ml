@@ -158,6 +158,38 @@ let translate_external_conditions idmap (conds : Mast.expression Pos.marked list
   in
   Mast_to_mir.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
 
+let generate_function_all_vars (p : Bir.program) : bir_function =
+  let open Mir in
+  let output_vars =
+    VariableDict.fold
+      (fun k acc -> VariableMap.add k () acc)
+      (find_vars_by_io p.mir_program Output)
+      VariableMap.empty
+  in
+  let input_vars =
+    let program_input_vars = find_vars_by_io p.mir_program Input in
+    let max_exec_vars =
+      Pos.VarNameToID.fold
+        (fun _ v acc ->
+          let max_exec_var = Mast_to_mir.list_max_execution_number v in
+          Mir.VariableDict.add max_exec_var acc)
+        p.idmap VariableDict.empty
+    in
+    VariableDict.fold
+      (fun k acc -> VariableMap.add k () acc)
+      (VariableDict.inter program_input_vars max_exec_vars)
+      VariableMap.empty
+  in
+  Cli.debug_print "Using all %d outputs and %d inputs from m sources"
+    (VariableMap.cardinal output_vars)
+    (VariableMap.cardinal input_vars);
+  {
+    func_variable_inputs = input_vars;
+    func_constant_inputs = VariableMap.empty;
+    func_outputs = output_vars;
+    func_conds = VariableMap.empty;
+  }
+
 let read_function_from_spec (p : Bir.program) (spec_file : string) : bir_function =
   let input = open_in spec_file in
   let filebuf = Lexing.from_channel input in
@@ -227,7 +259,17 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) : Bir.program
                     {
                       Mir.var_typ = None;
                       Mir.var_io = Regular;
-                      Mir.var_definition = Mir.SimpleVar (Mir.Literal Mir.Undefined, pos);
+                      Mir.var_definition =
+                        begin
+                          match var.Mir.Variable.is_table with
+                          | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
+                          | Some size ->
+                              Mir.TableVar
+                                ( size,
+                                  Mir.IndexGeneric
+                                    (Pos.same_pos_as (Mir.Literal Mir.Undefined)
+                                       var.Mir.Variable.name) )
+                        end;
                     } ),
                 pos )
               :: acc
