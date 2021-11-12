@@ -265,6 +265,17 @@ let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bo
   Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
     (if add_semicolon then ";" else "")
 
+let get_anomaly_indexes (p : Bir.program) : (Error.t * Variable.t option) ErrorIndex.t =
+  let _, index =
+    VariableMap.fold
+      (fun _ v acc ->
+        let count, err = acc in
+        let count = count + 1 in
+        count, ErrorIndex.add count v.cond_error err)
+      p.mir_program.program_conds (0, ErrorIndex.empty)
+  in
+  index
+
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
   let input_vars = List.map fst (VariableMap.bindings function_spec.func_variable_inputs) in
