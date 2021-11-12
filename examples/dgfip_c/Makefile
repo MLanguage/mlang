@@ -1,6 +1,6 @@
 include ../../Makefile.include
 
-MPP_FILE=../../../mpp_specs/dgfip_base.mpp
+MPP_FILE=../../mpp_specs/dgfip_base.mpp
 
 OPTIMIZE_FLAG=-O
 

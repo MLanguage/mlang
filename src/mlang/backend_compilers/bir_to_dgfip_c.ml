@@ -15,8 +15,6 @@ open Mir
 
 let none_value = "m_undefined"
 
-module ErrorSet = Set.Make (Error)
-
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
   | Mast.Gt -> "m_gt"
@@ -182,21 +180,24 @@ let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_da
     defs scond
     (fun oc () ->
       if (fst cond.cond_error).Mir.Error.typ = Mast.Anomaly then
+        let error, _ = cond.cond_error in
+        let error_pos = error.id in
         Format.fprintf oc
-          {|
-      output->is_error = true;
-      #ifndef ANOMALY_LIMIT
-      free(TGV);
-      free(LOCAL);
-      return -1;
-      #else /* ANOMALY_LIMIT */
-      if (anomaly_count >= max_anomalies) {
-          free(TGV);
-          free(LOCAL);
-          return -1;
-      }
-      #endif /* ANOMALY_LIMIT */
-|})
+          " @[<hv 0>output->is_error = true;@,\
+           m_error_occurrence occurrence = output->errors[%d]; @,\
+           occurrence.error = &m_errors[%d]; @,\
+          \ occurrence.has_occurred = true;@,\
+          \ #ifndef ANOMALY_LIMIT @,\
+           free(TGV); @,\
+           free(LOCAL); @,\
+           return -1; @,\
+           #else /* ANOMALY_LIMIT */ @,\
+           if (anomaly_count >= max_anomalies) {@,\
+          \ free(TGV); @,\
+           free(LOCAL);@,\
+          \ return -1;@,\
+           }@,\
+          \ #endif /* ANOMALY_LIMIT */" error_pos error_pos)
     ()
 
 let fresh_cond_counter = ref 0
@@ -264,17 +265,6 @@ let generate_rule_functions (program : Bir.program) (var_indexes : int Mir.Varia
 let generate_main_function_signature (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "int m_extracted(m_output *output, const m_input *input)%s"
     (if add_semicolon then ";" else "")
-
-let get_anomaly_indexes (p : Bir.program) : (Error.t * Variable.t option) ErrorIndex.t =
-  let _, index =
-    VariableMap.fold
-      (fun _ v acc ->
-        let count, err = acc in
-        let count = count + 1 in
-        count, ErrorIndex.add count v.cond_error err)
-      p.mir_program.program_conds (0, ErrorIndex.empty)
-  in
-  index
 
 let get_variables_indexes (p : Bir.program) (function_spec : Bir_interface.bir_function) :
     int Mir.VariableMap.t * int =
@@ -362,54 +352,6 @@ let generate_header (oc : Format.formatter) () : unit =
 
 let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
-
-let print_error_line (oc : Format.formatter) (err : error) =
-  let err = err.descr in
-  Format.fprintf oc
-    "{.kind = \"%s\", .major_code = \"%s\", .minor_code = \"%s\", .isisf = \"%s\",.description = \
-     \"%s\"},@,"
-    (Strings.sanitize_str err.kind)
-    (Strings.sanitize_str err.major_code)
-    (Strings.sanitize_str err.minor_code)
-    (Strings.sanitize_str err.isisf)
-    (Strings.sanitize_str err.description)
-
-let generate_errors_table (oc : Format.formatter) (errors : ErrorSet.t) =
-  Format.fprintf oc "@[<hv 2>static const errors m_errors = {@,%a@]};"
-    (fun oc errors -> ErrorSet.iter (print_error_line oc) errors)
-    errors
-
-let generate_get_error_index_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "int m_get_error_index(char *name)%s" (if add_semicolon then ";\n\n" else "")
-
-let generate_get_error_index_func (oc : Format.formatter) (errors : ErrorSet.t) =
-  let error_counter = ref 0 in
-  Format.fprintf oc
-    "%a {@\n%a @\n    printf(\"Error %%s not found!\", name);@\n    exit(-1); @\n}@\n"
-    generate_get_error_index_prototype false
-    (fun oc () ->
-      ErrorSet.iter
-        (fun (error : Error.t) ->
-          Format.fprintf oc "    if (strcmp(\"%s%s%s\", name) == 0) { return %d; } \n"
-            (Pos.unmark error.descr.kind)
-            (Pos.unmark error.descr.major_code)
-            (Pos.unmark error.descr.minor_code)
-            !error_counter;
-          error_counter := !error_counter + 1)
-        errors)
-    ()
-
-let generate_get_error_count_prototype (oc : Format.formatter) (add_semicolon : bool) =
-  Format.fprintf oc "int m_num_errors()%s" (if add_semicolon then ";\n\n" else "")
-
-let generate_get_error_count_func (oc : Format.formatter) (errors : ErrorSet.t) =
-  Format.fprintf oc {|
-%a {
-  return %d;
-}
-
-|} generate_get_error_count_prototype false
-    (ErrorSet.cardinal errors)
 
 let generate_empty_input_prototype (oc : Format.formatter) (add_semicolon : bool) =
   Format.fprintf oc "void m_empty_input(m_input *input)%s" (if add_semicolon then ";\n\n" else "")
@@ -574,7 +516,7 @@ let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.
   let output_vars = List.map fst (VariableMap.bindings function_spec.func_outputs) in
   Format.fprintf oc
     "@[<v 2>typedef struct m_output {@,\
-     m_error *errors;@,\
+     m_error_occurrence *errors;@,\
      bool is_error;@,\
      %a@.@[<h>}@ m_output;@]@]@\n\
      @\n"
@@ -584,12 +526,46 @@ let generate_output_type (oc : Format.formatter) (function_spec : Bir_interface.
          Format.fprintf fmt "m_value %s; // %s" (generate_name var) (Pos.unmark var.Variable.descr)))
     output_vars
 
+let error_table_definitions (oc : Format.formatter) (program : Bir.program) =
+  let error_set_size = VariableMap.cardinal program.mir_program.program_conds in
+  Format.fprintf oc "typedef m_error_occurrence error_occurrences[%d];\n" error_set_size;
+  Format.fprintf oc "typedef m_error errors[%d];\n" error_set_size
+
+let print_error_line (oc : Format.formatter) (cond_data : condition_data) =
+  let err, var = cond_data.cond_error in
+  Format.fprintf oc
+    "{.kind = \"%s\", .major_code = \"%s\", .minor_code = \"%s\", .isisf = \"%s\",.description = \
+     \"%s\", .code_information = %s},@,"
+    (Strings.sanitize_str err.descr.kind)
+    (Strings.sanitize_str err.descr.major_code)
+    (Strings.sanitize_str err.descr.minor_code)
+    (Strings.sanitize_str err.descr.isisf)
+    (Strings.sanitize_str err.descr.description)
+    (match var with
+    | None -> "\"\""
+    | Some v -> ( match v.alias with Some alias -> "\"" ^ alias ^ "\"" | None -> assert false))
+
+let generate_errors_table (oc : Format.formatter) (program : Bir.program) =
+  Format.fprintf oc "@[<hv 2>static const errors m_errors = {@,%a@]};"
+    (fun oc conds -> VariableMap.iter (fun _ cond_data -> print_error_line oc cond_data) conds)
+    program.mir_program.program_conds
+
+let generate_get_error_count_prototype (oc : Format.formatter) (add_semicolon : bool) =
+  Format.fprintf oc "int m_num_errors()%s" (if add_semicolon then ";\n\n" else "")
+
+let generate_get_error_count_func (oc : Format.formatter) (program : Bir.program) =
+  Format.fprintf oc {|
+%a {
+  return %d;
+}
+
+|} generate_get_error_count_prototype false
+    (VariableMap.cardinal program.mir_program.program_conds)
+
 let generate_implem_header oc header_filename =
   Format.fprintf oc "// File generated by the Mlang compiler\n\n";
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
-
-let generate_cond_table _ v error_set = ErrorSet.add (fst v.cond_error) error_set
 
 let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -600,34 +576,24 @@ let generate_c_program (program : Bir.program) (function_spec : Bir_interface.bi
   let _oc = open_out header_filename in
   let var_indexes, var_table_size = get_variables_indexes program function_spec in
   let oc = Format.formatter_of_out_channel _oc in
-  let error_set =
-    VariableMap.fold generate_cond_table program.mir_program.program_conds ErrorSet.empty
-  in
-  let conds oc () =
-    let error_set_size = ErrorSet.cardinal error_set in
-    Format.fprintf oc "typedef m_error_occurrence error_occurrences[%d];\n" error_set_size;
-    Format.fprintf oc "typedef m_error errors[%d];\n" error_set_size
-  in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () conds ()
-    generate_input_type function_spec generate_empty_input_prototype true
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header () error_table_definitions
+    program generate_input_type function_spec generate_empty_input_prototype true
     generate_input_from_array_prototype true generate_get_input_index_prototype true
     generate_get_input_num_prototype true generate_get_input_name_from_index_prototype true
     generate_output_type function_spec generate_output_to_array_prototype true
     generate_get_output_index_prototype true generate_get_output_name_from_index_prototype true
     generate_get_output_num_prototype true generate_empty_output_prototype true
-    generate_get_error_index_prototype true generate_get_error_count_prototype true
-    generate_main_function_signature true generate_footer ();
+    generate_get_error_count_prototype true generate_main_function_signature true generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
-    generate_get_error_index_func error_set generate_errors_table error_set
-    generate_get_error_count_func error_set generate_empty_input_func function_spec
-    generate_input_from_array_func function_spec generate_get_input_index_func function_spec
-    generate_get_input_name_from_index_func function_spec generate_get_input_num_func function_spec
-    generate_output_to_array_func function_spec generate_get_output_index_func function_spec
-    generate_get_output_name_from_index_func function_spec generate_get_output_num_func
-    function_spec generate_empty_output_func function_spec
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header header_filename
+    generate_errors_table program generate_get_error_count_func program generate_empty_input_func
+    function_spec generate_input_from_array_func function_spec generate_get_input_index_func
+    function_spec generate_get_input_name_from_index_func function_spec generate_get_input_num_func
+    function_spec generate_output_to_array_func function_spec generate_get_output_index_func
+    function_spec generate_get_output_name_from_index_func function_spec
+    generate_get_output_num_func function_spec generate_empty_output_func function_spec
     (generate_rule_functions program var_indexes)
     program.rules
     (generate_main_function_signature_and_var_decls program var_indexes var_table_size)

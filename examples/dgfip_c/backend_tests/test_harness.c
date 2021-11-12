@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     int num_outputs = m_num_inputs();
     m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
     m_output *output_for_m = malloc(sizeof(m_input));
-    m_error *errors;
+    m_error_occurrence *errors;
 
     char *name;
     char *value_s;

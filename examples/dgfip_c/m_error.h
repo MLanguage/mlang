@@ -14,10 +14,11 @@ typedef struct m_error {
   char minor_code[7];
   char description[81];
   char isisf[2];
+  char code_information[10];
 } m_error;
 
 typedef struct m_error_occurrence {
-  m_error *error;
+  const m_error *error;
   bool has_occurred; 
 } m_error_occurrence;
 
