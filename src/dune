@@ -1,6 +1,6 @@
 (env
  (static
-  (flags
+  (ocamlopt_flags
    (-ccopt -static -O3))))
 
 (executable

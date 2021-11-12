@@ -1,6 +1,6 @@
 (env
   (static
-    (flags
+    (ocamlopt_flags
       (-O3 -ccopt -static))))
 
 (include_subdirs unqualified)
