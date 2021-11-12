@@ -319,8 +319,16 @@ val fresh_rule_id : unit -> rule_id
 val initial_undef_rule_id : rule_id
 
 val find_var_by_name : program -> string Pos.marked -> variable
+(** Get a variable for a given name or alias, because of SSA multiple variables share a name or
+    alias. If an alias is provided, the variable returned is that with the lowest execution number.
+    When a name is provided, then the variable with the highest execution number is returned. *)
+
+val is_dummy_variable : Variable.t -> bool
 
 val find_vars_by_io : program -> io -> VariableDict.t
+(** Returns a VariableDict.t containing all the variables that have a given io type, only one
+    variable per name is entered in the VariableDict.t, this function chooses the one with the
+    highest execution number*)
 
 val rule_number_and_tags_of_rule_name :
   Mast.rule_name -> rule_id Pos.marked * rule_tag Pos.marked list

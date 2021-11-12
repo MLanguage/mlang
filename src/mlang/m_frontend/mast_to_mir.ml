@@ -1209,8 +1209,7 @@ let add_dummy_definitions_for_variable_declarations (var_data : Mir.variable_dat
       | Input -> add_var var decl var_data
       | Output | Regular ->
           if
-            List.for_all
-              (fun var' -> var'.Mir.Variable.execution_number.Mir.rule_number = -1)
+            List.for_all Mir.is_dummy_variable
               (Pos.VarNameToID.find (Pos.unmark var.Mir.Variable.name) idmap)
           then
             Cli.var_info_print "variable %s declared %a is never defined in the application"

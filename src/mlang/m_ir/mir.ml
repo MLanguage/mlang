@@ -482,23 +482,24 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
+let sort_by_lowest_exec_number v1 v2 =
+  -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
+(* here the minus sign is to have the "meaningful" execution numbers first, and the declarative
+   execution number last *)
+
+let sort_by_highest_exec_number v1 v2 =
+  compare v1.Variable.execution_number v2.Variable.execution_number
+
+let get_var_sorted_by_execution_number (p : program) (name : string) sort : Variable.t =
+  let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
+  List.hd vars
+
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try
-    let vars =
-      Pos.VarNameToID.find (Pos.unmark name) p.program_idmap
-      |> List.sort (fun v1 v2 ->
-             -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
-             (* here the minus sign is to have the "meaningful" execution numbers first, and the
-                declarative execution number last *))
-    in
-    List.hd vars
+  try get_var_sorted_by_execution_number p (Pos.unmark name) sort_by_lowest_exec_number
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
-      List.hd
-        (List.sort
-           (fun v1 v2 -> compare v1.Variable.execution_number v2.Variable.execution_number)
-           (Pos.VarNameToID.find name p.program_idmap))
+      get_var_sorted_by_execution_number p name sort_by_highest_exec_number
     with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
 (** Explores the rules to find rule and variable data *)
@@ -544,17 +545,15 @@ let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program) (acc :
         acc rule_data.rule_vars)
     p.program_rules acc
 
+let is_dummy_variable (var : Variable.t) : bool = var.execution_number.rule_number = -1
+
 let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
   fold_vars
     (fun var var_data acc ->
       if
         var_data.var_io = io_to_find
         && var
-           = List.hd
-               (Pos.VarNameToID.find (Pos.unmark var.name) p.program_idmap
-               |> List.sort (fun v1 v2 ->
-                      -compare_execution_number v1.Variable.execution_number
-                         v2.Variable.execution_number))
+           = get_var_sorted_by_execution_number p (Pos.unmark var.name) sort_by_lowest_exec_number
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
