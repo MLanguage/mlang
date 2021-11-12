@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
                         // Here we move to controlling the outputs, so we
                         // have to run the computation!
                         m_input_from_array(input_for_m, input_array_for_m);
-                        errors = malloc(sizeof(Errors));
+                        errors = malloc(sizeof(error_occurrences));
                         output_for_m->errors = errors;
                         m_extracted(output_for_m, input_for_m);
                         free(output_for_m->errors);
