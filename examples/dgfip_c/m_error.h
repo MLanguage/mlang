@@ -22,12 +22,12 @@
 typedef enum error_kind { Anomaly, Discordance, Information } error_kind;
 
 typedef struct m_error {
-  char kind[2];
-  char major_code[4];
-  char minor_code[7];
-  char description[81];
-  char isisf[2];
-  char code_information[10];
+  const char* kind;
+  const char* major_code;
+  const char* minor_code;
+  const char* description;
+  const char* isisf;
+  const char* code_information;
 } m_error;
 
 typedef struct m_error_occurrence {
