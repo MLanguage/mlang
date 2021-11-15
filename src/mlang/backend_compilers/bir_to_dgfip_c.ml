@@ -170,30 +170,29 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Mir.Variable.t
 let generate_var_cond (var_indexes : int Mir.VariableMap.t) (cond : condition_data)
     (oc : Format.formatter) =
   let scond, defs = generate_c_expr cond.cond_expr var_indexes in
-  Format.fprintf oc "@[<hv 0>%acond = %s;@,\
-  @[<hv 2>if (m_is_defined_true(cond)){@,\
-  %a@]@,\
-  }@,@,@]"
+  Format.fprintf oc "@[<hv 0>%acond = %s;@,@[<hv 2>if (m_is_defined_true(cond)){@,%a@]@,}@,@,@]"
     (format_local_vars_defs var_indexes)
     defs scond
     (fun oc () ->
-        let error, _ = cond.cond_error in
-        let error_pos = error.id in
-        Format.fprintf oc "@[<hv 0>m_error_occurrence occurrence = output->errors[%d]; @,\
-           occurrence.error = &m_errors[%d]; @,\
-           occurrence.has_occurred = true;@]@," error_pos error_pos;
+      let error, _ = cond.cond_error in
+      let error_pos = error.id in
+      Format.fprintf oc
+        "@[<hv 0>m_error_occurrence occurrence = output->errors[%d]; @,\
+         occurrence.error = &m_errors[%d]; @,\
+         occurrence.has_occurred = true;@]@,"
+        error_pos error_pos;
       if (fst cond.cond_error).Mir.Error.typ = Mast.Anomaly then
-               Format.fprintf oc
+        Format.fprintf oc
           "output->is_error = true;@,\
            #ifndef ANOMALY_LIMIT @,\
            free(TGV); @,\
            free(LOCAL); @,\
            return -1; @,\
            #else /* ANOMALY_LIMIT */ @,\
-           @[<hv 2>if (anomaly_count >= max_anomalies) {@, \
-           free(TGV); @, \
-           free(LOCAL);@, \
-           return -1;@]@,\
+           @[<hv 2>if (anomaly_count >= max_anomalies) {@,\
+          \ free(TGV); @,\
+          \ free(LOCAL);@,\
+          \ return -1;@]@,\
            }@,\
            #endif /* ANOMALY_LIMIT */")
     ()
