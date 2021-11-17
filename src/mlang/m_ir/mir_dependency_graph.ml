@@ -1,15 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 module RG =
   Graph.Persistent.Digraph.ConcreteBidirectionalLabeled
@@ -31,10 +34,11 @@ module RG =
     end)
 
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
-let rec get_used_variables_ (e : Mir.expression Pos.marked) (acc : Mir.VariableDict.t) :
-    Mir.VariableDict.t =
+let rec get_used_variables_ (e : Mir.expression Pos.marked)
+    (acc : Mir.VariableDict.t) : Mir.VariableDict.t =
   match Pos.unmark e with
-  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2) ->
+  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2)
+    ->
       let acc = get_used_variables_ e1 acc in
       let acc = get_used_variables_ e2 acc in
       acc
@@ -80,9 +84,12 @@ let create_rules_dependency_graph (program : Mir.program)
               (fun succ var_deps ->
                 let rsucc = Mir.VariableMap.find succ vars_to_rules in
                 let vsuccs =
-                  try Mir.RuleMap.find rsucc var_deps with Not_found -> Mir.VariableDict.empty
+                  try Mir.RuleMap.find rsucc var_deps
+                  with Not_found -> Mir.VariableDict.empty
                 in
-                Mir.RuleMap.add rsucc (Mir.VariableDict.add succ vsuccs) var_deps)
+                Mir.RuleMap.add rsucc
+                  (Mir.VariableDict.add succ vsuccs)
+                  var_deps)
               succs Mir.RuleMap.empty
           in
           Mir.RuleMap.fold
@@ -109,10 +116,12 @@ module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
 let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
-  (* Find a cycle within a list of strongly connected components. Depth first traversal *)
+  (* Find a cycle within a list of strongly connected components. Depth first
+     traversal *)
   let cycle_within g vtx =
     let exception Found of (RG.V.t * RG.E.t) list in
-    (* Find an already passed vertex. Return all vertexes passed from that point *)
+    (* Find an already passed vertex. Return all vertexes passed from that
+       point *)
     let rec find_seen_suffix v seen =
       match seen with
       | [] -> None
@@ -137,7 +146,8 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
       assert false
     with Found cycle -> cycle
   in
-  (* if there is a cycle, there will be an strongly connected component of cardinality > 1 *)
+  (* if there is a cycle, there will be an strongly connected component of
+     cardinality > 1 *)
   let sccs = SCC.scc_list g in
   if List.length sccs < RG.nb_vertex g then begin
     let sccs = List.filter (fun scc -> List.length scc > 1) sccs in
@@ -147,12 +157,14 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
         (fun scc ->
           let edges = cycle_within g scc in
           cycles_strings :=
-            Format.asprintf "The following rules contain circular definitions:\n%s\n"
+            Format.asprintf
+              "The following rules contain circular definitions:\n%s\n"
               (String.concat "\n"
                  (List.map
                     (fun (rule_id, edge) ->
                       let rule = Mir.RuleMap.find rule_id p.Mir.program_rules in
-                      Format.asprintf "%d with vars: %s" (Pos.unmark rule.rule_number)
+                      Format.asprintf "%d with vars: %s"
+                        (Pos.unmark rule.rule_number)
                         (RG.E.label edge))
                     edges))
             :: !cycles_strings)

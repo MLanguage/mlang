@@ -1,16 +1,18 @@
-(* Copyright (C) 2019-2021-2020 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
-   Raphaël Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021-2020 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 type rule_id = Mir.rule_id
 
@@ -34,7 +36,8 @@ type program = {
   outputs : unit Mir.VariableMap.t;
 }
 
-let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) : stmt list =
+let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
+    stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
@@ -48,15 +51,21 @@ let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) : stmt
   |> List.rev
 
 (** Returns program statements with all rules inlined *)
-let get_all_statements (p : program) : stmt list = get_block_statements p.rules p.statements
+let get_all_statements (p : program) : stmt list =
+  get_block_statements p.rules p.statements
 
-let squish_statements (program : program) (threshold : int) (rule_suffix : string) =
+let squish_statements (program : program) (threshold : int)
+    (rule_suffix : string) =
   let rule_from_stmts stmts =
     let id = Mir.fresh_rule_id () in
-    { rule_id = id; rule_name = rule_suffix ^ string_of_int id; rule_stmts = List.rev stmts }
+    {
+      rule_id = id;
+      rule_name = rule_suffix ^ string_of_int id;
+      rule_stmts = List.rev stmts;
+    }
   in
-  let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list) (curr_stmts : stmt list)
-      (rules : rule RuleMap.t) =
+  let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list)
+      (curr_stmts : stmt list) (rules : rule RuleMap.t) =
     match old_stmts with
     | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->
@@ -66,7 +75,9 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
           | SConditional (expr, t, f) ->
               let t_rules, t_curr_list = browse_bir t [] [] rules in
               let f_rules, f_curr_list = browse_bir f [] [] t_rules in
-              let cond = give_pos (SConditional (expr, t_curr_list, f_curr_list)) in
+              let cond =
+                give_pos (SConditional (expr, t_curr_list, f_curr_list))
+              in
               (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
@@ -79,7 +90,9 @@ let squish_statements (program : program) (threshold : int) (rule_suffix : strin
             []
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
-  let new_rules, new_stmts = browse_bir program.statements [] [] program.rules in
+  let new_rules, new_stmts =
+    browse_bir program.statements [] [] program.rules
+  in
   { program with statements = new_stmts; rules = new_rules }
 
 let count_instructions (p : program) : int =
@@ -88,13 +101,15 @@ let count_instructions (p : program) : int =
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
-        | SConditional (_, s1, s2) -> acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
+        | SConditional (_, s1, s2) ->
+            acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
   cond_instr_blocks p.statements
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
-  let rec get_assigned_variables_block acc (stmts : stmt list) : Mir.VariableDict.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) :
+      Mir.VariableDict.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
@@ -109,7 +124,8 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
   get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
-  let rec get_local_vars_expr acc (e : Mir.expression Pos.marked) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_expr acc (e : Mir.expression Pos.marked) :
+      unit Mir.LocalVariableMap.t =
     match Pos.unmark e with
     | Mir.Unop (_, e) | Mir.Index (_, e) -> get_local_vars_expr acc e
     | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) ->
@@ -121,7 +137,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
         get_local_vars_expr acc e3
     | Mir.FunctionCall (_, args) ->
         List.fold_left
-          (fun (acc : unit Mir.LocalVariableMap.t) arg -> get_local_vars_expr acc arg)
+          (fun (acc : unit Mir.LocalVariableMap.t) arg ->
+            get_local_vars_expr acc arg)
           acc args
     | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error -> acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
@@ -130,7 +147,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
         let acc = get_local_vars_expr acc e2 in
         Mir.LocalVariableMap.add lvar () acc
   in
-  let rec get_local_vars_block acc (stmts : stmt list) : unit Mir.LocalVariableMap.t =
+  let rec get_local_vars_block acc (stmts : stmt list) :
+      unit Mir.LocalVariableMap.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
@@ -141,7 +159,9 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             | Mir.TableVar (_, defs) -> (
                 match defs with
                 | Mir.IndexTable es ->
-                    Mir.IndexMap.fold (fun _ e acc -> get_local_vars_expr acc e) es acc
+                    Mir.IndexMap.fold
+                      (fun _ e acc -> get_local_vars_expr acc e)
+                      es acc
                 | Mir.IndexGeneric e -> get_local_vars_expr acc e)
             | _ -> acc)
         | SConditional (cond, s1, s2) ->

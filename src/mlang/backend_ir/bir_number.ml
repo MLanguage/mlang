@@ -1,15 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 module type NumberInterface = sig
   type t
@@ -169,14 +172,16 @@ module IntervalNumber : NumberInterface = struct
 
   let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
 
-  let format_t fmt f = Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
+  let format_t fmt f =
+    Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
 
   let floor x =
     let id = mpfr_float x.down in
     let iu = mpfr_float x.up in
     v id iu
 
-  let of_int i = v (Mpfrf.of_int (Int64.to_int i) Down) (Mpfrf.of_int (Int64.to_int i) Up)
+  let of_int i =
+    v (Mpfrf.of_int (Int64.to_int i) Down) (Mpfrf.of_int (Int64.to_int i) Up)
 
   let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
@@ -191,7 +196,9 @@ module IntervalNumber : NumberInterface = struct
       let prec_diff = fu -. fd in
       let digits = 1 - (Float.to_int @@ Float.log10 prec_diff) in
       Errors.raise_error
-        (Format.asprintf "Tried to convert interval to float, got two different bounds: [%.*f;%.*f]"
+        (Format.asprintf
+           "Tried to convert interval to float, got two different bounds: \
+            [%.*f;%.*f]"
            digits fd digits fu)
 
   let to_int (f : t) : Int64.t = Int64.of_float (to_float f)
@@ -206,8 +213,8 @@ module IntervalNumber : NumberInterface = struct
     if outd = outu then outu
     else
       Errors.raise_error
-        (Format.asprintf "Tried to compare %a = %a but got inconsistent results" format_t x format_t
-           y)
+        (Format.asprintf "Tried to compare %a = %a but got inconsistent results"
+           format_t x format_t y)
 
   let ( >=. ) x y =
     let outd = Mpfrf.cmp x.down y.down >= 0 in
@@ -215,7 +222,8 @@ module IntervalNumber : NumberInterface = struct
     if outd = outu then outu
     else
       Errors.raise_error
-        (Format.asprintf "Tried to compare %a >= %a but got inconsistent results" format_t x
+        (Format.asprintf
+           "Tried to compare %a >= %a but got inconsistent results" format_t x
            format_t y)
 
   let ( >. ) x y =
@@ -224,8 +232,8 @@ module IntervalNumber : NumberInterface = struct
     if outd = outu then outu
     else
       Errors.raise_error
-        (Format.asprintf "Tried to compare %a > %a but got inconsistent results" format_t x format_t
-           y)
+        (Format.asprintf "Tried to compare %a > %a but got inconsistent results"
+           format_t x format_t y)
 
   let ( <. ) x y =
     let outd = Mpfrf.cmp x.down y.down < 0 in
@@ -233,8 +241,8 @@ module IntervalNumber : NumberInterface = struct
     if outd = outu then outu
     else
       Errors.raise_error
-        (Format.asprintf "Tried to compare %a < %a but got inconsistent results" format_t x format_t
-           y)
+        (Format.asprintf "Tried to compare %a < %a but got inconsistent results"
+           format_t x format_t y)
 
   let ( <=. ) x y =
     let outd = Mpfrf.cmp x.down y.down <= 0 in
@@ -242,7 +250,8 @@ module IntervalNumber : NumberInterface = struct
     if outd = outu then outu
     else
       Errors.raise_error
-        (Format.asprintf "Tried to compare %a <= %a but got inconsistent results" format_t x
+        (Format.asprintf
+           "Tried to compare %a <= %a but got inconsistent results" format_t x
            format_t y)
 
   let ( +. ) x y = v (Mpfrf.add x.down y.down Down) (Mpfrf.add x.up y.up Up)
@@ -334,7 +343,9 @@ end) : NumberInterface = struct
   let format_t fmt (f : t) =
     Format.fprintf fmt "%f"
       (Mpfrf.to_float
-         (Mpfrf.div (Mpfrf.of_mpz f Near) (Mpfrf.of_mpz (precision_modulo ()) Near) Near))
+         (Mpfrf.div (Mpfrf.of_mpz f Near)
+            (Mpfrf.of_mpz (precision_modulo ()) Near)
+            Near))
 
   let modf x =
     let int_part, frac_part = Mpzf.tdiv_qr x (precision_modulo ()) in
@@ -352,7 +363,8 @@ end) : NumberInterface = struct
   let of_float (f : float) : t =
     let frac_part, int_part = Float.modf f in
     let frac_part_scaled = frac_part *. Mpzf.to_float (precision_modulo ()) in
-    Mpzf.add (Mpzf.of_float frac_part_scaled)
+    Mpzf.add
+      (Mpzf.of_float frac_part_scaled)
       (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
 
   let of_float_input _ (f : float) : t = of_float f
