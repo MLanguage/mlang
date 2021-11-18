@@ -32,11 +32,15 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | "exists_deposit_defined_variables" -> DepositDefinedVariables
   | "exists_taxbenefit_defined_variables" -> TaxbenefitDefinedVariables
   | "exists_taxbenefit_ceiled_variables" -> TaxbenefitCeiledVariables
-  | "call_m" -> Program
   | x ->
       if List.mem x translated_names then MppFunction x
       else
         Errors.raise_spanned_error (Format.sprintf "unknown callable %s" x) (Pos.get_position cname)
+
+let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
+    (translated_names : string list) : mpp_callable * string Pos.marked list =
+  if Pos.unmark cname = "call_m" then (Program (Pos.unmark (List.hd args)), List.tl args)
+  else (to_mpp_callable cname translated_names, args)
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     (scope : mpp_compute_name list) (e : Mpp_ast.expr) : mpp_expr * Mpp_ast.var list =
@@ -53,7 +57,7 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
         let e', scope = to_mpp_expr p translated_names scope e in
         (Unop (Minus, e'), scope)
     | Call (c, args) ->
-        let c' = to_mpp_callable c translated_names in
+        let c', args = to_mpp_callable c args translated_names in
         let new_scope = List.map Pos.unmark args in
         let args' = List.map (to_scoped_var p) args in
         (Call (c', args'), new_scope)

@@ -9,7 +9,7 @@ compute_benefits():
     V_INDTEO = 1
     V_CALCUL_NAPS = 1
     partition with var_is_taxbenefit:
-      IAD11, INE, IRE <- call_m()
+      IAD11, INE, IRE <- call_m(calcul_primitif)
     V_CALCUL_NAPS = 0
     iad11 = cast(IAD11)
     ire = cast(IRE)
@@ -41,7 +41,9 @@ compute_double_liquidation3(outputs):
   8ZG = v_8ZG
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  outputs <- call_m()
+  outputs <- call_m(calcul_primitif_isf)
+  outputs <- call_m(calcul_primitif)
+  outputs <- call_m(calcul_primitif_taux)
 
 compute_double_liquidation_exit_taxe(outputs):
   annee = 2018 # FIXME

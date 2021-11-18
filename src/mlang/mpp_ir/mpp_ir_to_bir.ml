@@ -342,7 +342,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       translate_mpp_function mpp_program m_program
         (List.find (fun decl -> decl.Mpp_ir.name = f) mpp_program)
         real_args ctx
-  | Mpp_ir.Expr (Call (Program, args), _) ->
+  | Mpp_ir.Expr (Call (Program _chain, args), _) ->
       let real_args = match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args in
       let exec_order = m_program.main_execution_order in
       wrap_m_code_call m_program exec_order real_args ctx
