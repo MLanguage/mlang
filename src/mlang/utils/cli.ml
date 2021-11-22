@@ -136,12 +136,19 @@ let m_clean_calls =
           "Clean the value of computed variables between two m calls (to check that there is no \
            hidden state kept between two calls)")
 
+let dgfip_options =
+  Arg.(
+    value & opt (some (list string)) (None)
+    & info [ "dgfip_options" ]
+        ~doc:
+          "Specify DGFiP options (use --dgfip_options=--help to display DGFiP specific options)")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ no_print_cycles
     $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
     $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin
-    $ m_clean_calls)
+    $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
