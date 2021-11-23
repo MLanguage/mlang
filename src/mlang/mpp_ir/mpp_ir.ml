@@ -28,10 +28,12 @@ type scoped_var =
 
 (* variables defined in the M codebase *)
 
+type m_chaining = string
+
 type mpp_compute_name = string
 
 type mpp_callable =
-  | Program (* M codebase *)
+  | Program of m_chaining (* M codebase *)
   | MppFunction of mpp_compute_name
   | Present
   | Abs

@@ -33,9 +33,11 @@ compute_functions:
 
 ident:
 | i = IDENT { (i, mk_position $sloc) }
+;
 
 stmt:
 | args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN RPAREN NEWLINE { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN chain = ident RPAREN NEWLINE { Expr(Call(var, chain :: args), mk_position $sloc), mk_position $sloc }
 | var = IDENT EQ e = expr NEWLINE { Assign(var, e), mk_position $sloc }
 | DELETE var = IDENT NEWLINE { Delete var, mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
