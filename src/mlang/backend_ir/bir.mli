@@ -1,16 +1,18 @@
-(* Copyright (C) 2019-2021-2020 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
-   Raphaël Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021-2020 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 type rule_id = Mir.rule_id
 
@@ -37,10 +39,11 @@ type program = {
 val get_all_statements : program -> stmt list
 
 val squish_statements : program -> int -> string -> program
-(** In order to handle backends with limited function / method capacity, such as Java's 64kB of
-    bytecode per method, class, etc, this funciton allows a [program] to be split into chunks of an
-    arbitrary size using the string argument as a suffix to the new function / method name. We
-    piggyback on the existing rules semantics, with these chunks being rule definitions and
+(** In order to handle backends with limited function / method capacity, such as
+    Java's 64kB of bytecode per method, class, etc, this funciton allows a
+    [program] to be split into chunks of an arbitrary size using the string
+    argument as a suffix to the new function / method name. We piggyback on the
+    existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
 
 val count_instructions : program -> int

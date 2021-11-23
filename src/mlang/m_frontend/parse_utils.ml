@@ -1,15 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 module E = Errors
 
@@ -44,14 +47,16 @@ let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
     else parameters := p :: !parameters
   done;
   if dup_exists !parameters then
-    E.raise_spanned_error "variable parameters should have distinct names" (mk_position sloc);
+    E.raise_spanned_error "variable parameters should have distinct names"
+      (mk_position sloc);
   { Mast.parameters = !parameters; Mast.base = s }
 
 let parse_variable sloc (s : string) =
   try Mast.Normal (parse_variable_name sloc s)
   with E.StructuredError _ -> (
     try Mast.Generic (parse_variable_generic_name sloc s)
-    with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc))
+    with E.StructuredError _ ->
+      E.raise_spanned_error "invalid variable name" (mk_position sloc))
 
 type parse_val = ParseVar of Mast.variable | ParseInt of int
 
@@ -61,25 +66,29 @@ let parse_variable_or_int sloc (s : string) : parse_val =
     try ParseVar (Mast.Normal (parse_variable_name sloc s))
     with E.StructuredError _ -> (
       try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
-      with E.StructuredError _ -> E.raise_spanned_error "invalid variable name" (mk_position sloc)))
+      with E.StructuredError _ ->
+        E.raise_spanned_error "invalid variable name" (mk_position sloc)))
 
 let parse_table_index sloc (s : string) : Mast.table_index =
   try Mast.LiteralIndex (int_of_string s)
   with Failure _ -> (
     try Mast.SymbolIndex (parse_variable sloc s)
     with E.StructuredError _ ->
-      E.raise_spanned_error "table index should be an integer" (mk_position sloc))
+      E.raise_spanned_error "table index should be an integer"
+        (mk_position sloc))
 
 (**{1 Literal parsing}*)
 
 let parse_literal sloc (s : string) : Mast.literal =
-  try Mast.Float (float_of_string s) with Failure _ -> Mast.Variable (parse_variable sloc s)
+  try Mast.Float (float_of_string s)
+  with Failure _ -> Mast.Variable (parse_variable sloc s)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
 let parse_int sloc (s : string) : int =
   try int_of_string s
-  with Failure _ -> E.raise_spanned_error "should be an integer" (mk_position sloc)
+  with Failure _ ->
+    E.raise_spanned_error "should be an integer" (mk_position sloc)
 
 let parse_string (s : string) : string =
   (* we remove the quotes *)

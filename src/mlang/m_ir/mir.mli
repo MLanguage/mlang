@@ -1,19 +1,22 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
-   Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 type execution_number = {
-  rule_number : int;  (** Written in the name of the rule or verification condition *)
+  rule_number : int;
+      (** Written in the name of the rule or verification condition *)
   seq_number : int;  (** Index in the sequence of the definitions in the rule *)
   pos : Pos.t;
 }
@@ -28,12 +31,14 @@ type variable_id = int
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which the variable is
-          defined *)
+      (** The number associated with the rule of verification condition in which
+          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
-  descr : string Pos.marked;  (** Description taken from the variable declaration *)
-  attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  descr : string Pos.marked;
+      (** Description taken from the variable declaration *)
+  attributes :
+    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
   is_income : bool;
   is_table : int option;
 }
@@ -60,19 +65,27 @@ type func =
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
 
-(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
-    define conditional without an else branch although it is an expression-based language, we
-    include an [Error] constructor to which the missing else branch is translated to.
+(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
+    Because M lets you define conditional without an else branch although it is
+    an expression-based language, we include an [Error] constructor to which the
+    missing else branch is translated to.
 
-    Because translating to MIR requires a lot of unrolling and expansion, we introduce a [LocalLet]
-    construct to avoid code duplication. *)
+    Because translating to MIR requires a lot of unrolling and expansion, we
+    introduce a [LocalLet] construct to avoid code duplication. *)
 
 type expression =
   | Unop of (Mast.unop[@opaque]) * expression Pos.marked
-  | Comparison of (Mast.comp_op[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
-  | Binop of (Mast.binop[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
+  | Comparison of
+      (Mast.comp_op[@opaque]) Pos.marked
+      * expression Pos.marked
+      * expression Pos.marked
+  | Binop of
+      (Mast.binop[@opaque]) Pos.marked
+      * expression Pos.marked
+      * expression Pos.marked
   | Index of variable Pos.marked * expression Pos.marked
-  | Conditional of expression Pos.marked * expression Pos.marked * expression Pos.marked
+  | Conditional of
+      expression Pos.marked * expression Pos.marked * expression Pos.marked
   | FunctionCall of (func[@opaque]) * expression Pos.marked list
   | Literal of (literal[@opaque])
   | Var of variable
@@ -81,8 +94,8 @@ type expression =
   | Error
   | LocalLet of local_variable * expression Pos.marked * expression Pos.marked
 
-(** MIR programs are just mapping from variables to their definitions, and make a massive use of
-    [VariableMap]. *)
+(** MIR programs are just mapping from variables to their definitions, and make
+    a massive use of [VariableMap]. *)
 module VariableMap : sig
   include Map.S with type key = variable
 
@@ -103,27 +116,33 @@ module VariableSet : Set.S
 module LocalVariableMap : sig
   include Map.S with type key = local_variable
 
-  val map_printer : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val map_printer :
+    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
 module IndexMap : sig
   include Map.S with type key = int
 
-  val map_printer : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val map_printer :
+    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
 type index_def =
   | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
   | IndexGeneric of expression Pos.marked
 
-type variable_def = SimpleVar of expression Pos.marked | TableVar of int * index_def | InputVar
+type variable_def =
+  | SimpleVar of expression Pos.marked
+  | TableVar of int * index_def
+  | InputVar
 
 type io = Input | Output | Regular
 
 type variable_data = {
   var_definition : variable_def;
   var_typ : typ option;
-      (** The typing info here comes from the variable declaration in the source program *)
+      (** The typing info here comes from the variable declaration in the source
+          program *)
   var_io : io;
 }
 
@@ -183,21 +202,27 @@ type error = {
   typ : Mast.error_typ;
 }
 
-type condition_data = { cond_expr : expression Pos.marked; cond_error : error * variable option }
+type condition_data = {
+  cond_expr : expression Pos.marked;
+  cond_error : error * variable option;
+}
 
 type idmap = variable list Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type: Mir.variable}, so we need to keep
-    a mapping between the two. A name is mapped to a list of variables because variables can be
-    redefined in different rules *)
+(** We translate string variables into first-class unique {!type: Mir.variable},
+    so we need to keep a mapping between the two. A name is mapped to a list of
+    variables because variables can be redefined in different rules *)
 
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_vars : variable_dict;
-      (** A static register of all variables that can be used during a calculation *)
+      (** A static register of all variables that can be used during a
+          calculation *)
   program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization passes *)
-  program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
+      (** Definitions of variables, some may be removed during optimization
+          passes *)
+  program_conds : condition_data VariableMap.t;
+      (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
 }
@@ -208,12 +233,14 @@ module Variable : sig
   type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     execution_number : execution_number;
-        (** The number associated with the rule of verification condition in which the variable is
-            defined *)
+        (** The number associated with the rule of verification condition in
+            which the variable is defined *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
-    descr : string Pos.marked;  (** Description taken from the variable declaration *)
-    attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attributes :
+      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
     is_table : int option;
   }
@@ -233,9 +260,9 @@ module Variable : sig
   val compare : t -> t -> int
 end
 
-(** Local variables don't appear in the M source program but can be introduced by let bindings when
-    translating to MIR. They should be De Bruijn indices but instead are unique globals identifiers
-    out of laziness. *)
+(** Local variables don't appear in the M source program but can be introduced
+    by let bindings when translating to MIR. They should be De Bruijn indices
+    but instead are unique globals identifiers out of laziness. *)
 module LocalVariable : sig
   type t = local_variable = { id : int }
 
@@ -304,7 +331,8 @@ val find_var_name_by_alias : program -> string Pos.marked -> string
 
 val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
 
-val map_vars : (variable -> variable_data -> variable_data) -> program -> program
+val map_vars :
+  (variable -> variable_data -> variable_data) -> program -> program
 
 val compare_execution_number : execution_number -> execution_number -> rule_id
 
@@ -319,16 +347,17 @@ val fresh_rule_id : unit -> rule_id
 val initial_undef_rule_id : rule_id
 
 val find_var_by_name : program -> string Pos.marked -> variable
-(** Get a variable for a given name or alias, because of SSA multiple variables share a name or
-    alias. If an alias is provided, the variable returned is that with the lowest execution number.
-    When a name is provided, then the variable with the highest execution number is returned. *)
+(** Get a variable for a given name or alias, because of SSA multiple variables
+    share a name or alias. If an alias is provided, the variable returned is
+    that with the lowest execution number. When a name is provided, then the
+    variable with the highest execution number is returned. *)
 
 val is_dummy_variable : Variable.t -> bool
 
 val find_vars_by_io : program -> io -> VariableDict.t
-(** Returns a VariableDict.t containing all the variables that have a given io type, only one
-    variable per name is entered in the VariableDict.t, this function chooses the one with the
-    highest execution number*)
+(** Returns a VariableDict.t containing all the variables that have a given io
+    type, only one variable per name is entered in the VariableDict.t, this
+    function chooses the one with the highest execution number*)
 
 val rule_number_and_tags_of_rule_name :
   Mast.rule_name -> rule_id Pos.marked * rule_tag Pos.marked list

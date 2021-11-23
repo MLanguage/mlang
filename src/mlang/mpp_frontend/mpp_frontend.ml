@@ -1,30 +1,34 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
-   Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(* FIXME: scope is only to know variables stored in ctx by previous computation. We don't check that
-   local variables read have been defined previously *)
+(* FIXME: scope is only to know variables stored in ctx by previous computation.
+   We don't check that local variables read have been defined previously *)
 
 open Mpp_ir
 
-let to_scoped_var ?(scope = Input) (p : Mir.program) (var : Mpp_ast.var Pos.marked) : scoped_var =
+let to_scoped_var ?(scope = Input) (p : Mir.program)
+    (var : Mpp_ast.var Pos.marked) : scoped_var =
   let var_s = Pos.unmark var in
   if String.uppercase_ascii var_s = var_s then
     (* we have an MBased variable *)
     Mbased (Mir.find_var_by_name p var, scope)
   else Local var_s
 
-let to_mpp_callable (cname : string Pos.marked) (translated_names : string list) : mpp_callable =
+let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
+    : mpp_callable =
   match Pos.unmark cname with
   | "present" -> Present
   | "abs" -> Abs
@@ -35,15 +39,19 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | x ->
       if List.mem x translated_names then MppFunction x
       else
-        Errors.raise_spanned_error (Format.sprintf "unknown callable %s" x) (Pos.get_position cname)
+        Errors.raise_spanned_error
+          (Format.sprintf "unknown callable %s" x)
+          (Pos.get_position cname)
 
 let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
     (translated_names : string list) : mpp_callable * string Pos.marked list =
-  if Pos.unmark cname = "call_m" then (Program (Pos.unmark (List.hd args)), List.tl args)
+  if Pos.unmark cname = "call_m" then
+    (Program (Pos.unmark (List.hd args)), List.tl args)
   else (to_mpp_callable cname translated_names, args)
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
-    (scope : mpp_compute_name list) (e : Mpp_ast.expr) : mpp_expr * Mpp_ast.var list =
+    (scope : mpp_compute_name list) (e : Mpp_ast.expr) :
+    mpp_expr * Mpp_ast.var list =
   let e', scope =
     match Pos.unmark e with
     | Constant i -> (Constant i, scope)
@@ -78,12 +86,14 @@ let to_mpp_filter (f : string Pos.marked) : mpp_filter =
       (Pos.get_position f)
 
 let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
-    (scope : mpp_compute_name list) (stmt : Mpp_ast.stmt) : mpp_stmt * Mpp_ast.var list =
+    (scope : mpp_compute_name list) (stmt : Mpp_ast.stmt) :
+    mpp_stmt * Mpp_ast.var list =
   let stmt', scope =
     match Pos.unmark stmt with
     | Assign (v, e) ->
         ( Assign
-            (to_scoped_var p (Pos.same_pos_as v e), fst @@ to_mpp_expr p translated_names scope e),
+            ( to_scoped_var p (Pos.same_pos_as v e),
+              fst @@ to_mpp_expr p translated_names scope e ),
           scope )
     | Conditional (b, t, f) ->
         ( Conditional
@@ -97,13 +107,15 @@ let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
         (Expr e', scope)
     | Partition (f, body) ->
         ( Partition
-            (to_mpp_filter (Pos.same_pos_as f stmt), to_mpp_stmts p translated_names ~scope body),
+            ( to_mpp_filter (Pos.same_pos_as f stmt),
+              to_mpp_stmts p translated_names ~scope body ),
           scope )
   in
   (Pos.same_pos_as stmt' stmt, scope)
 
 and to_mpp_stmts (p : Mir.program) (translated_names : mpp_compute_name list)
-    ?(scope : mpp_compute_name list = []) (stmts : Mpp_ast.stmt list) : mpp_stmt list =
+    ?(scope : mpp_compute_name list = []) (stmts : Mpp_ast.stmt list) :
+    mpp_stmt list =
   List.rev @@ fst
   @@ List.fold_left
        (fun (translated_stmts, scope) cstmt ->
@@ -115,14 +127,19 @@ let cdef_to_adef (p : Mir.program) (translated_names : mpp_compute_name list)
     (cdef : Mpp_ast.compute) : Mpp_ir.mpp_compute =
   let name = cdef.Mpp_ast.name in
   assert (not @@ List.mem name translated_names);
-  { name; args = []; (* FIXME *)
-                     body = to_mpp_stmts p translated_names cdef.body }
+  {
+    name;
+    args = [];
+    (* FIXME *)
+    body = to_mpp_stmts p translated_names cdef.body;
+  }
 
 let cst_to_ast (c : Mpp_ast.program) (p : Mir.program) : Mpp_ir.mpp_program =
   List.rev @@ fst
   @@ List.fold_left
        (fun (mpp_acc, translated_names) cdef ->
-         (cdef_to_adef p translated_names cdef :: mpp_acc, cdef.Mpp_ast.name :: translated_names))
+         ( cdef_to_adef p translated_names cdef :: mpp_acc,
+           cdef.Mpp_ast.name :: translated_names ))
        ([], []) c
 
 let process (mpp_file : string) (p : Mir_interface.full_program) : mpp_program =

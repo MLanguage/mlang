@@ -1,16 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
-   Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 (** Main data structure for M analysis *)
 
@@ -19,14 +21,16 @@
 (** Variables are first-class objects *)
 
 type execution_number = {
-  rule_number : int;  (** Written in the name of the rule or verification condition *)
+  rule_number : int;
+      (** Written in the name of the rule or verification condition *)
   seq_number : int;  (** Index in the sequence of the definitions in the rule *)
   pos : Pos.t;
 }
-(** To determine in which order execute the different variable assigment we have to record their
-    position in the graph. *)
+(** To determine in which order execute the different variable assigment we have
+    to record their position in the graph. *)
 
-let compare_execution_number (n1 : execution_number) (n2 : execution_number) : int =
+let compare_execution_number (n1 : execution_number) (n2 : execution_number) :
+    int =
   if n1.rule_number = n2.rule_number then compare n1.seq_number n2.seq_number
   else compare n1.rule_number n2.rule_number
 
@@ -34,29 +38,36 @@ type max_result =
   | Left
   | Right  (** Operator used to select the most preferable variable to choose *)
 
-let max_exec_number (left : execution_number) (right : execution_number) : max_result =
+let max_exec_number (left : execution_number) (right : execution_number) :
+    max_result =
   if left.rule_number > right.rule_number then Left
   else if left.rule_number < right.rule_number then Right
   else if left.seq_number > right.seq_number then Left
   else if left.seq_number < right.seq_number then Right
   else Left
 
-(** This is the operator used to determine the if a candidate definition is valid at a given point *)
-let is_candidate_valid (candidate : execution_number) (current : execution_number)
-    (is_lvalue : bool) : bool =
+(** This is the operator used to determine the if a candidate definition is
+    valid at a given point *)
+let is_candidate_valid (candidate : execution_number)
+    (current : execution_number) (is_lvalue : bool) : bool =
   if is_lvalue then
-    (* This is the case where we are using variable [VAR] while defining [VAR]: i.e we are querying
-       the left hand side of the assignation. The valid definitions here are either the declaration
-       or earlier definitions in the same rules. *)
+    (* This is the case where we are using variable [VAR] while defining [VAR]:
+       i.e we are querying the left hand side of the assignation. The valid
+       definitions here are either the declaration or earlier definitions in the
+       same rules. *)
     candidate.rule_number = -1
-    || (candidate.rule_number = current.rule_number && candidate.seq_number < current.seq_number)
+    || candidate.rule_number = current.rule_number
+       && candidate.seq_number < current.seq_number
   else
-    (* In this case, we are using [FOO] in the definition of [BAR]. Then valid definitions of [FOO]
-       include all that are in different rules or earlier definition in the same rule. *)
-    candidate.rule_number <> current.rule_number || candidate.seq_number < current.seq_number
+    (* In this case, we are using [FOO] in the definition of [BAR]. Then valid
+       definitions of [FOO] include all that are in different rules or earlier
+       definition in the same rule. *)
+    candidate.rule_number <> current.rule_number
+    || candidate.seq_number < current.seq_number
 
 (** This is the operator used to find a particular variable in the [idmap] *)
-let same_execution_number (en1 : execution_number) (en2 : execution_number) : bool =
+let same_execution_number (en1 : execution_number) (en2 : execution_number) :
+    bool =
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
 type variable_id = int
@@ -65,12 +76,14 @@ type variable_id = int
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which the variable is
-          defined *)
+      (** The number associated with the rule of verification condition in which
+          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
-  descr : string Pos.marked;  (** Description taken from the variable declaration *)
-  attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  descr : string Pos.marked;
+      (** Description taken from the variable declaration *)
+  attributes :
+    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
   is_income : bool;
   is_table : int option;
 }
@@ -81,12 +94,14 @@ module Variable = struct
   type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     execution_number : execution_number;
-        (** The number associated with the rule of verification condition in which the variable is
-            defined *)
+        (** The number associated with the rule of verification condition in
+            which the variable is defined *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
-    descr : string Pos.marked;  (** Description taken from the variable declaration *)
-    attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attributes :
+      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
     is_income : bool;
     is_table : int option;
   }
@@ -98,18 +113,28 @@ module Variable = struct
       counter := !counter + 1;
       v
 
-  let new_var (name : string Pos.marked) (alias : string option) (descr : string Pos.marked)
-      (execution_number : execution_number)
-      ~(attributes : (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list)
-      ~(is_income : bool) ~(is_table : int option) : t =
-    { name; id = fresh_id (); descr; alias; execution_number; attributes; is_income; is_table }
+  let new_var (name : string Pos.marked) (alias : string option)
+      (descr : string Pos.marked) (execution_number : execution_number)
+      ~(attributes :
+         (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked)
+         list) ~(is_income : bool) ~(is_table : int option) : t =
+    {
+      name;
+      id = fresh_id ();
+      descr;
+      alias;
+      execution_number;
+      attributes;
+      is_income;
+      is_table;
+    }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-(** Local variables don't appear in the M source program but can be introduced by let bindings when
-    translating to MIR. They should be De Bruijn indices but instead are unique globals identifiers
-    out of laziness. *)
+(** Local variables don't appear in the M source program but can be introduced
+    by let bindings when translating to MIR. They should be De Bruijn indices
+    but instead are unique globals identifiers out of laziness. *)
 
 type local_variable = { id : int }
 
@@ -152,35 +177,46 @@ type func =
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
 
-(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars. Because M lets you
-    define conditional without an else branch although it is an expression-based language, we
-    include an [Error] constructor to which the missing else branch is translated to.
+(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
+    Because M lets you define conditional without an else branch although it is
+    an expression-based language, we include an [Error] constructor to which the
+    missing else branch is translated to.
 
-    Because translating to MIR requires a lot of unrolling and expansion, we introduce a [LocalLet]
-    construct to avoid code duplication. *)
+    Because translating to MIR requires a lot of unrolling and expansion, we
+    introduce a [LocalLet] construct to avoid code duplication. *)
 
 type expression =
   | Unop of (Mast.unop[@opaque]) * expression Pos.marked
-  | Comparison of (Mast.comp_op[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
-  | Binop of (Mast.binop[@opaque]) Pos.marked * expression Pos.marked * expression Pos.marked
+  | Comparison of
+      (Mast.comp_op[@opaque]) Pos.marked
+      * expression Pos.marked
+      * expression Pos.marked
+  | Binop of
+      (Mast.binop[@opaque]) Pos.marked
+      * expression Pos.marked
+      * expression Pos.marked
   | Index of (Variable.t[@opaque]) Pos.marked * expression Pos.marked
-  | Conditional of expression Pos.marked * expression Pos.marked * expression Pos.marked
+  | Conditional of
+      expression Pos.marked * expression Pos.marked * expression Pos.marked
   | FunctionCall of (func[@opaque]) * expression Pos.marked list
   | Literal of (literal[@opaque])
   | Var of (Variable.t[@opaque])
   | LocalVar of (LocalVariable.t[@opaque])
   | GenericTableIndex
   | Error
-  | LocalLet of (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
+  | LocalLet of
+      (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
 
-(** MIR programs are just mapping from variables to their definitions, and make a massive use of
-    [VariableMap]. *)
+(** MIR programs are just mapping from variables to their definitions, and make
+    a massive use of [VariableMap]. *)
 module VariableMap = struct
   include Map.Make (Variable)
 
   let map_printer key_printer value_printer fmt map =
     Format.fprintf fmt "{ %a }"
-      (fun fmt -> iter (fun k v -> Format.fprintf fmt "%a ~> %a, " key_printer k value_printer v))
+      (fun fmt ->
+        iter (fun k v ->
+            Format.fprintf fmt "%a ~> %a, " key_printer k value_printer v))
       map
 end
 
@@ -229,12 +265,14 @@ module LocalVariableMap = struct
 
   let map_printer value_printer fmt map =
     Format.fprintf fmt "{ %a }"
-      (fun fmt -> iter (fun var v -> Format.fprintf fmt "%d ~> %a, " var.id value_printer v))
+      (fun fmt ->
+        iter (fun var v ->
+            Format.fprintf fmt "%d ~> %a, " var.id value_printer v))
       map
 end
 
-(** This map is used to store the definitions of all the cells of a table variable that is not not
-    defined generically *)
+(** This map is used to store the definitions of all the cells of a table
+    variable that is not not defined generically *)
 module IndexMap = struct
   include Map.Make (struct
     type t = int
@@ -244,7 +282,8 @@ module IndexMap = struct
 
   let map_printer value_printer fmt map =
     Format.fprintf fmt "{ %a }"
-      (fun fmt -> iter (fun k v -> Format.fprintf fmt "%d ~> %a, " k value_printer v))
+      (fun fmt ->
+        iter (fun k v -> Format.fprintf fmt "%d ~> %a, " k value_printer v))
       map
 end
 
@@ -252,16 +291,21 @@ type index_def =
   | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
   | IndexGeneric of expression Pos.marked
 
-(** The definitions here are modeled closely to the source M language. One could also adopt a more
-    lambda-calculus-compatible model with functions used to model tables. *)
-type variable_def = SimpleVar of expression Pos.marked | TableVar of int * index_def | InputVar
+(** The definitions here are modeled closely to the source M language. One could
+    also adopt a more lambda-calculus-compatible model with functions used to
+    model tables. *)
+type variable_def =
+  | SimpleVar of expression Pos.marked
+  | TableVar of int * index_def
+  | InputVar
 
 type io = Input | Output | Regular
 
 type variable_data = {
   var_definition : variable_def;
   var_typ : typ option;
-      (** The typing info here comes from the variable declaration in the source program *)
+      (** The typing info here comes from the variable declaration in the source
+          program *)
   var_io : io;
 }
 
@@ -346,7 +390,8 @@ let rule_number_and_tags_of_rule_name (rule_name : Mast.rule_name) :
         let num =
           try Pos.map_under_mark int_of_string n
           with _ ->
-            Errors.raise_spanned_error "this rule doesn't have an execution number"
+            Errors.raise_spanned_error
+              "this rule doesn't have an execution number"
               (Pos.get_position (List.hd rule_name))
         in
         (num, tags)
@@ -354,7 +399,9 @@ let rule_number_and_tags_of_rule_name (rule_name : Mast.rule_name) :
         let tag =
           try Pos.map_under_mark rule_tag_of_string h
           with _ ->
-            Errors.raise_spanned_error ("Unknown rule tag " ^ Pos.unmark h) (Pos.get_position h)
+            Errors.raise_spanned_error
+              ("Unknown rule tag " ^ Pos.unmark h)
+              (Pos.get_position h)
         in
         aux (tag :: tags) t
   in
@@ -419,11 +466,20 @@ module Error = struct
       major_code = List.nth error.error_descr 1;
       minor_code = List.nth error.error_descr 2;
       description = List.nth error.error_descr 3;
-      isisf = (match List.nth_opt error.error_descr 4 with Some s -> s | None -> ("", Pos.no_pos));
+      isisf =
+        (match List.nth_opt error.error_descr 4 with
+        | Some s -> s
+        | None -> ("", Pos.no_pos));
     }
 
-  let new_error (name : string Pos.marked) (error : Mast.error_) (error_typ : Mast.error_typ) : t =
-    { name; id = fresh_id (); descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
+  let new_error (name : string Pos.marked) (error : Mast.error_)
+      (error_typ : Mast.error_typ) : t =
+    {
+      name;
+      id = fresh_id ();
+      descr = error |> mast_error_desc_to_ErrorDesc;
+      typ = error_typ;
+    }
 
   let err_descr_string (err : t) =
     Pos.same_pos_as
@@ -446,18 +502,22 @@ type condition_data = {
 }
 
 type idmap = Variable.t list Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type: Mir.Variable.t}, so we need to
-    keep a mapping between the two. A name is mapped to a list of variables because variables can be
-    redefined in different rules *)
+(** We translate string variables into first-class unique {!type:
+    Mir.Variable.t}, so we need to keep a mapping between the two. A name is
+    mapped to a list of variables because variables can be redefined in
+    different rules *)
 
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_vars : VariableDict.t;
-      (** A static register of all variables that can be used during a calculation *)
+      (** A static register of all variables that can be used during a
+          calculation *)
   program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization passes *)
-  program_conds : condition_data VariableMap.t;  (** Conditions are affected to dummy variables *)
+      (** Definitions of variables, some may be removed during optimization
+          passes *)
+  program_conds : condition_data VariableMap.t;
+      (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
 }
@@ -472,7 +532,8 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         match (acc, v.Variable.alias) with
         | Some _, _ | None, None -> acc
         | None, Some v_alias ->
-            if v_alias = Pos.unmark alias then Some (Pos.unmark v.Variable.name) else None)
+            if v_alias = Pos.unmark alias then Some (Pos.unmark v.Variable.name)
+            else None)
       p.program_vars None
   in
   match v with
@@ -483,27 +544,33 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Pos.get_position alias)
 
 let sort_by_lowest_exec_number v1 v2 =
-  -compare_execution_number v1.Variable.execution_number v2.Variable.execution_number
-(* here the minus sign is to have the "meaningful" execution numbers first, and the declarative
-   execution number last *)
+  -compare_execution_number v1.Variable.execution_number
+     v2.Variable.execution_number
+(* here the minus sign is to have the "meaningful" execution numbers first, and
+   the declarative execution number last *)
 
 let sort_by_highest_exec_number v1 v2 =
   compare v1.Variable.execution_number v2.Variable.execution_number
 
-let get_var_sorted_by_execution_number (p : program) (name : string) sort : Variable.t =
+let get_var_sorted_by_execution_number (p : program) (name : string) sort :
+    Variable.t =
   let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
   List.hd vars
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try get_var_sorted_by_execution_number p (Pos.unmark name) sort_by_lowest_exec_number
+  try
+    get_var_sorted_by_execution_number p (Pos.unmark name)
+      sort_by_lowest_exec_number
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
       get_var_sorted_by_execution_number p name sort_by_highest_exec_number
-    with Not_found -> Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
+    with Not_found ->
+      Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
 (** Explores the rules to find rule and variable data *)
-let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_data =
+let find_var_definition (p : program) (var : Variable.t) :
+    rule_data * variable_data =
   (* using exceptions to cut short exploration *)
   let exception Found_rule of rule_data * variable_data in
   let exception Found_var of variable_data in
@@ -519,7 +586,8 @@ let find_var_definition (p : program) (var : Variable.t) : rule_data * variable_
     raise Not_found
   with Found_rule (rule, var) -> (rule, var)
 
-let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) : program =
+let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) :
+    program =
   let program_rules =
     RuleMap.map
       (fun rule_data ->
@@ -535,7 +603,8 @@ let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) : 
   in
   { p with program_rules }
 
-let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program) (acc : 'a) : 'a =
+let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program)
+    (acc : 'a) : 'a =
   RuleMap.fold
     (fun _ rule_data acc ->
       List.fold_left
@@ -545,7 +614,8 @@ let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program) (acc :
         acc rule_data.rule_vars)
     p.program_rules acc
 
-let is_dummy_variable (var : Variable.t) : bool = var.execution_number.rule_number = -1
+let is_dummy_variable (var : Variable.t) : bool =
+  var.execution_number.rule_number = -1
 
 let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
   fold_vars
@@ -553,7 +623,8 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       if
         var_data.var_io = io_to_find
         && var
-           = get_var_sorted_by_execution_number p (Pos.unmark var.name) sort_by_lowest_exec_number
+           = get_var_sorted_by_execution_number p (Pos.unmark var.name)
+               sort_by_lowest_exec_number
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
