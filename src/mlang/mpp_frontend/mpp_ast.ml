@@ -27,8 +27,8 @@ and stmt_kind =
   | Delete of var
   | Expr of expr
   (* | MultiAssign of var list * expr *)
-  (* no multiassign: all assignments performed to input scope. Multiassign-ed variables would have
-     output scope *)
+  (* no multiassign: all assignments performed to input scope. Multiassign-ed
+     variables would have output scope *)
   | Partition of filter * stmt list
 
 type compute = { name : compute_name; args : var list; body : stmt list }

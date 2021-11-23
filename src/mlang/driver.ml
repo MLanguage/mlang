@@ -1,48 +1,51 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 open Lexing
 open Mlexer
 
-let process_dgfip_options (backend : string option) (dgfip_options : string list option) =
-  match backend with
-  | Some (backend) when String.lowercase_ascii backend = "dgfip_c" ->
-      begin
-        match dgfip_options with
-        | None ->
-            Errors.raise_error "when using the DGFiP backend, DGFiP options MUST be provided"
-        | Some (options) ->
-            begin
-              match Dgfip_options.process_dgfip_options options with
-              | None ->
-                  Errors.raise_error "parsing of DGFiP options failed, aborting"
-              | Some (flags) ->
-                  flags
-            end
-      end
-  | _ ->
-      Dgfip_options.default_flags
-
-(** Entry function for the executable. Returns a negative number in case of error. *)
-let driver (files : string list) (debug : bool) (var_info_debug : string list) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
-    (function_spec : string option) (mpp_file : string) (output : string option)
-    (run_all_tests : string option) (run_test : string option) (mpp_function : string)
-    (optimize : bool) (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (test_error_margin : float option) (m_clean_calls : bool)
+let process_dgfip_options (backend : string option)
     (dgfip_options : string list option) =
-  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file print_cycles output
-    optimize_unsafe_float m_clean_calls;
+  match backend with
+  | Some backend when String.lowercase_ascii backend = "dgfip_c" -> begin
+      match dgfip_options with
+      | None ->
+          Errors.raise_error
+            "when using the DGFiP backend, DGFiP options MUST be provided"
+      | Some options -> begin
+          match Dgfip_options.process_dgfip_options options with
+          | None ->
+              Errors.raise_error "parsing of DGFiP options failed, aborting"
+          | Some flags -> flags
+        end
+    end
+  | _ -> Dgfip_options.default_flags
+
+(** Entry function for the executable. Returns a negative number in case of
+    error. *)
+let driver (files : string list) (debug : bool) (var_info_debug : string list)
+    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
+    (backend : string option) (function_spec : string option)
+    (mpp_file : string) (output : string option) (run_all_tests : string option)
+    (run_test : string option) (mpp_function : string) (optimize : bool)
+    (optimize_unsafe_float : bool) (code_coverage : bool)
+    (precision : string option) (test_error_margin : float option)
+    (m_clean_calls : bool) (dgfip_options : string list option) =
+  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
+    print_cycles output optimize_unsafe_float m_clean_calls;
   try
     let _dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
@@ -61,7 +64,10 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
         in
         current_progress source_file;
         let filebuf =
-          { filebuf with lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } }
+          {
+            filebuf with
+            lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
+          }
         in
         try
           let commands = Mparser.source_file token filebuf in
@@ -83,7 +89,9 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
     Cli.debug_print "Checking for circular variable definitions...";
-    if Mir_dependency_graph.check_for_cycle full_m_program.dep_graph full_m_program.program true
+    if
+      Mir_dependency_graph.check_for_cycle full_m_program.dep_graph
+        full_m_program.program true
     then Errors.raise_error "Cycles between rules.";
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let full_m_program =
@@ -93,14 +101,18 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
         | None -> full_m_program.program)
     in
     Cli.debug_print "Creating combined program suitable for execution...";
-    let combined_program = Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function in
+    let combined_program =
+      Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function
+    in
     let value_sort =
       let precision = Option.get precision in
       if precision = "double" then Bir_interpreter.RegularFloat
       else
         let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
         if Re.Pcre.pmatch ~rex:mpfr_regex precision then
-          let mpfr_prec = Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1 in
+          let mpfr_prec =
+            Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1
+          in
           Bir_interpreter.MPFR (int_of_string mpfr_prec)
         else if precision = "interval" then Bir_interpreter.Interval
         else
@@ -111,33 +123,44 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
             in
             Bir_interpreter.BigInt (int_of_string fixpoint_prec)
           else if precision = "mpq" then Bir_interpreter.Rational
-          else Errors.raise_error (Format.asprintf "Unkown precision option: %s" precision)
+          else
+            Errors.raise_error
+              (Format.asprintf "Unkown precision option: %s" precision)
     in
     if run_all_tests <> None then begin
       if code_coverage && optimize then
         Errors.raise_error
-          "Code coverage and program optimizations cannot be enabled together when running a test \
-           suite, check your command-line options";
-      let tests : string = match run_all_tests with Some s -> s | _ -> assert false in
-      Test_interpreter.check_all_tests combined_program tests optimize code_coverage value_sort
+          "Code coverage and program optimizations cannot be enabled together \
+           when running a test suite, check your command-line options";
+      let tests : string =
+        match run_all_tests with Some s -> s | _ -> assert false
+      in
+      Test_interpreter.check_all_tests combined_program tests optimize
+        code_coverage value_sort
         (Option.get test_error_margin)
     end
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       if code_coverage then
-        Cli.warning_print "The code coverage flag is ignored when running a single test";
-      let test : string = match run_test with Some s -> s | _ -> assert false in
+        Cli.warning_print
+          "The code coverage flag is ignored when running a single test";
+      let test : string =
+        match run_test with Some s -> s | _ -> assert false
+      in
       ignore
-        (Test_interpreter.check_test combined_program test optimize false value_sort
+        (Test_interpreter.check_test combined_program test optimize false
+           value_sort
            (Option.get test_error_margin));
       Cli.result_print "Test passed!"
     end
     else begin
-      Cli.debug_print "Extracting the desired function from the whole program...";
+      Cli.debug_print
+        "Extracting the desired function from the whole program...";
       let function_spec =
         match function_spec with
         | None -> Bir_interface.generate_function_all_vars combined_program
-        | Some spec_file -> Bir_interface.read_function_from_spec combined_program spec_file
+        | Some spec_file ->
+            Bir_interface.read_function_from_spec combined_program spec_file
       in
       let combined_program, _ =
         Bir_interface.adapt_program_to_function combined_program function_spec
@@ -160,7 +183,8 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
             let print_output =
-              Bir_interpreter.evaluate_program function_spec combined_program inputs 0 value_sort
+              Bir_interpreter.evaluate_program function_spec combined_program
+                inputs 0 value_sort
             in
             print_output ()
           end
@@ -168,30 +192,35 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
             Cli.debug_print "Compiling the codebase to Python...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Bir_to_python.generate_python_program combined_program function_spec !Cli.output_file;
+            Bir_to_python.generate_python_program combined_program function_spec
+              !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else if String.lowercase_ascii backend = "c" then begin
             Cli.debug_print "Compiling the codebase to C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Bir_to_c.generate_c_program combined_program function_spec !Cli.output_file;
+            Bir_to_c.generate_c_program combined_program function_spec
+              !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else if String.lowercase_ascii backend = "java" then begin
             Cli.debug_print "Compiling codebase to Java...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Bir_to_java.generate_java_program combined_program function_spec !Cli.output_file
+            Bir_to_java.generate_java_program combined_program function_spec
+              !Cli.output_file
           end
           else if String.lowercase_ascii backend = "dgfip_c" then begin
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Bir_to_dgfip_c.generate_c_program combined_program function_spec !Cli.output_file;
+            Bir_to_dgfip_c.generate_c_program combined_program function_spec
+              !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
-          else Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+          else
+            Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
     end
   with Errors.StructuredError (msg, pos, kont) ->
@@ -199,4 +228,5 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list) (
     (match kont with None -> () | Some kont -> kont ());
     exit (-1)
 
-let main () = Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)
+let main () =
+  Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)

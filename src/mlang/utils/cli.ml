@@ -1,15 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 (** Command-line interface helpers *)
 
@@ -21,36 +24,49 @@
 
 open Cmdliner
 
-let files = Arg.(non_empty & pos_all file [] & info [] ~docv:"FILES" ~doc:"M files to be compiled")
+let files =
+  Arg.(
+    non_empty & pos_all file []
+    & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
-let debug = Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
+let debug =
+  Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
 let var_info_debug =
   Arg.(
     value & opt_all string []
-    & info [ "var_info_debug" ] ~doc:"Prints debug information for variables passed as arguments")
+    & info [ "var_info_debug" ]
+        ~doc:"Prints debug information for variables passed as arguments")
 
 let display_time =
   Arg.(
     value & flag
-    & info [ "display_time"; "t" ] ~doc:"Displays timing information (use with --debug)")
+    & info [ "display_time"; "t" ]
+        ~doc:"Displays timing information (use with --debug)")
 
 let dep_graph_file =
   let doc =
-    "Name of the file where the variable dependency graph should be output (use with --debug)"
+    "Name of the file where the variable dependency graph should be output \
+     (use with --debug)"
   in
-  Arg.(value & opt file "dep_graph.dot" & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
+  Arg.(
+    value & opt file "dep_graph.dot"
+    & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
 
 let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
   Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
 
 let optimize =
-  let doc = "Applies dead code removal and partial evaluation to the generated code" in
+  let doc =
+    "Applies dead code removal and partial evaluation to the generated code"
+  in
   Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
 
 let optimize_unsafe_float =
-  let doc = "Activate unsafe floating point optimizations (such as x * 0 ~> 0)" in
+  let doc =
+    "Activate unsafe floating point optimizations (such as x * 0 ~> 0)"
+  in
   Arg.(value & flag & info [ "fast-math" ] ~doc)
 
 let backend =
@@ -66,16 +82,18 @@ let function_spec =
     & opt (some file) None
     & info [ "function_spec"; "f" ] ~docv:"SPEC"
         ~doc:
-          "M function specification file (extension .m_spec).$(i, SPEC) should define the expected \
-           inputs, outputs and constant values. This information will be used to select the \
-           relevant computational rules from the M code corpus. If no function_spec is specified, \
-           all available inputs and outputs are used for the calculation.")
+          "M function specification file (extension .m_spec).$(i, SPEC) should \
+           define the expected inputs, outputs and constant values. This \
+           information will be used to select the relevant computational rules \
+           from the M code corpus. If no function_spec is specified, all \
+           available inputs and outputs are used for the calculation.")
 
 let mpp_file =
   Arg.(
     required
     & opt (some file) None
-    & info [ "mpp_file" ] ~docv:"MPP_FILE" ~doc:"M++ preprocessor file (extension .mpp)")
+    & info [ "mpp_file" ] ~docv:"MPP_FILE"
+        ~doc:"M++ preprocessor file (extension .mpp)")
 
 let mpp_function =
   Arg.(
@@ -89,26 +107,30 @@ let output =
     & opt (some string) None
     & info [ "output"; "o" ] ~docv:"OUTPUT"
         ~doc:
-          "$(i, OUTPUT) is the file that will contain the extracted function (for compiler \
-           backends)")
+          "$(i, OUTPUT) is the file that will contain the extracted function \
+           (for compiler backends)")
 
 let run_all_tests =
   Arg.(
     value
     & opt (some file) None
-    & info [ "run_all_tests"; "R" ] ~docv:"TESTS" ~doc:"Run all tests in folder specified folder")
+    & info [ "run_all_tests"; "R" ] ~docv:"TESTS"
+        ~doc:"Run all tests in folder specified folder")
 
 let run_test =
   Arg.(
     value
     & opt (some file) None
-    & info [ "run_test"; "r" ] ~docv:"TESTS" ~doc:"Run specific test passed as argument")
+    & info [ "run_test"; "r" ] ~docv:"TESTS"
+        ~doc:"Run specific test passed as argument")
 
 let code_coverage =
   Arg.(
     value & flag
     & info [ "code_coverage" ]
-        ~doc:"Instruments the interpreter to retrieve the code coverage (use with --run_all_tests)")
+        ~doc:
+          "Instruments the interpreter to retrieve the code coverage (use with \
+           --run_all_tests)")
 
 let precision =
   Arg.(
@@ -116,61 +138,71 @@ let precision =
     & opt (some string) (Some "double")
     & info [ "precision"; "p" ] ~docv:"PRECISION"
         ~doc:
-          "Precision of the interpreter: double, mpfr<n> (where n > 0 it the bit size of the \
-           multi-precision floats), fixed<n> (where n > 0 is the fixpoint precision), interval \
-           (64-bits IEEE754 floats, with up and down rounding mode), mpq (multi-precision \
-           rationals) . Default is double")
+          "Precision of the interpreter: double, mpfr<n> (where n > 0 it the \
+           bit size of the multi-precision floats), fixed<n> (where n > 0 is \
+           the fixpoint precision), interval (64-bits IEEE754 floats, with up \
+           and down rounding mode), mpq (multi-precision rationals) . Default \
+           is double")
 
 let test_error_margin =
   Arg.(
     value
     & opt (some float) (Some 0.)
     & info [ "test_error_margin" ] ~docv:"ERROR_MARGIN"
-        ~doc:"Margin of error tolerated when executing tests, as a float. Default 0.")
+        ~doc:
+          "Margin of error tolerated when executing tests, as a float. Default \
+           0.")
 
 let m_clean_calls =
   Arg.(
     value & flag
-    & info [ "clean_between_m_calls" ]
+    & info
+        [ "clean_between_m_calls" ]
         ~doc:
-          "Clean the value of computed variables between two m calls (to check that there is no \
-           hidden state kept between two calls)")
+          "Clean the value of computed variables between two m calls (to check \
+           that there is no hidden state kept between two calls)")
 
 let dgfip_options =
   Arg.(
-    value & opt (some (list string)) (None)
+    value
+    & opt (some (list string)) None
     & info [ "dgfip_options" ]
         ~doc:
-          "Specify DGFiP options (use --dgfip_options=--help to display DGFiP specific options)")
+          "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
+           specific options)")
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file $ no_print_cycles
-    $ backend $ function_spec $ mpp_file $ output $ run_all_tests $ run_test $ mpp_function
-    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ test_error_margin
-    $ m_clean_calls $ dgfip_options)
+    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file
+    $ no_print_cycles $ backend $ function_spec $ mpp_file $ output
+    $ run_all_tests $ run_test $ mpp_function $ optimize $ optimize_unsafe_float
+    $ code_coverage $ precision $ test_error_margin $ m_clean_calls
+    $ dgfip_options)
 
 let info =
   let doc =
-    "Intepreter and compiler for M, the language created by the French Direction Generale des \
-     Finances Publiques (DGFiP)."
+    "Intepreter and compiler for M, the language created by the French \
+     Direction Generale des Finances Publiques (DGFiP)."
   in
   let man =
     [
       `S Manpage.s_description;
       `P
-        "The M language is used by the DGFiP to encode the rules describing the computation of the \
-         French income tax. An M program consists in several *.m files in no particular order. \
-         $(tname) will parse all the rules contained in those files that correspond to a \
-         particular application tag. Then, it will extract from this set of rules an \
-         user-specified function, than can be interpreted with a command-line prompt or compiled \
-         to a function in the language of your choice.";
+        "The M language is used by the DGFiP to encode the rules describing \
+         the computation of the French income tax. An M program consists in \
+         several *.m files in no particular order. $(tname) will parse all the \
+         rules contained in those files that correspond to a particular \
+         application tag. Then, it will extract from this set of rules an \
+         user-specified function, than can be interpreted with a command-line \
+         prompt or compiled to a function in the language of your choice.";
       `S Manpage.s_authors;
       `P "Denis Merigoux <denis.merigoux@inria.fr>";
       `P "Raphael Monat <raphael.monat@lip6.fr>";
       `S Manpage.s_examples;
       `P "Typical usage:";
-      `Pre "mlang -a iliad -f query.m_spec -b interpreter ir-calcul/sources2018m_6_3/*.m";
+      `Pre
+        "mlang -a iliad -f query.m_spec -b interpreter \
+         ir-calcul/sources2018m_6_3/*.m";
       `S Manpage.s_bugs;
       `P "Please file bug reports at https://github.com/MLanguage/mlang/issues";
     ]
@@ -213,9 +245,11 @@ let optimize_unsafe_float = ref false
 
 let m_clean_calls = ref false
 
-let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : string list)
-    (display_time_ : bool) (dep_graph_file_ : string) (no_print_cycles_ : bool)
-    (output_file_ : string option) (optimize_unsafe_float_ : bool) (m_clean_calls_ : bool) =
+let set_all_arg_refs (files_ : string list) (debug_ : bool)
+    (var_info_debug_ : string list) (display_time_ : bool)
+    (dep_graph_file_ : string) (no_print_cycles_ : bool)
+    (output_file_ : string option) (optimize_unsafe_float_ : bool)
+    (m_clean_calls_ : bool) =
   source_files := files_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
@@ -229,14 +263,16 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool) (var_info_debug_ : s
 
 (**{1 Terminal formatting}*)
 
-let concat_with_line_depending_prefix_and_suffix (prefix : int -> string) (suffix : int -> string)
-    (ss : string list) =
+let concat_with_line_depending_prefix_and_suffix (prefix : int -> string)
+    (suffix : int -> string) (ss : string list) =
   match ss with
   | hd :: rest ->
       let out, _ =
         List.fold_left
           (fun (acc, i) s ->
-            ((acc ^ prefix i ^ s ^ if i = List.length ss - 1 then "" else suffix i), i + 1))
+            ( (acc ^ prefix i ^ s
+              ^ if i = List.length ss - 1 then "" else suffix i),
+              i + 1 ))
           ((prefix 0 ^ hd ^ if 0 = List.length ss - 1 then "" else suffix 0), 1)
           rest
       in
@@ -252,7 +288,8 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
 (**{2 Markers}*)
 
 (** Prints [\[INFO\]] in blue on the terminal standard output *)
-let var_info_marker () = ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
+let var_info_marker () =
+  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
 
 let time : float ref = ref (Unix.gettimeofday ())
 
@@ -264,27 +301,35 @@ let time_marker () =
   time := new_time;
   let delta = (new_time -. old_time) *. 1000. in
   if delta > 100. then
-    ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.black ] "[TIME] %.0f ms\n" delta
+    ANSITerminal.printf
+      [ ANSITerminal.Bold; ANSITerminal.black ]
+      "[TIME] %.0f ms\n" delta
 
-let format_with_style (styles : ANSITerminal.style list) (str : ('a, unit, string) format) =
+let format_with_style (styles : ANSITerminal.style list)
+    (str : ('a, unit, string) format) =
   if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
   else Printf.sprintf str
 
-(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as timing since last debug *)
+(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
+    timing since last debug *)
 let debug_marker (f_time : bool) =
   if f_time then time_marker ();
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
 
 (** Prints [\[ERROR\]] in red on the terminal error output *)
-let error_marker () = ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
+let error_marker () =
+  ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
 
 (** Prints [\[WARNING\]] in yellow on the terminal standard output *)
-let warning_marker () = ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
+let warning_marker () =
+  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
 
 (** Prints [\[RESULT\]] in green on the terminal standard output *)
-let result_marker () = ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
+let result_marker () =
+  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
 
-let clocks = Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
+let clocks =
+  Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
 (** Prints [\[🕛\]] in blue on the terminal standard output *)
 let clock_marker i =
@@ -303,19 +348,26 @@ let debug_print ?(endline = "\n") kont =
   ANSITerminal.erase ANSITerminal.Eol;
   if !debug_flag then
     Format.kasprintf
-      (fun str -> Format.printf "%a%s%s@?" (fun _ -> debug_marker) !display_time str endline)
+      (fun str ->
+        Format.printf "%a%s%s@?"
+          (fun _ -> debug_marker)
+          !display_time str endline)
       kont
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
   if !var_info_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str) kont
+    Format.kasprintf
+      (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
+      kont
   else Format.ifprintf Format.std_formatter kont
 
 let error_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str) kont
+  Format.kasprintf
+    (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str)
+    kont
 
 let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let step_ticks = 5 in
@@ -336,7 +388,8 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
     done
   in
   let _ = Thread.create timer () in
-  ( (fun current_progress_msg -> msg := Format.sprintf "%s: %s" task current_progress_msg),
+  ( (fun current_progress_msg ->
+      msg := Format.sprintf "%s: %s" task current_progress_msg),
     fun finish_msg ->
       stop := true;
       debug_marker false;
@@ -349,9 +402,13 @@ let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
 let warning_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
   if !warning_flag then
-    Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str) kont
+    Format.kasprintf
+      (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str)
+      kont
   else Format.ifprintf Format.std_formatter kont
 
 let result_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str) kont
+  Format.kasprintf
+    (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str)
+    kont

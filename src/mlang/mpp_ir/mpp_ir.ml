@@ -1,16 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr> Raphaël
-   Monat <raphael.monat@lip6.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 type scope =
   | Input
@@ -20,7 +22,8 @@ type scope =
 (* is this supposed to be read from a previous computation *)
 
 type scoped_var =
-  | Local of string (* lowercase variable used only to define something locally *)
+  | Local of string
+  (* lowercase variable used only to define something locally *)
   | Mbased of Mir.Variable.t * scope
 
 (* variables defined in the M codebase *)
@@ -61,6 +64,10 @@ and mpp_stmt_kind =
   | Expr of mpp_expr
   | Partition of mpp_filter * mpp_stmt list
 
-type mpp_compute = { name : mpp_compute_name; args : scoped_var list; body : mpp_stmt list }
+type mpp_compute = {
+  name : mpp_compute_name;
+  args : scoped_var list;
+  body : mpp_stmt list;
+}
 
 type mpp_program = mpp_compute list

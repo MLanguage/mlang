@@ -1,15 +1,18 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux <denis.merigoux@inria.fr>
+(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
+   <denis.merigoux@inria.fr>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 open Oir
 
@@ -25,7 +28,9 @@ let print_done ?msg (init : int) (old : int) (new_ : int) : unit =
     (match msg with None -> "" | Some msg -> msg ^ ": ")
     (ANSITerminal.sprintf [ ANSITerminal.magenta ] "%d → %d" old new_)
     (ANSITerminal.sprintf
-       [ (if strict_reduction then ANSITerminal.green else ANSITerminal.yellow) ]
+       [
+         (if strict_reduction then ANSITerminal.green else ANSITerminal.yellow);
+       ]
        "%s %.1f%%"
        (if strict_reduction then "↘" else "~")
        reduction_percent)
@@ -57,5 +62,6 @@ let optimize (p : program) : program =
    with Exit -> ());
   let p = !p in
   let end_instrs = count_instr p in
-  print_done ~msg:"Optimizations done! Total effect" start_instrs start_instrs end_instrs;
+  print_done ~msg:"Optimizations done! Total effect" start_instrs start_instrs
+    end_instrs;
   p
