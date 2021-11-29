@@ -15,4 +15,4 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 val generate_c_program :
-  Bir.program -> Bir_interface.bir_function -> (* filename *) string -> unit
+  Bir.program -> Bir_interface.bir_function -> (* filename *) string -> Dgfip_varid.var_id_map -> unit

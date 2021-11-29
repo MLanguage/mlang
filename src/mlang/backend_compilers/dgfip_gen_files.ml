@@ -14,48 +14,6 @@
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
-(* Flags inherited from the old comiler *)
-type flags = {
-  (* -A *) nom_application : string;
-  (* iliad, pro, oceans, bareme, batch *)
-  (* -m *) annee_revenu : int;
-  (* -P *) flg_correctif : bool;
-  (* flg_correctif true by default, -P makes it false *)
-  (* -R *) flg_iliad : bool;
-  (* also implied by nom_application = "iliad"; disabled by -U *)
-  (* -R *) flg_pro : bool;
-  (* also implied by nom_application = "pro"; disabled by -U *)
-  (* -U *) flg_cfir : bool;
-  (* disabled by -R *)
-  (* -b *) flg_gcos : bool;
-  (* -b0 and -b1 ; disabled by -U and -R *)
-  (* -b *) flg_tri_ebcdic : bool;
-  (* -b1 only *)
-  (* -M *) flg_multithread : bool;
-  (* -s *) flg_short : bool;
-  (* -r *) flg_register : bool;
-  (* -O *) flg_optim_min_max : bool;
-  (* -X *) flg_extraction : bool;
-  (* -D *) flg_genere_libelle_restituee : bool;
-  (* -S *) flg_controle_separe : bool;
-  (* -I *) flg_controle_immediat : bool;
-  (* unused *)
-  (* -o *) flg_overlays : bool;
-  (* -Z *) flg_colors : bool;
-  (* -L *) flg_ticket : bool;
-  (* -t *) flg_trace : bool;
-  (* -g *) flg_debug : bool;
-  (* also implied by -t *)
-  (* -k *) nb_debug_c : int;
-  (* -x *)
-  xflg : bool;
-      (* Flags to deal with in a particular way : -c compilation mode -l link mode -v specify the
-         variable file (tgv.m) -e specify the error file (err.m) *)
-      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident -C flg_compact -K
-         flg_optim_min_max -G flg_listing (+genere_cre = FALSE) -p flag_phase -f flg_ench_init -E
-         cvt_file -g flg_debug -a flg_api -T flg_trace_irdata *)
-}
-
 (* Various flags used to control wicch data to put in each variable array *)
 type gen_opt = {
   with_verif : bool;
@@ -103,7 +61,7 @@ type gen_type =
 (* can be of any subtype *)
 
 let default_flags =
-  {
+  Dgfip_options.{
     nom_application = "";
     annee_revenu = 0;
     flg_correctif = true;
@@ -496,7 +454,7 @@ let gen_table_output fmt flags vars =
       with_sanction = false;
       with_modcat = false;
       with_liee = false;
-      with_libelle = flags.flg_genere_libelle_restituee;
+      with_libelle = flags.Dgfip_options.flg_genere_libelle_restituee;
       with_alias = false;
       with_type = true;
       with_type_donnee = true;
@@ -548,7 +506,7 @@ let gen_table_family fmt flags vars =
       with_sanction = false;
       with_modcat = true;
       with_liee = false;
-      with_libelle = flags.flg_pro || flags.flg_iliad;
+      with_libelle = flags.Dgfip_options.flg_pro || flags.flg_iliad;
       with_alias = true;
       with_type = false;
       with_type_donnee = true;
@@ -574,7 +532,7 @@ let gen_table_income fmt flags vars =
       with_sanction = true;
       with_modcat = true;
       with_liee = true;
-      with_libelle = flags.flg_pro || not flags.flg_gcos;
+      with_libelle = flags.Dgfip_options.flg_pro || not flags.flg_gcos;
       with_alias = true;
       with_type = false;
       with_type_donnee = true;
@@ -740,7 +698,7 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
   let open Mast in
   gen_header fmt;
 
-  if flags.flg_debug then begin
+  if flags.Dgfip_options.flg_debug then begin
     if flags.nb_debug_c <= 0 then gen_table_debug fmt flags vars_debug 0;
 
     List.iter (fun rn -> Format.fprintf fmt "extern int regle_%d();\n" rn) rules;
@@ -768,7 +726,7 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
 let gen_table_verif fmt flags verifs =
   gen_header fmt;
 
-  if flags.flg_debug || flags.flg_controle_immediat then begin
+  if flags.Dgfip_options.flg_debug || flags.flg_controle_immediat then begin
     (* TODO: when control_immediat, don' put everything (but what ?) *)
     List.iter (fun vn -> Format.fprintf fmt "extern void verif_%d();\n" vn) verifs;
 
@@ -833,7 +791,7 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
     taille_saisie taille_calculee taille_base taille_totale nb_contexte nb_famille nb_revenu
     nb_revenu_correc nb_variation nb_penalite nb_restituee nb_ench;
 
-  if flags.flg_debug then begin
+  if flags.Dgfip_options.flg_debug then begin
     Format.fprintf fmt "#define NB_ERR %d\n" nb_err;
     (if flags.nb_debug_c <= 0 then
      let nb = match nb_debug with [ nb ] -> nb | _ -> assert false in
@@ -899,7 +857,7 @@ let gen_var_c fmt flags errors =
       | _ -> failwith "Invalid error description")
     errors;
 
-  if flags.flg_pro || flags.flg_iliad then begin
+  if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
     Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
 
     List.iter (fun e -> Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.error_name)) errors;
@@ -911,12 +869,13 @@ let gen_annee_h fmt flags =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #define ANNEE_REVENU %04d
-|} flags.annee_revenu;
+|} flags.Dgfip_options.annee_revenu;
 
   Format.pp_print_flush fmt ()
 
 (* Print #defines corresponding to generation options *)
 let gen_conf_h fmt flags vars =
+  let open Dgfip_options in
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
@@ -961,7 +920,7 @@ let gen_conf_h fmt flags vars =
   let nb_vars = nb_saisie + nb_calculee + nb_base in
   Format.fprintf fmt "#define NB_VARS  %d\n" nb_vars;
 
-  Format.fprintf fmt "#endif _CONF_H_\n"
+  Format.fprintf fmt "#endif /* _CONF_H_ */\n"
 
 (* Generate a map from variables to array indices *)
 let extract_var_ids (cprog : Bir.program) vars =
@@ -1008,20 +967,7 @@ let open_file filename =
   (oc, fmt)
 
 (* Generate the auxiliary files AND return the map of variables names to TGV ids *)
-let generate_auxiliary_files prog cprog : Dgfip_varid.var_id_map =
-  let flags =
-    {
-      default_flags with
-      nom_application = "iliad";
-      annee_revenu = 2020;
-      flg_gcos = false;
-      flg_iliad = true;
-      flg_pro = false;
-      flg_multithread = false;
-      flg_debug = false;
-      nb_debug_c = 4;
-    }
-  in
+let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let folder = Filename.dirname !Cli.output_file in
 

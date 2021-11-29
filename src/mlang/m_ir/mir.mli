@@ -107,11 +107,11 @@ module VariableMap : sig
     unit
 end
 
-module VariableDictMap : Map.S
+module VariableDictMap : Map.S with type key = variable_id
 
 type variable_dict = variable VariableDictMap.t
 
-module VariableSet : Set.S
+module VariableSet : Set.S with type elt = variable
 
 module LocalVariableMap : sig
   include Map.S with type key = local_variable

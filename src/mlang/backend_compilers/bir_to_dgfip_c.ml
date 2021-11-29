@@ -682,9 +682,6 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
-let generate_cond_table _ v error_set =
-  List.fold_left (fun acc err -> ErrorSet.add err acc) error_set v.cond_errors
-
 let generate_c_program (program : Bir.program)
     (function_spec : Bir_interface.bir_function) (filename : string)
     (_vm : Dgfip_varid.var_id_map) : unit =

@@ -24,6 +24,8 @@ val format_variable : Format.formatter -> Mast.variable -> unit
 
 val format_rule_name : Format.formatter -> Mast.rule_name -> unit
 
+val format_value_typ : Format.formatter -> Mast.value_typ -> unit
+
 val format_source_file : Format.formatter -> Mast.source_file -> unit
 
 val pp_print_list_endline :
