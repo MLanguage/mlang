@@ -47,7 +47,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
   Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
     print_cycles output optimize_unsafe_float m_clean_calls;
   try
-    let _dgfip_flags = process_dgfip_options backend dgfip_options in
+    let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
     let m_program = ref [] in
     if List.length !Cli.source_files = 0 then
@@ -83,6 +83,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       !Cli.source_files;
     finish "completed!";
     Cli.debug_print "Elaborating...";
+    let source_m_program = !m_program in
     let m_program = Mast_to_mir.translate !m_program in
     let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
@@ -215,8 +216,10 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
+            let vm = Dgfip_gen_files.generate_auxiliary_files dgfip_flags
+                source_m_program combined_program in
             Bir_to_dgfip_c.generate_c_program combined_program function_spec
-              !Cli.output_file;
+              !Cli.output_file vm;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else

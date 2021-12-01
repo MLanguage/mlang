@@ -683,7 +683,8 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include <string.h>\n"
 
 let generate_c_program (program : Bir.program)
-    (function_spec : Bir_interface.bir_function) (filename : string) : unit =
+    (function_spec : Bir_interface.bir_function) (filename : string)
+    (_vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
