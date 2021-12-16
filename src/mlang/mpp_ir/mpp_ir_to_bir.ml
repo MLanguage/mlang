@@ -243,7 +243,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~is_income:false ~is_table:None
+                ~attributes:[] ~origin:None ~is_income:false ~is_table:None
             in
             let ctx =
               {

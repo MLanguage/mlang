@@ -39,6 +39,9 @@ type variable = {
       (** Description taken from the variable declaration *)
   attributes :
     (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  origin : variable option;
+      (** If the variable is an SSA duplication, refers to the original
+          (declared) variable *)
   is_income : bool;
   is_table : int option;
 }
@@ -241,6 +244,9 @@ module Variable : sig
         (** Description taken from the variable declaration *)
     attributes :
       (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    origin : variable option;
+        (** If the variable is an SSA duplication, refers to the original
+            (declared) variable *)
     is_income : bool;
     is_table : int option;
   }
@@ -253,6 +259,7 @@ module Variable : sig
     string Pos.marked ->
     execution_number ->
     attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
+    origin:variable option ->
     is_income:bool ->
     is_table:rule_id option ->
     variable

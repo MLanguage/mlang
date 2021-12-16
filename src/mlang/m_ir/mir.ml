@@ -84,6 +84,9 @@ type variable = {
       (** Description taken from the variable declaration *)
   attributes :
     (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  origin : variable option;
+      (** If the variable is an SSA duplication, refers to the original
+          (declared) variable *)
   is_income : bool;
   is_table : int option;
 }
@@ -102,6 +105,9 @@ module Variable = struct
         (** Description taken from the variable declaration *)
     attributes :
       (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    origin : variable option;
+        (** If the variable is an SSA duplication, refers to the original
+            (declared) variable *)
     is_income : bool;
     is_table : int option;
   }
@@ -117,7 +123,8 @@ module Variable = struct
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes :
          (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked)
-         list) ~(is_income : bool) ~(is_table : int option) : t =
+         list) ~(origin : t option) ~(is_income : bool) ~(is_table : int option)
+      : t =
     {
       name;
       id = fresh_id ();
@@ -125,6 +132,7 @@ module Variable = struct
       alias;
       execution_number;
       attributes;
+      origin;
       is_income;
       is_table;
     }
