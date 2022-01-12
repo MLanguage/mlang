@@ -1,0 +1,48 @@
+name: Publish documentation on GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Opam modules cache
+        uses: actions/cache@v1
+        env:
+          cache-name: cache-opam-modules
+        with:
+          # The opam files are in a global switch
+          path: ~/.opam
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Set up OCaml
+        uses: avsm/setup-ocaml@v1
+        with:
+          # Version of the OCaml compiler to initialise
+          ocaml-version: 4.11.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
+          make deps-without-ocaml
+
+      - name: Build
+        run: |
+          eval $(opam env)
+          dune build @doc
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        # if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: _build/default/_doc/_html/
