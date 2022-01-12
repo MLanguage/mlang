@@ -17,7 +17,7 @@
 open Oir
 
 type ctx = {
-  ctx_vars : (Mir.variable_def * int) BlockMap.t Mir.VariableMap.t;
+  ctx_vars : (Mir.variable_def * int) BlockMap.t Bir.VariableMap.t;
   (* the int is the statement number inside the block *)
   ctx_local_vars : Mir.expression Mir.LocalVariableMap.t;
   ctx_doms : Dominators.dom;
@@ -26,18 +26,18 @@ type ctx = {
 
 let empty_ctx (g : CFG.t) (entry_block : block_id) =
   {
-    ctx_vars = Mir.VariableMap.empty;
+    ctx_vars = Bir.VariableMap.empty;
     ctx_local_vars = Mir.LocalVariableMap.empty;
     ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
     ctx_paths = Paths.create g;
   }
 
-let add_var_def_to_ctx (var : Mir.Variable.t) (def : Mir.variable_def)
+let add_var_def_to_ctx (var : Bir.variable) (def : Mir.variable_def)
     (current_block : block_id) (current_stmt_pos : int) (ctx : ctx) : ctx =
   {
     ctx with
     ctx_vars =
-      Mir.VariableMap.update var
+      Bir.VariableMap.update var
         (fun defs ->
           match defs with
           | None ->
@@ -101,7 +101,8 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx)
     (current_block : block_id) (current_pos : int) : Mir.expression =
   match e with
   | Mir.Var var_x -> (
-      match Mir.VariableMap.find_opt var_x ctx.ctx_vars with
+      let var_x = Bir.var_from_mir var_x in
+      match Bir.VariableMap.find_opt var_x ctx.ctx_vars with
       | Some previous_x_defs -> (
           let candidate =
             BlockMap.filter
@@ -115,16 +116,17 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx)
                     is_inlining_worthy previous_e
                     &&
                     let vars_used_in_previous_x_def =
-                      Mir_dependency_graph.get_used_variables previous_e
+                      Bir.dict_from_mir_dict
+                        (Mir_dependency_graph.get_used_variables previous_e)
                     in
                     (* we're trying to replace the use of [var] with
                        [previous_e]. This is valid only if [var] and the
                        variables used in [previous_e] have not been redefined
                        between [previous_def_block_id] and [current_block] *)
                     let exists_def_between_previous_x_def_and_here
-                        (var : Mir.Variable.t) : bool =
+                        (var : Bir.variable) : bool =
                       let var_defs =
-                        match Mir.VariableMap.find_opt var ctx.ctx_vars with
+                        match Bir.VariableMap.find_opt var ctx.ctx_vars with
                         | None -> BlockMap.empty
                         | Some defs -> defs
                       in
@@ -141,7 +143,7 @@ let rec inline_in_expr (e : Mir.expression) (ctx : ctx)
                                  current_block)
                         var_defs
                     in
-                    Mir.VariableDict.for_all
+                    Bir.VariableDict.for_all
                       (fun var ->
                         not (exists_def_between_previous_x_def_and_here var))
                       vars_used_in_previous_x_def

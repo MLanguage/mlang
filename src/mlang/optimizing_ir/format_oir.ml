@@ -20,7 +20,7 @@ let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdata) ->
       Format.fprintf fmt "%s = %a@,"
-        (Pos.unmark v.Mir.Variable.name)
+        (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
         Format_mir.format_variable_def vdata.var_definition
   | SConditional (cond, b1, b2, _) ->
       Format.fprintf fmt "if(%a) then goto %d else goto %d@,"

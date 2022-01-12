@@ -46,7 +46,8 @@ type offset =
   | None
 
 let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
-    (fmt : Format.formatter) (var : Variable.t) : unit =
+    (fmt : Format.formatter) (var : Bir.variable) : unit =
+  let var = Bir.var_to_mir var in
   let var_index =
     match Mir.VariableMap.find_opt var var_indexes with
     | Some i -> i
@@ -68,10 +69,11 @@ let generate_variable (var_indexes : int Mir.VariableMap.t) (offset : offset)
         | GetValueConst offset -> " + " ^ string_of_int offset
         | PassPointer -> assert false)
 
-let generate_raw_name (v : Variable.t) : string =
+let generate_raw_name (v : Bir.variable) : string =
+  let v = Bir.var_to_mir v in
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
-let generate_name (v : Variable.t) : string = "v_" ^ generate_raw_name v
+let generate_name (v : Bir.variable) : string = "v_" ^ generate_raw_name v
 
 let rec generate_c_expr (e : expression Pos.marked)
     (var_indexes : int Mir.VariableMap.t) :
@@ -95,7 +97,8 @@ let rec generate_c_expr (e : expression Pos.marked)
       let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
       ( Format.asprintf "m_array_index(%a, %s, %d)"
           (generate_variable var_indexes PassPointer)
-          (Pos.unmark var) se size,
+          (Bir.var_from_mir (Pos.unmark var))
+          se size,
         s )
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_c_expr e1 var_indexes in
@@ -126,14 +129,17 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se1, s1 = generate_c_expr e1 var_indexes in
       ( Format.asprintf "m_multimax(%s, %a)" se1
           (generate_variable var_indexes PassPointer)
-          v2,
+          (Bir.var_from_mir v2),
         s1 )
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) ->
       (Format.asprintf "m_literal(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
-      (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
+      ( Format.asprintf "%a"
+          (generate_variable var_indexes None)
+          (Bir.var_from_mir var),
+        [] )
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "m_literal(generic_index)", [])
   | Error -> assert false (* should not happen *)
@@ -151,9 +157,8 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t)
       Format.fprintf fmt "LOCAL[%d] = %s;@\n" lvar.LocalVariable.id se)
     defs
 
-let generate_var_def (var_indexes : int Mir.VariableMap.t)
-    (var : Mir.Variable.t) (data : Mir.variable_data) (oc : Format.formatter) :
-    unit =
+let generate_var_def (var_indexes : int Mir.VariableMap.t) (var : Bir.variable)
+    (data : Mir.variable_data) (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_c_expr e var_indexes in
@@ -315,7 +320,9 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (var_table_size : int)
     (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc "%a {@\n@[<h 4>    @\n" generate_main_function_signature
     false;
@@ -344,7 +351,9 @@ let generate_main_function_signature_and_var_decls (p : Bir.program)
 let generate_return (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
   let returned_variables =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_outputs)
   in
   Format.fprintf oc
     "%a@\n\
@@ -380,7 +389,9 @@ let generate_empty_input_prototype (oc : Format.formatter)
 let generate_empty_input_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n"
     generate_empty_input_prototype false
@@ -398,7 +409,9 @@ let generate_input_from_array_prototype (oc : Format.formatter)
 let generate_input_from_array_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n"
     generate_input_from_array_prototype false
@@ -416,7 +429,9 @@ let generate_get_input_index_prototype (oc : Format.formatter)
 let generate_get_input_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc
     "%a {@\n\
@@ -441,7 +456,9 @@ let generate_get_input_name_from_index_prototype (oc : Format.formatter)
 let generate_get_input_name_from_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc
     "%a {@\n\
@@ -474,14 +491,16 @@ let generate_get_input_num_func (oc : Format.formatter)
 let generate_input_type (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_variable_inputs)
   in
   Format.fprintf oc "typedef struct m_input {@[<h 4>    %a@]@\n} m_input;@\n@\n"
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
          Format.fprintf fmt "m_value %s; // %s" (generate_name var)
-           (Pos.unmark var.Variable.descr)))
+           (Pos.unmark (Bir.var_to_mir var).Variable.descr)))
     input_vars
 
 let generate_empty_output_prototype (oc : Format.formatter)
@@ -492,7 +511,9 @@ let generate_empty_output_prototype (oc : Format.formatter)
 let generate_empty_output_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_outputs)
   in
   Format.fprintf oc
     "%a {@\n@[<h 4>    @\noutput->is_error = false;@\n%a@]@\n};@\n@\n"
@@ -511,7 +532,9 @@ let generate_output_to_array_prototype (oc : Format.formatter)
 let generate_output_to_array_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_outputs)
   in
   Format.fprintf oc "%a {@\n@[<h 4>    %a@]@\n};@\n@\n"
     generate_output_to_array_prototype false
@@ -588,7 +611,9 @@ let generate_get_output_num_func (oc : Format.formatter)
 let generate_output_type (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
+    List.map
+      (fun b -> fst b |> Bir.var_from_mir)
+      (VariableMap.bindings function_spec.func_outputs)
   in
   Format.fprintf oc
     "typedef struct m_output {@\n\
@@ -600,7 +625,7 @@ let generate_output_type (oc : Format.formatter)
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
          Format.fprintf fmt "m_value %s; // %s" (generate_name var)
-           (Pos.unmark var.Variable.descr)))
+           (Pos.unmark (Bir.var_to_mir var).Variable.descr)))
     output_vars
 
 let generate_implem_header oc header_filename =

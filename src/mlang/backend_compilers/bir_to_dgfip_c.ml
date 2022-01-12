@@ -294,7 +294,8 @@ let rec generate_stmt (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     (stmt : Bir.stmt) =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
+  | Bir.SAssign (var, vdata) ->
+      generate_var_def var_indexes (Bir.var_to_mir var) vdata oc
   | SConditional _ -> assert false (* not in dgfip trivial M++ *)
   | SVerif v -> generate_var_cond var_indexes v oc
   | SRuleCall r ->

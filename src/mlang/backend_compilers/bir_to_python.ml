@@ -370,7 +370,7 @@ let rec generate_stmts (program : Bir.program) oc stmts =
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def var vdata oc
+  | Bir.SAssign (var, vdata) -> generate_var_def (Bir.var_to_mir var) vdata oc
   | SConditional (cond, tt, []) ->
       let pos = Pos.get_position stmt in
       let fname =

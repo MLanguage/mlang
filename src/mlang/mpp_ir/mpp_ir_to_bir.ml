@@ -150,7 +150,9 @@ let translate_m_code (m_program : Mir_interface.full_program)
         | InputVar -> None
         | _ ->
             (* variables used in the context should not be reassigned *)
-            Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
+            Some
+              ( Bir.SAssign (Bir.var_from_mir var, vdef),
+                var.Mir.Variable.execution_number.pos )
       with Not_found -> None)
     vars
 
@@ -258,7 +260,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( new_l,
+               ( Bir.var_from_mir new_l,
                  {
                    var_definition =
                      SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -276,7 +278,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( var,
+               ( Bir.var_from_mir var,
                  {
                    var_definition =
                      SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -302,7 +304,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( var,
+               ( Bir.var_from_mir var,
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
@@ -318,7 +320,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( var,
+               ( Bir.var_from_mir var,
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;

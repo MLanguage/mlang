@@ -134,7 +134,8 @@ let add_test_conds_to_combined_program (p : Bir.program)
                   (match var_data.var_definition with
                   | InputVar ->
                       SimpleVar
-                        (Pos.same_pos_as (Literal Undefined) var.Variable.name)
+                        (Pos.same_pos_as (Literal Undefined)
+                           (Bir.var_to_mir var).Variable.name)
                   | SimpleVar old -> SimpleVar old
                   | TableVar (size, old) -> TableVar (size, old));
               }
@@ -199,7 +200,7 @@ let check_test (combined_program : Bir.program) (test_name : string)
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
-type test_failures = (string * Mir.literal * Mir.literal) list Mir.VariableMap.t
+type test_failures = (string * Mir.literal * Mir.literal) list Bir.VariableMap.t
 
 type process_acc =
   string list * test_failures * Bir_instrumentation.code_coverage_acc
@@ -234,7 +235,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   let process (name : string)
       ((successes, failures, code_coverage_acc) : process_acc) : process_acc =
     let report_violated_condition_error
-        (bindings : (Variable.t * Mir.literal) option)
+        (bindings : (Bir.variable * Mir.literal) option)
         (expr : Mir.expression Pos.marked) (err : Error.t) =
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
@@ -251,12 +252,12 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                     _ ),
                 _ ) ) ) ->
           Cli.error_print "Test %s incorrect (error on variable %s)" name
-            (Pos.unmark v.Variable.name);
+            (Pos.unmark (Bir.var_to_mir v).Variable.name);
           let errs_varname =
-            try VariableMap.find v failures with Not_found -> []
+            try Bir.VariableMap.find v failures with Not_found -> []
           in
           ( successes,
-            VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
+            Bir.VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
             code_coverage_acc )
       | _ ->
           Cli.error_print "Test %s incorrect (error %s raised)" name
@@ -394,11 +395,11 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr)
-      ([], VariableMap.empty, VariableMap.empty)
+      ([], Bir.VariableMap.empty, Bir.VariableMap.empty)
       (fun (old_s, old_f, old_code_coverage) (new_s, new_f, new_code_coverage)
       ->
         ( new_s @ old_s,
-          VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f,
+          Bir.VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f,
           Bir_instrumentation.merge_code_coverage_acc old_code_coverage
             new_code_coverage ))
   in
@@ -410,7 +411,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   let f_l =
     List.sort
       (fun (_, i) (_, i') -> -compare (List.length i) (List.length i'))
-      (VariableMap.bindings f)
+      (Bir.VariableMap.bindings f)
   in
   if List.length f_l = 0 then Cli.result_print "No failures!"
   else begin
@@ -418,7 +419,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     List.iter
       (fun (var, infos) ->
         Cli.error_print "\t%s, %d errors in files %s"
-          (Pos.unmark var.Variable.name)
+          (Pos.unmark (Bir.var_to_mir var).Variable.name)
           (List.length infos)
           (String.concat ", "
              (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
@@ -429,7 +430,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     let all_code_locs_with_coverage =
       Bir_instrumentation.CodeLocationMap.mapi
         (fun code_loc var ->
-          match Mir.VariableMap.find_opt var code_coverage with
+          match Bir.VariableMap.find_opt var code_coverage with
           | None -> NotCovered
           | Some used_code_locs -> (
               match

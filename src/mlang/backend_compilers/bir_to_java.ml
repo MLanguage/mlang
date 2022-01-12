@@ -316,7 +316,8 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
   | SRuleCall r ->
       let rule = Bir.RuleMap.find r program.rules in
       generate_rule_header oc rule
-  | Bir.SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
+  | Bir.SAssign (var, vdata) ->
+      generate_var_def var_indexes (Bir.var_to_mir var) vdata oc
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =

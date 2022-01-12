@@ -18,6 +18,29 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type variable = Mir.Variable.t
+
+type variable_id = Mir.variable_id
+
+module VariableMap = Mir.VariableMap
+module VariableDict = Mir.VariableDict
+
+(* unify SSA variables *)
+let var_from_mir (v : Mir.Variable.t) : variable =
+  match v.origin with Some v -> v | None -> v
+
+let var_to_mir v = v
+
+let map_from_mir_map map =
+  Mir.VariableMap.fold
+    (fun var -> VariableMap.add (var_from_mir var))
+    map VariableMap.empty
+
+let dict_from_mir_dict dict =
+  Mir.VariableDict.fold
+    (fun var -> VariableDict.add (var_from_mir var))
+    dict VariableDict.empty
+
 type function_name = string
 
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
@@ -25,7 +48,7 @@ type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Mir.Variable.t * Mir.variable_data
+  | SAssign of variable * Mir.variable_data
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id

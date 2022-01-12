@@ -17,7 +17,7 @@
 open Oir
 module PosSet = Set.Make (Int)
 
-type pos_map = PosSet.t BlockMap.t Mir.VariableMap.t
+type pos_map = PosSet.t BlockMap.t Bir.VariableMap.t
 
 let remove_dead_statements (stmts : block) (id : block_id)
     (path_checker : Paths.path_checker) (doms : Dominators.dom)
@@ -25,13 +25,12 @@ let remove_dead_statements (stmts : block) (id : block_id)
     =
   (* used_vars contains, for each variable, the location of the top-most use of
      this variables in every basic block *)
-  let update_used_vars (stmt_used_vars : Mir.VariableDict.t) (pos : int)
+  let update_used_vars (stmt_used_vars : Bir.VariableDict.t) (pos : int)
       (used_vars : pos_map) : pos_map =
-    Mir.VariableDict.fold
+    Bir.VariableDict.fold
       (fun stmt_used_var (used_vars : pos_map) ->
-        Mir.VariableMap.update stmt_used_var
-          (fun old_entry ->
-            match old_entry with
+        Bir.VariableMap.update stmt_used_var
+          (function
             | None -> Some (BlockMap.singleton id (PosSet.singleton pos))
             | Some used -> (
                 match BlockMap.find_opt id used with
@@ -47,11 +46,11 @@ let remove_dead_statements (stmts : block) (id : block_id)
         match Pos.unmark stmt with
         | SAssign (var, var_def) ->
             let used_defs_returned =
-              update_used_vars (Mir.VariableDict.singleton var) pos used_defs
+              update_used_vars (Bir.VariableDict.singleton var) pos used_defs
             in
             if
-              (* here we determine whether this definition is useful or not*)
-              match Mir.VariableMap.find_opt var used_vars with
+              (* here we determine whether this definition is useful or not *)
+              match Bir.VariableMap.find_opt var used_vars with
               | None -> false
               | Some used_blocks ->
                   (* this definition is useful only if there exists a path from
@@ -88,7 +87,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
                          superceding dominating definition between [id] and
                          [used_block] *)
                       let defs_blocks =
-                        match Mir.VariableMap.find_opt var used_defs with
+                        match Bir.VariableMap.find_opt var used_defs with
                         | Some x -> x
                         | None -> BlockMap.empty
                       in
@@ -110,16 +109,20 @@ let remove_dead_statements (stmts : block) (id : block_id)
             then
               let stmt_used_vars =
                 match var_def.Mir.var_definition with
-                | Mir.SimpleVar e -> Mir_dependency_graph.get_used_variables e
+                | Mir.SimpleVar e ->
+                    Bir.dict_from_mir_dict
+                      (Mir_dependency_graph.get_used_variables e)
                 | Mir.TableVar (_, def) -> (
                     match def with
                     | Mir.IndexGeneric e ->
-                        Mir_dependency_graph.get_used_variables e
+                        Bir.dict_from_mir_dict
+                          (Mir_dependency_graph.get_used_variables e)
                     | Mir.IndexTable es ->
                         Mir.IndexMap.fold
                           (fun _ e used_vars ->
                             Mir_dependency_graph.get_used_variables_ e used_vars)
-                          es Mir.VariableDict.empty)
+                          es Mir.VariableDict.empty
+                        |> Bir.dict_from_mir_dict)
                 | Mir.InputVar -> assert false
                 (* should not happen *)
               in
@@ -132,7 +135,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
            removed *)
         | SVerif cond ->
             let stmt_used_vars =
-              Mir_dependency_graph.get_used_variables cond.cond_expr
+              Bir.dict_from_mir_dict
+                (Mir_dependency_graph.get_used_variables cond.cond_expr)
             in
             ( update_used_vars stmt_used_vars pos used_vars,
               used_defs,
@@ -140,7 +144,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
               pos - 1 )
         | SConditional (cond, _, _, _) ->
             let stmt_used_vars =
-              Mir_dependency_graph.get_used_variables (cond, Pos.no_pos)
+              Bir.dict_from_mir_dict
+                (Mir_dependency_graph.get_used_variables (cond, Pos.no_pos))
             in
             ( update_used_vars stmt_used_vars pos used_vars,
               used_defs,
@@ -189,10 +194,10 @@ let dead_code_removal (p : program) : program =
           let p = { p with blocks = BlockMap.add block_id block p.blocks } in
           (used_vars, defs_vars, p)
         with Not_found -> (used_vars, defs_vars, p))
-      ( Mir.VariableMap.map
+      ( Bir.VariableMap.map
           (fun () -> BlockMap.singleton p.exit_block (PosSet.singleton 1))
-          p.outputs,
-        Mir.VariableMap.empty,
+          (Bir.map_from_mir_map p.outputs),
+        Bir.VariableMap.empty,
         p )
       rev_topological_order
   in

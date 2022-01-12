@@ -18,6 +18,38 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type variable
+
+type variable_id
+
+module VariableMap : Map.S with type key = variable
+
+module VariableDict : sig
+  type t
+
+  val bindings : t -> (variable_id * variable) list
+
+  val add : variable -> t -> t
+
+  val empty : t
+
+  val find : variable_id -> t -> variable
+
+  val mem : variable -> t -> bool
+
+  val union : t -> t -> t
+
+  val inter : t -> t -> t
+
+  val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
+
+  val singleton : variable -> t
+
+  val filter : (variable_id -> variable -> bool) -> t -> t
+
+  val for_all : (variable -> bool) -> t -> bool
+end
+
 type function_name = string
 
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
@@ -25,7 +57,7 @@ type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Mir.Variable.t * Mir.variable_data
+  | SAssign of variable * Mir.variable_data
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
@@ -43,6 +75,14 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
+
+val var_from_mir : Mir.Variable.t -> variable
+
+val var_to_mir : variable -> Mir.Variable.t
+
+val map_from_mir_map : 'a Mir.VariableMap.t -> 'a VariableMap.t
+
+val dict_from_mir_dict : Mir.VariableDict.t -> VariableDict.t
 
 val main_statements : program -> stmt list
 

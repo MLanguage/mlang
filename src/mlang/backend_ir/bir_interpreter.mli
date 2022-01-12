@@ -44,7 +44,7 @@ type code_location = code_location_segment list
 val format_code_location : Format.formatter -> code_location -> unit
 
 val assign_hook :
-  (Mir.Variable.t -> (unit -> var_literal) -> code_location -> unit) ref
+  (Bir.variable -> (unit -> var_literal) -> code_location -> unit) ref
 (** The instrumentation of the interpreter is done through this reference. The
     function that you assign to this reference will be called each time a
     variable assignment is executed *)
@@ -78,11 +78,11 @@ module type S = sig
   val format_var_value : Format.formatter -> var_value -> unit
 
   val format_var_value_with_var :
-    Format.formatter -> Mir.Variable.t * var_value -> unit
+    Format.formatter -> Bir.variable * var_value -> unit
 
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
-    ctx_vars : var_value Mir.VariableMap.t;
+    ctx_vars : var_value Bir.VariableMap.t;
     ctx_generic_index : int option;
   }
   (** Interpretation context *)
@@ -107,7 +107,7 @@ module type S = sig
     | ConditionViolated of
         Mir.Error.t
         * Mir.expression Pos.marked
-        * (Mir.Variable.t * var_value) list
+        * (Bir.variable * var_value) list
     | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)

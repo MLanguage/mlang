@@ -277,7 +277,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       (fun var e acc ->
         Pos.same_pos_as
           (Bir.SAssign
-             ( var,
+             ( Bir.var_from_mir var,
                {
                  Mir.var_typ = None;
                  Mir.var_io = Regular;
@@ -296,7 +296,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
             else
               let pos = Pos.no_pos in
               ( Bir.SAssign
-                  ( var,
+                  ( Bir.var_from_mir var,
                     {
                       Mir.var_typ = None;
                       Mir.var_io = Regular;
