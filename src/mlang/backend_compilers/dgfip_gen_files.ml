@@ -1,15 +1,18 @@
-(* Copyright (C) 2019 Inria, contributor: David Declerck <david.declerck@ocamlpro.com>
+(* Copyright (C) 2019 Inria, contributor: David Declerck
+   <david.declerck@ocamlpro.com>
 
-   This program is free software: you can redistribute it and/or modify it under the terms of the
-   GNU General Public License as published by the Free Software Foundation, either version 3 of the
-   License, or (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, either version 3 of the License, or (at your option) any later
+   version.
 
-   This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
-   even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
 
-   You should have received a copy of the GNU General Public License along with this program. If
-   not, see <https://www.gnu.org/licenses/>. *)
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -50,7 +53,15 @@ type idx = {
   pen : int ref;
 }
 
-type var_subtype = Context | Family | Income | CorrIncome | Variation | Penality | Base | Computed
+type var_subtype =
+  | Context
+  | Family
+  | Income
+  | CorrIncome
+  | Variation
+  | Penality
+  | Base
+  | Computed
 
 (* Used to specify the type of array to generate *)
 type gen_type =
@@ -61,31 +72,32 @@ type gen_type =
 (* can be of any subtype *)
 
 let default_flags =
-  Dgfip_options.{
-    nom_application = "";
-    annee_revenu = 0;
-    flg_correctif = true;
-    flg_iliad = false;
-    flg_pro = false;
-    flg_cfir = false;
-    flg_gcos = false;
-    flg_tri_ebcdic = false;
-    flg_multithread = false;
-    flg_short = false;
-    flg_register = false;
-    flg_optim_min_max = false;
-    flg_extraction = false;
-    flg_genere_libelle_restituee = false;
-    flg_controle_separe = false;
-    flg_controle_immediat = false;
-    flg_overlays = false;
-    flg_colors = false;
-    flg_ticket = false;
-    flg_trace = false;
-    flg_debug = false;
-    nb_debug_c = 0;
-    xflg = false;
-  }
+  Dgfip_options.
+    {
+      nom_application = "";
+      annee_revenu = 0;
+      flg_correctif = true;
+      flg_iliad = false;
+      flg_pro = false;
+      flg_cfir = false;
+      flg_gcos = false;
+      flg_tri_ebcdic = false;
+      flg_multithread = false;
+      flg_short = false;
+      flg_register = false;
+      flg_optim_min_max = false;
+      flg_extraction = false;
+      flg_genere_libelle_restituee = false;
+      flg_controle_separe = false;
+      flg_controle_immediat = false;
+      flg_overlays = false;
+      flg_colors = false;
+      flg_ticket = false;
+      flg_trace = false;
+      flg_debug = false;
+      nb_debug_c = 0;
+      xflg = false;
+    }
 
 let is_input st = match st with Base | Computed -> false | _ -> true
 
@@ -102,14 +114,16 @@ let input_var_subtype iv : var_subtype =
 let computed_var_subtype cv : var_subtype =
   let is_base =
     List.exists
-      (fun ct -> match Pos.unmark ct with Mast.Base -> true | GivenBack -> false)
+      (fun ct ->
+        match Pos.unmark ct with Mast.Base -> true | GivenBack -> false)
       cv.Mast.comp_subtyp
   in
   if is_base then Base else Computed
 
 let computed_var_is_output cv =
   List.exists
-    (fun st -> match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
+    (fun st ->
+      match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
     cv.Mast.comp_subtyp
 
 (* Used to generated the array names *)
@@ -151,8 +165,9 @@ let new_idx () =
   }
 
 (* Compute the variable indices in the different arrays according to its type *)
-(* Returns 3 indices: 1 - Index in the Computed/Base/Input arrays of the TGV 2 - Index in the
-   Context/Family/Income/... arrays 3 - Index in the Restituee array *)
+(* Returns 3 indices: 1 - Index in the Computed/Base/Input arrays of the TGV 2 -
+   Index in the Context/Family/Income/... arrays 3 - Index in the Restituee
+   array *)
 let next_idx idx kind output size =
   let idxr1, idxr2 =
     match (kind : var_subtype) with
@@ -178,16 +193,21 @@ let next_idx idx kind output size =
   (idx1, idx2, idxo_opt)
 
 let get_attr a attributes =
-  let attr_opt = List.find_opt (fun (an, _al) -> Pos.unmark an = a) attributes in
+  let attr_opt =
+    List.find_opt (fun (an, _al) -> Pos.unmark an = a) attributes
+  in
   match attr_opt with
   | None -> if a = "primrest" then 1 else -1
-  | Some (_an, al) -> ( match Pos.unmark al with Mast.Float f -> int_of_float f | _ -> 0)
+  | Some (_an, al) -> (
+      match Pos.unmark al with Mast.Float f -> int_of_float f | _ -> 0)
 
-let get_name name alias_opt = match alias_opt with Some alias -> alias | _ -> name
+let get_name name alias_opt =
+  match alias_opt with Some alias -> alias | _ -> name
 
 let sort_vars_by_alias vars =
   List.fast_sort
-    (fun (_, _, _, _, name1, alias_opt1, _, _, _, _) (_, _, _, _, name2, alias_opt2, _, _, _, _) ->
+    (fun (_, _, _, _, name1, alias_opt1, _, _, _, _)
+         (_, _, _, _, name2, alias_opt2, _, _, _, _) ->
       let var_name1 = get_name name1 alias_opt1 in
       let var_name2 = get_name name2 alias_opt2 in
       String.compare var_name1 var_name2)
@@ -213,8 +233,12 @@ let get_vars prog =
                 let cv = Pos.unmark cv in
                 let tvar = computed_var_subtype cv in
                 (* Base or Computed *)
-                let size = match cv.comp_table with Some i -> Pos.unmark i | None -> 1 in
-                let idx1, idx2, idxo_opt = next_idx idx tvar (computed_var_is_output cv) size in
+                let size =
+                  match cv.comp_table with Some i -> Pos.unmark i | None -> 1
+                in
+                let idx1, idx2, idxo_opt =
+                  next_idx idx tvar (computed_var_is_output cv) size
+                in
                 let var =
                   ( tvar,
                     idx1,
@@ -231,7 +255,9 @@ let get_vars prog =
             | VariableDecl (InputVar iv) ->
                 let iv = Pos.unmark iv in
                 let tvar = input_var_subtype iv in
-                let idx1, idx2, idxo_opt = next_idx idx tvar iv.input_given_back 1 in
+                let idx1, idx2, idxo_opt =
+                  next_idx idx tvar iv.input_given_back 1
+                in
                 let var =
                   ( tvar,
                     idx1,
@@ -254,22 +280,62 @@ let get_vars prog =
 
   let idx = new_idx () in
 
-  (* Recompute the indices of Context/Family/Income/... vars, as they are sorted by alias *)
+  (* Recompute the indices of Context/Family/Income/... vars, as they are sorted
+     by alias *)
   List.map
-    (fun (tvar, idx1, _idx2, idxo_opt, name, alias_opt, desc, typ_opt, attributes, size) ->
+    (fun ( tvar,
+           idx1,
+           _idx2,
+           idxo_opt,
+           name,
+           alias_opt,
+           desc,
+           typ_opt,
+           attributes,
+           size ) ->
       let _idx1, idx2, _idxo_opt = next_idx idx tvar (idxo_opt <> None) size in
-      (tvar, idx1, idx2, idxo_opt, name, alias_opt, desc, typ_opt, attributes, size))
+      ( tvar,
+        idx1,
+        idx2,
+        idxo_opt,
+        name,
+        alias_opt,
+        desc,
+        typ_opt,
+        attributes,
+        size ))
     vars
 
-(* Retrieve the variables for the debug array; variables with aliases are duplicated *)
+(* Retrieve the variables for the debug array; variables with aliases are
+   duplicated *)
 let get_vars_debug vars =
   sort_vars_by_name
   @@ List.fold_left
        (fun vars var ->
-         let tvar, idx1, idx2, idxo_opt, _name, alias_opt, desc, typ_opt, attributes, size = var in
+         let ( tvar,
+               idx1,
+               idx2,
+               idxo_opt,
+               _name,
+               alias_opt,
+               desc,
+               typ_opt,
+               attributes,
+               size ) =
+           var
+         in
          match alias_opt with
          | Some alias ->
-             (tvar, idx1, idx2, idxo_opt, alias, alias_opt, desc, typ_opt, attributes, size)
+             ( tvar,
+               idx1,
+               idx2,
+               idxo_opt,
+               alias,
+               alias_opt,
+               desc,
+               typ_opt,
+               attributes,
+               size )
              :: var :: vars
          | None -> var :: vars)
        [] vars
@@ -308,7 +374,8 @@ let gen_header fmt =
 |}
 
 (* Print a variable's description *)
-let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes ~desc ~alias_opt =
+let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
+    ~desc ~alias_opt =
   let open Mast in
   let var_name = if opt.with_alias then get_name name alias_opt else name in
 
@@ -323,29 +390,43 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes ~d
   let typ = match typ_opt with None -> Real | Some ct -> Pos.unmark ct in
 
   Format.fprintf fmt "    { \"%s\", %s | %d" var_name kind idx;
-  if opt.with_type_donnee then Format.fprintf fmt ", %a" Format_mast.format_value_typ typ;
+  if opt.with_type_donnee then
+    Format.fprintf fmt ", %a" Format_mast.format_value_typ typ;
   if opt.with_verif then
-    if is_input && false then Format.fprintf fmt ", err_%s" name (* Note: no alias *)
+    if is_input && false then Format.fprintf fmt ", err_%s" name
+      (* Note: no alias *)
     else Format.fprintf fmt ", no_error";
   (* does not seem to be used anymore... *)
-  if opt.with_classe then Format.fprintf fmt ", %d" (get_attr "classe" attributes);
-  if opt.with_priorite then Format.fprintf fmt ", %d" (get_attr "priorite" attributes);
-  if opt.with_categorie_TL then Format.fprintf fmt ", %d" (get_attr "categorie_TL" attributes);
-  if opt.with_nat_code then Format.fprintf fmt ", %d" (get_attr "nat_code" attributes);
-  if opt.with_cotsoc then Format.fprintf fmt ", %d" (get_attr "cotsoc" attributes);
-  if opt.with_ind_abat then Format.fprintf fmt ", %d" (get_attr "ind_abat" attributes);
-  if opt.with_acompte then Format.fprintf fmt ", %d" (get_attr "acompte" attributes);
-  if opt.with_avfisc then Format.fprintf fmt ", %d" (get_attr "avfisc" attributes);
-  if opt.with_rapcat then Format.fprintf fmt ", %d" (get_attr "rapcat" attributes);
-  if opt.with_sanction then Format.fprintf fmt ", %d" (get_attr "sanction" attributes);
-  if opt.with_modcat then Format.fprintf fmt ", %d" (get_attr "modcat" attributes);
+  if opt.with_classe then
+    Format.fprintf fmt ", %d" (get_attr "classe" attributes);
+  if opt.with_priorite then
+    Format.fprintf fmt ", %d" (get_attr "priorite" attributes);
+  if opt.with_categorie_TL then
+    Format.fprintf fmt ", %d" (get_attr "categorie_TL" attributes);
+  if opt.with_nat_code then
+    Format.fprintf fmt ", %d" (get_attr "nat_code" attributes);
+  if opt.with_cotsoc then
+    Format.fprintf fmt ", %d" (get_attr "cotsoc" attributes);
+  if opt.with_ind_abat then
+    Format.fprintf fmt ", %d" (get_attr "ind_abat" attributes);
+  if opt.with_acompte then
+    Format.fprintf fmt ", %d" (get_attr "acompte" attributes);
+  if opt.with_avfisc then
+    Format.fprintf fmt ", %d" (get_attr "avfisc" attributes);
+  if opt.with_rapcat then
+    Format.fprintf fmt ", %d" (get_attr "rapcat" attributes);
+  if opt.with_sanction then
+    Format.fprintf fmt ", %d" (get_attr "sanction" attributes);
+  if opt.with_modcat then
+    Format.fprintf fmt ", %d" (get_attr "modcat" attributes);
   if opt.with_liee then
     if true (* no linked var *) then Format.fprintf fmt ", (T_var_irdata)NULL"
     else Format.fprintf fmt ", desc_%s" (assert false);
   (* only REVENU vars may use this, but they don't... *)
   if opt.with_type && is_output then Format.fprintf fmt ", RESTITUEE";
   (* there also exist RESTITUEE_P and RESTITUEE_C, but they are unused *)
-  if opt.with_primrest then Format.fprintf fmt ", %d" (get_attr "primrest" attributes);
+  if opt.with_primrest then
+    Format.fprintf fmt ", %d" (get_attr "primrest" attributes);
   if opt.with_libelle then Format.fprintf fmt ", \"%s\"" desc
   else Format.fprintf fmt " /*\"%s\"*/" desc;
   begin
@@ -372,34 +453,49 @@ let gen_table fmt _flags vars req_type opt =
   (* if opt.with_verif then *)
   Format.fprintf fmt "extern T_discord *no_error(T_irdata *);\n";
 
-  (* TODO there should be individual var verification functions here, but they do not seem to be
-     used (for all kind of input vars as well as output vars and debug tables) *)
+  (* TODO there should be individual var verification functions here, but they
+     do not seem to be used (for all kind of input vars as well as output vars
+     and debug tables) *)
   let vars =
-    if opt.with_alias then vars (* already sorted by alias *) else sort_vars_by_name vars
+    if opt.with_alias then vars (* already sorted by alias *)
+    else sort_vars_by_name vars
   in
 
   let table_name = req_type_name req_type in
   let table_NAME = String.uppercase_ascii table_name in
   begin
     match req_type with
-    | Debug _i -> Format.fprintf fmt "T_desc_debug desc_%s[NB_%s + 1] = {\n" table_name table_NAME
-    | _ -> Format.fprintf fmt "T_desc_%s desc_%s[NB_%s + 1] = {\n" table_name table_name table_NAME
+    | Debug _i ->
+        Format.fprintf fmt "T_desc_debug desc_%s[NB_%s + 1] = {\n" table_name
+          table_NAME
+    | _ ->
+        Format.fprintf fmt "T_desc_%s desc_%s[NB_%s + 1] = {\n" table_name
+          table_name table_NAME
   end;
 
   List.iter
-    (fun (tvar, idx1, _idx2, idxo_opt, name, alias_opt, desc, typ_opt, attributes, _size) ->
+    (fun ( tvar,
+           idx1,
+           _idx2,
+           idxo_opt,
+           name,
+           alias_opt,
+           desc,
+           typ_opt,
+           attributes,
+           _size ) ->
       let is_output = match idxo_opt with Some _ -> true | _ -> false in
       if var_matches req_type tvar is_output then
         match req_type with
         | Debug _i ->
             (* Special case for debug *)
             let opt = { opt with with_alias = false } in
-            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt ~attributes ~desc
-              ~alias_opt
+            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
+              ~attributes ~desc ~alias_opt
         | _ ->
             (* General case*)
-            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt ~attributes ~desc
-              ~alias_opt)
+            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
+              ~attributes ~desc ~alias_opt)
     vars;
 
   Format.fprintf fmt "};\n"
@@ -407,36 +503,51 @@ let gen_table fmt _flags vars req_type opt =
 let gen_desc fmt vars ~alias_only =
   let vars = sort_vars_by_name vars in
 
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
 
 #include "desc_static.h"
 
 |};
 
   List.iter
-    (fun (tvar, _idx1, idx2, idxo_opt, name, alias_opt, _desc, _typ_opt, _attributes, _size) ->
+    (fun ( tvar,
+           _idx1,
+           idx2,
+           idxo_opt,
+           name,
+           alias_opt,
+           _desc,
+           _typ_opt,
+           _attributes,
+           _size ) ->
       if (not alias_only) || alias_opt <> None then
         let data_opt =
           match (tvar : var_subtype) with
           | Base | Computed -> begin
               (* computed var: only output *)
-              match idxo_opt with Some idx -> Some ("restituee", idx) | None -> None
+              match idxo_opt with
+              | Some idx -> Some ("restituee", idx)
+              | None -> None
             end
           | _ -> Some (subtype_name tvar, idx2)
         in
         match data_opt with
         | Some (type_name, idx) ->
             let var_name =
-              match (alias_only, alias_opt) with true, Some alias -> alias | _ -> name
+              match (alias_only, alias_opt) with
+              | true, Some alias -> alias
+              | _ -> name
             in
-            (* TODO special handling for debug vars (though it does not seem to happen) *)
-            Format.fprintf fmt "#define desc_%s (T_var_irdata)(desc_%s + %d)\n" var_name type_name
-              idx
+            (* TODO special handling for debug vars (though it does not seem to
+               happen) *)
+            Format.fprintf fmt "#define desc_%s (T_var_irdata)(desc_%s + %d)\n"
+              var_name type_name idx
         | None -> ())
     vars
 
-(* TODO when flg_controle_immediat, add per variable verifications (add #define desc_verif) although
-   it does not seem to be used anymore *)
+(* TODO when flg_controle_immediat, add per variable verifications (add #define
+   desc_verif) although it does not seem to be used anymore *)
 
 let gen_table_output fmt flags vars =
   let opt =
@@ -646,7 +757,8 @@ let gen_table_debug fmt flags vars i =
 
   gen_table fmt flags vars (Debug i) opt
 
-let is_valid_app al = List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al
+let is_valid_app al =
+  List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al
 
 (* Retrieve rules, verifications, errors and chainings from a program *)
 let get_rules_verif_etc prog =
@@ -679,11 +791,13 @@ let get_rules_verif_etc prog =
                 in
                 (rules, verifs, errors, chainings)
             | Error e -> (rules, verifs, e :: errors, chainings)
-            (* | Chaining (cn, _anl) -> rules, verifs, errors, cn :: chainings *)
+            (* | Chaining (cn, _anl) -> rules, verifs, errors, cn ::
+               chainings *)
             | _ -> (rules, verifs, errors, chainings))
           (rules, verifs, errors, chainings)
           file)
-      ([], [], [], StringSet.empty) prog
+      ([], [], [], StringSet.empty)
+      prog
   in
 
   let rules = List.fast_sort compare rules in
@@ -704,7 +818,9 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
     List.iter (fun rn -> Format.fprintf fmt "extern int regle_%d();\n" rn) rules;
 
     Format.fprintf fmt "T_desc_call desc_call[NB_CALL + 1] = {\n";
-    List.iter (fun rn -> Format.fprintf fmt "    { %d, regle_%d },\n" rn rn) rules;
+    List.iter
+      (fun rn -> Format.fprintf fmt "    { %d, regle_%d },\n" rn rn)
+      rules;
     Format.fprintf fmt "};\n\n";
 
     Format.fprintf fmt "T_desc_err desc_err[NB_ERR + 1] = {\n";
@@ -716,10 +832,14 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
     Format.fprintf fmt "};\n\n"
   end;
 
-  StringSet.iter (fun cn -> Format.fprintf fmt "extern void %s();\n" cn) chainings;
+  StringSet.iter
+    (fun cn -> Format.fprintf fmt "extern void %s();\n" cn)
+    chainings;
 
   Format.fprintf fmt "T_desc_ench desc_ench[NB_ENCH + 1] = {\n";
-  StringSet.iter (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn) chainings;
+  StringSet.iter
+    (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn)
+    chainings;
   Format.fprintf fmt "};\n"
 
 (* Print the table of verification functions (tablev.c) *)
@@ -728,10 +848,14 @@ let gen_table_verif fmt flags verifs =
 
   if flags.Dgfip_options.flg_debug || flags.flg_controle_immediat then begin
     (* TODO: when control_immediat, don' put everything (but what ?) *)
-    List.iter (fun vn -> Format.fprintf fmt "extern void verif_%d();\n" vn) verifs;
+    List.iter
+      (fun vn -> Format.fprintf fmt "extern void verif_%d();\n" vn)
+      verifs;
 
     Format.fprintf fmt "T_desc_verif desc_verif[NB_VERIF + 1] = {\n";
-    List.iter (fun vn -> Format.fprintf fmt "    { %d, verif_%d },\n" vn vn) verifs;
+    List.iter
+      (fun vn -> Format.fprintf fmt "    { %d, verif_%d },\n" vn vn)
+      verifs;
     Format.fprintf fmt "};\n\n"
   end
 
@@ -748,6 +872,9 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
   (* TODO paths may differ if dir_var_h is set *)
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
+
+#ifndef _VAR_
+#define _VAR_
 
 #include "irdata.h"
 #include "desc_inv.h"
@@ -788,8 +915,9 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
 #define NB_RESTITUEE %d
 #define NB_ENCH %d
 |}
-    taille_saisie taille_calculee taille_base taille_totale nb_contexte nb_famille nb_revenu
-    nb_revenu_correc nb_variation nb_penalite nb_restituee nb_ench;
+    taille_saisie taille_calculee taille_base taille_totale nb_contexte
+    nb_famille nb_revenu nb_revenu_correc nb_variation nb_penalite nb_restituee
+    nb_ench;
 
   if flags.Dgfip_options.flg_debug then begin
     Format.fprintf fmt "#define NB_ERR %d\n" nb_err;
@@ -812,14 +940,18 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
     Format.fprintf fmt "#define NB_VERIF %d\n" nb_verif;
 
   List.iter
-    (fun rn -> Format.fprintf fmt "extern int regle_%d _PROTS((struct S_irdata *));\n" rn)
+    (fun rn ->
+      Format.fprintf fmt "extern int regle_%d _PROTS((struct S_irdata *));\n" rn)
     rules;
 
   List.iter
-    (fun vn -> Format.fprintf fmt "extern void verif_%d _PROTS((struct S_irdata *));\n" vn)
+    (fun vn ->
+      Format.fprintf fmt "extern void verif_%d _PROTS((struct S_irdata *));\n"
+        vn)
     verifs;
 
-  (* TODO external declaration of individual control rules (seems to be no longer used) *)
+  (* TODO external declaration of individual control rules (seems to be no
+     longer used) *)
   List.iter
     (fun e ->
       let en = Pos.unmark e.error_name in
@@ -827,7 +959,10 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
     errors;
 
   (* TODO function declarations (seems to be no longer used) *)
-  if flags.flg_pro then Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n"
+  if flags.flg_pro then
+    Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n";
+
+  Format.fprintf fmt "#endif /* _VAR_ */\n"
 
 let gen_var_c fmt flags errors =
   let open Mast in
@@ -847,29 +982,37 @@ let gen_var_c fmt flags errors =
             | Information -> 4
           in
           let sous_code_suffix =
-            if String.equal (Pos.unmark sous_code) "00" then "" else "-" ^ Pos.unmark sous_code
+            if String.equal (Pos.unmark sous_code) "00" then ""
+            else "-" ^ Pos.unmark sous_code
           in
           Format.fprintf fmt
-            "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \"%s\", %d };\n"
-            (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo) sous_code_suffix
-            (Pos.unmark libelle) (Pos.unmark code_bo) (Pos.unmark sous_code) (Pos.unmark is_isf)
-            (Pos.unmark e.error_name) terr
+            "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
+             \"%s\", %d };\n"
+            (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo)
+            sous_code_suffix (Pos.unmark libelle) (Pos.unmark code_bo)
+            (Pos.unmark sous_code) (Pos.unmark is_isf) (Pos.unmark e.error_name)
+            terr
       | _ -> failwith "Invalid error description")
     errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
     Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
 
-    List.iter (fun e -> Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.error_name)) errors;
+    List.iter
+      (fun e ->
+        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.error_name))
+      errors;
 
     Format.fprintf fmt "    NULL\n};\n"
   end
 
 let gen_annee_h fmt flags =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
 
 #define ANNEE_REVENU %04d
-|} flags.Dgfip_options.annee_revenu;
+|}
+    flags.Dgfip_options.annee_revenu;
 
   Format.pp_print_flush fmt ()
 
@@ -898,19 +1041,23 @@ let gen_conf_h fmt flags vars =
   if flags.flg_short then Format.fprintf fmt "#define FLG_SHORT\n";
   if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
-  (*if flags.flg_optim_min_max then Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX\n"; *)
+  (*if flags.flg_optim_min_max then Format.fprintf fmt "#define
+    FLG_OPTIM_MIN_MAX\n"; *)
   if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
     Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
-  if flags.flg_controle_separe then Format.fprintf fmt "#define FLG_CONTROLE_SEPARE\n";
-  if flags.flg_controle_immediat then Format.fprintf fmt "#define FLG_CONTROLE_IMMEDIAT\n";
+  if flags.flg_controle_separe then
+    Format.fprintf fmt "#define FLG_CONTROLE_SEPARE\n";
+  if flags.flg_controle_immediat then
+    Format.fprintf fmt "#define FLG_CONTROLE_IMMEDIAT\n";
   (* does not need to be printed *)
   (*if flags.flg_overlays then Format.fprintf fmt "#define FLG_OVERLAYS\n"; *)
   if flags.flg_colors then Format.fprintf fmt "#define FLG_COLORS\n";
   if flags.flg_ticket then Format.fprintf fmt "#define FLG_TICKET\n";
   if flags.flg_trace then Format.fprintf fmt "#define FLG_TRACE\n";
   (* flag is not used *)
-  (*if flags.flg_trace_irdata then Format.fprintf fmt "#define FLG_TRACE_IRDATA\n"; *)
+  (*if flags.flg_trace_irdata then Format.fprintf fmt "#define
+    FLG_TRACE_IRDATA\n"; *)
   if flags.flg_debug then Format.fprintf fmt "#define FLG_DEBUG\n";
   Format.fprintf fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
 
@@ -925,13 +1072,18 @@ let gen_conf_h fmt flags vars =
 (* Generate a map from variables to array indices *)
 let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
-  let open Dgfip_varid in
+  (* let open Dgfip_varid in *)
   let pvars = cprog.mir_program.program_vars in
   let add vn v vm =
-    let vs = match StringMap.find_opt vn vm with None -> VariableSet.empty | Some vs -> vs in
+    let vs =
+      match StringMap.find_opt vn vm with
+      | None -> VariableSet.empty
+      | Some vs -> vs
+    in
     StringMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
   in
-  (* Build a map from variable names to all their definitions (with different ids) *)
+  (* Build a map from variable names to all their definitions (with different
+     ids) *)
   let vars_map =
     VariableDict.fold
       (fun v vm ->
@@ -940,23 +1092,37 @@ let extract_var_ids (cprog : Bir.program) vars =
       pvars StringMap.empty
   in
   let process_var ~alias
-      (tvar, idx1, _idx2, _idxo_opt, name, alias_opt, _desc, _typ_opt, _attributes, _size) =
+      ( tvar,
+        idx1,
+        _idx2,
+        _idxo_opt,
+        name,
+        alias_opt,
+        _desc,
+        _typ_opt,
+        _attributes,
+        _size ) =
     let vid =
       match (tvar : var_subtype) with
       | Computed -> Dgfip_varid.VarComputed idx1
       | Base -> VarBase idx1
       | _ -> VarInput idx1
     in
-    let name = if alias then match alias_opt with Some alias -> alias | None -> name else name in
+    let name =
+      if alias then match alias_opt with Some alias -> alias | None -> name
+      else name
+    in
     (name, vid)
   in
-  (* Build a map from variable definitions (with different ids) to their array indices *)
+  (* Build a map from variable definitions (with different ids) to their array
+     indices *)
   List.fold_left
     (fun vm vd ->
       let name, vid = process_var ~alias:false vd in
       let vs =
         try StringMap.find name vars_map
-        with Not_found -> Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
+        with Not_found ->
+          Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
       in
       VariableSet.fold (fun v vm -> VariableMap.add v vid vm) vs vm)
     VariableMap.empty vars
@@ -966,9 +1132,9 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-(* Generate the auxiliary files AND return the map of variables names to TGV ids *)
+(* Generate the auxiliary files AND return the map of variables names to TGV
+   ids *)
 let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
-
   let folder = Filename.dirname !Cli.output_file in
 
   let vars = get_vars prog in
@@ -1009,7 +1175,8 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
         (fun i vars ->
           let file = Printf.sprintf "tableg%02d.c" i in
           let oc, fmt = open_file (Filename.concat folder file) in
-          if flags.flg_debug then gen_table_debug fmt flags vars i else gen_header fmt;
+          if flags.flg_debug then gen_table_debug fmt flags vars i
+          else gen_header fmt;
           close_out oc;
           i + 1)
         1 vars_debug_split
