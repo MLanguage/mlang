@@ -13,7 +13,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Mir
 open Test_ast
 
 let parse_file (test_name : string) : test_file =
@@ -41,7 +40,8 @@ let parse_file (test_name : string) : test_file =
 let to_ast_literal (value : Test_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
-let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
+let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
+    Mir.Variable.t =
   try
     List.hd
       (List.sort
@@ -50,7 +50,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find (Pos.unmark name) p.program_idmap))
   with Not_found ->
-    let name = find_var_name_by_alias p name in
+    let name = Mir.find_var_name_by_alias p name in
     List.hd
       (List.sort
          (fun v1 v2 ->
@@ -60,20 +60,22 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Variable.t =
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
     (test_error_margin : float) :
-    Bir_interface.bir_function * Mir.literal VariableMap.t =
+    Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
-        let var = find_var_of_name program.mir_program (var, pos) in
-        let lit =
-          match value with I i -> Float (float_of_int i) | F f -> Float f
+        let var =
+          find_var_of_name program.mir_program (var, pos) |> Bir.var_from_mir
         in
-        (VariableMap.add var () fv, VariableMap.add var lit in_f))
-      (VariableMap.empty, VariableMap.empty)
+        let lit =
+          match value with I i -> Mir.Float (float_of_int i) | F f -> Float f
+        in
+        (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
+      (Bir.VariableMap.empty, Bir.VariableMap.empty)
       t.ep
   in
-  let func_constant_inputs = VariableMap.empty in
-  let func_outputs = VariableMap.empty in
+  let func_constant_inputs = Bir.VariableMap.empty in
+  let func_outputs = Bir.VariableMap.empty in
   (* some output variables are actually input, so we don't declare any for
      now *)
   let func_conds =
@@ -84,7 +86,8 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
               two using the line below*)
            let var =
              Pos.unmark
-               (find_var_of_name program.mir_program (var, pos)).Variable.name
+               (find_var_of_name program.mir_program (var, pos))
+                 .Mir.Variable.name
            in
            (* we allow a difference of 0.000001 between the control value and
               the result *)
@@ -117,7 +120,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
     input_file )
 
 let add_test_conds_to_combined_program (p : Bir.program)
-    (conds : condition_data VariableMap.t) : Bir.program =
+    (conds : Bir.condition_data Bir.VariableMap.t) : Bir.program =
   (* because evaluate_program redefines everything each time, we have to make
      sure that the redefinitions of our constant inputs are removed from the
      main list of statements *)
@@ -134,8 +137,8 @@ let add_test_conds_to_combined_program (p : Bir.program)
                   (match var_data.var_definition with
                   | InputVar ->
                       SimpleVar
-                        (Pos.same_pos_as (Literal Undefined)
-                           (Bir.var_to_mir var).Variable.name)
+                        (Pos.same_pos_as (Mir.Literal Undefined)
+                           (Bir.var_to_mir var).Mir.Variable.name)
                   | SimpleVar old -> SimpleVar old
                   | TableVar (size, old) -> TableVar (size, old));
               }
@@ -149,7 +152,7 @@ let add_test_conds_to_combined_program (p : Bir.program)
   in
   let new_stmts = filter_stmts (Bir.main_statements p) in
   let conditions_stmts =
-    VariableMap.fold
+    Bir.VariableMap.fold
       (fun _ cond stmts ->
         (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
       conds []
@@ -236,7 +239,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       ((successes, failures, code_coverage_acc) : process_acc) : process_acc =
     let report_violated_condition_error
         (bindings : (Bir.variable * Mir.literal) option)
-        (expr : Mir.expression Pos.marked) (err : Error.t) =
+        (expr : Bir.expression Pos.marked) (err : Mir.Error.t) =
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
       | ( Some (v, l1),
@@ -252,7 +255,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
                     _ ),
                 _ ) ) ) ->
           Cli.error_print "Test %s incorrect (error on variable %s)" name
-            (Pos.unmark (Bir.var_to_mir v).Variable.name);
+            (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name);
           let errs_varname =
             try Bir.VariableMap.find v failures with Not_found -> []
           in
@@ -261,7 +264,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
             code_coverage_acc )
       | _ ->
           Cli.error_print "Test %s incorrect (error %s raised)" name
-            (Pos.unmark err.Error.name);
+            (Pos.unmark err.Mir.Error.name);
           (successes, failures, code_coverage_acc)
     in
     try
@@ -419,7 +422,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     List.iter
       (fun (var, infos) ->
         Cli.error_print "\t%s, %d errors in files %s"
-          (Pos.unmark (Bir.var_to_mir var).Variable.name)
+          (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
           (List.length infos)
           (String.concat ", "
              (List.map (fun (n, _, _) -> n) (List.sort compare infos))))

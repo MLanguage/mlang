@@ -231,8 +231,8 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
   (* the typechecking modifications do not change the dependency graph *)
   { p with program }
 
-let rec expand_functions_expr (e : expression Pos.marked) :
-    expression Pos.marked =
+let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
+    'var expression_ Pos.marked =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
       let new_e1 = expand_functions_expr e1 in

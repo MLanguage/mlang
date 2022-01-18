@@ -106,9 +106,9 @@ module type S = sig
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of
         Mir.Error.t
-        * Mir.expression Pos.marked
+        * Bir.expression Pos.marked
         * (Bir.variable * var_value) list
-    | NanOrInf of string * Mir.expression Pos.marked
+    | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -147,7 +147,7 @@ type value_sort =
 val evaluate_program :
   Bir_interface.bir_function ->
   Bir.program ->
-  Mir.literal Mir.VariableMap.t ->
+  Mir.literal Bir.VariableMap.t ->
   int ->
   value_sort ->
   unit ->
@@ -155,5 +155,5 @@ val evaluate_program :
 (** Main interpreter function *)
 
 val evaluate_expr :
-  Mir.program -> Mir.expression Pos.marked -> value_sort -> Mir.literal
+  Mir.program -> Bir.expression Pos.marked -> value_sort -> Mir.literal
 (** Interprets only an expression *)

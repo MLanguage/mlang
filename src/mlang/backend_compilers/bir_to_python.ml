@@ -14,7 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Mir
+open Bir
 
 let verbose_output = ref false
 
@@ -122,19 +122,23 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "not" | Mast.Minus -> "-"
 
-let generate_variable fmt (var : Variable.t) : unit =
+let generate_variable fmt (var : variable) : unit =
+  let var = Bir.var_to_mir var in
   let v =
-    match var.alias with Some v -> v | None -> Pos.unmark var.Variable.name
+    match var.alias with
+    | Some v -> v
+    | None -> Pos.unmark var.Mir.Variable.name
   in
   let v = String.lowercase_ascii v in
   let v =
     if
-      same_execution_number var.Variable.execution_number
-        (Mast_to_mir.dummy_exec_number (Pos.get_position var.Variable.name))
+      Mir.same_execution_number var.Mir.Variable.execution_number
+        (Mast_to_mir.dummy_exec_number (Pos.get_position var.Mir.Variable.name))
     then v
     else
-      Format.asprintf "%s_%d_%d" v var.Variable.execution_number.Mir.rule_number
-        var.Variable.execution_number.Mir.seq_number
+      Format.asprintf "%s_%d_%d" v
+        var.Mir.Variable.execution_number.Mir.rule_number
+        var.Mir.Variable.execution_number.Mir.seq_number
   in
   if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v
   else Format.fprintf fmt "%s" v
@@ -142,8 +146,9 @@ let generate_variable fmt (var : Variable.t) : unit =
 let generate_tgv_variable fmt (var : variable) : unit =
   Format.fprintf fmt "tgv['%a']" generate_variable var
 
-let generate_name (v : Variable.t) : string =
-  match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
+let generate_name (v : variable) : string =
+  let v = Bir.var_to_mir v in
+  match v.alias with Some v -> v | None -> Pos.unmark v.Mir.Variable.name
 
 let autograd_ref = ref false
 
@@ -279,17 +284,18 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) :
   | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
   | Var var -> Format.fprintf fmt "%a" generate_tgv_variable var
-  | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
+  | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.Mir.LocalVariable.id
   | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
-      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.LocalVariable.id
+      Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.Mir.LocalVariable.id
         (generate_python_expr safe_bool_binops)
         e2
         (generate_python_expr safe_bool_binops)
         e1
 
-let generate_var_def var data (oc : Format.formatter) : unit =
+let generate_var_def (var : variable) (data : variable_data)
+    (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
       if !verbose_output then
@@ -301,7 +307,7 @@ let generate_var_def var data (oc : Format.formatter) : unit =
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a = [%a]@\n" generate_tgv_variable var
         (fun fmt ->
-          IndexMap.iter (fun _ v ->
+          Mir.IndexMap.iter (fun _ v ->
               Format.fprintf fmt "%a, " (generate_python_expr false) v))
         es
   | TableVar (_, IndexGeneric e) ->
@@ -335,7 +341,7 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
          (fun fmt var ->
            Format.fprintf fmt "# %s: %s" (generate_name var)
-             (Pos.unmark var.Variable.descr)))
+             (Pos.unmark (Bir.var_to_mir var).Mir.Variable.descr)))
       input_vars;
   Format.fprintf oc "def extracted(input_variables):@\n@[<h 4>    @\n";
   Format.fprintf oc
@@ -347,7 +353,7 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
            var (generate_name var)))
     input_vars
 
-let generate_var_cond cond oc =
+let generate_var_cond (cond : condition_data) oc =
   if (fst cond.cond_error).typ = Mast.Anomaly then
     Format.fprintf oc
       "# Verification condition %a@\n\
@@ -361,16 +367,16 @@ let generate_var_cond cond oc =
       cond.cond_expr
       (fun fmt err ->
         Format.fprintf fmt "%s: %s"
-          (Strings.sanitize_str err.Error.name)
-          (Error.err_descr_string err |> Strings.sanitize_str))
+          (Strings.sanitize_str err.Mir.Error.name)
+          (Mir.Error.err_descr_string err |> Strings.sanitize_str))
       (fst cond.cond_error)
 
-let rec generate_stmts (program : Bir.program) oc stmts =
+let rec generate_stmts (program : program) oc stmts =
   Format.pp_print_list (generate_stmt program) oc stmts
 
 and generate_stmt program oc stmt =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) -> generate_var_def (Bir.var_to_mir var) vdata oc
+  | SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, []) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -440,13 +446,13 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
     Format.fprintf oc "return out@\n@]\n"
   end
 
-let generate_python_program (program : Bir.program)
+let generate_python_program (program : program)
     (function_spec : Bir_interface.bir_function) (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a" 
-    generate_header () 
-    generate_input_handling function_spec 
+  Format.fprintf oc "%a%a%a%a"
+    generate_header ()
+    generate_input_handling function_spec
     (generate_stmts program) (Bir.get_all_statements program)
     generate_return function_spec;
   close_out _oc[@@ocamlformat "disable"]

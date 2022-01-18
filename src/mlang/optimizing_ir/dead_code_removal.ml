@@ -109,20 +109,15 @@ let remove_dead_statements (stmts : block) (id : block_id)
             then
               let stmt_used_vars =
                 match var_def.Mir.var_definition with
-                | Mir.SimpleVar e ->
-                    Bir.dict_from_mir_dict
-                      (Mir_dependency_graph.get_used_variables e)
+                | Mir.SimpleVar e -> Bir.get_used_variables e
                 | Mir.TableVar (_, def) -> (
                     match def with
-                    | Mir.IndexGeneric e ->
-                        Bir.dict_from_mir_dict
-                          (Mir_dependency_graph.get_used_variables e)
+                    | Mir.IndexGeneric e -> Bir.get_used_variables e
                     | Mir.IndexTable es ->
                         Mir.IndexMap.fold
                           (fun _ e used_vars ->
-                            Mir_dependency_graph.get_used_variables_ e used_vars)
-                          es Mir.VariableDict.empty
-                        |> Bir.dict_from_mir_dict)
+                            Bir.get_used_variables_ e used_vars)
+                          es Bir.VariableDict.empty)
                 | Mir.InputVar -> assert false
                 (* should not happen *)
               in
@@ -134,19 +129,13 @@ let remove_dead_statements (stmts : block) (id : block_id)
         (* CR Keryan: why updated [used_defs] here ? This definition is
            removed *)
         | SVerif cond ->
-            let stmt_used_vars =
-              Bir.dict_from_mir_dict
-                (Mir_dependency_graph.get_used_variables cond.cond_expr)
-            in
+            let stmt_used_vars = Bir.get_used_variables cond.cond_expr in
             ( update_used_vars stmt_used_vars pos used_vars,
               used_defs,
               stmt :: acc,
               pos - 1 )
         | SConditional (cond, _, _, _) ->
-            let stmt_used_vars =
-              Bir.dict_from_mir_dict
-                (Mir_dependency_graph.get_used_variables (cond, Pos.no_pos))
-            in
+            let stmt_used_vars = Bir.get_used_variables (cond, Pos.no_pos) in
             ( update_used_vars stmt_used_vars pos used_vars,
               used_defs,
               stmt :: acc,
@@ -196,7 +185,7 @@ let dead_code_removal (p : program) : program =
         with Not_found -> (used_vars, defs_vars, p))
       ( Bir.VariableMap.map
           (fun () -> BlockMap.singleton p.exit_block (PosSet.singleton 1))
-          (Bir.map_from_mir_map p.outputs),
+          p.outputs,
         Bir.VariableMap.empty,
         p )
       rev_topological_order

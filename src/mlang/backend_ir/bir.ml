@@ -31,6 +31,8 @@ let var_from_mir (v : Mir.Variable.t) : variable =
 
 let var_to_mir v = v
 
+let compare_variable = Mir.Variable.compare
+
 let map_from_mir_map map =
   Mir.VariableMap.fold
     (fun var -> VariableMap.add (var_from_mir var))
@@ -41,6 +43,14 @@ let dict_from_mir_dict dict =
     (fun var -> VariableDict.add (var_from_mir var))
     dict VariableDict.empty
 
+type expression = variable Mir.expression_
+
+type condition_data = variable Mir.condition_data_
+
+type variable_def = variable Mir.variable_def_
+
+type variable_data = variable Mir.variable_data_
+
 type function_name = string
 
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
@@ -48,9 +58,9 @@ type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of variable * Mir.variable_data
-  | SConditional of Mir.expression * stmt list * stmt list
-  | SVerif of Mir.condition_data
+  | SAssign of variable * variable_data
+  | SConditional of expression * stmt list * stmt list
+  | SVerif of condition_data
   | SRuleCall of rule_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
@@ -68,7 +78,7 @@ type program = {
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit Mir.VariableMap.t;
+  outputs : unit VariableMap.t;
 }
 
 let main_statements (p : program) : stmt list =
@@ -152,14 +162,14 @@ let squish_statements (program : program) (threshold : int)
   in
   { program with rules; mpp_functions }
 
-let get_assigned_variables (p : program) : Mir.VariableDict.t =
-  let rec get_assigned_variables_block acc (stmts : stmt list) :
-      Mir.VariableDict.t =
+let get_assigned_variables (p : program) : VariableDict.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) : VariableDict.t
+      =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif _ -> acc
-        | SAssign (var, _) -> Mir.VariableDict.add var acc
+        | SAssign (var, _) -> VariableDict.add var acc
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
@@ -168,10 +178,10 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
            calls *))
       acc stmts
   in
-  get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
+  get_assigned_variables_block VariableDict.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
-  let rec get_local_vars_expr acc (e : Mir.expression Pos.marked) :
+  let rec get_local_vars_expr acc (e : expression Pos.marked) :
       unit Mir.LocalVariableMap.t =
     match Pos.unmark e with
     | Mir.Unop (_, e) | Mir.Index (_, e) -> get_local_vars_expr acc e
@@ -240,3 +250,29 @@ let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
              else Pos.same_pos_as (SConditional (e, b1, b2)) stmt :: acc
          | _ -> stmt :: acc)
        [] stmts)
+
+let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableDict.t) :
+    VariableDict.t =
+  match Pos.unmark e with
+  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2)
+    ->
+      let acc = get_used_variables_ e1 acc in
+      let acc = get_used_variables_ e2 acc in
+      acc
+  | Mir.Unop (_, e) -> get_used_variables_ e acc
+  | Mir.Index ((var, _), e) ->
+      let acc = VariableDict.add var acc in
+      let acc = get_used_variables_ e acc in
+      acc
+  | Mir.Conditional (e1, e2, e3) ->
+      let acc = get_used_variables_ e1 acc in
+      let acc = get_used_variables_ e2 acc in
+      let acc = get_used_variables_ e3 acc in
+      acc
+  | Mir.FunctionCall (_, args) ->
+      List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
+  | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
+  | Mir.Var var -> VariableDict.add var acc
+
+let get_used_variables (e : expression Pos.marked) : VariableDict.t =
+  get_used_variables_ e VariableDict.empty

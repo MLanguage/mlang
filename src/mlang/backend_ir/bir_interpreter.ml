@@ -14,9 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Mir
-
-type var_literal = SimpleVar of literal | TableVar of int * literal array
+type var_literal =
+  | SimpleVar of Mir.literal
+  | TableVar of int * Mir.literal array
 
 type code_location_segment =
   | InsideBlock of int
@@ -85,9 +85,9 @@ module type S = sig
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of
         Mir.Error.t
-        * Mir.expression Pos.marked
+        * Bir.expression Pos.marked
         * (Bir.variable * var_value) list
-    | NanOrInf of string * Mir.expression Pos.marked
+    | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -144,13 +144,13 @@ module Make (N : Bir_number.NumberInterface) = struct
     match vl with
     | SimpleVar value ->
         Format.fprintf fmt "%s (%s): %a"
-          (Pos.unmark var.Variable.name)
-          (Pos.unmark var.Variable.descr)
+          (Pos.unmark var.Mir.Variable.name)
+          (Pos.unmark var.Mir.Variable.descr)
           format_value value
     | TableVar (size, values) ->
         Format.fprintf fmt "%s (%s): Table (%d values)@\n"
-          (Pos.unmark var.Variable.name)
-          (Pos.unmark var.Variable.descr)
+          (Pos.unmark var.Mir.Variable.name)
+          (Pos.unmark var.Mir.Variable.descr)
           size;
         List.iteri
           (fun idx value ->
@@ -158,14 +158,14 @@ module Make (N : Bir_number.NumberInterface) = struct
           (Array.to_list values)
 
   type ctx = {
-    ctx_local_vars : value Pos.marked LocalVariableMap.t;
+    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
     ctx_generic_index : int option;
   }
 
   let empty_ctx : ctx =
     {
-      ctx_local_vars = LocalVariableMap.empty;
+      ctx_local_vars = Mir.LocalVariableMap.empty;
       ctx_vars = Bir.VariableMap.empty;
       ctx_generic_index = None;
     }
@@ -195,8 +195,8 @@ module Make (N : Bir_number.NumberInterface) = struct
     in
     l
 
-  let update_ctx_with_inputs (ctx : ctx) (inputs : literal Bir.VariableMap.t) :
-      ctx =
+  let update_ctx_with_inputs (ctx : ctx)
+      (inputs : Mir.literal Bir.VariableMap.t) : ctx =
     {
       ctx with
       ctx_vars =
@@ -219,8 +219,10 @@ module Make (N : Bir_number.NumberInterface) = struct
     | IncorrectOutputVariable of string * Pos.t
     | UnknownInputVariable of string * Pos.t
     | ConditionViolated of
-        Error.t * expression Pos.marked * (Bir.variable * var_value) list
-    | NanOrInf of string * expression Pos.marked
+        Mir.Error.t
+        * Bir.expression Pos.marked
+        * (Bir.variable * var_value) list
+    | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -233,11 +235,11 @@ module Make (N : Bir_number.NumberInterface) = struct
      it set the I/O flag properly for execution. Not that such a change to the
      program does not require to recompute the dependency graph and the
      execution order. *)
-  let replace_undefined_with_input_variables (p : program)
-      (input_values : VariableDict.t) : program =
+  let replace_undefined_with_input_variables (p : Mir.program)
+      (input_values : Mir.VariableDict.t) : Mir.program =
     Mir.map_vars
       (fun var def ->
-        match VariableDict.find var.id input_values with
+        match Mir.VariableDict.find var.id input_values with
         | _input -> { def with var_definition = InputVar; var_io = Input }
         | exception Not_found -> def)
       p
@@ -245,7 +247,7 @@ module Make (N : Bir_number.NumberInterface) = struct
   let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
     Bir.VariableMap.iter
       (fun var value ->
-        if Mir.VariableMap.mem (Bir.var_to_mir var) f.func_outputs then
+        if Bir.VariableMap.mem var f.func_outputs then
           Cli.result_print "%a" format_var_value_with_var (var, value))
       results.ctx_vars
 
@@ -266,24 +268,26 @@ module Make (N : Bir_number.NumberInterface) = struct
           let vars =
             List.sort
               (fun var1 var2 ->
-                compare_execution_number var1.Variable.execution_number
-                  var2.Variable.execution_number)
+                Mir.(
+                  compare_execution_number var1.Variable.execution_number
+                    var2.Variable.execution_number))
               vars
           in
           List.iter
-            (fun var ->
-              Format.printf "[%a %a] -> %a@\n"
-                Format_mir.format_execution_number_short
-                var.Variable.execution_number Pos.format_position
-                var.Variable.execution_number.pos
-                (fun fmt () ->
-                  try
-                    let rule, def = Mir.find_var_definition p var in
-                    Format.fprintf fmt "rule %d, %a"
-                      (Pos.unmark rule.rule_number)
-                      Format_mir.format_variable_def def.var_definition
-                  with Not_found -> Format.fprintf fmt "unused definition")
-                ())
+            Mir.(
+              fun var ->
+                Format.printf "[%a %a] -> %a@\n"
+                  Format_mir.format_execution_number_short
+                  var.Variable.execution_number Pos.format_position
+                  var.Variable.execution_number.pos
+                  (fun fmt () ->
+                    try
+                      let rule, def = Mir.find_var_definition p var in
+                      Format.fprintf fmt "rule %d, %a"
+                        (Pos.unmark rule.rule_number)
+                        Format_mir.format_variable_def def.var_definition
+                    with Not_found -> Format.fprintf fmt "unused definition")
+                  ())
             vars
         with Not_found -> Format.printf "Inexisting variable@\n"
       end
@@ -293,30 +297,33 @@ module Make (N : Bir_number.NumberInterface) = struct
           let vars =
             List.sort
               (fun var1 var2 ->
-                compare_execution_number var1.Variable.execution_number
-                  var2.Variable.execution_number)
+                Mir.(
+                  compare_execution_number var1.Variable.execution_number
+                    var2.Variable.execution_number))
               vars
           in
           List.iter
-            (fun var ->
-              let bvar = Bir.var_from_mir var in
-              try
-                let var_l = Bir.VariableMap.find bvar ctx.ctx_vars in
-                Format.printf "[%a %a] -> %a@\n"
-                  Format_mir.format_execution_number_short
-                  var.Variable.execution_number Pos.format_position
-                  var.Variable.execution_number.pos format_var_value_with_var
-                  (bvar, var_l)
-              with Not_found ->
-                Format.printf "[%a %a] -> not computed@\n"
-                  Format_mir.format_execution_number_short
-                  var.Variable.execution_number Pos.format_position
-                  var.Variable.execution_number.pos)
+            Mir.(
+              fun var ->
+                let bvar = Bir.var_from_mir var in
+                try
+                  let var_l = Bir.VariableMap.find bvar ctx.ctx_vars in
+                  Format.printf "[%a %a] -> %a@\n"
+                    Format_mir.format_execution_number_short
+                    var.Variable.execution_number Pos.format_position
+                    var.Variable.execution_number.pos format_var_value_with_var
+                    (bvar, var_l)
+                with Not_found ->
+                  Format.printf "[%a %a] -> not computed@\n"
+                    Format_mir.format_execution_number_short
+                    var.Variable.execution_number Pos.format_position
+                    var.Variable.execution_number.pos)
             vars
         with Not_found -> Format.printf "Inexisting variable@\n"
     done
 
-  let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : program) =
+  let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : Mir.program)
+      =
     match e with
     | ErrorValue (s, pos) ->
         Errors.raise_spanned_error
@@ -333,7 +340,7 @@ module Make (N : Bir_number.NumberInterface) = struct
     | NanOrInf (v, e) ->
         Errors.raise_spanned_error_with_continuation
           (Format.asprintf "Expression evaluated to %s: %a" v
-             Format_mir.format_expression (Pos.unmark e))
+             Format_bir.format_expression (Pos.unmark e))
           (Pos.get_position e)
           (fun _ -> repl_debugguer ctx p)
     | UnknownInputVariable (s, pos) ->
@@ -355,9 +362,9 @@ module Make (N : Bir_number.NumberInterface) = struct
               %a"
              (fun fmt err ->
                Format.fprintf fmt "Error %s [%s]"
-                 (Pos.unmark err.Error.name)
-                 (Pos.unmark @@ Error.err_descr_string err))
-             error Format_mir.format_expression (Pos.unmark condition)
+                 (Pos.unmark err.Mir.Error.name)
+                 (Pos.unmark @@ Mir.Error.err_descr_string err))
+             error Format_bir.format_expression (Pos.unmark condition)
              (Format_mast.pp_print_list_endline (fun fmt v ->
                   Format.fprintf fmt "  * %a" format_var_value_with_var v))
              bindings)
@@ -385,7 +392,7 @@ module Make (N : Bir_number.NumberInterface) = struct
     else values.(Int64.to_int (N.to_int idx))
 
   let rec evaluate_expr (ctx : ctx) (p : Mir.program)
-      (e : expression Pos.marked) : value =
+      (e : Bir.expression Pos.marked) : value =
     let out =
       try
         match Pos.unmark e with
@@ -457,30 +464,24 @@ module Make (N : Bir_number.NumberInterface) = struct
             let new_e1 = evaluate_expr ctx p e1 in
             if new_e1 = Undefined then Undefined
             else
-              match
-                Bir.VariableMap.find
-                  (Bir.var_from_mir (Pos.unmark var))
-                  ctx.ctx_vars
-              with
+              match Bir.VariableMap.find (Pos.unmark var) ctx.ctx_vars with
               | SimpleVar _ -> assert false (* should not happen *)
               | TableVar (size, values) ->
                   evaluate_array_index new_e1 size values)
         | LocalVar lvar -> (
-            try Pos.unmark (LocalVariableMap.find lvar ctx.ctx_local_vars)
+            try Pos.unmark (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars)
             with Not_found -> assert false (* should not happen*))
         | Var var ->
             let r =
               try
-                match
-                  Bir.VariableMap.find (Bir.var_from_mir var) ctx.ctx_vars
-                with
+                match Bir.VariableMap.find var ctx.ctx_vars with
                 | SimpleVar l -> l
                 | TableVar _ -> assert false
                 (* should not happen *)
               with Not_found ->
                 Errors.raise_spanned_error
                   ("Var not found (should not happen): "
-                  ^ Pos.unmark var.Variable.name)
+                  ^ Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
                   (Pos.get_position e)
             in
             r
@@ -503,7 +504,7 @@ module Make (N : Bir_number.NumberInterface) = struct
                 {
                   ctx with
                   ctx_local_vars =
-                    LocalVariableMap.add lvar
+                    Mir.LocalVariableMap.add lvar
                       (Pos.same_pos_as new_e1 e1)
                       ctx.ctx_local_vars;
                 }
@@ -548,7 +549,7 @@ module Make (N : Bir_number.NumberInterface) = struct
                        ( ErrorValue
                            ( Format.asprintf
                                "evaluation of %a should be an integer, not %a"
-                               Format_mir.format_expression (Pos.unmark arg1)
+                               Format_bir.format_expression (Pos.unmark arg1)
                                format_value e,
                              Pos.get_position arg1 ),
                          ctx ))
@@ -612,9 +613,9 @@ module Make (N : Bir_number.NumberInterface) = struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let report_violatedcondition (cond : condition_data) (ctx : ctx) : 'a =
+  let report_violatedcondition (cond : Bir.condition_data) (ctx : ctx) : 'a =
     let err = fst cond.cond_error in
-    match err.Error.typ with
+    match err.Mir.Error.typ with
     | Mast.Anomaly ->
         raise
           (RuntimeError
@@ -630,19 +631,21 @@ module Make (N : Bir_number.NumberInterface) = struct
                            (fun (_, x) -> Bir.var_from_mir x)
                            (Mir.VariableDict.bindings
                               (Mir_dependency_graph.get_used_variables
-                                 cond.cond_expr))) ),
+                                 (Pos.map_under_mark
+                                    (Mir.map_expr_var Bir.var_to_mir)
+                                    cond.cond_expr)))) ),
                ctx ))
     | Mast.Discordance ->
         Cli.warning_print "Anomaly: %s"
-          (Pos.unmark (Error.err_descr_string err));
+          (Pos.unmark (Mir.Error.err_descr_string err));
         ctx
     | Mast.Information ->
         Cli.debug_print "Information: %s"
-          (Pos.unmark (Error.err_descr_string err));
+          (Pos.unmark (Mir.Error.err_descr_string err));
         ctx
 
-  let evaluate_variable (p : Bir.program) (ctx : ctx) (vdef : variable_def) :
-      var_value =
+  let evaluate_variable (p : Bir.program) (ctx : ctx)
+      (vdef : Bir.variable Mir.variable_def_) : var_value =
     match vdef with
     | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
     | Mir.TableVar (size, es) ->
@@ -655,7 +658,7 @@ module Make (N : Bir_number.NumberInterface) = struct
                       { ctx with ctx_generic_index = Some idx }
                       p.mir_program e
                 | IndexTable es ->
-                    let e = IndexMap.find idx es in
+                    let e = Mir.IndexMap.find idx es in
                     evaluate_expr ctx p.mir_program e) )
     | Mir.InputVar -> assert false
 
@@ -728,9 +731,8 @@ type value_sort =
   | Rational
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
-    (inputs : literal VariableMap.t) (code_loc_start_value : int)
+    (inputs : Mir.literal Bir.VariableMap.t) (code_loc_start_value : int)
     (sort : value_sort) : unit -> unit =
-  let inputs = Bir.map_from_mir_map inputs in
   match sort with
   | RegularFloat ->
       let ctx =
@@ -776,8 +778,8 @@ let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
       in
       fun () -> RationalInterpreter.print_output bir_func ctx
 
-let evaluate_expr (p : Mir.program) (e : expression Pos.marked)
-    (sort : value_sort) : literal =
+let evaluate_expr (p : Mir.program) (e : Bir.expression Pos.marked)
+    (sort : value_sort) : Mir.literal =
   let f p e =
     match sort with
     | RegularFloat ->

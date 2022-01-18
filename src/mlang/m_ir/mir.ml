@@ -193,27 +193,49 @@ type func =
     Because translating to MIR requires a lot of unrolling and expansion, we
     introduce a [LocalLet] construct to avoid code duplication. *)
 
-type expression =
-  | Unop of (Mast.unop[@opaque]) * expression Pos.marked
+type 'variable expression_ =
+  | Unop of (Mast.unop[@opaque]) * 'variable expression_ Pos.marked
   | Comparison of
       (Mast.comp_op[@opaque]) Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
   | Binop of
       (Mast.binop[@opaque]) Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked
-  | Index of (Variable.t[@opaque]) Pos.marked * expression Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+  | Index of 'variable Pos.marked * 'variable expression_ Pos.marked
   | Conditional of
-      expression Pos.marked * expression Pos.marked * expression Pos.marked
-  | FunctionCall of (func[@opaque]) * expression Pos.marked list
+      'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+  | FunctionCall of (func[@opaque]) * 'variable expression_ Pos.marked list
   | Literal of (literal[@opaque])
-  | Var of (Variable.t[@opaque])
+  | Var of 'variable
   | LocalVar of (LocalVariable.t[@opaque])
   | GenericTableIndex
   | Error
   | LocalLet of
-      (LocalVariable.t[@opaque]) * expression Pos.marked * expression Pos.marked
+      (LocalVariable.t[@opaque])
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+
+type expression = variable expression_
+
+let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
+  let map = Pos.map_under_mark (map_expr_var f) in
+  match (e :> 'v expression_) with
+  | Unop (op, e) -> Unop (op, map e)
+  | Comparison (op, e1, e2) -> Comparison (op, map e1, map e2)
+  | Binop (op, e1, e2) -> Binop (op, map e1, map e2)
+  | Index ((v, pos), e) -> Index ((f v, pos), map e)
+  | Conditional (e1, e2, e3) -> Conditional (map e1, map e2, map e3)
+  | FunctionCall (func, es) -> FunctionCall (func, List.map map es)
+  | Var v -> Var (f v)
+  | LocalLet (v, e1, e2) -> LocalLet (v, map e1, map e2)
+  | Literal l -> Literal l
+  | LocalVar v -> LocalVar v
+  | GenericTableIndex -> GenericTableIndex
+  | Error -> Error
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -295,27 +317,46 @@ module IndexMap = struct
       map
 end
 
-type index_def =
-  | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of expression Pos.marked
+type 'variable index_def =
+  | IndexTable of
+      ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
+  | IndexGeneric of 'variable expression_ Pos.marked
 
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
     model tables. *)
-type variable_def =
-  | SimpleVar of expression Pos.marked
-  | TableVar of int * index_def
+type 'variable variable_def_ =
+  | SimpleVar of 'variable expression_ Pos.marked
+  | TableVar of int * 'variable index_def
   | InputVar
+
+let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
+    'v2 variable_def_ =
+  let map_expr = Pos.map_under_mark (map_expr_var f) in
+  match vdef with
+  | InputVar -> InputVar
+  | SimpleVar e -> SimpleVar (map_expr e)
+  | TableVar (i, idef) ->
+      let idef =
+        match idef with
+        | IndexTable idx_map -> IndexTable (IndexMap.map map_expr idx_map)
+        | IndexGeneric e -> IndexGeneric (map_expr e)
+      in
+      TableVar (i, idef)
+
+type variable_def = variable variable_def_
 
 type io = Input | Output | Regular
 
-type variable_data = {
-  var_definition : variable_def;
+type 'variable variable_data_ = {
+  var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
   var_io : io;
 }
+
+type variable_data = variable variable_data_
 
 type rule_id = int
 
@@ -504,10 +545,21 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type condition_data = {
-  cond_expr : expression Pos.marked;
-  cond_error : (Error.t[@opaque]) * Variable.t option;
+type 'variable condition_data_ = {
+  cond_expr : 'variable expression_ Pos.marked;
+  cond_error : (Error.t[@opaque]) * 'variable option;
 }
+
+let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
+    'v2 condition_data_ =
+  {
+    cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
+    cond_error =
+      (let e, v = cond.cond_error in
+       (e, Option.map f v));
+  }
+
+type condition_data = variable condition_data_
 
 type idmap = Variable.t list Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type:

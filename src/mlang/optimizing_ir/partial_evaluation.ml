@@ -62,17 +62,17 @@ let undef_cast (d1 : definedness) (d2 : definedness) : definedness =
   else if maybe_float d1 || maybe_float d2 then Float
   else assert false
 
-let from_literal (l : Mir.literal) : Mir.expression * definedness =
+let from_literal (l : Mir.literal) : Bir.expression * definedness =
   (Mir.Literal l, match l with Float _ -> Float | Undefined -> Undefined)
 
-let partial_to_expr (e : partial_expr) : Mir.expression option * definedness =
+let partial_to_expr (e : partial_expr) : Bir.expression option * definedness =
   match e with
   | PartialLiteral l ->
       let e, d = from_literal l in
       (Some e, d)
   | UnknownFloat -> (None, Float)
 
-let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
+let expr_to_partial (e : Bir.expression) (d : definedness) : partial_expr option
     =
   match (e, d) with
   | Literal l, _ -> Some (PartialLiteral l)
@@ -248,7 +248,7 @@ let check e d =
   | _ -> true
 
 let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
-    (e : Mir.expression Pos.marked) : Mir.expression Pos.marked * definedness =
+    (e : Bir.expression Pos.marked) : Bir.expression Pos.marked * definedness =
   let new_e, d =
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -432,11 +432,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                       (Bir_interpreter.RegularFloatInterpreter.RuntimeError
                          (err, ctx))
               in
-              match
-                get_closest_dominating_def
-                  (Bir.var_from_mir (Pos.unmark var))
-                  ctx
-              with
+              match get_closest_dominating_def (Pos.unmark var) ctx with
               | Some (SimpleVar _) -> assert false (* should not happen *)
               | Some (TableVar (size, es')) -> (
                   if idx >= size || idx < 0 then from_literal Undefined
@@ -453,7 +449,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
     | Literal l -> (
         (e, match l with Undefined -> Undefined | Float _ -> Float))
     | Var var -> (
-        match get_closest_dominating_def (Bir.var_from_mir var) ctx with
+        match get_closest_dominating_def var ctx with
         | Some (SimpleVar pexpr) ->
             let oe, d = partial_to_expr pexpr in
             let new_e = match oe with Some e' -> e' | None -> Pos.unmark e in
@@ -621,7 +617,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
   if not @@ check new_e d then
     Cli.debug_print "imprecise definedness inference @@%a: %a %a"
       Pos.format_position_short (Pos.get_position e)
-      Format_mir.format_expression (Pos.unmark e) format_definedness d;
+      Format_bir.format_expression (Pos.unmark e) format_definedness d;
   (new_e, d)
 
 let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
@@ -639,11 +635,11 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
             if peval_debug then
               Cli.var_info_print "starting partial evaluation for %s = %a"
                 (Pos.unmark (Bir.var_to_mir var).name)
-                Format_mir.format_expression (Pos.unmark e);
+                Format_bir.format_expression (Pos.unmark e);
             let e', d' = partially_evaluate_expr ctx p.mir_program e in
             if peval_debug then
               Cli.var_info_print "changed into %a, d = %a"
-                Format_mir.format_expression (Pos.unmark e') format_definedness
+                Format_bir.format_expression (Pos.unmark e') format_definedness
                 d';
             let partial_e' =
               Option.map

@@ -14,7 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Mir
+open Bir
 
 (* Returns def test operator with the operator itself *)
 let generate_comp_op (op : Mast.comp_op) : string * string =
@@ -46,10 +46,11 @@ type offset =
   | None
 
 let generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
-    ?(def_flag = false) (var : Variable.t) : string =
+    ?(def_flag = false) (var : Bir.variable) : string =
+  let mvar = Bir.var_to_mir var in
   try
     match offset with
-    | PassPointer -> Dgfip_varid.gen_access_pointer vm var
+    | PassPointer -> Dgfip_varid.gen_access_pointer vm mvar
     | _ ->
         let offset =
           match offset with
@@ -58,12 +59,12 @@ let generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           | GetValueConst offset -> " + " ^ string_of_int offset
           | PassPointer -> assert false
         in
-        if def_flag then Dgfip_varid.gen_access_def vm var offset
-        else Dgfip_varid.gen_access_val vm var offset
+        if def_flag then Dgfip_varid.gen_access_def vm mvar offset
+        else Dgfip_varid.gen_access_val vm mvar offset
   with Not_found ->
     Errors.raise_error
       (Format.asprintf "Variable %s not found in TGV"
-         (Pos.unmark var.Mir.Variable.name))
+         (Pos.unmark mvar.Mir.Variable.name))
 
 type expression_composition = {
   def_test : string;
@@ -121,7 +122,9 @@ let rec generate_c_expr (e : expression Pos.marked)
       { def_test; value_comp; locals = se.locals }
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
-      let size = Option.get (Pos.unmark var).Mir.Variable.is_table in
+      let size =
+        Option.get (Bir.var_to_mir (Pos.unmark var)).Mir.Variable.is_table
+      in
       let idx_var = fresh_c_local "idx" in
       let def_test =
         Format.asprintf "(%s_d || %s >= %d)" idx_var idx_var size
@@ -232,9 +235,8 @@ let rec format_local_vars_defs (fmt : Format.formatter)
         format_local_vars_defs se.locals lvar se.def_test lvar se.value_comp)
     defs
 
-let generate_var_def (var_indexes : Dgfip_varid.var_id_map)
-    (var : Mir.Variable.t) (data : Mir.variable_data) (oc : Format.formatter) :
-    unit =
+let generate_var_def (var_indexes : Dgfip_varid.var_id_map) (var : variable)
+    (data : variable_data) (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
       let se = generate_c_expr e var_indexes in
@@ -247,7 +249,7 @@ let generate_var_def (var_indexes : Dgfip_varid.var_id_map)
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a"
         (fun fmt ->
-          IndexMap.iter (fun i v ->
+          Mir.IndexMap.iter (fun i v ->
               let sv = generate_c_expr v var_indexes in
               Format.fprintf fmt "%a%s = %s;@\n%s = %s;@\n"
                 format_local_vars_defs sv.locals
@@ -288,50 +290,47 @@ let generate_var_cond (var_indexes : Dgfip_varid.var_id_map)
     (Pos.unmark (fst cond.cond_error).Mir.Error.name)
     (match snd cond.cond_error with
     | None -> "NULL"
-    | Some v -> Pos.unmark v.Mir.Variable.name)
+    | Some v -> Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
 
-let rec generate_stmt (program : Bir.program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (stmt : Bir.stmt) =
+let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
+    (oc : Format.formatter) (stmt : stmt) =
   match Pos.unmark stmt with
-  | Bir.SAssign (var, vdata) ->
-      generate_var_def var_indexes (Bir.var_to_mir var) vdata oc
+  | SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
   | SConditional _ -> assert false (* not in dgfip trivial M++ *)
   | SVerif v -> generate_var_cond var_indexes v oc
   | SRuleCall r ->
-      let rule = Bir.RuleMap.find r program.rules in
+      let rule = RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
   | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f
 
-and generate_stmts (program : Bir.program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (stmts : Bir.stmt list) =
+and generate_stmts (program : program) (var_indexes : Dgfip_varid.var_id_map)
+    (oc : Format.formatter) (stmts : stmt list) =
   Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
 and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
-    (rule : Bir.rule) =
+    (rule : rule) =
   let arg_type = if definition then "T_irdata *" else "" in
   let ret_type = if definition then "int " else "" in
   Format.fprintf oc "%sm_rule_%s(%sirdata)%s@\n" ret_type rule.rule_name
     arg_type
     (if definition then "" else ";")
 
-let generate_rule_function (program : Bir.program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (rule : Bir.rule) =
+let generate_rule_function (program : program)
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (rule : rule)
+    =
   Format.fprintf oc "%a@[<v 2>{@ %a@;return 0;@]@;}@\n"
     (generate_rule_function_header ~definition:true)
     rule
     (generate_stmts program var_indexes)
     rule.rule_stmts
 
-let generate_rule_functions (program : Bir.program)
+let generate_rule_functions (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (rules : Bir.rule Bir.RuleMap.t) =
+    (rules : rule RuleMap.t) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
     (generate_rule_function program var_indexes)
     oc
-    (Bir.RuleMap.bindings rules |> List.map snd)
+    (RuleMap.bindings rules |> List.map snd)
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -424,7 +423,7 @@ let generate_get_output_index_func (oc : Format.formatter)
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt (var, i) ->
          Format.fprintf fmt "if (strcmp(\"%s\", name) == 0) { return %d; }"
-           (Pos.unmark var.Mir.Variable.name)
+           (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
            i))
     (List.mapi (fun i x -> (x, i)) output_vars)
 
@@ -450,7 +449,7 @@ let generate_get_output_name_from_index_func (oc : Format.formatter)
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt (var, i) ->
          Format.fprintf fmt "if (index == %d) { return \"%s\"; }" i
-           (Pos.unmark var.Mir.Variable.name)))
+           (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)))
     (List.mapi (fun i x -> (x, i)) output_vars)
 
 let generate_get_output_num_prototype (oc : Format.formatter)
@@ -466,13 +465,15 @@ let generate_get_output_num_func (oc : Format.formatter)
   Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n};@\n@\n"
     generate_get_output_num_prototype false (List.length output_vars)
 
-let error_table_definitions (oc : Format.formatter) (program : Bir.program) =
-  let error_set_size = VariableMap.cardinal program.mir_program.program_conds in
+let error_table_definitions (oc : Format.formatter) (program : program) =
+  let error_set_size =
+    Mir.VariableMap.cardinal program.mir_program.program_conds
+  in
   Format.fprintf oc "typedef m_error_occurrence error_occurrences[%d];\n"
     error_set_size;
   Format.fprintf oc "typedef m_error errors[%d];\n" error_set_size
 
-let print_error_line (oc : Format.formatter) (cond_data : condition_data) =
+let print_error_line (oc : Format.formatter) (cond_data : Mir.condition_data) =
   let err, var = cond_data.cond_error in
   Format.fprintf oc
     "{.kind = \"%s\", .major_code = \"%s\", .minor_code = \"%s\", .isisf = \
@@ -489,10 +490,12 @@ let print_error_line (oc : Format.formatter) (cond_data : condition_data) =
         | Some alias -> "\"" ^ alias ^ "\""
         | None -> assert false))
 
-let generate_errors_table (oc : Format.formatter) (program : Bir.program) =
+let generate_errors_table (oc : Format.formatter) (program : program) =
   Format.fprintf oc "@[<hv 2>static const errors m_errors = {@,%a@]};"
     (fun oc conds ->
-      VariableMap.iter (fun _ cond_data -> print_error_line oc cond_data) conds)
+      Mir.VariableMap.iter
+        (fun _ cond_data -> print_error_line oc cond_data)
+        conds)
     program.mir_program.program_conds
 
 let generate_get_error_count_prototype (oc : Format.formatter)
@@ -500,8 +503,7 @@ let generate_get_error_count_prototype (oc : Format.formatter)
   Format.fprintf oc "int m_num_errors()%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_error_count_func (oc : Format.formatter)
-    (program : Bir.program) =
+let generate_get_error_count_func (oc : Format.formatter) (program : program) =
   Format.fprintf oc {|
 %a {
   return %d;
@@ -509,7 +511,7 @@ let generate_get_error_count_func (oc : Format.formatter)
 
 |}
     generate_get_error_count_prototype false
-    (VariableMap.cardinal program.mir_program.program_conds)
+    (Mir.VariableMap.cardinal program.mir_program.program_conds)
 
 let generate_mpp_function_protoype (add_semicolon : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
@@ -548,7 +550,7 @@ let generate_implem_header oc header_filename =
   Format.fprintf oc "#include \"%s\"\n\n" header_filename;
   Format.fprintf oc "#include <string.h>\n"
 
-let generate_c_program (program : Bir.program)
+let generate_c_program (program : program)
     (function_spec : Bir_interface.bir_function) (filename : string)
     (vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
