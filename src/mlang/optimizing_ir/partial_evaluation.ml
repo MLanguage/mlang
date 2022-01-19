@@ -214,6 +214,28 @@ let get_closest_dominating_def (var : Bir.variable) (ctx : partial_ev_ctx) :
                         | UnknownFloat, UnknownFloat ->
                             Some (SimpleVar UnknownFloat)
                         | _ -> None)
+                    | Some (TableVar (ai, aa)), Some (TableVar (di, da)) -> (
+                        assert (ai = di);
+                        let partials =
+                          List.fold_left2
+                            (fun acc a d ->
+                              match acc with
+                              | None -> None
+                              | Some acc -> (
+                                  match (a, d) with
+                                  | ( PartialLiteral (Float _),
+                                      PartialLiteral (Float _) )
+                                  | PartialLiteral (Float _), UnknownFloat
+                                  | UnknownFloat, PartialLiteral (Float _)
+                                  | UnknownFloat, UnknownFloat ->
+                                      Some (UnknownFloat :: acc)
+                                  | _ -> None))
+                            (Some []) (Array.to_list aa) (Array.to_list da)
+                        in
+                        match partials with
+                        | None -> None
+                        | Some ps ->
+                            Some (TableVar (ai, Array.of_list (List.rev ps))))
                     | Some (TableVar _), _ | _, Some (TableVar _) ->
                         assert false)
                   (Some def) defs
