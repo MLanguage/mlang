@@ -320,8 +320,8 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
   in
   ( {
       p with
-      statements =
-        unused_input_stmts @ const_input_stmts @ p.statements @ conds_stmts;
+      toplevel =
+        unused_input_stmts @ const_input_stmts @ p.toplevel @ conds_stmts;
       outputs = f.func_outputs;
     },
     List.length unused_input_stmts + List.length const_input_stmts )

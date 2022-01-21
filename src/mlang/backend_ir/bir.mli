@@ -28,9 +28,12 @@ and stmt_kind =
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
 
+type mpp_function = { name : string; stmts : stmt list }
+
 type program = {
+  mpp_functions : mpp_function list;
   rules : rule RuleMap.t;
-  statements : stmt list;
+  toplevel : stmt list;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;

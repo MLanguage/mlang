@@ -140,4 +140,4 @@ and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
   locs
 
 let get_code_locs (p : Bir.program) : code_locs =
-  get_code_locs_stmts p p.statements []
+  get_code_locs_stmts p p.toplevel []

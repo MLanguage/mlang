@@ -28,9 +28,12 @@ and stmt_kind =
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
 
+type mpp_function = {name : string; stmts : stmt list}
+
 type program = {
+  mpp_functions : mpp_function list;
   rules : rule RuleMap.t;
-  statements : stmt list;
+  toplevel : stmt list;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
@@ -52,7 +55,7 @@ let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  get_block_statements p.rules p.statements
+  get_block_statements p.rules p.toplevel
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -90,10 +93,8 @@ let squish_statements (program : program) (threshold : int)
             []
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
-  let new_rules, new_stmts =
-    browse_bir program.statements [] [] program.rules
-  in
-  { program with statements = new_stmts; rules = new_rules }
+  let new_rules, new_stmts = browse_bir program.toplevel [] [] program.rules in
+  { program with toplevel = new_stmts; rules = new_rules }
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
@@ -105,7 +106,7 @@ let count_instructions (p : program) : int =
             acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
-  cond_instr_blocks p.statements
+  cond_instr_blocks p.toplevel
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) :

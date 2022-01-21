@@ -430,7 +430,7 @@ let calculateTax_method_header (calculation_vars_len : int)
      @[}@]"
     calculation_vars_len locals_size
     (generate_stmts program var_indexes)
-    program.statements
+    program.toplevel
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =

@@ -101,7 +101,7 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
   let blocks = initialize_block entry_block Oir.BlockMap.empty in
   let exit_block, blocks =
-    translate_statement_list p p.statements entry_block blocks
+    translate_statement_list p p.toplevel entry_block blocks
   in
   let blocks = Oir.BlockMap.map (fun stmts -> List.rev stmts) blocks in
   {
@@ -182,7 +182,8 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
     re_translate_blocks_until p.entry_block p.blocks Bir.RuleMap.empty None
   in
   {
-    statements = Bir.remove_empty_conditionals statements;
+    mpp_functions = [];
+    toplevel = Bir.remove_empty_conditionals statements;
     rules;
     idmap = p.idmap;
     mir_program = p.mir_program;

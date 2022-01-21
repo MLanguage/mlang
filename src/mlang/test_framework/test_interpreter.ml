@@ -146,14 +146,14 @@ let add_test_conds_to_combined_program (p : Bir.program)
         | _ -> Some stmt)
       stmts
   in
-  let new_stmts = filter_stmts p.Bir.statements in
+  let new_stmts = filter_stmts p.Bir.toplevel in
   let conditions_stmts =
     VariableMap.fold
       (fun _ cond stmts ->
         (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
       conds []
   in
-  { p with Bir.statements = new_stmts @ conditions_stmts }
+  { p with Bir.toplevel = new_stmts @ conditions_stmts }
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool)

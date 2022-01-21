@@ -432,7 +432,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
     let conds_verif = generate_verif_conds m_program.program.program_conds in
     {
       rules;
-      statements = statements @ conds_verif;
+      mpp_functions = [];
+      toplevel = statements @ conds_verif;
       (* we append the M verification conditions at the end, when everything has
          already been computed *)
       idmap = m_program.program.program_idmap;

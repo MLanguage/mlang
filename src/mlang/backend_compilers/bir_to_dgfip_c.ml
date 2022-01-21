@@ -544,5 +544,5 @@ let generate_c_program (program : Bir.program)
     (generate_rule_functions program vm)
     program.rules generate_main_function_signature_and_var_decls ()
     (generate_stmts program vm)
-    program.statements generate_return ();
+    program.toplevel generate_return ();
   close_out _oc

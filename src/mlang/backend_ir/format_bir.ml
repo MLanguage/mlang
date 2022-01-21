@@ -52,4 +52,4 @@ let format_rules fmt rules =
     (Bir.RuleMap.bindings rules |> List.map snd)
 
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a%a" format_rules p.rules format_stmts p.statements
+  Format.fprintf fmt "%a%a" format_rules p.rules format_stmts p.toplevel
