@@ -18,6 +18,8 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type function_name = string
+
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 
 and stmt = stmt_kind Pos.marked
@@ -27,8 +29,7 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
-
-type function_name = string
+  | SFunctionCall of function_name
 
 type mpp_function = stmt list
 
