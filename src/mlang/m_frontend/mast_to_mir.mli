@@ -27,6 +27,8 @@
 (** The values of the map can be either strings of integers *)
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
+module ConstMap : Map.S with type key = Mast.variable_name
+
 module ParamsMap : Map.S with type key = Char.t
 (** Map whose keys are loop parameters *)
 
@@ -42,7 +44,7 @@ type translating_context = {
           table index *)
   idmap : Mir.idmap;  (** Current string-to-{!type: Mir.Variable.t} mapping *)
   lc : loop_context option;  (** Current loop translation context *)
-  int_const_values : int Mir.VariableMap.t;
+  const_map : float Pos.marked ConstMap.t;
       (** Mapping from constant variables to their value *)
   exec_number : Mir.execution_number;
       (** Number of the rule of verification condition being translated *)
@@ -73,6 +75,7 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 
 val get_conds :
   Mir.Error.t list ->
+  float Pos.marked ConstMap.t ->
   Mir.idmap ->
   Mast.program ->
   Mir.condition_data Mir.VariableMap.t
