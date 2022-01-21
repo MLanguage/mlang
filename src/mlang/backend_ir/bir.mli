@@ -28,16 +28,22 @@ and stmt_kind =
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
 
-type mpp_function = { name : string; stmts : stmt list }
+type function_name = string
+
+type mpp_function = stmt list
+
+module FunctionMap : Map.S with type key = function_name
 
 type program = {
-  mpp_functions : mpp_function list;
+  mpp_functions : mpp_function FunctionMap.t;
   rules : rule RuleMap.t;
-  toplevel : stmt list;
+  main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
+
+val main_statements : program -> stmt list
 
 val get_all_statements : program -> stmt list
 

@@ -28,16 +28,29 @@ and stmt_kind =
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
 
-type mpp_function = {name : string; stmts : stmt list}
+type function_name = string
+
+type mpp_function = stmt list
+
+module FunctionMap = Map.Make (struct
+  type t = function_name
+
+  let compare = String.compare
+end)
 
 type program = {
-  mpp_functions : mpp_function list;
+  mpp_functions : mpp_function FunctionMap.t;
   rules : rule RuleMap.t;
-  toplevel : stmt list;
+  main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
+
+let main_statements (p : program) : stmt list =
+  try FunctionMap.find p.main_function p.mpp_functions
+  with Not_found ->
+    Errors.raise_error "Unable to find main function of Bir program"
 
 let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
     stmt list =
@@ -55,7 +68,7 @@ let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  get_block_statements p.rules p.toplevel
+  get_block_statements p.rules (main_statements p)
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -93,8 +106,16 @@ let squish_statements (program : program) (threshold : int)
             []
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
-  let new_rules, new_stmts = browse_bir program.toplevel [] [] program.rules in
-  { program with toplevel = new_stmts; rules = new_rules }
+  let new_rules, new_stmts =
+    browse_bir (main_statements program) [] [] program.rules
+  in
+  {
+    program with
+    rules = new_rules;
+    mpp_functions =
+      (* TODO: this is not longer enough to slice the whole program *)
+      FunctionMap.add program.main_function new_stmts program.mpp_functions;
+  }
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
@@ -106,7 +127,8 @@ let count_instructions (p : program) : int =
             acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
-  cond_instr_blocks p.toplevel
+  (* TODO: same *)
+  cond_instr_blocks (main_statements p)
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) :
