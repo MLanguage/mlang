@@ -685,7 +685,9 @@ module Make (N : Bir_number.NumberInterface) = struct
   let evaluate_program (p : Bir.program) (ctx : ctx)
       (code_loc_start_value : int) : ctx =
     try
-      let ctx = evaluate_stmts p ctx p.toplevel [] code_loc_start_value in
+      let ctx =
+        evaluate_stmts p ctx (Bir.main_statements p) [] code_loc_start_value
+      in
       ctx
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program

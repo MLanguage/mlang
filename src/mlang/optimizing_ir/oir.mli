@@ -36,6 +36,7 @@ type program = {
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
+  main_function : Bir.function_name;
 }
 
 val count_instr : program -> int

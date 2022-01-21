@@ -627,7 +627,7 @@ let generate_c_program (program : Bir.program)
        var_table_size)
     function_spec
     (generate_stmts program var_indexes)
-    program.toplevel
+    (Bir.main_statements program)
     (generate_return var_indexes)
     function_spec;
   close_out _oc

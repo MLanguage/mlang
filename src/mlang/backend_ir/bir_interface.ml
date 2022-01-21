@@ -318,10 +318,11 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
         Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  ( {
-      p with
-      toplevel =
-        unused_input_stmts @ const_input_stmts @ p.toplevel @ conds_stmts;
-      outputs = f.func_outputs;
-    },
+  let mpp_functions =
+    Bir.FunctionMap.add p.main_function
+      (unused_input_stmts @ const_input_stmts @ Bir.main_statements p
+     @ conds_stmts)
+      p.mpp_functions
+  in
+  ( { p with mpp_functions; outputs = f.func_outputs },
     List.length unused_input_stmts + List.length const_input_stmts )

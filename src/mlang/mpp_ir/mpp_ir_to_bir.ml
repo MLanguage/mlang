@@ -430,10 +430,14 @@ let create_combined_program (m_program : Mir_interface.full_program)
         m_program.program.Mir.program_rules
     in
     let conds_verif = generate_verif_conds m_program.program.program_conds in
+    let mpp_functions =
+      Bir.FunctionMap.add mpp_function_to_extract (statements @ conds_verif)
+        Bir.FunctionMap.empty
+    in
     {
       rules;
-      mpp_functions = [];
-      toplevel = statements @ conds_verif;
+      mpp_functions;
+      main_function = mpp_function_to_extract;
       (* we append the M verification conditions at the end, when everything has
          already been computed *)
       idmap = m_program.program.program_idmap;

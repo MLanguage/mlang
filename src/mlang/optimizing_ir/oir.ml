@@ -38,6 +38,7 @@ type program = {
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
+  main_function : Bir.function_name;
 }
 
 let count_instr (p : program) : int =
