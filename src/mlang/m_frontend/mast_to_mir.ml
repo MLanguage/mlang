@@ -419,7 +419,8 @@ let belongs_to_iliad_app (r : Mast.application Pos.marked list) : bool =
 (** Retrieves variable declaration data. Done in a separate pass because wen
     don't want to deal with sorting the dependencies between files or inside
     files. *)
-let get_variables_decl (p : Mast.program) :
+let get_variables_decl (p : Mast.program)
+    (const_map : float Pos.marked ConstMap.t) :
     var_decl_data Mir.VariableMap.t * Mir.Error.t list * Mir.idmap =
   let vars, idmap, errors, out_list =
     List.fold_left
@@ -434,21 +435,36 @@ let get_variables_decl (p : Mast.program) :
                     (* First we check if the variable has not been declared a
                        first time *)
                     try
-                      let old_var =
-                        List.hd
-                          (Pos.VarNameToID.find
-                             (Pos.unmark cvar.Mast.comp_name)
-                             idmap)
-                      in
-                      Cli.var_info_print
-                        "Dropping declaration of %s %a because variable was \
-                         previously defined %a"
-                        (Pos.unmark old_var.Mir.Variable.name)
-                        Pos.format_position
-                        (Pos.get_position cvar.Mast.comp_name)
-                        Pos.format_position
-                        (Pos.get_position old_var.Mir.Variable.name);
-                      (vars, idmap, errors, out_list)
+                      match
+                        ConstMap.find_opt
+                          (Pos.unmark cvar.Mast.comp_name)
+                          const_map
+                      with
+                      | Some (_f, old_pos) ->
+                          Cli.var_info_print
+                            "Dropping declaration of %s %a because constant \
+                             was previously defined %a"
+                            (Pos.unmark cvar.Mast.comp_name)
+                            Pos.format_position
+                            (Pos.get_position cvar.Mast.comp_name)
+                            Pos.format_position old_pos;
+                          (vars, idmap, errors, out_list)
+                      | None ->
+                          let old_var =
+                            List.hd
+                              (Pos.VarNameToID.find
+                                 (Pos.unmark cvar.Mast.comp_name)
+                                 idmap)
+                          in
+                          Cli.var_info_print
+                            "Dropping declaration of %s %a because variable \
+                             was previously defined %a"
+                            (Pos.unmark old_var.Mir.Variable.name)
+                            Pos.format_position
+                            (Pos.get_position cvar.Mast.comp_name)
+                            Pos.format_position
+                            (Pos.get_position old_var.Mir.Variable.name);
+                          (vars, idmap, errors, out_list)
                     with Not_found ->
                       let attrs =
                         ( Pos.same_pos_as "calculee" cvar.Mast.comp_name,
@@ -509,21 +525,36 @@ let get_variables_decl (p : Mast.program) :
                 | Mast.InputVar ivar -> (
                     let ivar = Pos.unmark ivar in
                     try
-                      let old_var =
-                        List.hd
-                          (Pos.VarNameToID.find
-                             (Pos.unmark ivar.Mast.input_name)
-                             idmap)
-                      in
-                      Cli.var_info_print
-                        "Dropping declaration of %s %a because variable was \
-                         previously defined %a"
-                        (Pos.unmark old_var.Mir.Variable.name)
-                        Pos.format_position
-                        (Pos.get_position ivar.Mast.input_name)
-                        Pos.format_position
-                        (Pos.get_position old_var.Mir.Variable.name);
-                      (vars, idmap, errors, out_list)
+                      match
+                        ConstMap.find_opt
+                          (Pos.unmark ivar.Mast.input_name)
+                          const_map
+                      with
+                      | Some (_f, old_pos) ->
+                          Cli.var_info_print
+                            "Dropping declaration of %s %a because constant \
+                             was previously defined %a"
+                            (Pos.unmark ivar.Mast.input_name)
+                            Pos.format_position
+                            (Pos.get_position ivar.Mast.input_name)
+                            Pos.format_position old_pos;
+                          (vars, idmap, errors, out_list)
+                      | None ->
+                          let old_var =
+                            List.hd
+                              (Pos.VarNameToID.find
+                                 (Pos.unmark ivar.Mast.input_name)
+                                 idmap)
+                          in
+                          Cli.var_info_print
+                            "Dropping declaration of %s %a because variable \
+                             was previously defined %a"
+                            (Pos.unmark old_var.Mir.Variable.name)
+                            Pos.format_position
+                            (Pos.get_position ivar.Mast.input_name)
+                            Pos.format_position
+                            (Pos.get_position old_var.Mir.Variable.name);
+                          (vars, idmap, errors, out_list)
                     with Not_found ->
                       let new_var =
                         Mir.Variable.new_var ivar.Mast.input_name
@@ -1456,7 +1487,7 @@ let remove_corrective_rules (p : Mast.program) : Mast.program =
 let translate (p : Mast.program) : Mir.program =
   let p = remove_corrective_rules p in
   let const_map = get_constants p in
-  let var_decl_data, error_decls, idmap = get_variables_decl p in
+  let var_decl_data, error_decls, idmap = get_variables_decl p const_map in
   let idmap = get_var_redefinitions p idmap const_map in
   let rule_data, var_data =
     get_rules_and_var_data idmap var_decl_data const_map p
