@@ -430,173 +430,150 @@ let get_variables_decl (p : Mast.program)
             match Pos.unmark source_file_item with
             | Mast.VariableDecl var_decl -> (
                 match var_decl with
-                | Mast.ComputedVar cvar -> (
-                    let cvar = Pos.unmark cvar in
+                | Mast.ConstVar (_, _) ->
+                    (vars, idmap, errors, out_list) (* already treated before *)
+                | Mast.ComputedVar _ | Mast.InputVar _ -> (
+                    let var_name =
+                      match var_decl with
+                      | Mast.ComputedVar v -> (Pos.unmark v).Mast.comp_name
+                      | Mast.InputVar v -> (Pos.unmark v).Mast.input_name
+                      | Mast.ConstVar _ -> assert false
+                    in
                     (* First we check if the variable has not been declared a
                        first time *)
                     try
                       match
-                        ConstMap.find_opt
-                          (Pos.unmark cvar.Mast.comp_name)
-                          const_map
+                        ConstMap.find_opt (Pos.unmark var_name) const_map
                       with
                       | Some (_f, old_pos) ->
                           Cli.var_info_print
                             "Dropping declaration of %s %a because constant \
                              was previously defined %a"
-                            (Pos.unmark cvar.Mast.comp_name)
-                            Pos.format_position
-                            (Pos.get_position cvar.Mast.comp_name)
+                            (Pos.unmark var_name) Pos.format_position
+                            (Pos.get_position var_name)
                             Pos.format_position old_pos;
                           (vars, idmap, errors, out_list)
                       | None ->
                           let old_var =
                             List.hd
-                              (Pos.VarNameToID.find
-                                 (Pos.unmark cvar.Mast.comp_name)
-                                 idmap)
+                              (Pos.VarNameToID.find (Pos.unmark var_name) idmap)
                           in
                           Cli.var_info_print
                             "Dropping declaration of %s %a because variable \
                              was previously defined %a"
-                            (Pos.unmark old_var.Mir.Variable.name)
-                            Pos.format_position
-                            (Pos.get_position cvar.Mast.comp_name)
+                            (Pos.unmark var_name) Pos.format_position
+                            (Pos.get_position var_name)
                             Pos.format_position
                             (Pos.get_position old_var.Mir.Variable.name);
                           (vars, idmap, errors, out_list)
-                    with Not_found ->
-                      let attrs =
-                        ( Pos.same_pos_as "calculee" cvar.Mast.comp_name,
-                          Pos.same_pos_as (Mast.Float 1.) cvar.Mast.comp_name )
-                        :: cvar.comp_attributes
-                      in
-                      let attrs =
-                        if
-                          List.exists
-                            (fun x -> Pos.unmark x = Mast.Base)
-                            cvar.Mast.comp_subtyp
-                        then
-                          ( Pos.same_pos_as "base" cvar.Mast.comp_name,
-                            Pos.same_pos_as (Mast.Float 1.) cvar.Mast.comp_name
-                          )
-                          :: attrs
-                        else attrs
-                      in
-                      let new_var =
-                        Mir.Variable.new_var cvar.Mast.comp_name None
-                          cvar.Mast.comp_description
-                          (dummy_exec_number
-                             (Pos.get_position cvar.Mast.comp_name))
-                          ~attributes:attrs ~is_income:false
-                          ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
-                      in
-                      let new_var_data =
-                        {
-                          var_decl_typ = Pos.unmark_option cvar.Mast.comp_typ;
-                          var_decl_is_table =
-                            Pos.unmark_option cvar.Mast.comp_table;
-                          var_decl_descr =
-                            Some (Pos.unmark cvar.Mast.comp_description);
-                          var_decl_io = Regular;
-                          var_pos = Pos.get_position source_file_item;
-                        }
-                      in
-                      let new_vars =
-                        Mir.VariableMap.add new_var new_var_data vars
-                      in
-                      let new_idmap =
-                        Pos.VarNameToID.add
-                          (Pos.unmark cvar.Mast.comp_name)
-                          [ new_var ] idmap
-                      in
-                      let new_out_list =
-                        if
-                          List.exists
-                            (fun x ->
-                              match Pos.unmark x with
-                              | Mast.GivenBack -> true
-                              | Mast.Base -> false)
-                            cvar.Mast.comp_subtyp
-                        then cvar.Mast.comp_name :: out_list
-                        else out_list
-                      in
-                      (new_vars, new_idmap, errors, new_out_list))
-                | Mast.InputVar ivar -> (
-                    let ivar = Pos.unmark ivar in
-                    try
-                      match
-                        ConstMap.find_opt
-                          (Pos.unmark ivar.Mast.input_name)
-                          const_map
-                      with
-                      | Some (_f, old_pos) ->
-                          Cli.var_info_print
-                            "Dropping declaration of %s %a because constant \
-                             was previously defined %a"
-                            (Pos.unmark ivar.Mast.input_name)
-                            Pos.format_position
-                            (Pos.get_position ivar.Mast.input_name)
-                            Pos.format_position old_pos;
-                          (vars, idmap, errors, out_list)
-                      | None ->
-                          let old_var =
-                            List.hd
-                              (Pos.VarNameToID.find
-                                 (Pos.unmark ivar.Mast.input_name)
-                                 idmap)
+                    with Not_found -> (
+                      match var_decl with
+                      | Mast.ComputedVar cvar ->
+                          let cvar = Pos.unmark cvar in
+                          let attrs =
+                            ( Pos.same_pos_as "calculee" cvar.Mast.comp_name,
+                              Pos.same_pos_as (Mast.Float 1.)
+                                cvar.Mast.comp_name )
+                            :: cvar.comp_attributes
                           in
-                          Cli.var_info_print
-                            "Dropping declaration of %s %a because variable \
-                             was previously defined %a"
-                            (Pos.unmark old_var.Mir.Variable.name)
-                            Pos.format_position
-                            (Pos.get_position ivar.Mast.input_name)
-                            Pos.format_position
-                            (Pos.get_position old_var.Mir.Variable.name);
-                          (vars, idmap, errors, out_list)
-                    with Not_found ->
-                      let new_var =
-                        Mir.Variable.new_var ivar.Mast.input_name
-                          (Some (Pos.unmark ivar.Mast.input_alias))
-                          ivar.Mast.input_description
-                          (dummy_exec_number
-                             (Pos.get_position ivar.Mast.input_name))
-                          ~attributes:ivar.input_attributes
-                          ~is_income:(Pos.unmark ivar.input_subtyp = Mast.Income)
-                          ~is_table:None
-                        (* Input variables also have a low order *)
-                      in
-                      let new_var_data =
-                        {
-                          var_decl_typ =
-                            begin
-                              match Pos.unmark_option ivar.Mast.input_typ with
-                              | Some x -> Some x
-                              | None -> (
-                                  match Pos.unmark ivar.Mast.input_subtyp with
-                                  | Mast.Income -> Some Mast.Real
-                                  | _ -> None)
-                            end;
-                          var_decl_is_table = None;
-                          var_decl_descr =
-                            Some (Pos.unmark ivar.Mast.input_description);
-                          var_decl_io = Input;
-                          var_pos = Pos.get_position source_file_item;
-                        }
-                      in
-                      let new_vars =
-                        Mir.VariableMap.add new_var new_var_data vars
-                      in
-                      let new_idmap =
-                        Pos.VarNameToID.add
-                          (Pos.unmark ivar.Mast.input_name)
-                          [ new_var ] idmap
-                      in
-                      (new_vars, new_idmap, errors, out_list))
-                | Mast.ConstVar (_, _) ->
-                    (vars, idmap, errors, out_list) (* already treated before *)
-                )
+                          let attrs =
+                            if
+                              List.exists
+                                (fun x -> Pos.unmark x = Mast.Base)
+                                cvar.Mast.comp_subtyp
+                            then
+                              ( Pos.same_pos_as "base" cvar.Mast.comp_name,
+                                Pos.same_pos_as (Mast.Float 1.)
+                                  cvar.Mast.comp_name )
+                              :: attrs
+                            else attrs
+                          in
+                          let new_var =
+                            Mir.Variable.new_var cvar.Mast.comp_name None
+                              cvar.Mast.comp_description
+                              (dummy_exec_number
+                                 (Pos.get_position cvar.Mast.comp_name))
+                              ~attributes:attrs ~is_income:false
+                              ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
+                          in
+                          let new_var_data =
+                            {
+                              var_decl_typ =
+                                Pos.unmark_option cvar.Mast.comp_typ;
+                              var_decl_is_table =
+                                Pos.unmark_option cvar.Mast.comp_table;
+                              var_decl_descr =
+                                Some (Pos.unmark cvar.Mast.comp_description);
+                              var_decl_io = Regular;
+                              var_pos = Pos.get_position source_file_item;
+                            }
+                          in
+                          let new_vars =
+                            Mir.VariableMap.add new_var new_var_data vars
+                          in
+                          let new_idmap =
+                            Pos.VarNameToID.add
+                              (Pos.unmark cvar.Mast.comp_name)
+                              [ new_var ] idmap
+                          in
+                          let new_out_list =
+                            if
+                              List.exists
+                                (fun x ->
+                                  match Pos.unmark x with
+                                  | Mast.GivenBack -> true
+                                  | Mast.Base -> false)
+                                cvar.Mast.comp_subtyp
+                            then cvar.Mast.comp_name :: out_list
+                            else out_list
+                          in
+                          (new_vars, new_idmap, errors, new_out_list)
+                      | Mast.InputVar ivar ->
+                          let ivar = Pos.unmark ivar in
+                          let new_var =
+                            Mir.Variable.new_var ivar.Mast.input_name
+                              (Some (Pos.unmark ivar.Mast.input_alias))
+                              ivar.Mast.input_description
+                              (dummy_exec_number
+                                 (Pos.get_position ivar.Mast.input_name))
+                              ~attributes:ivar.input_attributes
+                              ~is_income:
+                                (Pos.unmark ivar.input_subtyp = Mast.Income)
+                              ~is_table:None
+                            (* Input variables also have a low order *)
+                          in
+                          let new_var_data =
+                            {
+                              var_decl_typ =
+                                begin
+                                  match
+                                    Pos.unmark_option ivar.Mast.input_typ
+                                  with
+                                  | Some x -> Some x
+                                  | None -> (
+                                      match
+                                        Pos.unmark ivar.Mast.input_subtyp
+                                      with
+                                      | Mast.Income -> Some Mast.Real
+                                      | _ -> None)
+                                end;
+                              var_decl_is_table = None;
+                              var_decl_descr =
+                                Some (Pos.unmark ivar.Mast.input_description);
+                              var_decl_io = Input;
+                              var_pos = Pos.get_position source_file_item;
+                            }
+                          in
+                          let new_vars =
+                            Mir.VariableMap.add new_var new_var_data vars
+                          in
+                          let new_idmap =
+                            Pos.VarNameToID.add
+                              (Pos.unmark ivar.Mast.input_name)
+                              [ new_var ] idmap
+                          in
+                          (new_vars, new_idmap, errors, out_list)
+                      | Mast.ConstVar _ -> assert false)))
             | Mast.Output out_name -> (vars, idmap, errors, out_name :: out_list)
             | Mast.Error err ->
                 let err =
