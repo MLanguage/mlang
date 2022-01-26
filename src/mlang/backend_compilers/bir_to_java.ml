@@ -52,12 +52,6 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
-let float_literal_to_int e =
-  (match Pos.unmark e with
-  | Literal l -> ( match l with Float f -> f | _ -> assert false)
-  | _ -> assert false)
-  |> int_of_float
-
 let generate_var_name (var : Variable.t) : string =
   let v = Pos.unmark var.Variable.name in
   String.uppercase_ascii v
@@ -98,14 +92,13 @@ let rec generate_java_expr (e : expression Pos.marked)
       let se2, s2 = (Format.asprintf "%s(%s)" (generate_unop op) se, s) in
       (se2, s2)
   | Index (var, e) ->
-      let _, s = generate_java_expr e var_indexes in
-      let index = float_literal_to_int e in
+      let se, s = generate_java_expr e var_indexes in
       let unmarked_var = Pos.unmark var in
       let size = Option.get unmarked_var.Mir.Variable.is_table in
       let se2, s2 =
-        ( Format.asprintf "m_array_index(calculationVariables, %d ,%d, %d)"
+        ( Format.asprintf "m_array_index(calculationVariables, %d ,%s, %d)"
             (get_var_pos unmarked_var var_indexes)
-            index size,
+            se size,
           s )
       in
       (se2, s2)
@@ -144,13 +137,13 @@ let rec generate_java_expr (e : expression Pos.marked)
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
-      let bound = float_literal_to_int e1 in
+      let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 =
-        ( Format.asprintf "m_multimax(%d, calculationVariables, %d)" bound
+        ( Format.asprintf "m_multimax(%s, calculationVariables, %d)" se1
             (get_var_pos v2 var_indexes),
           [] )
       in
-      (se2, s2)
+      (se2,  s1 @ s2)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
@@ -165,7 +158,7 @@ let rec generate_java_expr (e : expression Pos.marked)
         [] )
   | LocalVar lvar ->
       (Format.asprintf "localVariables[%d]" lvar.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "generic_index", [])
+  | GenericTableIndex -> (Format.asprintf "new MValue(genericIndex)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 var_indexes in
@@ -203,10 +196,16 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
                 (get_var_pos var var_indexes |> ( + ) i)
                 format_var_name var sv))
         es
-  | TableVar (_, IndexGeneric e) ->
-      Errors.raise_spanned_error
-        "generic index table definitions not supported in the java backend"
-        (Pos.get_position e)
+  | TableVar (size, IndexGeneric e) ->
+      let se, s = generate_java_expr e var_indexes in
+      Format.fprintf oc
+        "for (int genericIndex=0; genericIndex < %d; genericIndex++) {@\n\
+        \ @[<h 4> %acalculationVariables[%d + genericIndex /* %a */] = %s;@]@\n\
+        \ }@\n"
+        size (format_local_vars_defs var_indexes) s
+        (get_var_pos var var_indexes)
+        format_var_name var
+        se
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) (class_name : string) : unit =

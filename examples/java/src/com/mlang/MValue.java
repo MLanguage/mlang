@@ -239,14 +239,21 @@ public class MValue {
     }
   }
 
-  static MValue m_array_index(MValue[] array, int tableStart, int index, int size) {
-    if (index < 0) {
+  static MValue m_array_index(MValue[] array, int tableStart, MValue index, int size) {
+    if (index.isUndefined()) {
+      return mUndefined;
+    } 
+     
+    int indexInteger = index.getValue();
+    
+    if (indexInteger < 0) {
       return zero;
-    } else if (index >= size) {
+    } else if (indexInteger >= size) {
       return mUndefined;
     } else {
-      return array[tableStart + index];
+      return array[tableStart + indexInteger];
     }
+
   }
 
   /**
