@@ -212,7 +212,13 @@ public class MValue {
     return value.getValue() == 0 ? one : zero;
   }
 
-  static MValue m_multimax(int bound, MValue[] array, int position) {
+  static MValue m_multimax(MValue boundMValue, MValue[] array, int position) {
+    if (boundMValue.isUndefined()) {
+      throw new RuntimeException("Multimax bound undefined!");
+    }
+
+    int bound = (int)boundMValue.getValue();
+
     MValue max = mAdd(array[position], zero);
     for (int i = 0; i <= bound; i++) {
       MValue challenger = mAdd(array[position + i], zero);
@@ -244,7 +250,7 @@ public class MValue {
       return mUndefined;
     } 
      
-    int indexInteger = index.getValue();
+    int indexInteger = (int)index.getValue();
     
     if (indexInteger < 0) {
       return zero;
