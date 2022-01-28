@@ -438,8 +438,13 @@ let create_combined_program (m_program : Mir_interface.full_program)
         (Format.asprintf "M++ function %s not found in M++ file!"
            mpp_function_to_extract);
     let conds_verif = generate_verif_conds m_program.program.program_conds in
+    let mpp_main_function =
+      Bir.FunctionMap.find mpp_function_to_extract mpp_functions
+    in
     let mpp_functions =
-      Bir.FunctionMap.add "verif_conds" conds_verif mpp_functions
+      Bir.FunctionMap.add mpp_function_to_extract
+        (mpp_main_function @ conds_verif)
+        mpp_functions
     in
     {
       rules;
