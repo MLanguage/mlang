@@ -46,6 +46,8 @@ type program = {
 
 val main_statements : program -> stmt list
 
+val get_block_statements : rule RuleMap.t -> stmt list -> stmt list
+
 val get_all_statements : program -> stmt list
 
 val squish_statements : program -> int -> string -> program
