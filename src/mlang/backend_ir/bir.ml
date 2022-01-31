@@ -69,7 +69,10 @@ let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  get_block_statements p.rules (main_statements p)
+  FunctionMap.fold
+    (fun _ mpp_function stmts ->
+      get_block_statements p.rules mpp_function @ stmts)
+    p.mpp_functions []
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
