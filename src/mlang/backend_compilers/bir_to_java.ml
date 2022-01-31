@@ -298,7 +298,7 @@ let generate_var_cond var_indexes oc cond =
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
-  Format.fprintf oc "m_rule_%s(mCalculation, calculationErrors);@,"
+  Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);@,"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program)
@@ -349,7 +349,8 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
         (generate_stmts program var_indexes)
         ff
   | SVerif v -> generate_var_cond var_indexes oc v
-  | SFunctionCall _ -> assert false
+  | SFunctionCall (f, _) ->
+      Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
 
 let generate_return (var_indexes : variable_id VariableMap.t)
     (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
@@ -379,8 +380,8 @@ let generate_rule_method (program : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<hv 2>private static void m_rule_%s(MCalculation mCalculation, \
-     List<MError> calculationErrors){@,\
+    "@[<hv 2>static void m_rule_%s(MCalculation mCalculation, List<MError> \
+     calculationErrors){@,\
      MValue cond = MValue.mUndefined;@,\
      MValue[] tgv = mCalculation.getCalculationVariables();@,\
      MValue[] localVariables = mCalculation.getLocalVariables();@,\
@@ -431,7 +432,30 @@ let calculateTax_method_header (calculation_vars_len : int)
      @[}@]"
     calculation_vars_len locals_size
     (generate_stmts program var_indexes)
-    (Bir.main_statements program)
+    [ (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos) ]
+
+let generate_mpp_function (program : Bir.program)
+    (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
+    (f : Bir.function_name) =
+  let stmts = Bir.FunctionMap.find f program.mpp_functions in
+  Format.fprintf oc
+    "@[<hv 4>static void %s(MCalculation mCalculation, List<MError> \
+     calculationErrors) {@,\
+     MValue cond = MValue.mUndefined;@,\
+     MValue[] calculationVariables = mCalculation.getCalculationVariables();@,\
+     MValue[] localVariables = mCalculation.getLocalVariables();@,\
+     Map<String, List<MValue>> tableVariables = \
+     mCalculation.getTableVariables();@,\
+     %a@]}@,"
+    f
+    (generate_stmts program var_indexes)
+    stmts
+
+let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
+    (var_indexes : variable_id VariableMap.t) =
+  List.iter
+    (fun (fname, _) -> generate_mpp_function program var_indexes oc fname)
+    (Bir.FunctionMap.bindings program.mpp_functions)
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
@@ -444,21 +468,27 @@ let generate_java_program (program : Bir.program) (function_spec : Bir_interface
   Format.fprintf oc
     "@[<hv 2>%a@,\
      @,\
-     %a@.@,\
      %a@,\
      @,\
      %a}@]@,\
      @[<hv 2>class InputHandler {@,\
      %a\
-     }\
+     }@,
+     @[<hv 2>class MppFunction {
+      %a\
+     }@,@]\
+     @[<hv 2>class Rule {
+      %a\
+     }@,@]\
      @]@." 
      generate_header (
        String.split_on_char '.' filename 
           |> List.hd 
           |> String.split_on_char '/' 
           |> fun list -> List.nth list (List.length list -1))
-     (generate_rule_methods program) var_indexes
      (calculateTax_method_header var_table_size program locals_size) var_indexes 
      (generate_return var_indexes) function_spec
-     (generate_input_handling function_spec var_indexes) split_treshold;
+     (generate_input_handling function_spec var_indexes) split_treshold
+     (generate_mpp_functions program) var_indexes
+     (generate_rule_methods program) var_indexes;
   close_out _oc[@@ocamlformat "disable"]
