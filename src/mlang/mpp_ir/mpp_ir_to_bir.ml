@@ -445,6 +445,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
       Bir.FunctionMap.add mpp_function_to_extract
         (mpp_main_function @ conds_verif)
         mpp_functions
+      (* TODO: Put verifications elsewhere than a a user facing function such as
+         is the case at the moment *)
     in
     {
       rules;
