@@ -323,6 +323,8 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       (unused_input_stmts @ const_input_stmts @ Bir.main_statements p
      @ conds_stmts)
       p.mpp_functions
+    (* TODO: This add initialisation and verifications to a user facing
+       function, those statements should be put elsewhere *)
   in
   ( { p with mpp_functions; outputs = f.func_outputs },
     List.length unused_input_stmts + List.length const_input_stmts )
