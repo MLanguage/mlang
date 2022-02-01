@@ -96,11 +96,9 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
           curr_block_id blocks
       in
       (curr_block_id, blocks)
-  | Bir.SFunctionCall (f, args) ->
-      ( curr_block_id,
-        append_to_block
-          (Pos.same_pos_as (Oir.SFunctionCall (f, args)) s)
-          curr_block_id blocks )
+  | Bir.SFunctionCall (f, _) ->
+      let stmts = Bir.FunctionMap.find f p.mpp_functions in
+      translate_statement_list p stmts curr_block_id blocks
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
@@ -146,8 +144,7 @@ let rec re_translate_statement (s : Oir.stmt) (rules : Bir.rule Bir.RuleMap.t)
         ( None,
           Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s),
           Bir.RuleMap.add rule_id rule rules )
-  | Oir.SFunctionCall (f, args) ->
-      (None, Some (Pos.same_pos_as (Bir.SFunctionCall (f, args)) s), rules)
+  | Oir.SFunctionCall _ -> assert false
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (rules : Bir.rule Bir.RuleMap.t) (blocks : Oir.block Oir.BlockMap.t) =
