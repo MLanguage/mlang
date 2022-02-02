@@ -116,7 +116,7 @@ let const_var_set_from_list (p : Bir.program)
             table_definition = false;
             idmap = p.idmap;
             lc = None;
-            int_const_values = Mir.VariableMap.empty;
+            const_map = Mast_to_mir.ConstMap.empty;
             exec_number = Mast_to_mir.dummy_exec_number Pos.no_pos;
           }
           e
@@ -180,7 +180,10 @@ let translate_external_conditions idmap
         verif_conditions = verif_conds;
       }
   in
-  Mast_to_mir.get_conds [ test_error ] idmap [ [ (program, Pos.no_pos) ] ]
+  (* Leave a constant map empty is risky, it will fail if we allow tests to
+     refer to M constants in their expressions *)
+  Mast_to_mir.get_conds [ test_error ] Mast_to_mir.ConstMap.empty idmap
+    [ [ (program, Pos.no_pos) ] ]
 
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let open Mir in
