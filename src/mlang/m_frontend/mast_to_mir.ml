@@ -51,14 +51,14 @@ end
 
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
-let format_loop_param_value fmt (v : loop_param_value) =
-  match v with
+let format_loop_param_value fmt (v : loop_param_value * int) =
+  match fst v with
   | VarName v -> Format.fprintf fmt "%s" v
   | RangeInt i -> Format.fprintf fmt "%d" i
 
-type loop_context = loop_param_value ParamsMap.t
+type loop_context = (loop_param_value * int) ParamsMap.t
 
-type loop_domain = loop_param_value list ParamsMap.t
+type loop_domain = (loop_param_value * int) list ParamsMap.t
 (** Loops can have multiple loop parameters *)
 
 let _format_loop_context fmt (ld : loop_context) =
@@ -95,10 +95,10 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
   with Not_found -> []
 
 (** Helper to make a list of integers from a range *)
-let rec make_range_list (i1 : int) (i2 : int) : loop_param_value list =
+let rec make_int_range_list (i1 : int) (i2 : int) : loop_param_value list =
   if i1 > i2 then []
   else
-    let tl = make_range_list (i1 + 1) i2 in
+    let tl = make_int_range_list (i1 + 1) i2 in
     RangeInt i1 :: tl
 
 (** {2 General translation context} *)
@@ -265,6 +265,61 @@ let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
           (Pos.get_position l))
   | Mast.Float f -> int_of_float f
 
+let loop_variables_size (lpvl : loop_param_value list) (pos : Pos.t) =
+  let size_err p =
+    Errors.raise_spanned_error "loop variables have different sizes" p
+  in
+  let _fixed, size =
+    List.fold_left
+      (fun (fixed, size) (lpv : loop_param_value) ->
+        match lpv with
+        | VarName n ->
+            let l = String.length n in
+            if (fixed && size <> l) || ((not fixed) && size > l) then
+              size_err pos;
+            (true, l)
+        | RangeInt i ->
+            let l = String.length (Int.to_string i) in
+            if fixed && size < l then size_err pos;
+            (fixed, max l size))
+      (false, 0) lpvl
+  in
+  size
+
+let var_or_int (l : Mast.literal Pos.marked) =
+  match Pos.unmark l with
+  | Mast.Float f -> RangeInt (int_of_float f)
+  | Mast.Variable (Normal v) -> VarName v
+  | Mast.Variable (Generic _) ->
+      Errors.raise_spanned_error
+        "generic variables not allowed in left part of loop"
+        (Pos.get_position l)
+
+let make_var_range_list (v1 : string) (v2 : string) : loop_param_value list =
+  let rec aux c1 c2 =
+    if c1 > c2 then []
+    else
+      let tl = aux (c1 + 1) c2 in
+      VarName (String.make 1 (Char.chr c1)) :: tl
+  in
+  aux (Char.code v1.[0]) (Char.code v2.[0])
+
+let make_range_list (l1 : Mast.literal Pos.marked)
+    (l2 : Mast.literal Pos.marked) : loop_param_value list =
+  let length_err p =
+    Errors.raise_spanned_error
+      "non-numeric range bounds must consist of a single character" p
+  in
+  match (var_or_int l1, var_or_int l2) with
+  | RangeInt i1, RangeInt i2 -> make_int_range_list i1 i2
+  | VarName v1, VarName v2 ->
+      if String.length v1 <> 1 then length_err (Pos.get_position l1);
+      if String.length v2 <> 1 then length_err (Pos.get_position l2);
+      make_var_range_list v1 v2
+  | _ ->
+      Errors.raise_spanned_error "range bounds must be of the same type"
+        (Pos.get_position l2)
+
 (** This function is the workhorse of loop unrolling : it takes a loop prefix
     containing the set of variables over which to iterate, and fabricates a
     combinator. This combinator takes auser-provided way of translating the loop
@@ -276,10 +331,12 @@ let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
     should define [f] by [let f = fun lc i ctx -> ...] and use {!val:
     merge_loop_ctx} inside [...] before translating the loop body. [lc] is the
     loop context, [i] the loop sequence index and [ctx] the translation context. *)
+
 let translate_loop_variables (lvs : Mast.loop_variables Pos.marked)
     (ctx : translating_context) : (loop_context -> int -> 'a) -> 'a list =
+  let pos = Pos.get_position lvs in
   match Pos.unmark lvs with
-  | Mast.ValueSets lvs ->
+  | Mast.ValueSets lvs | Mast.Ranges lvs ->
       fun translator ->
         let varying_domain =
           List.fold_left
@@ -289,40 +346,16 @@ let translate_loop_variables (lvs : Mast.loop_variables Pos.marked)
                   (List.map
                      (fun value ->
                        match value with
-                       | Mast.VarParam v -> [ VarName (Pos.unmark v) ]
-                       | Mast.IntervalLoop (i1, i2) ->
-                           make_range_list (var_or_int_value ctx i1)
-                             (var_or_int_value ctx i2))
+                       | Mast.Single l -> [ var_or_int l ]
+                       | Mast.Range (l1, l2) -> make_range_list l1 l2
+                       | Mast.NumRange (l1, l2) ->
+                           make_int_range_list (var_or_int_value ctx l1)
+                             (var_or_int_value ctx l2))
                      values)
               in
+              let sz = loop_variables_size values pos in
+              let values = List.map (fun v -> (v, sz)) values in
               ParamsMap.add (Pos.unmark param) values domain)
-            ParamsMap.empty lvs
-        in
-        let _, t_list =
-          List.fold_left
-            (fun (i, t_list) lc ->
-              let new_t = translator lc i in
-              (i + 1, new_t :: t_list))
-            (0, [])
-            (iterate_all_combinations varying_domain)
-        in
-        List.rev t_list
-  | Mast.Ranges lvs ->
-      fun translator ->
-        let varying_domain =
-          List.fold_left
-            (fun domain (param, values) ->
-              let values =
-                List.map
-                  (fun value ->
-                    match value with
-                    | Mast.VarParam v -> [ VarName (Pos.unmark v) ]
-                    | Mast.IntervalLoop (i1, i2) ->
-                        make_range_list (var_or_int_value ctx i1)
-                          (var_or_int_value ctx i2))
-                  values
-              in
-              ParamsMap.add (Pos.unmark param) (List.flatten values) domain)
             ParamsMap.empty lvs
         in
         let _, t_list =
@@ -367,15 +400,6 @@ let get_var_or_x (d : Mir.Variable.t list Pos.VarNameToID.t)
     It is unclear why this behavior is accepted by the M language. Maybe it has
     to do with the way a string to integer function works inside the official
     interpreter... *)
-
-(** To try everything, we have to cover all cases concerning trailing zeroes *)
-type zero_padding = ZPNone | ZPAdd | ZPRemove
-
-let _format_zero_padding (zp : zero_padding) : string =
-  match zp with
-  | ZPNone -> "no zero padding"
-  | ZPAdd -> "add zero padding"
-  | ZPRemove -> "remove zero padding"
 
 (**{2 Preliminary passes}*)
 
@@ -647,7 +671,7 @@ let rec translate_variable (idmap : Mir.idmap)
               "variable contains loop parameters but is not used inside a loop \
                context"
               (Pos.get_position var)
-        | Some _ ->
+        | Some lc ->
             instantiate_generic_variables_parameters idmap exec_number const_map
               table_definition lc gen_name is_lvalue (Pos.get_position var) lax)
 
@@ -655,93 +679,48 @@ let rec translate_variable (idmap : Mir.idmap)
 and instantiate_generic_variables_parameters (idmap : Mir.idmap)
     (exec_number : Mir.execution_number)
     (const_map : float Pos.marked ConstMap.t) (table_definition : bool)
-    (lc : loop_context option) (gen_name : Mast.variable_generic_name)
+    (lc : loop_context) (gen_name : Mast.variable_generic_name)
     (is_lvalue : bool) (pos : Pos.t) (lax : bool) : Mir.expression Pos.marked =
   instantiate_generic_variables_parameters_aux idmap exec_number const_map
-    table_definition lc gen_name.Mast.base is_lvalue ZPNone pos lax
+    table_definition lc gen_name.Mast.base is_lvalue pos lax
 
 and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
     (exec_number : Mir.execution_number)
     (const_map : float Pos.marked ConstMap.t) (table_definition : bool)
-    (lc : loop_context option) (var_name : string) (is_lvalue : bool)
-    (pad_zero : zero_padding) (pos : Pos.t) (lax : bool) :
-    Mir.expression Pos.marked =
-  try
-    match
-      ParamsMap.choose_opt
-        (match lc with
-        | None ->
-            Errors.raise_spanned_error
-              "variable contains loop parameters but is not used inside a loop \
-               context"
-              pos
-        | Some lc -> lc)
-    with
-    | None ->
-        translate_variable idmap exec_number const_map table_definition lc
-          (Mast.Normal var_name, pos)
-          is_lvalue lax
-    | Some (param, value) ->
-        (* The [pad_zero] parameter is here because RangeInt variables are
-           sometimes defined with a trailing 0 before the index. So the
-           algorithm first tries to find a definition without the trailing 0,
-           and if it fails it tries with a trailing 0. *)
-        let new_var_name =
-          match value with
-          | VarName value ->
-              (* Sometimes the DGFiP code inserts a extra 0 to the value they
-                 want to replace when it is already there... So we need to
-                 remove it here. *)
-              let value =
-                match pad_zero with
-                | ZPNone -> value
-                | ZPRemove -> string_of_int (int_of_string value)
-                | ZPAdd -> "0" ^ value
-              in
-              Re.Str.replace_first
-                (Re.Str.regexp (Format.asprintf "%c" param))
-                value var_name
-          | RangeInt i ->
-              let value =
-                match pad_zero with
-                | ZPNone -> string_of_int i
-                | ZPRemove -> string_of_int i
-                | ZPAdd -> "0" ^ string_of_int i
-              in
-              Re.Str.replace_first
-                (Re.Str.regexp (Format.asprintf "%c" param))
-                value var_name
-        in
-        instantiate_generic_variables_parameters_aux idmap exec_number const_map
-          table_definition
-          (Some
-             (ParamsMap.remove param
-                (match lc with
-                | None ->
-                    Errors.raise_spanned_error
-                      "variable contains loop parameters but is not used \
-                       inside a loop context"
-                      pos
-                | Some lc -> lc)))
-          new_var_name is_lvalue pad_zero pos lax
-  with
-  | err
-  when match lc with
-       | None ->
-           Errors.raise_spanned_error
-             "variable contains loop parameters but is not used inside a loop \
-              context"
-             pos
-       | Some lc -> ParamsMap.cardinal lc > 0
-  ->
-    let new_pad_zero =
-      match pad_zero with
-      | ZPNone -> ZPRemove
-      | ZPRemove -> ZPAdd
-      | _ -> raise err
-    in
-    instantiate_generic_variables_parameters_aux idmap exec_number const_map
-      table_definition lc var_name is_lvalue new_pad_zero pos lax
+    (lc : loop_context) (var_name : string) (is_lvalue : bool) (pos : Pos.t)
+    (lax : bool) : Mir.expression Pos.marked =
+  match ParamsMap.choose_opt lc with
+  | None ->
+      translate_variable idmap exec_number const_map table_definition (Some lc)
+        (Mast.Normal var_name, pos)
+        is_lvalue lax
+  | Some (param, (value, size)) ->
+      let new_var_name =
+        match value with
+        | VarName value ->
+            if size <> String.length value then
+              Errors.raise_spanned_error
+                "variable name does not match computed size" pos;
+            Re.Str.replace_first
+              (Re.Str.regexp (Format.asprintf "%c" param))
+              value var_name
+        | RangeInt i ->
+            let is = string_of_int i in
+            let l = String.length is in
+            if size < l then
+              Errors.raise_spanned_error
+                "integer representation exceeds computed size" pos;
+            let value =
+              if l = size then is else String.make (size - l) '0' ^ is
+            in
+            Re.Str.replace_first
+              (Re.Str.regexp (Format.asprintf "%c" param))
+              value var_name
+      in
+      instantiate_generic_variables_parameters_aux idmap exec_number const_map
+        table_definition
+        (ParamsMap.remove param lc)
+        new_var_name is_lvalue pos lax
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
     their execution number. *)

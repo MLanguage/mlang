@@ -32,7 +32,7 @@ module ConstMap : Map.S with type key = Mast.variable_name
 module ParamsMap : Map.S with type key = Char.t
 (** Map whose keys are loop parameters *)
 
-type loop_context = loop_param_value ParamsMap.t
+type loop_context = (loop_param_value * int) ParamsMap.t
 (** This is the context when iterating a loop : for each loop parameter, we have
     access to the current value of this loop parameter in this iteration. *)
 

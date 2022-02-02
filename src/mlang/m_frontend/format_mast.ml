@@ -85,9 +85,12 @@ let format_set_value fmt (sv : set_value) =
 
 let format_set_value_loop fmt (sv : set_value_loop) =
   match sv with
-  | VarParam v -> Format.fprintf fmt "%s" (Pos.unmark v)
-  | IntervalLoop (i1, i2) ->
+  | Single l -> Format.fprintf fmt "%a" format_literal (Pos.unmark l)
+  | Range (i1, i2) ->
       Format.fprintf fmt "%a..%a" format_literal (Pos.unmark i1) format_literal
+        (Pos.unmark i2)
+  | NumRange (i1, i2) ->
+      Format.fprintf fmt "%a-%a" format_literal (Pos.unmark i1) format_literal
         (Pos.unmark i2)
 
 let format_comp_op fmt (op : comp_op) =
