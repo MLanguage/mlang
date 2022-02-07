@@ -71,7 +71,6 @@ let rec get_block_statements (rules : rule RuleMap.t) (p : program)
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
   main_statements p |> get_block_statements p.rules p
-    
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -146,11 +145,9 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
-        | SRuleCall _ -> assert false
-        | SFunctionCall (f, _) ->
-            get_assigned_variables_block acc
-              (get_block_statements p.rules p
-                 (FunctionMap.find f p.mpp_functions)))
+        | SRuleCall _ | SFunctionCall _ -> assert false
+        (* Cannot happen get_all_statements inlines all rule and mpp_function
+           calls *))
       acc stmts
   in
   get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
