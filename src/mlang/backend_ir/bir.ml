@@ -53,26 +53,25 @@ let main_statements (p : program) : stmt list =
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
 
-let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
-    stmt list =
+let rec get_block_statements (rules : rule RuleMap.t) (p : program)
+    (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
       | SRuleCall r -> List.rev (RuleMap.find r rules).rule_stmts @ stmts
       | SConditional (e, t, f) ->
-          let t = get_block_statements rules t in
-          let f = get_block_statements rules f in
+          let t = get_block_statements rules p t in
+          let f = get_block_statements rules p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
+      | SFunctionCall (f, _) -> List.rev (FunctionMap.find f p.mpp_functions)
       | _ -> stmt :: stmts)
     [] stmts
   |> List.rev
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  FunctionMap.fold
-    (fun _ mpp_function stmts ->
-      get_block_statements p.rules mpp_function @ stmts)
-    p.mpp_functions []
+  main_statements p |> get_block_statements p.rules p
+    
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -101,8 +100,10 @@ let squish_statements (program : program) (threshold : int)
               (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
-        if List.length (get_block_statements rules curr_stmts) < threshold then
-          browse_bir tl new_stmts curr_stmts rules
+        if
+          List.length (get_block_statements rules program curr_stmts)
+          < threshold
+        then browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
@@ -148,7 +149,7 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
         | SRuleCall _ -> assert false
         | SFunctionCall (f, _) ->
             get_assigned_variables_block acc
-              (get_block_statements p.rules
+              (get_block_statements p.rules p
                  (FunctionMap.find f p.mpp_functions)))
       acc stmts
   in

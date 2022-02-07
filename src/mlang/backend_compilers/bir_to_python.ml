@@ -424,7 +424,7 @@ let generate_mpp_function (oc : Format.formatter) (program : Bir.program)
   let stmts = Bir.FunctionMap.find f program.mpp_functions in
   Format.fprintf oc "@[<hv 4>def %s(out, tgv):@,%a@]@," f
     (generate_stmts program)
-    (Bir.get_block_statements program.rules stmts)
+    (Bir.get_block_statements program.rules program stmts)
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   List.iter
