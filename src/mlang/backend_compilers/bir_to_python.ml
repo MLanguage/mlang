@@ -417,19 +417,7 @@ and generate_stmt program oc stmt =
   | SVerif v -> generate_var_cond v oc
   | SRuleCall _ -> assert false
   (* Removed with [Bir.get_all_statements] below *)
-  | SFunctionCall (f, _) -> Format.fprintf oc "%s(out, tgv)@\n" f
-
-let generate_mpp_function (oc : Format.formatter) (program : Bir.program)
-    (f : Bir.function_name) =
-  let stmts = Bir.FunctionMap.find f program.mpp_functions in
-  Format.fprintf oc "@[<hv 4>def %s(out, tgv):@,%a@]@," f
-    (generate_stmts program)
-    (Bir.get_block_statements program.rules program stmts)
-
-let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
-  List.iter
-    (fun (fname, _) -> generate_mpp_function oc program fname)
-    (Bir.FunctionMap.bindings program.mpp_functions)
+  | SFunctionCall _ -> assert false (* Also removed with [Bir.get_all_statements] below *)
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables =
@@ -457,8 +445,7 @@ let generate_python_program (program : Bir.program)
     (function_spec : Bir_interface.bir_function) (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a" 
-    generate_mpp_functions program
+  Format.fprintf oc "%a%a%a%a" 
     generate_header () 
     generate_input_handling function_spec 
     (generate_stmts program) (Bir.get_all_statements program)
