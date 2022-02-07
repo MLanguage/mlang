@@ -423,10 +423,10 @@ let calculateTax_method_header (calculation_vars_len : int)
      MCalculation mCalculation = new MCalculation(tgv, \
      localVariables, maxAnomalies);@,\
      @[<hv 2>for (int i = 0; i < calculationVariables.length; i++) {@,\
-       calculationVariables[i] = mUndefined;@]@,\
+     calculationVariables[i] = mUndefined;@]@,\
      }@,\
      @[<hv 2>for (int i = 0; i < localVariables.length; i++) {@,\
-       localVariables[i] = mUndefined;@]@,\
+     localVariables[i] = mUndefined;@]@,\
      }@,\
      @,\
      InputHandler.loadInputVariables(inputVariables, \
