@@ -126,12 +126,13 @@ let count_instructions (p : program) : int =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
-        | SAssign _ | SVerif _ | SRuleCall _ | SFunctionCall _ -> acc + 1
+        | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
+        | SFunctionCall (f, _) ->
+            acc + 1 + cond_instr_blocks (FunctionMap.find f p.mpp_functions)
         | SConditional (_, s1, s2) ->
             acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
       0 stmts
   in
-  (* TODO: same *)
   cond_instr_blocks (main_statements p)
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
