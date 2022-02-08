@@ -97,6 +97,8 @@ let squish_statements (program : program) (threshold : int)
                 give_pos (SConditional (expr, t_curr_list, f_curr_list))
               in
               (f_rules, cond :: curr_stmts)
+          | SFunctionCall (f, _) ->
+              browse_bir (FunctionMap.find f program.mpp_functions) [] [] rules
           | _ -> (rules, hd :: curr_stmts)
         in
         if
@@ -110,15 +112,20 @@ let squish_statements (program : program) (threshold : int)
             []
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
-  let new_rules, new_stmts =
-    browse_bir (main_statements program) [] [] program.rules
+  let rules, mpp_functions =
+    FunctionMap.fold
+      (fun f _ (rules, mpp_functions) ->
+        let rules, stmts =
+          browse_bir (FunctionMap.find f program.mpp_functions) [] [] rules
+        in
+        (rules, FunctionMap.add f stmts mpp_functions))
+      program.mpp_functions
+      (program.rules, FunctionMap.empty)
   in
   {
     program with
-    rules = new_rules;
-    mpp_functions =
-      (* TODO: this is not longer enough to slice the whole program *)
-      FunctionMap.add program.main_function new_stmts program.mpp_functions;
+    rules;
+    mpp_functions;
   }
 
 let count_instructions (p : program) : int =
