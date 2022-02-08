@@ -63,7 +63,8 @@ let rec get_block_statements (rules : rule RuleMap.t) (p : program)
           let t = get_block_statements rules p t in
           let f = get_block_statements rules p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
-      | SFunctionCall (f, _) -> List.rev (FunctionMap.find f p.mpp_functions)
+      | SFunctionCall (f, _) ->
+          get_block_statements rules p (FunctionMap.find f p.mpp_functions)
       | _ -> stmt :: stmts)
     [] stmts
   |> List.rev
@@ -97,8 +98,6 @@ let squish_statements (program : program) (threshold : int)
                 give_pos (SConditional (expr, t_curr_list, f_curr_list))
               in
               (f_rules, cond :: curr_stmts)
-          | SFunctionCall (f, _) ->
-              browse_bir (FunctionMap.find f program.mpp_functions) [] [] rules
           | _ -> (rules, hd :: curr_stmts)
         in
         if
@@ -114,19 +113,15 @@ let squish_statements (program : program) (threshold : int)
   in
   let rules, mpp_functions =
     FunctionMap.fold
-      (fun f _ (rules, mpp_functions) ->
+      (fun f mpp_func (rules, mpp_functions) ->
         let rules, stmts =
-          browse_bir (FunctionMap.find f program.mpp_functions) [] [] rules
+          browse_bir mpp_func [] [] rules
         in
         (rules, FunctionMap.add f stmts mpp_functions))
       program.mpp_functions
       (program.rules, FunctionMap.empty)
   in
-  {
-    program with
-    rules;
-    mpp_functions;
-  }
+  { program with rules; mpp_functions }
 
 let count_instructions (p : program) : int =
   let rec cond_instr_blocks (stmts : stmt list) : int =
