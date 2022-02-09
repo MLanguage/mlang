@@ -37,3 +37,11 @@ else
 endif
 
 C_COMPILER?=clang
+
+ifeq ($(OPTIMIZE), 1)
+    OPTIMIZE_FLAG=-O --fast-math
+else
+    OPTIMIZE_FLAG=
+endif
+
+
