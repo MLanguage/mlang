@@ -326,13 +326,21 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  } ))
             stmt;
         ] )
-  | Mpp_ir.Expr (Call (MppFunction f, args), _) ->
+  | Mpp_ir.Expr (Call (MppFunction f, args), pos) ->
       let real_args =
         match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args
       in
-      translate_mpp_function mpp_program m_program
-        (List.find (fun decl -> decl.Mpp_ir.name = f) mpp_program)
-        real_args ctx
+      ( ctx,
+        [
+          ( Bir.SFunctionCall
+              ( f,
+                List.map
+                  (function
+                    | Mpp_ir.Local _ -> assert false
+                    | Mpp_ir.Mbased (var, _) -> var)
+                  real_args ),
+            pos );
+        ] )
   | Mpp_ir.Expr (Call (Program _chain, _args), _) ->
       let exec_order = m_program.main_execution_order in
       wrap_m_code_call m_program exec_order ctx
