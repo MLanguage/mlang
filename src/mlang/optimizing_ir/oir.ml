@@ -47,7 +47,7 @@ let count_instr (p : program) : int =
     List.fold_left
       (fun acc s ->
         match Pos.unmark s with
-        | SConditional _ | SAssign _ | SVerif _ -> acc + 1
+        | SConditional _ | SAssign _ | SVerif _ | SFunctionCall _ -> acc + 1
         | SGoto _ -> acc
         | SRuleCall (_, _, stmts) -> aux acc stmts)
       acc stmts
