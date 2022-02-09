@@ -411,7 +411,8 @@ and generate_stmt program oc stmt =
         (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
   | SRuleCall _ -> assert false
-(* Removed with [Bir.get_all_statements] below *)
+  (* Removed with [Bir.get_all_statements] below *)
+  | SFunctionCall _ -> assert false
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables =
