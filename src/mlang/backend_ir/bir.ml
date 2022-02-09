@@ -64,7 +64,9 @@ let rec get_block_statements (rules : rule RuleMap.t) (p : program)
           let f = get_block_statements rules p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
       | SFunctionCall (f, _) ->
-          get_block_statements rules p (FunctionMap.find f p.mpp_functions)
+          (get_block_statements rules p (FunctionMap.find f p.mpp_functions)
+          |> List.rev)
+          @ stmts
       | _ -> stmt :: stmts)
     [] stmts
   |> List.rev
