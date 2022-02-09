@@ -146,6 +146,8 @@ let rec re_translate_statement (s : Oir.stmt) (rules : Bir.rule Bir.RuleMap.t)
         ( None,
           Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s),
           Bir.RuleMap.add rule_id rule rules )
+  | Oir.SFunctionCall (f, args) ->
+      (None, Some (Pos.same_pos_as (Bir.SFunctionCall (f, args)) s), rules)
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (rules : Bir.rule Bir.RuleMap.t) (blocks : Oir.block Oir.BlockMap.t) =
