@@ -30,6 +30,7 @@ let format_code_location_segment (fmt : Format.formatter)
   | InsideBlock i -> Format.fprintf fmt "#%d" i
   | ConditionalBranch b -> Format.fprintf fmt "?%b" b
   | InsideRule r -> Format.fprintf fmt "R_%d" r
+  | InsideFunction f -> Format.fprintf fmt "%s" f
 
 type code_location = code_location_segment list
 
