@@ -345,6 +345,8 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
         Pos.same_pos_as (SRuleCall (rule_id, name, List.rev new_stmts)) stmt
       in
       (new_stmt, ctx, new_pos)
+  | SFunctionCall _ -> assert false
+(* TODO: Implement me *)
 
 let inlining (p : program) : program =
   let g = get_cfg p in
