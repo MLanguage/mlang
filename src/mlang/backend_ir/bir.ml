@@ -142,7 +142,11 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
-        | SRuleCall _ -> assert false)
+        | SRuleCall _ -> assert false
+        | SFunctionCall (f, _) ->
+            get_assigned_variables_block acc
+              (get_block_statements p.rules
+                 (FunctionMap.find f p.mpp_functions)))
       acc stmts
   in
   get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
