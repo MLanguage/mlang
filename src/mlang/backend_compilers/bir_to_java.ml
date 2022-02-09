@@ -349,6 +349,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
         (generate_stmts program var_indexes)
         ff
   | SVerif v -> generate_var_cond var_indexes oc v
+  | SFunctionCall _ -> assert false
 
 let generate_return (var_indexes : variable_id VariableMap.t)
     (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
