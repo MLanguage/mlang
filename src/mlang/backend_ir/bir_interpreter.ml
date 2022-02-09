@@ -22,6 +22,7 @@ type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
   | InsideRule of Bir.rule_id
+  | InsideFunction of Bir.function_name
 
 let format_code_location_segment (fmt : Format.formatter)
     (s : code_location_segment) =
