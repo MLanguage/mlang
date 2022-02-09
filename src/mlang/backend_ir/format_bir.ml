@@ -37,6 +37,11 @@ let rec format_stmt fmt (stmt : stmt) =
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
         (snd cond_data.cond_error)
   | SRuleCall r -> Format.fprintf fmt "call_rule(%d)@\n" r
+  | SFunctionCall (func, args) ->
+      Format.fprintf fmt "call_function: %s with args %a@," func
+        (Format.pp_print_list (fun fmt arg ->
+             Format.fprintf fmt "%s" (arg.Mir.Variable.name |> Pos.unmark)))
+        args
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
