@@ -96,7 +96,7 @@ let rec generate_java_expr (e : expression Pos.marked)
       let unmarked_var = Pos.unmark var in
       let size = Option.get unmarked_var.Mir.Variable.is_table in
       let se2, s2 =
-        ( Format.asprintf "m_array_index(calculationVariables, %d ,%s, %d)"
+        ( Format.asprintf "m_array_index(tgv, %d ,%s, %d)"
             (get_var_pos unmarked_var var_indexes)
             se size,
           s )
@@ -139,7 +139,7 @@ let rec generate_java_expr (e : expression Pos.marked)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 var_indexes in
       let se2, s2 =
-        ( Format.asprintf "m_multimax(%s, calculationVariables, %d)" se1
+        ( Format.asprintf "m_multimax(%s, tgv, %d)" se1
             (get_var_pos v2 var_indexes),
           [] )
       in
@@ -152,7 +152,7 @@ let rec generate_java_expr (e : expression Pos.marked)
       | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
-      ( Format.asprintf "calculationVariables[%d/*\"%a\"*/]"
+      ( Format.asprintf "tgv[%d/*\"%a\"*/]"
           (get_var_pos var var_indexes)
           format_var_name var,
         [] )
@@ -180,7 +180,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%acalculationVariables[%d /*\"%a\"*/] = %s;@,"
+      Format.fprintf oc "%atgv[%d /*\"%a\"*/] = %s;@,"
         (format_local_vars_defs var_indexes)
         defs
         (get_var_pos var var_indexes)
@@ -190,7 +190,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
         (fun fmt ->
           IndexMap.iter (fun i v ->
               let sv, defs = generate_java_expr v var_indexes in
-              Format.fprintf fmt "%acalculationVariables[%d /* %a */] = %s;@,"
+              Format.fprintf fmt "%atgv[%d /* %a */] = %s;@,"
                 (format_local_vars_defs var_indexes)
                 defs
                 (get_var_pos var var_indexes |> ( + ) i)
@@ -200,7 +200,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
       let se, s = generate_java_expr e var_indexes in
       Format.fprintf oc
         "for (int genericIndex=0; genericIndex < %d; genericIndex++) {@\n\
-        \ @[<h 4> %acalculationVariables[%d + genericIndex /* %a */] = %s;@]@\n\
+        \ @[<h 4> %atgv[%d + genericIndex /* %a */] = %s;@]@\n\
         \ }@\n"
         size (format_local_vars_defs var_indexes) s
         (get_var_pos var var_indexes)
@@ -226,20 +226,20 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
   let print_header count =
     Format.fprintf oc
       "@[<hv 2>private static void loadInputVariables_%d(Map<String, MValue> \
-       inputVariables, MValue[] calculationVariables){@,"
+       inputVariables, MValue[] tgv){@,"
       count
   in
   let rec print_load_input curr oc len =
     if curr <= len then (
       Format.fprintf oc
-        "loadInputVariables_%d(inputVariables, calculationVariables);@," curr;
+        "loadInputVariables_%d(inputVariables, tgv);@," curr;
       print_load_input (curr + 1) oc len)
   in
   let format_input_var var count =
     if count mod split_threshold = 0 then
       print_header (if count > 0 then count / split_threshold else 0);
     Format.fprintf oc
-      "calculationVariables[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null \
+      "tgv[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null \
        ? inputVariables.get(\"%s\") : MValue.mUndefined;@,"
       format_var_name var
       (get_var_pos var var_indexes)
@@ -255,7 +255,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
   Format.fprintf oc
     "}@,\
      static void loadInputVariables(Map<String, MValue> inputVariables, \
-     MValue[] calculationVariables) {@,\
+     MValue[] tgv) {@,\
      %a@,\
      }"
     (print_load_input 0) (count / split_threshold)
@@ -359,7 +359,7 @@ let generate_return (var_indexes : variable_id VariableMap.t)
     Format.pp_print_list
       (fun oc var ->
         Format.fprintf oc
-          "outputVariables.put(\"%a\",calculationVariables[%d/*\"%a\"*/]);"
+          "outputVariables.put(\"%a\",tgv[%d/*\"%a\"*/]);"
           format_var_name var
           (get_var_pos var var_indexes)
           format_var_name var)
@@ -367,7 +367,7 @@ let generate_return (var_indexes : variable_id VariableMap.t)
   in
   Format.fprintf oc
     "@[<v 2>private static Map<String, MValue> loadOutputVariables(MValue[] \
-     calculationVariables){@,\
+     tgv){@,\
      Map<String, MValue> outputVariables = new HashMap<>();@,\
     \ \n\
     \     %a@,\
@@ -382,7 +382,7 @@ let generate_rule_method (program : Bir.program)
     "@[<hv 2>private static void m_rule_%s(MCalculation mCalculation, \
      List<MError> calculationErrors){@,\
      MValue cond = MValue.mUndefined;@,\
-     MValue[] calculationVariables = mCalculation.getCalculationVariables();@,\
+     MValue[] tgv = mCalculation.getCalculationVariables();@,\
      MValue[] localVariables = mCalculation.getLocalVariables();@,\
      Map<String, List<MValue>> tableVariables = \
      mCalculation.getTableVariables();@,\
@@ -417,9 +417,9 @@ let calculateTax_method_header (calculation_vars_len : int)
      inputVariables, int maxAnomalies) {@,\
      MValue cond = MValue.mUndefined;@,\
      List<MError> calculationErrors = new ArrayList<>();@,\
-     MValue[] calculationVariables = new MValue[%d];@,\
+     MValue[] tgv = new MValue[%d];@,\
      MValue[] localVariables = new MValue[%d];@,\
-     MCalculation mCalculation = new MCalculation(calculationVariables, \
+     MCalculation mCalculation = new MCalculation(tgv, \
      localVariables, maxAnomalies);@,\
      @,\
      InputHandler.loadInputVariables(inputVariables, \
