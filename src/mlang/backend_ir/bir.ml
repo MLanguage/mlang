@@ -116,9 +116,7 @@ let squish_statements (program : program) (threshold : int)
   let rules, mpp_functions =
     FunctionMap.fold
       (fun f mpp_func (rules, mpp_functions) ->
-        let rules, stmts =
-          browse_bir mpp_func [] [] rules
-        in
+        let rules, stmts = browse_bir mpp_func [] [] rules in
         (rules, FunctionMap.add f stmts mpp_functions))
       program.mpp_functions
       (program.rules, FunctionMap.empty)
