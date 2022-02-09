@@ -96,6 +96,11 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
           curr_block_id blocks
       in
       (curr_block_id, blocks)
+  | Bir.SFunctionCall (f, args) ->
+      ( curr_block_id,
+        append_to_block
+          (Pos.same_pos_as (Oir.SFunctionCall (f, args)) s)
+          curr_block_id blocks )
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
