@@ -217,7 +217,7 @@ public class MValue {
       throw new RuntimeException("Multimax bound undefined!");
     }
 
-    int bound = (int)boundMValue.getValue();
+    int bound = (int)Math.floor(boundMValue.getValue());
 
     MValue max = mAdd(array[position], zero);
     for (int i = 0; i <= bound; i++) {
@@ -250,7 +250,7 @@ public class MValue {
       return mUndefined;
     } 
      
-    int indexInteger = (int)index.getValue();
+    int indexInteger = (int)Math.floor(index.getValue());
     
     if (indexInteger < 0) {
       return zero;
