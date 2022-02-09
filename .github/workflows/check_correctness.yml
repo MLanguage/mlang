@@ -62,6 +62,11 @@ jobs:
         run: |
           eval $(opam env)
           make test_c_backend
+          
+      - name: Test Java backend
+        run: |
+          eval $(opam env)
+          make test_java_backend
 
       - name: Test Python backend
         run: |
@@ -71,9 +76,6 @@ jobs:
           # Removed optimizations cause the python compiler to use too much memory,
           # this option should be removed when that issue is fixed
 
-      - name: Test Java backend
-        run: |
-          eval $(opam env)
-          make test_java_backend
+
 
 
