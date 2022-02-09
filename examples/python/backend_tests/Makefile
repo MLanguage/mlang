@@ -6,7 +6,7 @@ MLANG=dune exec ../../../src/main.exe --
 
 all_tests:
 	python3 gen_m_spec.py $(TESTS_DIR) tests.m_spec all_ins.csv
-	$(MLANG) --display_time --debug --optimize \
+	$(MLANG) --display_time --debug \
 	        --mpp_file $(MPP_FILE) --mpp_function compute_double_liquidation_pvro \
 	        --backend python --output ./tests.py \
                 --function_spec ./tests.m_spec \

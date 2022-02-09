@@ -1,13 +1,5 @@
 include ../../Makefile.include
 
-OPTIMIZE?=1
-
-ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O
-else
-    OPTIMIZE_FLAG=
-endif
-
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\

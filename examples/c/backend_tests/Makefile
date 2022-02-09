@@ -1,7 +1,5 @@
 include ../../../Makefile.include
 
-OPTIMIZE_FLAG=-O
-
 MLANG_BIN=dune exec --no-print-director ../../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
@@ -43,7 +41,7 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 CC=$(C_COMPILER)
 
 ifeq ($(C_COMPILER), clang)
-    F_BRACKET_OPT=-fbracket-depth=2048
+    F_BRACKET_OPT=-fbracket-depth=3072
 else
     F_BRACKET_OPT=
 endif
