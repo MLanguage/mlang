@@ -425,12 +425,10 @@ let create_combined_program (m_program : Mir_interface.full_program)
         (emtpy_translation_ctx, Bir.FunctionMap.empty)
         mpp_program
     in
-    ignore
-      (try Bir.FunctionMap.find mpp_function_to_extract mpp_functions
-       with Not_found ->
-         Errors.raise_error
-           (Format.asprintf "M++ function %s not found in M++ file!"
-              mpp_function_to_extract));
+    if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
+      Errors.raise_error
+        (Format.asprintf "M++ function %s not found in M++ file!"
+           mpp_function_to_extract);
     let conds_verif = generate_verif_conds m_program.program.program_conds in
     let mpp_functions =
       Bir.FunctionMap.add "verif_conds" conds_verif mpp_functions
