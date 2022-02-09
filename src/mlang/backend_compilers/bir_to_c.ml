@@ -255,6 +255,7 @@ let rec generate_stmt (program : Bir.program)
   | SRuleCall r ->
       let rule = Bir.RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
+  | SFunctionCall _ -> assert false
 
 and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (stmts : Bir.stmt list) =
