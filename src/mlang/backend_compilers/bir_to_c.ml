@@ -293,7 +293,8 @@ let generate_mpp_function (program : Bir.program)
   Format.fprintf oc
     "@[<hv 4>int %s(m_output*output, m_value* TGV, m_value* LOCAL) {@,\
      m_value cond;@,\
-     %a@]}@,"
+     %a@,\
+     return 0;@]}@,"
     f
     (generate_stmts program var_indexes)
     stmts
