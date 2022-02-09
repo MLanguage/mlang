@@ -154,7 +154,9 @@ let remove_dead_statements (stmts : block) (id : block_id)
             let rule_call =
               Pos.same_pos_as (SRuleCall (rule_id, name, new_stmts)) stmt
             in
-            (used_vars, used_defs, rule_call :: acc, pos - 1))
+            (used_vars, used_defs, rule_call :: acc, pos - 1)
+        | SFunctionCall _ -> assert false
+        (* TODO: Implement me *))
       stmts
       (used_vars, used_defs, [], pos)
   in
