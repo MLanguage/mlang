@@ -29,7 +29,7 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
-  | SFunctionCall of function_name
+  | SFunctionCall of function_name * Mir.Variable.t list
 
 type mpp_function = stmt list
 
