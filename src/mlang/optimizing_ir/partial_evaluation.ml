@@ -737,6 +737,8 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
         Pos.same_pos_as (SRuleCall (rule_id, name, List.rev stmts)) stmt
       in
       (stmt :: new_block, ctx)
+  | SFunctionCall _ -> assert false
+(* TODO: Implement me *)
 
 let partial_evaluation (p : program) : program =
   let g = get_cfg p in
