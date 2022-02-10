@@ -422,8 +422,8 @@ let calculateTax_method_header (calculation_vars_len : int)
      MValue[] localVariables = new MValue[%d];@,\
      MCalculation mCalculation = new MCalculation(tgv, \
      localVariables, maxAnomalies);@,\
-     @[<hv 2>for (int i = 0; i < calculationVariables.length; i++) {@,\
-     calculationVariables[i] = mUndefined;@]@,\
+     @[<hv 2>for (int i = 0; i < tgv.length; i++) {@,\
+     tgv[i] = mUndefined;@]@,\
      }@,\
      @[<hv 2>for (int i = 0; i < localVariables.length; i++) {@,\
      localVariables[i] = mUndefined;@]@,\
@@ -448,7 +448,7 @@ let generate_mpp_function (program : Bir.program)
     "@[<hv 4>static void %s(MCalculation mCalculation, List<MError> \
      calculationErrors) {@,\
      MValue cond = MValue.mUndefined;@,\
-     MValue[] calculationVariables = mCalculation.getCalculationVariables();@,\
+     MValue[] tgv = mCalculation.getCalculationVariables();@,\
      MValue[] localVariables = mCalculation.getLocalVariables();@,\
      Map<String, List<MValue>> tableVariables = \
      mCalculation.getTableVariables();@,\
