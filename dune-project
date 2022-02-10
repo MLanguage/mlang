@@ -33,6 +33,8 @@
    (and :build))
   (ANSITerminal
    (= 0.8.2))
+  (cmdliner
+    (= 1.0.4))
   (re
    (= 1.9.0))
   (ocamlgraph
