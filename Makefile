@@ -80,6 +80,10 @@ test_c_backend:
 	$(MAKE) -C examples/c/backend_tests run_tests
 
 test_java_backend:
+ifeq ($(OPTIMIZE), 0)
+	@echo "\033[0;31mWarning, non-optimized Java files cannot be executed for now (too many constants for the JVM)\033[0m"
+else
+endif
 	$(MAKE) -C examples/java/ run_tests
 
 test_dgfip_c_backend:
