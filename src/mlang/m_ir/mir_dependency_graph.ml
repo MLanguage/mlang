@@ -122,15 +122,17 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
     let exception Found of (RG.V.t * RG.E.t) list in
     (* Find an already passed vertex. Return all vertexes passed from that
        point *)
-    let rec find_seen_suffix v seen =
-      match seen with
-      | [] -> None
-      | (v', _) :: _ when v = v' -> Some seen
-      | _ :: seen -> find_seen_suffix v seen
+    let find_seen_suffix v seen =
+      let rec aux seen suffix =
+        match seen with
+        | [] -> None
+        | (v', e) :: _ when v = v' -> Some ((v', e) :: suffix)
+        | s :: seen -> aux seen (s :: suffix)
+      in
+      aux seen []
     in
     (* DFS. Never returns, raise an exception on cycle find *)
     let rec aux seen v =
-      Printf.eprintf "loop %d %d\n%!" (List.length seen) v;
       match find_seen_suffix v seen with
       | Some seen -> raise (Found seen)
       | None ->
@@ -160,13 +162,19 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
             Format.asprintf
               "The following rules contain circular definitions:\n%s\n"
               (String.concat "\n"
-                 (List.map
-                    (fun (rule_id, edge) ->
-                      let rule = Mir.RuleMap.find rule_id p.Mir.program_rules in
-                      Format.asprintf "%d with vars: %s"
-                        (Pos.unmark rule.rule_number)
-                        (RG.E.label edge))
-                    edges))
+                 (let rule =
+                    Mir.RuleMap.find (List.hd edges |> fst) p.Mir.program_rules
+                  in
+                  string_of_int (Pos.unmark rule.rule_number)
+                  :: List.map
+                       (fun (rule_id, edge) ->
+                         let rule =
+                           Mir.RuleMap.find rule_id p.Mir.program_rules
+                         in
+                         Format.asprintf "depends on %d through vars: {%s}"
+                           (Pos.unmark rule.rule_number)
+                           (RG.E.label edge))
+                       edges))
             :: !cycles_strings)
         sccs;
       Format.eprintf "%s" (String.concat "\n\n" !cycles_strings)
