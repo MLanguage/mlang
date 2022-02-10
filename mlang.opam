@@ -18,6 +18,7 @@ depends: [
   "ocaml" {>= "4.11.2"}
   "dune" {build}
   "ANSITerminal" {= "0.8.2"}
+  "cmdliner" {= "1.0.4"}
   "re" {= "1.9.0"}
   "ocamlgraph" {= "1.8.8"}
   "odoc" {= "1.5.3"}
