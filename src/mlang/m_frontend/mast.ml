@@ -100,7 +100,7 @@ type set_value =
 type set_value_loop =
   | Single of literal Pos.marked
   | Range of literal Pos.marked * literal Pos.marked
-  | NumRange of literal Pos.marked * literal Pos.marked
+  | Interval of literal Pos.marked * literal Pos.marked
 
 type loop_variable = char Pos.marked * set_value_loop list
 (** A loop variable is the character that should be substituted in variable

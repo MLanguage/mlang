@@ -89,7 +89,7 @@ let format_set_value_loop fmt (sv : set_value_loop) =
   | Range (i1, i2) ->
       Format.fprintf fmt "%a..%a" format_literal (Pos.unmark i1) format_literal
         (Pos.unmark i2)
-  | NumRange (i1, i2) ->
+  | Interval (i1, i2) ->
       Format.fprintf fmt "%a-%a" format_literal (Pos.unmark i1) format_literal
         (Pos.unmark i2)
 

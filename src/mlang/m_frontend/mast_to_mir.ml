@@ -57,6 +57,8 @@ let format_loop_param_value fmt (v : loop_param_value * int) =
   | RangeInt i -> Format.fprintf fmt "%d" i
 
 type loop_context = (loop_param_value * int) ParamsMap.t
+(** Maps loop variables to their values ; the integer represents the expected
+    length of the string representation of the value *)
 
 type loop_domain = (loop_param_value * int) list ParamsMap.t
 (** Loops can have multiple loop parameters *)
@@ -94,7 +96,7 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
         all_context_with_hd_val_for_param @ all_contexts_minus_hd_val_for_param
   with Not_found -> []
 
-(** Helper to make a list of integers from a range *)
+(** Helper to make a list of integers from an integer range *)
 let rec make_int_range_list (i1 : int) (i2 : int) : loop_param_value list =
   if i1 > i2 then []
   else
@@ -348,7 +350,7 @@ let translate_loop_variables (lvs : Mast.loop_variables Pos.marked)
                        match value with
                        | Mast.Single l -> [ var_or_int l ]
                        | Mast.Range (l1, l2) -> make_range_list l1 l2
-                       | Mast.NumRange (l1, l2) ->
+                       | Mast.Interval (l1, l2) ->
                            make_int_range_list (var_or_int_value ctx l1)
                              (var_or_int_value ctx l2))
                      values)

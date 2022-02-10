@@ -367,7 +367,7 @@ interval_loop:
     let l2 = parse_to_literal (parse_variable_or_int $sloc i2), mk_position $sloc in
     match rm with
     | `Range -> Range (l1, l2)
-    | `Minus -> NumRange (l1, l2)
+    | `Minus -> Interval (l1, l2)
   }
 
 enumeration:
@@ -385,7 +385,7 @@ enumeration_item:
 interval:
 | i1 = SYMBOL RANGE i2 = SYMBOL
  { Interval ((parse_int $sloc i1, mk_position $sloc),
-   (parse_int $sloc i2, mk_position $sloc)) }
+   (parse_int $sloc i2, mk_position $sloc)) : set_value }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
