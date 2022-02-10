@@ -98,8 +98,9 @@ type set_value =
 
 (** Values that can be substituted for loop parameters *)
 type set_value_loop =
-  | VarParam of variable_name Pos.marked
-  | IntervalLoop of literal Pos.marked * literal Pos.marked
+  | Single of literal Pos.marked
+  | Range of literal Pos.marked * literal Pos.marked
+  | Interval of literal Pos.marked * literal Pos.marked
 
 type loop_variable = char Pos.marked * set_value_loop list
 (** A loop variable is the character that should be substituted in variable

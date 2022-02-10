@@ -25,6 +25,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of computed_typ Pos.marked
  | Attr of input_variable_attribute Pos.marked * literal Pos.marked
 
+ let parse_to_literal (v: parse_val) : literal = match v with
+ | ParseVar v -> Variable v
+ | ParseInt v -> Float (float_of_int v)
+
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -350,21 +354,21 @@ loop_variables_range:
 
  enumeration_loop_item:
  | bounds = interval_loop { bounds  }
- | s = SYMBOL { VarParam (parse_variable_name $sloc s, mk_position $sloc) }
+ | s = SYMBOL { Single (parse_to_literal (parse_variable_or_int $sloc s),
+                        mk_position $sloc) }
 
 range_or_minus:
-| RANGE {}
-| MINUS {}
+| RANGE { `Range }
+| MINUS { `Minus }
 
 interval_loop:
- | i1 = SYMBOL range_or_minus i2 = SYMBOL
-  {
-      let parse_to_literal (v: parse_val) : literal = match v with
-      | ParseVar v -> Variable v
-      | ParseInt v -> Float (float_of_int v)
-      in
-      IntervalLoop ((parse_to_literal (parse_variable_or_int $sloc i1), mk_position $sloc),
-    (parse_to_literal (parse_variable_or_int $sloc i2), mk_position $sloc)) }
+| i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
+    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), mk_position $sloc in
+    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), mk_position $sloc in
+    match rm with
+    | `Range -> Range (l1, l2)
+    | `Minus -> Interval (l1, l2)
+  }
 
 enumeration:
 | i = enumeration_item { [i] }
@@ -381,7 +385,7 @@ enumeration_item:
 interval:
 | i1 = SYMBOL RANGE i2 = SYMBOL
  { Interval ((parse_int $sloc i1, mk_position $sloc),
-   (parse_int $sloc i2, mk_position $sloc)) }
+   (parse_int $sloc i2, mk_position $sloc)) : set_value }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
