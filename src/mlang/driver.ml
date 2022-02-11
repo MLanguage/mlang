@@ -168,10 +168,6 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       in
       let combined_program =
         if optimize then begin
-          ignore
-            (failwith
-               "Optimization temporarily unsupported after mpp_function \
-                splitting implementation");
           Cli.debug_print "Translating to CFG form for optimizations...";
           let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
           Cli.debug_print "Optimizing...";
