@@ -23,14 +23,12 @@ end)
 type translation_ctx = {
   new_variables : Mir.Variable.t StringMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
-  rule_instances : Bir.rule Bir.RuleMap.t;
 }
 
 let emtpy_translation_ctx : translation_ctx =
   {
     new_variables = StringMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
-    rule_instances = Bir.RuleMap.empty;
   }
 
 let ctx_join ctx1 ctx2 =
@@ -44,10 +42,6 @@ let ctx_join ctx1 ctx2 =
     variables_used_as_inputs =
       Mir.VariableDict.union ctx1.variables_used_as_inputs
         ctx2.variables_used_as_inputs;
-    rule_instances =
-      Bir.RuleMap.union
-        (fun _ r _ -> Some r)
-        ctx1.rule_instances ctx2.rule_instances;
   }
 
 let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
@@ -189,25 +183,6 @@ let translate_m_code (m_program : Mir_interface.full_program)
       with Not_found -> None)
     vars
 
-let generate_rule_instance (m_program : Mir_interface.full_program)
-    (rule_id : Mir.rule_id) (ctx : translation_ctx) :
-    Mir.rule_id * Pos.t * translation_ctx =
-  let instance_id = Mir.fresh_rule_id () in
-  let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
-  let rule_stmts = translate_m_code m_program rule.rule_vars in
-  let pos, rule_name =
-    let pos = Pos.get_position rule.Mir.rule_number in
-    let name = string_of_int (Pos.unmark rule.Mir.rule_number) in
-    (pos, name ^ "_i" ^ string_of_int instance_id)
-  in
-  let instance = Bir.{ rule_id = instance_id; rule_name; rule_stmts } in
-  ( instance_id,
-    pos,
-    {
-      ctx with
-      rule_instances = Bir.RuleMap.add instance_id instance ctx.rule_instances;
-    } )
-
 let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
     (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
@@ -231,10 +206,9 @@ let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
   let program_stmts, ctx =
     List.fold_left
       (fun (stmts, ctx) rule_id ->
-        let instance_id, pos, ctx =
-          generate_rule_instance m_program rule_id ctx
-        in
-        ((Bir.SRuleCall instance_id, pos) :: stmts, ctx))
+        let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
+        ( Pos.same_pos_as (Bir.SRuleCall rule_id) rule.Mir.rule_number :: stmts,
+          ctx ))
       ([], ctx) execution_order
   in
   let program_stmts = List.rev program_stmts in
@@ -480,13 +454,25 @@ let create_combined_program (m_program : Mir_interface.full_program)
           (Format.asprintf "M++ function %s not found in M++ file!"
              mpp_function_to_extract)
     in
-    let ctx, statements =
+    let _ctx, statements =
       translate_mpp_function mpp_program m_program decl_to_extract []
         emtpy_translation_ctx
     in
+    let rules =
+      Mir.RuleMap.mapi
+        (fun rule_id rule_data ->
+          let rule_stmts = translate_m_code m_program rule_data.Mir.rule_vars in
+          Bir.
+            {
+              rule_id;
+              rule_name = string_of_int (Pos.unmark rule_data.Mir.rule_number);
+              rule_stmts;
+            })
+        m_program.program.Mir.program_rules
+    in
     let conds_verif = generate_verif_conds m_program.program.program_conds in
     {
-      rules = ctx.rule_instances;
+      rules;
       statements = statements @ conds_verif;
       (* we append the M verification conditions at the end, when everything has
          already been computed *)

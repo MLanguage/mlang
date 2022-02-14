@@ -75,7 +75,11 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       in
       (join_block, blocks)
   | Bir.SRuleCall rule_id ->
+      (* To properly optimize M code, we have to instanciate each call as
+         independent code *)
       let rule = Bir.RuleMap.find rule_id p.Bir.rules in
+      let instance_id = Mir.fresh_rule_id () in
+      let instance_name = rule.rule_name ^ "_i" ^ string_of_int instance_id in
       let stmts =
         let dummy = fresh_block_id () in
         let dummy_blocks = initialize_block dummy Oir.BlockMap.empty in
@@ -87,7 +91,7 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       let blocks =
         append_to_block
           (Pos.same_pos_as
-             (Oir.SRuleCall (rule_id, rule.rule_name, List.rev stmts))
+             (Oir.SRuleCall (instance_id, instance_name, List.rev stmts))
              s)
           curr_block_id blocks
       in
