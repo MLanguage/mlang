@@ -208,7 +208,9 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
   get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
 
 let get_locals_size (p : program) : int =
-  Mir.LocalVariableMap.cardinal (get_local_variables p)
+  Mir.LocalVariableMap.fold
+    (fun v () top -> max top v.Mir.LocalVariable.id)
+    (get_local_variables p) 0
 
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev
