@@ -255,7 +255,8 @@ let rec generate_stmt (program : Bir.program)
   | SRuleCall r ->
       let rule = Bir.RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
-  | SFunctionCall (f, _) -> Format.fprintf oc "%s(output, TGV, LOCAL);\n" f
+  | SFunctionCall (f, _) ->
+      Format.fprintf oc "if(%s(output, TGV, LOCAL)) {return -1;};\n" f
 
 and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (stmts : Bir.stmt list) =
