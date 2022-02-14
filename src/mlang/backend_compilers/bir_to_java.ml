@@ -420,8 +420,8 @@ let calculateTax_method_header (calculation_vars_len : int)
      List<MError> calculationErrors = new ArrayList<>();@,\
      MValue[] tgv = new MValue[%d];@,\
      MValue[] localVariables = new MValue[%d];@,\
-     MCalculation mCalculation = new MCalculation(tgv, \
-     localVariables, maxAnomalies);@,\
+     MCalculation mCalculation = new MCalculation(tgv, localVariables, \
+     maxAnomalies);@,\
      @[<hv 2>for (int i = 0; i < tgv.length; i++) {@,\
      tgv[i] = mUndefined;@]@,\
      }@,\
