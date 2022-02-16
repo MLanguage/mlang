@@ -179,6 +179,13 @@ let find_var_among_candidates (exec_number : Mir.execution_number)
 
 module IntMap = Map.Make (Int)
 
+let is_vartmp (v : Mir.Variable.t) =
+  let vartmp_pattern = "VARTMP" in
+  try
+    String.sub (Pos.unmark v.Mir.name) 0 (String.length vartmp_pattern)
+    |> String.equal vartmp_pattern
+  with Invalid_argument _ -> false
+
 let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
     (name : Mast.variable_name Pos.marked) (exec_number : Mir.execution_number)
     (is_lvalue : bool) : Mir.Variable.t =
@@ -724,18 +731,22 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
         (ParamsMap.remove param lc)
         new_var_name is_lvalue pos lax
 
-let duplicate_var (var : Mir.Variable.t) exec_number (idmap : Mir.idmap) :
-    Mir.Variable.t =
+let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
+    (idmap : Mir.idmap) : Mir.Variable.t =
   let origin =
-    match Pos.VarNameToID.find (Pos.unmark var.name) idmap with
-    | [] ->
-        Errors.raise_error "Tried to duplicate a variable without declaration"
-    | v :: _ -> ( match v.Mir.Variable.origin with None -> v | Some v -> v)
+    if is_vartmp var then None
+    else
+      match Pos.VarNameToID.find (Pos.unmark var.name) idmap with
+      | [] ->
+          Errors.raise_error "Tried to duplicate a variable without declaration"
+      | v :: _ -> (
+          match v.Mir.Variable.origin with None -> Some v | Some v -> Some v)
     (* invariant : every variables with the same name have the same origin
-       (itself have None) *)
+       (itself have None), with the exception of [VARTMP]s which are used as
+       local variables *)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin:(Some origin) ~is_income:var.is_income
+    ~attributes:var.attributes ~origin ~is_income:var.is_income
     ~is_table:var.is_table
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
