@@ -459,9 +459,9 @@ let generate_mpp_function (program : Bir.program)
 
 let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
     (var_indexes : variable_id VariableMap.t) =
-  List.iter
-    (fun (fname, _) -> generate_mpp_function program var_indexes oc fname)
-    (Bir.FunctionMap.bindings program.mpp_functions)
+  Bir.FunctionMap.iter
+    (fun fname _ -> generate_mpp_function program var_indexes oc fname)
+    program.mpp_functions
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =

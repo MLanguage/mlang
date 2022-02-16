@@ -302,9 +302,9 @@ let generate_mpp_function (program : Bir.program)
 
 let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
     (var_indexes : int Mir.VariableMap.t) =
-  List.iter
-    (fun (fname, _) -> generate_mpp_function program var_indexes oc fname)
-    (Bir.FunctionMap.bindings program.mpp_functions)
+  Bir.FunctionMap.iter
+    (fun fname _ -> generate_mpp_function program var_indexes oc fname)
+    (Bir_interface.context_agnostic_mpp_functions program)
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -651,7 +651,7 @@ let generate_c_program (program : Bir.program)
       var_indexes
     (generate_main_function_signature_and_var_decls program var_indexes
        var_table_size) function_spec
-    (generate_stmt program var_indexes) 
-      (Bir.SFunctionCall (program.Bir.main_function, [] ), Pos.no_pos)
+    (generate_stmts program var_indexes) 
+      (Bir.main_statements program)
     (generate_return var_indexes) function_spec;
   close_out _oc[@@ocamlformat "disable"]
