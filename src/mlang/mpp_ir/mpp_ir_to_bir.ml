@@ -140,35 +140,6 @@ let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program)
   in
   generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
 
-let reset_and_add_outputs (p : Mir_interface.full_program)
-    (outputs : string Pos.marked list) : Mir_interface.full_program =
-  let outputs =
-    List.map (fun out -> Mir.find_var_by_name p.program out) outputs
-  in
-  let program =
-    Mir.map_vars
-      (fun var data ->
-        if List.mem var outputs then
-          match data.Mir.var_io with
-          | Input ->
-              raise
-                (Bir_interpreter.RegularFloatInterpreter.RuntimeError
-                   ( Bir_interpreter.RegularFloatInterpreter
-                     .IncorrectOutputVariable
-                       ( Format.asprintf "%a is an input"
-                           Format_mir.format_variable var,
-                         Pos.get_position var.Mir.Variable.name ),
-                     Bir_interpreter.RegularFloatInterpreter.empty_ctx ))
-          | Output -> data
-          | Regular -> { data with var_io = Output }
-        else
-          match data.Mir.var_io with
-          | Input | Regular -> data
-          | Output -> { data with var_io = Regular })
-      p.program
-  in
-  { p with program }
-
 let translate_m_code (m_program : Mir_interface.full_program)
     (vars : (Mir.Variable.id * Mir.variable_data) list) =
   list_map_opt
@@ -184,16 +155,7 @@ let translate_m_code (m_program : Mir_interface.full_program)
     vars
 
 let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
-    (args : Mpp_ir.scoped_var list) (ctx : translation_ctx) :
-    translation_ctx * Bir.stmt list =
-  let m_program =
-    reset_and_add_outputs m_program
-      (List.map
-         (function
-           | Mpp_ir.Mbased (s, _) -> s.Mir.Variable.name
-           | Local l -> (l, Pos.no_pos))
-         args)
-  in
+    (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
   let m_program =
     {
       m_program with
@@ -371,12 +333,9 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       translate_mpp_function mpp_program m_program
         (List.find (fun decl -> decl.Mpp_ir.name = f) mpp_program)
         real_args ctx
-  | Mpp_ir.Expr (Call (Program _chain, args), _) ->
-      let real_args =
-        match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args
-      in
+  | Mpp_ir.Expr (Call (Program _chain, _args), _) ->
       let exec_order = m_program.main_execution_order in
-      wrap_m_code_call m_program exec_order real_args ctx
+      wrap_m_code_call m_program exec_order ctx
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
