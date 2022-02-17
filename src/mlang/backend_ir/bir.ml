@@ -200,9 +200,9 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
-        | SFunctionCall (f, _) ->
-            get_local_vars_block acc (FunctionMap.find f p.mpp_functions)
-        | SRuleCall _ -> assert false)
+        | SFunctionCall _ | SRuleCall _ -> assert false
+        (* Can't happen because SFunctionCall and SRuleCall are eliminated by
+           get_all_statements below*))
       acc stmts
   in
   get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
