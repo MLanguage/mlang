@@ -99,8 +99,6 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
   | Bir.SFunctionCall (f, _) ->
       let stmts = Bir.FunctionMap.find f p.mpp_functions in
       translate_statement_list p stmts curr_block_id blocks
-(* TODO: Fix SFunctionCall handling in optimization passes, currently broken
-   because of rule duplication *)
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
