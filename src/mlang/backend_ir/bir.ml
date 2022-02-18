@@ -53,18 +53,17 @@ let main_statements (p : program) : stmt list =
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
 
-let rec get_block_statements (rules : rule RuleMap.t) (p : program)
-    (stmts : stmt list) : stmt list =
+let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
-      | SRuleCall r -> List.rev (RuleMap.find r rules).rule_stmts @ stmts
+      | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
       | SConditional (e, t, f) ->
-          let t = get_block_statements rules p t in
-          let f = get_block_statements rules p f in
+          let t = get_block_statements p t in
+          let f = get_block_statements p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
       | SFunctionCall (f, _) ->
-          (get_block_statements rules p (FunctionMap.find f p.mpp_functions)
+          (get_block_statements p (FunctionMap.find f p.mpp_functions)
           |> List.rev)
           @ stmts
       | _ -> stmt :: stmts)
@@ -73,7 +72,21 @@ let rec get_block_statements (rules : rule RuleMap.t) (p : program)
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  main_statements p |> get_block_statements p.rules p
+  main_statements p |> get_block_statements p
+
+let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
+  List.fold_left
+    (fun acc stmt ->
+      match Pos.unmark stmt with
+      | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
+      | SFunctionCall (f, _) ->
+          acc + 1 + count_instr_blocks p (FunctionMap.find f p.mpp_functions)
+      | SConditional (_, s1, s2) ->
+          acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
+    0 stmts
+
+let count_instructions (p : program) : int =
+  count_instr_blocks p (main_statements p)
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -102,10 +115,8 @@ let squish_statements (program : program) (threshold : int)
               (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
-        if
-          List.length (get_block_statements rules program curr_stmts)
-          < threshold
-        then browse_bir tl new_stmts curr_stmts rules
+        if count_instr_blocks program curr_stmts < threshold then
+          browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
@@ -122,20 +133,6 @@ let squish_statements (program : program) (threshold : int)
       (program.rules, FunctionMap.empty)
   in
   { program with rules; mpp_functions }
-
-let count_instructions (p : program) : int =
-  let rec cond_instr_blocks (stmts : stmt list) : int =
-    List.fold_left
-      (fun acc stmt ->
-        match Pos.unmark stmt with
-        | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
-        | SFunctionCall (f, _) ->
-            acc + 1 + cond_instr_blocks (FunctionMap.find f p.mpp_functions)
-        | SConditional (_, s1, s2) ->
-            acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
-      0 stmts
-  in
-  cond_instr_blocks (main_statements p)
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) :
