@@ -208,13 +208,13 @@ let info =
     ]
   in
   let exits =
-    Term.default_exits
+    Cmd.Exit.defaults
     @ [
-        Term.exit_info ~doc:"on M parsing error." 1;
-        Term.exit_info ~doc:"on M typechecking error." 2;
+        Cmd.Exit.info ~doc:"on M parsing error." 1;
+        Cmd.Exit.info ~doc:"on M typechecking error." 2;
       ]
   in
-  Term.info "mlang"
+  Cmd.info "mlang"
     ~version:
       (match Build_info.V1.version () with
       | None -> "n/a"

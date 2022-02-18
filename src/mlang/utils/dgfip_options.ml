@@ -101,9 +101,9 @@ let info =
       `P "Please file bug reports at https://github.com/MLanguage/mlang/issues";
     ]
   in
-  Term.info "mlang --dgfip_options" ~doc ~man
+  Cmd.info "mlang --dgfip_options" ~doc ~man
 
-(* Flags inherited from the old comiler *)
+(* Flags inherited from the old compiler *)
 type flags = {
   (* -A *) nom_application : string;
   (* iliad, pro, oceans, bareme, batch *)
@@ -213,5 +213,8 @@ let handler (income_year : int) (application_name : string) (iliad_pro : bool)
 
 let process_dgfip_options options =
   let options = Array.of_list ("mlang" :: options) in
-  let res = Cmdliner.Term.eval ~argv:options (dgfip_t handler, info) in
-  match res with `Ok res -> Some res | _ -> None
+  let cmd = Cmd.v info (dgfip_t handler) in
+  let res = Cmd.eval_value ~argv:options cmd in
+  match res with
+  | Ok res -> ( match res with `Ok res -> Some res | _ -> None)
+  | _ -> None

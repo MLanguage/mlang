@@ -234,4 +234,4 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     exit (-1)
 
 let main () =
-  Cmdliner.Term.exit @@ Cmdliner.Term.eval (Cli.mlang_t driver, Cli.info)
+  exit @@ Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)
