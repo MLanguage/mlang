@@ -438,7 +438,7 @@ let calculateTax_method_header (calculation_vars_len : int)
      @[}@]"
     calculation_vars_len locals_size
     (generate_stmts program var_indexes)
-      (Bir.main_statements program)
+    (Bir.main_statements program)
 
 let generate_mpp_function (program : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
