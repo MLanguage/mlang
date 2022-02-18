@@ -37,7 +37,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Set up OCaml
-        uses: avsm/setup-ocaml@v1
+        uses: ocaml/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
           ocaml-version: 4.11.2
