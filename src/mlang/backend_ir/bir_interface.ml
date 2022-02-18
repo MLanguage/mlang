@@ -56,20 +56,8 @@ let get_variables_indexes (p : Bir.program) (function_spec : bir_function) :
 let var_set_from_variable_name_list (p : Bir.program)
     (names : string Pos.marked list) : unit Mir.VariableMap.t =
   List.fold_left
-    (fun acc alias ->
-      let name =
-        try Mir.find_var_name_by_alias p.mir_program alias
-        with Errors.StructuredError _ -> Pos.unmark alias
-      in
-      let var =
-        try
-          Mast_to_mir.list_max_execution_number
-            (Pos.VarNameToID.find name p.idmap)
-        with Not_found ->
-          Errors.raise_spanned_error
-            (Format.asprintf "unknown variable %s" name)
-            (Pos.get_position alias)
-      in
+    (fun acc name ->
+      let var = Mir.find_var_by_name p.mir_program name in
       Mir.VariableMap.add var () acc)
     Mir.VariableMap.empty names
 
