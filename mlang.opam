@@ -11,7 +11,7 @@ before translating it into various backend languages.
 """
 maintainer: ["denis.merigoux@inria.fr"]
 authors: ["Denis Merigoux" "Raphaël Monat"]
-license: "GPLv3"
+license: "GPL-3.0-or-later"
 homepage: "https://gitlab.inria.fr/verifisc/mlang"
 bug-reports: "https://gitlab.inria.fr/verifisc/mlang/issues"
 depends: [
