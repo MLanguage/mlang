@@ -16,55 +16,45 @@
 
 open Mir
 
-type ctx = { ctx_is_generic_table : bool }
-
 let is_table_var var =
   match var.Variable.is_table with Some _ -> true | None -> false
 
-let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
+let rec typecheck_top_down ~(in_generic_table : bool)
+    (e : expression Pos.marked) : unit =
   match Pos.unmark e with
   | Comparison (_, e1, e2) ->
-      let ctx = typecheck_top_down ctx e1 in
-      let ctx = typecheck_top_down ctx e2 in
-      ctx
+      typecheck_top_down ~in_generic_table e1;
+      typecheck_top_down ~in_generic_table e2
   | Binop (((Mast.And | Mast.Or), _), e1, e2)
   | Binop (((Mast.Add | Mast.Sub | Mast.Mul | Mast.Div), _), e1, e2) ->
-      let ctx = typecheck_top_down ctx e1 in
-      let ctx = typecheck_top_down ctx e2 in
-      ctx
+      typecheck_top_down ~in_generic_table e1;
+      typecheck_top_down ~in_generic_table e2
   | Unop (Mast.Not, e) | Unop (Mast.Minus, e) ->
-      let ctx = typecheck_top_down ctx e in
-      ctx
+      typecheck_top_down ~in_generic_table e
   | Conditional (e1, e2, e3) ->
-      let ctx = typecheck_top_down ctx e1 in
-      let ctx = typecheck_top_down ctx e2 in
-      let ctx = typecheck_top_down ctx e3 in
-      ctx
+      typecheck_top_down ~in_generic_table e1;
+      typecheck_top_down ~in_generic_table e2;
+      typecheck_top_down ~in_generic_table e3
   | FunctionCall (func, args) ->
       let typechecker = typecheck_func_args func (Pos.get_position e) in
-      let ctx = typechecker ctx args in
-      ctx
-  | Literal (Float _) -> ctx
+      typechecker in_generic_table args
+  | Literal (Float _) -> ()
   | Literal Undefined ->
       (* Literal has all the types *)
-      ctx
-  | Var _ -> ctx (* All variables are real *)
+      ()
+  | Var _ -> () (* All variables are real *)
   | LocalLet (_local_var, e1, e2) ->
-      let ctx = typecheck_top_down ctx e1 in
-      let ctx = typecheck_top_down ctx e2 in
-      ctx
-  | Error -> ctx
-  | LocalVar _ -> ctx
+      typecheck_top_down ~in_generic_table e1;
+      typecheck_top_down ~in_generic_table e2
+  | Error | LocalVar _ -> ()
   | GenericTableIndex ->
-      if ctx.ctx_is_generic_table then ctx
-      else
+      if not in_generic_table then
         Errors.raise_spanned_error
           "Generic table index appears outside of table" (Pos.get_position e)
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
-      let ctx = typecheck_top_down ctx e' in
-      if is_table_var var then ctx
-      else
+      typecheck_top_down ~in_generic_table e';
+      if not (is_table_var var) then
         Errors.raise_multispanned_error
           (Format.asprintf
              "variable %s is accessed as a table but it is not defined as one"
@@ -75,58 +65,46 @@ let rec typecheck_top_down (ctx : ctx) (e : expression Pos.marked) : ctx =
           ]
 
 and typecheck_func_args (f : func) (pos : Pos.t) :
-    ctx -> Mir.expression Pos.marked list -> ctx =
+    bool -> Mir.expression Pos.marked list -> unit =
   match f with
   | SumFunc | MinFunc | MaxFunc ->
-      fun ctx args ->
+      fun in_generic_table args ->
         if List.length args = 0 then
           Errors.raise_spanned_error
             "sum function must be called with at least one argument" pos
-        else
-          let ctx = typecheck_top_down ctx (List.hd args) in
-          let ctx =
-            List.fold_left
-              (fun ctx arg ->
-                let ctx = typecheck_top_down ctx arg in
-                ctx)
-              ctx args
-          in
-          ctx
+        else begin
+          typecheck_top_down ~in_generic_table (List.hd args);
+          List.iter (typecheck_top_down ~in_generic_table) args
+        end
   | AbsFunc -> (
-      fun ctx args ->
+      fun in_generic_table args ->
         match args with
-        | [ arg ] ->
-            let ctx = typecheck_top_down ctx arg in
-            ctx
+        | [ arg ] -> typecheck_top_down ~in_generic_table arg
         | _ ->
             Errors.raise_spanned_error
               "function abs should have only one argument" pos)
   | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero -> (
       fun (* These functions return a integer value encoding a boolean; 0 for
              false and 1 for true *)
-            ctx args ->
+            in_generic_table args ->
         match args with
-        | [ arg ] ->
-            let ctx = typecheck_top_down ctx arg in
-            ctx
+        | [ arg ] -> typecheck_top_down ~in_generic_table arg
         | _ ->
             Errors.raise_spanned_error "function should have only one argument"
               pos)
   | ArrFunc | InfFunc -> (
-      fun ctx args ->
+      fun in_generic_table args ->
         match args with
-        | [ arg ] ->
-            let ctx = typecheck_top_down ctx arg in
-            ctx
+        | [ arg ] -> typecheck_top_down ~in_generic_table arg
         | _ ->
             Errors.raise_spanned_error "function should have only one argument"
               pos)
   | Mir.Multimax -> (
-      fun ctx args ->
+      fun in_generic_table args ->
         match args with
         | [ bound; table ] ->
-            let ctx = typecheck_top_down ctx bound in
-            typecheck_top_down ctx table
+            typecheck_top_down ~in_generic_table bound;
+            typecheck_top_down ~in_generic_table table
         | _ ->
             Errors.raise_spanned_error "function %a should have two arguments"
               pos)
@@ -158,11 +136,10 @@ let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     defs_array;
   List.sort compare !undefined
 
-let typecheck_program_conds (ctx : ctx) (conds : condition_data VariableMap.t) :
-    ctx =
-  VariableMap.fold
-    (fun _ cond ctx -> typecheck_top_down ctx cond.cond_expr)
-    conds ctx
+let typecheck_program_conds (conds : condition_data VariableMap.t) =
+  VariableMap.iter
+    (fun _ cond -> typecheck_top_down ~in_generic_table:false cond.cond_expr)
+    conds
 
 let rec check_non_recursivity_expr (e : expression Pos.marked)
     (lvar : Variable.t) : unit =
@@ -200,35 +177,30 @@ let check_non_recursivity_of_variable_defs (var : Variable.t)
   | TableVar _ | InputVar -> ()
 
 let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
-  let check_var_def ctx vid def =
+  let check_var_def vid def =
     let var = VariableDict.find vid p.program.program_vars in
     check_non_recursivity_of_variable_defs var def.var_definition;
     (* All top-level variables are og type Real *)
     match def.var_definition with
     | SimpleVar e ->
-        let new_ctx = typecheck_top_down { ctx_is_generic_table = false } e in
-        (new_ctx, def)
+        typecheck_top_down ~in_generic_table:false e;
+        def
     | TableVar (size, defs) -> (
         match defs with
         | IndexGeneric e ->
-            let new_ctx =
-              typecheck_top_down { ctx_is_generic_table = true } e
-            in
-            (new_ctx, def)
+            typecheck_top_down ~in_generic_table:true e;
+            def
         | IndexTable es ->
-            let new_ctx =
-              IndexMap.fold
-                (fun _ e _ctx ->
-                  typecheck_top_down { ctx_is_generic_table = false } e)
-                es ctx
-            in
+            IndexMap.iter
+              (fun _ e -> typecheck_top_down ~in_generic_table:false e)
+              es;
             let undefined_indexes =
               determine_def_complete_cover var size
                 (List.map
                    (fun (x, e) -> (x, Pos.get_position e))
                    (IndexMap.bindings es))
             in
-            if List.length undefined_indexes = 0 then (new_ctx, def)
+            if List.length undefined_indexes = 0 then def
             else
               let previous_var_def =
                 Mast_to_mir.get_var_from_name p.program.program_idmap
@@ -249,33 +221,31 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
                       es)
                   es undefined_indexes
               in
-              ( new_ctx,
-                {
-                  def with
-                  Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es);
-                } ))
-    | InputVar -> (ctx, def)
+              {
+                def with
+                Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es);
+              })
+    | InputVar -> def
   in
-  let ctx, program_rules =
+  let program_rules =
     List.fold_left
-      (fun (ctx, rules) rule_id ->
+      (fun rules rule_id ->
         let rule_data = RuleMap.find rule_id p.program.program_rules in
-        let ctx, rule_data =
-          let ctx, rule_vars =
+        let rule_data =
+          let rule_vars =
             List.fold_left
-              (fun (ctx, vars) (vid, def) ->
-                let ctx, def = check_var_def ctx vid def in
-                (ctx, (vid, def) :: vars))
-              (ctx, [])
+              (fun vars (vid, def) ->
+                let def = check_var_def vid def in
+                (vid, def) :: vars)
+              []
               (List.rev rule_data.rule_vars)
           in
-          (ctx, { rule_data with rule_vars })
+          { rule_data with rule_vars }
         in
-        (ctx, RuleMap.add rule_id rule_data rules))
-      ({ ctx_is_generic_table = false }, Mir.RuleMap.empty)
-      p.main_execution_order
+        RuleMap.add rule_id rule_data rules)
+      Mir.RuleMap.empty p.main_execution_order
   in
-  let _ = typecheck_program_conds ctx p.program.program_conds in
+  let _ = typecheck_program_conds p.program.program_conds in
   (* the typechecking modifications do not change the dependency graph *)
   { p with program = { p.program with program_rules } }
 
