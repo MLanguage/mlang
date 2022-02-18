@@ -56,8 +56,6 @@ val squish_statements : program -> int -> string -> program
     existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
 
-val count_instructions : program -> int
-
 val get_assigned_variables : program -> Mir.VariableDict.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t

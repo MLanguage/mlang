@@ -83,9 +83,6 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
 
-let count_instructions (p : program) : int =
-  count_instr_blocks p (main_statements p)
-
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
   let rule_from_stmts stmts =
