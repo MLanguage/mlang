@@ -78,9 +78,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
   List.fold_left
     (fun acc stmt ->
       match Pos.unmark stmt with
-      | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
-      | SFunctionCall (f, _) ->
-          acc + 1 + count_instr_blocks p (FunctionMap.find f p.mpp_functions)
+      | SAssign _ | SVerif _ | SRuleCall _ | SFunctionCall _ -> acc + 1
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
