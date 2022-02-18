@@ -143,7 +143,7 @@ let rec generate_java_expr (e : expression Pos.marked)
             (get_var_pos v2 var_indexes),
           [] )
       in
-      (se2,  s1 @ s2)
+      (se2, s1 @ s2)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
@@ -202,10 +202,11 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
         "for (int genericIndex=0; genericIndex < %d; genericIndex++) {@\n\
         \ @[<h 4> %atgv[%d + genericIndex /* %a */] = %s;@]@\n\
         \ }@\n"
-        size (format_local_vars_defs var_indexes) s
+        size
+        (format_local_vars_defs var_indexes)
+        s
         (get_var_pos var var_indexes)
-        format_var_name var
-        se
+        format_var_name var se
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) (class_name : string) : unit =
@@ -231,16 +232,15 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
   in
   let rec print_load_input curr oc len =
     if curr <= len then (
-      Format.fprintf oc
-        "loadInputVariables_%d(inputVariables, tgv);@," curr;
+      Format.fprintf oc "loadInputVariables_%d(inputVariables, tgv);@," curr;
       print_load_input (curr + 1) oc len)
   in
   let format_input_var var count =
     if count mod split_threshold = 0 then
       print_header (if count > 0 then count / split_threshold else 0);
     Format.fprintf oc
-      "tgv[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null \
-       ? inputVariables.get(\"%s\") : MValue.mUndefined;@,"
+      "tgv[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null ? \
+       inputVariables.get(\"%s\") : MValue.mUndefined;@,"
       format_var_name var
       (get_var_pos var var_indexes)
       (generate_name var) (generate_name var);
@@ -358,8 +358,7 @@ let generate_return (var_indexes : variable_id VariableMap.t)
   let print_outputs oc returned_variables =
     Format.pp_print_list
       (fun oc var ->
-        Format.fprintf oc
-          "outputVariables.put(\"%a\",tgv[%d/*\"%a\"*/]);"
+        Format.fprintf oc "outputVariables.put(\"%a\",tgv[%d/*\"%a\"*/]);"
           format_var_name var
           (get_var_pos var var_indexes)
           format_var_name var)
@@ -419,8 +418,8 @@ let calculateTax_method_header (calculation_vars_len : int)
      List<MError> calculationErrors = new ArrayList<>();@,\
      MValue[] tgv = new MValue[%d];@,\
      MValue[] localVariables = new MValue[%d];@,\
-     MCalculation mCalculation = new MCalculation(tgv, \
-     localVariables, maxAnomalies);@,\
+     MCalculation mCalculation = new MCalculation(tgv, localVariables, \
+     maxAnomalies);@,\
      @,\
      InputHandler.loadInputVariables(inputVariables, \
      mCalculation.getCalculationVariables());%a@,\
