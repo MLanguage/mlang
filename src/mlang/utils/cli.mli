@@ -43,7 +43,7 @@ val mlang_t :
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
 
-val info : Cmdliner.Term.info
+val info : Cmdliner.Cmd.info
 (** Command-line man page for --help *)
 
 (**{2 Flags and parameters}*)

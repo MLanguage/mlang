@@ -45,6 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
+          opam update
           make deps-without-ocaml
 
       - name: Build Mlang
