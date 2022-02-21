@@ -41,7 +41,7 @@ jobs:
             ${{ runner.os }}-
 
      - name: Set up OCaml
-       uses: avsm/setup-ocaml@v1
+       uses: avsm/setup-ocaml@v2
        with:
           ocaml-version: 4.11.2
 
@@ -87,11 +87,11 @@ jobs:
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
-            
+
       # TODO : Cache gmp and mpfr builds
-      
+
       - name: Set up OCaml
-        uses: avsm/setup-ocaml@v1
+        uses: avsm/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
           ocaml-version: 4.11.2+musl+static+flambda
@@ -121,4 +121,3 @@ jobs:
           asset_path: ./_build/default/src/main.exe
           asset_name: mlang-linux-v${{ github.run_number }}.exe
           asset_content_type: application/octet-stream
-
