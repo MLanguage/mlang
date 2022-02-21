@@ -48,6 +48,7 @@ jobs:
      - name: Install dependencies
        run: |
             brew install gmp mpfr
+            opam update
             make deps-without-ocaml
 
      - name: Make mlang binary
@@ -87,9 +88,9 @@ jobs:
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
-            
+
       # TODO : Cache gmp and mpfr builds
-      
+
       - name: Set up OCaml
         uses: avsm/setup-ocaml@v1
         with:
@@ -105,6 +106,7 @@ jobs:
           wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
+          opam update
           MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make deps-without-ocaml
 
       - name: Make mlang binary
@@ -121,4 +123,3 @@ jobs:
           asset_path: ./_build/default/src/main.exe
           asset_name: mlang-linux-v${{ github.run_number }}.exe
           asset_content_type: application/octet-stream
-
