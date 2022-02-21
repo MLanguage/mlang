@@ -17,7 +17,7 @@
 
 (maintainers "denis.merigoux@inria.fr")
 
-(license GPLv3)
+(license GPL-3.0-or-later)
 
 (using menhir 2.0)
 
