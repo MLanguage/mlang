@@ -21,7 +21,6 @@ let java_imports : string =
 package com.mlang;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -61,6 +60,8 @@ let format_var_name (fmt : Format.formatter) (var : Variable.t) : unit =
 
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
+
+let print_double_cut oc () = Format.fprintf oc "@,@,"
 
 let get_var_pos (var : Variable.t) var_indexes : int =
   match Mir.VariableMap.find_opt var var_indexes with
@@ -172,7 +173,7 @@ let format_local_vars_defs (var_indexes : int Mir.VariableMap.t)
   Format.pp_print_list
     (fun fmt (lvar, expr) ->
       let se, _ = generate_java_expr expr var_indexes in
-      Format.fprintf fmt "localVariables[%d] = %s;@," lvar.LocalVariable.id se)
+      Format.fprintf fmt "localVariables[%d] = %s;" lvar.LocalVariable.id se)
     oc defs
 
 let generate_var_def (var_indexes : int Mir.VariableMap.t)
@@ -180,7 +181,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e var_indexes in
-      Format.fprintf oc "%atgv[%d /*\"%a\"*/] = %s;@,"
+      Format.fprintf oc "%atgv[%d /*\"%a\"*/] = %s;"
         (format_local_vars_defs var_indexes)
         defs
         (get_var_pos var var_indexes)
@@ -190,7 +191,7 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
         (fun fmt ->
           IndexMap.iter (fun i v ->
               let sv, defs = generate_java_expr v var_indexes in
-              Format.fprintf fmt "%atgv[%d /* %a */] = %s;@,"
+              Format.fprintf fmt "%atgv[%d /* %a */] = %s;"
                 (format_local_vars_defs var_indexes)
                 defs
                 (get_var_pos var var_indexes |> ( + ) i)
@@ -199,9 +200,10 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
   | TableVar (size, IndexGeneric e) ->
       let se, s = generate_java_expr e var_indexes in
       Format.fprintf oc
-        "for (int genericIndex=0; genericIndex < %d; genericIndex++) {@\n\
-        \ @[<h 4> %atgv[%d + genericIndex /* %a */] = %s;@]@\n\
-        \ }@\n"
+        "@[<hv 2>for (int genericIndex = 0; genericIndex < %d; genericIndex++) \
+         {@,\
+         @[<h 4> %atgv[%d + genericIndex /* %a */] = %s;@]@]@,\
+         }"
         size
         (format_local_vars_defs var_indexes)
         s
@@ -209,56 +211,57 @@ let generate_var_def (var_indexes : int Mir.VariableMap.t)
         format_var_name var se
   | InputVar -> assert false
 
-let generate_header (oc : Format.formatter) (class_name : string) : unit =
-  Format.fprintf oc
-    "@[// %s@,\
-     %s@,\
-     /**@,\
-     * Main class containing calculation logic@,\
-     */@,\
-     public class %s {@]" Prelude.message java_imports class_name
-
 let generate_input_handling (function_spec : Bir_interface.bir_function)
     (var_indexes : variable_id VariableMap.t) (oc : Format.formatter)
     (split_threshold : int) =
   let input_vars =
     List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
   in
-  let print_header count =
-    Format.fprintf oc
-      "@[<hv 2>private static void loadInputVariables_%d(Map<String, MValue> \
-       inputVariables, MValue[] tgv){@,"
-      count
+  let rec split_input_vars old_list filling_list acc =
+    match old_list with
+    | hd :: tl ->
+        let filling_list, acc =
+          if List.length filling_list >= split_threshold then
+            ([ hd ], (List.rev filling_list) :: acc)
+          else (hd :: filling_list, acc)
+        in
+        split_input_vars tl filling_list acc
+    | [] -> List.rev (List.rev filling_list :: acc)
   in
-  let rec print_load_input curr oc len =
-    if curr <= len then (
-      Format.fprintf oc "loadInputVariables_%d(inputVariables, tgv);@," curr;
-      print_load_input (curr + 1) oc len)
-  in
-  let format_input_var var count =
-    if count mod split_threshold = 0 then
-      print_header (if count > 0 then count / split_threshold else 0);
-    Format.fprintf oc
+  let input_vars = split_input_vars input_vars [] [] in
+  let input_methods_count = ref 0 in
+  let print_input fmt var =
+    Format.fprintf fmt
       "tgv[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null ? \
-       inputVariables.get(\"%s\") : MValue.mUndefined;@,"
+       inputVariables.get(\"%s\") : MValue.mUndefined;"
       format_var_name var
       (get_var_pos var var_indexes)
-      (generate_name var) (generate_name var);
-    if (count + 1) mod split_threshold = 0 then Format.fprintf oc "@]@,@[}@]";
-    count + 1
+      (generate_name var) (generate_name var)
   in
-  let count =
-    List.fold_left
-      (fun count assign -> format_input_var assign count)
-      0 input_vars
+  let print_method fmt inputs =
+    Format.fprintf fmt
+      "@[<hv 2>private static void loadInputVariables_%d(Map<String, \
+       MValue>inputVariables, MValue[] tgv) {@,\
+       %a@]@,\
+       }@,"
+      !input_methods_count
+      (Format.pp_print_list print_input)
+      inputs;
+    input_methods_count := !input_methods_count + 1
+  in
+  Format.pp_print_list print_method oc input_vars;
+  let load_calls = List.init !input_methods_count (fun i -> i) in
+  let print_call oc i =
+    Format.fprintf oc "loadInputVariables_%d(inputVariables, tgv);" i
   in
   Format.fprintf oc
-    "}@,\
-     static void loadInputVariables(Map<String, MValue> inputVariables, \
-     MValue[] tgv) {@,\
-     %a@,\
+    "@,\
+     @[<hov 2>static void loadInputVariables(Map<String, MValue> \
+     inputVariables, MValue[] tgv) {@,\
+     %a@]@,\
      }"
-    (print_load_input 0) (count / split_threshold)
+    (Format.pp_print_list print_call)
+    load_calls
 
 let generate_var_cond var_indexes oc cond =
   let open Strings in
@@ -290,24 +293,25 @@ let generate_var_cond var_indexes oc cond =
     Format.fprintf oc
       "mCalculation.setCurrentAnomalies(mCalculation.getCurrentAnomalies() + \
        1);@,\
-       if (mCalculation.getCurrentAnomalies() >= \
-       mCalculation.getMaxAnomalies()) throw new \
-       MException(calculationErrors);";
-  Format.fprintf oc "@]@,@[}@]@,"
+       @[<hv 2>if (mCalculation.getCurrentAnomalies() >= \
+       mCalculation.getMaxAnomalies()) {@,\
+      \ throw new MException(calculationErrors);@]@,\
+       }";
+  Format.fprintf oc "@]@,@[}@]"
 
 let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : Bir.rule) =
-  Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);@,"
+  Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);"
     rule.rule_name
 
 let rec generate_stmts (program : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (stmts : Bir.stmt list) =
-  List.iter (fun stmt -> generate_stmt program var_indexes stmt oc) stmts
+  Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
 and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
-    (stmt : Bir.stmt) (oc : Format.formatter) : unit =
+    (oc : Format.formatter) (stmt : Bir.stmt) : unit =
   match Pos.unmark stmt with
   | SRuleCall r ->
       let rule = Bir.RuleMap.find r program.rules in
@@ -326,11 +330,8 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
           (Pos.get_end_column pos) !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      if List.length tt = 0 then assert false;
       Format.fprintf oc
-        "/* SConditional (cond, tt, ff) */MValue %s = %s;@,\
-         if (m_is_defined_true(%s)) {@,\
-         %a}"
+        "MValue %s = %s;@,@[<hv 2>if (m_is_defined_true(%s)) {@,%a@]@,}"
         cond_name
         (let s, _ =
            generate_java_expr (Pos.same_pos_as cond stmt) var_indexes
@@ -339,12 +340,7 @@ and generate_stmt (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
         cond_name
         (generate_stmts program var_indexes)
         tt;
-      Format.fprintf oc
-        {|
-   if (m_is_defined_false(%s)) {
-      %a
-    }
-|}
+      Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name
         (generate_stmts program var_indexes)
         ff
@@ -368,75 +364,75 @@ let generate_return (var_indexes : variable_id VariableMap.t)
   in
   Format.fprintf oc
     "@[<v 2>private static Map<String, MValue> loadOutputVariables(MValue[] \
-     tgv){@,\
+     tgv) {@,\
      Map<String, MValue> outputVariables = new HashMap<>();@,\
-    \ \n\
-    \     %a@,\
+     @,\
+     %a@,\
      return outputVariables;@]@,\
-     @[}@]"
+     }"
     print_outputs returned_variables
 
 let generate_rule_method (program : Bir.program)
     (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
     (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<hv 2>static void m_rule_%s(MCalculation mCalculation, List<MError> \
-     calculationErrors){@,\
+    "@[<v 2>static void m_rule_%s(MCalculation mCalculation, List<MError> \
+     calculationErrors) {@,\
      MValue cond = MValue.mUndefined;@,\
      MValue[] tgv = mCalculation.getCalculationVariables();@,\
      MValue[] localVariables = mCalculation.getLocalVariables();@,\
      Map<String, List<MValue>> tableVariables = \
      mCalculation.getTableVariables();@,\
-     %a@]}"
+     %a@]@,\
+     }"
     rule.rule_name
     (generate_stmts program var_indexes)
     rule.rule_stmts
 
 let generate_rule_methods (program : Bir.program) (oc : Format.formatter)
     (var_indexes : int Mir.VariableMap.t) : unit =
-  RuleMap.iter
-    (fun _ rule ->
-      Format.fprintf oc "%a@," (generate_rule_method program var_indexes) rule)
-    program.rules
+  let rules = RuleMap.bindings program.rules in
+  let _, rules = List.split rules in
+  Format.pp_print_list ~pp_sep:print_double_cut
+    (generate_rule_method program var_indexes)
+    oc rules
 
-let calculateTax_method_header (calculation_vars_len : int)
+let generate_calculateTax_method (calculation_vars_len : int)
     (program : Bir.program) (locals_size : int) (oc : Format.formatter)
     (var_indexes : variable_id VariableMap.t) =
   Format.fprintf oc
-    "@[<hv 0>/**@,\
+    "@[<v 0>/**@,\
      * Main calculation method for determining tax @,\
      * @param inputVariables Map of variables to be used for calculation, the \
      key is the variable name and the value is the variable value@,\
      * @return  Map of variables returned after calculation, the key is the \
      variable name and the value is the variable value@,\
-     */@]@,\
+     */@,\
      @[<hv 2>public static MOutput calculateTax(Map<String,MValue> \
      inputVariables) {@,\
-     return calculateTax(inputVariables, 0);\n\
-    \     @]}@,\
-     @[<hv 2>public static MOutput calculateTax(Map<String,MValue> \
+     return calculateTax(inputVariables, 0);@]@,\
+     }%a@[<v 2>public static MOutput calculateTax(Map<String,MValue> \
      inputVariables, int maxAnomalies) {@,\
      MValue cond = MValue.mUndefined;@,\
      List<MError> calculationErrors = new ArrayList<>();@,\
      MValue[] tgv = new MValue[%d];@,\
      MValue[] localVariables = new MValue[%d];@,\
      MCalculation mCalculation = new MCalculation(tgv, localVariables, \
-     maxAnomalies);@,\
-     @[<hv 2>for (int i = 0; i < tgv.length; i++) {@,\
-     tgv[i] = mUndefined;@]@,\
-     }@,\
-     @[<hv 2>for (int i = 0; i < localVariables.length; i++) {@,\
+     maxAnomalies);%a@[<hv 2>for (int i = 0; i < localVariables.length; i++) \
+     {@,\
      localVariables[i] = mUndefined;@]@,\
-     }@,\
-     @,\
-     InputHandler.loadInputVariables(inputVariables, \
-     mCalculation.getCalculationVariables());%a@,\
+     }%a@[<v 2>for (int i = 0; i < tgv.length; i++) {@,\
+     tgv[i] = mUndefined;@]@,\
+     }%aInputHandler.loadInputVariables(inputVariables, \
+     mCalculation.getCalculationVariables());@,\
+     %a@,\
      Map<String, MValue> outputVariables = \
      loadOutputVariables(mCalculation.getCalculationVariables());@,\
-     return new MOutput(outputVariables, calculationErrors);@,\
-     @]@,\
-     @[}@]"
-    calculation_vars_len locals_size
+     return new MOutput(outputVariables, calculationErrors);@]@,\
+     }@]@,\
+     @,"
+    print_double_cut () calculation_vars_len locals_size print_double_cut ()
+    print_double_cut () print_double_cut ()
     (generate_stmts program var_indexes)
     (Bir.main_statements program)
 
@@ -445,56 +441,75 @@ let generate_mpp_function (program : Bir.program)
     (f : Bir.function_name) =
   let stmts = Bir.FunctionMap.find f program.mpp_functions in
   Format.fprintf oc
-    "@[<hv 4>static void %s(MCalculation mCalculation, List<MError> \
+    "@[<v 2>static void %s(MCalculation mCalculation, List<MError> \
      calculationErrors) {@,\
      MValue cond = MValue.mUndefined;@,\
      MValue[] tgv = mCalculation.getCalculationVariables();@,\
      MValue[] localVariables = mCalculation.getLocalVariables();@,\
      Map<String, List<MValue>> tableVariables = \
      mCalculation.getTableVariables();@,\
-     %a@]}@,"
+     %a@]@,\
+     }"
     f
     (generate_stmts program var_indexes)
     stmts
 
 let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
     (var_indexes : variable_id VariableMap.t) =
-  Bir.FunctionMap.iter
-    (fun fname _ -> generate_mpp_function program var_indexes oc fname)
-    (Bir_interface.context_agnostic_mpp_functions program)
+  let functions =
+    Bir.FunctionMap.bindings
+      (Bir_interface.context_agnostic_mpp_functions program)
+  in
+  let function_names, _ = List.split functions in
+  Format.pp_print_list ~pp_sep:print_double_cut
+    (generate_mpp_function program var_indexes)
+    oc function_names
+
+let generate_main_class (program : Bir.program) (var_table_size : int)
+    (locals_size : int) (var_indexes : variable_id VariableMap.t)
+    (function_spec : Bir_interface.bir_function) (fmt : Format.formatter)
+    (filename : string) =
+  let class_name =
+    String.split_on_char '.' filename |> List.hd |> String.split_on_char '/'
+    |> fun list -> List.nth list (List.length list - 1)
+  in
+  Format.fprintf fmt
+    "@[<hv 0>// %s@,\
+     %s@,\
+     /**@,\
+     * Main class containing calculation logic@,\
+     */@,\
+     @[<v 2>public class %s {@,\
+     @,\
+     %a%a@]@]@,\
+     }"
+    Prelude.message java_imports class_name
+    (generate_calculateTax_method var_table_size program locals_size)
+    var_indexes
+    (generate_return var_indexes)
+    function_spec
 
 let generate_java_program (program : Bir.program) (function_spec : Bir_interface.bir_function)
     (filename : string) : unit =
   let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let locals_size = Bir.get_locals_size program |> (+) 1 in
-  let var_indexes, var_table_size = Bir_interface.get_variables_indexes program function_spec in
-  let program = Bir.squish_statements program split_treshold "java_rule_" in
+  let locals_size = Bir.get_locals_size program |> ( + ) 1 in
+  let var_indexes, var_table_size =
+    Bir_interface.get_variables_indexes program function_spec
+  in
+   let program = Bir.squish_statements program split_treshold "java_rule_" in
   Format.fprintf oc
-    "@[<hv 2>%a@,\
-     @,\
-     %a@,\
-     @,\
-     %a}@]@,\
-     @[<hv 2>class InputHandler {@,\
-     %a\
-     }@,
-     @[<hv 2>class MppFunction {
-      %a\
-     }@,@]\
-     @[<hv 2>class Rule {
-      %a\
-     }@,@]\
-     @]@." 
-     generate_header (
-       String.split_on_char '.' filename 
-          |> List.hd 
-          |> String.split_on_char '/' 
-          |> fun list -> List.nth list (List.length list -1))
-     (calculateTax_method_header var_table_size program locals_size) var_indexes 
-     (generate_return var_indexes) function_spec
+    "@[<v 0>%a%a\
+     @[<v 2>class InputHandler {@,%a@]@,}%a\
+     @[<v 2>class MppFunction {@,%a@]@,}%a\
+     @[<hv 2>class Rule {@,%a@]@,}@]@." 
+     (generate_main_class program var_table_size locals_size
+            var_indexes function_spec) filename
+     print_double_cut ()
      (generate_input_handling function_spec var_indexes) split_treshold
+     print_double_cut ()
      (generate_mpp_functions program) var_indexes
+     print_double_cut ()
      (generate_rule_methods program) var_indexes;
   close_out _oc[@@ocamlformat "disable"]
