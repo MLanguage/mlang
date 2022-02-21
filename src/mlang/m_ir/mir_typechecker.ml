@@ -64,50 +64,45 @@ let rec typecheck_top_down ~(in_generic_table : bool)
             (Some "variable definition", Pos.get_position var.Variable.name);
           ]
 
-and typecheck_func_args (f : func) (pos : Pos.t) :
-    bool -> Mir.expression Pos.marked list -> unit =
+and typecheck_func_args (f : func) (pos : Pos.t) (in_generic_table : bool)
+    (args : Mir.expression Pos.marked list) =
   match f with
   | SumFunc | MinFunc | MaxFunc ->
-      fun in_generic_table args ->
-        if List.length args = 0 then
-          Errors.raise_spanned_error
-            "sum function must be called with at least one argument" pos
-        else begin
-          typecheck_top_down ~in_generic_table (List.hd args);
-          List.iter (typecheck_top_down ~in_generic_table) args
-        end
+      if List.length args = 0 then
+        Errors.raise_spanned_error
+          "sum function must be called with at least one argument" pos
+      else begin
+        typecheck_top_down ~in_generic_table (List.hd args);
+        List.iter (typecheck_top_down ~in_generic_table) args
+      end
   | AbsFunc -> (
-      fun in_generic_table args ->
-        match args with
-        | [ arg ] -> typecheck_top_down ~in_generic_table arg
-        | _ ->
-            Errors.raise_spanned_error
-              "function abs should have only one argument" pos)
+      match args with
+      | [ arg ] -> typecheck_top_down ~in_generic_table arg
+      | _ ->
+          Errors.raise_spanned_error
+            "function abs should have only one argument" pos)
   | PresentFunc | NullFunc | GtzFunc | GtezFunc | Supzero -> (
-      fun (* These functions return a integer value encoding a boolean; 0 for
-             false and 1 for true *)
-            in_generic_table args ->
-        match args with
-        | [ arg ] -> typecheck_top_down ~in_generic_table arg
-        | _ ->
-            Errors.raise_spanned_error "function should have only one argument"
-              pos)
+      (* These functions return a integer value encoding a boolean; 0 for false
+         and 1 for true *)
+      match args with
+      | [ arg ] -> typecheck_top_down ~in_generic_table arg
+      | _ ->
+          Errors.raise_spanned_error "function should have only one argument"
+            pos)
   | ArrFunc | InfFunc -> (
-      fun in_generic_table args ->
-        match args with
-        | [ arg ] -> typecheck_top_down ~in_generic_table arg
-        | _ ->
-            Errors.raise_spanned_error "function should have only one argument"
-              pos)
+      match args with
+      | [ arg ] -> typecheck_top_down ~in_generic_table arg
+      | _ ->
+          Errors.raise_spanned_error "function should have only one argument"
+            pos)
   | Mir.Multimax -> (
-      fun in_generic_table args ->
-        match args with
-        | [ bound; table ] ->
-            typecheck_top_down ~in_generic_table bound;
-            typecheck_top_down ~in_generic_table table
-        | _ ->
-            Errors.raise_spanned_error "function %a should have two arguments"
-              pos)
+      match args with
+      | [ bound; table ] ->
+          typecheck_top_down ~in_generic_table bound;
+          typecheck_top_down ~in_generic_table table
+      | _ ->
+          Errors.raise_spanned_error "function %a should have two arguments" pos
+      )
 
 let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (defs : (int * Pos.t) list) : int list =
@@ -227,27 +222,14 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
               })
     | InputVar -> def
   in
-  let program_rules =
-    List.fold_left
-      (fun rules rule_id ->
-        let rule_data = RuleMap.find rule_id p.program.program_rules in
-        let rule_data =
-          let rule_vars =
-            List.fold_left
-              (fun vars (vid, def) ->
-                let def = check_var_def vid def in
-                (vid, def) :: vars)
-              []
-              (List.rev rule_data.rule_vars)
-          in
-          { rule_data with rule_vars }
-        in
-        RuleMap.add rule_id rule_data rules)
-      Mir.RuleMap.empty p.main_execution_order
+  let program =
+    Mir.map_vars
+      (fun var def -> check_var_def var.Mir.Variable.id def)
+      p.program
   in
   let _ = typecheck_program_conds p.program.program_conds in
   (* the typechecking modifications do not change the dependency graph *)
-  { p with program = { p.program with program_rules } }
+  { p with program }
 
 let rec expand_functions_expr (e : expression Pos.marked) :
     expression Pos.marked =
