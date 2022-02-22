@@ -29,7 +29,7 @@ val get_used_variables : Mir.expression Pos.marked -> Mir.VariableDict.t
 (** Calls the previous function with an empty dict *)
 
 val create_rules_dependency_graph :
-  Mir.program -> Mir.rule_id Mir.VariableMap.t -> RG.t
+  Mir.rule_data Mir.RuleMap.t -> Mir.rule_id Mir.VariableMap.t -> RG.t
 
 val check_for_cycle : RG.t -> Mir.program -> bool -> bool
 (** Outputs [true] and a warning in case of cycles. *)

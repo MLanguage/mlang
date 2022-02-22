@@ -34,23 +34,6 @@ let process_dgfip_options (backend : string option)
     end
   | _ -> Dgfip_options.default_flags
 
-let build_m_program_of_tag (mast : Mast.source_file list) (tag : Mast.chain_tag)
-    : Mir_interface.full_program =
-  Cli.debug_print "Builing M program for %s..."
-    (Format.asprintf "%a" Format_mast.format_chain_tag tag);
-  Cli.debug_print "Elaborating...";
-  let m_program = Mast_to_mir.translate mast tag in
-  let full_m_program = Mir_interface.to_full_program m_program in
-  let full_m_program = Mir_typechecker.expand_functions full_m_program in
-  Cli.debug_print "Typechecking...";
-  let full_m_program = Mir_typechecker.typecheck full_m_program in
-  Cli.debug_print "Checking for circular variable definitions...";
-  if
-    Mir_dependency_graph.check_for_cycle full_m_program.dep_graph
-      full_m_program.program true
-  then Errors.raise_error "Cycles between rules.";
-  full_m_program
-
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
 let driver (files : string list) (debug : bool) (var_info_debug : string list)
@@ -94,14 +77,32 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     finish "completed!";
+    Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
-    let full_m_program = build_m_program_of_tag !m_program Mast.Primitif in
+    let m_program = Mast_to_mir.translate !m_program in
+    let full_m_program =
+      Mir_interface.to_full_program m_program Mast.all_tags
+    in
+    let full_m_program = Mir_typechecker.expand_functions full_m_program in
+    Cli.debug_print "Typechecking...";
+    let full_m_program = Mir_typechecker.typecheck full_m_program in
+    Mir.TagMap.iter
+      (fun tag Mir_interface.{ dep_graph; _ } ->
+        Cli.debug_print
+          "Checking for circular variable definitions for chain %a..."
+          Format_mast.format_chain_tag tag;
+        if
+          Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
+            true
+        then Errors.raise_error "Cycles between rules.")
+      full_m_program.chains_orders;
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let full_m_program =
       Mir_interface.to_full_program
         (match function_spec with
         | Some _ -> Mir_interface.reset_all_outputs full_m_program.program
         | None -> full_m_program.program)
+        Mast.all_tags
     in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program =

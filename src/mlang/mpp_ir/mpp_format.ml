@@ -26,7 +26,9 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
     (match f with
-    | Program chain -> Printf.sprintf "evaluate_program(%s)" chain
+    | Program chain ->
+        Format.asprintf "evaluate_program(%a)" Format_mast.format_chain_tag
+          chain
     | MppFunction m -> m
     | Present -> "present"
     | Abs -> "abs"

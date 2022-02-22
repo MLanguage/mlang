@@ -479,10 +479,11 @@ module Make (N : Bir_number.NumberInterface) = struct
                 | TableVar _ -> assert false
                 (* should not happen *)
               with Not_found ->
-                Errors.raise_spanned_error
-                  ("Var not found (should not happen): "
-                  ^ Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
-                  (Pos.get_position e)
+                (* Cli.warning_print
+                 *   "Var %s used before definition, assumed undefined.\n%s"
+                 *   (Pos.unmark var.Variable.name)
+                 *   (Pos.retrieve_loc_text (Pos.get_position e)); *)
+                Undefined
             in
             r
         | GenericTableIndex -> (

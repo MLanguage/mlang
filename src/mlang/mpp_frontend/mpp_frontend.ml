@@ -46,7 +46,12 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
 let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
     (translated_names : string list) : mpp_callable * string Pos.marked list =
   if Pos.unmark cname = "call_m" then
-    (Program (Pos.unmark (List.hd args)), List.tl args)
+    match args with
+    | [] ->
+        Errors.raise_spanned_error "Expected a chain to call"
+          (Pos.get_position cname)
+    | chain :: args ->
+        (Program (Mast.chain_tag_of_string (Pos.unmark chain)), args)
   else (to_mpp_callable cname translated_names, args)
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)

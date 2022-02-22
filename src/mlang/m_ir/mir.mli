@@ -164,12 +164,14 @@ type variable_data = variable variable_data_
 type rule_data = {
   rule_vars : (variable_id * variable_data) list;
   rule_number : int Pos.marked;
-  rule_tags : Mast.chain_tag Pos.marked list;
+  rule_tags : Mast.chain_tag list;
 }
 
 type rule_id = int
 
 module RuleMap : Map.S with type key = rule_id
+
+module TagMap : Map.S with type key = Mast.chain_tag
 
 type error_descr = {
   kind : string Pos.marked;

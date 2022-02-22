@@ -21,11 +21,15 @@ val reset_all_outputs : Mir.program -> Mir.program
 (** This function defines the [var_io] property of [var_data] to [Regular] for
     all variables that don't have [Input] as their [var_io]. *)
 
-type full_program = {
+type chain_order = {
   dep_graph : Mir_dependency_graph.RG.t;
-  main_execution_order : Mir.rule_id list;
-  program : Mir.program;
+  execution_order : Mir.rule_id list;
 }
 
-val to_full_program : Mir.program -> full_program
+type full_program = {
+  program : Mir.program;
+  chains_orders : chain_order Mir.TagMap.t;
+}
+
+val to_full_program : Mir.program -> Mast.chain_tag list -> full_program
 (** Creates the dependency graph and stores it *)

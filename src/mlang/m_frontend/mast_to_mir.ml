@@ -1285,7 +1285,8 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                     ([], var_data, 0) r.Mast.rule_formulaes
                 in
                 let rule = (List.rev rule_vars, r.rule_number, r.rule_tags) in
-                (Mir.RuleMap.add (Mir.fresh_rule_id ()) rule rule_data, var_data)
+                ( Mir.RuleMap.add (Pos.unmark r.rule_number) rule rule_data,
+                  var_data )
           | Mast.VariableDecl (Mast.ConstVar _) ->
               (* constant variables occurences are substituted by their
                  values *)
@@ -1445,22 +1446,7 @@ let get_conds (error_decls : Mir.Error.t list)
         conds source_file)
     Mir.VariableMap.empty p
 
-let filter_by_tag (p : Mast.program) (tag : Mast.chain_tag) : Mast.program =
-  List.map
-    (fun source_file ->
-      List.filter
-        (fun source_file_item ->
-          match Pos.unmark source_file_item with
-          | Mast.Rule rule ->
-              List.exists (fun part -> Pos.unmark part = tag) rule.rule_tags
-          | Mast.Verification verif ->
-              List.exists (fun part -> Pos.unmark part = tag) verif.verif_tags
-          | _ -> true)
-        source_file)
-    p
-
-let translate (p : Mast.program) (tag : Mast.chain_tag) : Mir.program =
-  let p = filter_by_tag p tag in
+let translate (p : Mast.program) : Mir.program =
   let const_map = get_constants p in
   let var_decl_data, error_decls, idmap = get_variables_decl p const_map in
   let idmap = get_var_redefinitions p idmap const_map in
@@ -1481,6 +1467,7 @@ let translate (p : Mast.program) (tag : Mast.chain_tag) : Mir.program =
                 Mir.VariableDict.add var vars ))
             ([], vars) (List.rev rule_vars)
         in
+        let rule_tags = List.map Pos.unmark rule_tags in
         ( Mir.RuleMap.add rule_id Mir.{ rule_vars; rule_number; rule_tags } rules,
           vars ))
       rule_data

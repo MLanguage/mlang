@@ -373,11 +373,17 @@ let initial_undef_rule_id = -1
 type rule_data = {
   rule_vars : (Variable.id * variable_data) list;
   rule_number : int Pos.marked;
-  rule_tags : Mast.chain_tag Pos.marked list;
+  rule_tags : Mast.chain_tag list;
 }
 
 module RuleMap = Map.Make (struct
   type t = rule_id
+
+  let compare = compare
+end)
+
+module TagMap = Map.Make (struct
+  type t = Mast.chain_tag
 
   let compare = compare
 end)
@@ -529,7 +535,7 @@ let sort_by_highest_exec_number v1 v2 =
 let get_var_sorted_by_execution_number (p : program) (name : string) sort :
     Variable.t =
   let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
-  List.hd vars
+  match vars with [] -> raise Not_found | hd :: _ -> hd
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try
