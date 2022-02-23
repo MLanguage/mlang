@@ -41,9 +41,9 @@ jobs:
             ${{ runner.os }}-
 
      - name: Set up OCaml
-       uses: avsm/setup-ocaml@v1
+       uses: ocaml/setup-ocaml@v2
        with:
-          ocaml-version: 4.11.2
+          ocaml-compiler: 4.11.2
 
      - name: Install dependencies
        run: |
@@ -92,10 +92,10 @@ jobs:
       # TODO : Cache gmp and mpfr builds
 
       - name: Set up OCaml
-        uses: avsm/setup-ocaml@v1
+        uses: ocaml/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
-          ocaml-version: 4.11.2+musl+static+flambda
+          ocaml-compiler: 4.11.2+musl+static+flambda
 
       - name: Install dependencies
         run: |
