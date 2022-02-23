@@ -53,24 +53,30 @@ jobs:
           eval $(opam env)
           make build
 
-      - name: Test interpreter
+  format:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Check formatting
+        run: |
+          dune build @fmt
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        test: ["test_c_backend", "test_java_backend", "test_python_backend"]
+        optimize: [1]
+        include:
+          - test: "tests"
+            optimize: 0
+
+    steps:
+      - name: Test backend
+        env:
+          TEST: ${{ matrix.test }}
+          OPTIMIZE: ${{ matrix.optimize }}
         run: |
           eval $(opam env)
-          OPTIMIZE=0 make tests
-
-      - name: Test C backend
-        run: |
-          eval $(opam env)
-          make test_c_backend
-
-      - name: Test Python backend
-        run: |
-          eval $(opam env)
-          make test_python_backend
-
-      - name: Test Java backend
-        run: |
-          eval $(opam env)
-          make test_java_backend
-
-
+          OPTIMIZE=$OPTIMIZE make $TEST
