@@ -95,7 +95,8 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
-          ocaml-compiler: 4.11.2+musl+static+flambda
+          ocaml-compiler: 4.11.2+options,ocaml-option-flambda,ocaml-option-musl,ocaml-option-static
+
 
       - name: Install dependencies
         run: |
