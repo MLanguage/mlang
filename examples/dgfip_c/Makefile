@@ -1,13 +1,13 @@
 include ../../Makefile.include
 
-MPP_FILE=../../mpp_specs/dgfip_base.mpp
+MPP_FILE=../../mpp_specs/2020_6_5.mpp
 
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--mpp_file=$(MPP_FILE) \
-	--mpp_function=dgfip_calculation
+	--mpp_function=compute_double_liquidation_pvro
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
@@ -17,6 +17,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
 ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
+		--dgfip_options=-rXk4,-b0,-Ailiad\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES)
 

@@ -222,7 +222,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
     | hd :: tl ->
         let filling_list, acc =
           if List.length filling_list >= split_threshold then
-            ([ hd ], (List.rev filling_list) :: acc)
+            ([ hd ], List.rev filling_list :: acc)
           else (hd :: filling_list, acc)
         in
         split_input_vars tl filling_list acc
