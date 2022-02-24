@@ -76,6 +76,7 @@ let create_rules_dependency_graph (program : Mir.program)
     (vars_to_rules : Mir.rule_id Mir.VariableMap.t) : RG.t =
   Mir.RuleMap.fold
     (fun rule_id { Mir.rule_vars; _ } g ->
+      let g = RG.add_vertex g rule_id in
       List.fold_left
         (fun g (_vid, def) ->
           let succs = get_def_used_variables def.Mir.var_definition in
