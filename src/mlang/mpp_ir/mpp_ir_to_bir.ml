@@ -147,43 +147,13 @@ let translate_m_code (m_program : Mir_interface.full_program)
     (fun (vid, (vdef : Mir.variable_data)) ->
       try
         let var = Mir.VariableDict.find vid m_program.program.program_vars in
-        match vdef.var_definition with
+        let var_definition =
+          Mir.map_var_def_var Bir.var_from_mir vdef.Mir.var_definition
+        in
+        match var_definition with
         | InputVar -> None
-        | TableVar (i, idx_def) ->
-            (* variables used in the context should not be reassigned *)
-            let idx_def =
-              match idx_def with
-              | IndexTable es ->
-                  Mir.IndexTable
-                    (Mir.IndexMap.map
-                       (Pos.map_under_mark (Mir.map_expr_var Bir.var_from_mir))
-                       es)
-              | IndexGeneric e ->
-                  Mir.IndexGeneric
-                    (Pos.map_under_mark (Mir.map_expr_var Bir.var_from_mir) e)
-            in
-            let vdef =
-              Mir.
-                {
-                  var_definition = Mir.TableVar (i, idx_def);
-                  var_typ = vdef.var_typ;
-                  var_io = vdef.var_io;
-                }
-            in
-            Some
-              ( Bir.SAssign (Bir.var_from_mir var, vdef),
-                var.Mir.Variable.execution_number.pos )
-        | SimpleVar e ->
-            let vdef =
-              Mir.
-                {
-                  var_definition =
-                    Mir.SimpleVar
-                      (Pos.map_under_mark (Mir.map_expr_var Bir.var_from_mir) e);
-                  var_typ = vdef.var_typ;
-                  var_io = vdef.var_io;
-                }
-            in
+        | TableVar _ | SimpleVar _ ->
+            let vdef = { vdef with var_definition } in
             Some
               ( Bir.SAssign (Bir.var_from_mir var, vdef),
                 var.Mir.Variable.execution_number.pos )
