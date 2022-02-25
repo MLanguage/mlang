@@ -255,6 +255,8 @@ let rec generate_stmt (program : Bir.program)
   | SRuleCall r ->
       let rule = Bir.RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
+  | SFunctionCall (f, _) ->
+      Format.fprintf oc "if(%s(output, TGV, LOCAL)) {return -1;};\n" f
 
 and generate_stmts (program : Bir.program) (var_indexes : int Mir.VariableMap.t)
     (oc : Format.formatter) (stmts : Bir.stmt list) =
@@ -284,6 +286,25 @@ let generate_rule_functions (program : Bir.program)
     (generate_rule_function program var_indexes)
     oc
     (Bir.RuleMap.bindings rules |> List.map snd)
+
+let generate_mpp_function (program : Bir.program)
+    (var_indexes : int Mir.VariableMap.t) (oc : Format.formatter)
+    (f : Bir.function_name) =
+  let stmts = Bir.FunctionMap.find f program.mpp_functions in
+  Format.fprintf oc
+    "@[<hv 4>int %s(m_output*output, m_value* TGV, m_value* LOCAL) {@,\
+     m_value cond;@,\
+     %a@,\
+     return 0;@]}@,"
+    f
+    (generate_stmts program var_indexes)
+    stmts
+
+let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
+    (var_indexes : int Mir.VariableMap.t) =
+  Bir.FunctionMap.iter
+    (fun fname _ -> generate_mpp_function program var_indexes oc fname)
+    (Bir_interface.context_agnostic_mpp_functions program)
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -612,22 +633,25 @@ let generate_c_program (program : Bir.program)
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_implem_header
-    header_filename generate_empty_input_func function_spec
-    generate_input_from_array_func function_spec generate_get_input_index_func
-    function_spec generate_get_input_name_from_index_func function_spec
-    generate_get_input_num_func function_spec generate_output_to_array_func
-    function_spec generate_get_output_index_func function_spec
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" 
+    generate_implem_header header_filename 
+    generate_empty_input_func function_spec
+    generate_input_from_array_func function_spec 
+    generate_get_input_index_func function_spec 
+    generate_get_input_name_from_index_func function_spec
+    generate_get_input_num_func function_spec 
+    generate_output_to_array_func function_spec 
+    generate_get_output_index_func function_spec
     generate_get_output_name_from_index_func function_spec
-    generate_get_output_num_func function_spec generate_empty_output_func
-    function_spec
+    generate_get_output_num_func function_spec 
+    generate_empty_output_func function_spec
     (generate_rule_functions program var_indexes)
-    program.rules
+      program.rules
+    (generate_mpp_functions program)
+      var_indexes
     (generate_main_function_signature_and_var_decls program var_indexes
-       var_table_size)
-    function_spec
-    (generate_stmts program var_indexes)
-    program.statements
-    (generate_return var_indexes)
-    function_spec;
-  close_out _oc
+       var_table_size) function_spec
+    (generate_stmts program var_indexes) 
+      (Bir.main_statements program)
+    (generate_return var_indexes) function_spec;
+  close_out _oc[@@ocamlformat "disable"]

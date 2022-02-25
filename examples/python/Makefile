@@ -1,11 +1,5 @@
 include ../../Makefile.include
 
-ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O
-else
-    OPTIMIZE_FLAG=
-endif
-
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
@@ -23,7 +17,6 @@ ir_%.py: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend python --output $@ \
 		--function_spec $^ \
-		--optimize \
 		$(SOURCE_FILES)
 
 run_%.py: ir_%.py FORCE

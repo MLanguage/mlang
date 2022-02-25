@@ -28,6 +28,7 @@ and stmt_kind =
   | SVerif of Mir.condition_data
   | SGoto of block_id
   | SRuleCall of Bir.rule_id * string * stmt list
+  | SFunctionCall of Bir.function_name * Mir.variable list
 
 type block = stmt list
 
@@ -38,6 +39,7 @@ type program = {
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
+  main_function : Bir.function_name;
 }
 
 let count_instr (p : program) : int =
@@ -45,7 +47,7 @@ let count_instr (p : program) : int =
     List.fold_left
       (fun acc s ->
         match Pos.unmark s with
-        | SConditional _ | SAssign _ | SVerif _ -> acc + 1
+        | SConditional _ | SAssign _ | SVerif _ | SFunctionCall _ -> acc + 1
         | SGoto _ -> acc
         | SRuleCall (_, _, stmts) -> aux acc stmts)
       acc stmts

@@ -4,12 +4,21 @@ compute_article1731bis():
     ART1731BIS = 1
     PREM8_11 = 1
 
+calcul_primitif_isf(outputs):
+  outputs <- call_m(calcul_primitif_isf)
+ 
+calcul_primitif(outputs):
+  outputs <- call_m(calcul_primitif)
+
+calcul_primitif_taux(outputs):
+  outputs <- call_m(calcul_primitif_taux)
+
 compute_benefits():
  if exists_deposit_defined_variables() or exists_taxbenefit_ceiled_variables():
     partition with var_is_taxbenefit:
       V_INDTEO = 1
       V_CALCUL_NAPS = 1
-      IAD11, INE, IRE <- call_m(calcul_primitif)
+      IAD11, INE, IRE <- calcul_primitif()
       V_CALCUL_NAPS = 0
       iad11 = cast(IAD11)
       ire = cast(IRE)
@@ -41,9 +50,9 @@ compute_double_liquidation3(outputs):
   8ZG = v_8ZG
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  outputs <- call_m(calcul_primitif_isf)
-  outputs <- call_m(calcul_primitif)
-  outputs <- call_m(calcul_primitif_taux)
+  outputs <- calcul_primitif_isf()
+  outputs <- calcul_primitif()
+  outputs <- calcul_primitif_taux()
 
 compute_double_liquidation_exit_taxe(outputs):
   annee = 2018 # FIXME

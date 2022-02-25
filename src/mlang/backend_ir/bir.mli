@@ -18,6 +18,8 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type function_name = string
+
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 
 and stmt = stmt_kind Pos.marked
@@ -27,14 +29,22 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
+  | SFunctionCall of function_name * Mir.Variable.t list
+
+type mpp_function = stmt list
+
+module FunctionMap : Map.S with type key = function_name
 
 type program = {
+  mpp_functions : mpp_function FunctionMap.t;
   rules : rule RuleMap.t;
-  statements : stmt list;
+  main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
+
+val main_statements : program -> stmt list
 
 val get_all_statements : program -> stmt list
 
@@ -45,8 +55,6 @@ val squish_statements : program -> int -> string -> program
     argument as a suffix to the new function / method name. We piggyback on the
     existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
-
-val count_instructions : program -> int
 
 val get_assigned_variables : program -> Mir.VariableDict.t
 

@@ -36,6 +36,11 @@ let rec format_stmt fmt (stmt : stmt) =
   | SGoto b -> Format.fprintf fmt "goto %d@," b
   | SRuleCall (_rid, name, stmts) ->
       Format.fprintf fmt "call(%s)@[<v 3>{@,%a@]}@," name format_stmts stmts
+  | SFunctionCall (func, args) ->
+      Format.fprintf fmt "call_function: %s with args %a@," func
+        (Format.pp_print_list (fun fmt arg ->
+             Format.fprintf fmt "%s" (arg.Mir.Variable.name |> Pos.unmark)))
+        args
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

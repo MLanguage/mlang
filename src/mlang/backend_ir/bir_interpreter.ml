@@ -22,6 +22,7 @@ type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
   | InsideRule of Bir.rule_id
+  | InsideFunction of Bir.function_name
 
 let format_code_location_segment (fmt : Format.formatter)
     (s : code_location_segment) =
@@ -29,6 +30,7 @@ let format_code_location_segment (fmt : Format.formatter)
   | InsideBlock i -> Format.fprintf fmt "#%d" i
   | ConditionalBranch b -> Format.fprintf fmt "?%b" b
   | InsideRule r -> Format.fprintf fmt "R_%d" r
+  | InsideFunction f -> Format.fprintf fmt "%s" f
 
 type code_location = code_location_segment list
 
@@ -671,6 +673,10 @@ module Make (N : Bir_number.NumberInterface) = struct
     | Bir.SRuleCall r ->
         let rule = Bir.RuleMap.find r p.rules in
         evaluate_stmts p ctx rule.rule_stmts (InsideRule r :: loc) 0
+    | Bir.SFunctionCall (f, _args) ->
+        evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions) loc 0
+  (* Mpp_function arguments seem to be used only to determine which variables
+     are actually output. Does this actually make sense ? *)
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =
@@ -685,7 +691,9 @@ module Make (N : Bir_number.NumberInterface) = struct
   let evaluate_program (p : Bir.program) (ctx : ctx)
       (code_loc_start_value : int) : ctx =
     try
-      let ctx = evaluate_stmts p ctx p.statements [] code_loc_start_value in
+      let ctx =
+        evaluate_stmts p ctx (Bir.main_statements p) [] code_loc_start_value
+      in
       ctx
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program

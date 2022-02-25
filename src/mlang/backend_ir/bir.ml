@@ -18,6 +18,8 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type function_name = string
+
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 
 and stmt = stmt_kind Pos.marked
@@ -27,32 +29,59 @@ and stmt_kind =
   | SConditional of Mir.expression * stmt list * stmt list
   | SVerif of Mir.condition_data
   | SRuleCall of rule_id
+  | SFunctionCall of function_name * Mir.Variable.t list
+
+type mpp_function = stmt list
+
+module FunctionMap = Map.Make (struct
+  type t = function_name
+
+  let compare = String.compare
+end)
 
 type program = {
+  mpp_functions : mpp_function FunctionMap.t;
   rules : rule RuleMap.t;
-  statements : stmt list;
+  main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Mir.VariableMap.t;
 }
 
-let rec get_block_statements (rules : rule RuleMap.t) (stmts : stmt list) :
-    stmt list =
+let main_statements (p : program) : stmt list =
+  try FunctionMap.find p.main_function p.mpp_functions
+  with Not_found ->
+    Errors.raise_error "Unable to find main function of Bir program"
+
+let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
-      | SRuleCall r -> List.rev (RuleMap.find r rules).rule_stmts @ stmts
+      | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
       | SConditional (e, t, f) ->
-          let t = get_block_statements rules t in
-          let f = get_block_statements rules f in
+          let t = get_block_statements p t in
+          let f = get_block_statements p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
+      | SFunctionCall (f, _) ->
+          (get_block_statements p (FunctionMap.find f p.mpp_functions)
+          |> List.rev)
+          @ stmts
       | _ -> stmt :: stmts)
     [] stmts
   |> List.rev
 
 (** Returns program statements with all rules inlined *)
 let get_all_statements (p : program) : stmt list =
-  get_block_statements p.rules p.statements
+  main_statements p |> get_block_statements p
+
+let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
+  List.fold_left
+    (fun acc stmt ->
+      match Pos.unmark stmt with
+      | SAssign _ | SVerif _ | SRuleCall _ | SFunctionCall _ -> acc + 1
+      | SConditional (_, s1, s2) ->
+          acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
+    0 stmts
 
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
@@ -81,7 +110,7 @@ let squish_statements (program : program) (threshold : int)
               (f_rules, cond :: curr_stmts)
           | _ -> (rules, hd :: curr_stmts)
         in
-        if List.length (get_block_statements rules curr_stmts) < threshold then
+        if count_instr_blocks program curr_stmts < threshold then
           browse_bir tl new_stmts curr_stmts rules
         else
           let squish_rule = rule_from_stmts curr_stmts in
@@ -90,22 +119,15 @@ let squish_statements (program : program) (threshold : int)
             []
             (RuleMap.add squish_rule.rule_id squish_rule rules)
   in
-  let new_rules, new_stmts =
-    browse_bir program.statements [] [] program.rules
+  let rules, mpp_functions =
+    FunctionMap.fold
+      (fun f mpp_func (rules, mpp_functions) ->
+        let rules, stmts = browse_bir mpp_func [] [] rules in
+        (rules, FunctionMap.add f stmts mpp_functions))
+      program.mpp_functions
+      (program.rules, FunctionMap.empty)
   in
-  { program with statements = new_stmts; rules = new_rules }
-
-let count_instructions (p : program) : int =
-  let rec cond_instr_blocks (stmts : stmt list) : int =
-    List.fold_left
-      (fun acc stmt ->
-        match Pos.unmark stmt with
-        | SAssign _ | SVerif _ | SRuleCall _ -> acc + 1
-        | SConditional (_, s1, s2) ->
-            acc + 1 + cond_instr_blocks s1 + cond_instr_blocks s2)
-      0 stmts
-  in
-  cond_instr_blocks p.statements
+  { program with rules; mpp_functions }
 
 let get_assigned_variables (p : program) : Mir.VariableDict.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) :
@@ -118,7 +140,9 @@ let get_assigned_variables (p : program) : Mir.VariableDict.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
-        | SRuleCall _ -> assert false)
+        | SRuleCall _ | SFunctionCall _ -> assert false
+        (* Cannot happen get_all_statements inlines all rule and mpp_function
+           calls *))
       acc stmts
   in
   get_assigned_variables_block Mir.VariableDict.empty (get_all_statements p)
@@ -168,18 +192,17 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
-        | SRuleCall _ -> assert false)
+        | SFunctionCall _ | SRuleCall _ -> assert false
+        (* Can't happen because SFunctionCall and SRuleCall are eliminated by
+           get_all_statements below*))
       acc stmts
   in
   get_local_vars_block Mir.LocalVariableMap.empty (get_all_statements p)
 
 let get_locals_size (p : program) : int =
-  List.hd
-    (List.rev
-       (List.sort compare
-          (List.map
-             (fun (x, _) -> x.Mir.LocalVariable.id)
-             (Mir.LocalVariableMap.bindings (get_local_variables p)))))
+  Mir.LocalVariableMap.fold
+    (fun v () top -> max top v.Mir.LocalVariable.id)
+    (get_local_variables p) 0
 
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev

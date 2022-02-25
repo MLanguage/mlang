@@ -139,6 +139,9 @@ let generate_variable fmt (var : Variable.t) : unit =
   if '0' <= v.[0] && v.[0] <= '9' then Format.fprintf fmt "var_%s" v
   else Format.fprintf fmt "%s" v
 
+let generate_tgv_variable fmt (var : variable) : unit =
+  Format.fprintf fmt "tgv['%a']" generate_variable var
+
 let generate_name (v : Variable.t) : string =
   match v.alias with Some v -> v | None -> Pos.unmark v.Variable.name
 
@@ -215,13 +218,13 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) :
   | Index (var, e) -> (
       match Pos.unmark e with
       | Literal (Float f) ->
-          Format.fprintf fmt "%a[%d]" generate_variable (Pos.unmark var)
+          Format.fprintf fmt "%a[%d]" generate_tgv_variable (Pos.unmark var)
             (int_of_float f)
       | _ ->
           (* FIXME: int cast hack *)
           Format.fprintf fmt
             "%a[int(%a)] if not isinstance(%a, Undefined) else Undefined()"
-            generate_variable (Pos.unmark var)
+            generate_tgv_variable (Pos.unmark var)
             (generate_python_expr safe_bool_binops)
             e
             (generate_python_expr safe_bool_binops)
@@ -275,7 +278,7 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) :
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> Format.fprintf fmt "%s" (string_of_float f)
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
-  | Var var -> Format.fprintf fmt "%a" generate_variable var
+  | Var var -> Format.fprintf fmt "%a" generate_tgv_variable var
   | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.LocalVariable.id
   | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
@@ -292,11 +295,11 @@ let generate_var_def var data (oc : Format.formatter) : unit =
       if !verbose_output then
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short
           (Pos.get_position e);
-      Format.fprintf oc "%a = %a@\n" generate_variable var
+      Format.fprintf oc "%a = %a@\n" generate_tgv_variable var
         (generate_python_expr false)
         e
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a = [%a]@\n" generate_variable var
+      Format.fprintf oc "%a = [%a]@\n" generate_tgv_variable var
         (fun fmt ->
           IndexMap.iter (fun _ v ->
               Format.fprintf fmt "%a, " (generate_python_expr false) v))
@@ -306,7 +309,7 @@ let generate_var_def var data (oc : Format.formatter) : unit =
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short
           (Pos.get_position e);
       Format.fprintf oc "%a = GenericIndex(lambda generic_index: %a)@\n@\n"
-        generate_variable var
+        generate_tgv_variable var
         (generate_python_expr false)
         e
   | InputVar -> assert false
@@ -317,7 +320,9 @@ let generate_header (oc : Format.formatter) () : unit =
   if autograd () then Format.fprintf oc "import numpy as np\n\n"
   else Format.fprintf oc "from math import floor, modf\n\n";
   Format.fprintf oc "%s\n\n" undefined_class_prelude;
-  Format.fprintf oc "local_variables = dict()\n\n\n"
+  Format.fprintf oc "local_variables = dict()\n\n";
+  Format.fprintf oc "out = dict()\n\n";
+  Format.fprintf oc "tgv = dict()\n\n\n"
 
 let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
   let input_vars =
@@ -338,8 +343,8 @@ let generate_input_handling oc (function_spec : Bir_interface.bir_function) =
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_variable var
-           (generate_name var)))
+         Format.fprintf fmt "%a = input_variables[\"%s\"]" generate_tgv_variable
+           var (generate_name var)))
     input_vars
 
 let generate_var_cond cond oc =
@@ -410,8 +415,8 @@ and generate_stmt program oc stmt =
         cond_name cond_name (generate_stmts program) tt cond_name
         (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
-  | SRuleCall _ -> assert false
-(* Removed with [Bir.get_all_statements] below *)
+  | SRuleCall _ | SFunctionCall _ -> assert false
+(* Rule and mpp_function calls removed with [Bir.get_all_statements] below *)
 
 let generate_return oc (function_spec : Bir_interface.bir_function) =
   let returned_variables =
@@ -424,14 +429,13 @@ let generate_return oc (function_spec : Bir_interface.bir_function) =
      local_variables = locals()@\n\
      @\n";
   if List.length returned_variables = 1 then
-    Format.fprintf oc "return %a\n@]@\n" generate_variable
+    Format.fprintf oc "return %a\n@]@\n" generate_tgv_variable
       (List.hd returned_variables)
   else begin
-    Format.fprintf oc "out = {}@\n";
     Format.pp_print_list
       (fun fmt var ->
         Format.fprintf fmt "out[\"%a\"] = %a@\n" generate_variable var
-          generate_variable var)
+          generate_tgv_variable var)
       oc returned_variables;
     Format.fprintf oc "return out@\n@]\n"
   end
@@ -440,8 +444,9 @@ let generate_python_program (program : Bir.program)
     (function_spec : Bir_interface.bir_function) (filename : string) : unit =
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a" generate_header () generate_input_handling
-    function_spec (generate_stmts program)
-    (Bir.get_all_statements program)
+  Format.fprintf oc "%a%a%a%a" 
+    generate_header () 
+    generate_input_handling function_spec 
+    (generate_stmts program) (Bir.get_all_statements program)
     generate_return function_spec;
-  close_out _oc
+  close_out _oc[@@ocamlformat "disable"]

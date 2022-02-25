@@ -326,13 +326,21 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  } ))
             stmt;
         ] )
-  | Mpp_ir.Expr (Call (MppFunction f, args), _) ->
+  | Mpp_ir.Expr (Call (MppFunction f, args), pos) ->
       let real_args =
         match args with [ Mpp_ir.Local "outputs" ] -> func_args | _ -> args
       in
-      translate_mpp_function mpp_program m_program
-        (List.find (fun decl -> decl.Mpp_ir.name = f) mpp_program)
-        real_args ctx
+      ( ctx,
+        [
+          ( Bir.SFunctionCall
+              ( f,
+                List.map
+                  (function
+                    | Mpp_ir.Local _ -> assert false
+                    | Mpp_ir.Mbased (var, _) -> var)
+                  real_args ),
+            pos );
+        ] )
   | Mpp_ir.Expr (Call (Program _chain, _args), _) ->
       let exec_order = m_program.main_execution_order in
       wrap_m_code_call m_program exec_order ctx
@@ -403,20 +411,6 @@ let create_combined_program (m_program : Mir_interface.full_program)
     Bir.program =
   try
     let mpp_program = List.rev mpp_program in
-    let decl_to_extract =
-      try
-        List.find
-          (fun decl -> decl.Mpp_ir.name = mpp_function_to_extract)
-          mpp_program
-      with Not_found ->
-        Errors.raise_error
-          (Format.asprintf "M++ function %s not found in M++ file!"
-             mpp_function_to_extract)
-    in
-    let _ctx, statements =
-      translate_mpp_function mpp_program m_program decl_to_extract []
-        emtpy_translation_ctx
-    in
     let rules =
       Mir.RuleMap.mapi
         (fun rule_id rule_data ->
@@ -429,12 +423,35 @@ let create_combined_program (m_program : Mir_interface.full_program)
             })
         m_program.program.Mir.program_rules
     in
+    let _ctx, mpp_functions =
+      List.fold_left
+        (fun (ctx, function_map) mpp_func ->
+          let ctx, statements =
+            translate_mpp_function mpp_program m_program mpp_func [] ctx
+          in
+          (ctx, Bir.FunctionMap.add mpp_func.name statements function_map))
+        (emtpy_translation_ctx, Bir.FunctionMap.empty)
+        mpp_program
+    in
+    if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
+      Errors.raise_error
+        (Format.asprintf "M++ function %s not found in M++ file!"
+           mpp_function_to_extract);
     let conds_verif = generate_verif_conds m_program.program.program_conds in
+    let mpp_main_function =
+      Bir.FunctionMap.find mpp_function_to_extract mpp_functions
+    in
+    let mpp_functions =
+      Bir.FunctionMap.add mpp_function_to_extract
+        (mpp_main_function @ conds_verif)
+        mpp_functions
+      (* TODO: Put verifications elsewhere than a a user facing function such as
+         is the case at the moment *)
+    in
     {
       rules;
-      statements = statements @ conds_verif;
-      (* we append the M verification conditions at the end, when everything has
-         already been computed *)
+      mpp_functions;
+      main_function = mpp_function_to_extract;
       idmap = m_program.program.program_idmap;
       mir_program = m_program.program;
       outputs = Mir.VariableMap.empty;
