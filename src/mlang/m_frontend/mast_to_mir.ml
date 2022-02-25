@@ -179,6 +179,13 @@ let find_var_among_candidates (exec_number : Mir.execution_number)
 
 module IntMap = Map.Make (Int)
 
+let is_vartmp (v : Mir.Variable.t) =
+  let vartmp_pattern = "VARTMP" in
+  try
+    String.sub (Pos.unmark v.Mir.name) 0 (String.length vartmp_pattern)
+    |> String.equal vartmp_pattern
+  with Invalid_argument _ -> false
+
 let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
     (name : Mast.variable_name Pos.marked) (exec_number : Mir.execution_number)
     (is_lvalue : bool) : Mir.Variable.t =
@@ -519,7 +526,7 @@ let get_variables_decl (p : Mast.program)
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
-                              ~attributes:attrs ~is_income:false
+                              ~attributes:attrs ~is_income:false ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                           in
                           let new_var_data =
@@ -562,7 +569,7 @@ let get_variables_decl (p : Mast.program)
                               ivar.Mast.input_description
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
-                              ~attributes:ivar.input_attributes
+                              ~attributes:ivar.input_attributes ~origin:None
                               ~is_income:
                                 (Pos.unmark ivar.input_subtyp = Mast.Income)
                               ~is_table:None
@@ -724,6 +731,24 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
         (ParamsMap.remove param lc)
         new_var_name is_lvalue pos lax
 
+let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
+    (idmap : Mir.idmap) : Mir.Variable.t =
+  let origin =
+    if is_vartmp var then None
+    else
+      match Pos.VarNameToID.find (Pos.unmark var.name) idmap with
+      | [] ->
+          Errors.raise_error "Tried to duplicate a variable without declaration"
+      | v :: _ -> (
+          match v.Mir.Variable.origin with None -> Some v | Some v -> Some v)
+    (* invariant : every variables with the same name have the same origin
+       (itself have None), with the exception of [VARTMP]s which are used as
+       local variables *)
+  in
+  Mir.Variable.new_var var.name None var.descr exec_number
+    ~attributes:var.attributes ~origin ~is_income:var.is_income
+    ~is_table:var.is_table
+
 (** Linear pass that fills [idmap] with all the variable assignments along with
     their execution number. *)
 let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
@@ -766,11 +791,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                (* should not happen *)
                              in
                              let new_var =
-                               Mir.Variable.new_var lvar.Mir.Variable.name None
-                                 lvar.Mir.Variable.descr exec_number
-                                 ~attributes:lvar.Mir.Variable.attributes
-                                 ~is_income:lvar.Mir.Variable.is_income
-                                 ~is_table:lvar.Mir.Variable.is_table
+                               duplicate_var lvar exec_number idmap
                              in
                              let new_idmap =
                                Pos.VarNameToID.add
@@ -825,11 +846,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                  (* should not happen *)
                                in
                                let new_var =
-                                 Mir.Variable.new_var lvar.Mir.Variable.name
-                                   None lvar.Mir.Variable.descr exec_number
-                                   ~attributes:lvar.Mir.Variable.attributes
-                                   ~is_income:lvar.Mir.Variable.is_income
-                                   ~is_table:lvar.Mir.Variable.is_table
+                                 duplicate_var lvar exec_number idmap
                                in
                                (Pos.unmark lvar.Mir.Variable.name, new_var)
                              in
@@ -1417,7 +1434,8 @@ let get_conds (error_decls : Mir.Error.t list)
                         Mir.seq_number = 0;
                         Mir.pos = Pos.get_position verif_cond;
                       }
-                      ~attributes:[] ~is_income:false ~is_table:None
+                      ~attributes:[] ~origin:None ~is_income:false
+                      ~is_table:None
                   in
                   Mir.VariableMap.add dummy_var
                     { Mir.cond_expr = e; Mir.cond_error = err }

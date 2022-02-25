@@ -39,6 +39,9 @@ type variable = {
       (** Description taken from the variable declaration *)
   attributes :
     (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  origin : variable option;
+      (** If the variable is an SSA duplication, refers to the original
+          (declared) variable *)
   is_income : bool;
   is_table : int option;
 }
@@ -73,26 +76,33 @@ type func =
     Because translating to MIR requires a lot of unrolling and expansion, we
     introduce a [LocalLet] construct to avoid code duplication. *)
 
-type expression =
-  | Unop of (Mast.unop[@opaque]) * expression Pos.marked
+type 'variable expression_ =
+  | Unop of (Mast.unop[@opaque]) * 'variable expression_ Pos.marked
   | Comparison of
       (Mast.comp_op[@opaque]) Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
   | Binop of
       (Mast.binop[@opaque]) Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked
-  | Index of variable Pos.marked * expression Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+  | Index of 'variable Pos.marked * 'variable expression_ Pos.marked
   | Conditional of
-      expression Pos.marked * expression Pos.marked * expression Pos.marked
-  | FunctionCall of (func[@opaque]) * expression Pos.marked list
+      'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+  | FunctionCall of (func[@opaque]) * 'variable expression_ Pos.marked list
   | Literal of (literal[@opaque])
-  | Var of variable
+  | Var of 'variable
   | LocalVar of local_variable
   | GenericTableIndex
   | Error
-  | LocalLet of local_variable * expression Pos.marked * expression Pos.marked
+  | LocalLet of
+      local_variable
+      * 'variable expression_ Pos.marked
+      * 'variable expression_ Pos.marked
+
+type expression = variable expression_
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -127,24 +137,29 @@ module IndexMap : sig
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
-type index_def =
-  | IndexTable of (expression Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of expression Pos.marked
+type 'variable index_def =
+  | IndexTable of
+      ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
+  | IndexGeneric of 'variable expression_ Pos.marked
 
-type variable_def =
-  | SimpleVar of expression Pos.marked
-  | TableVar of int * index_def
+type 'variable variable_def_ =
+  | SimpleVar of 'variable expression_ Pos.marked
+  | TableVar of int * 'variable index_def
   | InputVar
+
+type variable_def = variable variable_def_
 
 type io = Input | Output | Regular
 
-type variable_data = {
-  var_definition : variable_def;
+type 'variable variable_data_ = {
+  var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
   var_io : io;
 }
+
+type variable_data = variable variable_data_
 
 type rule_tag =
   | Primitif
@@ -202,10 +217,12 @@ type error = {
   typ : Mast.error_typ;
 }
 
-type condition_data = {
-  cond_expr : expression Pos.marked;
-  cond_error : error * variable option;
+type 'variable condition_data_ = {
+  cond_expr : 'variable expression_ Pos.marked;
+  cond_error : error * 'variable option;
 }
+
+type condition_data = variable condition_data_
 
 type idmap = variable list Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type: Mir.variable},
@@ -241,6 +258,9 @@ module Variable : sig
         (** Description taken from the variable declaration *)
     attributes :
       (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    origin : variable option;
+        (** If the variable is an SSA duplication, refers to the original
+            (declared) variable *)
     is_income : bool;
     is_table : int option;
   }
@@ -253,6 +273,7 @@ module Variable : sig
     string Pos.marked ->
     execution_number ->
     attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
+    origin:variable option ->
     is_income:bool ->
     is_table:rule_id option ->
     variable
@@ -328,6 +349,12 @@ val true_literal : literal
 val same_execution_number : execution_number -> execution_number -> bool
 
 val find_var_name_by_alias : program -> string Pos.marked -> string
+
+val map_expr_var : ('v -> 'v2) -> 'v expression_ -> 'v2 expression_
+
+val map_var_def_var : ('v -> 'v2) -> 'v variable_def_ -> 'v2 variable_def_
+
+val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
 val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
 

@@ -17,20 +17,20 @@
 (** Input-output management for BIR programs interpretation *)
 
 type bir_function = {
-  func_variable_inputs : unit Mir.VariableMap.t;
-  func_constant_inputs : Mir.expression Pos.marked Mir.VariableMap.t;
-  func_outputs : unit Mir.VariableMap.t;
-  func_conds : Mir.condition_data Mir.VariableMap.t;
+  func_variable_inputs : unit Bir.VariableMap.t;
+  func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
+  func_outputs : unit Bir.VariableMap.t;
+  func_conds : Bir.condition_data Bir.VariableMap.t;
 }
 (** Input-output data necessary to interpret a BIR program*)
 
 val get_variables_indexes :
-  Bir.program -> bir_function -> int Mir.VariableMap.t * int
+  Bir.program -> bir_function -> int Bir.VariableMap.t * int
 
 val translate_external_conditions :
   Mir.idmap ->
   Mast.expression Pos.marked list ->
-  Mir.condition_data Mir.VariableMap.t
+  Bir.condition_data Bir.VariableMap.t
 (** [translate_external_conditions idmap conditions] translates a series of
     boolean expressions [conditions] into M verification conditions ready to be
     added to a BIR program *)
@@ -43,7 +43,7 @@ val read_function_from_spec : Bir.program -> string -> bir_function
 (** [read_function_from_spec program spec_file] reads and parses [spec_file] and
     extracts all the inputs, outputs and conditions from it. *)
 
-val read_inputs_from_stdin : bir_function -> Mir.literal Mir.VariableMap.t
+val read_inputs_from_stdin : bir_function -> Mir.literal Bir.VariableMap.t
 (** Given an input-output specification, prompts the user on [stdin] for the
     values of the inputs and returns them as a map *)
 

@@ -16,26 +16,34 @@
 
 open Bir
 
+let format_expression fmt (e : expression) =
+  Format_mir.format_expression fmt (Mir.map_expr_var Bir.var_to_mir e)
+
+let format_variable_def fmt (vdef : variable_def) =
+  Format_mir.format_variable_def fmt (Mir.map_var_def_var Bir.var_to_mir vdef)
+
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdata) ->
       Format.fprintf fmt "%s = %a"
-        (Pos.unmark v.Mir.Variable.name)
-        Format_mir.format_variable_def vdata.var_definition
+        (Pos.unmark (var_to_mir v).Mir.Variable.name)
+        format_variable_def vdata.var_definition
   | SConditional (cond, t, []) ->
-      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n"
-        Format_mir.format_expression cond format_stmts t
+      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" format_expression cond
+        format_stmts t
   | SConditional (cond, t, f) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
-        Format_mir.format_expression cond format_stmts t format_stmts f
+        format_expression cond format_stmts t format_stmts f
   | SVerif cond_data ->
-      Format.fprintf fmt "assert (%a) or raise %a%a"
-        Format_mir.format_expression
+      let cond_error_opt_var =
+        Option.map var_to_mir (snd cond_data.cond_error)
+      in
+      Format.fprintf fmt "assert (%a) or raise %a%a" format_expression
         (Pos.unmark cond_data.cond_expr)
         Format_mir.format_error (fst cond_data.cond_error)
         (Format.pp_print_option (fun fmt v ->
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
-        (snd cond_data.cond_error)
+        cond_error_opt_var
   | SRuleCall r -> Format.fprintf fmt "call_rule(%d)@\n" r
   | SFunctionCall (func, args) ->
       Format.fprintf fmt "call_function: %s with args %a@," func

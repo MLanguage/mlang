@@ -21,7 +21,7 @@
 module CodeLocationMap : Map.S with type key = Bir_interpreter.code_location
 
 type code_coverage_result =
-  Bir_interpreter.var_literal CodeLocationMap.t Mir.VariableMap.t
+  Bir_interpreter.var_literal CodeLocationMap.t Bir.VariableMap.t
 (** For each variable, and for each code location where it is assigned, we
     record the value it has been assigned to during an interpreter run *)
 
@@ -45,7 +45,7 @@ module VarLiteralSet : Set.S with type elt = Bir_interpreter.var_literal
 type code_coverage_map_value = VarLiteralSet.t
 
 type code_coverage_acc =
-  code_coverage_map_value CodeLocationMap.t Mir.VariableMap.t
+  code_coverage_map_value CodeLocationMap.t Bir.VariableMap.t
 (** The accumulated coverage is the set of distinct values a particular variable
     assignment has received in the tests runs so far *)
 
@@ -61,7 +61,7 @@ val merge_code_coverage_acc :
 
 (** {1 Code locations}*)
 
-type code_locs = Mir.Variable.t CodeLocationMap.t
+type code_locs = Bir.variable CodeLocationMap.t
 
 val get_code_locs : Bir.program -> code_locs
 (** Returns all code locations in a program *)

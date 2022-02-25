@@ -21,7 +21,7 @@ module StringMap = Map.Make (struct
 end)
 
 type translation_ctx = {
-  new_variables : Mir.Variable.t StringMap.t;
+  new_variables : Bir.variable StringMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
 }
 
@@ -36,7 +36,7 @@ let ctx_join ctx1 ctx2 =
     new_variables =
       StringMap.union
         (fun _ v1 v2 ->
-          assert (Mir.Variable.compare v1 v2 = 0);
+          assert (Bir.compare_variable v1 v2 = 0);
           Some v2)
         ctx1.new_variables ctx2.new_variables;
     variables_used_as_inputs =
@@ -68,14 +68,15 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
 let generate_input_condition (crit : Mir.Variable.t -> bool)
     (p : Mir_interface.full_program) (pos : Pos.t) =
   let variables_to_check =
-    Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars
+    Bir.dict_from_mir_dict
+    @@ Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars
   in
   let mk_call_present x =
     (Mir.FunctionCall (PresentFunc, [ (Mir.Var x, pos) ]), pos)
   in
   let mk_or e1 e2 = (Mir.Binop ((Or, pos), e1, e2), pos) in
   let mk_false = (Mir.Literal (Float 0.), pos) in
-  Mir.VariableDict.fold
+  Bir.VariableDict.fold
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
@@ -86,15 +87,15 @@ let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
     v.Mir.Variable.attributes
 
 let cond_DepositDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Mir.expression Pos.marked =
+    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
   generate_input_condition (var_is_ "acompte")
 
 let cond_TaxbenefitDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Mir.expression Pos.marked =
+    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
   generate_input_condition (var_is_ "avfisc")
 
 let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program)
-    (pos : Pos.t) : Mir.expression Pos.marked =
+    (pos : Pos.t) : Bir.expression Pos.marked =
   (* commented aliases do not exist in the 2018 version *)
   (* double-commented aliases do not exist in the 2019 version *)
   (* triple-commented aliases do not exist in the 2020 version *)
@@ -146,11 +147,16 @@ let translate_m_code (m_program : Mir_interface.full_program)
     (fun (vid, (vdef : Mir.variable_data)) ->
       try
         let var = Mir.VariableDict.find vid m_program.program.program_vars in
-        match vdef.var_definition with
+        let var_definition =
+          Mir.map_var_def_var Bir.var_from_mir vdef.Mir.var_definition
+        in
+        match var_definition with
         | InputVar -> None
-        | _ ->
-            (* variables used in the context should not be reassigned *)
-            Some (Bir.SAssign (var, vdef), var.Mir.Variable.execution_number.pos)
+        | TableVar _ | SimpleVar _ ->
+            let vdef = { vdef with var_definition } in
+            Some
+              ( Bir.SAssign (Bir.var_from_mir var, vdef),
+                var.Mir.Variable.execution_number.pos )
       with Not_found -> None)
     vars
 
@@ -183,11 +189,11 @@ let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
   translate_mpp_stmts mpp_program m_program args ctx compute_decl.Mpp_ir.body
 
 and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
-    (expr : Mpp_ir.mpp_expr_kind Pos.marked) : Mir.expression =
+    (expr : Mpp_ir.mpp_expr_kind Pos.marked) : Bir.expression =
   let pos = Pos.get_position expr in
   match Pos.unmark expr with
   | Mpp_ir.Constant i -> Mir.Literal (Float (float_of_int i))
-  | Variable (Mbased (var, _)) -> Var var
+  | Variable (Mbased (var, _)) -> Var (Bir.var_from_mir var)
   | Variable (Local l) -> (
       try Var (StringMap.find l ctx.new_variables)
       with Not_found ->
@@ -243,7 +249,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~is_income:false ~is_table:None
+                ~attributes:[] ~origin:None ~is_income:false ~is_table:None
+              |> Bir.var_from_mir
             in
             let ctx =
               {
@@ -276,7 +283,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( var,
+               ( Bir.var_from_mir var,
                  {
                    var_definition =
                      SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -302,7 +309,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( var,
+               ( Bir.var_from_mir var,
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
@@ -403,6 +410,7 @@ let generate_verif_conds (conds : Mir.condition_data Mir.VariableMap.t) :
     Bir.stmt list =
   Mir.VariableMap.fold
     (fun _var data acc ->
+      let data = Mir.map_cond_data_var Bir.var_from_mir data in
       (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
     conds []
 
@@ -454,7 +462,7 @@ let create_combined_program (m_program : Mir_interface.full_program)
       main_function = mpp_function_to_extract;
       idmap = m_program.program.program_idmap;
       mir_program = m_program.program;
-      outputs = Mir.VariableMap.empty;
+      outputs = Bir.VariableMap.empty;
     }
   with Bir_interpreter.RegularFloatInterpreter.RuntimeError (r, ctx) ->
     Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured r ctx

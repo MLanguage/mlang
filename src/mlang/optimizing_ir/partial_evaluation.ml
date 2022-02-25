@@ -62,17 +62,17 @@ let undef_cast (d1 : definedness) (d2 : definedness) : definedness =
   else if maybe_float d1 || maybe_float d2 then Float
   else assert false
 
-let from_literal (l : Mir.literal) : Mir.expression * definedness =
+let from_literal (l : Mir.literal) : Bir.expression * definedness =
   (Mir.Literal l, match l with Float _ -> Float | Undefined -> Undefined)
 
-let partial_to_expr (e : partial_expr) : Mir.expression option * definedness =
+let partial_to_expr (e : partial_expr) : Bir.expression option * definedness =
   match e with
   | PartialLiteral l ->
       let e, d = from_literal l in
       (Some e, d)
   | UnknownFloat -> (None, Float)
 
-let expr_to_partial (e : Mir.expression) (d : definedness) : partial_expr option
+let expr_to_partial (e : Bir.expression) (d : definedness) : partial_expr option
     =
   match (e, d) with
   | Literal l, _ -> Some (PartialLiteral l)
@@ -102,7 +102,7 @@ let _format_block fmt (id, ov) =
 
 type partial_ev_ctx = {
   ctx_local_vars : partial_expr Mir.LocalVariableMap.t;
-  ctx_vars : var_literal option BlockMap.t Mir.VariableMap.t;
+  ctx_vars : var_literal option BlockMap.t Bir.VariableMap.t;
       (** The option at the leaves of the [BlockMap.t] is to account for
           definitions that are not literals but that are to be taken into
           account for validity of inlining later *)
@@ -115,7 +115,7 @@ type partial_ev_ctx = {
 let empty_ctx (g : CFG.t) (entry_block : block_id) =
   {
     ctx_local_vars = Mir.LocalVariableMap.empty;
-    ctx_vars = Mir.VariableMap.empty;
+    ctx_vars = Bir.VariableMap.empty;
     ctx_doms = Dominators.idom_to_dom (Dominators.compute_idom g entry_block);
     ctx_paths = Paths.create g;
     ctx_inside_block = None;
@@ -137,24 +137,23 @@ let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id)
   if dom id1 id2 then 1 else if dom id2 id1 then -1 else 0
 
 let add_var_def_to_ctx (ctx : partial_ev_ctx) (block_id : block_id)
-    (var : Mir.Variable.t) (var_lit : var_literal option) : partial_ev_ctx =
+    (var : Bir.variable) (var_lit : var_literal option) : partial_ev_ctx =
   {
     ctx with
     ctx_vars =
-      Mir.VariableMap.add var
-        (match Mir.VariableMap.find_opt var ctx.ctx_vars with
+      Bir.VariableMap.add var
+        (match Bir.VariableMap.find_opt var ctx.ctx_vars with
         | None -> BlockMap.singleton block_id var_lit
         | Some defs -> BlockMap.add block_id var_lit defs)
         ctx.ctx_vars;
   }
 
-let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
+let get_closest_dominating_def (var : Bir.variable) (ctx : partial_ev_ctx) :
     var_literal option =
   let curr_block = Option.get ctx.ctx_inside_block in
-  match Mir.VariableMap.find_opt var ctx.ctx_vars with
+  match Bir.VariableMap.find_opt var ctx.ctx_vars with
   | None -> None
-  | Some defs -> (
-      let previous_defs = Mir.VariableMap.find var ctx.ctx_vars in
+  | Some previous_defs -> (
       let dominating_defs =
         BlockMap.bindings
           (BlockMap.filter
@@ -162,7 +161,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
                Option.is_some def
                (* we only consider definitions that were partially evaluated to
                   a literal *)
-               && (def_block_id = Option.get ctx.ctx_inside_block
+               && (def_block_id = curr_block
                   || ctx.ctx_doms def_block_id curr_block))
              previous_defs)
       in
@@ -194,7 +193,7 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
                          curr_block
                     (* if the definition is the same, this is not an issue *)
                     && (Option.compare Stdlib.compare) ov (Some def) <> 0)
-                defs
+                previous_defs
             in
             if BlockMap.cardinal exists_other_def_in_between > 0 then
               (* if there are multiple conflicting definitions but they have the
@@ -215,6 +214,28 @@ let get_closest_dominating_def (var : Mir.Variable.t) (ctx : partial_ev_ctx) :
                         | UnknownFloat, UnknownFloat ->
                             Some (SimpleVar UnknownFloat)
                         | _ -> None)
+                    | Some (TableVar (ai, aa)), Some (TableVar (di, da)) -> (
+                        assert (ai = di);
+                        let partials =
+                          List.fold_left2
+                            (fun acc a d ->
+                              match acc with
+                              | None -> None
+                              | Some acc -> (
+                                  match (a, d) with
+                                  | ( PartialLiteral (Float _),
+                                      PartialLiteral (Float _) )
+                                  | PartialLiteral (Float _), UnknownFloat
+                                  | UnknownFloat, PartialLiteral (Float _)
+                                  | UnknownFloat, UnknownFloat ->
+                                      Some (UnknownFloat :: acc)
+                                  | _ -> None))
+                            (Some []) (Array.to_list aa) (Array.to_list da)
+                        in
+                        match partials with
+                        | None -> None
+                        | Some ps ->
+                            Some (TableVar (ai, Array.of_list (List.rev ps))))
                     | Some (TableVar _), _ | _, Some (TableVar _) ->
                         assert false)
                   (Some def) defs
@@ -227,10 +248,10 @@ let interpreter_ctx_from_partial_ev_ctx (ctx : partial_ev_ctx) :
   {
     Bir_interpreter.RegularFloatInterpreter.empty_ctx with
     Bir_interpreter.RegularFloatInterpreter.ctx_vars =
-      Mir.VariableMap.map Option.get
-        (Mir.VariableMap.filter
+      Bir.VariableMap.map Option.get
+        (Bir.VariableMap.filter
            (fun _ x -> Option.is_some x)
-           (Mir.VariableMap.mapi
+           (Bir.VariableMap.mapi
               (fun var _ ->
                 match get_closest_dominating_def var ctx with
                 | Some (SimpleVar (PartialLiteral l)) ->
@@ -249,7 +270,7 @@ let check e d =
   | _ -> true
 
 let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
-    (e : Mir.expression Pos.marked) : Mir.expression Pos.marked * definedness =
+    (e : Bir.expression Pos.marked) : Bir.expression Pos.marked * definedness =
   let new_e, d =
     match Pos.unmark e with
     | Comparison (op, e1, e2) ->
@@ -618,7 +639,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
   if not @@ check new_e d then
     Cli.debug_print "imprecise definedness inference @@%a: %a %a"
       Pos.format_position_short (Pos.get_position e)
-      Format_mir.format_expression (Pos.unmark e) format_definedness d;
+      Format_bir.format_expression (Pos.unmark e) format_definedness d;
   (new_e, d)
 
 let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
@@ -626,19 +647,21 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
     stmt list * partial_ev_ctx =
   match Pos.unmark stmt with
   | SAssign (var, def) ->
-      let peval_debug = List.mem (Pos.unmark var.name) !Cli.var_info_debug in
+      let peval_debug =
+        List.mem (Pos.unmark (Bir.var_to_mir var).name) !Cli.var_info_debug
+      in
       let new_def, new_ctx =
         match def.var_definition with
         | InputVar -> (Mir.InputVar, ctx)
         | SimpleVar e ->
             if peval_debug then
               Cli.var_info_print "starting partial evaluation for %s = %a"
-                (Pos.unmark var.name) Format_mir.format_expression
-                (Pos.unmark e);
+                (Pos.unmark (Bir.var_to_mir var).name)
+                Format_bir.format_expression (Pos.unmark e);
             let e', d' = partially_evaluate_expr ctx p.mir_program e in
             if peval_debug then
               Cli.var_info_print "changed into %a, d = %a"
-                Format_mir.format_expression (Pos.unmark e') format_definedness
+                Format_bir.format_expression (Pos.unmark e') format_definedness
                 d';
             let partial_e' =
               Option.map

@@ -18,6 +18,46 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type variable
+
+type variable_id = int
+
+module VariableMap : Map.S with type key = variable
+
+module VariableDict : sig
+  type t
+
+  val bindings : t -> (variable_id * variable) list
+
+  val add : variable -> t -> t
+
+  val empty : t
+
+  val find : variable_id -> t -> variable
+
+  val mem : variable -> t -> bool
+
+  val union : t -> t -> t
+
+  val inter : t -> t -> t
+
+  val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
+
+  val singleton : variable -> t
+
+  val filter : (variable_id -> variable -> bool) -> t -> t
+
+  val for_all : (variable -> bool) -> t -> bool
+end
+
+type expression = variable Mir.expression_
+
+type condition_data = variable Mir.condition_data_
+
+type variable_def = variable Mir.variable_def_
+
+type variable_data = variable Mir.variable_data_
+
 type function_name = string
 
 type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
@@ -25,9 +65,9 @@ type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Mir.Variable.t * Mir.variable_data
-  | SConditional of Mir.expression * stmt list * stmt list
-  | SVerif of Mir.condition_data
+  | SAssign of variable * variable_data
+  | SConditional of expression * stmt list * stmt list
+  | SVerif of condition_data
   | SRuleCall of rule_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
@@ -41,8 +81,18 @@ type program = {
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit Mir.VariableMap.t;
+  outputs : unit VariableMap.t;
 }
+
+val var_from_mir : Mir.Variable.t -> variable
+
+val var_to_mir : variable -> Mir.Variable.t
+
+val compare_variable : variable -> variable -> int
+
+val map_from_mir_map : 'a Mir.VariableMap.t -> 'a VariableMap.t
+
+val dict_from_mir_dict : Mir.VariableDict.t -> VariableDict.t
 
 val main_statements : program -> stmt list
 
@@ -56,10 +106,15 @@ val squish_statements : program -> int -> string -> program
     existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
 
-val get_assigned_variables : program -> Mir.VariableDict.t
+val get_assigned_variables : program -> VariableDict.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t
 
 val get_locals_size : program -> int
 
 val remove_empty_conditionals : stmt list -> stmt list
+
+val get_used_variables_ :
+  expression Pos.marked -> VariableDict.t -> VariableDict.t
+
+val get_used_variables : expression Pos.marked -> VariableDict.t

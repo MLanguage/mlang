@@ -22,7 +22,7 @@
 val typecheck : Mir_interface.full_program -> Mir_interface.full_program
 
 val expand_functions_expr :
-  Mir.expression Pos.marked -> Mir.expression Pos.marked
+  'var Mir.expression_ Pos.marked -> 'var Mir.expression_ Pos.marked
 (** Most functions are just syntactic sugar for operations expressible with the
     rest of the language, so we expand these. *)
 

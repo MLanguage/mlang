@@ -20,19 +20,22 @@ let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdata) ->
       Format.fprintf fmt "%s = %a@,"
-        (Pos.unmark v.Mir.Variable.name)
-        Format_mir.format_variable_def vdata.var_definition
+        (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
+        Format_bir.format_variable_def vdata.var_definition
   | SConditional (cond, b1, b2, _) ->
       Format.fprintf fmt "if(%a) then goto %d else goto %d@,"
-        Format_mir.format_expression cond b1 b2
+        Format_bir.format_expression cond b1 b2
   | SVerif cond_data ->
+      let cond_error_opt_var =
+        Option.map Bir.var_to_mir (snd cond_data.cond_error)
+      in
       Format.fprintf fmt "assert (%a) or raise %a%a@,"
-        Format_mir.format_expression
+        Format_bir.format_expression
         (Pos.unmark cond_data.cond_expr)
         Format_mir.format_error (fst cond_data.cond_error)
         (Format.pp_print_option (fun fmt v ->
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
-        (snd cond_data.cond_error)
+        cond_error_opt_var
   | SGoto b -> Format.fprintf fmt "goto %d@," b
   | SRuleCall (_rid, name, stmts) ->
       Format.fprintf fmt "call(%s)@[<v 3>{@,%a@]}@," name format_stmts stmts

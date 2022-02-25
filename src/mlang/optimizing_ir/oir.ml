@@ -21,11 +21,11 @@ module BlockMap = Map.Make (Int)
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Mir.Variable.t * Mir.variable_data
-  | SConditional of Mir.expression * block_id * block_id * block_id
+  | SAssign of Bir.variable * Bir.variable_data
+  | SConditional of Bir.expression * block_id * block_id * block_id
       (** The first two block ids are the true and false branch, the third is
           the join point after *)
-  | SVerif of Mir.condition_data
+  | SVerif of Bir.condition_data
   | SGoto of block_id
   | SRuleCall of Bir.rule_id * string * stmt list
   | SFunctionCall of Bir.function_name * Mir.variable list
@@ -38,7 +38,7 @@ type program = {
   exit_block : block_id;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit Mir.VariableMap.t;
+  outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
 }
 
