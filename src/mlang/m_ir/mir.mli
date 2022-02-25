@@ -161,45 +161,17 @@ type 'variable variable_data_ = {
 
 type variable_data = variable variable_data_
 
-type rule_tag =
-  | Primitif
-  | Corrective
-  | Isf
-  | Taux
-  | Irisf
-  | Base_hr
-  | Base_tl
-  | Base_tl_init
-  | Base_tl_rect
-  | Base_initial
-  | Base_inr
-  | Base_inr_ref
-  | Base_inr_tl
-  | Base_inr_tl22
-  | Base_inr_tl24
-  | Base_inr_ntl
-  | Base_inr_ntl22
-  | Base_inr_ntl24
-  | Base_inr_inter22
-  | Base_inr_intertl
-  | Base_inr_r9901
-  | Base_abat98
-  | Base_abat99
-  | Base_majo
-  | Base_premier
-  | Base_anterieure
-  | Base_anterieure_cor
-  | Base_stratemajo
-
 type rule_data = {
   rule_vars : (variable_id * variable_data) list;
   rule_number : int Pos.marked;
-  rule_tags : rule_tag Pos.marked list;
+  rule_tags : Mast.chain_tag list;
 }
 
 type rule_id = int
 
 module RuleMap : Map.S with type key = rule_id
+
+module TagMap : Map.S with type key = Mast.chain_tag
 
 type error_descr = {
   kind : string Pos.marked;
@@ -385,6 +357,3 @@ val find_vars_by_io : program -> io -> VariableDict.t
 (** Returns a VariableDict.t containing all the variables that have a given io
     type, only one variable per name is entered in the VariableDict.t, this
     function chooses the one with the highest execution number*)
-
-val rule_number_and_tags_of_rule_name :
-  Mast.rule_name -> rule_id Pos.marked * rule_tag Pos.marked list

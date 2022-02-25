@@ -168,7 +168,8 @@ let translate_external_conditions idmap
   let program =
     Mast.Verification
       {
-        verif_name = [ ("000", Pos.no_pos) ];
+        verif_number = (0, Pos.no_pos);
+        verif_tags = [];
         verif_applications = [ ("iliad", Pos.no_pos) ];
         verif_conditions = verif_conds;
       }

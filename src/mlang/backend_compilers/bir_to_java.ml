@@ -67,7 +67,9 @@ let print_double_cut oc () = Format.fprintf oc "@,@,"
 let get_var_pos (var : variable) var_indexes : int =
   match VariableMap.find_opt var var_indexes with
   | Some i -> i
-  | None -> Errors.raise_error "Variable not found"
+  | None ->
+      Errors.raise_error
+        ("Variable not found: " ^ Pos.unmark (var_to_mir var).name)
 
 let rec generate_java_expr (e : expression Pos.marked)
     (var_indexes : int VariableMap.t) :

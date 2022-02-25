@@ -1,4 +1,4 @@
 dgfip_calculation():
-  outputs <- call_m(calcul_primitif_isf)
-  outputs <- call_m(calcul_primitif)
-  outputs <- call_m(calcul_primitif_taux)
+  outputs <- call_m(isf)
+  outputs <- call_m(primitif)
+  outputs <- call_m(taux)

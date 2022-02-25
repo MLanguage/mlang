@@ -23,12 +23,14 @@ end)
 type translation_ctx = {
   new_variables : Bir.variable StringMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
+  used_chains : unit Mir.TagMap.t;
 }
 
-let emtpy_translation_ctx : translation_ctx =
+let empty_translation_ctx : translation_ctx =
   {
     new_variables = StringMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
+    used_chains = Mir.TagMap.empty;
   }
 
 let ctx_join ctx1 ctx2 =
@@ -42,6 +44,8 @@ let ctx_join ctx1 ctx2 =
     variables_used_as_inputs =
       Mir.VariableDict.union ctx1.variables_used_as_inputs
         ctx2.variables_used_as_inputs;
+    used_chains =
+      Mir.TagMap.union (fun _ _ () -> Some ()) ctx1.used_chains ctx2.used_chains;
   }
 
 let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
@@ -67,6 +71,8 @@ let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
 
 let generate_input_condition (crit : Mir.Variable.t -> bool)
     (p : Mir_interface.full_program) (pos : Pos.t) =
+  (* this might do wierd thing iif all variables to check are not "saisie" since
+     the filter may find duplicates used in different contexts *)
   let variables_to_check =
     Bir.dict_from_mir_dict
     @@ Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars
@@ -160,8 +166,9 @@ let translate_m_code (m_program : Mir_interface.full_program)
       with Not_found -> None)
     vars
 
-let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
-    (ctx : translation_ctx) : translation_ctx * Bir.stmt list =
+let wrap_m_code_call (m_program : Mir_interface.full_program)
+    (chain_tag : Mast.chain_tag) (ctx : translation_ctx) :
+    translation_ctx * Bir.stmt list =
   let m_program =
     {
       m_program with
@@ -171,13 +178,15 @@ let wrap_m_code_call (m_program : Mir_interface.full_program) execution_order
           ctx.variables_used_as_inputs;
     }
   in
-  let program_stmts, ctx =
+  let execution_order =
+    (Mir.TagMap.find chain_tag m_program.chains_orders).execution_order
+  in
+  let program_stmts =
     List.fold_left
-      (fun (stmts, ctx) rule_id ->
+      (fun stmts rule_id ->
         let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
-        ( Pos.same_pos_as (Bir.SRuleCall rule_id) rule.Mir.rule_number :: stmts,
-          ctx ))
-      ([], ctx) execution_order
+        Pos.same_pos_as (Bir.SRuleCall rule_id) rule.Mir.rule_number :: stmts)
+      [] execution_order
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
@@ -288,9 +297,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                    var_definition =
                      SimpleVar (translate_mpp_expr m_program ctx expr, pos);
                    var_typ = None;
-                   var_io =
-                     (snd (Mir.find_var_definition m_program.program var))
-                       .var_io;
+                   var_io = Mir.Input;
                  } ))
             stmt;
         ] )
@@ -313,9 +320,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;
-                   var_io =
-                     (snd (Mir.find_var_definition m_program.program var))
-                       .var_io;
+                   var_io = Mir.Input;
                  } ))
             stmt;
         ] )
@@ -348,9 +353,11 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                   real_args ),
             pos );
         ] )
-  | Mpp_ir.Expr (Call (Program _chain, _args), _) ->
-      let exec_order = m_program.main_execution_order in
-      wrap_m_code_call m_program exec_order ctx
+  | Mpp_ir.Expr (Call (Program chain_tag, _args), _) ->
+      let ctx =
+        { ctx with used_chains = Mir.TagMap.add chain_tag () ctx.used_chains }
+      in
+      wrap_m_code_call m_program chain_tag ctx
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
@@ -419,27 +426,34 @@ let create_combined_program (m_program : Mir_interface.full_program)
     Bir.program =
   try
     let mpp_program = List.rev mpp_program in
-    let rules =
-      Mir.RuleMap.mapi
-        (fun rule_id rule_data ->
-          let rule_stmts = translate_m_code m_program rule_data.Mir.rule_vars in
-          Bir.
-            {
-              rule_id;
-              rule_name = string_of_int (Pos.unmark rule_data.Mir.rule_number);
-              rule_stmts;
-            })
-        m_program.program.Mir.program_rules
-    in
-    let _ctx, mpp_functions =
+    let ctx, mpp_functions =
       List.fold_left
         (fun (ctx, function_map) mpp_func ->
           let ctx, statements =
             translate_mpp_function mpp_program m_program mpp_func [] ctx
           in
           (ctx, Bir.FunctionMap.add mpp_func.name statements function_map))
-        (emtpy_translation_ctx, Bir.FunctionMap.empty)
+        (empty_translation_ctx, Bir.FunctionMap.empty)
         mpp_program
+    in
+    let rules =
+      Mir.RuleMap.fold
+        (fun rule_id rule_data rules ->
+          if
+            Mir.TagMap.exists
+              (fun chain () ->
+                Mast.are_tags_part_of_chain rule_data.Mir.rule_tags chain)
+              ctx.used_chains
+          then
+            let rule_name =
+              string_of_int (Pos.unmark rule_data.Mir.rule_number)
+            in
+            let rule_stmts =
+              translate_m_code m_program rule_data.Mir.rule_vars
+            in
+            Mir.RuleMap.add rule_id Bir.{ rule_id; rule_name; rule_stmts } rules
+          else rules)
+        m_program.program.program_rules Mir.RuleMap.empty
     in
     if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
       Errors.raise_error

@@ -34,15 +34,134 @@ type application = string
 type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
 
-type rule_name = string Pos.marked list
-(** Rule can have multiple names. The last one should be an integer, indicating
-    the order of execution of the rule. *)
+type chain_tag =
+  | Primitif
+  | Corrective
+  | Isf
+  | Taux
+  | Irisf
+  | Base_hr
+  | Base_tl
+  | Base_tl_init
+  | Base_tl_rect
+  | Base_initial
+  | Base_inr
+  | Base_inr_ref
+  | Base_inr_tl
+  | Base_inr_tl22
+  | Base_inr_tl24
+  | Base_inr_ntl
+  | Base_inr_ntl22
+  | Base_inr_ntl24
+  | Base_inr_inter22
+  | Base_inr_intertl
+  | Base_inr_r9901
+  | Base_abat98
+  | Base_abat99
+  | Base_majo
+  | Base_premier
+  | Base_anterieure
+  | Base_anterieure_cor
+  | Base_stratemajo
+  | Non_auto_cc
+  | Horizontale
+(* Make sure to update [all_tags] below when patching this *)
 
-let rule_number (name : rule_name) : int =
-  try int_of_string (Pos.unmark (List.hd (List.rev name)))
-  with _ ->
-    Errors.raise_spanned_error "this rule doesn't have an execution number"
-      (Pos.get_position (List.hd name))
+let all_tags : chain_tag list =
+  [
+    Primitif;
+    Corrective;
+    Isf;
+    Taux;
+    Irisf;
+    Base_hr;
+    Base_tl;
+    Base_tl_init;
+    Base_tl_rect;
+    Base_initial;
+    Base_inr;
+    Base_inr_ref;
+    Base_inr_tl;
+    Base_inr_tl22;
+    Base_inr_tl24;
+    Base_inr_ntl;
+    Base_inr_ntl22;
+    Base_inr_ntl24;
+    Base_inr_inter22;
+    Base_inr_intertl;
+    Base_inr_r9901;
+    Base_abat98;
+    Base_abat99;
+    Base_majo;
+    Base_premier;
+    Base_anterieure;
+    Base_anterieure_cor;
+    Base_stratemajo;
+    Non_auto_cc;
+    Horizontale;
+  ]
+
+let chain_tag_of_string : string -> chain_tag = function
+  | "primitif" -> Primitif
+  | "corrective" -> Corrective
+  | "isf" -> Isf
+  | "taux" -> Taux
+  | "irisf" -> Irisf
+  | "base_HR" -> Base_hr
+  | "base_tl" -> Base_tl
+  | "base_tl_init" -> Base_tl_init
+  | "base_tl_rect" -> Base_tl_rect
+  | "base_INR" -> Base_inr
+  | "base_inr_ref" -> Base_inr_ref
+  | "base_inr_tl" -> Base_inr_tl
+  | "base_inr_tl22" -> Base_inr_tl22
+  | "base_inr_tl24" -> Base_inr_tl24
+  | "base_inr_ntl" -> Base_inr_ntl
+  | "base_inr_ntl22" -> Base_inr_ntl22
+  | "base_inr_ntl24" -> Base_inr_ntl24
+  | "base_inr_inter22" -> Base_inr_inter22
+  | "base_inr_intertl" -> Base_inr_intertl
+  | "base_inr_r9901" -> Base_inr_r9901
+  | "base_ABAT98" -> Base_abat98
+  | "base_ABAT99" -> Base_abat99
+  | "base_INITIAL" -> Base_initial
+  | "base_premier" -> Base_premier
+  | "base_anterieure" -> Base_anterieure
+  | "base_anterieure_cor" -> Base_anterieure_cor
+  | "base_MAJO" -> Base_majo
+  | "base_stratemajo" -> Base_stratemajo
+  | "non_auto_cc" -> Non_auto_cc
+  | "horizontale" -> Horizontale
+  | _ -> raise Not_found
+
+let number_and_tags_of_name (name : string Pos.marked list) :
+    int Pos.marked * chain_tag Pos.marked list =
+  let rec aux tags = function
+    | [] -> assert false (* M parser shouldn't allow it *)
+    | [ n ] ->
+        let num =
+          try Pos.map_under_mark int_of_string n
+          with _ ->
+            Errors.raise_spanned_error
+              "this rule or verification doesn't have an execution number"
+              (Pos.get_position (List.hd name))
+        in
+        (num, tags)
+    | h :: t ->
+        let tag =
+          try Pos.map_under_mark chain_tag_of_string h
+          with _ ->
+            Errors.raise_spanned_error
+              ("Unknown chain tag " ^ Pos.unmark h)
+              (Pos.get_position h)
+        in
+        aux (tag :: tags) t
+  in
+  let number, tags = aux [] name in
+  if List.length tags = 0 then
+    (number, [ (Primitif, Pos.no_pos); (Corrective, Pos.no_pos) ])
+    (* No tags means both in primitive and corrective *)
+  else (number, tags)
 
 type variable_name = string
 (** Variables are just strings *)
@@ -52,15 +171,6 @@ type func_name = string
 
 type variable_generic_name = { base : string; parameters : char list }
 (** For generic variables, we record the list of their lowercase parameters *)
-
-type verification_name = string Pos.marked list
-(** Verification clauses can have multiple names, currently unused *)
-
-let verification_number (name : verification_name) : int =
-  try int_of_string (Pos.unmark (List.hd (List.rev name)))
-  with _ ->
-    Errors.raise_spanned_error "this rule doesn't have an execution number"
-      (Pos.get_position (List.hd name))
 
 type error_name = string
 (** Ununsed for now *)
@@ -193,7 +303,8 @@ type formula =
   | MultipleFormulaes of loop_variables Pos.marked * formula_decl
 
 type rule = {
-  rule_name : rule_name;
+  rule_number : int Pos.marked;
+  rule_tags : chain_tag Pos.marked list;
   rule_applications : application Pos.marked list;
   rule_chaining : chaining Pos.marked option;
   rule_formulaes : formula Pos.marked list;
@@ -272,7 +383,8 @@ type verification_condition = {
 }
 
 type verification = {
-  verif_name : verification_name;
+  verif_number : int Pos.marked;
+  verif_tags : chain_tag Pos.marked list;
   verif_applications : application Pos.marked list;
       (** Verification conditions are application-specific *)
   verif_conditions : verification_condition Pos.marked list;
@@ -318,3 +430,23 @@ type function_spec = {
 
 let get_variable_name (v : variable) : string =
   match v with Normal s -> s | Generic s -> s.base
+
+let are_tags_part_of_chain (tags : chain_tag list) (chain : chain_tag) : bool =
+  let is_part_of = List.exists (( = ) chain) tags in
+  match chain with
+  | Corrective ->
+      (* Specific exclusion of "base_" rules in corrective *)
+      (not
+         (List.exists
+            (function
+              | Base_hr | Base_tl | Base_tl_init | Base_tl_rect | Base_initial
+              | Base_inr | Base_inr_ref | Base_inr_tl | Base_inr_tl22
+              | Base_inr_tl24 | Base_inr_ntl | Base_inr_ntl22 | Base_inr_ntl24
+              | Base_inr_inter22 | Base_inr_intertl | Base_inr_r9901
+              | Base_abat98 | Base_abat99 | Base_majo | Base_premier
+              | Base_anterieure | Base_anterieure_cor | Base_stratemajo ->
+                  true
+              | _ -> false)
+            tags))
+      && is_part_of
+  | _ -> is_part_of

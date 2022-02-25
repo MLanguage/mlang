@@ -88,8 +88,6 @@ val translate : Mast.program -> Mir.program
 (** Main translation function from the M AST to the M Variable Graph. This
     function performs 6 linear passes on the input code:
 
-    - [remove_corrective_rules] removes all the rules that are not necessary for
-      the computation of the "primitive" income tax;
     - [get_constants] gets the value of all constant variables, the values of
       which are needed to compute certain loop bounds;
     - [get_variables_decl] retrieves the declarations of all other variables and

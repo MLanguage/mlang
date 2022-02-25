@@ -48,27 +48,43 @@ let reset_all_outputs (p : program) : program =
           })
     p
 
-type full_program = {
+type chain_order = {
   dep_graph : Mir_dependency_graph.RG.t;
-  main_execution_order : Mir.rule_id list;
-  program : Mir.program;
+  execution_order : Mir.rule_id list;
 }
 
-let to_full_program (program : program) : full_program =
-  let vars_to_rules =
-    Mir.RuleMap.fold
-      (fun rule_id { rule_vars; _ } conv ->
-        List.fold_left
-          (fun conv (vid, _def) ->
-            let var = VariableDict.find vid program.program_vars in
-            VariableMap.add var rule_id conv)
-          conv rule_vars)
-      program.program_rules VariableMap.empty
+type full_program = {
+  program : Mir.program;
+  chains_orders : chain_order Mir.TagMap.t;
+}
+
+let to_full_program (program : program) (chains : Mast.chain_tag list) :
+    full_program =
+  let chains_orders =
+    List.fold_left
+      (fun chains tag ->
+        let vars_to_rules, chain_rules =
+          Mir.RuleMap.fold
+            (fun rule_id rule (vars, rules) ->
+              if Mast.are_tags_part_of_chain rule.rule_tags tag then
+                ( List.fold_left
+                    (fun vars (vid, _def) ->
+                      let var = VariableDict.find vid program.program_vars in
+                      VariableMap.add var rule_id vars)
+                    vars rule.rule_vars,
+                  RuleMap.add rule_id rule rules )
+              else (vars, rules))
+            program.program_rules
+            (VariableMap.empty, RuleMap.empty)
+        in
+        let dep_graph =
+          Mir_dependency_graph.create_rules_dependency_graph chain_rules
+            vars_to_rules
+        in
+        let execution_order =
+          Mir_dependency_graph.get_rules_execution_order dep_graph
+        in
+        Mir.TagMap.add tag { dep_graph; execution_order } chains)
+      Mir.TagMap.empty chains
   in
-  let dep_graph =
-    Mir_dependency_graph.create_rules_dependency_graph program vars_to_rules
-  in
-  let main_execution_order =
-    Mir_dependency_graph.get_rules_execution_order dep_graph
-  in
-  { program; dep_graph; main_execution_order }
+  { program; chains_orders }

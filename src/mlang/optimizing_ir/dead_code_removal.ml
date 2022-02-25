@@ -41,8 +41,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
       stmt_used_vars used_vars
   in
   let rec remove_dead_stmts_of stmts used_vars used_defs pos =
-    List.fold_right
-      (fun stmt ((used_vars : pos_map), (used_defs : pos_map), acc, pos) ->
+    List.fold_left
+      (fun ((used_vars : pos_map), (used_defs : pos_map), acc, pos) stmt ->
         match Pos.unmark stmt with
         | SAssign (var, var_def) ->
             let used_defs_returned =
@@ -151,8 +151,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
             (used_vars, used_defs, rule_call :: acc, pos - 1)
         | SFunctionCall _ -> assert false
         (* TODO: Implement me *))
-      stmts
       (used_vars, used_defs, [], pos)
+      (List.rev stmts)
   in
   let used_vars, used_defs, new_stmts, _ =
     remove_dead_stmts_of stmts used_vars used_defs 0

@@ -370,100 +370,20 @@ let fresh_rule_id =
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = -1
 
-type rule_tag =
-  | Primitif
-  | Corrective
-  | Isf
-  | Taux
-  | Irisf
-  | Base_hr
-  | Base_tl
-  | Base_tl_init
-  | Base_tl_rect
-  | Base_initial
-  | Base_inr
-  | Base_inr_ref
-  | Base_inr_tl
-  | Base_inr_tl22
-  | Base_inr_tl24
-  | Base_inr_ntl
-  | Base_inr_ntl22
-  | Base_inr_ntl24
-  | Base_inr_inter22
-  | Base_inr_intertl
-  | Base_inr_r9901
-  | Base_abat98
-  | Base_abat99
-  | Base_majo
-  | Base_premier
-  | Base_anterieure
-  | Base_anterieure_cor
-  | Base_stratemajo
-
-let rule_tag_of_string : string -> rule_tag = function
-  | "primitif" -> Primitif
-  | "corrective" -> Corrective
-  | "isf" -> Isf
-  | "taux" -> Taux
-  | "irisf" -> Irisf
-  | "base_HR" -> Base_hr
-  | "base_tl" -> Base_tl
-  | "base_tl_init" -> Base_tl_init
-  | "base_tl_rect" -> Base_tl_rect
-  | "base_INR" -> Base_inr
-  | "base_inr_ref" -> Base_inr_ref
-  | "base_inr_tl" -> Base_inr_tl
-  | "base_inr_tl22" -> Base_inr_tl22
-  | "base_inr_tl24" -> Base_inr_tl24
-  | "base_inr_ntl" -> Base_inr_ntl
-  | "base_inr_ntl22" -> Base_inr_ntl22
-  | "base_inr_ntl24" -> Base_inr_ntl24
-  | "base_inr_inter22" -> Base_inr_inter22
-  | "base_inr_intertl" -> Base_inr_intertl
-  | "base_inr_r9901" -> Base_inr_r9901
-  | "base_ABAT98" -> Base_abat98
-  | "base_ABAT99" -> Base_abat99
-  | "base_INITIAL" -> Base_initial
-  | "base_premier" -> Base_premier
-  | "base_anterieure" -> Base_anterieure
-  | "base_anterieure_cor" -> Base_anterieure_cor
-  | "base_MAJO" -> Base_majo
-  | "base_stratemajo" -> Base_stratemajo
-  | _ -> raise Not_found
-
-let rule_number_and_tags_of_rule_name (rule_name : Mast.rule_name) :
-    int Pos.marked * rule_tag Pos.marked list =
-  let rec aux tags = function
-    | [] -> assert false (* M parser shouldn't allow it *)
-    | [ n ] ->
-        let num =
-          try Pos.map_under_mark int_of_string n
-          with _ ->
-            Errors.raise_spanned_error
-              "this rule doesn't have an execution number"
-              (Pos.get_position (List.hd rule_name))
-        in
-        (num, tags)
-    | h :: t ->
-        let tag =
-          try Pos.map_under_mark rule_tag_of_string h
-          with _ ->
-            Errors.raise_spanned_error
-              ("Unknown rule tag " ^ Pos.unmark h)
-              (Pos.get_position h)
-        in
-        aux (tag :: tags) t
-  in
-  aux [] rule_name
-
 type rule_data = {
   rule_vars : (Variable.id * variable_data) list;
   rule_number : int Pos.marked;
-  rule_tags : rule_tag Pos.marked list;
+  rule_tags : Mast.chain_tag list;
 }
 
 module RuleMap = Map.Make (struct
   type t = rule_id
+
+  let compare = compare
+end)
+
+module TagMap = Map.Make (struct
+  type t = Mast.chain_tag
 
   let compare = compare
 end)
@@ -615,7 +535,7 @@ let sort_by_highest_exec_number v1 v2 =
 let get_var_sorted_by_execution_number (p : program) (name : string) sort :
     Variable.t =
   let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
-  List.hd vars
+  match vars with [] -> raise Not_found | hd :: _ -> hd
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try

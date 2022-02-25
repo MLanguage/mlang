@@ -72,7 +72,7 @@ let get_def_used_variables (def : Mir.variable_def) : Mir.VariableDict.t =
             (fun _ e acc -> Mir.VariableDict.union acc (get_used_variables e))
             es Mir.VariableDict.empty)
 
-let create_rules_dependency_graph (program : Mir.program)
+let create_rules_dependency_graph (chain_rules : Mir.rule_data Mir.RuleMap.t)
     (vars_to_rules : Mir.rule_id Mir.VariableMap.t) : RG.t =
   Mir.RuleMap.fold
     (fun rule_id { Mir.rule_vars; _ } g ->
@@ -83,14 +83,16 @@ let create_rules_dependency_graph (program : Mir.program)
           let var_deps =
             Mir.VariableDict.fold
               (fun succ var_deps ->
-                let rsucc = Mir.VariableMap.find succ vars_to_rules in
-                let vsuccs =
-                  try Mir.RuleMap.find rsucc var_deps
-                  with Not_found -> Mir.VariableDict.empty
-                in
-                Mir.RuleMap.add rsucc
-                  (Mir.VariableDict.add succ vsuccs)
-                  var_deps)
+                try
+                  let rsucc = Mir.VariableMap.find succ vars_to_rules in
+                  let vsuccs =
+                    try Mir.RuleMap.find rsucc var_deps
+                    with Not_found -> Mir.VariableDict.empty
+                  in
+                  Mir.RuleMap.add rsucc
+                    (Mir.VariableDict.add succ vsuccs)
+                    var_deps
+                with Not_found -> var_deps)
               succs Mir.RuleMap.empty
           in
           Mir.RuleMap.fold
@@ -111,7 +113,7 @@ let create_rules_dependency_graph (program : Mir.program)
               with Not_found -> g)
             var_deps g)
         g rule_vars)
-    program.program_rules RG.empty
+    chain_rules RG.empty
 
 module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
@@ -164,14 +166,12 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
               "The following rules contain circular definitions:\n%s\n"
               (String.concat "\n"
                  (let rule =
-                    Mir.RuleMap.find (List.hd edges |> fst) p.Mir.program_rules
+                    Mir.RuleMap.find (List.hd edges |> fst) p.program_rules
                   in
                   string_of_int (Pos.unmark rule.rule_number)
                   :: List.map
                        (fun (rule_id, edge) ->
-                         let rule =
-                           Mir.RuleMap.find rule_id p.Mir.program_rules
-                         in
+                         let rule = Mir.RuleMap.find rule_id p.program_rules in
                          Format.asprintf "depends on %d through vars: {%s}"
                            (Pos.unmark rule.rule_number)
                            (RG.E.label edge))
