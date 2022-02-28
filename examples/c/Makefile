@@ -27,7 +27,7 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 ##################################################
 
 ifeq ($(C_COMPILER), clang)
-    F_BRACKET_OPT=-fbracket-depth=2048
+    F_BRACKET_OPT=-fbracket-depth=4096
 else
     F_BRACKET_OPT=
 endif

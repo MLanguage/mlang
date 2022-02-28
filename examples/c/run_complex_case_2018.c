@@ -2,7 +2,8 @@
 
 int main()
 {
-    m_input input = m_empty_input();
+    m_input input;
+    m_empty_input(&input);
     input.v_0AM = m_literal(1);     // Case a cocher : situation de famille Maries
     input.v_0CF = m_literal(1);     // Nombre d'enfants mineurs ou handicapes
     input.v_1AX = m_literal(10000); // CIMR - salaires revenus exceptionnels - dec1

@@ -347,7 +347,7 @@ let split_list lst cnt =
     let nl, s, sz, nll, c =
       if s < sz then (nl, s, sz, nll, c)
       else
-        let sz = ((c + 1) * size / cnt) - (c * size / cnt) in
+        let sz = ((c + 2) * size / cnt) - ((c + 1) * size / cnt) in
         ([], 0, sz, List.rev nl :: nll, c + 1)
     in
     match l with
