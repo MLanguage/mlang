@@ -158,7 +158,7 @@ let rec generate_c_expr (e : expression Pos.marked)
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = "1" in
-      let value_comp = Format.sprintf "(%s ? 1. : 0.)" se.def_test in
+      let value_comp = Format.sprintf "%s" se.def_test in
       { def_test; value_comp; locals = se.locals }
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
@@ -296,7 +296,20 @@ let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
-  | SConditional _ -> assert false (* not in dgfip trivial M++ *)
+  | SConditional (cond, iftrue, iffalse) ->
+      let cond_d = fresh_c_local "cond_d_mpp_" in
+      let cond_v = fresh_c_local "cond_mpp_" in
+      let cond = generate_c_expr (Pos.same_pos_as cond stmt) var_indexes in
+      Format.fprintf oc "%a@[<hov 2>%s = %s;@]@;@[<hov 2>%s = %s;@]@;"
+        format_local_vars_defs cond.locals cond_d cond.def_test cond_v
+        cond.value_comp;
+      Format.fprintf oc "@[<hv 2>if(%s && %s){@,%a@]@,}@;" cond_d cond_v
+        (generate_stmts program var_indexes)
+        iftrue;
+      if iffalse <> [] then
+        Format.fprintf oc "@[<hv 2>else if(%s){@,%a@]@,}@;" cond_d
+          (generate_stmts program var_indexes)
+          iffalse
   | SVerif v -> generate_var_cond var_indexes v oc
   | SRuleCall r ->
       let rule = RuleMap.find r program.rules in
