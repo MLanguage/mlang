@@ -1439,7 +1439,18 @@ let get_conds (error_decls : Mir.Error.t list)
                       ~is_table:None
                   in
                   Mir.VariableMap.add dummy_var
-                    { Mir.cond_expr = e; Mir.cond_error = err }
+                    {
+                      Mir.cond_expr = e;
+                      Mir.cond_error = err;
+                      Mir.cond_tags =
+                        (match verif.Mast.verif_tags with
+                        | [] ->
+                            [
+                              (Mast.Primitif, Pos.no_pos);
+                              (Mast.Corrective, Pos.no_pos);
+                            ]
+                        | l -> l);
+                    }
                     conds)
                 conds verif.Mast.verif_conditions
           | _ -> conds)

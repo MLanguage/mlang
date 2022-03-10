@@ -468,6 +468,7 @@ end
 type 'variable condition_data_ = {
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
+  cond_tags : Mast.chain_tag Pos.marked list;
 }
 
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
@@ -477,6 +478,7 @@ let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     cond_error =
       (let e, v = cond.cond_error in
        (e, Option.map f v));
+    cond_tags = cond.cond_tags;
   }
 
 type condition_data = variable condition_data_

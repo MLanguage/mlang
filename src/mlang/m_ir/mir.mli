@@ -192,6 +192,7 @@ type error = {
 type 'variable condition_data_ = {
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
+  cond_tags : Mast.chain_tag Pos.marked list;
 }
 
 type condition_data = variable condition_data_
