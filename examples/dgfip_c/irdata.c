@@ -198,4 +198,5 @@ T_desc_var * IRDATA_cherche_desc_var(const char *nom)
     T_desc_var *res = cherche_desc_var(nom, desc[i], size[i], nb[i]);
     if (res != NULL) return res;
   }
+  return NULL;
 }

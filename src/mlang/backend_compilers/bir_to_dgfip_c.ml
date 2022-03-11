@@ -374,6 +374,8 @@ let generate_header (oc : Format.formatter) () : unit =
 
 #include "m_error.h"
 
+double my_var1;
+
 #ifndef FLG_MULTITHREAD
 #define add_erreur(a,b,c) add_erreur(b,c)
 #endif
@@ -521,7 +523,7 @@ let generate_get_error_count_func (oc : Format.formatter) (program : program) =
 
 let generate_mpp_function_protoype (add_semicolon : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
-  Format.fprintf oc "int %s(T_irdata* irdata)%s" function_name
+  Format.fprintf oc "void %s(T_irdata* irdata)%s" function_name
     (if add_semicolon then ";" else "")
 
 let generate_mpp_function (program : Bir.program)
