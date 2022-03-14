@@ -73,6 +73,35 @@ let same_execution_number (en1 : execution_number) (en2 : execution_number) :
 type variable_id = int
 (** Each variable has an unique ID *)
 
+type variable_subtype =
+  | Context
+  | Family
+  | Penality
+  | Income
+  | Base
+  | GivenBack
+
+let subtypes_of_decl (var_decl : Mast.variable_decl) : variable_subtype list =
+  match var_decl with
+  | ConstVar _ -> []
+  | ComputedVar cv ->
+      List.map
+        (fun subtyp ->
+          match (Pos.unmark subtyp : Mast.computed_typ) with
+          | Base -> Base
+          | GivenBack -> GivenBack)
+        (Pos.unmark cv).comp_subtyp
+  | InputVar iv ->
+      let iv = Pos.unmark iv in
+      let subtypes =
+        match (Pos.unmark iv.input_subtyp : Mast.input_variable_subtype) with
+        | Context -> [ Context ]
+        | Family -> [ Family ]
+        | Penality -> [ Penality ]
+        | Income -> [ Income ]
+      in
+      if iv.input_given_back then GivenBack :: subtypes else subtypes
+
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
@@ -87,7 +116,7 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  is_income : bool;
+  subtypes : variable_subtype list;
   is_table : int option;
 }
 
@@ -108,7 +137,7 @@ module Variable = struct
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    is_income : bool;
+    subtypes : variable_subtype list;
     is_table : int option;
   }
 
@@ -123,8 +152,8 @@ module Variable = struct
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes :
          (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked)
-         list) ~(origin : t option) ~(is_income : bool) ~(is_table : int option)
-      : t =
+         list) ~(origin : t option) ~(subtypes : variable_subtype list)
+      ~(is_table : int option) : t =
     {
       name;
       id = fresh_id ();
@@ -133,7 +162,7 @@ module Variable = struct
       execution_number;
       attributes;
       origin;
-      is_income;
+      subtypes;
       is_table;
     }
 
@@ -236,6 +265,19 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | LocalVar v -> LocalVar v
   | GenericTableIndex -> GenericTableIndex
   | Error -> Error
+
+let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
+    =
+  let fold acc e = fold_expr_var f acc (Pos.unmark e) in
+  match (e :> 'v expression_) with
+  | Unop (_, e) -> fold acc e
+  | Comparison (_, e1, e2) | Binop (_, e1, e2) | LocalLet (_, e1, e2) ->
+      fold (fold acc e1) e2
+  | Index ((v, _), e) -> fold (f acc v) e
+  | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
+  | FunctionCall (_, es) -> List.fold_left fold acc es
+  | Var v -> f acc v
+  | Literal _ | LocalVar _ | GenericTableIndex | Error -> acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)

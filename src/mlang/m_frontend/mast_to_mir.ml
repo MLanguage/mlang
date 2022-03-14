@@ -462,6 +462,7 @@ let get_variables_decl (p : Mast.program)
           (fun (vars, (idmap : Mir.idmap), errors, out_list) source_file_item ->
             match Pos.unmark source_file_item with
             | Mast.VariableDecl var_decl -> (
+                let subtypes = Mir.subtypes_of_decl var_decl in
                 match var_decl with
                 | Mast.ConstVar (_, _) ->
                     (vars, idmap, errors, out_list) (* already treated before *)
@@ -526,7 +527,7 @@ let get_variables_decl (p : Mast.program)
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
-                              ~attributes:attrs ~is_income:false ~origin:None
+                              ~attributes:attrs ~subtypes ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                           in
                           let new_var_data =
@@ -570,9 +571,7 @@ let get_variables_decl (p : Mast.program)
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
-                              ~is_income:
-                                (Pos.unmark ivar.input_subtyp = Mast.Income)
-                              ~is_table:None
+                              ~subtypes ~is_table:None
                             (* Input variables also have a low order *)
                           in
                           let new_var_data =
@@ -746,7 +745,7 @@ let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
        local variables *)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin ~is_income:var.is_income
+    ~attributes:var.attributes ~origin ~subtypes:var.subtypes
     ~is_table:var.is_table
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
@@ -1391,6 +1390,20 @@ let get_conds (error_decls : Mir.Error.t list)
                       }
                       (Pos.unmark verif_cond).Mast.verif_cond_expr
                   in
+                  let subtypes =
+                    (* Verifications are maped to a dummy variable, we use it to
+                       store all the subtypes of variables appearing in its
+                       expression to avoid going through it later when we sort
+                       verifications chains out *)
+                    Mir.fold_expr_var
+                      (fun subtypes var ->
+                        List.fold_left
+                          (fun subtypes st ->
+                            if List.mem st subtypes then subtypes
+                            else st :: subtypes)
+                          subtypes var.Mir.subtypes)
+                      [] (Pos.unmark e)
+                  in
                   let err =
                     let err_name, err_var =
                       (Pos.unmark verif_cond).Mast.verif_cond_error
@@ -1435,8 +1448,7 @@ let get_conds (error_decls : Mir.Error.t list)
                         Mir.seq_number = 0;
                         Mir.pos = Pos.get_position verif_cond;
                       }
-                      ~attributes:[] ~origin:None ~is_income:false
-                      ~is_table:None
+                      ~attributes:[] ~origin:None ~subtypes ~is_table:None
                   in
                   Mir.VariableMap.add dummy_var
                     {
