@@ -19,6 +19,15 @@
 
 open Mpp_ir
 
+let filter_of_string (s : string Pos.marked) : var_filter =
+  match Pos.unmark s with
+  | "saisie" -> Saisie
+  | "calculee" -> Calculee
+  | unknown ->
+      Errors.raise_spanned_error
+        (Format.sprintf "unknown variable category %s" unknown)
+        (Pos.get_position s)
+
 let to_scoped_var ?(scope = Input) (p : Mir.program)
     (var : Mpp_ast.var Pos.marked) : scoped_var =
   let var_s = Pos.unmark var in
@@ -45,14 +54,34 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
 
 let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
     (translated_names : string list) : mpp_callable * string Pos.marked list =
-  if Pos.unmark cname = "call_m" then
-    match args with
-    | [] ->
-        Errors.raise_spanned_error "Expected a chain to call"
-          (Pos.get_position cname)
-    | chain :: args ->
-        (Program (Mast.chain_tag_of_string (Pos.unmark chain)), args)
-  else (to_mpp_callable cname translated_names, args)
+  let name = Pos.unmark cname in
+  match name with
+  | "call_m" -> begin
+      match args with
+      | [] ->
+          Errors.raise_spanned_error "Expected a chain to call"
+            (Pos.get_position cname)
+      | chain :: args ->
+          (Program (Mast.chain_tag_of_string (Pos.unmark chain)), args)
+    end
+  | "call_m_verif" -> begin
+      match args with
+      | [] ->
+          Errors.raise_spanned_error "Expected a chain to call"
+            (Pos.get_position cname)
+      | chain :: args ->
+          let chain = Mast.chain_tag_of_string (Pos.unmark chain) in
+          let filter =
+            match args with
+            | [] -> None
+            | [ filter ] -> Some (filter_of_string filter)
+            | arg :: _ ->
+                Errors.raise_spanned_error "unexpected additional argument"
+                  (Pos.get_position arg)
+          in
+          (Verif (chain, filter), args)
+    end
+  | _ -> (to_mpp_callable cname translated_names, args)
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     (scope : mpp_compute_name list) (e : Mpp_ast.expr) :

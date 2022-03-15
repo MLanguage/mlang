@@ -86,6 +86,18 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
+let var_filter_from_subtypes (subtypes : Mir.variable_subtype list) =
+  let filter_of (subtype : Mir.variable_subtype) : Mpp_ir.var_filter =
+    match subtype with
+    | Context | Family | Income | Penality -> Saisie
+    | Base | GivenBack -> Calculee
+  in
+  if List.exists (fun st -> filter_of st = Calculee) subtypes then
+    Mpp_ir.Calculee
+  else if List.exists (fun st -> filter_of st = Saisie) subtypes then
+    Mpp_ir.Saisie
+  else Errors.raise_error "Unable to detemine type of verification"
+
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
     (fun ((attr_name, _), (attr_value, _)) ->
@@ -190,6 +202,48 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
+
+let generate_verif_conds (conds : Mir.condition_data list) : Bir.stmt list =
+  List.fold_left
+    (fun acc data ->
+      let data = Mir.map_cond_data_var Bir.var_from_mir data in
+      (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
+    [] conds
+
+let generate_verif_call (m_program : Mir_interface.full_program)
+    (chain_tag : Mast.chain_tag) (filter : Mpp_ir.var_filter option) :
+    Bir.stmt list =
+  let is_verif_relevant var cond =
+    (* specific restriction *)
+    let test =
+      Mast.are_tags_part_of_verif_chain
+        (List.map Pos.unmark cond.Mir.cond_tags)
+        chain_tag
+      (* We use the constructed subtypes of the dummy variable built in
+         [Mast_to_mir] *)
+      &&
+      match filter with
+      | None -> true
+      | Some filter -> var_filter_from_subtypes var.Mir.subtypes = filter
+    in
+    if
+      test && chain_tag <> Horizontale && List.mem Mir.Penality var.Mir.subtypes
+    then
+      Errors.raise_spanned_error "Penality variable used in verification"
+        (Pos.get_position cond.Mir.cond_expr)
+    else test
+  in
+  let relevant_verifs =
+    Mir.VariableMap.filter is_verif_relevant m_program.program.program_conds
+  in
+  let verifs =
+    Mir.VariableMap.bindings relevant_verifs
+    |> List.map snd
+    |> List.sort (fun cond1 cond2 ->
+           Mast.compare_error_type (fst cond1.Mir.cond_error).typ
+             (fst cond2.Mir.cond_error).typ)
+  in
+  generate_verif_conds verifs
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
@@ -358,6 +412,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         { ctx with used_chains = Mir.TagMap.add chain_tag () ctx.used_chains }
       in
       wrap_m_code_call m_program chain_tag ctx
+  | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
+      (ctx, generate_verif_call m_program chain_tag filter)
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
@@ -413,14 +469,6 @@ and generate_partition mpp_program m_program func_args
   in
   (ctx, pre, post)
 
-let generate_verif_conds (conds : Mir.condition_data Mir.VariableMap.t) :
-    Bir.stmt list =
-  Mir.VariableMap.fold
-    (fun _var data acc ->
-      let data = Mir.map_cond_data_var Bir.var_from_mir data in
-      (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
-    conds []
-
 let create_combined_program (m_program : Mir_interface.full_program)
     (mpp_program : Mpp_ir.mpp_program) (mpp_function_to_extract : string) :
     Bir.program =
@@ -459,17 +507,6 @@ let create_combined_program (m_program : Mir_interface.full_program)
       Errors.raise_error
         (Format.asprintf "M++ function %s not found in M++ file!"
            mpp_function_to_extract);
-    let conds_verif = generate_verif_conds m_program.program.program_conds in
-    let mpp_main_function =
-      Bir.FunctionMap.find mpp_function_to_extract mpp_functions
-    in
-    let mpp_functions =
-      Bir.FunctionMap.add mpp_function_to_extract
-        (mpp_main_function @ conds_verif)
-        mpp_functions
-      (* TODO: Put verifications elsewhere than a a user facing function such as
-         is the case at the moment *)
-    in
     {
       rules;
       mpp_functions;
