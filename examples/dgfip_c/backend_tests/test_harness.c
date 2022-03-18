@@ -1,9 +1,12 @@
-#include "ir_tests.h"
-#include "m_error.h"
-#include "m_value.h"
-#include <dirent.h>
+
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
+
+#include "ir_tests.h"
+
+#include "irdata.h"
+#include "desc.h"
 
 int main(int argc, char *argv[])
 {
@@ -18,21 +21,21 @@ int main(int argc, char *argv[])
     char *separator = "/";
     char *tests_dir = argv[1];
     int state;
-    m_input *input_for_m = malloc(sizeof(m_input));
-    int num_inputs = m_num_inputs();
-    m_value *input_array_for_m = malloc(num_inputs * sizeof(m_value));
+
+    T_irdata *irdata = IRDATA_new_irdata();
+
     int i;
-    int num_outputs = m_num_inputs();
-    m_value *outputs_array_for_m = malloc(num_outputs * sizeof(m_value));
-    m_output *output_for_m = malloc(sizeof(m_input));
-    m_error_occurrence *errors;
+
+    //m_error_occurrence *errors;
 
     char *name;
     char *value_s;
     int value;
     double expected_value;
-    int name_index;
-    m_value computed_value;
+    double computed_value;
+
+    T_desc_var *desc;
+    double *varptr;
 
     DIR *d;
     struct dirent *dir;
@@ -56,14 +59,8 @@ int main(int argc, char *argv[])
             }
 
             // Resetting the arrays
-            for (i = 0; i < num_inputs; i++)
-            {
-                input_array_for_m[i] = m_undefined;
-            }
-            for (i = 0; i < num_outputs; i++)
-            {
-                outputs_array_for_m[i] = m_undefined;
-            }
+            IRDATA_reset_irdata(irdata);
+
             state = 0;
             // 0 - before #ENTREES-PRIMITIF
             // 1 - between #ENTREES-PRIMITIF and #CONTROLES-PRIMITIF
@@ -88,20 +85,18 @@ int main(int argc, char *argv[])
                         state = 2;
                         // Here we move to controlling the outputs, so we
                         // have to run the computation!
-                        m_input_from_array(input_for_m, input_array_for_m);
-                        errors = malloc(sizeof(error_occurrences));
-                        output_for_m->errors = errors;
-                        m_extracted(output_for_m, input_for_m);
-                        free(output_for_m->errors);
-                        m_output_to_array(outputs_array_for_m, output_for_m);
+                        //errors = malloc(sizeof(error_occurrences));
+                        //output_for_m->errors = errors;
+                        m_extracted(irdata);
+                        //free(output_for_m->errors);
                         break;
                     }
                     // We parse the inputs
                     name = strtok(line_buffer, separator);
                     value_s = strtok(NULL, separator);
                     value = atoi(value_s);
-                    name_index = m_get_input_index(name);
-                    input_array_for_m[name_index] = m_literal(value);
+                    desc = IRDATA_cherche_desc_var(name);
+                    IRDATA_range(irdata, desc, (double)value);
                     break;
 
                 case 2:
@@ -118,17 +113,14 @@ int main(int argc, char *argv[])
                     name = strtok(line_buffer, separator);
                     value_s = strtok(NULL, separator);
                     expected_value = atof(value_s);
-                    name_index = m_get_output_index(name);
-                    computed_value = outputs_array_for_m[name_index];
-                    if (computed_value.undefined)
-                    {
-                        // Undefined values returned are interpreted as 0
-                        computed_value.value = 0;
-                    }
-                    if (computed_value.value != expected_value)
+                    desc = IRDATA_cherche_desc_var(name);
+                    varptr = IRDATA_extrait_special(irdata, desc);
+                    // Undefined values returned are interpreted as 0
+                    computed_value = (varptr == NULL) ? 0.0 : *varptr;
+                    if (computed_value != expected_value)
                     {
                         printf("Testing file: %s\n", test_file);
-                        printf("Expected value for %s : %.4f, computed %.4f!\n", name, expected_value, computed_value.value);
+                        printf("Expected value for %s : %.4f, computed %.4f!\n", name, expected_value, computed_value);
                         exit(-1);
                     }
                     break;
@@ -141,9 +133,7 @@ int main(int argc, char *argv[])
         }
         closedir(d);
     }
-    free(input_for_m);
-    free(input_array_for_m);
-    free(outputs_array_for_m);
-    free(output_for_m);
+
+    IRDATA_delete_irdata(irdata);
     return 0;
 }

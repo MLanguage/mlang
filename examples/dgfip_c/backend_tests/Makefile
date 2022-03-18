@@ -1,12 +1,10 @@
 include ../../../Makefile.include
 
-MPP_FILE=../../../mpp_specs/dgfip_base.mpp
-
 MLANG_BIN=dune exec --no-print-director ../../../src/main.exe --
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
-	--mpp_file=$(MPP_FILE) \
+	--mpp_file=../../../mpp_specs/dgfip_base.mpp \
 	--mpp_function=dgfip_calculation
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
@@ -24,11 +22,13 @@ tests.m_spec: gen_m_spec.py
 
 ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
 	$(MLANG) \
+		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
 		--backend dgfip_c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
 ir_%.c: %.m_spec $(SOURCE_FILES)
 	$(MLANG) \
+		--dgfip_options=-rXMk1,-b0,-Ailiad,-m$(YEAR)\
 		--backend dgfip_c --output $@ \
 		--function_spec $< \
 		$(SOURCE_FILES)
@@ -36,11 +36,11 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 .SECONDARY: ir_%.c ir_%.h
 .PRECIOUS: ir_%.c ir_%.h
 
-enchain.c: tests.m_spec $(SOURCE_FILES)
-	$(MLANG) \
-		--backend dgfip_c --output $@ \
-		--function_spec $< \
-		$(SOURCE_FILES)
+# enchain.c: tests.m_spec $(SOURCE_FILES)
+# 	$(MLANG) \
+# 		--backend dgfip_c --output $@ \
+# 		--function_spec $< \
+# 		$(SOURCE_FILES)
 
 
 ##################################################
@@ -57,7 +57,9 @@ endif
 
 ir_%.o: export AFL_DONT_OPTIMIZE=1
 ir_%.o: ir_%.c
-	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c -o $@ $<
+	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c $< \
+	contexte.c famille.c penalite.c restitue.c revcor.c \
+	revenu.c variatio.c var.c irdata.c
 
 %.o: %.c
 	$(CC) -I ../ -O3 -c -o $@ $<
@@ -66,15 +68,19 @@ ir_%.o: ir_%.c
 # Building and running the test harness
 ##################################################
 
-test_harness.exe: ir_tests.o test_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^
+test_harness.exe: ir_tests.o test_harness.o
+	$(CC) -fPIE -lm -o $@ $^ \
+	contexte.o famille.o penalite.o restitue.o revcor.o \
+	revenu.o variatio.o var.o irdata.o
 
 run_tests: test_harness.exe FORCE
 	ulimit -s 32768; \
 	./$< $(TESTS_DIR)
 
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^
+	$(CC) -fPIE -lm -o $@ $^ \
+	contexte.o famille.o penalite.o restitue.o revcor.o \
+	revenu.o variatio.o var.o irdata.o
 
 run_perf: perf_harness.exe FORCE
 	ulimit -s 32768; \
@@ -121,6 +127,9 @@ clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
 
 clean:
-	rm -f ir_tests.* ../m_value.o *.o tests.m_spec *.exe *.tmp
+	rm -f ir_tests.* *.o tests.m_spec *.exe *.tmp ../m_value.o \
+	contexte.* famille.* penalite.* restitue.* revcor.* \
+	revenu.* tableg*.* tablev.* variatio.* var.* \
+	conf.h annee.h desc.h desc_inv.h
 
 FORCE:

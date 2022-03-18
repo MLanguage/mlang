@@ -206,7 +206,7 @@ let handler (income_year : int) (application_name : string) (iliad_pro : bool)
     flg_colors = colored_output;
     flg_ticket = ticket;
     flg_trace = trace;
-    flg_debug = debug;
+    flg_debug = debug || trace;
     nb_debug_c;
     xflg = cross_references;
   }

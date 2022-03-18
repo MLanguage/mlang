@@ -246,7 +246,7 @@ let get_vars prog =
                     idxo_opt,
                     Pos.unmark cv.comp_name,
                     None,
-                    Pos.unmark cv.comp_description,
+                    Strings.sanitize_str cv.comp_description,
                     cv.comp_typ,
                     cv.comp_attributes,
                     size )
@@ -265,7 +265,7 @@ let get_vars prog =
                     idxo_opt,
                     Pos.unmark iv.input_name,
                     Some (Pos.unmark iv.input_alias),
-                    Pos.unmark iv.input_description,
+                    Strings.sanitize_str iv.input_description,
                     iv.input_typ,
                     iv.input_attributes,
                     1 )
@@ -347,7 +347,7 @@ let split_list lst cnt =
     let nl, s, sz, nll, c =
       if s < sz then (nl, s, sz, nll, c)
       else
-        let sz = ((c + 1) * size / cnt) - (c * size / cnt) in
+        let sz = ((c + 2) * size / cnt) - ((c + 1) * size / cnt) in
         ([], 0, sz, List.rev nl :: nll, c + 1)
     in
     match l with
@@ -989,7 +989,7 @@ let gen_var_c fmt flags errors =
             "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
              \"%s\", %d };\n"
             (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo)
-            sous_code_suffix (Pos.unmark libelle) (Pos.unmark code_bo)
+            sous_code_suffix (Strings.sanitize_str libelle) (Pos.unmark code_bo)
             (Pos.unmark sous_code) (Pos.unmark is_isf) (Pos.unmark e.error_name)
             terr
       | _ -> failwith "Invalid error description")

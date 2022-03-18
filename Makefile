@@ -105,6 +105,7 @@ doc: FORCE
 
 clean:
 	$(MAKE) -C examples/c clean
+	$(MAKE) -C examples/dgfip_c clean
 	$(MAKE) -C examples/python clean
 	$(MAKE) -C examples/java clean
 	dune clean
