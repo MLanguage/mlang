@@ -23,12 +23,19 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
     | Local s -> s
     | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
+let format_var_filter (fmt : formatter) (f : var_filter) : unit =
+  fprintf fmt "%s" (match f with Saisie -> "saisie" | Calculee -> "calculee")
+
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
     (match f with
     | Program chain ->
         Format.asprintf "evaluate_program(%a)" Format_mast.format_chain_tag
           chain
+    | Verif (chain, filter) ->
+        Format.asprintf "verification(%a%a)" Format_mast.format_chain_tag chain
+          (pp_print_option format_var_filter)
+          filter
     | MppFunction m -> m
     | Present -> "present"
     | Abs -> "abs"

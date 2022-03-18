@@ -407,6 +407,14 @@ type verification = {
 
 type error_typ = Anomaly | Discordance | Information
 
+let compare_error_type e1 e2 =
+  match (e1, e2) with
+  | Anomaly, (Discordance | Information) -> -1
+  | (Discordance | Information), Anomaly -> 1
+  | Discordance, Information -> -1
+  | Information, Discordance -> 1
+  | _ -> 0
+
 type error_ = {
   error_name : error_name Pos.marked;
   error_typ : error_typ Pos.marked;
@@ -466,4 +474,17 @@ let are_tags_part_of_chain (tags : chain_tag list) (chain : chain_tag) : bool =
               | _ -> false)
             tags))
       && is_part_of
+  | _ -> is_part_of
+
+let are_tags_part_of_verif_chain (tags : chain_tag list) (chain : chain_tag) :
+    bool =
+  let is_part_of = List.mem chain tags in
+  match chain with
+  | Primitif ->
+      is_part_of || (List.mem Isf tags && List.mem Corrective tags)
+      (* include "isf corrective" *)
+  | Isf ->
+      is_part_of && not (List.mem Corrective tags)
+      (* exclude "isf corrective" *)
+  | Corrective -> is_part_of && not (List.mem Horizontale tags)
   | _ -> is_part_of

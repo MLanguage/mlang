@@ -28,6 +28,14 @@ type max_result =
 type variable_id = int
 (** Each variable has an unique ID *)
 
+type variable_subtype =
+  | Context
+  | Family
+  | Penality
+  | Income
+  | Base
+  | GivenBack
+
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
@@ -42,7 +50,7 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  is_income : bool;
+  subtypes : variable_subtype list;
   is_table : int option;
 }
 
@@ -192,6 +200,7 @@ type error = {
 type 'variable condition_data_ = {
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
+  cond_tags : Mast.chain_tag Pos.marked list;
 }
 
 type condition_data = variable condition_data_
@@ -233,7 +242,7 @@ module Variable : sig
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    is_income : bool;
+    subtypes : variable_subtype list;
     is_table : int option;
   }
 
@@ -246,7 +255,7 @@ module Variable : sig
     execution_number ->
     attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
     origin:variable option ->
-    is_income:bool ->
+    subtypes:variable_subtype list ->
     is_table:rule_id option ->
     variable
 
@@ -324,6 +333,8 @@ val find_var_name_by_alias : program -> string Pos.marked -> string
 
 val map_expr_var : ('v -> 'v2) -> 'v expression_ -> 'v2 expression_
 
+val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v expression_ -> 'a
+
 val map_var_def_var : ('v -> 'v2) -> 'v variable_def_ -> 'v2 variable_def_
 
 val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
@@ -344,6 +355,8 @@ val is_candidate_valid : execution_number -> execution_number -> bool -> bool
 val fresh_rule_id : unit -> rule_id
 
 val initial_undef_rule_id : rule_id
+
+val subtypes_of_decl : Mast.variable_decl -> variable_subtype list
 
 val find_var_by_name : program -> string Pos.marked -> variable
 (** Get a variable for a given name or alias, because of SSA multiple variables

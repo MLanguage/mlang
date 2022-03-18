@@ -110,8 +110,32 @@ ENCH_TL():
   X = X
 #  outputs <- call_m(ENCH_TL)
 
+verif_calcul_primitive_isf():
+  call_m_verif(isf,calculee)
 
+verif_calcul_primitive():
+  verif_calcul_primitive_isf()
+  call_m_verif(primitif,calculee)
 
+verif_calcul_corrective():
+  outputs <- calcul_primitif_isf()
+  call_m_verif(corrective,calculee)
+
+verif_saisie_cohe_primitive_isf():
+  call_m_verif(isf,saisie)
+
+verif_saisie_cohe_primitive():
+  verif_saisie_cohe_primitive_isf()
+  outputs <- calcul_primitif_isf()
+  verif_calcul_primitive_isf()
+  call_m_verif(primitif,saisie)
+
+verif_saisie_cohe_corrective():
+  verif_saisie_cohe_primitive_isf()
+  call_m_verif(corrective,saisie)
+
+verif_saisie_cohe_horizontale():
+  call_m_verif(horizontale)
 
 dgfip_calculation():
   APPLI_OCEANS = 0
@@ -127,6 +151,6 @@ dgfip_calculation():
   ART1731BIS = 0
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  outputs <- call_m(isf)
-  outputs <- call_m(primitif)
-  outputs <- call_m(taux)
+  outputs <- calcul_primitif_isf()
+  outputs <- calcul_primitif()
+  outputs <- calcul_primitif_taux()
