@@ -989,9 +989,10 @@ let gen_var_c fmt flags errors =
             "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
              \"%s\", %d };\n"
             (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo)
-            sous_code_suffix (Strings.sanitize_str libelle) (Pos.unmark code_bo)
-            (Pos.unmark sous_code) (Pos.unmark is_isf) (Pos.unmark e.error_name)
-            terr
+            sous_code_suffix
+            (Strings.sanitize_str libelle)
+            (Pos.unmark code_bo) (Pos.unmark sous_code) (Pos.unmark is_isf)
+            (Pos.unmark e.error_name) terr
       | _ -> failwith "Invalid error description")
     errors;
 
