@@ -292,43 +292,24 @@ module VariableMap = struct
       map
 end
 
-module VariableDictMap = Map.Make (struct
+(* module VariableDictMap = Map.Make (struct
+ *   type t = Variable.id
+ * 
+ *   let compare = compare
+ * end)
+ * 
+ * type variable_dict = variable VariableDictMap.t *)
+
+(** Variable dictionary, act as a set but refered by keys *)
+module VariableDict = Dict.Make (struct
   type t = Variable.id
+
+  type elt = Variable.t
+
+  let key_of_elt v = v.Variable.id
 
   let compare = compare
 end)
-
-type variable_dict = variable VariableDictMap.t
-
-(** Variable dictionary, act as a set but refered by keys *)
-module VariableDict = struct
-  type t = variable_dict
-
-  let find = VariableDictMap.find
-
-  let filter = VariableDictMap.filter
-
-  let empty = VariableDictMap.empty
-
-  let bindings = VariableDictMap.bindings
-
-  let singleton v = VariableDictMap.singleton v.Variable.id v
-
-  let add v t = VariableDictMap.add v.Variable.id v t
-
-  let mem v t = VariableDictMap.mem v.Variable.id t
-
-  let fold f t acc = VariableDictMap.fold (fun _ v acc -> f v acc) t acc
-
-  let union t1 t2 = VariableDictMap.union (fun _ v _ -> Some v) t1 t2
-
-  let inter t1 t2 =
-    VariableDictMap.merge
-      (fun _ v1 v2 -> match (v1, v2) with Some _, Some _ -> v1 | _ -> None)
-      t1 t2
-
-  let for_all f t = VariableDictMap.for_all (fun _ v -> f v) t
-end
 
 module VariableSet = Set.Make (Variable)
 

@@ -125,9 +125,7 @@ module VariableMap : sig
     unit
 end
 
-module VariableDictMap : Map.S with type key = variable_id
-
-type variable_dict = variable VariableDictMap.t
+module VariableDict : Dict.S with type key = variable_id and type elt = variable
 
 module VariableSet : Set.S with type elt = variable
 
@@ -213,7 +211,7 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_vars : variable_dict;
+  program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_rules : rule_data RuleMap.t;
@@ -294,33 +292,6 @@ module Error : sig
   val err_descr_string : t -> string Pos.marked
 
   val compare : t -> t -> int
-end
-
-(** Variable dictionary, act as a set but refered by keys *)
-module VariableDict : sig
-  type t = variable_dict
-
-  val bindings : t -> (variable_id * variable) list
-
-  val add : variable -> t -> t
-
-  val empty : t
-
-  val find : variable_id -> t -> variable
-
-  val mem : variable -> t -> bool
-
-  val union : t -> t -> t
-
-  val inter : t -> t -> t
-
-  val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
-
-  val singleton : variable -> t
-
-  val filter : (variable_id -> variable -> bool) -> t -> t
-
-  val for_all : (variable -> bool) -> t -> bool
 end
 
 val false_literal : literal
