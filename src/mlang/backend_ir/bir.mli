@@ -18,6 +18,8 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
+type tgv_id = string
+
 type variable
 
 type variable_id = int
@@ -84,15 +86,17 @@ type program = {
   outputs : unit VariableMap.t;
 }
 
-val var_from_mir : Mir.Variable.t -> variable
+val default_tgv : tgv_id
+
+val var_from_mir : tgv_id -> Mir.Variable.t -> variable
 
 val var_to_mir : variable -> Mir.Variable.t
 
 val compare_variable : variable -> variable -> int
 
-val map_from_mir_map : 'a Mir.VariableMap.t -> 'a VariableMap.t
+val map_from_mir_map : tgv_id -> 'a Mir.VariableMap.t -> 'a VariableMap.t
 
-val dict_from_mir_dict : Mir.VariableDict.t -> VariableDict.t
+val dict_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableDict.t
 
 val main_statements : program -> stmt list
 

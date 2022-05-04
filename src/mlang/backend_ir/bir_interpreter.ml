@@ -305,7 +305,7 @@ module Make (N : Bir_number.NumberInterface) = struct
           List.iter
             Mir.(
               fun var ->
-                let bvar = Bir.var_from_mir var in
+                let bvar = Bir.(var_from_mir default_tgv) var in
                 try
                   let var_l = Bir.VariableMap.find bvar ctx.ctx_vars in
                   Format.printf "[%a %a] -> %a@\n"
@@ -628,7 +628,7 @@ module Make (N : Bir_number.NumberInterface) = struct
                           (var, Bir.VariableMap.find var ctx.ctx_vars) :: acc)
                         []
                         (List.map
-                           (fun (_, x) -> Bir.var_from_mir x)
+                           (fun (_, x) -> Bir.(var_from_mir default_tgv) x)
                            (Mir.VariableDict.bindings
                               (Mir_dependency_graph.get_used_variables
                                  (Pos.map_under_mark

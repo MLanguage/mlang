@@ -74,7 +74,7 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
   (* this might do wierd thing iif all variables to check are not "saisie" since
      the filter may find duplicates used in different contexts *)
   let variables_to_check =
-    Bir.dict_from_mir_dict
+    Bir.dict_from_mir_dict Bir.default_tgv
     @@ Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars
   in
   let mk_call_present x =
@@ -166,14 +166,16 @@ let translate_m_code (m_program : Mir_interface.full_program)
       try
         let var = Mir.VariableDict.find vid m_program.program.program_vars in
         let var_definition =
-          Mir.map_var_def_var Bir.var_from_mir vdef.Mir.var_definition
+          Mir.map_var_def_var
+            Bir.(var_from_mir default_tgv)
+            vdef.Mir.var_definition
         in
         match var_definition with
         | InputVar -> None
         | TableVar _ | SimpleVar _ ->
             let vdef = { vdef with var_definition } in
             Some
-              ( Bir.SAssign (Bir.var_from_mir var, vdef),
+              ( Bir.SAssign (Bir.(var_from_mir default_tgv) var, vdef),
                 var.Mir.Variable.execution_number.pos )
       with Not_found -> None)
     vars
@@ -206,7 +208,7 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
 let generate_verif_conds (conds : Mir.condition_data list) : Bir.stmt list =
   List.fold_left
     (fun acc data ->
-      let data = Mir.map_cond_data_var Bir.var_from_mir data in
+      let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data in
       (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
     [] conds
 
@@ -256,7 +258,7 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
   let pos = Pos.get_position expr in
   match Pos.unmark expr with
   | Mpp_ir.Constant i -> Mir.Literal (Float (float_of_int i))
-  | Variable (Mbased (var, _)) -> Var (Bir.var_from_mir var)
+  | Variable (Mbased (var, _)) -> Var Bir.(var_from_mir default_tgv var)
   | Variable (Local l) -> (
       try Var (StringMap.find l ctx.new_variables)
       with Not_found ->
@@ -313,7 +315,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
                 ~attributes:[] ~origin:None ~subtypes:[] ~is_table:None
-              |> Bir.var_from_mir
+              |> Bir.(var_from_mir default_tgv)
             in
             let ctx =
               {
@@ -346,7 +348,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( Bir.var_from_mir var,
+               ( Bir.(var_from_mir default_tgv) var,
                  {
                    var_definition =
                      SimpleVar (translate_mpp_expr m_program ctx expr, pos);
@@ -370,7 +372,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( Bir.var_from_mir var,
+               ( Bir.(var_from_mir default_tgv) var,
                  {
                    var_definition = SimpleVar (Mir.Literal Undefined, pos);
                    var_typ = None;

@@ -59,7 +59,7 @@ let var_set_from_variable_name_list (p : Bir.program)
   List.fold_left
     (fun acc name ->
       let var = Mir.find_var_by_name p.mir_program name in
-      Bir.VariableMap.add (Bir.var_from_mir var) () acc)
+      Bir.VariableMap.add (Bir.var_from_mir Bir.default_tgv var) () acc)
     Bir.VariableMap.empty names
 
 let check_const_expression_is_really_const (e : Mir.expression Pos.marked) :
@@ -85,7 +85,7 @@ let const_var_set_from_list (p : Bir.program)
                  compare v1.Mir.Variable.execution_number
                    v2.Mir.Variable.execution_number)
                (Pos.VarNameToID.find (Pos.unmark name) p.idmap))
-          |> Bir.var_from_mir
+          |> Bir.(var_from_mir default_tgv)
         with Not_found -> (
           try
             let name = Mir.find_var_name_by_alias p.mir_program name in
@@ -95,7 +95,7 @@ let const_var_set_from_list (p : Bir.program)
                    compare v1.Mir.Variable.execution_number
                      v2.Mir.Variable.execution_number)
                  (Pos.VarNameToID.find name p.idmap))
-            |> Bir.var_from_mir
+            |> Bir.(var_from_mir default_tgv)
           with Errors.StructuredError _ ->
             Errors.raise_spanned_error
               (Format.asprintf "unknown variable %s" (Pos.unmark name))
@@ -114,7 +114,9 @@ let const_var_set_from_list (p : Bir.program)
       in
       check_const_expression_is_really_const new_e;
       Bir.VariableMap.add var
-        (Pos.map_under_mark (Mir.map_expr_var Bir.var_from_mir) new_e)
+        (Pos.map_under_mark
+           (Mir.map_expr_var Bir.(var_from_mir default_tgv))
+           new_e)
         acc)
     Bir.VariableMap.empty names
 
@@ -182,27 +184,30 @@ let translate_external_conditions idmap
   in
   Mir.VariableMap.fold
     (fun v data acc ->
-      Bir.VariableMap.add (Bir.var_from_mir v)
-        (Mir.map_cond_data_var Bir.var_from_mir data)
+      Bir.VariableMap.add
+        Bir.(var_from_mir default_tgv v)
+        (Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
         acc)
     conds Bir.VariableMap.empty
 
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let output_vars =
     Mir.VariableDict.fold
-      (fun k acc -> Bir.VariableMap.add (Bir.var_from_mir k) () acc)
+      (fun k acc -> Bir.VariableMap.add Bir.(var_from_mir default_tgv k) () acc)
       (Mir.find_vars_by_io p.mir_program Output)
       Bir.VariableMap.empty
   in
   let input_vars =
     let program_input_vars =
-      Mir.find_vars_by_io p.mir_program Input |> Bir.dict_from_mir_dict
+      Mir.find_vars_by_io p.mir_program Input
+      |> Bir.(dict_from_mir_dict default_tgv)
     in
     let max_exec_vars =
       Pos.VarNameToID.fold
         (fun _ v acc ->
           let max_exec_var =
-            Mast_to_mir.list_max_execution_number v |> Bir.var_from_mir
+            Mast_to_mir.list_max_execution_number v
+            |> Bir.(var_from_mir default_tgv)
           in
           Bir.VariableDict.add max_exec_var acc)
         p.idmap Bir.VariableDict.empty
@@ -310,12 +315,15 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       (fun var def acc ->
         match def.Mir.var_definition with
         | Mir.InputVar ->
-            if Bir.VariableMap.mem (Bir.var_from_mir var) f.func_variable_inputs
+            if
+              Bir.VariableMap.mem
+                Bir.(var_from_mir default_tgv var)
+                f.func_variable_inputs
             then acc
             else
               let pos = Pos.no_pos in
               ( Bir.SAssign
-                  ( Bir.var_from_mir var,
+                  ( Bir.(var_from_mir default_tgv) var,
                     {
                       Mir.var_typ = None;
                       Mir.var_io = Regular;

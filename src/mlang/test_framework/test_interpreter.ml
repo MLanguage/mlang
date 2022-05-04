@@ -65,7 +65,8 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
         let var =
-          find_var_of_name program.mir_program (var, pos) |> Bir.var_from_mir
+          find_var_of_name program.mir_program (var, pos)
+          |> Bir.(var_from_mir default_tgv)
         in
         let lit =
           match value with I i -> Mir.Float (float_of_int i) | F f -> Float f

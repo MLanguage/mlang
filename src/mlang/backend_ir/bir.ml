@@ -18,29 +18,55 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
-type variable = Mir.Variable.t
+type tgv_id = string
+
+let default_tgv = "primitif"
+
+type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
+
+let compare_variable v1 v2 =
+  let c = String.compare v1.on_tgv v2.on_tgv in
+  if c = 0 then Stdlib.compare v1.offset v2.offset else c
 
 type variable_id = Mir.variable_id
 
-module VariableMap = Mir.VariableMap
-module VariableDict = Mir.VariableDict
+module VariableMap = Map.Make (struct
+  type t = variable
+
+  let compare = compare_variable
+end)
+
+module VariableDict = Dict.Make (struct
+  type t = variable_id
+
+  type elt = variable
+
+  let key_of_elt v = v.mir_var.Mir.Variable.id
+
+  let compare = compare
+end)
 
 (* unify SSA variables *)
-let var_from_mir (v : Mir.Variable.t) : variable =
-  match v.origin with Some v -> v | None -> v
+let var_from_mir (on_tgv : tgv_id) (v : Mir.Variable.t) : variable =
+  let mir_var = match v.origin with Some v -> v | None -> v in
+  {
+    offset = mir_var.id;
+    (* unstable, rely on the fact that declaration variables are unique and seen
+       first *)
+    on_tgv;
+    mir_var;
+  }
 
-let var_to_mir v = v
+let var_to_mir v = v.mir_var
 
-let compare_variable = Mir.Variable.compare
-
-let map_from_mir_map map =
+let map_from_mir_map on_tgv map =
   Mir.VariableMap.fold
-    (fun var -> VariableMap.add (var_from_mir var))
+    (fun var -> VariableMap.add (var_from_mir on_tgv var))
     map VariableMap.empty
 
-let dict_from_mir_dict dict =
+let dict_from_mir_dict on_tgv dict =
   Mir.VariableDict.fold
-    (fun var -> VariableDict.add (var_from_mir var))
+    (fun var -> VariableDict.add (var_from_mir on_tgv var))
     dict VariableDict.empty
 
 type expression = variable Mir.expression_
