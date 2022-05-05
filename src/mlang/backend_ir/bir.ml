@@ -36,14 +36,10 @@ module VariableMap = Map.Make (struct
   let compare = compare_variable
 end)
 
-module VariableDict = Dict.Make (struct
-  type t = variable_id
+module VariableSet = Set.Make (struct
+  type t = variable
 
-  type elt = variable
-
-  let key_of_elt v = v.mir_var.Mir.Variable.id
-
-  let compare = compare
+  let compare = compare_variable
 end)
 
 (* unify SSA variables *)
@@ -64,10 +60,10 @@ let map_from_mir_map on_tgv map =
     (fun var -> VariableMap.add (var_from_mir on_tgv var))
     map VariableMap.empty
 
-let dict_from_mir_dict on_tgv dict =
+let set_from_mir_dict on_tgv dict =
   Mir.VariableDict.fold
-    (fun var -> VariableDict.add (var_from_mir on_tgv var))
-    dict VariableDict.empty
+    (fun var -> VariableSet.add (var_from_mir on_tgv var))
+    dict VariableSet.empty
 
 type expression = variable Mir.expression_
 
@@ -188,14 +184,13 @@ let squish_statements (program : program) (threshold : int)
   in
   { program with rules; mpp_functions }
 
-let get_assigned_variables (p : program) : VariableDict.t =
-  let rec get_assigned_variables_block acc (stmts : stmt list) : VariableDict.t
-      =
+let get_assigned_variables (p : program) : VariableSet.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) : VariableSet.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif _ -> acc
-        | SAssign (var, _) -> VariableDict.add var acc
+        | SAssign (var, _) -> VariableSet.add var acc
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
@@ -204,7 +199,7 @@ let get_assigned_variables (p : program) : VariableDict.t =
            calls *))
       acc stmts
   in
-  get_assigned_variables_block VariableDict.empty (get_all_statements p)
+  get_assigned_variables_block VariableSet.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
   let rec get_local_vars_expr acc (e : expression Pos.marked) :
@@ -277,8 +272,8 @@ let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
          | _ -> stmt :: acc)
        [] stmts)
 
-let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableDict.t) :
-    VariableDict.t =
+let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableSet.t) :
+    VariableSet.t =
   match Pos.unmark e with
   | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2)
     ->
@@ -287,7 +282,7 @@ let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableDict.t) :
       acc
   | Mir.Unop (_, e) -> get_used_variables_ e acc
   | Mir.Index ((var, _), e) ->
-      let acc = VariableDict.add var acc in
+      let acc = VariableSet.add var acc in
       let acc = get_used_variables_ e acc in
       acc
   | Mir.Conditional (e1, e2, e3) ->
@@ -298,7 +293,7 @@ let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableDict.t) :
   | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
   | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
-  | Mir.Var var -> VariableDict.add var acc
+  | Mir.Var var -> VariableSet.add var acc
 
-let get_used_variables (e : expression Pos.marked) : VariableDict.t =
-  get_used_variables_ e VariableDict.empty
+let get_used_variables (e : expression Pos.marked) : VariableSet.t =
+  get_used_variables_ e VariableSet.empty

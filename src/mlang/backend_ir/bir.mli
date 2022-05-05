@@ -26,31 +26,7 @@ type variable_id = int
 
 module VariableMap : Map.S with type key = variable
 
-module VariableDict : sig
-  type t
-
-  val bindings : t -> (variable_id * variable) list
-
-  val add : variable -> t -> t
-
-  val empty : t
-
-  val find : variable_id -> t -> variable
-
-  val mem : variable -> t -> bool
-
-  val union : t -> t -> t
-
-  val inter : t -> t -> t
-
-  val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
-
-  val singleton : variable -> t
-
-  val filter : (variable_id -> variable -> bool) -> t -> t
-
-  val for_all : (variable -> bool) -> t -> bool
-end
+module VariableSet : Set.S with type elt = variable
 
 type expression = variable Mir.expression_
 
@@ -96,7 +72,7 @@ val compare_variable : variable -> variable -> int
 
 val map_from_mir_map : tgv_id -> 'a Mir.VariableMap.t -> 'a VariableMap.t
 
-val dict_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableDict.t
+val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
 
 val main_statements : program -> stmt list
 
@@ -110,7 +86,7 @@ val squish_statements : program -> int -> string -> program
     existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
 
-val get_assigned_variables : program -> VariableDict.t
+val get_assigned_variables : program -> VariableSet.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t
 
@@ -119,6 +95,6 @@ val get_locals_size : program -> int
 val remove_empty_conditionals : stmt list -> stmt list
 
 val get_used_variables_ :
-  expression Pos.marked -> VariableDict.t -> VariableDict.t
+  expression Pos.marked -> VariableSet.t -> VariableSet.t
 
-val get_used_variables : expression Pos.marked -> VariableDict.t
+val get_used_variables : expression Pos.marked -> VariableSet.t

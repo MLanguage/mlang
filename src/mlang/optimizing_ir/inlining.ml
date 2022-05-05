@@ -141,7 +141,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
                                  current_block)
                         var_defs
                     in
-                    Bir.VariableDict.for_all
+                    Bir.VariableSet.for_all
                       (fun var ->
                         not (exists_def_between_previous_x_def_and_here var))
                       vars_used_in_previous_x_def

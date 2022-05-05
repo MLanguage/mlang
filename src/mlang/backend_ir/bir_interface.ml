@@ -27,7 +27,7 @@ let get_variables_indexes (p : Bir.program) (function_spec : bir_function) :
     List.map fst (Bir.VariableMap.bindings function_spec.func_variable_inputs)
   in
   let assigned_variables =
-    List.map snd (Bir.VariableDict.bindings (Bir.get_assigned_variables p))
+    Bir.VariableSet.elements (Bir.get_assigned_variables p)
   in
   let output_vars =
     List.map fst (Bir.VariableMap.bindings function_spec.func_outputs)
@@ -200,7 +200,7 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
   let input_vars =
     let program_input_vars =
       Mir.find_vars_by_io p.mir_program Input
-      |> Bir.(dict_from_mir_dict default_tgv)
+      |> Bir.(set_from_mir_dict default_tgv)
     in
     let max_exec_vars =
       Pos.VarNameToID.fold
@@ -209,12 +209,12 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
             Mast_to_mir.list_max_execution_number v
             |> Bir.(var_from_mir default_tgv)
           in
-          Bir.VariableDict.add max_exec_var acc)
-        p.idmap Bir.VariableDict.empty
+          Bir.VariableSet.add max_exec_var acc)
+        p.idmap Bir.VariableSet.empty
     in
-    Bir.VariableDict.fold
+    Bir.VariableSet.fold
       (fun k acc -> Bir.VariableMap.add k () acc)
-      (Bir.VariableDict.inter program_input_vars max_exec_vars)
+      (Bir.VariableSet.inter program_input_vars max_exec_vars)
       Bir.VariableMap.empty
   in
   Cli.debug_print "Using all %d outputs and %d inputs from m sources"

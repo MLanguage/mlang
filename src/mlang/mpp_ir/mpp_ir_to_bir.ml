@@ -74,7 +74,7 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
   (* this might do wierd thing iif all variables to check are not "saisie" since
      the filter may find duplicates used in different contexts *)
   let variables_to_check =
-    Bir.dict_from_mir_dict Bir.default_tgv
+    Bir.set_from_mir_dict Bir.default_tgv
     @@ Mir.VariableDict.filter (fun _ var -> crit var) p.program.program_vars
   in
   let mk_call_present x =
@@ -82,7 +82,7 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
   in
   let mk_or e1 e2 = (Mir.Binop ((Or, pos), e1, e2), pos) in
   let mk_false = (Mir.Literal (Float 0.), pos) in
-  Bir.VariableDict.fold
+  Bir.VariableSet.fold
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
