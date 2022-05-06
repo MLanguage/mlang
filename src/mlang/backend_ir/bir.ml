@@ -26,7 +26,10 @@ type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
 
 let compare_variable v1 v2 =
   let c = String.compare v1.on_tgv v2.on_tgv in
-  if c = 0 then Stdlib.compare v1.offset v2.offset else c
+  if c <> 0 then c
+  else
+    let c = Stdlib.compare v1.offset v2.offset in
+    if c <> 0 then c else Mir.Variable.compare v1.mir_var v2.mir_var
 
 module VariableMap = Map.Make (struct
   type t = variable
