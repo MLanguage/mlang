@@ -40,16 +40,35 @@ module VariableSet = Set.Make (struct
   let compare = compare_variable
 end)
 
+module NameMap = Map.Make (String)
+
+type offset_alloc = { mutable name_map : int NameMap.t; mutable size : int }
+
+(* Mutable state hidden away in the signature. Used for black-magicaly
+   transition variable representations from SSA duplications to offsets of TGV.
+   An issue though: this disregards tetantives to reduce the size of the TGV
+   through optimisations *)
+let offset_alloc = { name_map = NameMap.empty; size = 0 }
+
+let allocate_variable (var : Mir.variable) : int =
+  let name = Pos.unmark var.Mir.Variable.name in
+  match NameMap.find_opt name offset_alloc.name_map with
+  | Some offset -> offset
+  | None ->
+      let var_size =
+        match var.Mir.Variable.is_table with None -> 1 | Some s -> s
+      in
+      let offset = offset_alloc.size in
+      offset_alloc.name_map <- NameMap.add name offset offset_alloc.name_map;
+      offset_alloc.size <- offset_alloc.size + var_size;
+      offset
+
+let size_of_tgv () = offset_alloc.size
+
 (* unify SSA variables *)
 let var_from_mir (on_tgv : tgv_id) (v : Mir.Variable.t) : variable =
   let mir_var = match v.origin with Some v -> v | None -> v in
-  {
-    offset = mir_var.id;
-    (* unstable, rely on the fact that declaration variables are unique and seen
-       first *)
-    on_tgv;
-    mir_var;
-  }
+  { offset = allocate_variable mir_var; on_tgv; mir_var }
 
 let var_to_mir v = v.mir_var
 

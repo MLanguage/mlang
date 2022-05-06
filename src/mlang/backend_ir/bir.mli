@@ -20,9 +20,7 @@ module RuleMap = Mir.RuleMap
 
 type tgv_id = string
 
-type variable
-
-(* type variable_id = int *)
+type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
 
 module VariableMap : Map.S with type key = variable
 
@@ -63,6 +61,8 @@ type program = {
 }
 
 val default_tgv : tgv_id
+
+val size_of_tgv : unit -> int
 
 val var_from_mir : tgv_id -> Mir.Variable.t -> variable
 

@@ -45,17 +45,10 @@ type offset =
   | PassPointer
   | None
 
-let generate_variable (var_indexes : int VariableMap.t) (offset : offset)
-    (fmt : Format.formatter) (var : variable) : unit =
+let generate_variable (offset : offset) (fmt : Format.formatter)
+    (var : variable) : unit =
   let mvar = var_to_mir var in
-  let var_index =
-    match VariableMap.find_opt var var_indexes with
-    | Some i -> i
-    | None ->
-        Errors.raise_error
-          (Format.asprintf "Variable %s not found in TGV"
-             (Pos.unmark mvar.Mir.Variable.name))
-  in
+  let var_index = var.offset in
   match offset with
   | PassPointer ->
       Format.fprintf fmt "(TGV + %d/*%s*/)" var_index
@@ -75,126 +68,115 @@ let generate_raw_name (v : variable) : string =
 
 let generate_name (v : variable) : string = "v_" ^ generate_raw_name v
 
-let rec generate_c_expr (e : expression Pos.marked)
-    (var_indexes : int VariableMap.t) :
+let rec generate_c_expr (e : expression Pos.marked) :
     string * (Mir.LocalVariable.t * expression Pos.marked) list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
       ( Format.asprintf "%s(%s, %s)" (generate_comp_op (Pos.unmark op)) se1 se2,
         s1 @ s2 )
   | Binop (op, e1, e2) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
       ( Format.asprintf "%s(%s, %s)" (generate_binop (Pos.unmark op)) se1 se2,
         s1 @ s2 )
   | Unop (op, e) ->
-      let se, s = generate_c_expr e var_indexes in
+      let se, s = generate_c_expr e in
       (Format.asprintf "%s(%s)" (generate_unop op) se, s)
   | Index (var, e) ->
-      let se, s = generate_c_expr e var_indexes in
+      let se, s = generate_c_expr e in
       let size =
         Option.get (var_to_mir (Pos.unmark var)).Mir.Variable.is_table
       in
       ( Format.asprintf "m_array_index(%a, %s, %d)"
-          (generate_variable var_indexes PassPointer)
+          (generate_variable PassPointer)
           (Pos.unmark var) se size,
         s )
   | Conditional (e1, e2, e3) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
-      let se3, s3 = generate_c_expr e3 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
+      let se3, s3 = generate_c_expr e3 in
       (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg var_indexes in
+      let se, s = generate_c_expr arg in
       (Format.asprintf "m_present(%s)" se, s)
   | FunctionCall (NullFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg var_indexes in
+      let se, s = generate_c_expr arg in
       (Format.asprintf "m_null(%s)" se, s)
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg var_indexes in
+      let se, s = generate_c_expr arg in
       (Format.asprintf "m_round(%s)" se, s)
   | FunctionCall (InfFunc, [ arg ]) ->
-      let se, s = generate_c_expr arg var_indexes in
+      let se, s = generate_c_expr arg in
       (Format.asprintf "m_floor(%s)" se, s)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
       (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
       (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
-      let se1, s1 = generate_c_expr e1 var_indexes in
+      let se1, s1 = generate_c_expr e1 in
       ( Format.asprintf "m_multimax(%s, %a)" se1
-          (generate_variable var_indexes PassPointer)
+          (generate_variable PassPointer)
           v2,
         s1 )
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) ->
       (Format.asprintf "m_literal(%s)" (string_of_float f), [])
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var ->
-      (Format.asprintf "%a" (generate_variable var_indexes None) var, [])
+  | Var var -> (Format.asprintf "%a" (generate_variable None) var, [])
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.Mir.LocalVariable.id, [])
   | GenericTableIndex -> (Format.asprintf "m_literal(generic_index)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
-      let _, s1 = generate_c_expr e1 var_indexes in
-      let se2, s2 = generate_c_expr e2 var_indexes in
+      let _, s1 = generate_c_expr e1 in
+      let se2, s2 = generate_c_expr e2 in
       (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2))
 
-let format_local_vars_defs (var_indexes : int VariableMap.t)
-    (fmt : Format.formatter)
+let format_local_vars_defs (fmt : Format.formatter)
     (defs : (Mir.LocalVariable.t * expression Pos.marked) list) =
   List.iter
     (fun (lvar, e) ->
-      let se, _ = generate_c_expr e var_indexes in
+      let se, _ = generate_c_expr e in
       Format.fprintf fmt "LOCAL[%d] = %s;@\n" lvar.Mir.LocalVariable.id se)
     defs
 
-let generate_var_def (var_indexes : int VariableMap.t) (var : variable)
-    (data : variable_data) (oc : Format.formatter) : unit =
+let generate_var_def (var : variable) (data : variable_data)
+    (oc : Format.formatter) : unit =
   match data.var_definition with
   | SimpleVar e ->
-      let se, defs = generate_c_expr e var_indexes in
-      Format.fprintf oc "%a%a = %s;@\n"
-        (format_local_vars_defs var_indexes)
-        defs
-        (generate_variable var_indexes None)
-        var se
+      let se, defs = generate_c_expr e in
+      Format.fprintf oc "%a%a = %s;@\n" format_local_vars_defs defs
+        (generate_variable None) var se
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a"
         (fun fmt ->
           Mir.IndexMap.iter (fun i v ->
-              let sv, defs = generate_c_expr v var_indexes in
-              Format.fprintf fmt "%a%a = %s;@\n"
-                (format_local_vars_defs var_indexes)
-                defs
-                (generate_variable var_indexes (GetValueConst i))
+              let sv, defs = generate_c_expr v in
+              Format.fprintf fmt "%a%a = %s;@\n" format_local_vars_defs defs
+                (generate_variable (GetValueConst i))
                 var sv))
         es
   | TableVar (size, IndexGeneric e) ->
-      let sv, defs = generate_c_expr e var_indexes in
+      let sv, defs = generate_c_expr e in
       Format.fprintf oc
         "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
         \ @[<h 4> %a%a = %s;@]@\n\
         \ }@\n"
-        size
-        (format_local_vars_defs var_indexes)
-        defs
-        (generate_variable var_indexes (GetValueVar "generic_index"))
+        size format_local_vars_defs defs
+        (generate_variable (GetValueVar "generic_index"))
         var sv
       (* Errors.raise_spanned_error "generic index table definitions not supported in C the backend"
        *   (Pos.get_position e) *)
   | InputVar -> assert false
 
-let generate_var_cond (var_indexes : int VariableMap.t) (cond : condition_data)
-    (oc : Format.formatter) =
+let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
   if (fst cond.cond_error).typ = Mast.Anomaly then
-    let scond, defs = generate_c_expr cond.cond_expr var_indexes in
+    let scond, defs = generate_c_expr cond.cond_expr in
     let percent = Re.Pcre.regexp "%" in
     Format.fprintf oc
       "%acond = %s;@\n\
@@ -207,8 +189,7 @@ let generate_var_cond (var_indexes : int VariableMap.t) (cond : condition_data)
       \        return -1;@\n\
       \    }@\n\
        }@\n"
-      (format_local_vars_defs var_indexes)
-      defs scond
+      format_local_vars_defs defs scond
       (fun fmt err ->
         let error_descr = Mir.Error.err_descr_string err |> Pos.unmark in
         let error_descr =
@@ -219,10 +200,10 @@ let generate_var_cond (var_indexes : int VariableMap.t) (cond : condition_data)
 
 let fresh_cond_counter = ref 0
 
-let rec generate_stmt (program : program) (var_indexes : int VariableMap.t)
-    (oc : Format.formatter) (stmt : stmt) =
+let rec generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt)
+    =
   match Pos.unmark stmt with
-  | SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
+  | SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -236,9 +217,7 @@ let rec generate_stmt (program : program) (var_indexes : int VariableMap.t)
           (Pos.get_end_column pos) !fresh_cond_counter
       in
       fresh_cond_counter := !fresh_cond_counter + 1;
-      let scond, defs =
-        generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
-      in
+      let scond, defs = generate_c_expr (Pos.same_pos_as cond stmt) in
       Format.fprintf oc
         "%am_value %s = %s;@\n\
          if (m_is_defined_true(%s)) {@\n\
@@ -247,22 +226,18 @@ let rec generate_stmt (program : program) (var_indexes : int VariableMap.t)
          if (m_is_defined_false(%s)) {@\n\
          @[<h 4>    %a@]@\n\n\
          };@\n"
-        (format_local_vars_defs var_indexes)
-        defs cond_name scond cond_name
-        (generate_stmts program var_indexes)
-        tt cond_name
-        (generate_stmts program var_indexes)
-        ff
-  | SVerif v -> generate_var_cond var_indexes v oc
+        format_local_vars_defs defs cond_name scond cond_name
+        (generate_stmts program) tt cond_name (generate_stmts program) ff
+  | SVerif v -> generate_var_cond v oc
   | SRuleCall r ->
       let rule = RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
   | SFunctionCall (f, _) ->
       Format.fprintf oc "if(%s(output, TGV, LOCAL)) {return -1;};\n" f
 
-and generate_stmts (program : program) (var_indexes : int VariableMap.t)
-    (oc : Format.formatter) (stmts : stmt list) =
-  Format.pp_print_list (generate_stmt program var_indexes) oc stmts
+and generate_stmts (program : program) (oc : Format.formatter)
+    (stmts : stmt list) =
+  Format.pp_print_list (generate_stmt program) oc stmts
 
 and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
     (rule : rule) =
@@ -272,38 +247,32 @@ and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
     arg_type arg_type
     (if definition then "" else ";")
 
-let generate_rule_function (program : program) (var_indexes : int VariableMap.t)
-    (oc : Format.formatter) (rule : rule) =
+let generate_rule_function (program : program) (oc : Format.formatter)
+    (rule : rule) =
   Format.fprintf oc "%a@[<v 2>{@ %a@]@;}@\n"
     (generate_rule_function_header ~definition:true)
-    rule
-    (generate_stmts program var_indexes)
-    rule.rule_stmts
+    rule (generate_stmts program) rule.rule_stmts
 
-let generate_rule_functions (program : program)
-    (var_indexes : int VariableMap.t) (oc : Format.formatter)
+let generate_rule_functions (program : program) (oc : Format.formatter)
     (rules : rule RuleMap.t) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
-    (generate_rule_function program var_indexes)
+    (generate_rule_function program)
     oc
     (RuleMap.bindings rules |> List.map snd)
 
-let generate_mpp_function (program : program) (var_indexes : int VariableMap.t)
-    (oc : Format.formatter) (f : function_name) =
+let generate_mpp_function (program : program) (oc : Format.formatter)
+    (f : function_name) =
   let stmts = FunctionMap.find f program.mpp_functions in
   Format.fprintf oc
     "@[<hv 4>int %s(m_output*output, m_value* TGV, m_value* LOCAL) {@,\
      m_value cond;@,\
      %a@,\
      return 0;@]}@,"
-    f
-    (generate_stmts program var_indexes)
-    stmts
+    f (generate_stmts program) stmts
 
-let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
-    (var_indexes : int VariableMap.t) =
+let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   Bir.FunctionMap.iter
-    (fun fname _ -> generate_mpp_function program var_indexes oc fname)
+    (fun fname _ -> generate_mpp_function program oc fname)
     (Bir_interface.context_agnostic_mpp_functions program)
 
 let generate_main_function_signature (oc : Format.formatter)
@@ -312,8 +281,8 @@ let generate_main_function_signature (oc : Format.formatter)
     (if add_semicolon then ";" else "")
 
 let generate_main_function_signature_and_var_decls (p : program)
-    (var_indexes : int VariableMap.t) (var_table_size : int)
-    (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+    (var_table_size : int) (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
   let input_vars =
     List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
   in
@@ -334,14 +303,13 @@ let generate_main_function_signature_and_var_decls (p : program)
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
-         Format.fprintf fmt "%a = input->%s;"
-           (generate_variable var_indexes None)
-           var (generate_name var)))
+         Format.fprintf fmt "%a = input->%s;" (generate_variable None) var
+           (generate_name var)))
     input_vars;
 
   Format.fprintf oc "m_value cond;@\n@\n"
 
-let generate_return (var_indexes : int VariableMap.t) (oc : Format.formatter)
+let generate_return (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let returned_variables =
     List.map fst (VariableMap.bindings function_spec.func_outputs)
@@ -358,8 +326,7 @@ let generate_return (var_indexes : int VariableMap.t) (oc : Format.formatter)
        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
        (fun fmt var ->
          Format.fprintf fmt "output->%s = %a;" (generate_name var)
-           (generate_variable var_indexes None)
-           var))
+           (generate_variable None) var))
     returned_variables
 
 let generate_header (oc : Format.formatter) () : unit =
@@ -616,9 +583,7 @@ let generate_c_program (program : program)
          filename);
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
-  let var_indexes, var_table_size =
-    Bir_interface.get_variables_indexes program function_spec
-  in
+  let var_table_size = Bir.size_of_tgv () in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a%a%a%a" generate_header ()
     generate_input_type function_spec generate_empty_input_prototype true
@@ -645,13 +610,10 @@ let generate_c_program (program : program)
     generate_get_output_name_from_index_func function_spec
     generate_get_output_num_func function_spec
     generate_empty_output_func function_spec
-    (generate_rule_functions program var_indexes)
-      program.rules
-    (generate_mpp_functions program)
-      var_indexes
-    (generate_main_function_signature_and_var_decls program var_indexes
+    (generate_rule_functions program) program.rules
+    generate_mpp_functions program
+    (generate_main_function_signature_and_var_decls program
        var_table_size) function_spec
-    (generate_stmts program var_indexes)
-      (Bir.main_statements program)
-    (generate_return var_indexes) function_spec;
+    (generate_stmts program) (Bir.main_statements program)
+    generate_return function_spec;
   close_out _oc[@@ocamlformat "disable"]

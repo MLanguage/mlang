@@ -21,39 +21,6 @@ type bir_function = {
   func_conds : Bir.condition_data Bir.VariableMap.t;
 }
 
-let get_variables_indexes (p : Bir.program) (function_spec : bir_function) :
-    int Bir.VariableMap.t * int =
-  let input_vars =
-    List.map fst (Bir.VariableMap.bindings function_spec.func_variable_inputs)
-  in
-  let assigned_variables =
-    Bir.VariableSet.elements (Bir.get_assigned_variables p)
-  in
-  let output_vars =
-    List.map fst (Bir.VariableMap.bindings function_spec.func_outputs)
-  in
-  let all_relevant_variables =
-    List.fold_left
-      (fun acc var -> Bir.VariableMap.add var () acc)
-      Bir.VariableMap.empty
-      (input_vars @ assigned_variables @ output_vars)
-  in
-  let counter = ref 0 in
-  let var_indexes =
-    Bir.VariableMap.mapi
-      (fun var _ ->
-        let id = !counter in
-        let size =
-          match (Bir.var_to_mir var).Mir.Variable.is_table with
-          | None -> 1
-          | Some size -> size
-        in
-        counter := !counter + size;
-        id)
-      all_relevant_variables
-  in
-  (var_indexes, !counter)
-
 let var_set_from_variable_name_list (p : Bir.program)
     (names : string Pos.marked list) : unit Bir.VariableMap.t =
   List.fold_left
