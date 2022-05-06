@@ -28,8 +28,6 @@ let compare_variable v1 v2 =
   let c = String.compare v1.on_tgv v2.on_tgv in
   if c = 0 then Stdlib.compare v1.offset v2.offset else c
 
-type variable_id = Mir.variable_id
-
 module VariableMap = Map.Make (struct
   type t = variable
 

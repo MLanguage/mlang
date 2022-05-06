@@ -217,7 +217,7 @@ let generate_var_def (var_indexes : int VariableMap.t) (var : variable)
   | InputVar -> assert false
 
 let generate_input_handling (function_spec : Bir_interface.bir_function)
-    (var_indexes : variable_id VariableMap.t) (oc : Format.formatter)
+    (var_indexes : int VariableMap.t) (oc : Format.formatter)
     (split_threshold : int) =
   let input_vars =
     List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
@@ -352,8 +352,8 @@ and generate_stmt (program : program) (var_indexes : int VariableMap.t)
   | SFunctionCall (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
 
-let generate_return (var_indexes : variable_id VariableMap.t)
-    (oc : Format.formatter) (function_spec : Bir_interface.bir_function) =
+let generate_return (var_indexes : int VariableMap.t) (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) =
   let returned_variables =
     List.map fst (VariableMap.bindings function_spec.func_outputs)
   in
@@ -402,7 +402,7 @@ let generate_rule_methods (program : program) (oc : Format.formatter)
 
 let generate_calculateTax_method (calculation_vars_len : int)
     (program : program) (locals_size : int) (oc : Format.formatter)
-    (var_indexes : variable_id VariableMap.t) =
+    (var_indexes : int VariableMap.t) =
   Format.fprintf oc
     "@[<v 0>/**@,\
      * Main calculation method for determining tax @,\
@@ -457,7 +457,7 @@ let generate_mpp_function (program : program) (var_indexes : int VariableMap.t)
     stmts
 
 let generate_mpp_functions (program : program) (oc : Format.formatter)
-    (var_indexes : variable_id VariableMap.t) =
+    (var_indexes : int VariableMap.t) =
   let functions =
     FunctionMap.bindings (Bir_interface.context_agnostic_mpp_functions program)
   in
@@ -467,7 +467,7 @@ let generate_mpp_functions (program : program) (oc : Format.formatter)
     oc function_names
 
 let generate_main_class (program : program) (var_table_size : int)
-    (locals_size : int) (var_indexes : variable_id VariableMap.t)
+    (locals_size : int) (var_indexes : int VariableMap.t)
     (function_spec : Bir_interface.bir_function) (fmt : Format.formatter)
     (filename : string) =
   let class_name =

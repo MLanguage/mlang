@@ -22,7 +22,7 @@ type tgv_id = string
 
 type variable
 
-type variable_id = int
+(* type variable_id = int *)
 
 module VariableMap : Map.S with type key = variable
 
