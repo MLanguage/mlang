@@ -292,28 +292,9 @@ let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
          | _ -> stmt :: acc)
        [] stmts)
 
-let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableSet.t) :
+let get_used_variables_ (e : expression Pos.marked) (acc : VariableSet.t) :
     VariableSet.t =
-  match Pos.unmark e with
-  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2)
-    ->
-      let acc = get_used_variables_ e1 acc in
-      let acc = get_used_variables_ e2 acc in
-      acc
-  | Mir.Unop (_, e) -> get_used_variables_ e acc
-  | Mir.Index ((var, _), e) ->
-      let acc = VariableSet.add var acc in
-      let acc = get_used_variables_ e acc in
-      acc
-  | Mir.Conditional (e1, e2, e3) ->
-      let acc = get_used_variables_ e1 acc in
-      let acc = get_used_variables_ e2 acc in
-      let acc = get_used_variables_ e3 acc in
-      acc
-  | Mir.FunctionCall (_, args) ->
-      List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
-  | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
-  | Mir.Var var -> VariableSet.add var acc
+  Mir.fold_expr_var (fun acc var -> VariableSet.add var acc) acc (Pos.unmark e)
 
 let get_used_variables (e : expression Pos.marked) : VariableSet.t =
   get_used_variables_ e VariableSet.empty
