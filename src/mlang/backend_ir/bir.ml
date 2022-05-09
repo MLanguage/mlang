@@ -18,30 +18,72 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
-type variable = Mir.Variable.t
+type tgv_id = string
 
-type variable_id = Mir.variable_id
+let default_tgv = "primitif"
 
-module VariableMap = Mir.VariableMap
-module VariableDict = Mir.VariableDict
+type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
+
+let compare_variable v1 v2 =
+  let c = String.compare v1.on_tgv v2.on_tgv in
+  if c <> 0 then c
+  else
+    let c = Stdlib.compare v1.offset v2.offset in
+    if c <> 0 then c else Mir.Variable.compare v1.mir_var v2.mir_var
+
+module VariableMap = Map.Make (struct
+  type t = variable
+
+  let compare = compare_variable
+end)
+
+module VariableSet = Set.Make (struct
+  type t = variable
+
+  let compare = compare_variable
+end)
+
+module NameMap = Map.Make (String)
+
+type offset_alloc = { mutable name_map : int NameMap.t; mutable size : int }
+
+(* Mutable state hidden away in the signature. Used for black-magicaly
+   transition variable representations from SSA duplications to offsets of TGV.
+   An issue though: this disregards tetantives to reduce the size of the TGV
+   through optimisations *)
+let offset_alloc = { name_map = NameMap.empty; size = 0 }
+
+let allocate_variable (var : Mir.variable) : int =
+  let name = Pos.unmark var.Mir.Variable.name in
+  match NameMap.find_opt name offset_alloc.name_map with
+  | Some offset -> offset
+  | None ->
+      let var_size =
+        match var.Mir.Variable.is_table with None -> 1 | Some s -> s
+      in
+      let offset = offset_alloc.size in
+      offset_alloc.name_map <- NameMap.add name offset offset_alloc.name_map;
+      offset_alloc.size <- offset_alloc.size + var_size;
+      offset
+
+let size_of_tgv () = offset_alloc.size
 
 (* unify SSA variables *)
-let var_from_mir (v : Mir.Variable.t) : variable =
-  match v.origin with Some v -> v | None -> v
+let var_from_mir (on_tgv : tgv_id) (v : Mir.Variable.t) : variable =
+  let mir_var = match v.origin with Some v -> v | None -> v in
+  { offset = allocate_variable mir_var; on_tgv; mir_var }
 
-let var_to_mir v = v
+let var_to_mir v = v.mir_var
 
-let compare_variable = Mir.Variable.compare
-
-let map_from_mir_map map =
+let map_from_mir_map on_tgv map =
   Mir.VariableMap.fold
-    (fun var -> VariableMap.add (var_from_mir var))
+    (fun var -> VariableMap.add (var_from_mir on_tgv var))
     map VariableMap.empty
 
-let dict_from_mir_dict dict =
+let set_from_mir_dict on_tgv dict =
   Mir.VariableDict.fold
-    (fun var -> VariableDict.add (var_from_mir var))
-    dict VariableDict.empty
+    (fun var -> VariableSet.add (var_from_mir on_tgv var))
+    dict VariableSet.empty
 
 type expression = variable Mir.expression_
 
@@ -162,14 +204,13 @@ let squish_statements (program : program) (threshold : int)
   in
   { program with rules; mpp_functions }
 
-let get_assigned_variables (p : program) : VariableDict.t =
-  let rec get_assigned_variables_block acc (stmts : stmt list) : VariableDict.t
-      =
+let get_assigned_variables (p : program) : VariableSet.t =
+  let rec get_assigned_variables_block acc (stmts : stmt list) : VariableSet.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif _ -> acc
-        | SAssign (var, _) -> VariableDict.add var acc
+        | SAssign (var, _) -> VariableSet.add var acc
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
@@ -178,7 +219,7 @@ let get_assigned_variables (p : program) : VariableDict.t =
            calls *))
       acc stmts
   in
-  get_assigned_variables_block VariableDict.empty (get_all_statements p)
+  get_assigned_variables_block VariableSet.empty (get_all_statements p)
 
 let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
   let rec get_local_vars_expr acc (e : expression Pos.marked) :
@@ -251,28 +292,9 @@ let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
          | _ -> stmt :: acc)
        [] stmts)
 
-let rec get_used_variables_ (e : expression Pos.marked) (acc : VariableDict.t) :
-    VariableDict.t =
-  match Pos.unmark e with
-  | Mir.Comparison (_, e1, e2) | Mir.Binop (_, e1, e2) | Mir.LocalLet (_, e1, e2)
-    ->
-      let acc = get_used_variables_ e1 acc in
-      let acc = get_used_variables_ e2 acc in
-      acc
-  | Mir.Unop (_, e) -> get_used_variables_ e acc
-  | Mir.Index ((var, _), e) ->
-      let acc = VariableDict.add var acc in
-      let acc = get_used_variables_ e acc in
-      acc
-  | Mir.Conditional (e1, e2, e3) ->
-      let acc = get_used_variables_ e1 acc in
-      let acc = get_used_variables_ e2 acc in
-      let acc = get_used_variables_ e3 acc in
-      acc
-  | Mir.FunctionCall (_, args) ->
-      List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
-  | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
-  | Mir.Var var -> VariableDict.add var acc
+let get_used_variables_ (e : expression Pos.marked) (acc : VariableSet.t) :
+    VariableSet.t =
+  Mir.fold_expr_var (fun acc var -> VariableSet.add var acc) acc (Pos.unmark e)
 
-let get_used_variables (e : expression Pos.marked) : VariableDict.t =
-  get_used_variables_ e VariableDict.empty
+let get_used_variables (e : expression Pos.marked) : VariableSet.t =
+  get_used_variables_ e VariableSet.empty

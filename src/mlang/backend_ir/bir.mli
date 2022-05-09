@@ -18,37 +18,13 @@ type rule_id = Mir.rule_id
 
 module RuleMap = Mir.RuleMap
 
-type variable
+type tgv_id = string
 
-type variable_id = int
+type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
 
 module VariableMap : Map.S with type key = variable
 
-module VariableDict : sig
-  type t
-
-  val bindings : t -> (variable_id * variable) list
-
-  val add : variable -> t -> t
-
-  val empty : t
-
-  val find : variable_id -> t -> variable
-
-  val mem : variable -> t -> bool
-
-  val union : t -> t -> t
-
-  val inter : t -> t -> t
-
-  val fold : (variable -> 'b -> 'b) -> t -> 'b -> 'b
-
-  val singleton : variable -> t
-
-  val filter : (variable_id -> variable -> bool) -> t -> t
-
-  val for_all : (variable -> bool) -> t -> bool
-end
+module VariableSet : Set.S with type elt = variable
 
 type expression = variable Mir.expression_
 
@@ -84,15 +60,19 @@ type program = {
   outputs : unit VariableMap.t;
 }
 
-val var_from_mir : Mir.Variable.t -> variable
+val default_tgv : tgv_id
+
+val size_of_tgv : unit -> int
+
+val var_from_mir : tgv_id -> Mir.Variable.t -> variable
 
 val var_to_mir : variable -> Mir.Variable.t
 
 val compare_variable : variable -> variable -> int
 
-val map_from_mir_map : 'a Mir.VariableMap.t -> 'a VariableMap.t
+val map_from_mir_map : tgv_id -> 'a Mir.VariableMap.t -> 'a VariableMap.t
 
-val dict_from_mir_dict : Mir.VariableDict.t -> VariableDict.t
+val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
 
 val main_statements : program -> stmt list
 
@@ -106,7 +86,7 @@ val squish_statements : program -> int -> string -> program
     existing rules semantics, with these chunks being rule definitions and
     inserting rule calls in their place*)
 
-val get_assigned_variables : program -> VariableDict.t
+val get_assigned_variables : program -> VariableSet.t
 
 val get_local_variables : program -> unit Mir.LocalVariableMap.t
 
@@ -115,6 +95,6 @@ val get_locals_size : program -> int
 val remove_empty_conditionals : stmt list -> stmt list
 
 val get_used_variables_ :
-  expression Pos.marked -> VariableDict.t -> VariableDict.t
+  expression Pos.marked -> VariableSet.t -> VariableSet.t
 
-val get_used_variables : expression Pos.marked -> VariableDict.t
+val get_used_variables : expression Pos.marked -> VariableSet.t
