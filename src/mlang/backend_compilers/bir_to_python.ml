@@ -92,8 +92,7 @@ let undefined_class_prelude : string =
   \    else: return float(int(x + (-0.50005 if x < 0 else 0.50005)))\n\n\
    def m_null(x):\n\
   \    if isinstance(x, Undefined): return Undefined\n\
-  \    elif x == 0: return True\n\
-  \    else: return False\n\n\
+  \    else: return x == 0\n\n\
    def m_floor(x):\n\
   \    if isinstance(x, Undefined): return x\n\
   \    else: return floor(x + 0.000001)\n\n\
