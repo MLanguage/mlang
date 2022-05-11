@@ -228,6 +228,10 @@ m_value m_null(m_value x)
 {
     if (x.undefined)
     {
+        return m_undefined;
+    }
+    else if(x.value == 0)
+    {
         return m_one;
     }
     else

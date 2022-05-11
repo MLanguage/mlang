@@ -162,8 +162,11 @@ let rec generate_c_expr (e : expression Pos.marked)
       { def_test; value_comp; locals = se.locals }
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
-      let def_test = "1" in
-      let value_comp = Format.sprintf "(%s ? 0. : 1.)" se.def_test in
+      let def_test = se.def_test in
+      let value_comp =
+        Format.sprintf "(%s ? (%s == 0 ? 1. : 0.) : 0.)" se.def_test
+          se.value_comp
+      in
       { def_test; value_comp; locals = se.locals }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in

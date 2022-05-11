@@ -168,6 +168,18 @@ public class MValue {
     return new MValue((double) (int) (valueToRound));
   }
 
+  static MValue m_null(MValue x) {
+    if (x.isUndefined()) {
+      return mUndefined;
+    }
+    else if (x.getValue() == 0) {
+      return one;
+    }
+    else {
+      return zero;
+    }
+  }
+
   static MValue m_floor(MValue x) {
     if (x.isUndefined()) {
       return mUndefined;
