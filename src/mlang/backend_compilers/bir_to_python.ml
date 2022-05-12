@@ -90,6 +90,9 @@ let undefined_class_prelude : string =
    def m_round(x):\n\
   \    if isinstance(x, Undefined): return x\n\
   \    else: return float(int(x + (-0.50005 if x < 0 else 0.50005)))\n\n\
+   def m_null(x):\n\
+  \    if isinstance(x, Undefined): return Undefined\n\
+  \    else: return x == 0\n\n\
    def m_floor(x):\n\
   \    if isinstance(x, Undefined): return x\n\
   \    else: return floor(x + 0.000001)\n\n\
@@ -247,9 +250,9 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) :
         (generate_python_expr safe_bool_binops)
         arg
   | FunctionCall (NullFunc, [ arg ]) ->
-      Format.fprintf fmt "(%a == %s)"
+      Format.fprintf fmt "m_null(%a)"
         (generate_python_expr safe_bool_binops)
-        arg none_value
+        arg
   | FunctionCall (ArrFunc, [ arg ]) ->
       if autograd () then (generate_python_expr safe_bool_binops) fmt arg
       else

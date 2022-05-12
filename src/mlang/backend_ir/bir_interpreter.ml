@@ -527,6 +527,11 @@ module Make (N : Bir_number.NumberInterface) = struct
             match evaluate_expr ctx p arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
+        | FunctionCall (NullFunc, [ arg ]) -> (
+            match evaluate_expr ctx p arg with
+              | Undefined -> Undefined
+              | Number f ->
+                if N.is_zero f then true_value () else false_value ())
         | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Number f | Number f, Undefined ->
