@@ -182,7 +182,7 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
         def
     | TableVar (size, defs) -> (
         match defs with
-        | IndexGeneric e ->
+        | IndexGeneric (_v, e) ->
             typecheck_top_down ~in_generic_table:true e;
             def
         | IndexTable es ->
@@ -366,11 +366,12 @@ let expand_functions (p : Mir_interface.full_program) :
                  }
              | TableVar (size, defg) -> (
                  match defg with
-                 | IndexGeneric e ->
+                 | IndexGeneric (v, e) ->
                      {
                        def with
                        var_definition =
-                         TableVar (size, IndexGeneric (expand_functions_expr e));
+                         TableVar
+                           (size, IndexGeneric (v, expand_functions_expr e));
                      }
                  | IndexTable es ->
                      {

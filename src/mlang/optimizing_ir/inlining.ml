@@ -272,13 +272,14 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
           (new_stmt, new_ctx, current_stmt_pos)
       | TableVar (size, defs) -> (
           match defs with
-          | IndexGeneric def ->
+          | IndexGeneric (v, def) ->
               let new_def =
                 inline_in_expr (Pos.unmark def) ctx current_block
                   current_stmt_pos
               in
               let new_def =
-                Mir.TableVar (size, IndexGeneric (Pos.same_pos_as new_def def))
+                Mir.TableVar
+                  (size, IndexGeneric (v, Pos.same_pos_as new_def def))
               in
               let new_stmt =
                 Pos.same_pos_as

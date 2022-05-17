@@ -260,7 +260,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                     Mir.IndexMap.fold
                       (fun _ e acc -> get_local_vars_expr acc e)
                       es acc
-                | Mir.IndexGeneric e -> get_local_vars_expr acc e)
+                | Mir.IndexGeneric (_v, e) -> get_local_vars_expr acc e)
             | _ -> acc)
         | SConditional (cond, s1, s2) ->
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in

@@ -41,11 +41,11 @@ let generate_unop (op : Mast.unop) : string =
 
 type offset =
   | GetValueConst of int
-  | GetValueVar of string
+  | GetValueVar of variable
   | PassPointer
   | None
 
-let generate_variable (offset : offset) (fmt : Format.formatter)
+let rec generate_variable (offset : offset) (fmt : Format.formatter)
     (var : variable) : unit =
   let mvar = var_to_mir var in
   let var_index = var.offset in
@@ -53,14 +53,18 @@ let generate_variable (offset : offset) (fmt : Format.formatter)
   | PassPointer ->
       Format.fprintf fmt "(TGV + %d/*%s*/)" var_index
         (Pos.unmark mvar.Mir.Variable.name)
+  | GetValueVar offset ->
+      (* TODO: boundary checks *)
+      Format.fprintf fmt "TGV[%d/*%s*/ + (int)%a.value]" var_index
+        (Pos.unmark mvar.Mir.Variable.name)
+        (generate_variable None) offset
   | _ ->
       Format.fprintf fmt "TGV[%d/*%s*/%s]" var_index
         (Pos.unmark mvar.Mir.Variable.name)
         (match offset with
         | None -> ""
-        | GetValueVar offset -> " + " ^ offset
         | GetValueConst offset -> " + " ^ string_of_int offset
-        | PassPointer -> assert false)
+        | PassPointer | GetValueVar _ -> assert false)
 
 let generate_raw_name (v : variable) : string =
   let v = var_to_mir v in
@@ -161,17 +165,12 @@ let generate_var_def (var : variable) (data : variable_data)
                 (generate_variable (GetValueConst i))
                 var sv))
         es
-  | TableVar (size, IndexGeneric e) ->
+  | TableVar (_size, IndexGeneric (v, e)) ->
       let sv, defs = generate_c_expr e in
-      Format.fprintf oc
-        "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
-        \ @[<h 4> %a%a = %s;@]@\n\
-        \ }@\n"
-        size format_local_vars_defs defs
-        (generate_variable (GetValueVar "generic_index"))
+      Format.fprintf oc "if(m_is_defined_true(%a))@[<hov 2>{%a%a = %s;@]@;}@\n"
+        (generate_variable None) v format_local_vars_defs defs
+        (generate_variable (GetValueVar v))
         var sv
-      (* Errors.raise_spanned_error "generic index table definitions not supported in C the backend"
-       *   (Pos.get_position e) *)
   | InputVar -> assert false
 
 let generate_var_cond (cond : condition_data) (oc : Format.formatter) =

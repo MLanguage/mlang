@@ -41,11 +41,11 @@ let generate_unop (op : Mast.unop) : string =
 
 type offset =
   | GetValueConst of int
-  | GetValueVar of string
+  | GetValueVar of variable
   | PassPointer
   | None
 
-let generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
+let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
     ?(def_flag = false) (var : Bir.variable) : string =
   let mvar = Bir.var_to_mir var in
   try
@@ -55,7 +55,7 @@ let generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
         let offset =
           match offset with
           | None -> ""
-          | GetValueVar offset -> " + " ^ offset
+          | GetValueVar offset -> " + (int)" ^ generate_variable vm None offset
           | GetValueConst offset -> " + " ^ string_of_int offset
           | PassPointer -> assert false
         in
@@ -266,18 +266,15 @@ let generate_var_def (var_indexes : Dgfip_varid.var_id_map) (var : variable)
                 (generate_variable var_indexes (GetValueConst i) var)
                 sv.value_comp))
         es
-  | TableVar (size, IndexGeneric e) ->
+  | TableVar (_size, IndexGeneric (v, e)) ->
+      (* TODO: boundary checks *)
       let sv = generate_c_expr e var_indexes in
-      Format.fprintf oc
-        "for (int generic_index=0; generic_index < %d; generic_index++) {@\n\
-        \ @[<h 4> %a%s = %s;@\n\
-         %s = %s;@]@\n\
-        \ }@\n"
-        size format_local_vars_defs sv.locals
-        (generate_variable ~def_flag:true var_indexes
-           (GetValueVar "generic_index") var)
+      Format.fprintf oc "if(%s)@[<hov 2>{%a%s = %s;@ %s = %s;@]@;}@\n"
+        (generate_variable var_indexes None ~def_flag:true v)
+        format_local_vars_defs sv.locals
+        (generate_variable ~def_flag:true var_indexes (GetValueVar v) var)
         sv.def_test
-        (generate_variable var_indexes (GetValueVar "generic_index") var)
+        (generate_variable var_indexes (GetValueVar v) var)
         sv.value_comp
   | InputVar -> assert false
 

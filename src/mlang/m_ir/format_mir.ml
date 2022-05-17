@@ -95,8 +95,10 @@ let format_variable_def fmt (def : variable_def) =
   match def with
   | SimpleVar e -> Format.fprintf fmt "%a@\n" format_expression (Pos.unmark e)
   | InputVar -> Format.fprintf fmt "[User input]@\n"
-  | TableVar (_, IndexGeneric e) ->
-      Format.fprintf fmt "X -> %a@\n" format_expression (Pos.unmark e)
+  | TableVar (_, IndexGeneric (v, e)) ->
+      Format.fprintf fmt "%s -> %a@\n"
+        (Pos.unmark v.Variable.name)
+        format_expression (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
       IndexMap.map_printer (Format_mast.pp_unmark format_expression) fmt defs
 

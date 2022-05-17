@@ -343,7 +343,7 @@ end
 type 'variable index_def =
   | IndexTable of
       ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of 'variable expression_ Pos.marked
+  | IndexGeneric of 'variable * 'variable expression_ Pos.marked
 
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
@@ -363,7 +363,7 @@ let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
       let idef =
         match idef with
         | IndexTable idx_map -> IndexTable (IndexMap.map map_expr idx_map)
-        | IndexGeneric e -> IndexGeneric (map_expr e)
+        | IndexGeneric (v, e) -> IndexGeneric (f v, map_expr e)
       in
       TableVar (i, idef)
 

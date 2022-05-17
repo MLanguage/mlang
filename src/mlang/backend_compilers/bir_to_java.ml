@@ -186,14 +186,14 @@ let generate_var_def (var : variable) (data : variable_data)
                 (get_var_pos var |> ( + ) i)
                 format_var_name var sv))
         es
-  | TableVar (size, IndexGeneric e) ->
+  | TableVar (_size, IndexGeneric (v, e)) ->
       let se, s = generate_java_expr e in
       Format.fprintf oc
-        "@[<hv 2>for (int genericIndex = 0; genericIndex < %d; genericIndex++) \
-         {@,\
-         @[<h 4> %atgv[%d + genericIndex /* %a */] = %s;@]@]@,\
-         }"
-        size format_local_vars_defs s (get_var_pos var) format_var_name var se
+        "if(!tgv[%d/* %a */].isUndefined())@[<hov 2>{@ %atgv[%d/* %a */ + \
+         (int)tgv[%d/* %a */].getValue()] = %s;@] }@,"
+        (get_var_pos v) format_var_name v format_local_vars_defs s
+        (get_var_pos var) format_var_name var (get_var_pos v) format_var_name v
+        se
   | InputVar -> assert false
 
 let generate_input_handling (function_spec : Bir_interface.bir_function)

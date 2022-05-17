@@ -66,7 +66,7 @@ let get_def_used_variables (def : Mir.variable_def) : Mir.VariableDict.t =
   | Mir.SimpleVar e -> get_used_variables e
   | Mir.TableVar (_, def) -> (
       match def with
-      | Mir.IndexGeneric e -> get_used_variables e
+      | Mir.IndexGeneric (v, e) -> Mir.VariableDict.add v (get_used_variables e)
       | Mir.IndexTable es ->
           Mir.IndexMap.fold
             (fun _ e acc -> Mir.VariableDict.union acc (get_used_variables e))

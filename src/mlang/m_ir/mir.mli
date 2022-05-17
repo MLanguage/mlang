@@ -146,7 +146,7 @@ end
 type 'variable index_def =
   | IndexTable of
       ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of 'variable expression_ Pos.marked
+  | IndexGeneric of 'variable * 'variable expression_ Pos.marked
 
 type 'variable variable_def_ =
   | SimpleVar of 'variable expression_ Pos.marked

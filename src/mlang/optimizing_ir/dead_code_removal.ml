@@ -112,7 +112,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
                 | Mir.SimpleVar e -> Bir.get_used_variables e
                 | Mir.TableVar (_, def) -> (
                     match def with
-                    | Mir.IndexGeneric e -> Bir.get_used_variables e
+                    | Mir.IndexGeneric (v, e) ->
+                        Bir.get_used_variables_ e (Bir.VariableSet.singleton v)
                     | Mir.IndexTable es ->
                         Mir.IndexMap.fold
                           (fun _ e used_vars ->

@@ -97,10 +97,12 @@ let undefined_class_prelude : string =
   \    if isinstance(x, Undefined): return x\n\
   \    else: return floor(x + 0.000001)\n\n\
    class GenericIndex:\n\
-  \    def __init__(self, lambda_function):\n\
+  \    def __init__(self, lambda_function, var):\n\
   \      self.l = lambda_function\n\
+  \      self.i = var\n\
   \    def __getitem__(self, x):\n\
-  \      return self.l(x)"
+  \      if isinstance(self.i, Undefined) or self.i != x: return x\n\
+  \      else: self.l(x)"
 
 let none_value = "Undefined()"
 
@@ -313,14 +315,14 @@ let generate_var_def (var : variable) (data : variable_data)
           Mir.IndexMap.iter (fun _ v ->
               Format.fprintf fmt "%a, " (generate_python_expr false) v))
         es
-  | TableVar (_, IndexGeneric e) ->
+  | TableVar (_, IndexGeneric (v, e)) ->
       if !verbose_output then
         Format.fprintf oc "# Defined %a@\n" Pos.format_position_short
           (Pos.get_position e);
-      Format.fprintf oc "%a = GenericIndex(lambda generic_index: %a)@\n@\n"
+      Format.fprintf oc "%a = GenericIndex(lambda index: %a, %a)@\n@\n"
         generate_tgv_variable var
         (generate_python_expr false)
-        e
+        e generate_tgv_variable v
   | InputVar -> assert false
 
 let generate_header (oc : Format.formatter) () : unit =
