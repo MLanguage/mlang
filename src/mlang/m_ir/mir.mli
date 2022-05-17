@@ -103,7 +103,6 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of local_variable
-  | GenericTableIndex
   | Error
   | LocalLet of
       local_variable

@@ -219,8 +219,6 @@ let rec generate_c_expr (e : expression Pos.marked)
         value_comp = "mlocal" ^ string_of_int lvar.Mir.LocalVariable.id;
         locals = [];
       }
-  | GenericTableIndex ->
-      { def_test = "1"; value_comp = "generic_index"; locals = [] }
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in

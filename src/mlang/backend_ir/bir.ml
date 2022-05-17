@@ -238,7 +238,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
           (fun (acc : unit Mir.LocalVariableMap.t) arg ->
             get_local_vars_expr acc arg)
           acc args
-    | Mir.Literal _ | Mir.Var _ | Mir.GenericTableIndex | Mir.Error -> acc
+    | Mir.Literal _ | Mir.Var _ | Mir.Error -> acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
         let acc = get_local_vars_expr acc e1 in

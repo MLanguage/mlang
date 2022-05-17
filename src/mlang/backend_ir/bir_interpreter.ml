@@ -64,7 +64,6 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_generic_index : int option;
   }
 
   val empty_ctx : ctx
@@ -160,14 +159,12 @@ module Make (N : Bir_number.NumberInterface) = struct
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_generic_index : int option;
   }
 
   let empty_ctx : ctx =
     {
       ctx_local_vars = Mir.LocalVariableMap.empty;
       ctx_vars = Bir.VariableMap.empty;
-      ctx_generic_index = None;
     }
 
   let literal_to_value (l : Mir.literal) : value =
@@ -485,10 +482,6 @@ module Make (N : Bir_number.NumberInterface) = struct
                   (Pos.get_position e)
             in
             r
-        | GenericTableIndex -> (
-            match ctx.ctx_generic_index with
-            | None -> assert false (* should not happen *)
-            | Some i -> Number (N.of_int (Int64.of_int i)))
         | Error ->
             raise
               (RuntimeError

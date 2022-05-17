@@ -153,7 +153,6 @@ let rec generate_java_expr (e : expression Pos.marked) :
         [] )
   | LocalVar lvar ->
       (Format.asprintf "localVariables[%d]" lvar.Mir.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "new MValue(genericIndex)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 in

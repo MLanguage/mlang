@@ -134,7 +134,6 @@ let rec generate_c_expr (e : expression Pos.marked) :
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var -> (Format.asprintf "%a" (generate_variable None) var, [])
   | LocalVar lvar -> (Format.asprintf "LOCAL[%d]" lvar.Mir.LocalVariable.id, [])
-  | GenericTableIndex -> (Format.asprintf "m_literal(generic_index)", [])
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_c_expr e1 in

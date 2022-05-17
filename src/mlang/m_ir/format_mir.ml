@@ -81,7 +81,6 @@ let rec format_expression fmt (e : expression) =
         (Pos.unmark var.Variable.name)
         format_execution_number_short var.Variable.execution_number
   | LocalVar lvar -> Format.fprintf fmt "t%d" lvar.LocalVariable.id
-  | GenericTableIndex -> Format.fprintf fmt "X"
   | Error -> Format.fprintf fmt "erreur"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
       Format.fprintf fmt "soit t%d = (%a) dans %a" lvar.LocalVariable.id

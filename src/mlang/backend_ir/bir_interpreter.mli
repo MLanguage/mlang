@@ -83,7 +83,6 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_generic_index : int option;
   }
   (** Interpretation context *)
 

@@ -290,7 +290,6 @@ let rec generate_python_expr safe_bool_binops fmt (e : expression Pos.marked) :
   | Literal Undefined -> Format.fprintf fmt "%s" none_value
   | Var var -> Format.fprintf fmt "%a" generate_tgv_variable var
   | LocalVar lvar -> Format.fprintf fmt "v%d" lvar.Mir.LocalVariable.id
-  | GenericTableIndex -> Format.fprintf fmt "generic_index"
   | Error -> assert false (* TODO *)
   | LocalLet (lvar, e1, e2) ->
       Format.fprintf fmt "(lambda v%d: %a)(%a)" lvar.Mir.LocalVariable.id

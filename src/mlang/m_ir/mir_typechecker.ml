@@ -47,10 +47,6 @@ let rec typecheck_top_down ~(in_generic_table : bool)
       typecheck_top_down ~in_generic_table e1;
       typecheck_top_down ~in_generic_table e2
   | Error | LocalVar _ -> ()
-  | GenericTableIndex ->
-      if not in_generic_table then
-        Errors.raise_spanned_error
-          "Generic table index appears outside of table" (Pos.get_position e)
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
       typecheck_top_down ~in_generic_table e';
@@ -155,7 +151,7 @@ let rec check_non_recursivity_expr (e : expression Pos.marked)
       check_non_recursivity_expr e3 lvar
   | FunctionCall (_, args) ->
       List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
-  | Literal _ | LocalVar _ | GenericTableIndex | Error -> ()
+  | Literal _ | LocalVar _ | Error -> ()
   | Var var ->
       if var = lvar then
         Errors.raise_spanned_error
@@ -256,7 +252,6 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
   | Literal _ -> e
   | Var _ -> e
   | LocalVar _ -> e
-  | GenericTableIndex -> e
   | Error -> e
   | LocalLet (lvar, e1, e2) ->
       let new_e1 = expand_functions_expr e1 in

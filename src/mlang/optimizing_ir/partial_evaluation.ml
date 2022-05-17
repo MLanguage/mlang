@@ -485,7 +485,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           in
           match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
         with Not_found -> (e, Top))
-    | GenericTableIndex -> (e, Float)
     | Error -> assert false
     (* (e, Top) *)
     (* let l1 = b in l2 *)
