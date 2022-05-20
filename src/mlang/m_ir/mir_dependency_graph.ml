@@ -184,9 +184,46 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
   end
   else false
 
-module RuleExecutionOrder = Graph.Topological.Make (RG)
-
 type rule_execution_order = Mir.rule_id list
+
+module Traversal = Graph.Traverse.Dfs (RG)
+
+let pull_rules_dependencies (g : RG.t) (rules : Mir.rule_id list) :
+    RG.t * rule_execution_order =
+  let order =
+    List.fold_left
+      (fun exec_order rule_id ->
+        let new_deps =
+          Traversal.fold_component
+            (fun dep new_deps ->
+              if List.mem dep exec_order then
+                (* We already added this dependency from another rule, and thus
+                   all its own dependencies *)
+                new_deps
+              else dep :: new_deps)
+            exec_order g rule_id
+        in
+        (* Here's a subtlety, we don't now in which order the rules given are,
+           only that their should not be any cycles. So we can have three cases:
+           The current rule we pull dependencies of is unrelated to previous
+           ones, this is trivialy correct. Or, the current rule is already a
+           dependency of previous ones, then nothing will be added, as seen
+           above. Or finally, the current rule has dependencies in common with
+           previous rules, in which case we know them to be already added, so to
+           be topologically ordered we have to put the new dependencies at the
+           end, it is safe since there is no cycles. *)
+        exec_order @ new_deps)
+      [] rules
+  in
+  let subgraph =
+    RG.fold_vertex
+      (fun rule_id subg ->
+        if List.mem rule_id order then subg else RG.remove_vertex subg rule_id)
+      g g
+  in
+  (subgraph, order)
+
+module RuleExecutionOrder = Graph.Topological.Make (RG)
 
 let get_rules_execution_order (dep_graph : RG.t) : rule_execution_order =
   RuleExecutionOrder.fold (fun var exec_order -> var :: exec_order) dep_graph []

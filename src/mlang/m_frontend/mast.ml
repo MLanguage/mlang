@@ -35,6 +35,8 @@ type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
 
 type chain_tag =
+  | Custom of string (* Custom chain, not an actual rule tag *)
+  | PrimCorr (* empty tag *)
   | Primitif
   | Corrective
   | Isf
@@ -147,7 +149,7 @@ let chain_tag_of_string : string -> chain_tag = function
   | "base_stratemajo" -> Base_stratemajo
   | "non_auto_cc" -> Non_auto_cc
   | "horizontale" -> Horizontale
-  | _ -> raise Not_found
+  | s -> Custom s
 
 let number_and_tags_of_name (name : string Pos.marked list) :
     int Pos.marked * chain_tag Pos.marked list =
@@ -174,8 +176,10 @@ let number_and_tags_of_name (name : string Pos.marked list) :
   in
   let number, tags = aux [] name in
   if List.length tags = 0 then
-    (number, [ (Primitif, Pos.no_pos); (Corrective, Pos.no_pos) ])
-    (* No tags means both in primitive and corrective *)
+    ( number,
+      [
+        (PrimCorr, Pos.no_pos); (Primitif, Pos.no_pos); (Corrective, Pos.no_pos);
+      ] ) (* No tags means both in primitive and corrective *)
   else (number, tags)
 
 type variable_name = string

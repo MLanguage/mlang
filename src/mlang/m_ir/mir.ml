@@ -408,7 +408,10 @@ end)
 module TagMap = Map.Make (struct
   type t = Mast.chain_tag
 
-  let compare = compare
+  let compare t1 t2 =
+    match (t1, t2) with
+    | Mast.Custom s1, Mast.Custom s2 -> String.compare s1 s2
+    | _ -> Stdlib.compare t1 t2
 end)
 
 (**{1 Verification conditions}*)

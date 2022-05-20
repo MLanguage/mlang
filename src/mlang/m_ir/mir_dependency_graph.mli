@@ -36,4 +36,7 @@ val check_for_cycle : RG.t -> Mir.program -> bool -> bool
 
 type rule_execution_order = Mir.rule_id list
 
+val pull_rules_dependencies :
+  RG.t -> Mir.rule_id list -> RG.t * rule_execution_order
+
 val get_rules_execution_order : RG.t -> rule_execution_order
