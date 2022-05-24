@@ -143,6 +143,62 @@ T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur)
   return discord;
 }
 
+void IRDATA_range_base(T_irdata *irdata, T_desc_var *desc, double valeur)
+{
+#ifdef FLG_COMPACT
+  int indice = desc->indice;
+  irdata->defs[indice] = 1;
+  irdata->valeurs[indice] = valeur;
+#else
+  int indice = desc->indice & INDICE_VAL;
+  switch (desc->indice & EST_MASQUE) {
+    case EST_SAISIE:
+      irdata->def_saisie[indice] = 1;
+      irdata->saisie[indice] = valeur;
+      break;
+    case EST_CALCULEE:
+      irdata->def_calculee[indice] = 1;
+      irdata->calculee[indice] = valeur;
+      break;
+    case EST_BASE:
+      irdata->def_base[indice] = 1;
+      irdata->base[indice] = valeur;
+      break;
+  }
+#endif /* FLG_COMPACT */
+}
+
+struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_desc_var *desc, int ind, double valeur)
+{
+  T_discord *discord = NULL;
+  discord = (*desc->verif)(irdata);
+  if ((discord != NULL) && (discord->erreur->type == ANOMALIE)) {
+    return discord;
+  }
+#ifdef FLG_COMPACT
+  int indice = desc->indice + ind;
+  irdata->defs[indice] = 1;
+  irdata->valeurs[indice] = valeur;
+#else
+  int indice = (desc->indice & INDICE_VAL) + ind;
+  switch (desc->indice & EST_MASQUE) {
+    case EST_SAISIE:
+      irdata->def_saisie[indice] = 1;
+      irdata->saisie[indice] = valeur;
+      break;
+    case EST_CALCULEE:
+      irdata->def_calculee[indice] = 1;
+      irdata->calculee[indice] = valeur;
+      break;
+    case EST_BASE:
+      irdata->def_base[indice] = 1;
+      irdata->base[indice] = valeur;
+      break;
+  }
+#endif /* FLG_COMPACT */
+  return discord;
+}
+
 double * IRDATA_extrait_special(T_irdata *irdata, T_desc_var *desc)
 {
   double *res = NULL;
@@ -151,6 +207,32 @@ double * IRDATA_extrait_special(T_irdata *irdata, T_desc_var *desc)
   res = (irdata->defs[indice] == 0) ? NULL : &irdata->valeurs[indice];
 #else
   int indice = desc->indice & INDICE_VAL;
+  switch (desc->indice & EST_MASQUE) {
+    case EST_SAISIE:
+      res = (irdata->def_saisie[indice] == 0) ? NULL : &irdata->saisie[indice];
+      break;
+    case EST_CALCULEE:
+      res = (irdata->def_calculee[indice] == 0) ? NULL : &irdata->calculee[indice];
+      break;
+    case EST_BASE:
+      res = (irdata->def_base[indice] == 0) ? NULL : &irdata->base[indice];
+      break;
+    default:
+      res = NULL;
+      break;
+  }
+#endif /* FLG_COMPACT */
+  return res;
+}
+
+double * IRDATA_extrait_tableau(T_irdata *irdata, T_desc_var *desc, int ind)
+{
+  double *res = NULL;
+#ifdef FLG_COMPACT
+  int indice = desc->indice + ind;
+  res = (irdata->defs[indice] == 0) ? NULL : &irdata->valeurs[indice];
+#else
+  int indice = (desc->indice & INDICE_VAL) + ind;
   switch (desc->indice & EST_MASQUE) {
     case EST_SAISIE:
       res = (irdata->def_saisie[indice] == 0) ? NULL : &irdata->saisie[indice];
@@ -180,7 +262,10 @@ static T_desc_var * cherche_desc_var(const char *nom, T_desc_var *table, int tai
     if (res < 0) sup = millieu;
     else if (res > 0) inf = millieu + 1;
   }
-  return desc;
+  if (res == 0)
+    return desc;
+  else
+    return NULL;
 }
 
 T_desc_var * IRDATA_cherche_desc_var(const char *nom)

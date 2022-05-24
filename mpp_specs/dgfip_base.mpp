@@ -134,7 +134,7 @@ verif_saisie_cohe_corrective():
   verif_saisie_cohe_primitive_isf()
   call_m_verif(corrective,saisie)
 
-verif_saisie_cohe_horizontale():
+verif_cohe_horizontale():
   call_m_verif(horizontale)
 
 dgfip_calculation():
