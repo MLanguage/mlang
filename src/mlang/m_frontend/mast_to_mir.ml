@@ -259,7 +259,8 @@ type var_or_int_index = VarIndex of Mast.variable | IntIndex of int
 (** The M language added a new feature in its 2017 edition : you can specify
     loop variable ranges bounds with constant variables. Because we need the
     actual value of the bounds to unroll everything, this function queries the
-    const value in the context if needed. *)
+    const value in the context if needed. Otherwise, it might be a dynamic
+    index. *)
 let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
     var_or_int_index =
   match Pos.unmark l with
