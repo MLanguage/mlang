@@ -1286,7 +1286,12 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                             data_to_add)
                     ([], var_data, 0) r.Mast.rule_formulaes
                 in
-                let rule = (List.rev rule_vars, r.rule_number, r.rule_tags) in
+                let rule_tags =
+                  match r.rule_chaining with
+                  | None -> r.rule_tags
+                  | Some (chain, pos) -> (Mast.Custom chain, pos) :: r.rule_tags
+                in
+                let rule = (List.rev rule_vars, r.rule_number, rule_tags) in
                 ( Mir.RuleMap.add (Pos.unmark r.rule_number) rule rule_data,
                   var_data )
           | Mast.VariableDecl (Mast.ConstVar _) ->
@@ -1464,6 +1469,10 @@ let get_conds (error_decls : Mir.Error.t list)
                               (Mast.Primitif, Pos.no_pos);
                               (Mast.Corrective, Pos.no_pos);
                             ]
+                        | [ (Mast.Custom _, _) ] as l ->
+                            (Mast.Primitif, Pos.no_pos)
+                            :: (Mast.Corrective, Pos.no_pos)
+                            :: l
                         | l -> l);
                     }
                     conds)

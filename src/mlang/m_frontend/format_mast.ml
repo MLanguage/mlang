@@ -42,6 +42,8 @@ let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 let format_chain_tag fmt (t : chain_tag) =
   Format.pp_print_string fmt
     (match t with
+    | Custom name -> "\"" ^ name ^ "\""
+    | PrimCorr -> ""
     | Primitif -> "primitif"
     | Corrective -> "corrective"
     | Isf -> "isf"

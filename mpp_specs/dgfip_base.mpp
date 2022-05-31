@@ -108,7 +108,7 @@ sauve_base_HR():
 
 ENCH_TL():
   X = X
-#  outputs <- call_m(ENCH_TL)
+  outputs <- call_m(ENCH_TL)
 
 verif_calcul_primitive_isf():
   call_m_verif(isf,calculee)
