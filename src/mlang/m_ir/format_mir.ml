@@ -81,7 +81,6 @@ let rec format_expression fmt (e : expression) =
         (Pos.unmark var.Variable.name)
         format_execution_number_short var.Variable.execution_number
   | LocalVar lvar -> Format.fprintf fmt "t%d" lvar.LocalVariable.id
-  | GenericTableIndex -> Format.fprintf fmt "X"
   | Error -> Format.fprintf fmt "erreur"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
       Format.fprintf fmt "soit t%d = (%a) dans %a" lvar.LocalVariable.id
@@ -95,8 +94,10 @@ let format_variable_def fmt (def : variable_def) =
   match def with
   | SimpleVar e -> Format.fprintf fmt "%a@\n" format_expression (Pos.unmark e)
   | InputVar -> Format.fprintf fmt "[User input]@\n"
-  | TableVar (_, IndexGeneric e) ->
-      Format.fprintf fmt "X -> %a@\n" format_expression (Pos.unmark e)
+  | TableVar (_, IndexGeneric (v, e)) ->
+      Format.fprintf fmt "%s -> %a@\n"
+        (Pos.unmark v.Variable.name)
+        format_expression (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
       IndexMap.map_printer (Format_mast.pp_unmark format_expression) fmt defs
 

@@ -300,11 +300,20 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
                           | None ->
                               Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
                           | Some size ->
-                              Mir.TableVar
-                                ( size,
-                                  Mir.IndexGeneric
-                                    (Pos.same_pos_as (Mir.Literal Mir.Undefined)
-                                       var.Mir.Variable.name) )
+                              let idxmap =
+                                let rec loop i acc =
+                                  if i < 0 then acc
+                                  else
+                                    loop (i - 1)
+                                      (Mir.IndexMap.add i
+                                         (Pos.same_pos_as
+                                            (Mir.Literal Mir.Undefined)
+                                            var.Mir.Variable.name)
+                                         acc)
+                                in
+                                loop (size - 1) Mir.IndexMap.empty
+                              in
+                              Mir.TableVar (size, Mir.IndexTable idxmap)
                         end;
                     } ),
                 pos )

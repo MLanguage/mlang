@@ -54,7 +54,7 @@ let rec get_used_variables_ (e : Mir.expression Pos.marked)
       acc
   | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
-  | Mir.LocalVar _ | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> acc
+  | Mir.LocalVar _ | Mir.Literal _ | Mir.Error -> acc
   | Mir.Var var -> Mir.VariableDict.add var acc
 
 let get_used_variables (e : Mir.expression Pos.marked) : Mir.VariableDict.t =
@@ -66,7 +66,7 @@ let get_def_used_variables (def : Mir.variable_def) : Mir.VariableDict.t =
   | Mir.SimpleVar e -> get_used_variables e
   | Mir.TableVar (_, def) -> (
       match def with
-      | Mir.IndexGeneric e -> get_used_variables e
+      | Mir.IndexGeneric (v, e) -> Mir.VariableDict.add v (get_used_variables e)
       | Mir.IndexTable es ->
           Mir.IndexMap.fold
             (fun _ e acc -> Mir.VariableDict.union acc (get_used_variables e))

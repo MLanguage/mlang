@@ -241,7 +241,6 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of (LocalVariable.t[@opaque])
-  | GenericTableIndex
   | Error
   | LocalLet of
       (LocalVariable.t[@opaque])
@@ -263,7 +262,6 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | LocalLet (v, e1, e2) -> LocalLet (v, map e1, map e2)
   | Literal l -> Literal l
   | LocalVar v -> LocalVar v
-  | GenericTableIndex -> GenericTableIndex
   | Error -> Error
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
@@ -277,7 +275,7 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | GenericTableIndex | Error -> acc
+  | Literal _ | LocalVar _ | Error -> acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -343,7 +341,7 @@ end
 type 'variable index_def =
   | IndexTable of
       ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of 'variable expression_ Pos.marked
+  | IndexGeneric of 'variable * 'variable expression_ Pos.marked
 
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
@@ -363,7 +361,7 @@ let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
       let idef =
         match idef with
         | IndexTable idx_map -> IndexTable (IndexMap.map map_expr idx_map)
-        | IndexGeneric e -> IndexGeneric (map_expr e)
+        | IndexGeneric (v, e) -> IndexGeneric (f v, map_expr e)
       in
       TableVar (i, idef)
 

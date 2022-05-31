@@ -485,7 +485,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           in
           match oe with None -> (e, d) | Some e' -> (Pos.same_pos_as e' e, d)
         with Not_found -> (e, Top))
-    | GenericTableIndex -> (e, Float)
     | Error -> assert false
     (* (e, Top) *)
     (* let l1 = b in l2 *)
@@ -671,14 +670,14 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
             (SimpleVar e', add_var_def_to_ctx ctx block_id var partial_e')
         | TableVar (size, def) -> (
             match def with
-            | IndexGeneric e ->
+            | IndexGeneric (v, e) ->
                 let e', d' = partially_evaluate_expr ctx p.mir_program e in
                 let partial_e' =
                   Option.map
                     (fun x -> TableVar (size, Array.init size (fun _ -> x)))
                     (expr_to_partial (Pos.unmark e') d')
                 in
-                ( TableVar (size, IndexGeneric e'),
+                ( TableVar (size, IndexGeneric (v, e')),
                   add_var_def_to_ctx ctx block_id var partial_e' )
             | IndexTable es ->
                 let es' =

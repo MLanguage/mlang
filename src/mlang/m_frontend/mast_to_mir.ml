@@ -254,25 +254,23 @@ let get_var_from_name_lax (d : Mir.Variable.t list Pos.VarNameToID.t)
 
 (**{2 Loops}*)
 
+type var_or_int_index = VarIndex of Mast.variable | IntIndex of int
+
 (** The M language added a new feature in its 2017 edition : you can specify
     loop variable ranges bounds with constant variables. Because we need the
     actual value of the bounds to unroll everything, this function queries the
-    const value in the context if needed. *)
+    const value in the context if needed. Otherwise, it might be a dynamic
+    index. *)
 let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
-    int =
+    var_or_int_index =
   match Pos.unmark l with
   | Mast.Variable v -> (
       try
-        (* We look up the value of the variable, which has to be const *)
+        (* We look up the value of the variable, which may be const *)
         let name = Mast.get_variable_name v in
-        ConstMap.find name ctx.const_map |> Pos.unmark |> int_of_float
-      with Not_found ->
-        Errors.raise_spanned_error
-          (Format.asprintf
-             "variable %s is not an integer constant and cannot be used here"
-             (Mast.get_variable_name v))
-          (Pos.get_position l))
-  | Mast.Float f -> int_of_float f
+        IntIndex (ConstMap.find name ctx.const_map |> Pos.unmark |> int_of_float)
+      with Not_found -> VarIndex v)
+  | Mast.Float f -> IntIndex (int_of_float f)
 
 let loop_variables_size (lpvl : loop_param_value list) (pos : Pos.t) =
   let size_err p =
@@ -357,9 +355,19 @@ let translate_loop_variables (lvs : Mast.loop_variables Pos.marked)
                        match value with
                        | Mast.Single l -> [ var_or_int l ]
                        | Mast.Range (l1, l2) -> make_range_list l1 l2
-                       | Mast.Interval (l1, l2) ->
-                           make_int_range_list (var_or_int_value ctx l1)
-                             (var_or_int_value ctx l2))
+                       | Mast.Interval (l1, l2) -> (
+                           let lb = var_or_int_value ctx l1 in
+                           let ub = var_or_int_value ctx l2 in
+                           match (lb, ub) with
+                           | VarIndex v, _ | _, VarIndex v ->
+                               Errors.raise_spanned_error
+                                 (Format.asprintf
+                                    "variable %s is not an integer constant \
+                                     and cannot be used here"
+                                    (Mast.get_variable_name v))
+                                 pos
+                           | IntIndex lb, IntIndex ub ->
+                               make_int_range_list lb ub))
                      values)
               in
               let sz = loop_variables_size values pos in
@@ -385,14 +393,10 @@ let translate_loop_variables (lvs : Mast.loop_variables Pos.marked)
     replace *inside the string* the loop parameter by its value to produce the
     new variable. *)
 
-(** A variable whose name is [X] should be translated as the generic table index
-    expression. However sometimes there is a variable called [X] (yes...) so if
-    there is no loop in the context we return the variable [X] for ["X"]. *)
-let get_var_or_x (d : Mir.Variable.t list Pos.VarNameToID.t)
+let get_var (d : Mir.Variable.t list Pos.VarNameToID.t)
     (exec_number : Mir.execution_number) (name : Mast.variable_name Pos.marked)
-    (is_lvalue : bool) (in_table : bool) (lax : bool) : Mir.expression =
-  if Pos.unmark name = "X" && in_table then Mir.GenericTableIndex
-  else if lax then Mir.Var (get_var_from_name_lax d name exec_number is_lvalue)
+    (is_lvalue : bool) (lax : bool) : Mir.expression =
+  if lax then Mir.Var (get_var_from_name_lax d name exec_number is_lvalue)
   else Mir.Var (get_var_from_name d name exec_number is_lvalue)
 
 (** The M language has a weird and very annoying "feature", which is that you
@@ -642,34 +646,30 @@ let get_variables_decl (p : Mast.program)
     [translate_variable idmap exec_number table_definition lc var lax]. SSA is
     all about assigning the correct variable assignment instance when a variable
     is used somewhere. That is why [translate_variable] needs the
-    [execution_number]. [table_definition] is needed because the M language has
-    a special ["X"] variable (generic table index) that has to be distinguished
-    from a variable simply named ["X"]. [lc] is the loop context and the thing
-    that complicates this function the most: variables used inside loops have
-    loop parameters that have to be instantiated to give a normal variable name.
-    [var] is the main argument that you want to translate. [lax] is a special
-    argument for SSA construction that, if sets to [true], allows
-    [translate_variable] to return a variable assigned exactly at [exec_number]
-    (otherwise it always return a variable) in another rule or before in the
-    same rule. *)
+    [execution_number]. [lc] is the loop context and the thing that complicates
+    this function the most: variables used inside loops have loop parameters
+    that have to be instantiated to give a normal variable name. [var] is the
+    main argument that you want to translate. [lax] is a special argument for
+    SSA construction that, if sets to [true], allows [translate_variable] to
+    return a variable assigned exactly at [exec_number] (otherwise it always
+    return a variable) in another rule or before in the same rule. *)
 let rec translate_variable (idmap : Mir.idmap)
     (exec_number : Mir.execution_number)
-    (const_map : float Pos.marked ConstMap.t) (table_definition : bool)
-    (lc : loop_context option) (var : Mast.variable Pos.marked)
-    (is_lvalue : bool) (lax : bool) : Mir.expression Pos.marked =
+    (const_map : float Pos.marked ConstMap.t) (lc : loop_context option)
+    (var : Mast.variable Pos.marked) (is_lvalue : bool) (lax : bool) :
+    Mir.expression Pos.marked =
   match Pos.unmark var with
   | Mast.Normal name -> begin
       match ConstMap.find_opt name const_map with
       | Some (f, _pos) -> Pos.same_pos_as (Mir.Literal (Float f)) var
       | None ->
           Pos.same_pos_as
-            (get_var_or_x idmap exec_number (Pos.same_pos_as name var) is_lvalue
-               table_definition lax)
+            (get_var idmap exec_number (Pos.same_pos_as name var) is_lvalue lax)
             var
     end
   | Mast.Generic gen_name -> (
       if List.length gen_name.Mast.parameters == 0 then
-        translate_variable idmap exec_number const_map table_definition lc
+        translate_variable idmap exec_number const_map lc
           (Pos.same_pos_as (Mast.Normal gen_name.Mast.base) var)
           is_lvalue lax
       else
@@ -681,25 +681,25 @@ let rec translate_variable (idmap : Mir.idmap)
               (Pos.get_position var)
         | Some lc ->
             instantiate_generic_variables_parameters idmap exec_number const_map
-              table_definition lc gen_name is_lvalue (Pos.get_position var) lax)
+              lc gen_name is_lvalue (Pos.get_position var) lax)
 
 (** The following function deal with the "trying all cases" pragma *)
 and instantiate_generic_variables_parameters (idmap : Mir.idmap)
     (exec_number : Mir.execution_number)
-    (const_map : float Pos.marked ConstMap.t) (table_definition : bool)
-    (lc : loop_context) (gen_name : Mast.variable_generic_name)
-    (is_lvalue : bool) (pos : Pos.t) (lax : bool) : Mir.expression Pos.marked =
-  instantiate_generic_variables_parameters_aux idmap exec_number const_map
-    table_definition lc gen_name.Mast.base is_lvalue pos lax
+    (const_map : float Pos.marked ConstMap.t) (lc : loop_context)
+    (gen_name : Mast.variable_generic_name) (is_lvalue : bool) (pos : Pos.t)
+    (lax : bool) : Mir.expression Pos.marked =
+  instantiate_generic_variables_parameters_aux idmap exec_number const_map lc
+    gen_name.Mast.base is_lvalue pos lax
 
 and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
     (exec_number : Mir.execution_number)
-    (const_map : float Pos.marked ConstMap.t) (table_definition : bool)
-    (lc : loop_context) (var_name : string) (is_lvalue : bool) (pos : Pos.t)
-    (lax : bool) : Mir.expression Pos.marked =
+    (const_map : float Pos.marked ConstMap.t) (lc : loop_context)
+    (var_name : string) (is_lvalue : bool) (pos : Pos.t) (lax : bool) :
+    Mir.expression Pos.marked =
   match ParamsMap.choose_opt lc with
   | None ->
-      translate_variable idmap exec_number const_map table_definition (Some lc)
+      translate_variable idmap exec_number const_map (Some lc)
         (Mast.Normal var_name, pos)
         is_lvalue lax
   | Some (param, (value, size)) ->
@@ -726,7 +726,7 @@ and instantiate_generic_variables_parameters_aux (idmap : Mir.idmap)
               value var_name
       in
       instantiate_generic_variables_parameters_aux idmap exec_number const_map
-        table_definition
+        (* table_definition *)
         (ParamsMap.remove param lc)
         new_var_name is_lvalue pos lax
 
@@ -779,11 +779,9 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                match
                                  Pos.unmark
                                    (translate_variable idmap exec_number
-                                      const_map
-                                      ((Pos.unmark f.Mast.lvalue).Mast.index
-                                     <> None)
-                                      None (Pos.unmark f.Mast.lvalue).Mast.var
-                                      true false)
+                                      const_map None
+                                      (Pos.unmark f.Mast.lvalue).Mast.var true
+                                      false)
                                with
                                | Mir.Var var -> var
                                | _ -> assert false
@@ -833,10 +831,7 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap)
                                  match
                                    Pos.unmark
                                      (translate_variable idmap exec_number
-                                        const_map
-                                        ((Pos.unmark f.Mast.lvalue).Mast.index
-                                       <> None)
-                                        (Some lc)
+                                        const_map (Some lc)
                                         (Pos.unmark f.Mast.lvalue).Mast.var
                                         false false)
                                  with
@@ -877,8 +872,8 @@ let translate_table_index (ctx : translating_context)
       Pos.same_pos_as (Mir.Literal (Mir.Float (float_of_int i'))) i
   | Mast.SymbolIndex v ->
       let var =
-        translate_variable ctx.idmap ctx.exec_number ctx.const_map
-          ctx.table_definition ctx.lc (Pos.same_pos_as v i) false false
+        translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc
+          (Pos.same_pos_as v i) false false
       in
       var
 
@@ -920,8 +915,7 @@ let rec translate_expression (ctx : translating_context)
                       ( Pos.same_pos_as Mast.Eq set_var,
                         Pos.same_pos_as local_var_expr e,
                         translate_variable ctx.idmap ctx.exec_number
-                          ctx.const_map ctx.table_definition ctx.lc set_var
-                          false false )
+                          ctx.const_map ctx.lc set_var false false )
                 | Mast.FloatValue i ->
                     Mir.Comparison
                       ( Pos.same_pos_as Mast.Eq i,
@@ -983,8 +977,8 @@ let rec translate_expression (ctx : translating_context)
         Mir.Unop (op, new_e)
     | Mast.Index (t, i) ->
         let t_var =
-          translate_variable ctx.idmap ctx.exec_number ctx.const_map
-            ctx.table_definition ctx.lc t false false
+          translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc t
+            false false
         in
         let new_i = translate_table_index ctx i in
         Mir.Index
@@ -1011,8 +1005,8 @@ let rec translate_expression (ctx : translating_context)
         match l with
         | Mast.Variable var ->
             let new_var =
-              translate_variable ctx.idmap ctx.exec_number ctx.const_map
-                ctx.table_definition ctx.lc (Pos.same_pos_as var f) false false
+              translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc
+                (Pos.same_pos_as var f) false false
             in
             Pos.unmark new_var
         | Mast.Float f -> Mir.Literal (Mir.Float f))
@@ -1047,7 +1041,19 @@ and translate_func_args (ctx : translating_context) (args : Mast.func_args) :
 (** {2 Translation of source file items}*)
 
 (** Helper type to indicate the kind of variable assignment *)
-type index_def = NoIndex | SingleIndex of int | GenericIndex
+type index_def = NoIndex | ConstIndex of int | DynamicIndex of Mir.variable
+
+let translate_index_def ctx var : translating_context * index_def =
+  let v, pos = var in
+  match var_or_int_value ctx (Mast.Variable v, pos) with
+  | IntIndex i -> (ctx, ConstIndex i)
+  | VarIndex v -> (
+      match
+        translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc
+          (v, pos) true true
+      with
+      | Mir.Var v, _ -> (ctx, DynamicIndex v)
+      | _ -> assert false)
 
 (** Translates lvalues into the assigning variable as well as the type of
     assignment *)
@@ -1056,8 +1062,8 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
   let var =
     match
       Pos.unmark
-        (translate_variable ctx.idmap ctx.exec_number ctx.const_map
-           ctx.table_definition ctx.lc (Pos.unmark lval).Mast.var true true)
+        (translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc
+           (Pos.unmark lval).Mast.var true true)
     with
     | Mir.Var (var : Mir.Variable.t) -> var
     | _ -> assert false
@@ -1066,30 +1072,27 @@ let translate_lvalue (ctx : translating_context) (lval : Mast.lvalue Pos.marked)
   match (Pos.unmark lval).Mast.index with
   | Some ti -> (
       match Pos.unmark ti with
-      | Mast.SymbolIndex (Mast.Normal "X") ->
-          ({ ctx with table_definition = true }, var, GenericIndex)
-      | Mast.LiteralIndex i -> (ctx, var, SingleIndex i)
+      | Mast.LiteralIndex i -> (ctx, var, ConstIndex i)
       | Mast.SymbolIndex (Mast.Normal _ as v) ->
-          let i = var_or_int_value ctx (Pos.same_pos_as (Mast.Variable v) ti) in
-          (ctx, var, SingleIndex i)
+          let ctx, index_def = translate_index_def ctx (Pos.same_pos_as v ti) in
+          (ctx, var, index_def)
       | Mast.SymbolIndex (Mast.Generic _ as v) ->
           let mir_v =
-            translate_variable ctx.idmap ctx.exec_number ctx.const_map
-              ctx.table_definition ctx.lc (Pos.same_pos_as v ti) true false
+            translate_variable ctx.idmap ctx.exec_number ctx.const_map ctx.lc
+              (Pos.same_pos_as v ti) true false
           in
-          let i =
+          let ctx, index_def =
             match Pos.unmark mir_v with
             | Mir.Var v ->
-                var_or_int_value ctx
+                translate_index_def ctx
                   (Pos.same_pos_as
-                     (Mast.Variable
-                        (Mast.Normal (Pos.unmark v.Mir.Variable.name)))
+                     (Mast.Normal (Pos.unmark v.Mir.Variable.name))
                      ti)
-            | Mir.Literal (Float f) -> int_of_float f
+            | Mir.Literal (Float f) -> (ctx, ConstIndex (int_of_float f))
             | _ -> assert false
             (* should not happen*)
           in
-          (ctx, var, SingleIndex i))
+          (ctx, var, index_def))
   | None -> (ctx, var, NoIndex)
 
 (** Date types are not supported *)
@@ -1146,8 +1149,8 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
          match decl_data.var_decl_is_table with
          | Some size -> (
              match def_kind with
-             | NoIndex -> assert false (* should not happen*)
-             | SingleIndex i ->
+             | NoIndex -> assert false (* should not happen *)
+             | ConstIndex i ->
                  {
                    Mir.var_definition =
                      Mir.TableVar
@@ -1155,10 +1158,10 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
                    Mir.var_typ;
                    Mir.var_io = io;
                  }
-             | GenericIndex ->
+             | DynamicIndex v ->
                  {
                    Mir.var_definition =
-                     Mir.TableVar (size, Mir.IndexGeneric var_expr);
+                     Mir.TableVar (size, Mir.IndexGeneric (v, var_expr));
                    Mir.var_typ;
                    Mir.var_io = io;
                  })

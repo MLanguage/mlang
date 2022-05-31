@@ -51,7 +51,7 @@ let rec no_local_vars (e : Bir.expression Pos.marked) : bool =
   match Pos.unmark e with
   | Mir.LocalVar _ -> false
   | Mir.LocalLet _ -> false
-  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> true
+  | Mir.Literal _ | Mir.Error | Mir.Var _ -> true
   | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) ->
       no_local_vars e1 && no_local_vars e2
   | Mir.Index (_, e1) | Mir.Unop (_, e1) -> no_local_vars e1
@@ -66,7 +66,7 @@ let rec has_this_local_var (e : Bir.expression Pos.marked)
   | Mir.LocalVar l' -> l = l'
   | Mir.LocalLet (l', e1, e2) ->
       l = l' || has_this_local_var e1 l || has_this_local_var e2 l
-  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error | Mir.Var _ -> false
+  | Mir.Literal _ | Mir.Error | Mir.Var _ -> false
   | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) ->
       has_this_local_var e1 l || has_this_local_var e2 l
   | Mir.Index (_, e1) | Mir.Unop (_, e1) -> has_this_local_var e1 l
@@ -78,9 +78,7 @@ let rec has_this_local_var (e : Bir.expression Pos.marked)
 
 let rec expr_size (e : Bir.expression Pos.marked) : int =
   match Pos.unmark e with
-  | Mir.LocalVar _ | Mir.LocalLet _ | Mir.Literal _ | Mir.GenericTableIndex
-  | Mir.Error | Mir.Var _ ->
-      1
+  | Mir.LocalVar _ | Mir.LocalLet _ | Mir.Literal _ | Mir.Error | Mir.Var _ -> 1
   | Mir.Binop (_, e1, e2) | Mir.Comparison (_, e1, e2) ->
       expr_size e1 + expr_size e2 + 1
   | Mir.Index (_, e1) | Mir.Unop (_, e1) -> expr_size e1 + 1
@@ -231,7 +229,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
       match Mir.LocalVariableMap.find_opt l ctx.ctx_local_vars with
       | None -> e
       | Some e' -> e')
-  | Mir.Literal _ | Mir.GenericTableIndex | Mir.Error -> e
+  | Mir.Literal _ | Mir.Error -> e
   | Mir.Index (v, e2) ->
       let new_e2 =
         Pos.same_pos_as
@@ -272,13 +270,14 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
           (new_stmt, new_ctx, current_stmt_pos)
       | TableVar (size, defs) -> (
           match defs with
-          | IndexGeneric def ->
+          | IndexGeneric (v, def) ->
               let new_def =
                 inline_in_expr (Pos.unmark def) ctx current_block
                   current_stmt_pos
               in
               let new_def =
-                Mir.TableVar (size, IndexGeneric (Pos.same_pos_as new_def def))
+                Mir.TableVar
+                  (size, IndexGeneric (v, Pos.same_pos_as new_def def))
               in
               let new_stmt =
                 Pos.same_pos_as
