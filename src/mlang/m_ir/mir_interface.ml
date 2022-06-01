@@ -162,4 +162,8 @@ let output_var_dependencies (p : full_program) (chain : Mast.chain_tag)
     Mir_dependency_graph.get_var_dependencies p.program chain.execution_order
       var
   in
-  List.iter (fun (var : variable) -> print_endline (Pos.unmark var.name)) deps
+  List.iter
+    (fun (var : variable) ->
+      Printf.printf "%s (%s)\n" (Pos.unmark var.name)
+        (Option.value ~default:"" var.alias))
+    deps
