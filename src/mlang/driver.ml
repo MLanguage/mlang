@@ -44,7 +44,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     (optimize_unsafe_float : bool) (code_coverage : bool)
     (precision : string option) (test_error_margin : float option)
     (m_clean_calls : bool) (dgfip_options : string list option)
-    (var_dependencies : string option) =
+    (var_dependencies : (string * string) option) =
   Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
     print_cycles output optimize_unsafe_float m_clean_calls;
   try
@@ -106,11 +106,12 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         Mast.all_tags
     in
     (match var_dependencies with
-    | Some var ->
+    | Some (var, chain) ->
         let var =
           Mir.find_var_by_name full_m_program.program (var, Pos.no_pos)
         in
-        Mir_interface.output_var_dependencies full_m_program Mast.Corrective var;
+        let chain = Mast.chain_tag_of_string chain in
+        Mir_interface.output_var_dependencies full_m_program chain var;
         exit 0
     | None -> ());
     Cli.debug_print "Creating combined program suitable for execution...";

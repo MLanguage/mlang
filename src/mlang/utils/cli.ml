@@ -174,7 +174,7 @@ let dgfip_options =
 let var_dependencies =
   Arg.(
     value
-    & opt (some string) None
+    & opt (some (pair string string)) None
     & info [ "var_dependencies" ]
         ~doc:"Output list of dependencies of the given variable")
 
