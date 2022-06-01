@@ -154,3 +154,12 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
       chains
   in
   { program; chains_orders }
+
+let output_var_dependencies (p : full_program) (chain : Mast.chain_tag)
+    (var : Mir.variable) =
+  let chain = TagMap.find chain p.chains_orders in
+  let deps =
+    Mir_dependency_graph.get_var_dependencies p.program chain.execution_order
+      var
+  in
+  List.iter (fun (var : variable) -> print_endline (Pos.unmark var.name)) deps

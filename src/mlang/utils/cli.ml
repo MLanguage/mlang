@@ -171,13 +171,20 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
+let var_dependencies =
+  Arg.(
+    value
+    & opt (some string) None
+    & info [ "var_dependencies" ]
+        ~doc:"Output list of dependencies of the given variable")
+
 let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file
     $ no_print_cycles $ backend $ function_spec $ mpp_file $ output
     $ run_all_tests $ run_test $ mpp_function $ optimize $ optimize_unsafe_float
     $ code_coverage $ precision $ test_error_margin $ m_clean_calls
-    $ dgfip_options)
+    $ dgfip_options $ var_dependencies)
 
 let info =
   let doc =

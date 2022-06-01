@@ -115,6 +115,16 @@ let create_rules_dependency_graph (chain_rules : Mir.rule_data Mir.RuleMap.t)
         g rule_vars)
     chain_rules RG.empty
 
+module VG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
+  type t = Mir.variable_id
+
+  let hash v = v
+
+  let compare = compare
+
+  let equal = ( = )
+end)
+
 module SCC = Graph.Components.Make (RG)
 (** Tarjan's stongly connected components algorithm, provided by OCamlGraph *)
 
@@ -222,6 +232,35 @@ let pull_rules_dependencies (g : RG.t) (rules : Mir.rule_id list) :
       g g
   in
   (subgraph, order)
+
+let create_vars_dependency_graph (p : Mir.program)
+    (chain_rules : rule_execution_order) : VG.t =
+  List.fold_left
+    (fun g rule_id ->
+      let rule = Mir.RuleMap.find rule_id p.program_rules in
+      List.fold_left
+        (fun g (vid, vdef) ->
+          let deps = get_def_used_variables vdef.Mir.var_definition in
+          Mir.VariableDict.fold
+            (fun var g -> VG.add_edge g vid var.Mir.id)
+            deps g)
+        g rule.rule_vars)
+    VG.empty chain_rules
+
+let get_var_dependencies ?(strict = true) (p : Mir.program)
+    (rules : rule_execution_order) (var : Mir.variable) : Mir.variable list =
+  let depg = create_vars_dependency_graph p rules in
+  let vid = var.Mir.id in
+  if not (VG.mem_vertex depg var.Mir.id) then
+    Errors.raise_error "This variable is not defined in this chain.";
+  let module Traversal = Graph.Traverse.Dfs (VG) in
+  Traversal.fold_component
+    (fun did deps ->
+      if (not strict) || VG.out_degree depg did = 0 then
+        let var = Mir.VariableDict.find did p.program_vars in
+        var :: deps
+      else deps)
+    [] depg vid
 
 module RuleExecutionOrder = Graph.Topological.Make (RG)
 
