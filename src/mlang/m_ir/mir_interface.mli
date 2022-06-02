@@ -33,3 +33,8 @@ type full_program = {
 
 val to_full_program : Mir.program -> Mast.chain_tag list -> full_program
 (** Creates the dependency graph and stores it *)
+
+val output_var_dependencies :
+  full_program -> Mast.chain_tag -> Mir.variable -> unit
+(** Print list of input variables effecting the valuation of the given variable
+    in the given chain *)
