@@ -17,7 +17,7 @@ and generate_stmt (_program : Bir.program) (oc : Format.formatter)
 let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
     (function_name : string) : unit =
   let stmts = Bir.FunctionMap.find function_name program.mpp_functions in
-  Format.fprintf oc "@[<v 1>%s:@,%a@]" function_name (generate_stmts program)
+  Format.fprintf oc "@[<v 1>%s:@,%a@]@," function_name (generate_stmts program)
     stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
@@ -39,12 +39,30 @@ let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
   let _, rules = List.split rules in
   Format.pp_print_list (generate_rule_method program) oc rules
 
+let generate_header (locals_size : int) (oc : Format.formatter)
+    (var_table_size : int) : unit =
+  Format.fprintf oc
+    "@[<v 0>type m_value = {undefined : bool; value : float}@,\
+     type m_array = m_value array@,\
+     type m_context = m_value list@,\
+     let m_undef : m_value = {undefined = true ; value = 0.0}@,\
+     let m_zero  : m_value = {undefined = false; value = 0.0}@,\
+     let m_one   : m_value = {undefined = false; value = 1.0}@,\
+     let tgv : m_array = Array.make %i m_undef@,\
+     let local_variables : m_array = Array.make %i m_undef@,\
+     @]"
+    var_table_size locals_size
+
 let generate_ocaml_program (program : Bir.program)
     (_function_spec : Bir_interface.bir_function) (_output_file : string) =
   let _oc = open_out _output_file in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "@[<v 0>%a@,@,%a@,%a@]@." generate_rule_methods program
-    generate_mpp_functions program (generate_stmts program)
+  let locals_size = Bir.get_locals_size program |> ( + ) 1 in
+  let var_table_size = Bir.size_of_tgv () in
+  Format.fprintf oc "@[<v 0>%a@,%a@,(*@,%a@,%a@]*)@."
+    (generate_header locals_size)
+    var_table_size generate_rule_methods program generate_mpp_functions program
+    (generate_stmts program)
     (Bir.main_statements program);
   close_out _oc
   [@@ocamlformat disable]
