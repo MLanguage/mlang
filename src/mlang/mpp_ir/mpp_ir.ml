@@ -30,7 +30,9 @@ type scoped_var =
 
 type mpp_compute_name = string
 
-type var_filter = Saisie | Calculee
+type var_filter =
+  | Saisie of Mir.variable_subtype option
+  | Calculee of Mir.variable_subtype option
 
 type mpp_callable =
   | Program of Mast.chain_tag (* M codebase *)

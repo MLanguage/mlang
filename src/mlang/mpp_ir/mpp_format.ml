@@ -24,7 +24,10 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
     | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
 let format_var_filter (fmt : formatter) (f : var_filter) : unit =
-  fprintf fmt "%s" (match f with Saisie -> "saisie" | Calculee -> "calculee")
+  match f with
+  | Saisie None -> fprintf fmt "saisie"
+  | Calculee None -> fprintf fmt "calculee"
+  | Calculee (Some st) | Saisie (Some st) -> Format_mir.format_subtype fmt st
 
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
