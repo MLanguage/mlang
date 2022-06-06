@@ -724,7 +724,8 @@ module Make (N : Bir_number.NumberInterface) = struct
         let rule = Bir.RuleMap.find r p.rules in
         evaluate_stmts p ctx rule.rule_stmts (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) ->
-        evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions) loc 0
+        evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
+          loc 0
   (* Mpp_function arguments seem to be used only to determine which variables
      are actually output. Does this actually make sense ? *)
 

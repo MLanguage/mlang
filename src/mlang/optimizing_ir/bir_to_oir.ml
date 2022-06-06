@@ -97,8 +97,8 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       in
       (curr_block_id, blocks)
   | Bir.SFunctionCall (f, _) ->
-      let stmts = Bir.FunctionMap.find f p.mpp_functions in
-      translate_statement_list p stmts curr_block_id blocks
+      let Bir.{ mppf_stmts; _ } = Bir.FunctionMap.find f p.mpp_functions in
+      translate_statement_list p mppf_stmts curr_block_id blocks
 
 let bir_program_to_oir (p : Bir.program) : Oir.program =
   let entry_block = fresh_block_id () in
@@ -187,9 +187,12 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
     re_translate_blocks_until p.entry_block p.blocks Bir.RuleMap.empty None
   in
   let mpp_functions =
-    Bir.FunctionMap.add p.main_function
-      (Bir.remove_empty_conditionals statements)
-      Bir.FunctionMap.empty
+    Bir.FunctionMap.singleton p.main_function
+      Bir.
+        {
+          mppf_stmts = Bir.remove_empty_conditionals statements;
+          mppf_is_verif = false;
+        }
   in
   {
     mpp_functions;

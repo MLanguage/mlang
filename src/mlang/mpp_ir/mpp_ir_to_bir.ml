@@ -24,6 +24,7 @@ type translation_ctx = {
   new_variables : Bir.variable StringMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
   used_chains : unit Mir.TagMap.t;
+  verif_seen : bool;
 }
 
 let empty_translation_ctx : translation_ctx =
@@ -31,6 +32,7 @@ let empty_translation_ctx : translation_ctx =
     new_variables = StringMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
     used_chains = Mir.TagMap.empty;
+    verif_seen = false;
   }
 
 let ctx_join ctx1 ctx2 =
@@ -46,6 +48,7 @@ let ctx_join ctx1 ctx2 =
         ctx2.variables_used_as_inputs;
     used_chains =
       Mir.TagMap.union (fun _ _ () -> Some ()) ctx1.used_chains ctx2.used_chains;
+    verif_seen = ctx1.verif_seen || ctx2.verif_seen;
   }
 
 let translate_to_binop (b : Mpp_ast.binop) : Mast.binop =
@@ -415,7 +418,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       in
       wrap_m_code_call m_program chain_tag ctx
   | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
-      (ctx, generate_verif_call m_program chain_tag filter)
+      ( { ctx with verif_seen = true },
+        generate_verif_call m_program chain_tag filter )
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
@@ -479,10 +483,12 @@ let create_combined_program (m_program : Mir_interface.full_program)
     let ctx, mpp_functions =
       List.fold_left
         (fun (ctx, function_map) mpp_func ->
-          let ctx, statements =
+          let ctx, mppf_stmts =
             translate_mpp_function mpp_program m_program mpp_func [] ctx
           in
-          (ctx, Bir.FunctionMap.add mpp_func.name statements function_map))
+          let func = Bir.{ mppf_stmts; mppf_is_verif = ctx.verif_seen } in
+          let ctx = { ctx with verif_seen = false } in
+          (ctx, Bir.FunctionMap.add mpp_func.name func function_map))
         (empty_translation_ctx, Bir.FunctionMap.empty)
         mpp_program
     in

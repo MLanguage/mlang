@@ -125,8 +125,7 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
       get_code_locs_stmts p (Bir.RuleMap.find r p.rules).rule_stmts
         (Bir_interpreter.InsideRule r :: loc)
   | Bir.SFunctionCall (f, _) ->
-      get_code_locs_stmts p
-        (Bir.FunctionMap.find f p.mpp_functions)
+      get_code_locs_stmts p (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
         (Bir_interpreter.InsideFunction f :: loc)
 
 and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)

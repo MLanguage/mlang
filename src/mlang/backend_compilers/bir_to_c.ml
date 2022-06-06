@@ -260,13 +260,13 @@ let generate_rule_functions (program : program) (oc : Format.formatter)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =
-  let stmts = FunctionMap.find f program.mpp_functions in
+  let { mppf_stmts; _ } = FunctionMap.find f program.mpp_functions in
   Format.fprintf oc
     "@[<hv 4>int %s(m_output*output, m_value* TGV, m_value* LOCAL) {@,\
      m_value cond;@,\
      %a@,\
      return 0;@]}@,"
-    f (generate_stmts program) stmts
+    f (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   Bir.FunctionMap.iter

@@ -279,6 +279,14 @@ let generate_var_def (var_indexes : Dgfip_varid.var_id_map) (var : variable)
 let generate_var_cond (var_indexes : Dgfip_varid.var_id_map)
     (cond : condition_data) (oc : Format.formatter) =
   let scond = generate_c_expr cond.cond_expr var_indexes in
+  let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
+  let code =
+    match snd cond.cond_error with
+    | None -> "NULL"
+    | Some v ->
+        Format.sprintf "\"%s\""
+          (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
+  in
   Format.fprintf oc
     {|
     %acond_def = %s;
@@ -288,13 +296,8 @@ let generate_var_cond (var_indexes : Dgfip_varid.var_id_map)
       add_erreur(irdata, &erreur_%s, %s);
     }
 |}
-    format_local_vars_defs scond.locals scond.def_test scond.value_comp
-    (Pos.unmark (fst cond.cond_error).Mir.Error.name)
-    (match snd cond.cond_error with
-    | None -> "NULL"
-    | Some v ->
-        Format.sprintf "\"%s\""
-          (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name))
+    format_local_vars_defs scond.locals scond.def_test scond.value_comp erreur
+    code
 
 let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : stmt) =
@@ -532,36 +535,48 @@ let generate_get_error_count_func (oc : Format.formatter) (program : program) =
     generate_get_error_count_prototype false
     (Mir.VariableMap.cardinal program.mir_program.program_conds)
 
-let generate_mpp_function_protoype (add_semicolon : bool)
+let generate_mpp_function_protoype (add_semicolon : bool) (return_type : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
-  Format.fprintf oc "void %s(T_irdata* irdata)%s" function_name
+  let ret_type = if return_type then "struct S_discord *" else "void" in
+  Format.fprintf oc "%s %s(T_irdata* irdata)%s" ret_type function_name
     (if add_semicolon then ";" else "")
 
 let generate_mpp_function (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (f : Bir.function_name) =
-  let stmts = Bir.FunctionMap.find f program.mpp_functions in
-  Format.fprintf oc "@[<hv 4>%a{@,int cond_def;@,double cond;@,%a@]}@,"
-    (generate_mpp_function_protoype false)
+    ((f, ret_type) : Bir.function_name * bool) =
+  let { mppf_stmts; mppf_is_verif } =
+    Bir.FunctionMap.find f program.mpp_functions
+  in
+  Format.fprintf oc "@[<hv 4>%a{@,int cond_def;@,double cond;@,%a%s@]}@,"
+    (generate_mpp_function_protoype false mppf_is_verif)
     f
     (generate_stmts program var_indexes)
-    stmts
+    mppf_stmts
+    (if ret_type then
+     {|#ifdef FLG_MULTITHREAD
+      return irdata->tas_discord;
+#else
+      return tas_discord;
+#endif
+|}
+    else "")
 
 let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
     (var_indexes : Dgfip_varid.var_id_map) =
   List.iter
-    (fun (fname, _) -> generate_mpp_function program var_indexes oc fname)
+    (fun (fname, { mppf_is_verif; _ }) ->
+      generate_mpp_function program var_indexes oc (fname, mppf_is_verif))
     (Bir.FunctionMap.bindings program.mpp_functions)
 
 let generate_mpp_functions_signatures (oc : Format.formatter)
     (program : Bir.program) =
-  let funcs, _ =
-    List.split
-      (Bir.FunctionMap.bindings
-         (Bir_interface.context_agnostic_mpp_functions program))
+  let funcs =
+    Bir.FunctionMap.bindings
+      (Bir_interface.context_agnostic_mpp_functions program)
   in
   Format.fprintf oc "@[<v 0>%a@]@,"
-    (Format.pp_print_list (generate_mpp_function_protoype true))
+    (Format.pp_print_list (fun ppf (func, { mppf_is_verif; _ }) ->
+         generate_mpp_function_protoype true mppf_is_verif ppf func))
     funcs
 
 let generate_implem_header oc header_filename =
@@ -580,7 +595,7 @@ let generate_c_program (program : program)
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a" 
+  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a"
     generate_header ()
     error_table_definitions program 
     generate_get_input_index_prototype true
