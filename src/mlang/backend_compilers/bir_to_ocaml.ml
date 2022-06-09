@@ -95,16 +95,15 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
 
 let format_tgv_set (variable_expression : string) (oc : Format.formatter)
     (variable_position : int) : unit =
-  Format.fprintf oc "Array.set tgv %d %s;@,"
-    variable_position variable_expression
+  Format.fprintf oc "Array.set tgv %d %s;@," variable_position
+    variable_expression
 
 let format_local_defs (oc : Format.formatter)
     (defs : (Mir.LocalVariable.t * Bir.expression Pos.marked) list) : unit =
   Format.pp_print_list
     (fun fmt (lvar, expr) ->
       let se, _ = generate_ocaml_expr expr in
-      Format.fprintf fmt
-        "Array.set local_variables %d %s;@,"
+      Format.fprintf fmt "Array.set local_variables %d %s;@,"
         lvar.Mir.LocalVariable.id se)
     oc defs
 
@@ -225,4 +224,4 @@ let generate_ocaml_program (program : Bir.program)
     (generate_stmts program)
     (Bir.main_statements program);
   close_out _oc
-  [@@ocamlformat disable]
+  [@@ocamlformat "disable"]
