@@ -82,7 +82,7 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
       )
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
-      ( Format.asprintf "(get tgv %d (*%s*))" (get_var_pos var)
+      ( Format.asprintf "(Array.get tgv %d (*%s*))" (get_var_pos var)
           (Pos.unmark var.mir_var.name),
         [] )
   | LocalVar _lvar -> ("localvar", []) (*TODO*)
@@ -191,7 +191,7 @@ let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
 let generate_rule_method (program : Bir.program) (oc : Format.formatter)
     (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]@," rule.rule_name
+    "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]@,()" rule.rule_name
     (generate_stmts program) rule.rule_stmts
 
 let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
