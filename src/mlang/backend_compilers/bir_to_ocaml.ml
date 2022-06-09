@@ -86,7 +86,6 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
           (Pos.unmark var.mir_var.name),
         [] )
   | LocalVar _lvar -> ("localvar", []) (*TODO*)
-  | GenericTableIndex -> ("generic table index", []) (* TODO *)
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, local1 = generate_ocaml_expr e1 in
@@ -96,6 +95,16 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
 let format_tgv_set (variable_expression : string) (oc : Format.formatter)
     (variable_position : int) : unit =
   Format.fprintf oc "Array.set tgv %d %s;@," variable_position
+    variable_expression
+
+let format_tgv_set_with_offset (variable_position : int) (offset_tgv_variable : Bir.variable) (oc : Format.formatter)
+     (variable_expression : string): unit =
+  Format.fprintf oc
+    "Array.set tgv (%d +  (((*%s*) Array.get tgv %d).value |> int_of_float)) \
+     %s;@,"
+    variable_position
+    (Pos.unmark offset_tgv_variable.mir_var.name)
+    (get_var_pos offset_tgv_variable)
     variable_expression
 
 let format_local_defs (oc : Format.formatter)
@@ -126,22 +135,15 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
                 (format_tgv_set tgv_expression)
                 (get_var_pos variable |> ( + ) i)))
         es
-  | TableVar (size, IndexGeneric e) ->
+  | TableVar (_size, IndexGeneric (v, e)) ->
       let tgv_expression, local_defs = generate_ocaml_expr e in
-      let list_pos =
-        let rec integer_range first_item last_item =
-          if first_item > last_item then []
-          else first_item :: integer_range (first_item + 1) last_item
-        in
-        integer_range (get_var_pos variable) (get_var_pos variable + size)
-      in
-      let aux_print_list (list_pos : int list) (oc : Format.formatter)
-          (tgv_expression : string) =
-        List.iter (format_tgv_set tgv_expression oc) list_pos
-      in
-      Format.fprintf oc "%a(*Table %s*)@,%a" format_local_defs local_defs
+      Format.fprintf oc
+        "if (Array.get tgv %d (*%s*)).undefined then %a(*Table %s*)@,%a"
+        (get_var_pos v)
+        (Pos.unmark v.mir_var.name)
+        format_local_defs local_defs
         (Pos.unmark variable.mir_var.name)
-        (aux_print_list list_pos) tgv_expression
+        (format_tgv_set_with_offset (get_var_pos variable) v) tgv_expression
   | InputVar -> assert false
 
 let rec generate_stmts (program : Bir.program) (oc : Format.formatter)
