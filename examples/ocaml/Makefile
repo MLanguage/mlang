@@ -12,10 +12,10 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 all: backend_tests $(shell find . -name "run_*.py")
 
 clean: 
-	rm -f ir_*.ml mvalue.cmi mvalue.cmo mvalue.out mvalue.o mvalue.cmx
+	rm -f ir_*.ml ir_*.o ir_*.cmi ir_*.cmx ir_*.exe mvalue.cmi mvalue.cmo mvalue.out mvalue.o mvalue.cmx
 
 ##################################################
-# Generating and running Java files from Mlang
+# Generating and running OCaml files from Mlang
 ##################################################
 
 .PRECIOUS: ir_%.ml
