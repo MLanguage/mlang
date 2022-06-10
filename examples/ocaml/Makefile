@@ -12,7 +12,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 all: backend_tests $(shell find . -name "run_*.py")
 
 clean: 
-	rm -f ir_*.ml
+	rm -f ir_*.ml mvalue.cmi mvalue.cmo mvalue.out mvalue.o mvalue.cmx
 
 ##################################################
 # Generating and running Java files from Mlang
@@ -26,4 +26,10 @@ ir_%.ml: ../../m_specs/%.m_spec
 		$(SOURCE_FILES)
 
 ir_%.exe: ir_%.ml
-	ocamlfind opt -o $@ $^
+	ocamlopt -o $@ mvalue.ml $^
+
+ir_%.out: ir_%.ml
+	ocamlc.opt -o $@ mvalue.ml $^
+
+mvalue.out: 
+	ocamlc.opt -c mvalue.ml
