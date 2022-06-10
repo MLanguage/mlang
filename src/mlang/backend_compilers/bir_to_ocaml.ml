@@ -23,7 +23,7 @@ let generate_binop (op : Mast.binop) : string =
   | Mast.Div -> "m_divide"
 
 let generate_unop (op : Mast.unop) : string =
-  match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
+  match op with Mast.Not -> "m_not" | Mast.Minus -> "m_neg"
 
 let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
     string * (Mir.LocalVariable.t * Bir.expression Pos.marked) list =
@@ -43,49 +43,60 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
   | Unop (op, e) ->
       let expr, local = generate_ocaml_expr e in
       (Format.asprintf "(%s %s)" (generate_unop op) expr, local)
-  | Index (_var, e) ->
-      let _expr, local = generate_ocaml_expr e in
-      ("Index", local)
+  | Index (var, e) ->
+      let expr, local = generate_ocaml_expr e in
+      let unmarked_var = Pos.unmark var in
+      let size =
+        Option.get (Bir.var_to_mir unmarked_var).Mir.Variable.is_table
+      in
+      ( Format.asprintf "(m_table_value_at_index tgv %d %s %d)"
+          (get_var_pos unmarked_var) expr size,
+        local )
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_ocaml_expr e1 in
       let se2, s2 = generate_ocaml_expr e2 in
       let se3, s3 = generate_ocaml_expr e3 in
       (Format.asprintf "(m_cond %s  %s  %s)" se1 se2 se3, s1 @ s2 @ s3)
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let _expr, local = generate_ocaml_expr arg in
-      ("PresentFunc", local)
+      let s, local = generate_ocaml_expr arg in
+      (Format.asprintf "(m_present %s)" s, local)
   | FunctionCall (NullFunc, [ arg ]) ->
-      let _expr, local = generate_ocaml_expr arg in
-      ("NullFunc", local)
+      let s, local = generate_ocaml_expr arg in
+      (Format.asprintf "(m_null %s)" s, local)
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let _expr, local = generate_ocaml_expr arg in
-      ("ArrFunc", local)
+      let s, local = generate_ocaml_expr arg in
+      (Format.asprintf "(m_round %s)" s, local)
   | FunctionCall (InfFunc, [ arg ]) ->
-      let _expr, local = generate_ocaml_expr arg in
-      ("InfFunc", local)
-  | FunctionCall (MaxFunc, [ e1; _e2 ]) ->
-      let _s1, local1 = generate_ocaml_expr e1 in
-      ("MaxFunc", local1)
-  | FunctionCall (MinFunc, [ e1; _e2 ]) ->
-      let _s1, local1 = generate_ocaml_expr e1 in
-      ("MinFunc", local1)
-  | FunctionCall (Multimax, [ e1; (Var _v2, _) ]) ->
-      let _s1, local1 = generate_ocaml_expr e1 in
-      ("Multimax", local1)
+      let s, local = generate_ocaml_expr arg in
+      (Format.asprintf "(m_floor %s)" s, local)
+  | FunctionCall (MaxFunc, [ e1; e2 ]) ->
+      let s1, local1 = generate_ocaml_expr e1 in
+      let s2, local2 = generate_ocaml_expr e2 in
+      (Format.asprintf "(%s %s %s)" "m_max" s1 s2, local1 @ local2)
+  | FunctionCall (MinFunc, [ e1; e2 ]) ->
+      let s1, local1 = generate_ocaml_expr e1 in
+      let s2, local2 = generate_ocaml_expr e2 in
+      (Format.asprintf "(%s %s %s)" "m_min" s1 s2, local1 @ local2)
+  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+      let s1, local1 = generate_ocaml_expr e1 in
+      (Format.asprintf "(m_multimax %s tgv %d)" s1 (get_var_pos v2), local1)
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
       | 0. -> (Format.asprintf "m_zero", [])
       | 1. -> (Format.asprintf "m_one", [])
       | _ ->
-          (Format.asprintf "{undefined=false;value=%s}" (string_of_float f), [])
+          (Format.asprintf "{undefined = false ; value = %s}" (string_of_float f), [])
       )
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
       ( Format.asprintf "(Array.get tgv %d (*%s*))" (get_var_pos var)
           (Pos.unmark var.mir_var.name),
         [] )
-  | LocalVar _lvar -> ("localvar", []) (*TODO*)
+  | LocalVar lvar ->
+      ( Format.asprintf "(Array.get local_variables %d)"
+          lvar.Mir.LocalVariable.id,
+        [] )
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, local1 = generate_ocaml_expr e1 in
@@ -97,8 +108,9 @@ let format_tgv_set (variable_expression : string) (oc : Format.formatter)
   Format.fprintf oc "Array.set tgv %d %s;@," variable_position
     variable_expression
 
-let format_tgv_set_with_offset (variable_position : int) (offset_tgv_variable : Bir.variable) (oc : Format.formatter)
-     (variable_expression : string): unit =
+let format_tgv_set_with_offset (variable_position : int)
+    (offset_tgv_variable : Bir.variable) (oc : Format.formatter)
+    (variable_expression : string) : unit =
   Format.fprintf oc
     "Array.set tgv (%d +  (((*%s*) Array.get tgv %d).value |> int_of_float)) \
      %s;@,"
@@ -143,7 +155,8 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
         (Pos.unmark v.mir_var.name)
         format_local_defs local_defs
         (Pos.unmark variable.mir_var.name)
-        (format_tgv_set_with_offset (get_var_pos variable) v) tgv_expression
+        (format_tgv_set_with_offset (get_var_pos variable) v)
+        tgv_expression
   | InputVar -> assert false
 
 let rec generate_stmts (program : Bir.program) (oc : Format.formatter)
@@ -191,8 +204,8 @@ let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
 let generate_rule_method (program : Bir.program) (oc : Format.formatter)
     (rule : Bir.rule) =
   Format.fprintf oc
-    "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]@,()" rule.rule_name
-    (generate_stmts program) rule.rule_stmts
+    "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]()@,"
+    rule.rule_name (generate_stmts program) rule.rule_stmts
 
 let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
     =
@@ -216,7 +229,7 @@ let generate_ocaml_program (program : Bir.program)
   let oc = Format.formatter_of_out_channel _oc in
   let locals_size = Bir.get_locals_size program |> ( + ) 1 in
   let var_table_size = Bir.size_of_tgv () in
-  Format.fprintf oc "@[<v 0>%a@,%a@,(*@,%a@,%a@]*)@."
+  Format.fprintf oc "@[<v 0>%a@,%a@,(*@,%a@,let calculate_tax = %a@]*)@."
     (generate_header locals_size)
     var_table_size generate_rule_methods program generate_mpp_functions program
     (generate_stmts program)

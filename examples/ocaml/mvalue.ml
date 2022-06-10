@@ -83,3 +83,57 @@ let m_not (x : m_value) : m_value =
 let m_neg (x : m_value) : m_value =
   if x.undefined then m_undef
   else { undefined = true; value = Float.neg x.value }
+
+let m_table_value_at_index (variable_array : m_array) (table_start : int)
+    (index : m_value) (size : int) =
+  if index.undefined then m_undef
+  else
+    let offset = int_of_float index.value in
+    match offset with
+    | x when x < 0 -> m_zero
+    | x when x > size -> m_undef
+    | _ -> Array.get variable_array (offset + table_start)
+
+let m_max (x : m_value) (y : m_value) : m_value =
+  { undefined = false; value = max x.value y.value }
+
+let m_min (x : m_value) (y : m_value) : m_value =
+  { undefined = false; value = min x.value y.value }
+
+let m_round (x : m_value) : m_value =
+  if x.undefined then m_undef
+  else
+    {
+      undefined = false;
+      value =
+        floor (if x.value < 0.0 then x.value -. 0.50005 else x.value +. 0.50005);
+    }
+
+let m_null = m_not
+
+let m_floor (x : m_value) : m_value =
+  if x.undefined then m_undef
+  else { undefined = false; value = floor (x.value +. 0.000001) }
+
+let m_present (x : m_value) : m_value = if x.undefined then m_zero else m_one
+
+let m_multimax (bound_variable : m_value) (variable_array : m_array)
+    (position : int) : m_value =
+  if bound_variable.undefined then failwith "Multimax bound undefined!"
+  else
+    let bound = int_of_float bound_variable.value in
+    let get_position_value_or_zero (position) =
+      m_add (Array.get variable_array position) m_zero
+    in
+    let rec multimax (variable_array) (current_index)
+        (max_index) (reference) =
+      let new_max =
+        m_max reference (get_position_value_or_zero current_index)
+      in
+      if current_index = max_index then new_max
+      else multimax variable_array (current_index + 1) max_index new_max
+    in
+    if bound >= 1 then
+      multimax variable_array (position + 1) (position + bound)
+        (get_position_value_or_zero position)
+    else get_position_value_or_zero position
