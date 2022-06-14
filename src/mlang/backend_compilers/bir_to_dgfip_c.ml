@@ -79,6 +79,16 @@ let fresh_c_local : string -> string =
     incr c;
     v
 
+let build_transitive_undef (e : expression_composition) : expression_composition
+    =
+  let expr_v = fresh_c_local "expr" in
+  let def_test = expr_v ^ "_d" in
+  {
+    def_test;
+    value_comp = Format.sprintf "((%s) ? %s : 0.)" def_test expr_v;
+    locals = [ (expr_v, e) ];
+  }
+
 let rec generate_c_expr (e : expression Pos.marked)
     (var_indexes : Dgfip_varid.var_id_map) : expression_composition =
   match Pos.unmark e with
@@ -92,7 +102,8 @@ let rec generate_c_expr (e : expression Pos.marked)
       let value_comp =
         Format.sprintf "(%s %s %s)" se1.value_comp comp_op se2.value_comp
       in
-      { def_test; value_comp; locals = se1.locals @ se2.locals }
+      build_transitive_undef
+        { def_test; value_comp; locals = se1.locals @ se2.locals }
   | Binop ((Mast.Div, _), e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
@@ -101,7 +112,8 @@ let rec generate_c_expr (e : expression Pos.marked)
         Format.asprintf "((%s==0.) ? 0. : (%s / %s))" se2.value_comp
           se1.value_comp se2.value_comp
       in
-      { def_test; value_comp; locals = se1.locals @ se2.locals }
+      build_transitive_undef
+        { def_test; value_comp; locals = se1.locals @ se2.locals }
   | Binop (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
@@ -112,14 +124,15 @@ let rec generate_c_expr (e : expression Pos.marked)
       let value_comp =
         Format.asprintf "(%s %s %s)" se1.value_comp comp_op se2.value_comp
       in
-      { def_test; value_comp; locals = se1.locals @ se2.locals }
+      build_transitive_undef
+        { def_test; value_comp; locals = se1.locals @ se2.locals }
   | Unop (op, e) ->
       let se = generate_c_expr e var_indexes in
       let def_test = se.def_test in
       let value_comp =
         Format.asprintf "(%s%s)" (generate_unop op) se.value_comp
       in
-      { def_test; value_comp; locals = se.locals }
+      build_transitive_undef { def_test; value_comp; locals = se.locals }
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
       let size =
@@ -134,7 +147,8 @@ let rec generate_c_expr (e : expression Pos.marked)
           (generate_variable var_indexes PassPointer (Pos.unmark var))
           idx_var
       in
-      { def_test; value_comp; locals = [ (idx_var, idx) ] }
+      build_transitive_undef
+        { def_test; value_comp; locals = [ (idx_var, idx) ] }
   | Conditional (c, t, f) ->
       let cond = generate_c_expr c var_indexes in
       let thenval = generate_c_expr t var_indexes in
@@ -167,17 +181,17 @@ let rec generate_c_expr (e : expression Pos.marked)
         Format.sprintf "(%s ? (%s == 0 ? 1. : 0.) : 0.)" se.def_test
           se.value_comp
       in
-      { def_test; value_comp; locals = se.locals }
+      build_transitive_undef { def_test; value_comp; locals = se.locals }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = Format.sprintf "(my_arr(%s))" se.value_comp in
-      { def_test; value_comp; locals = se.locals }
+      build_transitive_undef { def_test; value_comp; locals = se.locals }
   | FunctionCall (InfFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = Format.sprintf "(my_floor(%s))" se.value_comp in
-      { def_test; value_comp; locals = se.locals }
+      build_transitive_undef { def_test; value_comp; locals = se.locals }
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
