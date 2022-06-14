@@ -2,7 +2,7 @@ type m_value = { undefined : bool; value : float }
 
 type m_array = m_value array
 
-type m_context = m_value list
+type m_context = { tgv : m_array; local_variables : m_array}
 
 let m_undef : m_value = { undefined = true; value = 0.0 }
 

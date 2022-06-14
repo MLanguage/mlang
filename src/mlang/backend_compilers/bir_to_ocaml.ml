@@ -49,7 +49,7 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
       let size =
         Option.get (Bir.var_to_mir unmarked_var).Mir.Variable.is_table
       in
-      ( Format.asprintf "(m_table_value_at_index tgv %d %s %d)"
+      ( Format.asprintf "(m_table_value_at_index context.tgv %d %s %d)"
           (get_var_pos unmarked_var) expr size,
         local )
   | Conditional (e1, e2, e3) ->
@@ -79,22 +79,24 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
       (Format.asprintf "(%s %s %s)" "m_min" s1 s2, local1 @ local2)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let s1, local1 = generate_ocaml_expr e1 in
-      (Format.asprintf "(m_multimax %s tgv %d)" s1 (get_var_pos v2), local1)
+      ( Format.asprintf "(m_multimax %s context.tgv %d)" s1 (get_var_pos v2),
+        local1 )
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
       | 0. -> (Format.asprintf "m_zero", [])
       | 1. -> (Format.asprintf "m_one", [])
       | _ ->
-          (Format.asprintf "{undefined = false ; value = %s}" (string_of_float f), [])
-      )
+          ( Format.asprintf "{undefined = false ; value = %s}"
+              (string_of_float f),
+            [] ))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var ->
-      ( Format.asprintf "(Array.get tgv %d (*%s*))" (get_var_pos var)
+      ( Format.asprintf "(Array.get context.tgv %d (*%s*))" (get_var_pos var)
           (Pos.unmark var.mir_var.name),
         [] )
   | LocalVar lvar ->
-      ( Format.asprintf "(Array.get local_variables %d)"
+      ( Format.asprintf "(Array.get context.local_variables %d)"
           lvar.Mir.LocalVariable.id,
         [] )
   | Error -> assert false (* should not happen *)
@@ -105,55 +107,61 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
 
 let format_tgv_set (variable_expression : string) (oc : Format.formatter)
     (variable_position : int) : unit =
-  Format.fprintf oc "Array.set tgv %d %s;@," variable_position
+  Format.fprintf oc "Array.set context.tgv %d %s" variable_position
     variable_expression
 
 let format_tgv_set_with_offset (variable_position : int)
     (offset_tgv_variable : Bir.variable) (oc : Format.formatter)
     (variable_expression : string) : unit =
   Format.fprintf oc
-    "Array.set tgv (%d +  (((*%s*) Array.get tgv %d).value |> int_of_float)) \
-     %s;@,"
+    "Array.set context.tgv (%d +  (((*%s*) Array.get context.tgv %d).value |> \
+     int_of_float)) %s"
     variable_position
     (Pos.unmark offset_tgv_variable.mir_var.name)
     (get_var_pos offset_tgv_variable)
     variable_expression
 
-let format_local_defs (oc : Format.formatter)
+let pp_statement_separator (f : Format.formatter) () : unit =
+  Format.fprintf f ";@,"
+
+let format_local_set (oc : Format.formatter) (lvar, expr) : unit =
+  let se, _ = generate_ocaml_expr expr in
+  Format.fprintf oc "Array.set context.local_variables %d %s"
+    lvar.Mir.LocalVariable.id se
+
+let generate_local_defs (oc : Format.formatter)
     (defs : (Mir.LocalVariable.t * Bir.expression Pos.marked) list) : unit =
-  Format.pp_print_list
-    (fun fmt (lvar, expr) ->
-      let se, _ = generate_ocaml_expr expr in
-      Format.fprintf fmt "Array.set local_variables %d %s;@,"
-        lvar.Mir.LocalVariable.id se)
-    oc defs
+  match defs with
+  | [] -> ()
+  | _ :: _ ->
+      Format.fprintf oc "%a;@,"
+        (Format.pp_print_list ~pp_sep:pp_statement_separator format_local_set)
+        defs
 
 let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
     (oc : Format.formatter) : unit =
+  let generate_one_var position oc (e : Bir.expression Pos.marked) : unit =
+    let tgv_expression, local_defs = generate_ocaml_expr e in
+    Format.fprintf oc "%a(*%s*) %a" generate_local_defs local_defs
+      (Pos.unmark variable.mir_var.name)
+      (format_tgv_set tgv_expression)
+      position
+  in
   match vdata.var_definition with
-  | SimpleVar e ->
-      let tgv_expression, local_defs = generate_ocaml_expr e in
-      Format.fprintf oc "%a(*%s*) %a" format_local_defs local_defs
-        (Pos.unmark variable.mir_var.name)
-        (format_tgv_set tgv_expression)
-        (get_var_pos variable)
+  | SimpleVar e -> generate_one_var (get_var_pos variable) oc e
   | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a"
-        (fun fmt ->
-          Mir.IndexMap.iter (fun i v ->
-              let tgv_expression, local_defs = generate_ocaml_expr v in
-              Format.fprintf fmt "%a(*%s*) %a" format_local_defs local_defs
-                (Pos.unmark variable.mir_var.name)
-                (format_tgv_set tgv_expression)
-                (get_var_pos variable |> ( + ) i)))
-        es
+      let bindings_list = Mir.IndexMap.bindings es in
+      Format.pp_print_list ~pp_sep:pp_statement_separator
+        (fun fmt (i, v) ->
+          generate_one_var (get_var_pos variable |> ( + ) i) fmt v)
+        oc bindings_list
   | TableVar (_size, IndexGeneric (v, e)) ->
       let tgv_expression, local_defs = generate_ocaml_expr e in
       Format.fprintf oc
-        "if (Array.get tgv %d (*%s*)).undefined then %a(*Table %s*)@,%a"
+        "if (Array.get context.tgv %d (*%s*)).undefined then %a(*Table %s*)@,%a"
         (get_var_pos v)
         (Pos.unmark v.mir_var.name)
-        format_local_defs local_defs
+        generate_local_defs local_defs
         (Pos.unmark variable.mir_var.name)
         (format_tgv_set_with_offset (get_var_pos variable) v)
         tgv_expression
@@ -161,15 +169,15 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
 
 let rec generate_stmts (program : Bir.program) (oc : Format.formatter)
     (stmts : Bir.stmt list) : unit =
-  Format.pp_print_list ~pp_sep:Format.pp_print_if_newline
-    (generate_stmt program) oc stmts
+  Format.pp_print_list ~pp_sep:pp_statement_separator (generate_stmt program) oc
+    stmts
 
 and generate_stmt (program : Bir.program) (oc : Format.formatter)
     (stmt : Bir.stmt) : unit =
   match Pos.unmark stmt with
   | SAssign (variable, variable_data) ->
       generate_var_def variable variable_data oc
-  | SConditional (_expression, tt, ff) ->
+  | SConditional (cond_expression, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
         String.map
@@ -181,17 +189,30 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
           (Pos.get_start_column pos) (Pos.get_end_line pos)
           (Pos.get_end_column pos)
       in
-      Format.fprintf oc "@[<v 1>Condition %s :@,true ->@,%a@,false ->@,%a@]"
-        cond_name (generate_stmts program) tt (generate_stmts program) ff
+      let s, _ = generate_ocaml_expr (Pos.same_pos_as cond_expression stmt) in
+      Format.fprintf oc
+        "@[<v 1>let %s : m_value = %s in@,\
+         (match %s with@,\
+         | m_undef -> ()@,\
+         | m_zero -> (@[<v 0>%a@])@,\
+         | _ -> (@[<v 0>%a@]))@]" cond_name s cond_name (generate_stmts program)
+        tt (generate_stmts program) ff
   | SVerif _condition_data -> Format.fprintf oc "%s" "Verif"
-  | SRuleCall _rule_id -> Format.fprintf oc "Rule %i call" _rule_id
-  | SFunctionCall (function_name, _) -> Format.fprintf oc "%s" function_name
+  | SRuleCall rule_id ->
+      let rule = Mir.RuleMap.find rule_id program.rules in
+      Format.fprintf oc "m_rule_%s context" rule.rule_name
+  | SFunctionCall (function_name, _) ->
+      Format.fprintf oc "mpp_func_%s context" function_name
+
+let pp_function_separator (f : Format.formatter) () : unit =
+  Format.fprintf f "@,@,"
 
 let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
     (function_name : string) : unit =
   let stmts = Bir.FunctionMap.find function_name program.mpp_functions in
-  Format.fprintf oc "@[<v 1>%s:@,%a@]@," function_name (generate_stmts program)
-    stmts
+  Format.fprintf oc
+    "@[<v 1>let mpp_func_%s (context : m_context) : unit =@,%a@]" function_name
+    (generate_stmts program) stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   let functions =
@@ -199,29 +220,38 @@ let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
       (Bir_interface.context_agnostic_mpp_functions program)
   in
   let function_names, _ = List.split functions in
-  Format.pp_print_list (generate_mpp_function program) oc function_names
+  Format.pp_print_list ~pp_sep:pp_function_separator
+    (generate_mpp_function program)
+    oc function_names
 
 let generate_rule_method (program : Bir.program) (oc : Format.formatter)
     (rule : Bir.rule) =
-  Format.fprintf oc
-    "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]()@,"
+  Format.fprintf oc "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]"
     rule.rule_name (generate_stmts program) rule.rule_stmts
 
 let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
     =
   let rules = Bir.RuleMap.bindings program.rules in
   let _, rules = List.split rules in
-  Format.pp_print_list (generate_rule_method program) oc rules
+  Format.pp_print_list ~pp_sep:pp_function_separator
+    (generate_rule_method program)
+    oc rules
 
-let generate_header (locals_size : int) (oc : Format.formatter)
-    (var_table_size : int) : unit =
+let generate_header (oc : Format.formatter) () : unit =
+  Format.fprintf oc "@[<v 0>open Mvalue@,@]"
+
+let generate_main_function (locals_size : int) (var_table_size : int)
+    (oc : Format.formatter) (program : Bir.program) : unit =
   Format.fprintf oc
-    "@[<v 0>open Mvalue@,\
-     let tgv : m_array = Array.make %i m_undef@,\
-     let local_variables : m_array = Array.make %i m_undef@,\
-     @,\
-     @]"
-    var_table_size locals_size
+    "let calculate_tax : unit =@,\
+     let tgv : m_array = Array.make %i m_undef in@,\
+     let local_variables : m_array = Array.make %i m_undef in@,\
+     let context : m_context = {tgv; local_variables} in@,\
+     Array.set context.tgv 2062 {undefined = false ; value = 150000.0};@,\
+     %a;\
+     Printf.printf \"%%b %%f\" (Array.get context.tgv 4949).undefined (Array.get context.tgv 4949).value"
+    var_table_size locals_size (generate_stmts program)
+    (Bir.main_statements program)
 
 let generate_ocaml_program (program : Bir.program)
     (_function_spec : Bir_interface.bir_function) (_output_file : string) =
@@ -229,10 +259,8 @@ let generate_ocaml_program (program : Bir.program)
   let oc = Format.formatter_of_out_channel _oc in
   let locals_size = Bir.get_locals_size program |> ( + ) 1 in
   let var_table_size = Bir.size_of_tgv () in
-  Format.fprintf oc "@[<v 0>%a@,%a@,(*@,%a@,let calculate_tax = %a@]*)@."
-    (generate_header locals_size)
-    var_table_size generate_rule_methods program generate_mpp_functions program
-    (generate_stmts program)
-    (Bir.main_statements program);
+  Format.fprintf oc "@[<v 0>%a@,%a@,%a@,%a@]@."
+    generate_header () generate_rule_methods program generate_mpp_functions program
+    (generate_main_function locals_size var_table_size) program;
   close_out _oc
   [@@ocamlformat "disable"]
