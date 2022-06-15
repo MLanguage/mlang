@@ -2,7 +2,7 @@ type m_value = { undefined : bool; value : float }
 
 type m_array = m_value array
 
-type m_context = { tgv : m_array; local_variables : m_array}
+type m_context = { tgv : m_array; local_variables : m_array }
 
 let m_undef : m_value = { undefined = true; value = 0.0 }
 
@@ -122,11 +122,10 @@ let m_multimax (bound_variable : m_value) (variable_array : m_array)
   if bound_variable.undefined then failwith "Multimax bound undefined!"
   else
     let bound = int_of_float bound_variable.value in
-    let get_position_value_or_zero (position) =
+    let get_position_value_or_zero position =
       m_add (Array.get variable_array position) m_zero
     in
-    let rec multimax (variable_array) (current_index)
-        (max_index) (reference) =
+    let rec multimax variable_array current_index max_index reference =
       let new_max =
         m_max reference (get_position_value_or_zero current_index)
       in
