@@ -38,7 +38,9 @@ let format_subtype fmt (st : variable_subtype) =
     | Income -> "revenu"
     | Penality -> "penalite"
     | Base -> "base"
-    | GivenBack -> "restituee")
+    | GivenBack -> "restituee"
+    | Computed -> "calculee"
+    | Input -> "saisie")
 
 let format_io fmt (io : io) =
   Format.pp_print_string fmt

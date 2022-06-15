@@ -35,6 +35,8 @@ type variable_subtype =
   | Income
   | Base
   | GivenBack
+  | Computed
+  | Input
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
@@ -217,7 +219,8 @@ type program = {
       (** Definitions of variables, some may be removed during optimization
           passes *)
   program_conds : condition_data VariableMap.t;
-      (** Conditions are affected to dummy variables *)
+      (** Conditions are affected to dummy variables containing informations
+          about actual variables in the conditions *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
 }

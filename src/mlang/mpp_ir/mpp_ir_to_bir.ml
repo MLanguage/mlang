@@ -88,15 +88,28 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
 
 let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
     (filter : Mpp_ir.var_filter) : bool =
-  List.exists
-    (fun st ->
-      match ((filter : Mpp_ir.var_filter), (st : Mir.variable_subtype)) with
-      | Saisie None, (Context | Family | Income | Penality)
-      | Calculee None, (Base | GivenBack) ->
-          true
-      | (Saisie (Some s), _ | Calculee (Some s), _) when s = st -> true
-      | _ -> false)
-    subtypes
+  match (filter : Mpp_ir.var_filter) with
+  | Saisie st ->
+      (match st with
+      | None ->
+          List.exists
+            (fun st ->
+              match (st : Mir.variable_subtype) with
+              | Context | Family | Income | Penality | Input -> true
+              | _ -> false)
+            subtypes
+      | Some st -> List.mem st subtypes)
+      && List.for_all (( <> ) (Computed : Mir.variable_subtype)) subtypes
+  | Calculee st -> (
+      match st with
+      | None ->
+          List.exists
+            (fun st ->
+              match (st : Mir.variable_subtype) with
+              | Base | GivenBack | Computed -> true
+              | _ -> false)
+            subtypes
+      | Some st -> List.mem st subtypes)
 
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
