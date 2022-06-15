@@ -21,8 +21,14 @@ open Mpp_ir
 
 let filter_of_string (s : string Pos.marked) : var_filter =
   match Pos.unmark s with
-  | "saisie" -> Saisie
-  | "calculee" -> Calculee
+  | "saisie" -> Saisie None
+  | "calculee" -> Calculee None
+  | "contexte" -> Saisie (Some Context)
+  | "famille" -> Saisie (Some Family)
+  | "revenu" -> Saisie (Some Income)
+  | "penalite" -> Saisie (Some Penality)
+  | "base" -> Calculee (Some Base)
+  | "restituee" -> Calculee (Some GivenBack)
   | unknown ->
       Errors.raise_spanned_error
         (Format.sprintf "unknown variable category %s" unknown)

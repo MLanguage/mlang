@@ -30,6 +30,18 @@ let format_execution_number_short fmt (exec_number : execution_number) =
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
+let format_subtype fmt (st : variable_subtype) =
+  Format.pp_print_string fmt
+    (match st with
+    | Context -> "contexte"
+    | Family -> "famille"
+    | Income -> "revenu"
+    | Penality -> "penalite"
+    | Base -> "base"
+    | GivenBack -> "restituee"
+    | Computed -> "calculee"
+    | Input -> "saisie")
+
 let format_io fmt (io : io) =
   Format.pp_print_string fmt
     (match io with

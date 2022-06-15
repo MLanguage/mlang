@@ -89,17 +89,30 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_filter_from_subtypes (subtypes : Mir.variable_subtype list) =
-  let filter_of (subtype : Mir.variable_subtype) : Mpp_ir.var_filter =
-    match subtype with
-    | Context | Family | Income | Penality -> Saisie
-    | Base | GivenBack -> Calculee
-  in
-  if List.exists (fun st -> filter_of st = Calculee) subtypes then
-    Mpp_ir.Calculee
-  else if List.exists (fun st -> filter_of st = Saisie) subtypes then
-    Mpp_ir.Saisie
-  else Errors.raise_error "Unable to detemine type of verification"
+let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
+    (filter : Mpp_ir.var_filter) : bool =
+  match (filter : Mpp_ir.var_filter) with
+  | Saisie st ->
+      (match st with
+      | None ->
+          List.exists
+            (fun st ->
+              match (st : Mir.variable_subtype) with
+              | Context | Family | Income | Penality | Input -> true
+              | _ -> false)
+            subtypes
+      | Some st -> List.mem st subtypes)
+      && List.for_all (( <> ) (Computed : Mir.variable_subtype)) subtypes
+  | Calculee st -> (
+      match st with
+      | None ->
+          List.exists
+            (fun st ->
+              match (st : Mir.variable_subtype) with
+              | Base | GivenBack | Computed -> true
+              | _ -> false)
+            subtypes
+      | Some st -> List.mem st subtypes)
 
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
@@ -229,7 +242,7 @@ let generate_verif_call (m_program : Mir_interface.full_program)
       &&
       match filter with
       | None -> true
-      | Some filter -> var_filter_from_subtypes var.Mir.subtypes = filter
+      | Some filter -> var_filter_compatible_subtypes var.Mir.subtypes filter
     in
     if
       test && chain_tag <> Horizontale && List.mem Mir.Penality var.Mir.subtypes

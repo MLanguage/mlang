@@ -80,17 +80,22 @@ type variable_subtype =
   | Income
   | Base
   | GivenBack
+  | Computed
+  | Input
 
 let subtypes_of_decl (var_decl : Mast.variable_decl) : variable_subtype list =
   match var_decl with
   | ConstVar _ -> []
   | ComputedVar cv ->
-      List.map
-        (fun subtyp ->
-          match (Pos.unmark subtyp : Mast.computed_typ) with
-          | Base -> Base
-          | GivenBack -> GivenBack)
-        (Pos.unmark cv).comp_subtyp
+      let subtypes =
+        List.map
+          (fun subtyp ->
+            match (Pos.unmark subtyp : Mast.computed_typ) with
+            | Base -> Base
+            | GivenBack -> GivenBack)
+          (Pos.unmark cv).comp_subtyp
+      in
+      Computed :: subtypes
   | InputVar iv ->
       let iv = Pos.unmark iv in
       let subtypes =
@@ -100,7 +105,10 @@ let subtypes_of_decl (var_decl : Mast.variable_decl) : variable_subtype list =
         | Penality -> [ Penality ]
         | Income -> [ Income ]
       in
-      if iv.input_given_back then GivenBack :: subtypes else subtypes
+      let subtypes =
+        if iv.input_given_back then GivenBack :: subtypes else subtypes
+      in
+      Input :: subtypes
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
