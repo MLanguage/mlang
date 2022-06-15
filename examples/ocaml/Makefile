@@ -9,8 +9,6 @@ MLANG_DEFAULT_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
-all: backend_tests $(shell find . -name "run_*.py")
-
 clean: 
 	rm -f ir_*.ml ir_*.o ir_*.cmi ir_*.cmx ir_*.exe ir_*.cmo ir_*.out mvalue.cmi mvalue.cmo mvalue.out mvalue.o mvalue.cmx
 
@@ -28,8 +26,8 @@ ir_%.ml: ../../m_specs/%.m_spec
 ir_%.exe: ir_%.ml
 	ocamlopt -o $@ mvalue.ml $^
 
-ir_%.out: ir_%.ml
-	ocamlc.opt -o $@ mvalue.ml $^
+ir_%.bc: ir_%.ml
+	ocamlc.opt -g -o $@ mvalue.ml $^
 
 mvalue.out: 
 	ocamlc.opt -c mvalue.ml
