@@ -193,8 +193,8 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
       Format.fprintf oc
         "@[<v 1>let %s : m_value = %s in@,\
          (match %s with@,\
-         | m_undef -> ()@,\
-         | m_zero -> (@[<v 0>%a@])@,\
+         | { undefined = true ; value = _ } -> ()@,\
+         | { undefined = false ; value = 0.0 }-> (@[<v 0>%a@])@,\
          | _ -> (@[<v 0>%a@]))@]" cond_name s cond_name (generate_stmts program)
         tt (generate_stmts program) ff
   | SVerif _condition_data -> Format.fprintf oc "%s" "Verif"
