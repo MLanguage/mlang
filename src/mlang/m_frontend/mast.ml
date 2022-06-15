@@ -459,8 +459,9 @@ let get_variable_name (v : variable) : string =
   match v with Normal s -> s | Generic s -> s.base
 
 let are_tags_part_of_chain (tags : chain_tag list) (chain : chain_tag) : bool =
-  let is_part_of = List.exists (( = ) chain) tags in
+  let is_part_of chain = List.exists (( = ) chain) tags in
   match chain with
+  | Irisf -> false (* Not a real chain *)
   | Corrective ->
       (* Specific exclusion of "base_" rules in corrective *)
       (not
@@ -477,8 +478,9 @@ let are_tags_part_of_chain (tags : chain_tag list) (chain : chain_tag) : bool =
                   true
               | _ -> false)
             tags))
-      && is_part_of
-  | _ -> is_part_of
+      && (is_part_of chain || is_part_of Irisf)
+  | Primitif | Isf -> is_part_of chain || is_part_of Irisf
+  | _ -> is_part_of chain
 
 let are_tags_part_of_verif_chain (tags : chain_tag list) (chain : chain_tag) :
     bool =
