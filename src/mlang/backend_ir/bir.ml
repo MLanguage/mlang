@@ -106,7 +106,7 @@ and stmt_kind =
   | SRuleCall of rule_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
-type mpp_function = stmt list
+type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 module FunctionMap = Map.Make (struct
   type t = function_name
@@ -124,7 +124,7 @@ type program = {
 }
 
 let main_statements (p : program) : stmt list =
-  try FunctionMap.find p.main_function p.mpp_functions
+  try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
 
@@ -138,7 +138,8 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
           let f = get_block_statements p f in
           Pos.same_pos_as (SConditional (e, t, f)) stmt :: stmts
       | SFunctionCall (f, _) ->
-          (get_block_statements p (FunctionMap.find f p.mpp_functions)
+          (get_block_statements p
+             (FunctionMap.find f p.mpp_functions).mppf_stmts
           |> List.rev)
           @ stmts
       | _ -> stmt :: stmts)
@@ -197,8 +198,9 @@ let squish_statements (program : program) (threshold : int)
   let rules, mpp_functions =
     FunctionMap.fold
       (fun f mpp_func (rules, mpp_functions) ->
-        let rules, stmts = browse_bir mpp_func [] [] rules in
-        (rules, FunctionMap.add f stmts mpp_functions))
+        let rules, mppf_stmts = browse_bir mpp_func.mppf_stmts [] [] rules in
+        let func = { mppf_stmts; mppf_is_verif = mpp_func.mppf_is_verif } in
+        (rules, FunctionMap.add f func mpp_functions))
       program.mpp_functions
       (program.rules, FunctionMap.empty)
   in

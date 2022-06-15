@@ -160,7 +160,7 @@ let add_test_conds_to_combined_program (p : Bir.program)
   in
   let mpp_functions =
     Bir.FunctionMap.add p.Bir.main_function
-      (new_stmts @ conditions_stmts)
+      Bir.{ mppf_stmts = new_stmts @ conditions_stmts; mppf_is_verif = false }
       p.mpp_functions
   in
   { p with mpp_functions }

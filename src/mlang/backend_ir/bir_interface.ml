@@ -329,9 +329,14 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
   in
   let mpp_functions =
     Bir.FunctionMap.add context_function
-      (unused_input_stmts @ const_input_stmts
-      @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
-      @ conds_stmts)
+      Bir.
+        {
+          mppf_stmts =
+            unused_input_stmts @ const_input_stmts
+            @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
+            @ conds_stmts;
+          mppf_is_verif = false;
+        }
       p.mpp_functions
   in
   ( {

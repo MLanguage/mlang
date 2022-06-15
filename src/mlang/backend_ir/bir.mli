@@ -47,7 +47,7 @@ and stmt_kind =
   | SRuleCall of rule_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
-type mpp_function = stmt list
+type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 module FunctionMap : Map.S with type key = function_name
 

@@ -405,7 +405,7 @@ let generate_calculateTax_method (calculation_vars_len : int)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =
-  let stmts = FunctionMap.find f program.mpp_functions in
+  let { mppf_stmts; _ } = FunctionMap.find f program.mpp_functions in
   Format.fprintf oc
     "@[<v 2>static void %s(MCalculation mCalculation, List<MError> \
      calculationErrors) {@,\
@@ -416,7 +416,7 @@ let generate_mpp_function (program : program) (oc : Format.formatter)
      mCalculation.getTableVariables();@,\
      %a@]@,\
      }"
-    f (generate_stmts program) stmts
+    f (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : program) =
   let functions =
