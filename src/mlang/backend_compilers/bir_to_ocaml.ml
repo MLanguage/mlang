@@ -4,6 +4,8 @@ let none_value = "m_undef"
 
 let get_var_pos (var : Bir.variable) : int = var.Bir.offset
 
+let get_var_alias (v : Bir.variable) : string option = (Bir.var_to_mir v).alias
+
 let generate_comp_op (op : Mast.comp_op) : string =
   match op with
   | Mast.Gt -> "m_greater_than"
@@ -240,27 +242,61 @@ let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "@[<v 0>open Mvalue@,@]"
 
+let generate_input_handler (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) : unit =
+  let input_vars =
+    List.map fst (Bir.VariableMap.bindings function_spec.func_variable_inputs)
+  in
+  let get_position_and_alias variable : (int * string) option =
+    let tgv_pos = get_var_pos variable in
+    Option.map (fun alias -> (tgv_pos, alias)) (get_var_alias variable)
+  in
+  let pp_print_line fmt variable : unit =
+    match get_position_and_alias variable with
+    | Some (position, alias) ->
+        Format.fprintf fmt
+          "let tgv_positions = TgvPositionMap.add \"%s\" %d tgv_positions in"
+          alias position
+    | None -> ()
+  in
+  let pp_print_position_map fmt input_vars =
+    Format.pp_print_list pp_print_line fmt
+      input_vars
+  in
+  Format.fprintf oc
+    "let input_handler (tgv : m_array) (entry_list : revenue_code list) : unit \
+     =@,\
+     let tgv_positions = TgvPositionMap.empty in@,\
+     %a@,\
+     let init_tgv_var (entry_var : revenue_code) : unit =@,\
+      Array.set tgv @,\
+      (TgvPositionMap.find entry_var.alias tgv_positions)@, \
+      {undefined = false ; value = entry_var.value} in@,\
+     List.iter init_tgv_var entry_list"
+    pp_print_position_map input_vars
+    (* Prévoir les cas : variable manquante, variable en trop dans entry_list, 
+       variable définie n fois*)
+
 let generate_main_function (locals_size : int) (var_table_size : int)
     (oc : Format.formatter) (program : Bir.program) : unit =
   Format.fprintf oc
-    "let calculate_tax : unit =@,\
+    "let calculate_tax entry_list : unit =@,\
      let tgv : m_array = Array.make %i m_undef in@,\
      let local_variables : m_array = Array.make %i m_undef in@,\
      let context : m_context = {tgv; local_variables} in@,\
-     Array.set context.tgv 2062 {undefined = false ; value = 150000.0};@,\
-     %a;\
-     Printf.printf \"%%b %%f\" (Array.get context.tgv 4949).undefined (Array.get context.tgv 4949).value"
-    var_table_size locals_size (generate_stmts program)
+     input_handler tgv entry_list;@,\
+     %a;" var_table_size locals_size (generate_stmts program)
     (Bir.main_statements program)
 
 let generate_ocaml_program (program : Bir.program)
-    (_function_spec : Bir_interface.bir_function) (_output_file : string) =
+    (function_spec : Bir_interface.bir_function) (_output_file : string) =
   let _oc = open_out _output_file in
   let oc = Format.formatter_of_out_channel _oc in
   let locals_size = Bir.get_locals_size program |> ( + ) 1 in
   let var_table_size = Bir.size_of_tgv () in
-  Format.fprintf oc "@[<v 0>%a@,%a@,%a@,%a@]@."
+  Format.fprintf oc "@[<v 0>%a@,%a@,%a@,@,%a@,@,%a@]@."
     generate_header () generate_rule_methods program generate_mpp_functions program
+    generate_input_handler function_spec
     (generate_main_function locals_size var_table_size) program;
   close_out _oc
   [@@ocamlformat "disable"]

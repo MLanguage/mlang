@@ -4,6 +4,10 @@ type m_array = m_value array
 
 type m_context = { tgv : m_array; local_variables : m_array }
 
+type revenue_code = { alias : string; value : float }
+
+module TgvPositionMap = Map.Make (String)
+
 let m_undef : m_value = { undefined = true; value = 0.0 }
 
 let m_zero : m_value = { undefined = false; value = 0.0 }
