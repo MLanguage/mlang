@@ -211,7 +211,9 @@ let pp_function_separator (f : Format.formatter) () : unit =
 
 let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
     (f_name : Bir.function_name) : unit =
-  let Bir.{mppf_stmts; _} = Bir.FunctionMap.find f_name program.mpp_functions in
+  let Bir.{ mppf_stmts; _ } =
+    Bir.FunctionMap.find f_name program.mpp_functions
+  in
   Format.fprintf oc
     "@[<v 1>let mpp_func_%s (context : m_context) : unit =@,%a@]" f_name
     (generate_stmts program) mppf_stmts
@@ -242,6 +244,26 @@ let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "@[<v 0>open Mvalue@,@]"
 
+let generate_output (oc : Format.formatter)
+    (function_spec : Bir_interface.bir_function) : unit =
+  let output_vars =
+    List.map fst (Bir.VariableMap.bindings function_spec.func_outputs)
+  in
+  let name_and_pos_list var_list =
+    List.map
+      (fun var -> (get_var_pos var, Pos.unmark var.mir_var.name))
+      var_list
+  in
+  let print_line fmt (position, name) =
+    Format.fprintf fmt "{alias = \"%s\" ; value = (Array.get tgv %d).value} ::"
+      name position
+  in
+  let pp_print_output_get fmt output_vars =
+    Format.pp_print_list print_line fmt (name_and_pos_list output_vars)
+  in
+  Format.fprintf oc "let output (tgv : m_array) : output_list =@,%a []@,"
+    pp_print_output_get output_vars
+
 let generate_input_handler (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) : unit =
   let input_vars =
@@ -260,8 +282,7 @@ let generate_input_handler (oc : Format.formatter)
     | None -> ()
   in
   let pp_print_position_map fmt input_vars =
-    Format.pp_print_list pp_print_line fmt
-      input_vars
+    Format.pp_print_list pp_print_line fmt input_vars
   in
   Format.fprintf oc
     "let input_handler (tgv : m_array) (entry_list : revenue_code list) : unit \
@@ -269,23 +290,23 @@ let generate_input_handler (oc : Format.formatter)
      let tgv_positions = TgvPositionMap.empty in@,\
      %a@,\
      let init_tgv_var (entry_var : revenue_code) : unit =@,\
-      Array.set tgv @,\
-      (TgvPositionMap.find entry_var.alias tgv_positions)@, \
-      {undefined = false ; value = entry_var.value} in@,\
-     List.iter init_tgv_var entry_list"
-    pp_print_position_map input_vars
-    (* Prévoir les cas : variable manquante, variable en trop dans entry_list, 
-       variable définie n fois*)
+     Array.set tgv @,\
+     (TgvPositionMap.find entry_var.alias tgv_positions)@,\
+    \ {undefined = false ; value = entry_var.value} in@,\
+     List.iter init_tgv_var entry_list" pp_print_position_map input_vars
+(* Prévoir les cas : variable manquante, variable en trop dans entry_list,
+   variable définie n fois*)
 
 let generate_main_function (locals_size : int) (var_table_size : int)
     (oc : Format.formatter) (program : Bir.program) : unit =
   Format.fprintf oc
-    "let calculate_tax entry_list : unit =@,\
+    "let calculate_tax entry_list : output_list =@,\
      let tgv : m_array = Array.make %i m_undef in@,\
      let local_variables : m_array = Array.make %i m_undef in@,\
      let context : m_context = {tgv; local_variables} in@,\
      input_handler tgv entry_list;@,\
-     %a;" var_table_size locals_size (generate_stmts program)
+     %a;@,\
+     output tgv" var_table_size locals_size (generate_stmts program)
     (Bir.main_statements program)
 
 let generate_ocaml_program (program : Bir.program)
@@ -294,9 +315,10 @@ let generate_ocaml_program (program : Bir.program)
   let oc = Format.formatter_of_out_channel _oc in
   let locals_size = Bir.get_locals_size program |> ( + ) 1 in
   let var_table_size = Bir.size_of_tgv () in
-  Format.fprintf oc "@[<v 0>%a@,%a@,%a@,@,%a@,@,%a@]@."
+  Format.fprintf oc "@[<v 0>%a@,%a@,%a@,@,%a@,@,%a@,@,%a@]@."
     generate_header () generate_rule_methods program generate_mpp_functions program
     generate_input_handler function_spec
+    generate_output function_spec
     (generate_main_function locals_size var_table_size) program;
   close_out _oc
   [@@ocamlformat "disable"]

@@ -8,6 +8,10 @@ type revenue_code = { alias : string; value : float }
 
 module TgvPositionMap = Map.Make (String)
 
+type input_list = revenue_code list
+
+type output_list = revenue_code list
+
 let m_undef : m_value = { undefined = true; value = 0.0 }
 
 let m_zero : m_value = { undefined = false; value = 0.0 }
