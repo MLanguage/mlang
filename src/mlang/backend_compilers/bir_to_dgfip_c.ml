@@ -363,11 +363,10 @@ let generate_rule_function (program : program)
 
 let generate_rule_functions (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (rules : rule RuleMap.t) =
+    (rules : rule list) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
     (generate_rule_function program var_indexes)
-    oc
-    (RuleMap.bindings rules |> List.map snd)
+    oc rules
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -598,6 +597,41 @@ let generate_mpp_functions_signatures (oc : Format.formatter)
          generate_mpp_function_protoype true mppf_is_verif ppf func))
     funcs
 
+let generate_rules_files (program : program) (vm : Dgfip_varid.var_id_map) =
+  let module StringMap = Map.Make (String) in
+  let default_file = "default" in
+  let filemap =
+    RuleMap.fold
+      (fun _rule_id rule filemap ->
+        let file =
+          let pos = Pos.get_position rule.rule_name in
+          if pos = Pos.no_pos then default_file
+          else
+            (Pos.get_file pos |> Filename.basename |> Filename.remove_extension)
+            ^ ".c"
+        in
+        let filerules =
+          match StringMap.find_opt file filemap with
+          | None -> []
+          | Some fr -> fr
+        in
+        StringMap.add file (rule :: filerules) filemap)
+      program.rules StringMap.empty
+  in
+  StringMap.fold
+    (fun file rules orphan ->
+      if String.equal file default_file then rules @ orphan
+      else
+        let oc = open_out file in
+        let fmt = Format.formatter_of_out_channel oc in
+        Format.fprintf fmt "#include <math.h>\n";
+        Format.fprintf fmt "#include \"var.h\"\n\n";
+        generate_rule_functions program vm fmt rules;
+        Format.pp_print_flush fmt ();
+        close_out oc;
+        orphan)
+    filemap []
+
 let generate_implem_header oc header_filename =
   Format.fprintf oc
     {|
@@ -628,6 +662,7 @@ let generate_c_program (program : program)
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
+  let orphan_rules = generate_rules_files program vm in
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
@@ -655,11 +690,10 @@ let generate_c_program (program : program)
     (* generate_get_output_index_func function_spec *)
     (* generate_get_output_name_from_index_func function_spec *)
     (* generate_get_output_num_func function_spec *)
-    (generate_rule_functions program vm)
-      program.rules 
+    (generate_rule_functions program vm) orphan_rules
     (generate_mpp_functions program) vm
     (* generate_main_function_signature_and_var_decls ()
-     * (generate_stmt program vm) 
-     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos) 
+     * (generate_stmt program vm)
+     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos)
      * generate_return () *) ;
   close_out _oc[@@ocamlformat "disable"]
