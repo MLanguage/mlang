@@ -27,7 +27,7 @@ and stmt_kind =
           the join point after *)
   | SVerif of Bir.condition_data
   | SGoto of block_id
-  | SRuleCall of Bir.rule_id * string * stmt list
+  | SRuleCall of Bir.rule_id * string Pos.marked * stmt list
   | SFunctionCall of Bir.function_name * Mir.variable list
 
 type block = stmt list

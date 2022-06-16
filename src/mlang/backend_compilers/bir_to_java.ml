@@ -285,7 +285,7 @@ let fresh_cond_counter = ref 0
 
 let generate_rule_header (oc : Format.formatter) (rule : rule) =
   Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);"
-    rule.rule_name
+    (Pos.unmark rule.rule_name)
 
 let rec generate_stmts (program : program) (oc : Format.formatter)
     (stmts : stmt list) =
@@ -357,7 +357,8 @@ let generate_rule_method (program : program) (oc : Format.formatter)
      mCalculation.getTableVariables();@,\
      %a@]@,\
      }"
-    rule.rule_name (generate_stmts program) rule.rule_stmts
+    (Pos.unmark rule.rule_name)
+    (generate_stmts program) rule.rule_stmts
 
 let generate_rule_methods (oc : Format.formatter) (program : program) : unit =
   let rules = RuleMap.bindings program.rules in

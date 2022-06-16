@@ -95,7 +95,11 @@ type variable_data = variable Mir.variable_data_
 
 type function_name = string
 
-type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
+type rule = {
+  rule_id : rule_id;
+  rule_name : string Pos.marked;
+  rule_stmts : stmt list;
+}
 
 and stmt = stmt_kind Pos.marked
 
@@ -165,7 +169,7 @@ let squish_statements (program : program) (threshold : int)
     let id = Mir.fresh_rule_id () in
     {
       rule_id = id;
-      rule_name = rule_suffix ^ string_of_int id;
+      rule_name = (rule_suffix ^ string_of_int id, Pos.no_pos);
       rule_stmts = List.rev stmts;
     }
   in

@@ -241,7 +241,8 @@ and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
     (rule : rule) =
   let arg_type = if definition then "m_value *" else "" in
   let ret_type = if definition then "void " else "" in
-  Format.fprintf oc "%sm_rule_%s(%sTGV, %sLOCAL)%s@\n" ret_type rule.rule_name
+  Format.fprintf oc "%sm_rule_%s(%sTGV, %sLOCAL)%s@\n" ret_type
+    (Pos.unmark rule.rule_name)
     arg_type arg_type
     (if definition then "" else ";")
 

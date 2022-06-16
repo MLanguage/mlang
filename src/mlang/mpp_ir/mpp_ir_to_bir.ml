@@ -515,7 +515,7 @@ let create_combined_program (m_program : Mir_interface.full_program)
               ctx.used_chains
           then
             let rule_name =
-              string_of_int (Pos.unmark rule_data.Mir.rule_number)
+              Pos.map_under_mark string_of_int rule_data.Mir.rule_number
             in
             let rule_stmts =
               translate_m_code m_program rule_data.Mir.rule_vars

@@ -347,7 +347,9 @@ and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
     (rule : rule) =
   let arg_type = if definition then "T_irdata *" else "" in
   let ret_type = if definition then "int " else "" in
-  Format.fprintf oc "%sregle_%s(%sirdata)%s@\n" ret_type rule.rule_name arg_type
+  Format.fprintf oc "%sregle_%s(%sirdata)%s@\n" ret_type
+    (Pos.unmark rule.rule_name)
+    arg_type
     (if definition then "" else ";")
 
 let generate_rule_function (program : program)

@@ -36,7 +36,11 @@ type variable_data = variable Mir.variable_data_
 
 type function_name = string
 
-type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
+type rule = {
+  rule_id : rule_id;
+  rule_name : string Pos.marked;
+  rule_stmts : stmt list;
+}
 
 and stmt = stmt_kind Pos.marked
 
