@@ -210,11 +210,11 @@ let pp_function_separator (f : Format.formatter) () : unit =
   Format.fprintf f "@,@,"
 
 let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
-    (function_name : string) : unit =
-  let stmts = Bir.FunctionMap.find function_name program.mpp_functions in
+    (f_name : Bir.function_name) : unit =
+  let Bir.{mppf_stmts; _} = Bir.FunctionMap.find f_name program.mpp_functions in
   Format.fprintf oc
-    "@[<v 1>let mpp_func_%s (context : m_context) : unit =@,%a@]" function_name
-    (generate_stmts program) stmts
+    "@[<v 1>let mpp_func_%s (context : m_context) : unit =@,%a@]" f_name
+    (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   let functions =
