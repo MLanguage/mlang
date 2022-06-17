@@ -10,7 +10,7 @@ MLANG_DEFAULT_OPTS=\
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 
 clean: 
-	rm -f ir_*.ml ir_*.o ir_*.cmi ir_*.cmx ir_*.exe ir_*.cmo ir_*.out mvalue.cmi mvalue.cmo mvalue.out mvalue.o mvalue.cmx
+	rm -f ir_*.ml *.o *.cmi *.cmx ir_*.exe *.cmo *.bc *_resultat.txt
 
 ##################################################
 # Generating and running OCaml files from Mlang
@@ -29,5 +29,8 @@ ir_%.exe: ir_%.ml
 ir_%.bc: ir_%.ml
 	ocamlc.opt -g -o $@ mvalue.ml $^
 
-mvalue.out: 
+test_%: ir_%.ml
+	ocamlc.opt -g -o $@.bc mvalue.ml $^ test_harness.ml
+
+mvalue.bc: 
 	ocamlc.opt -c mvalue.ml
