@@ -197,7 +197,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = "1" in
       let value_comp =
-        Format.sprintf "(fmax(%s, %s))" se1.value_comp se2.value_comp
+        Format.sprintf "(_fmax(%s, %s))" se1.value_comp se2.value_comp
       in
       { def_test; value_comp; locals = se1.locals @ se2.locals }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
@@ -205,7 +205,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = "1" in
       let value_comp =
-        Format.sprintf "(fmin(%s, %s))" se1.value_comp se2.value_comp
+        Format.sprintf "(_fmin(%s, %s))" se1.value_comp se2.value_comp
       in
       { def_test; value_comp; locals = se1.locals @ se2.locals }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
@@ -270,7 +270,7 @@ let generate_var_def (var_indexes : Dgfip_varid.var_id_map) (var : variable)
         (fun fmt ->
           Mir.IndexMap.iter (fun i v ->
               let sv = generate_c_expr v var_indexes in
-              Format.fprintf fmt "%a%s = %s;@\n%s = %s;@\n"
+              Format.fprintf fmt "@[<hov 2>{@;%a%s = %s;@\n%s = %s;@\n@]@,}@;"
                 format_local_vars_defs sv.locals
                 (generate_variable ~def_flag:true var_indexes (GetValueConst i)
                    var)
@@ -315,7 +315,8 @@ let generate_var_cond (var_indexes : Dgfip_varid.var_id_map)
 
 let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : stmt) =
-  match Pos.unmark stmt with
+  Format.fprintf oc "@[<hov 2>{@;";
+  (match Pos.unmark stmt with
   | SAssign (var, vdata) -> generate_var_def var_indexes var vdata oc
   | SConditional (cond, iftrue, iffalse) ->
       let cond_d = fresh_c_local "cond_d_mpp_" in
@@ -335,7 +336,8 @@ let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
   | SRuleCall r ->
       let rule = RuleMap.find r program.rules in
       generate_rule_function_header ~definition:false oc rule
-  | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f
+  | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f);
+  Format.fprintf oc "@]@,}@;"
 
 and generate_stmts (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmts : stmt list) =
@@ -351,7 +353,7 @@ and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
 let generate_rule_function (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (rule : rule)
     =
-  Format.fprintf oc "%a@[<v 2>{@ %a@;return 0;@]@;}@\n"
+  Format.fprintf oc "%a@[<v 2>{@ %a@;return 0;@]@,@\n}@\n"
     (generate_rule_function_header ~definition:true)
     rule
     (generate_stmts program var_indexes)
@@ -370,7 +372,7 @@ let generate_main_function_signature (oc : Format.formatter)
   Format.fprintf oc "int m_extracted(T_irdata* irdata)%s"
     (if add_semicolon then ";" else "")
 
-let generate_main_function_signature_and_var_decls (oc : Format.formatter) () =
+let _generate_main_function_signature_and_var_decls (oc : Format.formatter) () =
   Format.fprintf oc "%a {@\n@[<h 4>    @\n" generate_main_function_signature
     false;
   Format.fprintf oc "int cond_def;@\ndouble cond;@\n@\n";
@@ -382,25 +384,22 @@ let generate_main_function_signature_and_var_decls (oc : Format.formatter) () =
   #endif /* ANOMALY_LIMIT */
 |}
 
-let generate_return (oc : Format.formatter) () =
-  Format.fprintf oc "@\nreturn 0;@]@\n}"
+let _generate_return (oc : Format.formatter) () =
+  Format.fprintf oc "@\nreturn 0;@]@\n}\n"
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc
     {|
-// %s
+/* %s */
 
 #ifndef IR_HEADER_
 #define IR_HEADER_
 
 #include <stdio.h>
-#include <math.h>
 
 #include "irdata.h"
 #include "const.h"
 #include "var.h"
-
-#include "m_error.h"
 
 double my_var1;
 
@@ -414,12 +413,12 @@ double my_var1;
 let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
 
-let generate_get_input_index_prototype (oc : Format.formatter)
+let _generate_get_input_index_prototype (oc : Format.formatter)
     (add_semicolon : bool) =
   Format.fprintf oc "int m_get_input_index(char *name)%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_input_name_from_index_prototype (oc : Format.formatter)
+let _generate_get_input_name_from_index_prototype (oc : Format.formatter)
     (add_semicolon : bool) =
   Format.fprintf oc "char* m_get_input_name_from_index(int index)%s"
     (if add_semicolon then ";\n" else "")
@@ -429,12 +428,12 @@ let generate_get_input_num_prototype (oc : Format.formatter)
   Format.fprintf oc "int m_num_inputs()%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_input_num_func (oc : Format.formatter)
+let _generate_get_input_num_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let input_vars =
     List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
   in
-  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n};@\n@\n"
+  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n}@\n@\n"
     generate_get_input_num_prototype false (List.length input_vars)
 
 let generate_get_output_index_prototype (oc : Format.formatter)
@@ -442,7 +441,7 @@ let generate_get_output_index_prototype (oc : Format.formatter)
   Format.fprintf oc "int m_get_output_index(char *name)%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_output_index_func (oc : Format.formatter)
+let _generate_get_output_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
     List.map fst (VariableMap.bindings function_spec.func_outputs)
@@ -452,7 +451,7 @@ let generate_get_output_index_func (oc : Format.formatter)
      @[<h 4>    %a@\n\
      printf(\"Output var %%s not found!\\n\", name);@\n\
      exit(-1);@]@\n\
-     };@\n\
+     }@\n\
      @\n"
     generate_get_output_index_prototype false
     (Format.pp_print_list
@@ -468,7 +467,7 @@ let generate_get_output_name_from_index_prototype (oc : Format.formatter)
   Format.fprintf oc "char* m_get_output_name_from_index(int index)%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_output_name_from_index_func (oc : Format.formatter)
+let _generate_get_output_name_from_index_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
     List.map fst (VariableMap.bindings function_spec.func_outputs)
@@ -478,7 +477,7 @@ let generate_get_output_name_from_index_func (oc : Format.formatter)
      @[<h 4>    %a@\n\
      printf(\"Output index %%d not found!\\n\", index);@\n\
      exit(-1);@]@\n\
-     };@\n\
+     }@\n\
      @\n"
     generate_get_output_name_from_index_prototype false
     (Format.pp_print_list
@@ -493,15 +492,15 @@ let generate_get_output_num_prototype (oc : Format.formatter)
   Format.fprintf oc "int m_num_outputs()%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_output_num_func (oc : Format.formatter)
+let _generate_get_output_num_func (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =
   let output_vars =
     List.map fst (VariableMap.bindings function_spec.func_outputs)
   in
-  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n};@\n@\n"
+  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n}@\n@\n"
     generate_get_output_num_prototype false (List.length output_vars)
 
-let error_table_definitions (oc : Format.formatter) (program : program) =
+let _error_table_definitions (oc : Format.formatter) (program : program) =
   let error_set_size =
     Mir.VariableMap.cardinal program.mir_program.program_conds
   in
@@ -526,7 +525,7 @@ let print_error_line (oc : Format.formatter) (cond_data : Mir.condition_data) =
         | Some alias -> "\"" ^ alias ^ "\""
         | None -> assert false))
 
-let generate_errors_table (oc : Format.formatter) (program : program) =
+let _generate_errors_table (oc : Format.formatter) (program : program) =
   Format.fprintf oc "@[<hv 2>static const errors m_errors = {@,%a@]};"
     (fun oc conds ->
       Mir.VariableMap.iter
@@ -539,7 +538,7 @@ let generate_get_error_count_prototype (oc : Format.formatter)
   Format.fprintf oc "int m_num_errors()%s"
     (if add_semicolon then ";\n\n" else "")
 
-let generate_get_error_count_func (oc : Format.formatter) (program : program) =
+let _generate_get_error_count_func (oc : Format.formatter) (program : program) =
   Format.fprintf oc {|
 %a {
   return %d;
@@ -577,10 +576,14 @@ let generate_mpp_function (program : Bir.program)
 
 let generate_mpp_functions (program : Bir.program) (oc : Format.formatter)
     (var_indexes : Dgfip_varid.var_id_map) =
+  let funcs =
+    Bir.FunctionMap.bindings
+      (Bir_interface.context_agnostic_mpp_functions program)
+  in
   List.iter
     (fun (fname, { mppf_is_verif; _ }) ->
       generate_mpp_function program var_indexes oc (fname, mppf_is_verif))
-    (Bir.FunctionMap.bindings program.mpp_functions)
+    funcs
 
 let generate_mpp_functions_signatures (oc : Format.formatter)
     (program : Bir.program) =
@@ -594,13 +597,30 @@ let generate_mpp_functions_signatures (oc : Format.formatter)
     funcs
 
 let generate_implem_header oc header_filename =
-  Format.fprintf oc "\n// %s\n\n" Prelude.message;
-  Format.fprintf oc "#include <string.h>\n\n";
-  Format.fprintf oc "#include \"enchain_static.c\"\n\n";
-  Format.fprintf oc "#include \"%s\"\n\n" header_filename
+  Format.fprintf oc
+    {|
+/* %s */
+
+#include <string.h>
+#include "enchain_static.c.inc"
+
+#include "%s"
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199409L)
+#define _fmax(x,y) fmax((x),(y))
+#define _fmin(x,y) fmin((x),(y))
+#else
+double _fmax(double x, double y)
+{ return (x > y) ? x : y; }
+double _fmin(double x, double y)
+{ return (x < y) ? x : y; }
+#endif
+
+|}
+    Prelude.message header_filename
 
 let generate_c_program (program : program)
-    (function_spec : Bir_interface.bir_function) (filename : string)
+    (_function_spec : Bir_interface.bir_function) (filename : string)
     (vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
@@ -609,35 +629,35 @@ let generate_c_program (program : program)
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a"
+  Format.fprintf oc "%a%a%a\n"
     generate_header ()
-    error_table_definitions program 
-    generate_get_input_index_prototype true
-    generate_get_input_num_prototype true
-    generate_get_input_name_from_index_prototype true
-    generate_get_output_index_prototype true
-    generate_get_output_name_from_index_prototype true
-    generate_get_output_num_prototype true 
-    generate_get_error_count_prototype true 
+    (* error_table_definitions program  *)
+    (* generate_get_input_index_prototype true *)
+    (* generate_get_input_num_prototype true *)
+    (* generate_get_input_name_from_index_prototype true *)
+    (* generate_get_output_index_prototype true *)
+    (* generate_get_output_name_from_index_prototype true *)
+    (* generate_get_output_num_prototype true  *)
+    (* generate_get_error_count_prototype true  *)
     generate_mpp_functions_signatures program
-    generate_main_function_signature true 
+    (* generate_main_function_signature true  *)
     generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a%a%a%a%a%a%a%a%a" 
+  Format.fprintf oc "%a%a%a\n"
     generate_implem_header header_filename
-    generate_errors_table program 
-    generate_get_error_count_func program 
-    generate_get_input_num_func function_spec
-    generate_get_output_index_func function_spec
-    generate_get_output_name_from_index_func function_spec
-    generate_get_output_num_func function_spec
+    (* generate_errors_table program *)
+    (* generate_get_error_count_func program  *)
+    (* generate_get_input_num_func function_spec *)
+    (* generate_get_output_index_func function_spec *)
+    (* generate_get_output_name_from_index_func function_spec *)
+    (* generate_get_output_num_func function_spec *)
     (generate_rule_functions program vm)
       program.rules 
     (generate_mpp_functions program) vm
-    generate_main_function_signature_and_var_decls ()
-    (generate_stmt program vm) 
-      (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos) 
-    generate_return ();
+    (* generate_main_function_signature_and_var_decls ()
+     * (generate_stmt program vm) 
+     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos) 
+     * generate_return () *) ;
   close_out _oc[@@ocamlformat "disable"]

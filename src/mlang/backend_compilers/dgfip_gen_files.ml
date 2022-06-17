@@ -506,7 +506,7 @@ let gen_desc fmt vars ~alias_only =
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
-#include "desc_static.h"
+#include "desc_static.h.inc"
 
 |};
 
@@ -968,7 +968,7 @@ let gen_var_c fmt flags errors =
   let open Mast in
   gen_header fmt;
 
-  Format.fprintf fmt "#include \"var_static.c\"\n\n";
+  Format.fprintf fmt "#include \"var_static.c.inc\"\n\n";
 
   (* TODO before 2006, the format is slightly different *)
   List.iter
@@ -1042,8 +1042,8 @@ let gen_conf_h fmt flags vars =
   if flags.flg_short then Format.fprintf fmt "#define FLG_SHORT\n";
   if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
-  (*if flags.flg_optim_min_max then Format.fprintf fmt "#define
-    FLG_OPTIM_MIN_MAX\n"; *)
+  if flags.flg_optim_min_max then
+    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX\n";
   if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
     Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";

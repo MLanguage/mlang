@@ -4,13 +4,13 @@
 
 #include "conf.h"
 
-typedef struct S_desc_var
+struct S_desc_var
 {
   char *nom;
   int indice;
   long type_donnee;
   T_discord * (*verif)(T_irdata *);
-} T_desc_var;
+};
 
 typedef struct S_desc_contexte
 {

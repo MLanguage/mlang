@@ -1,4 +1,5 @@
 
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "ir_all_ins_selected_outs_2018.h"
@@ -9,6 +10,7 @@
 int main()
 {
     T_irdata *irdata = IRDATA_new_irdata();
+    IRDATA_reset_irdata(irdata);
     IRDATA_range(irdata, desc_0AM, 1.0);     // Case a cocher : situation de famille Maries
     IRDATA_range(irdata, desc_0CF, 1.0);     // Nombre d'enfants mineurs ou handicapes
     IRDATA_range(irdata, desc_1AX, 10000.0); // CIMR - salaires revenus exceptionnels - dec1
@@ -20,7 +22,7 @@ int main()
     for (int i = 39000; i <= 40000; i++)
     {
         IRDATA_range(irdata, desc_1AJ, (double)i); // Salaires - Declarant 1
-        m_extracted(irdata);
+        dgfip_calculation(irdata);
     };
 
     printf("IAN: %.2f\n", *IRDATA_extrait_special(irdata, desc_IAN));
