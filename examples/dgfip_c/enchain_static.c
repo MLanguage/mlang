@@ -209,3 +209,255 @@ double modulo(double a, double b)
 {
   return (double)(((int)a) % ((int)b));
 }
+
+
+
+
+
+// Temporary wrapper functions for verifications
+
+struct S_discord * verif_saisie_cohe_primitive_raw(T_irdata *irdata);
+struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_saisie_cohe_primitive_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_saisie_cohe_primitive_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_saisie_cohe_primitive_isf_raw(T_irdata *irdata);
+struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if ((appel != 1) && (setjmp(irdata->jmp_bloq) != 0)) {
+    return irdata->discords;
+  }
+  verif_saisie_cohe_primitive_isf_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if ((appel != 1) && (setjmp(jmp_bloq) != 0)) {
+    return discords;
+  }
+  verif_saisie_cohe_primitive_isf_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_saisie_cohe_corrective_raw(T_irdata *irdata);
+struct S_discord * verif_saisie_cohe_corrective(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_saisie_cohe_corrective_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_saisie_cohe_corrective_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_cohe_horizontale_raw(T_irdata *irdata);
+struct S_discord * verif_cohe_horizontale(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_cohe_horizontale_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_cohe_horizontale_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_contexte_cohe_primitive_raw(T_irdata *irdata);
+struct S_discord * verif_contexte_cohe_primitive(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_contexte_cohe_primitive_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_contexte_cohe_primitive_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_contexte_cohe_corrective_raw(T_irdata *irdata);
+struct S_discord * verif_contexte_cohe_corrective(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_contexte_cohe_corrective_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_contexte_cohe_corrective_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_famille_cohe_primitive_raw(T_irdata *irdata);
+struct S_discord * verif_famille_cohe_primitive(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_famille_cohe_primitive_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_famille_cohe_primitive_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_famille_cohe_corrective_raw(T_irdata *irdata);
+struct S_discord * verif_famille_cohe_corrective(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_famille_cohe_corrective_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_famille_cohe_corrective_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_revenu_cohe_primitive_raw(T_irdata *irdata);
+struct S_discord * verif_revenu_cohe_primitive(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_revenu_cohe_primitive_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_revenu_cohe_primitive_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_revenu_cohe_corrective_raw(T_irdata *irdata);
+struct S_discord * verif_revenu_cohe_corrective(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_revenu_cohe_corrective_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_revenu_cohe_corrective_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_calcul_primitive_raw(T_irdata *irdata);
+struct S_discord * verif_calcul_primitive(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_calcul_primitive_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_calcul_primitive_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
+
+struct S_discord * verif_calcul_primitive_isf_raw(T_irdata *irdata);
+struct S_discord * verif_calcul_primitive_isf(T_irdata *irdata)
+{
+  return verif_calcul_primitive_isf_raw(irdata);
+}
+
+struct S_discord * verif_calcul_corrective_raw(T_irdata *irdata);
+struct S_discord * verif_calcul_corrective(T_irdata *irdata)
+{
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if (setjmp(irdata->jmp_bloq) != 0) {
+    return irdata->discords;
+  }
+  verif_calcul_corrective_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if (setjmp(jmp_bloq) != 0) {
+    return discords;
+  }
+  verif_calcul_corrective_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
+}
