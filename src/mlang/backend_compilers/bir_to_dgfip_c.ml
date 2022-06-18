@@ -637,9 +637,26 @@ let generate_rules_files (program : program) (vm : Dgfip_varid.var_id_map) =
       else
         let oc = open_out file in
         let fmt = Format.formatter_of_out_channel oc in
-        Format.fprintf fmt "#include <math.h>\n";
-        Format.fprintf fmt "#include <stdio.h>\n";
-        Format.fprintf fmt "#include \"var.h\"\n\n";
+        Format.fprintf fmt
+          {|
+#include <math.h>
+#include <stdio.h>
+#include "var.h"
+
+#ifndef FLG_MULTITHREAD
+#define add_erreur(a,b,c) add_erreur(b,c)
+#endif
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199409L)
+#define _fmax(x,y) fmax((x),(y))
+#define _fmin(x,y) fmin((x),(y))
+#else
+double _fmax(double x, double y)
+{ return (x > y) ? x : y; }
+double _fmin(double x, double y)
+{ return (x < y) ? x : y; }
+#endif
+|};
         generate_rule_functions program vm fmt rules;
         Format.pp_print_flush fmt ();
         close_out oc;
