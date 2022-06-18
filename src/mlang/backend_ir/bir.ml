@@ -95,10 +95,12 @@ type variable_data = variable Mir.variable_data_
 
 type function_name = string
 
-type rule = {
+type rule_or_verif_code = Rule of stmt list | Verif of stmt
+
+and rule_or_verif = {
   rule_id : rule_id;
   rule_name : string Pos.marked;
-  rule_stmts : stmt list;
+  rule_code : rule_or_verif_code;
 }
 
 and stmt = stmt_kind Pos.marked
@@ -110,6 +112,9 @@ and stmt_kind =
   | SRuleCall of rule_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
+let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
+  match rov.rule_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
+
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 module FunctionMap = Map.Make (struct
@@ -120,7 +125,7 @@ end)
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  rules : rule RuleMap.t;
+  rules : rule_or_verif RuleMap.t;
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -136,7 +141,10 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
-      | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
+      | SRuleCall r -> (
+          match (RuleMap.find r p.rules).rule_code with
+          | Rule stmts -> List.rev stmts @ stmts
+          | Verif stmt -> stmt :: stmts)
       | SConditional (e, t, f) ->
           let t = get_block_statements p t in
           let f = get_block_statements p f in
@@ -170,11 +178,11 @@ let squish_statements (program : program) (threshold : int)
     {
       rule_id = id;
       rule_name = (rule_suffix ^ string_of_int id, Pos.no_pos);
-      rule_stmts = List.rev stmts;
+      rule_code = Rule (List.rev stmts);
     }
   in
   let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list)
-      (curr_stmts : stmt list) (rules : rule RuleMap.t) =
+      (curr_stmts : stmt list) (rules : rule_or_verif RuleMap.t) =
     match old_stmts with
     | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->

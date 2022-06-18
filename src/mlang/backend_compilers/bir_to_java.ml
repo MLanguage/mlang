@@ -283,8 +283,11 @@ let generate_var_cond oc (cond : condition_data) =
 
 let fresh_cond_counter = ref 0
 
-let generate_rule_header (oc : Format.formatter) (rule : rule) =
-  Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);"
+let generate_rule_header (oc : Format.formatter) (rule : rule_or_verif) =
+  let tname =
+    match rule.rule_code with Rule _ -> "rule" | Verif _ -> "verif"
+  in
+  Format.fprintf oc "Rule.m_%s_%s(mCalculation, calculationErrors);" tname
     (Pos.unmark rule.rule_name)
 
 let rec generate_stmts (program : program) (oc : Format.formatter)
@@ -346,9 +349,14 @@ let generate_return (oc : Format.formatter)
     print_outputs returned_variables
 
 let generate_rule_method (program : program) (oc : Format.formatter)
-    (rule : rule) =
+    (rule : rule_or_verif) =
+  let tname, stmts =
+    match rule.rule_code with
+    | Rule stmts -> ("rule", stmts)
+    | Verif stmt -> ("verif", [ stmt ])
+  in
   Format.fprintf oc
-    "@[<v 2>static void m_rule_%s(MCalculation mCalculation, List<MError> \
+    "@[<v 2>static void m_%s_%s(MCalculation mCalculation, List<MError> \
      calculationErrors) {@,\
      MValue cond = MValue.mUndefined;@,\
      MValue[] tgv = mCalculation.getCalculationVariables();@,\
@@ -357,8 +365,9 @@ let generate_rule_method (program : program) (oc : Format.formatter)
      mCalculation.getTableVariables();@,\
      %a@]@,\
      }"
+    tname
     (Pos.unmark rule.rule_name)
-    (generate_stmts program) rule.rule_stmts
+    (generate_stmts program) stmts
 
 let generate_rule_methods (oc : Format.formatter) (program : program) : unit =
   let rules = RuleMap.bindings program.rules in

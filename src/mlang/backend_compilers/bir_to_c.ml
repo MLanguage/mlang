@@ -238,22 +238,26 @@ and generate_stmts (program : program) (oc : Format.formatter)
   Format.pp_print_list (generate_stmt program) oc stmts
 
 and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
-    (rule : rule) =
+    (rule : rule_or_verif) =
   let arg_type = if definition then "m_value *" else "" in
   let ret_type = if definition then "void " else "" in
-  Format.fprintf oc "%sm_rule_%s(%sTGV, %sLOCAL)%s@\n" ret_type
+  let tname =
+    match rule.rule_code with Rule _ -> "rule" | Verif _ -> "verif"
+  in
+  Format.fprintf oc "%sm_%s_%s(%sTGV, %sLOCAL)%s@\n" ret_type tname
     (Pos.unmark rule.rule_name)
     arg_type arg_type
     (if definition then "" else ";")
 
 let generate_rule_function (program : program) (oc : Format.formatter)
-    (rule : rule) =
+    (rule : rule_or_verif) =
   Format.fprintf oc "%a@[<v 2>{@ %a@]@;}@\n"
     (generate_rule_function_header ~definition:true)
-    rule (generate_stmts program) rule.rule_stmts
+    rule (generate_stmts program)
+    (Bir.rule_or_verif_as_statements rule)
 
 let generate_rule_functions (program : program) (oc : Format.formatter)
-    (rules : rule RuleMap.t) =
+    (rules : rule_or_verif RuleMap.t) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
     (generate_rule_function program)
     oc

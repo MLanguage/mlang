@@ -722,7 +722,9 @@ module Make (N : Bir_number.NumberInterface) = struct
         | _ -> ctx)
     | Bir.SRuleCall r ->
         let rule = Bir.RuleMap.find r p.rules in
-        evaluate_stmts p ctx rule.rule_stmts (InsideRule r :: loc) 0
+        evaluate_stmts p ctx
+          (Bir.rule_or_verif_as_statements rule)
+          (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) ->
         evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
           loc 0

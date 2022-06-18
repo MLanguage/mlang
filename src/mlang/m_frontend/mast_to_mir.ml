@@ -1460,6 +1460,7 @@ let get_conds (error_decls : Mir.Error.t list)
                   in
                   Mir.VariableMap.add dummy_var
                     {
+                      Mir.cond_number = verif.verif_number;
                       Mir.cond_expr = e;
                       Mir.cond_error = err;
                       Mir.cond_tags =

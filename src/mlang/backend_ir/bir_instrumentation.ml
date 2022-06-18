@@ -122,7 +122,8 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
   | Bir.SVerif _ -> CodeLocationMap.empty
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
   | Bir.SRuleCall r ->
-      get_code_locs_stmts p (Bir.RuleMap.find r p.rules).rule_stmts
+      get_code_locs_stmts p
+        (Bir.rule_or_verif_as_statements (Bir.RuleMap.find r p.rules))
         (Bir_interpreter.InsideRule r :: loc)
   | Bir.SFunctionCall (f, _) ->
       get_code_locs_stmts p (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts

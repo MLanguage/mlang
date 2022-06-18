@@ -55,8 +55,13 @@ and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
 let format_rule fmt rule =
-  Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n" rule.rule_id format_stmts
-    rule.rule_stmts
+  match rule.rule_code with
+  | Rule stmts ->
+      Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n" rule.rule_id format_stmts
+        stmts
+  | Verif stmt ->
+      Format.fprintf fmt "verif %d:@\n@[<h 2>  %a@]@\n" rule.rule_id
+        format_stmts [ stmt ]
 
 let format_rules fmt rules =
   Format.pp_print_list

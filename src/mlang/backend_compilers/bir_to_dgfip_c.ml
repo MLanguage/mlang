@@ -344,26 +344,39 @@ and generate_stmts (program : program) (var_indexes : Dgfip_varid.var_id_map)
   Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
 and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
-    (rule : rule) =
+    (rule : rule_or_verif) =
   let arg_type = if definition then "T_irdata *" else "" in
-  let ret_type = if definition then "int " else "" in
-  Format.fprintf oc "%sregle_%s(%sirdata)%s@\n" ret_type
+  let tname, ret_type =
+    match rule.rule_code with
+    | Rule _ -> ("regle", "int ")
+    | Verif _ -> ("verif", "void ")
+  in
+  let ret_type = if definition then ret_type else "" in
+  Format.fprintf oc "%s%s_%s(%sirdata)%s@\n" ret_type tname
     (Pos.unmark rule.rule_name)
     arg_type
     (if definition then "" else ";")
 
 let generate_rule_function (program : program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (rule : rule)
-    =
-  Format.fprintf oc "%a@[<v 2>{@ %a@;return 0;@]@,@\n}@\n"
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
+    (rule : rule_or_verif) =
+  let decl, ret =
+    match rule.rule_code with
+    | Rule _ -> ((fun _ _ -> ()), fun fmt () -> Format.fprintf fmt "@ return 0;")
+    | Verif _ ->
+        ( (fun fmt () -> Format.fprintf fmt "int cond_def;@ double cond;@;"),
+          fun _ _ -> () )
+  in
+  Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
     (generate_rule_function_header ~definition:true)
-    rule
+    rule decl ()
     (generate_stmts program var_indexes)
-    rule.rule_stmts
+    (Bir.rule_or_verif_as_statements rule)
+    ret ()
 
 let generate_rule_functions (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (rules : rule list) =
+    (rules : rule_or_verif list) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
     (generate_rule_function program var_indexes)
     oc rules
@@ -625,6 +638,7 @@ let generate_rules_files (program : program) (vm : Dgfip_varid.var_id_map) =
         let oc = open_out file in
         let fmt = Format.formatter_of_out_channel oc in
         Format.fprintf fmt "#include <math.h>\n";
+        Format.fprintf fmt "#include <stdio.h>\n";
         Format.fprintf fmt "#include \"var.h\"\n\n";
         generate_rule_functions program vm fmt rules;
         Format.pp_print_flush fmt ();

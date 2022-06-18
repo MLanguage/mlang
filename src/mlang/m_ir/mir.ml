@@ -498,6 +498,7 @@ module Error = struct
 end
 
 type 'variable condition_data_ = {
+  cond_number : int Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
   cond_tags : Mast.chain_tag Pos.marked list;
@@ -506,6 +507,7 @@ type 'variable condition_data_ = {
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     'v2 condition_data_ =
   {
+    cond_number = cond.cond_number;
     cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
     cond_error =
       (let e, v = cond.cond_error in
