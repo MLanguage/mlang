@@ -361,11 +361,12 @@ let generate_rule_function (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     (rule : rule_or_verif) =
   let decl, ret =
+    let noprint _ _ = () in
     match rule.rule_code with
-    | Rule _ -> ((fun _ _ -> ()), fun fmt () -> Format.fprintf fmt "@ return 0;")
+    | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@ return 0;")
     | Verif _ ->
         ( (fun fmt () -> Format.fprintf fmt "int cond_def;@ double cond;@;"),
-          fun _ _ -> () )
+          noprint )
   in
   Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
     (generate_rule_function_header ~definition:true)

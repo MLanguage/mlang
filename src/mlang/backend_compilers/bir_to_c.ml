@@ -180,12 +180,7 @@ let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
       "%acond = %s;@\n\
        if (m_is_defined_true(cond)) {@\n\
       \    printf(\"Error triggered: %a\\n\");@\n\
-      \    {@\n\
-      \        output->is_error = true;@\n\
-      \        free(TGV);@\n\
-      \        free(LOCAL);@\n\
-      \        return -1;@\n\
-      \    }@\n\
+      \    return -1;@\n\
        }@\n"
       format_local_vars_defs defs scond
       (fun fmt err ->
@@ -227,9 +222,20 @@ let rec generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt)
         format_local_vars_defs defs cond_name scond cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
-  | SRuleCall r ->
+  | SRuleCall r -> (
       let rule = RuleMap.find r program.rules in
-      generate_rule_function_header ~definition:false oc rule
+      match rule.rule_code with
+      | Rule _ ->
+          generate_rule_function_header ~definition:false oc rule;
+          Format.fprintf oc ";"
+      | Verif _ ->
+          Format.fprintf oc "if(%a){@[<v 2>"
+            (generate_rule_function_header ~definition:false)
+            rule;
+          Format.fprintf oc "output->is_error = true;@;";
+          Format.fprintf oc "free(TGV);@;";
+          Format.fprintf oc "free(LOCAL);@;";
+          Format.fprintf oc "return -1;@]@;}")
   | SFunctionCall (f, _) ->
       Format.fprintf oc "if(%s(output, TGV, LOCAL)) {return -1;};\n" f
 
@@ -240,21 +246,31 @@ and generate_stmts (program : program) (oc : Format.formatter)
 and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
     (rule : rule_or_verif) =
   let arg_type = if definition then "m_value *" else "" in
-  let ret_type = if definition then "void " else "" in
-  let tname =
-    match rule.rule_code with Rule _ -> "rule" | Verif _ -> "verif"
+  let tname, ret_type =
+    match rule.rule_code with
+    | Rule _ -> ("rule", "void ")
+    | Verif _ -> ("verif", "int ")
   in
-  Format.fprintf oc "%sm_%s_%s(%sTGV, %sLOCAL)%s@\n" ret_type tname
+  let ret_type = if definition then ret_type else "" in
+  Format.fprintf oc "%sm_%s_%s(%sTGV, %sLOCAL)@\n" ret_type tname
     (Pos.unmark rule.rule_name)
     arg_type arg_type
-    (if definition then "" else ";")
 
 let generate_rule_function (program : program) (oc : Format.formatter)
     (rule : rule_or_verif) =
-  Format.fprintf oc "%a@[<v 2>{@ %a@]@;}@\n"
+  let decl, ret =
+    let noprint _ _ = () in
+    match rule.rule_code with
+    | Rule _ -> (noprint, noprint)
+    | Verif _ ->
+        ( (fun fmt () -> Format.fprintf fmt "m_value cond;@;"),
+          fun fmt () -> Format.fprintf fmt "@ return 0;" )
+  in
+  Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
     (generate_rule_function_header ~definition:true)
-    rule (generate_stmts program)
+    rule decl () (generate_stmts program)
     (Bir.rule_or_verif_as_statements rule)
+    ret ()
 
 let generate_rule_functions (program : program) (oc : Format.formatter)
     (rules : rule_or_verif RuleMap.t) =
