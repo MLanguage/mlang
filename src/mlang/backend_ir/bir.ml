@@ -177,7 +177,9 @@ let squish_statements (program : program) (threshold : int)
     let id = Mir.fresh_rule_id () in
     {
       rule_id = id;
-      rule_name = (rule_suffix ^ string_of_int id, Pos.no_pos);
+      rule_name =
+        ( rule_suffix ^ string_of_int (Mir.num_of_rule_or_verif_id id),
+          Pos.no_pos );
       rule_code = Rule (List.rev stmts);
     }
   in

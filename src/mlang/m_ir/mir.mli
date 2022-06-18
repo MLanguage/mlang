@@ -168,7 +168,7 @@ type 'variable variable_data_ = {
 
 type variable_data = variable variable_data_
 
-type rule_id = int
+type rule_id = RuleID of int | VerifID of int
 
 module RuleMap : Map.S with type key = rule_id
 
@@ -197,7 +197,7 @@ type error = {
 }
 
 type 'variable condition_data_ = {
-  cond_number : int Pos.marked;
+  cond_number : rule_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
   cond_tags : Mast.chain_tag Pos.marked list;
@@ -257,7 +257,7 @@ module Variable : sig
     attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
     origin:variable option ->
     subtypes:variable_subtype list ->
-    is_table:rule_id option ->
+    is_table:int option ->
     variable
 
   val compare : t -> t -> int
@@ -301,6 +301,8 @@ val false_literal : literal
 
 val true_literal : literal
 
+val num_of_rule_or_verif_id : rule_id -> int
+
 val same_execution_number : execution_number -> execution_number -> bool
 
 val find_var_name_by_alias : program -> string Pos.marked -> string
@@ -318,7 +320,7 @@ val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
 val map_vars :
   (variable -> variable_data -> variable_data) -> program -> program
 
-val compare_execution_number : execution_number -> execution_number -> rule_id
+val compare_execution_number : execution_number -> execution_number -> int
 
 val find_var_definition : program -> variable -> rule_data * variable_data
 

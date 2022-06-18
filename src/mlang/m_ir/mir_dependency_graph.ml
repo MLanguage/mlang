@@ -19,7 +19,7 @@ module RG =
     (struct
       type t = Mir.rule_id
 
-      let hash v = v
+      let hash v = Mir.num_of_rule_or_verif_id v (* no verif here anyway *)
 
       let compare = compare
 
@@ -178,12 +178,14 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
                  (let rule =
                     Mir.RuleMap.find (List.hd edges |> fst) p.program_rules
                   in
-                  string_of_int (Pos.unmark rule.rule_number)
+                  string_of_int
+                    (Mir.num_of_rule_or_verif_id (Pos.unmark rule.rule_number))
                   :: List.map
                        (fun (rule_id, edge) ->
                          let rule = Mir.RuleMap.find rule_id p.program_rules in
                          Format.asprintf "depends on %d through vars: {%s}"
-                           (Pos.unmark rule.rule_number)
+                           (Mir.num_of_rule_or_verif_id
+                              (Pos.unmark rule.rule_number))
                            (RG.E.label edge))
                        edges))
             :: !cycles_strings)

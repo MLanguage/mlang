@@ -81,7 +81,9 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       let instance_id = Mir.fresh_rule_id () in
       let instance_name =
         Pos.map_under_mark
-          (fun name -> name ^ "_i" ^ string_of_int instance_id)
+          (fun name ->
+            name ^ "_i"
+            ^ string_of_int (Mir.num_of_rule_or_verif_id instance_id))
           rule.rule_name
       in
       let stmts =

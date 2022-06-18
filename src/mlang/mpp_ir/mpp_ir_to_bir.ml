@@ -517,7 +517,9 @@ let create_combined_program (m_program : Mir_interface.full_program)
               ctx.used_chains
           then
             let rule_name =
-              Pos.map_under_mark string_of_int rule_data.Mir.rule_number
+              Pos.map_under_mark
+                (fun n -> string_of_int (Mir.num_of_rule_or_verif_id n))
+                rule_data.Mir.rule_number
             in
             let rule_code =
               Bir.Rule (translate_m_code m_program rule_data.Mir.rule_vars)
@@ -531,7 +533,9 @@ let create_combined_program (m_program : Mir_interface.full_program)
         (fun _var cond_data rules ->
           let rule_id = Pos.unmark cond_data.Mir.cond_number in
           let rule_name =
-            Pos.same_pos_as (string_of_int rule_id) cond_data.Mir.cond_number
+            Pos.same_pos_as
+              (string_of_int (Mir.num_of_rule_or_verif_id rule_id))
+              cond_data.Mir.cond_number
           in
           let rule_code = Bir.Verif (generate_verif_cond cond_data) in
           Mir.RuleMap.add rule_id Bir.{ rule_id; rule_name; rule_code } rules)

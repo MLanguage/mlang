@@ -154,7 +154,8 @@ let format_program_rules fmt (vars : VariableDict.t)
             VariableMap.add var def var_defs)
           VariableMap.empty rule_vars
       in
-      Format.fprintf fmt "Regle %d\n%a\n" (Pos.unmark rule_number)
+      Format.fprintf fmt "Regle %d\n%a\n"
+        (num_of_rule_or_verif_id (Pos.unmark rule_number))
         format_variables var_defs)
     rules
 

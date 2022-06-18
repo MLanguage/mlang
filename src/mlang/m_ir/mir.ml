@@ -387,21 +387,23 @@ type 'variable variable_data_ = {
 
 type variable_data = variable variable_data_
 
-type rule_id = int
+type rule_id = RuleID of int | VerifID of int
+
+let num_of_rule_or_verif_id = function RuleID n | VerifID n -> n
 
 let fresh_rule_id =
   let count = ref 0 in
   fun () ->
     let n = !count in
     incr count;
-    n
+    RuleID n
 
 (** Special rule id for initial definition of variables *)
-let initial_undef_rule_id = -1
+let initial_undef_rule_id = RuleID (-1)
 
 type rule_data = {
   rule_vars : (Variable.id * variable_data) list;
-  rule_number : int Pos.marked;
+  rule_number : rule_id Pos.marked;
   rule_tags : Mast.chain_tag list;
 }
 
@@ -498,7 +500,7 @@ module Error = struct
 end
 
 type 'variable condition_data_ = {
-  cond_number : int Pos.marked;
+  cond_number : rule_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
   cond_tags : Mast.chain_tag Pos.marked list;
