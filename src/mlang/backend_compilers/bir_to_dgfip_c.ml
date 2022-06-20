@@ -651,10 +651,8 @@ let generate_rules_files (program : program) (vm : Dgfip_varid.var_id_map) =
 #define _fmax(x,y) fmax((x),(y))
 #define _fmin(x,y) fmin((x),(y))
 #else
-double _fmax(double x, double y)
-{ return (x > y) ? x : y; }
-double _fmin(double x, double y)
-{ return (x < y) ? x : y; }
+double _fmax(double x, double y);
+double _fmin(double x, double y);
 #endif
 |};
         generate_rule_functions program vm fmt rules;
