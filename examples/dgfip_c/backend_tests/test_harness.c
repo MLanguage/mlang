@@ -1,4 +1,5 @@
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
@@ -7,6 +8,8 @@
 
 #include "irdata.h"
 #include "desc.h"
+
+#define MAX_PATH_LENGTH 4096 /* Arbitrary value */
 
 int main(int argc, char *argv[])
 {
@@ -17,7 +20,7 @@ int main(int argc, char *argv[])
     }
 
     char line_buffer[1000];
-    char file_path[256];
+    char file_path[MAX_PATH_LENGTH];
     char *separator = "/";
     char *tests_dir = argv[1];
     int state;
@@ -50,7 +53,11 @@ int main(int argc, char *argv[])
             {
                 continue;
             }
-            snprintf(file_path, sizeof file_path, "%s/%s", tests_dir, test_file);
+            if ((strlen(tests_dir) + strlen(test_file) + 2) > MAX_PATH_LENGTH)
+            {
+                continue;
+            }
+            sprintf(file_path, "%s/%s", tests_dir, test_file);
 
             FILE *fp = fopen(file_path, "r");
             if (fp == NULL)
@@ -87,7 +94,7 @@ int main(int argc, char *argv[])
                         // have to run the computation!
                         //errors = malloc(sizeof(error_occurrences));
                         //output_for_m->errors = errors;
-                        m_extracted(irdata);
+                        dgfip_calculation(irdata);
                         //free(output_for_m->errors);
                         break;
                     }
