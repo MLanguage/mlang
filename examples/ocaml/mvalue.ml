@@ -114,7 +114,8 @@ let m_round (x : m_value) : m_value =
     {
       undefined = false;
       value =
-        floor (if x.value < 0.0 then x.value -. 0.50005 else x.value +. 0.50005);
+        (if x.value < 0.0 then ceil (x.value -. 0.50005)
+        else floor (x.value +. 0.50005));
     }
 
 let m_null = m_not
