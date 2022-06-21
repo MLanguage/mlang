@@ -90,7 +90,7 @@ let m_not (x : m_value) : m_value =
 
 let m_neg (x : m_value) : m_value =
   if x.undefined then m_undef
-  else { undefined = true; value = Float.neg x.value }
+  else { undefined = false; value = Float.neg x.value }
 
 let m_table_value_at_index (variable_array : m_array) (table_start : int)
     (index : m_value) (size : int) =
