@@ -198,7 +198,7 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
          | { undefined = true ; value = _ } -> ()@,\
          | { undefined = false ; value = 0.0 }-> (@[<v 0>%a@])@,\
          | _ -> (@[<v 0>%a@]))@]" cond_name s cond_name (generate_stmts program)
-        tt (generate_stmts program) ff
+        ff (generate_stmts program) tt
   | SVerif _condition_data -> Format.fprintf oc "%s" "Verif"
   | SRuleCall rule_id ->
       let rule = Mir.RuleMap.find rule_id program.rules in
