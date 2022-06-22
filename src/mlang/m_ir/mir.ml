@@ -387,7 +387,7 @@ type 'variable variable_data_ = {
 
 type variable_data = variable variable_data_
 
-type rule_id = RuleID of int | VerifID of int
+type rov_id = RuleID of int | VerifID of int
 
 let num_of_rule_or_verif_id = function RuleID n | VerifID n -> n
 
@@ -403,12 +403,12 @@ let initial_undef_rule_id = RuleID (-1)
 
 type rule_data = {
   rule_vars : (Variable.id * variable_data) list;
-  rule_number : rule_id Pos.marked;
+  rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;
 }
 
 module RuleMap = Map.Make (struct
-  type t = rule_id
+  type t = rov_id
 
   let compare = compare
 end)
@@ -500,7 +500,7 @@ module Error = struct
 end
 
 type 'variable condition_data_ = {
-  cond_number : rule_id Pos.marked;
+  cond_number : rov_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
   cond_tags : Mast.chain_tag Pos.marked list;

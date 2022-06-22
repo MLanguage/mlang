@@ -21,7 +21,7 @@ type var_literal =
 type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
-  | InsideRule of Bir.rule_id
+  | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
 
 let format_code_location_segment (fmt : Format.formatter)
@@ -722,7 +722,7 @@ module Make (N : Bir_number.NumberInterface) = struct
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
     | Bir.SRuleCall r ->
-        let rule = Bir.RuleMap.find r p.rules in
+        let rule = Bir.ROVMap.find r p.rules_and_verifs in
         evaluate_stmts p ctx
           (Bir.rule_or_verif_as_statements rule)
           (InsideRule r :: loc) 0

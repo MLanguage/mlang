@@ -14,9 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_id = Mir.rule_id
+type rov_id = Mir.rov_id
 
-module RuleMap = Mir.RuleMap
+module ROVMap = Mir.RuleMap
 
 type tgv_id = string
 
@@ -39,9 +39,9 @@ type function_name = string
 type rule_or_verif_code = Rule of stmt list | Verif of stmt
 
 and rule_or_verif = {
-  rule_id : rule_id;
-  rule_name : string Pos.marked;
-  rule_code : rule_or_verif_code;
+  rov_id : rov_id;
+  rov_name : string Pos.marked;
+  rov_code : rule_or_verif_code;
 }
 
 and stmt = stmt_kind Pos.marked
@@ -50,7 +50,7 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rule_id
+  | SRuleCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
@@ -59,7 +59,7 @@ module FunctionMap : Map.S with type key = function_name
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  rules : rule_or_verif RuleMap.t;
+  rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;

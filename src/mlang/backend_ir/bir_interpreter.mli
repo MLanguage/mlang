@@ -32,7 +32,7 @@ type var_literal =
 type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
-  | InsideRule of Bir.rule_id
+  | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
 
 val format_code_location_segment :

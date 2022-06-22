@@ -14,9 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_id = Mir.rule_id
+type rov_id = Mir.rov_id
 
-module RuleMap = Mir.RuleMap
+module ROVMap = Mir.RuleMap
 
 type tgv_id = string
 
@@ -98,9 +98,9 @@ type function_name = string
 type rule_or_verif_code = Rule of stmt list | Verif of stmt
 
 and rule_or_verif = {
-  rule_id : rule_id;
-  rule_name : string Pos.marked;
-  rule_code : rule_or_verif_code;
+  rov_id : rov_id;
+  rov_name : string Pos.marked;
+  rov_code : rule_or_verif_code;
 }
 
 and stmt = stmt_kind Pos.marked
@@ -109,11 +109,11 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rule_id
+  | SRuleCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
-  match rov.rule_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
+  match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
@@ -125,7 +125,7 @@ end)
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  rules : rule_or_verif RuleMap.t;
+  rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -142,7 +142,7 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
     (fun stmts stmt ->
       match Pos.unmark stmt with
       | SRuleCall r -> (
-          match (RuleMap.find r p.rules).rule_code with
+          match (ROVMap.find r p.rules_and_verifs).rov_code with
           | Rule rstmts -> List.rev rstmts @ stmts
           | Verif stmt -> stmt :: stmts)
       | SConditional (e, t, f) ->
@@ -176,15 +176,15 @@ let squish_statements (program : program) (threshold : int)
   let rule_from_stmts stmts =
     let id = Mir.RuleID (Mir.fresh_rule_num ()) in
     {
-      rule_id = id;
-      rule_name =
+      rov_id = id;
+      rov_name =
         ( rule_suffix ^ string_of_int (Mir.num_of_rule_or_verif_id id),
           Pos.no_pos );
-      rule_code = Rule (List.rev stmts);
+      rov_code = Rule (List.rev stmts);
     }
   in
   let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list)
-      (curr_stmts : stmt list) (rules : rule_or_verif RuleMap.t) =
+      (curr_stmts : stmt list) (rules : rule_or_verif ROVMap.t) =
     match old_stmts with
     | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->
@@ -205,20 +205,20 @@ let squish_statements (program : program) (threshold : int)
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
-            (give_pos (SRuleCall squish_rule.rule_id) :: new_stmts)
+            (give_pos (SRuleCall squish_rule.rov_id) :: new_stmts)
             []
-            (RuleMap.add squish_rule.rule_id squish_rule rules)
+            (ROVMap.add squish_rule.rov_id squish_rule rules)
   in
-  let rules, mpp_functions =
+  let rules_and_verifs, mpp_functions =
     FunctionMap.fold
       (fun f mpp_func (rules, mpp_functions) ->
         let rules, mppf_stmts = browse_bir mpp_func.mppf_stmts [] [] rules in
         let func = { mppf_stmts; mppf_is_verif = mpp_func.mppf_is_verif } in
         (rules, FunctionMap.add f func mpp_functions))
       program.mpp_functions
-      (program.rules, FunctionMap.empty)
+      (program.rules_and_verifs, FunctionMap.empty)
   in
-  { program with rules; mpp_functions }
+  { program with rules_and_verifs; mpp_functions }
 
 let get_assigned_variables (p : program) : VariableSet.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) : VariableSet.t =

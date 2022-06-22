@@ -1190,7 +1190,7 @@ let get_rules_and_var_data (idmap : Mir.idmap)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
     (Mir.Variable.t list
-    * Mir.rule_id Pos.marked
+    * Mir.rov_id Pos.marked
     * Mast.chain_tag Pos.marked list)
     Mir.RuleMap.t
     * Mir.variable_data Mir.VariableMap.t =

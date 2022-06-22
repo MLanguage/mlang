@@ -74,21 +74,21 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
         append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b2id blocks
       in
       (join_block, blocks)
-  | Bir.SRuleCall rule_id ->
+  | Bir.SRuleCall rov_id ->
       (* To properly optimize M code, we have to instanciate each call as
          independent code *)
-      let rule = Bir.RuleMap.find rule_id p.Bir.rules in
+      let rule = Bir.ROVMap.find rov_id p.Bir.rules_and_verifs in
       let instance_num = Mir.fresh_rule_num () in
       let instance_id =
         Mir.(
-          match rule_id with
+          match rov_id with
           | RuleID _ -> RuleID instance_num
           | VerifID _ -> VerifID instance_num)
       in
       let instance_name =
         Pos.map_under_mark
           (fun name -> name ^ "_i" ^ string_of_int instance_num)
-          rule.rule_name
+          rule.rov_name
       in
       let stmts =
         let dummy = fresh_block_id () in
@@ -130,9 +130,8 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
   }
 
 let rec re_translate_statement (s : Oir.stmt)
-    (rules : Bir.rule_or_verif Bir.RuleMap.t)
-    (blocks : Oir.block Oir.BlockMap.t) :
-    Oir.block_id option * Bir.stmt option * Bir.rule_or_verif Bir.RuleMap.t =
+    (rules : Bir.rule_or_verif Bir.ROVMap.t) (blocks : Oir.block Oir.BlockMap.t)
+    : Oir.block_id option * Bir.stmt option * Bir.rule_or_verif Bir.ROVMap.t =
   match Pos.unmark s with
   | Oir.SAssign (var, data) ->
       (None, Some (Pos.same_pos_as (Bir.SAssign (var, data)) s), rules)
@@ -148,28 +147,27 @@ let rec re_translate_statement (s : Oir.stmt)
         Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s),
         rules )
   | Oir.SGoto b -> (Some b, None, rules)
-  | Oir.SRuleCall (rule_id, rule_name, stmts) -> (
+  | Oir.SRuleCall (rov_id, rov_name, stmts) -> (
       let _, stmts, rules = re_translate_statement_list stmts rules blocks in
       let stmts = List.rev stmts in
       let rule =
         match stmts with
         | [] -> None
         | [ ((Bir.SVerif _, _) as stmt) ] ->
-            Some Bir.{ rule_id; rule_name; rule_code = Verif stmt }
-        | _ -> Some Bir.{ rule_id; rule_name; rule_code = Rule stmts }
+            Some Bir.{ rov_id; rov_name; rov_code = Verif stmt }
+        | _ -> Some Bir.{ rov_id; rov_name; rov_code = Rule stmts }
       in
       match rule with
       | None -> (None, None, rules)
       | Some rule ->
           ( None,
-            Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s),
-            Bir.RuleMap.add rule_id rule rules ))
+            Some (Pos.same_pos_as (Bir.SRuleCall rov_id) s),
+            Bir.ROVMap.add rov_id rule rules ))
   | Oir.SFunctionCall _ -> assert false
 
 and re_translate_statement_list (stmts : Oir.stmt list)
-    (rules : Bir.rule_or_verif Bir.RuleMap.t)
-    (blocks : Oir.block Oir.BlockMap.t) :
-    int option * Bir.stmt list * Bir.rule_or_verif Mir.RuleMap.t =
+    (rules : Bir.rule_or_verif Bir.ROVMap.t) (blocks : Oir.block Oir.BlockMap.t)
+    : int option * Bir.stmt list * Bir.rule_or_verif Bir.ROVMap.t =
   List.fold_left
     (fun (_, acc, rules) s ->
       let next_block, stmt, rules = re_translate_statement s rules blocks in
@@ -177,9 +175,9 @@ and re_translate_statement_list (stmts : Oir.stmt list)
     (None, [], rules) stmts
 
 and re_translate_blocks_until (block_id : Oir.block_id)
-    (blocks : Oir.block Oir.BlockMap.t)
-    (rules : Bir.rule_or_verif Bir.RuleMap.t) (stop : Oir.block_id option) :
-    Bir.stmt list * Bir.rule_or_verif Bir.RuleMap.t =
+    (blocks : Oir.block Oir.BlockMap.t) (rules : Bir.rule_or_verif Bir.ROVMap.t)
+    (stop : Oir.block_id option) :
+    Bir.stmt list * Bir.rule_or_verif Bir.ROVMap.t =
   let next_block, stmts, rules = re_translate_block block_id rules blocks in
   let next_stmts, rules =
     match (next_block, stop) with
@@ -194,9 +192,8 @@ and re_translate_blocks_until (block_id : Oir.block_id)
   (stmts @ next_stmts, rules)
 
 and re_translate_block (block_id : Oir.block_id)
-    (rules : Bir.rule_or_verif Bir.RuleMap.t)
-    (blocks : Oir.block Oir.BlockMap.t) :
-    Oir.block_id option * Bir.stmt list * Bir.rule_or_verif Bir.RuleMap.t =
+    (rules : Bir.rule_or_verif Bir.ROVMap.t) (blocks : Oir.block Oir.BlockMap.t)
+    : Oir.block_id option * Bir.stmt list * Bir.rule_or_verif Bir.ROVMap.t =
   match Oir.BlockMap.find_opt block_id blocks with
   | None -> assert false (* should not happen *)
   | Some block ->
@@ -207,8 +204,8 @@ and re_translate_block (block_id : Oir.block_id)
       (next_block_id, stmts, rules)
 
 let oir_program_to_bir (p : Oir.program) : Bir.program =
-  let statements, rules =
-    re_translate_blocks_until p.entry_block p.blocks Bir.RuleMap.empty None
+  let statements, rules_and_verifs =
+    re_translate_blocks_until p.entry_block p.blocks Bir.ROVMap.empty None
   in
   let mpp_functions =
     Bir.FunctionMap.singleton p.main_function
@@ -220,7 +217,7 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
   in
   {
     mpp_functions;
-    rules;
+    rules_and_verifs;
     idmap = p.idmap;
     mir_program = p.mir_program;
     outputs = p.outputs;

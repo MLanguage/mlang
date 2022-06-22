@@ -56,22 +56,22 @@ and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
 let format_rule fmt rule =
-  match rule.rule_code with
+  match rule.rov_code with
   | Rule stmts ->
       Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n"
-        (Mir.num_of_rule_or_verif_id rule.rule_id)
+        (Mir.num_of_rule_or_verif_id rule.rov_id)
         format_stmts stmts
   | Verif stmt ->
       Format.fprintf fmt "verif %d:@\n@[<h 2>  %a@]@\n"
-        (Mir.num_of_rule_or_verif_id rule.rule_id)
+        (Mir.num_of_rule_or_verif_id rule.rov_id)
         format_stmts [ stmt ]
 
 let format_rules fmt rules =
   Format.pp_print_list
     ~pp_sep:(fun _ () -> ())
     format_rule fmt
-    (Bir.RuleMap.bindings rules |> List.map snd)
+    (Bir.ROVMap.bindings rules |> List.map snd)
 
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a%a" format_rules p.rules format_stmts
+  Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
     (Bir.main_statements p)

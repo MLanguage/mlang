@@ -168,13 +168,13 @@ type 'variable variable_data_ = {
 
 type variable_data = variable variable_data_
 
-type rule_id = RuleID of int | VerifID of int
+type rov_id = RuleID of int | VerifID of int
 
-module RuleMap : Map.S with type key = rule_id
+module RuleMap : Map.S with type key = rov_id
 
 type rule_data = {
   rule_vars : (variable_id * variable_data) list;
-  rule_number : rule_id Pos.marked;
+  rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;
 }
 
@@ -197,7 +197,7 @@ type error = {
 }
 
 type 'variable condition_data_ = {
-  cond_number : rule_id Pos.marked;
+  cond_number : rov_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
   cond_tags : Mast.chain_tag Pos.marked list;
@@ -301,7 +301,7 @@ val false_literal : literal
 
 val true_literal : literal
 
-val num_of_rule_or_verif_id : rule_id -> int
+val num_of_rule_or_verif_id : rov_id -> int
 
 val same_execution_number : execution_number -> execution_number -> bool
 
@@ -330,7 +330,7 @@ val is_candidate_valid : execution_number -> execution_number -> bool -> bool
 
 val fresh_rule_num : unit -> int
 
-val initial_undef_rule_id : rule_id
+val initial_undef_rule_id : rov_id
 
 val subtypes_of_decl : Mast.variable_decl -> variable_subtype list
 

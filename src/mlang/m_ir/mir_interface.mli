@@ -23,7 +23,7 @@ val reset_all_outputs : Mir.program -> Mir.program
 
 type chain_order = {
   dep_graph : Mir_dependency_graph.RG.t;
-  execution_order : Mir.rule_id list;
+  execution_order : Mir.rov_id list;
 }
 
 type full_program = {
