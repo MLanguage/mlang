@@ -80,9 +80,7 @@ let reference_list (input_file : string) : Mvalue.revenue_code list =
   get_data_block input_file "#RESULTATS-PRIMITIF"
 
 let filter_rev_code_list initial_list ref_list : Mvalue.revenue_code list =
-  let alias_eq code1 code2 =
-    if code1.alias = code2.alias then true else false
-  in
+  let alias_eq code1 code2 = code1.alias = code2.alias in
   let ref_exists code : bool =
     List.exists (fun ref_code -> alias_eq code ref_code) ref_list
   in
@@ -90,9 +88,7 @@ let filter_rev_code_list initial_list ref_list : Mvalue.revenue_code list =
 
 let list_discrepancies filtered_list ref_list :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
-  let value_neq (code1, code2) =
-    if code1.value = code2.value then false else true
-  in
+  let value_neq (code1, code2) = not (code1.value = code2.value) in
   List.filter value_neq
     (List.combine
        (List.sort compare_rev_code filtered_list)
