@@ -78,12 +78,16 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       (* To properly optimize M code, we have to instanciate each call as
          independent code *)
       let rule = Bir.RuleMap.find rule_id p.Bir.rules in
-      let instance_id = Mir.fresh_rule_id () in
+      let instance_num = Mir.fresh_rule_num () in
+      let instance_id =
+        Mir.(
+          match rule_id with
+          | RuleID _ -> RuleID instance_num
+          | VerifID _ -> VerifID instance_num)
+      in
       let instance_name =
         Pos.map_under_mark
-          (fun name ->
-            name ^ "_i"
-            ^ string_of_int (Mir.num_of_rule_or_verif_id instance_id))
+          (fun name -> name ^ "_i" ^ string_of_int instance_num)
           rule.rule_name
       in
       let stmts =
@@ -146,16 +150,17 @@ let rec re_translate_statement (s : Oir.stmt)
   | Oir.SGoto b -> (Some b, None, rules)
   | Oir.SRuleCall (rule_id, rule_name, stmts) -> (
       let _, stmts, rules = re_translate_statement_list stmts rules blocks in
-      let rule_stmts = List.rev stmts in
-      match rule_stmts with
-      | [] -> (None, None, rules)
-      | [ ((Bir.SVerif _, _) as stmt) ] ->
-          let rule = Bir.{ rule_id; rule_name; rule_code = Verif stmt } in
-          ( None,
-            Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s),
-            Bir.RuleMap.add rule_id rule rules )
-      | _ ->
-          let rule = Bir.{ rule_id; rule_name; rule_code = Rule rule_stmts } in
+      let stmts = List.rev stmts in
+      let rule =
+        match stmts with
+        | [] -> None
+        | [ ((Bir.SVerif _, _) as stmt) ] ->
+            Some Bir.{ rule_id; rule_name; rule_code = Verif stmt }
+        | _ -> Some Bir.{ rule_id; rule_name; rule_code = Rule stmts }
+      in
+      match rule with
+      | None -> (None, None, rules)
+      | Some rule ->
           ( None,
             Some (Pos.same_pos_as (Bir.SRuleCall rule_id) s),
             Bir.RuleMap.add rule_id rule rules ))

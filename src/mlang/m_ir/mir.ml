@@ -391,12 +391,12 @@ type rule_id = RuleID of int | VerifID of int
 
 let num_of_rule_or_verif_id = function RuleID n | VerifID n -> n
 
-let fresh_rule_id =
+let fresh_rule_num =
   let count = ref 0 in
   fun () ->
     let n = !count in
     incr count;
-    RuleID n
+    n
 
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = RuleID (-1)

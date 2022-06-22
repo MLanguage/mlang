@@ -328,7 +328,7 @@ val max_exec_number : execution_number -> execution_number -> max_result
 
 val is_candidate_valid : execution_number -> execution_number -> bool -> bool
 
-val fresh_rule_id : unit -> rule_id
+val fresh_rule_num : unit -> int
 
 val initial_undef_rule_id : rule_id
 

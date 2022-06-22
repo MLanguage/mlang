@@ -174,7 +174,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
   let rule_from_stmts stmts =
-    let id = Mir.fresh_rule_id () in
+    let id = Mir.RuleID (Mir.fresh_rule_num ()) in
     {
       rule_id = id;
       rule_name =
