@@ -143,7 +143,7 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
       match Pos.unmark stmt with
       | SRuleCall r -> (
           match (RuleMap.find r p.rules).rule_code with
-          | Rule stmts -> List.rev stmts @ stmts
+          | Rule rstmts -> List.rev rstmts @ stmts
           | Verif stmt -> stmt :: stmts)
       | SConditional (e, t, f) ->
           let t = get_block_statements p t in
