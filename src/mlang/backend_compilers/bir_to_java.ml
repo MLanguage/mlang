@@ -66,6 +66,9 @@ let print_double_cut oc () = Format.fprintf oc "@,@,"
 
 let get_var_pos (var : variable) : int = var.Bir.offset
 
+let get_tgv_position (var : variable) : string =
+  Format.asprintf "tgv[%d /* %s */]" (get_var_pos var) (generate_var_name var)
+
 let rec generate_java_expr (e : expression Pos.marked) :
     string * (Mir.LocalVariable.t * expression Pos.marked) list =
   match Pos.unmark e with
@@ -148,9 +151,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
       | 1. -> (Format.asprintf "MValue.one", [])
       | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var ->
-      ( Format.asprintf "tgv[%d/*\"%a\"*/]" (get_var_pos var) format_var_name var,
-        [] )
+  | Var var -> (get_tgv_position var, [])
   | LocalVar lvar ->
       (Format.asprintf "localVariables[%d]" lvar.Mir.LocalVariable.id, [])
   | Error -> assert false (* should not happen *)
@@ -173,8 +174,8 @@ let generate_var_def (var : variable) (data : variable_data)
   match data.var_definition with
   | SimpleVar e ->
       let se, defs = generate_java_expr e in
-      Format.fprintf oc "%atgv[%d /*\"%a\"*/] = %s;" format_local_vars_defs defs
-        (get_var_pos var) format_var_name var se
+      Format.fprintf oc "%a%s = %s;" format_local_vars_defs defs
+        (get_tgv_position var) se
   | TableVar (_, IndexTable es) ->
       Format.fprintf oc "%a"
         (fun fmt ->
@@ -188,11 +189,10 @@ let generate_var_def (var : variable) (data : variable_data)
   | TableVar (_size, IndexGeneric (v, e)) ->
       let se, s = generate_java_expr e in
       Format.fprintf oc
-        "if(!tgv[%d/* %a */].isUndefined())@[<hov 2>{@ %atgv[%d/* %a */ + \
-         (int)tgv[%d/* %a */].getValue()] = %s;@] }@,"
-        (get_var_pos v) format_var_name v format_local_vars_defs s
-        (get_var_pos var) format_var_name var (get_var_pos v) format_var_name v
-        se
+        "if(!%s.isUndefined())@[<hov 2>{@ %atgv[%d/* %a */ + \
+         (int)%s.getValue()] = %s;@] }@,"
+        (get_tgv_position v) format_local_vars_defs s (get_var_pos var)
+        format_var_name var (get_tgv_position v) se
   | InputVar -> assert false
 
 let generate_input_handling (function_spec : Bir_interface.bir_function)
@@ -215,10 +215,9 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
   let input_methods_count = ref 0 in
   let print_input fmt var =
     Format.fprintf fmt
-      "tgv[/*\"%a\"*/%d] = inputVariables.get(\"%s\") != null ? \
-       inputVariables.get(\"%s\") : MValue.mUndefined;"
-      format_var_name var (get_var_pos var) (generate_name var)
-      (generate_name var)
+      "%s = inputVariables.get(\"%s\") != null ? inputVariables.get(\"%s\") : \
+       MValue.mUndefined;"
+      (get_tgv_position var) (generate_name var) (generate_name var)
   in
   let print_method fmt inputs =
     Format.fprintf fmt
@@ -331,8 +330,8 @@ let generate_return (oc : Format.formatter)
   let print_outputs oc returned_variables =
     Format.pp_print_list
       (fun oc var ->
-        Format.fprintf oc "outputVariables.put(\"%a\",tgv[%d/*\"%a\"*/]);"
-          format_var_name var (get_var_pos var) format_var_name var)
+        Format.fprintf oc "outputVariables.put(\"%a\",%s);" format_var_name var
+          (get_tgv_position var))
       oc returned_variables
   in
   Format.fprintf oc
