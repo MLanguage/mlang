@@ -25,7 +25,7 @@ and stmt_kind =
   | SConditional of Bir.expression * block_id * block_id * block_id
   | SVerif of Bir.condition_data
   | SGoto of block_id
-  | SRuleCall of Bir.rule_id * string * stmt list
+  | SRovCall of Bir.rov_id * string Pos.marked * stmt list
   | SFunctionCall of Bir.function_name * Mir.variable list
 
 type block = stmt list

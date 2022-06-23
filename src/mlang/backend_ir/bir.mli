@@ -14,9 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_id = Mir.rule_id
+type rov_id = Mir.rov_id
 
-module RuleMap = Mir.RuleMap
+module ROVMap = Mir.RuleMap
 
 type tgv_id = string
 
@@ -36,7 +36,13 @@ type variable_data = variable Mir.variable_data_
 
 type function_name = string
 
-type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
+type rule_or_verif_code = Rule of stmt list | Verif of stmt
+
+and rule_or_verif = {
+  rov_id : rov_id;
+  rov_name : string Pos.marked;
+  rov_code : rule_or_verif_code;
+}
 
 and stmt = stmt_kind Pos.marked
 
@@ -44,7 +50,7 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rule_id
+  | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
@@ -53,7 +59,7 @@ module FunctionMap : Map.S with type key = function_name
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  rules : rule RuleMap.t;
+  rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -73,6 +79,8 @@ val compare_variable : variable -> variable -> int
 val map_from_mir_map : tgv_id -> 'a Mir.VariableMap.t -> 'a VariableMap.t
 
 val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
+
+val rule_or_verif_as_statements : rule_or_verif -> stmt list
 
 val main_statements : program -> stmt list
 

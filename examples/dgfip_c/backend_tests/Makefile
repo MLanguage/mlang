@@ -47,6 +47,9 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
+### list existing C file from M equivalent
+M_C_FILES=$(filter $(wildcard *.c),$(notdir $(SOURCE_FILES:.m=.c)))
+
 CC=$(C_COMPILER)
 
 ifeq ($(C_COMPILER), clang)
@@ -58,6 +61,7 @@ endif
 ir_%.o: export AFL_DONT_OPTIMIZE=1
 ir_%.o: ir_%.c
 	$(CC) -I ../ $(F_BRACKET_OPT) $(C_OPT) -c $< \
+	$(M_C_FILES) \
 	contexte.c famille.c penalite.c restitue.c revcor.c \
 	revenu.c variatio.c var.c irdata.c
 
@@ -70,6 +74,7 @@ ir_%.o: ir_%.c
 
 test_harness.exe: ir_tests.o test_harness.o
 	$(CC) -fPIE -lm -o $@ $^ \
+	$(M_C_FILES) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
 
@@ -79,6 +84,7 @@ run_tests: test_harness.exe FORCE
 
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^ \
+	$(M_C_FILES) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
 
@@ -128,6 +134,7 @@ clean_fuzz_tests:
 
 clean:
 	rm -f ir_tests.* *.o tests.m_spec *.exe *.tmp ../m_value.o \
+	$(M_C_FILES) \
 	contexte.* famille.* penalite.* restitue.* revcor.* \
 	revenu.* tableg*.* tablev.* variatio.* var.* \
 	conf.h annee.h desc.h desc_inv.h

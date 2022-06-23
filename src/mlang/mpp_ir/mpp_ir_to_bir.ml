@@ -213,20 +213,17 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
   in
   let program_stmts =
     List.fold_left
-      (fun stmts rule_id ->
-        let rule = Mir.RuleMap.find rule_id m_program.program.program_rules in
-        Pos.same_pos_as (Bir.SRuleCall rule_id) rule.Mir.rule_number :: stmts)
+      (fun stmts rov_id ->
+        let rule = Mir.RuleMap.find rov_id m_program.program.program_rules in
+        Pos.same_pos_as (Bir.SRovCall rov_id) rule.Mir.rule_number :: stmts)
       [] execution_order
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
 
-let generate_verif_conds (conds : Mir.condition_data list) : Bir.stmt list =
-  List.fold_left
-    (fun acc data ->
-      let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data in
-      (Bir.SVerif data, Pos.get_position data.cond_expr) :: acc)
-    [] conds
+let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
+  let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
+  (Bir.SVerif data, Pos.get_position data.cond_expr)
 
 let generate_verif_call (m_program : Mir_interface.full_program)
     (chain_tag : Mast.chain_tag) (filter : Mpp_ir.var_filter option) :
@@ -261,7 +258,12 @@ let generate_verif_call (m_program : Mir_interface.full_program)
            Mast.compare_error_type (fst cond1.Mir.cond_error).typ
              (fst cond2.Mir.cond_error).typ)
   in
-  generate_verif_conds verifs
+  List.map
+    (fun verif ->
+      Pos.map_under_mark
+        (fun verif_id -> Bir.SRovCall verif_id)
+        verif.Mir.cond_number)
+    verifs
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
@@ -507,29 +509,44 @@ let create_combined_program (m_program : Mir_interface.full_program)
     in
     let rules =
       Mir.RuleMap.fold
-        (fun rule_id rule_data rules ->
+        (fun rov_id rule_data rules ->
           if
             Mir.TagMap.exists
               (fun chain () ->
                 Mast.are_tags_part_of_chain rule_data.Mir.rule_tags chain)
               ctx.used_chains
           then
-            let rule_name =
-              string_of_int (Pos.unmark rule_data.Mir.rule_number)
+            let rov_name =
+              Pos.map_under_mark
+                (fun n -> string_of_int (Mir.num_of_rule_or_verif_id n))
+                rule_data.Mir.rule_number
             in
-            let rule_stmts =
-              translate_m_code m_program rule_data.Mir.rule_vars
+            let rov_code =
+              Bir.Rule (translate_m_code m_program rule_data.Mir.rule_vars)
             in
-            Mir.RuleMap.add rule_id Bir.{ rule_id; rule_name; rule_stmts } rules
+            Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules
           else rules)
         m_program.program.program_rules Mir.RuleMap.empty
+    in
+    let rules_and_verifs =
+      Mir.VariableMap.fold
+        (fun _var cond_data rules ->
+          let rov_id = Pos.unmark cond_data.Mir.cond_number in
+          let rov_name =
+            Pos.same_pos_as
+              (string_of_int (Mir.num_of_rule_or_verif_id rov_id))
+              cond_data.Mir.cond_number
+          in
+          let rov_code = Bir.Verif (generate_verif_cond cond_data) in
+          Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules)
+        m_program.program.program_conds rules
     in
     if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
       Errors.raise_error
         (Format.asprintf "M++ function %s not found in M++ file!"
            mpp_function_to_extract);
     {
-      rules;
+      rules_and_verifs;
       mpp_functions;
       main_function = mpp_function_to_extract;
       idmap = m_program.program.program_idmap;

@@ -1189,7 +1189,9 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
 let get_rules_and_var_data (idmap : Mir.idmap)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
-    (Mir.Variable.t list * int Pos.marked * Mast.chain_tag Pos.marked list)
+    (Mir.Variable.t list
+    * Mir.rov_id Pos.marked
+    * Mast.chain_tag Pos.marked list)
     Mir.RuleMap.t
     * Mir.variable_data Mir.VariableMap.t =
   List.fold_left
@@ -1291,8 +1293,11 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                   | None -> r.rule_tags
                   | Some (chain, pos) -> (Mast.Custom chain, pos) :: r.rule_tags
                 in
-                let rule = (List.rev rule_vars, r.rule_number, rule_tags) in
-                ( Mir.RuleMap.add (Pos.unmark r.rule_number) rule rule_data,
+                let rule_number =
+                  Pos.map_under_mark (fun n -> Mir.RuleID n) r.rule_number
+                in
+                let rule = (List.rev rule_vars, rule_number, rule_tags) in
+                ( Mir.RuleMap.add (Pos.unmark rule_number) rule rule_data,
                   var_data )
           | Mast.VariableDecl (Mast.ConstVar _) ->
               (* constant variables occurences are substituted by their
@@ -1460,6 +1465,10 @@ let get_conds (error_decls : Mir.Error.t list)
                   in
                   Mir.VariableMap.add dummy_var
                     {
+                      Mir.cond_number =
+                        Pos.map_under_mark
+                          (fun n -> Mir.VerifID n)
+                          verif.verif_number;
                       Mir.cond_expr = e;
                       Mir.cond_error = err;
                       Mir.cond_tags =
@@ -1521,7 +1530,12 @@ let translate (p : Mast.program) : Mir.program =
   in
   let rules =
     Mir.RuleMap.add Mir.initial_undef_rule_id
-      Mir.{ rule_vars = orphans; rule_number = (0, Pos.no_pos); rule_tags = [] }
+      Mir.
+        {
+          rule_vars = orphans;
+          rule_number = (RuleID 0, Pos.no_pos);
+          rule_tags = [];
+        }
       rules
   in
   let conds = get_conds error_decls const_map idmap p in

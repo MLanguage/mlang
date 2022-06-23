@@ -282,9 +282,10 @@ let generate_var_cond oc (cond : condition_data) =
 
 let fresh_cond_counter = ref 0
 
-let generate_rule_header (oc : Format.formatter) (rule : rule) =
-  Format.fprintf oc "Rule.m_rule_%s(mCalculation, calculationErrors);"
-    rule.rule_name
+let generate_rov_header (oc : Format.formatter) (rov : rule_or_verif) =
+  let tname = match rov.rov_code with Rule _ -> "rule" | Verif _ -> "verif" in
+  Format.fprintf oc "Rule.m_%s_%s(mCalculation, calculationErrors);" tname
+    (Pos.unmark rov.rov_name)
 
 let rec generate_stmts (program : program) (oc : Format.formatter)
     (stmts : stmt list) =
@@ -293,9 +294,9 @@ let rec generate_stmts (program : program) (oc : Format.formatter)
 and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
     unit =
   match Pos.unmark stmt with
-  | SRuleCall r ->
-      let rule = RuleMap.find r program.rules in
-      generate_rule_header oc rule
+  | SRovCall r ->
+      let rov = ROVMap.find r program.rules_and_verifs in
+      generate_rov_header oc rov
   | SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
@@ -344,10 +345,15 @@ let generate_return (oc : Format.formatter)
      }"
     print_outputs returned_variables
 
-let generate_rule_method (program : program) (oc : Format.formatter)
-    (rule : rule) =
+let generate_rov_method (program : program) (oc : Format.formatter)
+    (rov : rule_or_verif) =
+  let tname, stmts =
+    match rov.rov_code with
+    | Rule stmts -> ("rule", stmts)
+    | Verif stmt -> ("verif", [ stmt ])
+  in
   Format.fprintf oc
-    "@[<v 2>static void m_rule_%s(MCalculation mCalculation, List<MError> \
+    "@[<v 2>static void m_%s_%s(MCalculation mCalculation, List<MError> \
      calculationErrors) {@,\
      MValue cond = MValue.mUndefined;@,\
      MValue[] tgv = mCalculation.getCalculationVariables();@,\
@@ -356,14 +362,14 @@ let generate_rule_method (program : program) (oc : Format.formatter)
      mCalculation.getTableVariables();@,\
      %a@]@,\
      }"
-    rule.rule_name (generate_stmts program) rule.rule_stmts
+    tname (Pos.unmark rov.rov_name) (generate_stmts program) stmts
 
-let generate_rule_methods (oc : Format.formatter) (program : program) : unit =
-  let rules = RuleMap.bindings program.rules in
-  let _, rules = List.split rules in
+let generate_rov_methods (oc : Format.formatter) (program : program) : unit =
+  let rovs = ROVMap.bindings program.rules_and_verifs in
+  let _, rovs = List.split rovs in
   Format.pp_print_list ~pp_sep:print_double_cut
-    (generate_rule_method program)
-    oc rules
+    (generate_rov_method program)
+    oc rovs
 
 let generate_calculateTax_method (calculation_vars_len : int)
     (program : program) (locals_size : int) (oc : Format.formatter) () =
@@ -467,5 +473,5 @@ let generate_java_program (program : program) (function_spec : Bir_interface.bir
      print_double_cut ()
      generate_mpp_functions program
      print_double_cut ()
-     generate_rule_methods program;
+     generate_rov_methods program;
   close_out _oc[@@ocamlformat "disable"]

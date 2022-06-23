@@ -44,7 +44,8 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format.pp_print_option (fun fmt v ->
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
         cond_error_opt_var
-  | SRuleCall r -> Format.fprintf fmt "call_rule(%d)@\n" r
+  | SRovCall r ->
+      Format.fprintf fmt "call_rule(%d)@\n" (Mir.num_of_rule_or_verif_id r)
   | SFunctionCall (func, args) ->
       Format.fprintf fmt "call_function: %s with args %a@," func
         (Format.pp_print_list (fun fmt arg ->
@@ -55,15 +56,22 @@ and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
 let format_rule fmt rule =
-  Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n" rule.rule_id format_stmts
-    rule.rule_stmts
+  match rule.rov_code with
+  | Rule stmts ->
+      Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n"
+        (Mir.num_of_rule_or_verif_id rule.rov_id)
+        format_stmts stmts
+  | Verif stmt ->
+      Format.fprintf fmt "verif %d:@\n@[<h 2>  %a@]@\n"
+        (Mir.num_of_rule_or_verif_id rule.rov_id)
+        format_stmts [ stmt ]
 
 let format_rules fmt rules =
   Format.pp_print_list
     ~pp_sep:(fun _ () -> ())
     format_rule fmt
-    (Bir.RuleMap.bindings rules |> List.map snd)
+    (Bir.ROVMap.bindings rules |> List.map snd)
 
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a%a" format_rules p.rules format_stmts
+  Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
     (Bir.main_statements p)

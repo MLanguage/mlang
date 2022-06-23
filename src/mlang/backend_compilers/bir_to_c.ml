@@ -180,12 +180,7 @@ let generate_var_cond (cond : condition_data) (oc : Format.formatter) =
       "%acond = %s;@\n\
        if (m_is_defined_true(cond)) {@\n\
       \    printf(\"Error triggered: %a\\n\");@\n\
-      \    {@\n\
-      \        output->is_error = true;@\n\
-      \        free(TGV);@\n\
-      \        free(LOCAL);@\n\
-      \        return -1;@\n\
-      \    }@\n\
+      \    return -1;@\n\
        }@\n"
       format_local_vars_defs defs scond
       (fun fmt err ->
@@ -227,9 +222,20 @@ let rec generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt)
         format_local_vars_defs defs cond_name scond cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
-  | SRuleCall r ->
-      let rule = RuleMap.find r program.rules in
-      generate_rule_function_header ~definition:false oc rule
+  | SRovCall r -> (
+      let rov = ROVMap.find r program.rules_and_verifs in
+      match rov.rov_code with
+      | Rule _ ->
+          generate_rov_function_header ~definition:false oc rov;
+          Format.fprintf oc ";"
+      | Verif _ ->
+          Format.fprintf oc "if(%a){@[<v 2>"
+            (generate_rov_function_header ~definition:false)
+            rov;
+          Format.fprintf oc "output->is_error = true;@;";
+          Format.fprintf oc "free(TGV);@;";
+          Format.fprintf oc "free(LOCAL);@;";
+          Format.fprintf oc "return -1;@]@;}")
   | SFunctionCall (f, _) ->
       Format.fprintf oc "if(%s(output, TGV, LOCAL)) {return -1;};\n" f
 
@@ -237,26 +243,40 @@ and generate_stmts (program : program) (oc : Format.formatter)
     (stmts : stmt list) =
   Format.pp_print_list (generate_stmt program) oc stmts
 
-and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
-    (rule : rule) =
+and generate_rov_function_header ~(definition : bool) (oc : Format.formatter)
+    (rov : rule_or_verif) =
   let arg_type = if definition then "m_value *" else "" in
-  let ret_type = if definition then "void " else "" in
-  Format.fprintf oc "%sm_rule_%s(%sTGV, %sLOCAL)%s@\n" ret_type rule.rule_name
-    arg_type arg_type
-    (if definition then "" else ";")
+  let tname, ret_type =
+    match rov.rov_code with
+    | Rule _ -> ("rule", "void ")
+    | Verif _ -> ("verif", "int ")
+  in
+  let ret_type = if definition then ret_type else "" in
+  Format.fprintf oc "%sm_%s_%s(%sTGV, %sLOCAL)@\n" ret_type tname
+    (Pos.unmark rov.rov_name) arg_type arg_type
 
-let generate_rule_function (program : program) (oc : Format.formatter)
-    (rule : rule) =
-  Format.fprintf oc "%a@[<v 2>{@ %a@]@;}@\n"
-    (generate_rule_function_header ~definition:true)
-    rule (generate_stmts program) rule.rule_stmts
+let generate_rov_function (program : program) (oc : Format.formatter)
+    (rov : rule_or_verif) =
+  let decl, ret =
+    let noprint _ _ = () in
+    match rov.rov_code with
+    | Rule _ -> (noprint, noprint)
+    | Verif _ ->
+        ( (fun fmt () -> Format.fprintf fmt "m_value cond;@;"),
+          fun fmt () -> Format.fprintf fmt "@ return 0;" )
+  in
+  Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
+    (generate_rov_function_header ~definition:true)
+    rov decl () (generate_stmts program)
+    (Bir.rule_or_verif_as_statements rov)
+    ret ()
 
-let generate_rule_functions (program : program) (oc : Format.formatter)
-    (rules : rule RuleMap.t) =
+let generate_rov_functions (program : program) (oc : Format.formatter)
+    (rovs : rule_or_verif ROVMap.t) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
-    (generate_rule_function program)
+    (generate_rov_function program)
     oc
-    (RuleMap.bindings rules |> List.map snd)
+    (ROVMap.bindings rovs |> List.map snd)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =
@@ -608,7 +628,7 @@ let generate_c_program (program : program)
     generate_get_output_name_from_index_func function_spec
     generate_get_output_num_func function_spec
     generate_empty_output_func function_spec
-    (generate_rule_functions program) program.rules
+    (generate_rov_functions program) program.rules_and_verifs
     generate_mpp_functions program
     (generate_main_function_signature_and_var_decls program
        var_table_size) function_spec

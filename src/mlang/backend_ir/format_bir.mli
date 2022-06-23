@@ -22,8 +22,8 @@ val format_stmt : Format.formatter -> Bir.stmt -> unit
 
 val format_stmts : Format.formatter -> Bir.stmt list -> unit
 
-val format_rule : Format.formatter -> Bir.rule -> unit
+val format_rule : Format.formatter -> Bir.rule_or_verif -> unit
 
-val format_rules : Format.formatter -> Bir.rule Bir.RuleMap.t -> unit
+val format_rules : Format.formatter -> Bir.rule_or_verif Bir.ROVMap.t -> unit
 
 val format_program : Format.formatter -> Bir.program -> unit

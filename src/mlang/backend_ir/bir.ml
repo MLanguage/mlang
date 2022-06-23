@@ -14,9 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_id = Mir.rule_id
+type rov_id = Mir.rov_id
 
-module RuleMap = Mir.RuleMap
+module ROVMap = Mir.RuleMap
 
 type tgv_id = string
 
@@ -95,7 +95,13 @@ type variable_data = variable Mir.variable_data_
 
 type function_name = string
 
-type rule = { rule_id : rule_id; rule_name : string; rule_stmts : stmt list }
+type rule_or_verif_code = Rule of stmt list | Verif of stmt
+
+and rule_or_verif = {
+  rov_id : rov_id;
+  rov_name : string Pos.marked;
+  rov_code : rule_or_verif_code;
+}
 
 and stmt = stmt_kind Pos.marked
 
@@ -103,8 +109,11 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rule_id
+  | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
+
+let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
+  match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
@@ -116,7 +125,7 @@ end)
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  rules : rule RuleMap.t;
+  rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -132,7 +141,10 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
-      | SRuleCall r -> List.rev (RuleMap.find r p.rules).rule_stmts @ stmts
+      | SRovCall r -> (
+          match (ROVMap.find r p.rules_and_verifs).rov_code with
+          | Rule rstmts -> List.rev rstmts @ stmts
+          | Verif stmt -> stmt :: stmts)
       | SConditional (e, t, f) ->
           let t = get_block_statements p t in
           let f = get_block_statements p f in
@@ -154,7 +166,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
   List.fold_left
     (fun acc stmt ->
       match Pos.unmark stmt with
-      | SAssign _ | SVerif _ | SRuleCall _ | SFunctionCall _ -> acc + 1
+      | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ -> acc + 1
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
@@ -162,15 +174,17 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
 let squish_statements (program : program) (threshold : int)
     (rule_suffix : string) =
   let rule_from_stmts stmts =
-    let id = Mir.fresh_rule_id () in
+    let id = Mir.RuleID (Mir.fresh_rule_num ()) in
     {
-      rule_id = id;
-      rule_name = rule_suffix ^ string_of_int id;
-      rule_stmts = List.rev stmts;
+      rov_id = id;
+      rov_name =
+        ( rule_suffix ^ string_of_int (Mir.num_of_rule_or_verif_id id),
+          Pos.no_pos );
+      rov_code = Rule (List.rev stmts);
     }
   in
   let rec browse_bir (old_stmts : stmt list) (new_stmts : stmt list)
-      (curr_stmts : stmt list) (rules : rule RuleMap.t) =
+      (curr_stmts : stmt list) (rules : rule_or_verif ROVMap.t) =
     match old_stmts with
     | [] -> (rules, List.rev (curr_stmts @ new_stmts))
     | hd :: tl ->
@@ -191,20 +205,20 @@ let squish_statements (program : program) (threshold : int)
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
-            (give_pos (SRuleCall squish_rule.rule_id) :: new_stmts)
+            (give_pos (SRovCall squish_rule.rov_id) :: new_stmts)
             []
-            (RuleMap.add squish_rule.rule_id squish_rule rules)
+            (ROVMap.add squish_rule.rov_id squish_rule rules)
   in
-  let rules, mpp_functions =
+  let rules_and_verifs, mpp_functions =
     FunctionMap.fold
       (fun f mpp_func (rules, mpp_functions) ->
         let rules, mppf_stmts = browse_bir mpp_func.mppf_stmts [] [] rules in
         let func = { mppf_stmts; mppf_is_verif = mpp_func.mppf_is_verif } in
         (rules, FunctionMap.add f func mpp_functions))
       program.mpp_functions
-      (program.rules, FunctionMap.empty)
+      (program.rules_and_verifs, FunctionMap.empty)
   in
-  { program with rules; mpp_functions }
+  { program with rules_and_verifs; mpp_functions }
 
 let get_assigned_variables (p : program) : VariableSet.t =
   let rec get_assigned_variables_block acc (stmts : stmt list) : VariableSet.t =
@@ -216,7 +230,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
-        | SRuleCall _ | SFunctionCall _ -> assert false
+        | SRovCall _ | SFunctionCall _ -> assert false
         (* Cannot happen get_all_statements inlines all rule and mpp_function
            calls *))
       acc stmts
@@ -268,8 +282,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
-        | SFunctionCall _ | SRuleCall _ -> assert false
-        (* Can't happen because SFunctionCall and SRuleCall are eliminated by
+        | SFunctionCall _ | SRovCall _ -> assert false
+        (* Can't happen because SFunctionCall and SRovCall are eliminated by
            get_all_statements below*))
       acc stmts
   in

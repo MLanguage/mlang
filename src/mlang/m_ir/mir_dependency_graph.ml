@@ -17,9 +17,9 @@
 module RG =
   Graph.Persistent.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = Mir.rule_id
+      type t = Mir.rov_id
 
-      let hash v = v
+      let hash v = Mir.num_of_rule_or_verif_id v (* no verif here anyway *)
 
       let compare = compare
 
@@ -73,7 +73,7 @@ let get_def_used_variables (def : Mir.variable_def) : Mir.VariableDict.t =
             es Mir.VariableDict.empty)
 
 let create_rules_dependency_graph (chain_rules : Mir.rule_data Mir.RuleMap.t)
-    (vars_to_rules : Mir.rule_id Mir.VariableMap.t) : RG.t =
+    (vars_to_rules : Mir.rov_id Mir.VariableMap.t) : RG.t =
   Mir.RuleMap.fold
     (fun rule_id { Mir.rule_vars; _ } g ->
       let g = RG.add_vertex g rule_id in
@@ -178,12 +178,14 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
                  (let rule =
                     Mir.RuleMap.find (List.hd edges |> fst) p.program_rules
                   in
-                  string_of_int (Pos.unmark rule.rule_number)
+                  string_of_int
+                    (Mir.num_of_rule_or_verif_id (Pos.unmark rule.rule_number))
                   :: List.map
                        (fun (rule_id, edge) ->
                          let rule = Mir.RuleMap.find rule_id p.program_rules in
                          Format.asprintf "depends on %d through vars: {%s}"
-                           (Pos.unmark rule.rule_number)
+                           (Mir.num_of_rule_or_verif_id
+                              (Pos.unmark rule.rule_number))
                            (RG.E.label edge))
                        edges))
             :: !cycles_strings)
@@ -194,11 +196,11 @@ let check_for_cycle (g : RG.t) (p : Mir.program) (print_debug : bool) : bool =
   end
   else false
 
-type rule_execution_order = Mir.rule_id list
+type rule_execution_order = Mir.rov_id list
 
 module Traversal = Graph.Traverse.Dfs (RG)
 
-let pull_rules_dependencies (g : RG.t) (rules : Mir.rule_id list) :
+let pull_rules_dependencies (g : RG.t) (rules : Mir.rov_id list) :
     RG.t * rule_execution_order =
   let order =
     List.fold_left

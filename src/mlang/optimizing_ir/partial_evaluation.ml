@@ -748,7 +748,7 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
             :: new_block,
             ctx ))
   | SGoto _ -> (stmt :: new_block, ctx)
-  | SRuleCall (rule_id, name, stmts) ->
+  | SRovCall (rov_id, name, stmts) ->
       let stmts, ctx =
         List.fold_left
           (fun (new_block, ctx) stmt ->
@@ -756,7 +756,7 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
           ([], ctx) stmts
       in
       let stmt =
-        Pos.same_pos_as (SRuleCall (rule_id, name, List.rev stmts)) stmt
+        Pos.same_pos_as (SRovCall (rov_id, name, List.rev stmts)) stmt
       in
       (stmt :: new_block, ctx)
   | SFunctionCall _ -> assert false

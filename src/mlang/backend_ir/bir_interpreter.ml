@@ -21,7 +21,7 @@ type var_literal =
 type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
-  | InsideRule of Bir.rule_id
+  | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
 
 let format_code_location_segment (fmt : Format.formatter)
@@ -29,7 +29,7 @@ let format_code_location_segment (fmt : Format.formatter)
   match s with
   | InsideBlock i -> Format.fprintf fmt "#%d" i
   | ConditionalBranch b -> Format.fprintf fmt "?%b" b
-  | InsideRule r -> Format.fprintf fmt "R_%d" r
+  | InsideRule r -> Format.fprintf fmt "R_%d" (Mir.num_of_rule_or_verif_id r)
   | InsideFunction f -> Format.fprintf fmt "%s" f
 
 type code_location = code_location_segment list
@@ -264,7 +264,7 @@ module Make (N : Bir_number.NumberInterface) = struct
           let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
           let vars =
             List.sort
-              (fun var1 var2 ->
+              (fun (var1 : Mir.Variable.t) var2 ->
                 Mir.(
                   compare_execution_number var1.Variable.execution_number
                     var2.Variable.execution_number))
@@ -281,7 +281,8 @@ module Make (N : Bir_number.NumberInterface) = struct
                     try
                       let rule, def = Mir.find_var_definition p var in
                       Format.fprintf fmt "rule %d, %a"
-                        (Pos.unmark rule.rule_number)
+                        (Mir.num_of_rule_or_verif_id
+                           (Pos.unmark rule.rule_number))
                         Format_mir.format_variable_def def.var_definition
                     with Not_found -> Format.fprintf fmt "unused definition")
                   ())
@@ -720,9 +721,11 @@ module Make (N : Bir_number.NumberInterface) = struct
         match evaluate_expr ctx p.mir_program data.cond_expr with
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
-    | Bir.SRuleCall r ->
-        let rule = Bir.RuleMap.find r p.rules in
-        evaluate_stmts p ctx rule.rule_stmts (InsideRule r :: loc) 0
+    | Bir.SRovCall r ->
+        let rule = Bir.ROVMap.find r p.rules_and_verifs in
+        evaluate_stmts p ctx
+          (Bir.rule_or_verif_as_statements rule)
+          (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) ->
         evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
           loc 0

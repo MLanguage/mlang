@@ -333,9 +333,9 @@ let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
           (generate_stmts program var_indexes)
           iffalse
   | SVerif v -> generate_var_cond var_indexes v oc
-  | SRuleCall r ->
-      let rule = RuleMap.find r program.rules in
-      generate_rule_function_header ~definition:false oc rule
+  | SRovCall r ->
+      let rov = ROVMap.find r program.rules_and_verifs in
+      generate_rov_function_header ~definition:false oc rov
   | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f);
   Format.fprintf oc "@]@,}@;"
 
@@ -343,29 +343,43 @@ and generate_stmts (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmts : stmt list) =
   Format.pp_print_list (generate_stmt program var_indexes) oc stmts
 
-and generate_rule_function_header ~(definition : bool) (oc : Format.formatter)
-    (rule : rule) =
+and generate_rov_function_header ~(definition : bool) (oc : Format.formatter)
+    (rov : rule_or_verif) =
   let arg_type = if definition then "T_irdata *" else "" in
-  let ret_type = if definition then "int " else "" in
-  Format.fprintf oc "%sregle_%s(%sirdata)%s@\n" ret_type rule.rule_name arg_type
+  let tname, ret_type =
+    match rov.rov_code with
+    | Rule _ -> ("regle", "int ")
+    | Verif _ -> ("verif", "void ")
+  in
+  let ret_type = if definition then ret_type else "" in
+  Format.fprintf oc "%s%s_%s(%sirdata)%s@\n" ret_type tname
+    (Pos.unmark rov.rov_name) arg_type
     (if definition then "" else ";")
 
-let generate_rule_function (program : program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (rule : rule)
-    =
-  Format.fprintf oc "%a@[<v 2>{@ %a@;return 0;@]@,@\n}@\n"
-    (generate_rule_function_header ~definition:true)
-    rule
-    (generate_stmts program var_indexes)
-    rule.rule_stmts
-
-let generate_rule_functions (program : program)
+let generate_rov_function (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (rules : rule RuleMap.t) =
+    (rov : rule_or_verif) =
+  let decl, ret =
+    let noprint _ _ = () in
+    match rov.rov_code with
+    | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@ return 0;")
+    | Verif _ ->
+        ( (fun fmt () -> Format.fprintf fmt "int cond_def;@ double cond;@;"),
+          noprint )
+  in
+  Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
+    (generate_rov_function_header ~definition:true)
+    rov decl ()
+    (generate_stmts program var_indexes)
+    (Bir.rule_or_verif_as_statements rov)
+    ret ()
+
+let generate_rov_functions (program : program)
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
+    (rovs : rule_or_verif list) =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
-    (generate_rule_function program var_indexes)
-    oc
-    (RuleMap.bindings rules |> List.map snd)
+    (generate_rov_function program var_indexes)
+    oc rovs
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -596,6 +610,57 @@ let generate_mpp_functions_signatures (oc : Format.formatter)
          generate_mpp_function_protoype true mppf_is_verif ppf func))
     funcs
 
+let generate_rovs_files (program : program) (vm : Dgfip_varid.var_id_map) =
+  let module StringMap = Map.Make (String) in
+  let default_file = "default" in
+  let filemap =
+    ROVMap.fold
+      (fun _rov_id rov filemap ->
+        let file =
+          let pos = Pos.get_position rov.rov_name in
+          if pos = Pos.no_pos then default_file
+          else
+            (Pos.get_file pos |> Filename.basename |> Filename.remove_extension)
+            ^ ".c"
+        in
+        let filerovs =
+          match StringMap.find_opt file filemap with
+          | None -> []
+          | Some fr -> fr
+        in
+        StringMap.add file (rov :: filerovs) filemap)
+      program.rules_and_verifs StringMap.empty
+  in
+  StringMap.fold
+    (fun file rovs orphan ->
+      if String.equal file default_file then rovs @ orphan
+      else
+        let oc = open_out file in
+        let fmt = Format.formatter_of_out_channel oc in
+        Format.fprintf fmt
+          {|
+#include <math.h>
+#include <stdio.h>
+#include "var.h"
+
+#ifndef FLG_MULTITHREAD
+#define add_erreur(a,b,c) add_erreur(b,c)
+#endif
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199409L)
+#define _fmax(x,y) fmax((x),(y))
+#define _fmin(x,y) fmin((x),(y))
+#else
+double _fmax(double x, double y);
+double _fmin(double x, double y);
+#endif
+|};
+        generate_rov_functions program vm fmt rovs;
+        Format.pp_print_flush fmt ();
+        close_out oc;
+        orphan)
+    filemap []
+
 let generate_implem_header oc header_filename =
   Format.fprintf oc
     {|
@@ -626,6 +691,7 @@ let generate_c_program (program : program)
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
+  let orphan_rovs = generate_rovs_files program vm in
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
@@ -653,11 +719,10 @@ let generate_c_program (program : program)
     (* generate_get_output_index_func function_spec *)
     (* generate_get_output_name_from_index_func function_spec *)
     (* generate_get_output_num_func function_spec *)
-    (generate_rule_functions program vm)
-      program.rules 
+    (generate_rov_functions program vm) orphan_rovs
     (generate_mpp_functions program) vm
     (* generate_main_function_signature_and_var_decls ()
-     * (generate_stmt program vm) 
-     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos) 
+     * (generate_stmt program vm)
+     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos)
      * generate_return () *) ;
   close_out _oc[@@ocamlformat "disable"]

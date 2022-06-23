@@ -50,7 +50,7 @@ let reset_all_outputs (p : program) : program =
 
 type chain_order = {
   dep_graph : Mir_dependency_graph.RG.t;
-  execution_order : Mir.rule_id list;
+  execution_order : Mir.rov_id list;
 }
 
 type full_program = {
@@ -65,14 +65,14 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
       (fun (chains, seen_customs) tag ->
         let vars_to_rules, chain_rules =
           Mir.RuleMap.fold
-            (fun rule_id rule (vars, rules) ->
+            (fun rov_id rule (vars, rules) ->
               if Mast.are_tags_part_of_chain rule.rule_tags tag then
                 ( List.fold_left
                     (fun vars (vid, _def) ->
                       let var = VariableDict.find vid program.program_vars in
-                      VariableMap.add var rule_id vars)
+                      VariableMap.add var rov_id vars)
                     vars rule.rule_vars,
-                  RuleMap.add rule_id rule rules )
+                  RuleMap.add rov_id rule rules )
               else (vars, rules))
             program.program_rules
             (VariableMap.empty, RuleMap.empty)
@@ -86,7 +86,7 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
         in
         let customs, _ =
           RuleMap.fold
-            (fun rule_id rule (customs, in_primcorr) ->
+            (fun rov_id rule (customs, in_primcorr) ->
               List.fold_left
                 (fun (customs, in_primcorr) tag ->
                   match tag with
@@ -101,10 +101,10 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
                       else
                         match TagMap.find_opt tag customs with
                         | Some rs ->
-                            ( TagMap.add tag (rule_id :: rs) customs,
+                            ( TagMap.add tag (rov_id :: rs) customs,
                               ipc || in_primcorr )
                         | None ->
-                            ( TagMap.add tag [ rule_id ] customs,
+                            ( TagMap.add tag [ rov_id ] customs,
                               ipc || in_primcorr ))
                   | _ -> (customs, in_primcorr))
                 (customs, in_primcorr) rule.rule_tags)
