@@ -100,7 +100,7 @@ let print_rev_code (oc : Format.formatter) (rev_code : Mvalue.revenue_code) :
 
 let compute_discrepancies_from_file_2020 (fip_file : string) :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
-  let tax_result = Ir_tests_2020.calculate_tax (entry_list fip_file) in
+  let tax_result, errors = Ir_tests_2020.calculate_tax (entry_list fip_file) in
   let ref_list = reference_list fip_file in
   let filtered_ref_list = filter_rev_code_list ref_list tax_result in
   let was_erased ref_list code : bool = not (List.mem code ref_list) in
@@ -111,12 +111,12 @@ let compute_discrepancies_from_file_2020 (fip_file : string) :
     Format.pp_print_list print_rev_code fmt code_list
   in
   let warning_string fmt () =
-    if List.length erased_codes <> 0 then Format.fprintf fmt
-      "@.Warning: following codes were expected results but are not part of \
-       the output variable list@.%a"
-      print_list erased_codes
-    else
-      Format.fprintf fmt ""
+    if List.length erased_codes <> 0 then
+      Format.fprintf fmt
+        "@.Warning: following codes were expected results but are not part of \
+         the output variable list@.%a"
+        print_list erased_codes
+    else Format.fprintf fmt ""
   in
   Format.printf "Test case: %s%a@." fip_file warning_string ();
   list_discrepancies
@@ -159,20 +159,41 @@ let test_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   print_discrepancies oc discrepancy_list fip_file;
   close_out _oc
 
+let print_error oc (error : m_error) : unit =
+  Format.fprintf oc "Name: %s, kind: %s, description: %s" error.name error.kind
+    error.description
+
+let print_errors oc error_list = Format.pp_print_list print_error oc error_list
+
 let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   Format.printf "Simple test on file %s.@." fip_file;
   let _oc = open_out (output_file_name ^ "_disc.txt") in
   let oc = Format.formatter_of_out_channel _oc in
   (* let _discrepancy_list = compute_discrepancies_from_file_2020 fip_file in *)
-  let tax_result = Ir_tests_2020.calculate_tax (entry_list fip_file) in
+  let tax_result, errors = Ir_tests_2020.calculate_tax (entry_list fip_file) in
   let ref_list = reference_list fip_file in
   let print_list fmt code_list =
     Format.pp_print_list print_rev_code fmt code_list
   in
   Format.printf "Test case: %s@." fip_file;
   Format.fprintf oc
-    "@[<v 0>REFERENCE@,@,%a@,@,OUTPUT@,@,%a@,@,FILTERED OUTPUT@,@,%a@,@]"
-    print_list
+    "@[<v 0>ANOMALIES@,\
+     @,\
+     %a@,\
+     @,\
+     REFERENCE@,\
+     @,\
+     %a@,\
+     @,\
+     OUTPUT@,\
+     @,\
+     %a@,\
+     @,\
+     FILTERED OUTPUT@,\
+     @,\
+     %a@,\
+     @]"
+    print_errors errors print_list
     (List.sort compare_rev_code ref_list)
     print_list
     (List.sort compare_rev_code tax_result)

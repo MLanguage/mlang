@@ -169,6 +169,42 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
         tgv_expression
   | InputVar -> assert false
 
+let generate_verif (oc : Format.formatter) (condition_data : Bir.condition_data)
+    =
+  let open Strings in
+  let _cond_expr = condition_data.cond_expr in
+  Format.fprintf oc "let verif_cond = %s in@,"
+    (let se, _ = generate_ocaml_expr condition_data.cond_expr in
+     se);
+  let cond_error, alias = condition_data.cond_error in
+  let error_name = sanitize_str cond_error.Mir.Error.name in
+  let error_kind = sanitize_str cond_error.Mir.Error.descr.kind in
+  let error_major_code = sanitize_str cond_error.Mir.Error.descr.major_code in
+  let error_minor_code = sanitize_str cond_error.Mir.Error.descr.minor_code in
+  let error_description = sanitize_str cond_error.Mir.Error.descr.description in
+  let error_alias =
+    match alias with
+    | Some v -> (
+        match (Bir.var_to_mir v).Mir.Variable.alias with
+        | Some alias -> "(( " ^ alias ^ " ))"
+        | None -> "")
+    | None -> ""
+  in
+  Format.fprintf oc
+    "(match verif_cond with@,\
+     | { undefined = true ; value = _ }@,\
+     | { undefined = false ; value = 0.0 } -> ()@,\
+     | _ -> (@[<v 0> context.errors <- {@,\
+     name = \"%s\";@,\
+     kind = \"%s\";@,\
+     major_code = \"%s\";@,\
+     minor_code = \"%s\";@,\
+     description = \"%s\";@,\
+     alias = \"%s\"} :: context.errors@,\
+     @]))"
+    error_name error_kind error_major_code error_minor_code error_description
+    error_alias
+
 let rec generate_stmts (program : Bir.program) (oc : Format.formatter)
     (stmts : Bir.stmt list) : unit =
   Format.pp_print_list ~pp_sep:pp_statement_separator (generate_stmt program) oc
@@ -199,7 +235,7 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
          | { undefined = false ; value = 0.0 }-> (@[<v 0>%a@])@,\
          | _ -> (@[<v 0>%a@]))@]" cond_name s cond_name (generate_stmts program)
         ff (generate_stmts program) tt
-  | SVerif _condition_data -> Format.fprintf oc "%s" "Verif"
+  | SVerif condition_data -> generate_verif oc condition_data
   | SRuleCall rule_id ->
       let rule = Mir.RuleMap.find rule_id program.rules in
       Format.fprintf oc "m_rule_%s context" rule.rule_name
@@ -209,14 +245,17 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
 let pp_function_separator (f : Format.formatter) () : unit =
   Format.fprintf f "@,@,"
 
+let pp_mpp_function_separator (f : Format.formatter) () : unit =
+  Format.fprintf f "@,@,and "
+
 let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
     (f_name : Bir.function_name) : unit =
   let Bir.{ mppf_stmts; _ } =
     Bir.FunctionMap.find f_name program.mpp_functions
   in
-  Format.fprintf oc
-    "@[<v 1>let mpp_func_%s (context : m_context) : unit =@,%a@]" f_name
-    (generate_stmts program) mppf_stmts
+  Format.fprintf oc "@[<v 1>mpp_func_%s (context : m_context) : unit =@," f_name;
+  if List.length mppf_stmts = 0 then Format.fprintf oc "%s@]" "()"
+  else Format.fprintf oc "%a@]" (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   let functions =
@@ -224,9 +263,12 @@ let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
       (Bir_interface.context_agnostic_mpp_functions program)
   in
   let function_names, _ = List.split functions in
-  Format.pp_print_list ~pp_sep:pp_function_separator
-    (generate_mpp_function program)
-    oc function_names
+  let pp_print_mpp_functions fmt function_names =
+    Format.pp_print_list ~pp_sep:pp_mpp_function_separator
+      (generate_mpp_function program)
+      fmt function_names
+  in
+  Format.fprintf oc "let rec %a@," pp_print_mpp_functions function_names
 
 let generate_rule_method (program : Bir.program) (oc : Format.formatter)
     (rule : Bir.rule) =
@@ -300,13 +342,15 @@ let generate_input_handler (oc : Format.formatter)
 let generate_main_function (locals_size : int) (var_table_size : int)
     (oc : Format.formatter) (program : Bir.program) : unit =
   Format.fprintf oc
-    "let calculate_tax entry_list : output_list =@,\
+    "let calculate_tax entry_list : (output_list * (m_error list)) =@,\
      let tgv : m_array = Array.make %i m_undef in@,\
      let local_variables : m_array = Array.make %i m_undef in@,\
-     let context : m_context = {tgv; local_variables} in@,\
+     let errors = [] in@,\
+     let context : m_context = {tgv; local_variables; errors} in@,\
      input_handler tgv entry_list;@,\
      %a;@,\
-     output tgv" var_table_size locals_size (generate_stmts program)
+     (output tgv, context.errors)" var_table_size locals_size
+    (generate_stmts program)
     (Bir.main_statements program)
 
 let generate_ocaml_program (program : Bir.program)

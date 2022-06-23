@@ -2,7 +2,20 @@ type m_value = { undefined : bool; value : float }
 
 type m_array = m_value array
 
-type m_context = { tgv : m_array; local_variables : m_array }
+type m_error = {
+  name : string;
+  kind : string;
+  major_code : string;
+  minor_code : string;
+  description : string;
+  alias : string;
+}
+
+type m_context = {
+  tgv : m_array;
+  local_variables : m_array;
+  mutable errors : m_error list;
+}
 
 type revenue_code = { alias : string; value : float }
 
