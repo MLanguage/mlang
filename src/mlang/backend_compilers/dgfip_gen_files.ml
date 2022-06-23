@@ -17,6 +17,32 @@
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
+let ascii_to_ebcdic =
+  [|
+    0;   1;   2;   3;   55;  45;  46;  47;  22;  5;   37;  11;  12;  13;  14;  15;
+    16;  17;  18;  19;  60;  61;  50;  38;  24;  25;  63;  39;  28;  29;  30;  31;
+    64;  79;  127; 123; 91;  108; 80;  125; 77;  93;  92;  78;  107; 96;  75;  97;
+    240; 241; 242; 243; 244; 245; 246; 247; 248; 249; 122; 94;  76;  126; 110; 111;
+    124; 193; 194; 195; 196; 197; 198; 199; 200; 201; 209; 210; 211; 212; 213; 214;
+    215; 216; 217; 226; 227; 228; 229; 230; 231; 232; 233; 74;  224; 90;  95;  109;
+    121; 129; 130; 131; 132; 133; 134; 135; 136; 137; 145; 146; 147; 148; 149; 150;
+    151; 152; 153; 162; 163; 164; 165; 166; 167; 168; 169; 192; 106; 208; 161;
+  |][@@ocamlformat "disable"]
+
+let ebcdic_compare (str1 : string) str2 =
+  let rec ebcdic_compare_aux i =
+    if String.length str1 <= i || String.length str2 <= i then
+      Stdlib.compare (String.length str1) (String.length str2)
+    else
+      let r =
+        Stdlib.compare
+          ascii_to_ebcdic.(Char.code str1.[i])
+          ascii_to_ebcdic.(Char.code str2.[i])
+      in
+      if r <> 0 then r else ebcdic_compare_aux (i + 1)
+  in
+  ebcdic_compare_aux 0
+
 (* Various flags used to control wicch data to put in each variable array *)
 type gen_opt = {
   with_verif : bool;
@@ -204,23 +230,25 @@ let get_attr a attributes =
 let get_name name alias_opt =
   match alias_opt with Some alias -> alias | _ -> name
 
-let sort_vars_by_alias vars =
+let sort_vars_by_alias vars is_ebcdic =
+  let compare_func = if is_ebcdic then ebcdic_compare else String.compare in
   List.fast_sort
     (fun (_, _, _, _, name1, alias_opt1, _, _, _, _)
          (_, _, _, _, name2, alias_opt2, _, _, _, _) ->
       let var_name1 = get_name name1 alias_opt1 in
       let var_name2 = get_name name2 alias_opt2 in
-      String.compare var_name1 var_name2)
+      compare_func var_name1 var_name2)
     vars
 
-let sort_vars_by_name vars =
+let sort_vars_by_name vars is_ebcdic =
+  let compare_func = if is_ebcdic then ebcdic_compare else String.compare in
   List.fast_sort
     (fun (_, _, _, _, name1, _, _, _, _, _) (_, _, _, _, name2, _, _, _, _, _) ->
-      String.compare name1 name2)
+      compare_func name1 name2)
     vars
 
 (* Retrieve all the variables, sorted by alias, and compute their IDs *)
-let get_vars prog =
+let get_vars prog is_ebcdic =
   let open Mast in
   let idx = new_idx () in
   let vars =
@@ -276,7 +304,7 @@ let get_vars prog =
       [] prog
   in
 
-  let vars = sort_vars_by_alias vars in
+  let vars = sort_vars_by_alias vars is_ebcdic in
 
   let idx = new_idx () in
 
@@ -308,9 +336,9 @@ let get_vars prog =
 
 (* Retrieve the variables for the debug array; variables with aliases are
    duplicated *)
-let get_vars_debug vars =
+let get_vars_debug vars is_ebcdic =
   sort_vars_by_name
-  @@ List.fold_left
+    (List.fold_left
        (fun vars var ->
          let ( tvar,
                idx1,
@@ -338,7 +366,8 @@ let get_vars_debug vars =
                size )
              :: var :: vars
          | None -> var :: vars)
-       [] vars
+       [] vars)
+    is_ebcdic
 
 (* Split a list in approximately equal chunks into a list of lists *)
 let split_list lst cnt =
@@ -447,7 +476,7 @@ let var_matches req_type var_type is_output =
   | Debug _i -> true
 
 (* Print the specified variable table *)
-let gen_table fmt _flags vars req_type opt =
+let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
   gen_header fmt;
 
   (* if opt.with_verif then *)
@@ -456,11 +485,12 @@ let gen_table fmt _flags vars req_type opt =
   (* TODO there should be individual var verification functions here, but they
      do not seem to be used (for all kind of input vars as well as output vars
      and debug tables) *)
+  let is_ebcdic = flags.flg_tri_ebcdic in
   let vars =
-    if opt.with_alias then vars (* already sorted by alias *)
-    else sort_vars_by_name vars
+    if opt.with_alias then
+      if is_ebcdic then sort_vars_by_alias vars is_ebcdic else vars
+    else sort_vars_by_name vars is_ebcdic
   in
-
   let table_name = req_type_name req_type in
   let table_NAME = String.uppercase_ascii table_name in
   begin
@@ -501,7 +531,8 @@ let gen_table fmt _flags vars req_type opt =
   Format.fprintf fmt "};\n"
 
 let gen_desc fmt vars ~alias_only =
-  let vars = sort_vars_by_name vars in
+  (* EBCDIC order not important as no binary search is done on descs*)
+  let vars = sort_vars_by_name vars false in
 
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
@@ -1138,7 +1169,7 @@ let open_file filename =
 let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
   let folder = Filename.dirname !Cli.output_file in
 
-  let vars = get_vars prog in
+  let vars = get_vars prog Dgfip_options.(flags.flg_tri_ebcdic) in
 
   let oc, fmt = open_file (Filename.concat folder "restitue.c") in
   gen_table_output fmt flags vars;
@@ -1168,7 +1199,7 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
   gen_table_penality fmt flags vars;
   close_out oc;
 
-  let vars_debug = get_vars_debug vars in
+  let vars_debug = get_vars_debug vars Dgfip_options.(flags.flg_tri_ebcdic) in
   let vars_debug_split = split_list vars_debug flags.nb_debug_c in
   let _ =
     if flags.nb_debug_c > 0 then
