@@ -102,8 +102,26 @@ let compute_discrepancies_from_file_2020 (fip_file : string) :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
   let tax_result = Ir_tests_2020.calculate_tax (entry_list fip_file) in
   let ref_list = reference_list fip_file in
-  Format.printf "Test case: %s@." fip_file;
-  list_discrepancies (filter_rev_code_list tax_result ref_list) ref_list
+  let filtered_ref_list = filter_rev_code_list ref_list tax_result in
+  let was_erased ref_list code : bool = not (List.mem code ref_list) in
+  let erased_codes : revenue_code list =
+    List.filter (was_erased filtered_ref_list) ref_list
+  in
+  let print_list fmt code_list =
+    Format.pp_print_list print_rev_code fmt code_list
+  in
+  let warning_string fmt () =
+    if List.length erased_codes <> 0 then Format.fprintf fmt
+      "@.Warning: following codes were expected results but are not part of \
+       the output variable list@.%a"
+      print_list erased_codes
+    else
+      Format.fprintf fmt ""
+  in
+  Format.printf "Test case: %s%a@." fip_file warning_string ();
+  list_discrepancies
+    (filter_rev_code_list tax_result filtered_ref_list)
+    filtered_ref_list
 
 let print_file_discrepancies (oc : Format.formatter)
     (file_discrepancies_list :
