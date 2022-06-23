@@ -27,7 +27,7 @@ and stmt_kind =
           the join point after *)
   | SVerif of Bir.condition_data
   | SGoto of block_id
-  | SRuleCall of Bir.rov_id * string Pos.marked * stmt list
+  | SRovCall of Bir.rov_id * string Pos.marked * stmt list
   | SFunctionCall of Bir.function_name * Mir.variable list
 
 type block = stmt list
@@ -49,7 +49,7 @@ let count_instr (p : program) : int =
         match Pos.unmark s with
         | SConditional _ | SAssign _ | SVerif _ | SFunctionCall _ -> acc + 1
         | SGoto _ -> acc
-        | SRuleCall (_, _, stmts) -> aux acc stmts)
+        | SRovCall (_, _, stmts) -> aux acc stmts)
       acc stmts
   in
   BlockMap.fold (fun _ block acc -> aux acc block) p.blocks 0

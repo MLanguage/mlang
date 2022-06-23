@@ -74,7 +74,7 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
         append_to_block (Oir.SGoto join_block, Pos.no_pos) last_b2id blocks
       in
       (join_block, blocks)
-  | Bir.SRuleCall rov_id ->
+  | Bir.SRovCall rov_id ->
       (* To properly optimize M code, we have to instanciate each call as
          independent code *)
       let rule = Bir.ROVMap.find rov_id p.Bir.rules_and_verifs in
@@ -103,7 +103,7 @@ and translate_statement (p : Bir.program) (s : Bir.stmt)
       let blocks =
         append_to_block
           (Pos.same_pos_as
-             (Oir.SRuleCall (instance_id, instance_name, List.rev stmts))
+             (Oir.SRovCall (instance_id, instance_name, List.rev stmts))
              s)
           curr_block_id blocks
       in
@@ -147,7 +147,7 @@ let rec re_translate_statement (s : Oir.stmt)
         Some (Pos.same_pos_as (Bir.SConditional (e, b1, b2)) s),
         rules )
   | Oir.SGoto b -> (Some b, None, rules)
-  | Oir.SRuleCall (rov_id, rov_name, stmts) -> (
+  | Oir.SRovCall (rov_id, rov_name, stmts) -> (
       let _, stmts, rules = re_translate_statement_list stmts rules blocks in
       let stmts = List.rev stmts in
       let rule =
@@ -161,7 +161,7 @@ let rec re_translate_statement (s : Oir.stmt)
       | None -> (None, None, rules)
       | Some rule ->
           ( None,
-            Some (Pos.same_pos_as (Bir.SRuleCall rov_id) s),
+            Some (Pos.same_pos_as (Bir.SRovCall rov_id) s),
             Bir.ROVMap.add rov_id rule rules ))
   | Oir.SFunctionCall _ -> assert false
 

@@ -121,7 +121,7 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
            (Bir_interpreter.ConditionalBranch false :: loc))
   | Bir.SVerif _ -> CodeLocationMap.empty
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
-  | Bir.SRuleCall r ->
+  | Bir.SRovCall r ->
       get_code_locs_stmts p
         (Bir.rule_or_verif_as_statements (Bir.ROVMap.find r p.rules_and_verifs))
         (Bir_interpreter.InsideRule r :: loc)

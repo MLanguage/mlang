@@ -721,7 +721,7 @@ module Make (N : Bir_number.NumberInterface) = struct
         match evaluate_expr ctx p.mir_program data.cond_expr with
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
-    | Bir.SRuleCall r ->
+    | Bir.SRovCall r ->
         let rule = Bir.ROVMap.find r p.rules_and_verifs in
         evaluate_stmts p ctx
           (Bir.rule_or_verif_as_statements rule)

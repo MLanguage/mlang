@@ -142,12 +142,12 @@ let remove_dead_statements (stmts : block) (id : block_id)
               stmt :: acc,
               pos - 1 )
         | SGoto _ -> (used_vars, used_defs, stmt :: acc, pos - 1)
-        | SRuleCall (rov_id, name, stmts) ->
+        | SRovCall (rov_id, name, stmts) ->
             let used_vars, used_defs, new_stmts, pos =
               remove_dead_stmts_of stmts used_vars used_defs pos
             in
             let rule_call =
-              Pos.same_pos_as (SRuleCall (rov_id, name, new_stmts)) stmt
+              Pos.same_pos_as (SRovCall (rov_id, name, new_stmts)) stmt
             in
             (used_vars, used_defs, rule_call :: acc, pos - 1)
         | SFunctionCall _ -> assert false

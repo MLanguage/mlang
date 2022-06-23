@@ -44,7 +44,7 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format.pp_print_option (fun fmt v ->
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
         cond_error_opt_var
-  | SRuleCall r ->
+  | SRovCall r ->
       Format.fprintf fmt "call_rule(%d)@\n" (Mir.num_of_rule_or_verif_id r)
   | SFunctionCall (func, args) ->
       Format.fprintf fmt "call_function: %s with args %a@," func

@@ -295,7 +295,7 @@ let rec generate_stmts (program : program) (oc : Format.formatter)
 and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
     unit =
   match Pos.unmark stmt with
-  | SRuleCall r ->
+  | SRovCall r ->
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_header oc rov
   | SAssign (var, vdata) -> generate_var_def var vdata oc

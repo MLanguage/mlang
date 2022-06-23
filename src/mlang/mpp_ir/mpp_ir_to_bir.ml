@@ -215,7 +215,7 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
     List.fold_left
       (fun stmts rov_id ->
         let rule = Mir.RuleMap.find rov_id m_program.program.program_rules in
-        Pos.same_pos_as (Bir.SRuleCall rov_id) rule.Mir.rule_number :: stmts)
+        Pos.same_pos_as (Bir.SRovCall rov_id) rule.Mir.rule_number :: stmts)
       [] execution_order
   in
   let program_stmts = List.rev program_stmts in
@@ -261,7 +261,7 @@ let generate_verif_call (m_program : Mir_interface.full_program)
   List.map
     (fun verif ->
       Pos.map_under_mark
-        (fun verif_id -> Bir.SRuleCall verif_id)
+        (fun verif_id -> Bir.SRovCall verif_id)
         verif.Mir.cond_number)
     verifs
 

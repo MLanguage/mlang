@@ -329,7 +329,7 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
       in
       (new_stmt, ctx, current_stmt_pos)
   | SGoto _ -> (stmt, ctx, current_stmt_pos)
-  | SRuleCall (rov_id, name, stmts) ->
+  | SRovCall (rov_id, name, stmts) ->
       let new_stmts, ctx, new_pos =
         List.fold_left
           (fun (stmts, ctx, stmt_pos) stmt ->
@@ -341,7 +341,7 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
           stmts
       in
       let new_stmt =
-        Pos.same_pos_as (SRuleCall (rov_id, name, List.rev new_stmts)) stmt
+        Pos.same_pos_as (SRovCall (rov_id, name, List.rev new_stmts)) stmt
       in
       (new_stmt, ctx, new_pos)
   | SFunctionCall _ -> assert false

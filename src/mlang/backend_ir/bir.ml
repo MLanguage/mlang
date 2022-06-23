@@ -109,7 +109,7 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rov_id
+  | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
@@ -141,7 +141,7 @@ let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
     (fun stmts stmt ->
       match Pos.unmark stmt with
-      | SRuleCall r -> (
+      | SRovCall r -> (
           match (ROVMap.find r p.rules_and_verifs).rov_code with
           | Rule rstmts -> List.rev rstmts @ stmts
           | Verif stmt -> stmt :: stmts)
@@ -166,7 +166,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
   List.fold_left
     (fun acc stmt ->
       match Pos.unmark stmt with
-      | SAssign _ | SVerif _ | SRuleCall _ | SFunctionCall _ -> acc + 1
+      | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ -> acc + 1
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
@@ -205,7 +205,7 @@ let squish_statements (program : program) (threshold : int)
         else
           let squish_rule = rule_from_stmts curr_stmts in
           browse_bir tl
-            (give_pos (SRuleCall squish_rule.rov_id) :: new_stmts)
+            (give_pos (SRovCall squish_rule.rov_id) :: new_stmts)
             []
             (ROVMap.add squish_rule.rov_id squish_rule rules)
   in
@@ -230,7 +230,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
-        | SRuleCall _ | SFunctionCall _ -> assert false
+        | SRovCall _ | SFunctionCall _ -> assert false
         (* Cannot happen get_all_statements inlines all rule and mpp_function
            calls *))
       acc stmts
@@ -282,8 +282,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
-        | SFunctionCall _ | SRuleCall _ -> assert false
-        (* Can't happen because SFunctionCall and SRuleCall are eliminated by
+        | SFunctionCall _ | SRovCall _ -> assert false
+        (* Can't happen because SFunctionCall and SRovCall are eliminated by
            get_all_statements below*))
       acc stmts
   in

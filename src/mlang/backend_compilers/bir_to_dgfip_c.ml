@@ -333,7 +333,7 @@ let rec generate_stmt (program : program) (var_indexes : Dgfip_varid.var_id_map)
           (generate_stmts program var_indexes)
           iffalse
   | SVerif v -> generate_var_cond var_indexes v oc
-  | SRuleCall r ->
+  | SRovCall r ->
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_function_header ~definition:false oc rov
   | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f);

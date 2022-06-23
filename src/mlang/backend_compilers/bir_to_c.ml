@@ -222,7 +222,7 @@ let rec generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt)
         format_local_vars_defs defs cond_name scond cond_name
         (generate_stmts program) tt cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond v oc
-  | SRuleCall r -> (
+  | SRovCall r -> (
       let rov = ROVMap.find r program.rules_and_verifs in
       match rov.rov_code with
       | Rule _ ->

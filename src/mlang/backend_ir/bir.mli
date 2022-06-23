@@ -50,7 +50,7 @@ and stmt_kind =
   | SAssign of variable * variable_data
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
-  | SRuleCall of rov_id
+  | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
