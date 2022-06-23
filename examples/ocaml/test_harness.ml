@@ -159,6 +159,27 @@ let test_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   print_discrepancies oc discrepancy_list fip_file;
   close_out _oc
 
+let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
+  Format.printf "Simple test on file %s.@." fip_file;
+  let _oc = open_out (output_file_name ^ "_disc.txt") in
+  let oc = Format.formatter_of_out_channel _oc in
+  (* let _discrepancy_list = compute_discrepancies_from_file_2020 fip_file in *)
+  let tax_result = Ir_tests_2020.calculate_tax (entry_list fip_file) in
+  let ref_list = reference_list fip_file in
+  let print_list fmt code_list =
+    Format.pp_print_list print_rev_code fmt code_list
+  in
+  Format.printf "Test case: %s@." fip_file;
+  Format.fprintf oc
+    "@[<v 0>REFERENCE@,@,%a@,@,OUTPUT@,@,%a@,@,FILTERED OUTPUT@,@,%a@,@]"
+    print_list
+    (List.sort compare_rev_code ref_list)
+    print_list
+    (List.sort compare_rev_code tax_result)
+    print_list
+    (List.sort compare_rev_code (filter_rev_code_list tax_result ref_list));
+  close_out _oc
+
 let run_test_directory (directory : string) (output_file_name : string) : unit =
   let dir_handle = Unix.opendir directory in
   let file_list =
@@ -190,6 +211,7 @@ let run_test_directory (directory : string) (output_file_name : string) : unit =
 let () =
   Format.printf "Starting %s.@." Sys.argv.(0);
   match Sys.argv.(1) with
+  | "raw" -> compute_on_FIP_2020 Sys.argv.(2) Sys.argv.(3)
   | "mono" -> test_FIP_2020 Sys.argv.(2) Sys.argv.(3)
   | "multi" -> run_test_directory Sys.argv.(2) Sys.argv.(3)
   | other -> Format.printf "Unknown command: %s@." other
