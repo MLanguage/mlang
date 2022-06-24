@@ -1,36 +1,80 @@
 include ../../Makefile.include
 
+########
+# USAGE: specifiying parameters of the generated "calculette"
+########
+# Specifying a mpp file and its main function:
+# make ir.ml MPP_FILE=../../mpp_specs/dgfip_base.mpp MPP_FUNCTION=verif_calcul_primitive_raw
+# Using the default m_spec file:
+# make ir.ml TAKE_MSPEC=true
+
 MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
+MPP_FUNCTION=compute_double_liquidation_pvro
+M_SPEC_FILE=$(SELF_DIR)/m_specs/tests_$(YEAR).m_spec
 
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--mpp_file=$(MPP_FILE) \
-	--mpp_function=compute_double_liquidation_pvro
+	--mpp_function=$(MPP_FUNCTION)
 
+MLANG_MSPEC=\
+	--function_spec=$(M_SPEC_FILE)
+
+ifdef TAKE_MSPEC
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(MLANG_MSPEC)
+SPEC_DEP=$(MPP_FILE) $(M_SPEC_FILE)
+else
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
+SPEC_DEP=$(MPP_FILE)
+endif
 
-clean: 
-	rm -f ir_*.ml *.o *.cmi *.cmx ir_*.exe *.cmo *.bc *_disc.txt
+.PHONY : clean cleangen cleancalc cleanstat cleantest cleanresult
+
+clean: cleancalc cleanstat cleanresult
+
+cleangen:
+	rm -f ir.ml
+cleancalc: cleangen
+	rm -f ir.cmi ir.cmx ir.o ir.cmo ir.exe ir.bc
+cleantest:
+	rm -f test_harness.cmi test_harness.cmx test_harness.o test_harness.cmo test.exe test.bc
+cleanstat: cleantest
+	rm -f mvalue.cmi mvalue.cmx mvalue.o mvalue.cmo
+cleanresult:
+	rm -f results/*
+
+##################################################
+# Implicit rules for OCaml modules
+##################################################
+
+%.cmo: %.ml
+	ocamlc.opt -c $(DEBUG_FLAG) $^
+
+%.cmx: %.ml
+	ocamlopt -c $(DEBUG_FLAG) $^
 
 ##################################################
 # Generating and running OCaml files from Mlang
 ##################################################
 
-.PRECIOUS: ir_%.ml
-ir_%.ml: ../../m_specs/%.m_spec
+# Generating OCaml files (MLang)
+ir.ml: $(SPEC_DEP)
 	$(MLANG) \
-		--backend ocaml --output $@ \
-		--function_spec $^ \
+		--backend ocaml --output ir.ml \
 		$(SOURCE_FILES)
 
-ir_%.exe: ir_%.ml
-	ocamlopt -o $@ mvalue.ml $^
+.INTERMEDIATE : test_harness.cmo test_harness.cmi test_harness.o test_harness.cmx
+# Compiling bytecode
+test.bc: mvalue.cmo ir.cmo test_harness.cmo 
+	ocamlc.opt $(DEBUG_FLAG) -o $@ unix.cma $^
 
-ir_%.bc: ir_%.ml
-	ocamlc.opt -g -o $@ mvalue.ml $^
+# Compiling native code
+test.exe: mvalue.cmx ir.cmx test_harness.cmx
+	ocamlopt $(DEBUG_FLAG) -o $@ unix.cmxa $^
 
-test_%: ir_%.ml
-	ocamlc.opt -g -o $@.bc unix.cma mvalue.ml $^ test_harness.ml
+# Running test suite
+run: test.bc
+	./test.bc "multi" $(TESTS_DIR) "results/y$(YEAR)"
 
-mvalue.bc: 
-	ocamlc.opt -c mvalue.ml
+runx: test.exe
+	./test.exe "multi" $(TESTS_DIR) "results/y$(YEAR)"

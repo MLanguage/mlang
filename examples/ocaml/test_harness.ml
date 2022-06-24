@@ -100,7 +100,7 @@ let print_rev_code (oc : Format.formatter) (rev_code : Mvalue.revenue_code) :
 
 let compute_discrepancies_from_file_2020 (fip_file : string) :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
-  let tax_result, errors = Ir_tests_2020.calculate_tax (entry_list fip_file) in
+  let tax_result, errors = Ir.calculate_tax (entry_list fip_file) in
   let ref_list = reference_list fip_file in
   let filtered_ref_list = filter_rev_code_list ref_list tax_result in
   let was_erased ref_list code : bool = not (List.mem code ref_list) in
@@ -170,7 +170,7 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   let _oc = open_out (output_file_name ^ "_disc.txt") in
   let oc = Format.formatter_of_out_channel _oc in
   (* let _discrepancy_list = compute_discrepancies_from_file_2020 fip_file in *)
-  let tax_result, errors = Ir_tests_2020.calculate_tax (entry_list fip_file) in
+  let tax_result, errors = Ir.calculate_tax (entry_list fip_file) in
   let ref_list = reference_list fip_file in
   let print_list fmt code_list =
     Format.pp_print_list print_rev_code fmt code_list
