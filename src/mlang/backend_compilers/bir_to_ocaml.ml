@@ -205,6 +205,11 @@ let generate_verif (oc : Format.formatter) (condition_data : Bir.condition_data)
     error_name error_kind error_major_code error_minor_code error_description
     error_alias
 
+let generate_rov_header (oc : Format.formatter) (rov : Bir.rule_or_verif) : unit
+    =
+  let tname = match rov.rov_code with Rule _ -> "rule" | Verif _ -> "verif" in
+  Format.fprintf oc "m_%s_%s context" tname (Pos.unmark rov.rov_name)
+
 let rec generate_stmts (program : Bir.program) (oc : Format.formatter)
     (stmts : Bir.stmt list) : unit =
   Format.pp_print_list ~pp_sep:pp_statement_separator (generate_stmt program) oc
@@ -236,9 +241,9 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
          | _ -> (@[<v 0>%a@]))@]" cond_name s cond_name (generate_stmts program)
         ff (generate_stmts program) tt
   | SVerif condition_data -> generate_verif oc condition_data
-  | SRuleCall rule_id ->
-      let rule = Mir.RuleMap.find rule_id program.rules in
-      Format.fprintf oc "m_rule_%s context" rule.rule_name
+  | SRovCall r ->
+      let rov = Bir.ROVMap.find r program.rules_and_verifs in
+      generate_rov_header oc rov
   | SFunctionCall (function_name, _) ->
       Format.fprintf oc "mpp_func_%s context" function_name
 
@@ -270,18 +275,23 @@ let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
   in
   Format.fprintf oc "let rec %a@," pp_print_mpp_functions function_names
 
-let generate_rule_method (program : Bir.program) (oc : Format.formatter)
-    (rule : Bir.rule) =
-  Format.fprintf oc "@[<v 1>let m_rule_%s (context : m_context) : unit =@,%a@]"
-    rule.rule_name (generate_stmts program) rule.rule_stmts
+let generate_rov_function (program : Bir.program) (oc : Format.formatter)
+    (rov : Bir.rule_or_verif) =
+  let tname, stmts =
+    match rov.rov_code with
+    | Rule stmts -> ("rule", stmts)
+    | Verif stmt -> ("verif", [ stmt ])
+  in
+  Format.fprintf oc "@[<v 1>let m_%s_%s (context : m_context) : unit =@,%a@]"
+    tname (Pos.unmark rov.rov_name) (generate_stmts program) stmts
 
-let generate_rule_methods (oc : Format.formatter) (program : Bir.program) : unit
-    =
-  let rules = Bir.RuleMap.bindings program.rules in
-  let _, rules = List.split rules in
+let generate_rov_functions (oc : Format.formatter) (program : Bir.program) :
+    unit =
+  let rovs = Bir.ROVMap.bindings program.rules_and_verifs in
+  let _, rovs = List.split rovs in
   Format.pp_print_list ~pp_sep:pp_function_separator
-    (generate_rule_method program)
-    oc rules
+    (generate_rov_function program)
+    oc rovs
 
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc "@[<v 0>open Mvalue@,@]"
@@ -360,7 +370,7 @@ let generate_ocaml_program (program : Bir.program)
   let locals_size = Bir.get_locals_size program |> ( + ) 1 in
   let var_table_size = Bir.size_of_tgv () in
   Format.fprintf oc "@[<v 0>%a@,%a@,%a@,@,%a@,@,%a@,@,%a@]@."
-    generate_header () generate_rule_methods program generate_mpp_functions program
+    generate_header () generate_rov_functions program generate_mpp_functions program
     generate_input_handler function_spec
     generate_output function_spec
     (generate_main_function locals_size var_table_size) program;
