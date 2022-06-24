@@ -647,7 +647,7 @@ let generate_rovs_files (program : program) (vm : Dgfip_varid.var_id_map) =
 #define add_erreur(a,b,c) add_erreur(b,c)
 #endif
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199409L)
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
 #define _fmax(x,y) fmax((x),(y))
 #define _fmin(x,y) fmin((x),(y))
 #else
@@ -671,7 +671,7 @@ let generate_implem_header oc header_filename =
 
 #include "%s"
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199409L)
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
 #define _fmax(x,y) fmax((x),(y))
 #define _fmin(x,y) fmin((x),(y))
 #else
