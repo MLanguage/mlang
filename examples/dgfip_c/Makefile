@@ -26,6 +26,9 @@ ir_%.c: ../../m_specs/%.m_spec $(SOURCE_FILES)
 # Compiling the generated C
 ##################################################
 
+### list existing C file from M equivalent
+M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
+
 ifeq ($(C_COMPILER), clang)
     F_BRACKET_OPT=-fbracket-depth=2048
 else
@@ -34,6 +37,7 @@ endif
 
 ir_%.o: ir_%.c
 	$(C_COMPILER) $(F_BRACKET_OPT) $(C_OPT) -c $< \
+	$(M_C_FILES) \
 	contexte.c famille.c penalite.c restitue.c revcor.c \
 	revenu.c variatio.c var.c irdata.c
 
@@ -47,6 +51,7 @@ ir_%.o: ir_%.c
 # To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
 run_%.exe: ir_%.o run_%.o
 	$(C_COMPILER) -lm -o $@ $^ \
+	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
 
@@ -61,6 +66,7 @@ backend_tests: FORCE
 clean:
 	$(MAKE) -C backend_tests clean
 	rm -f ir_*.c ir_*.h *.o *.exe *.tmp \
+	$(M_C_FILES) $(M_C_FILES:.c=.o) \
 	contexte.* famille.* penalite.* restitue.* revcor.* \
 	revenu.* tableg*.* tablev.* variatio.* var.* \
 	conf.h annee.h desc.h desc_inv.h

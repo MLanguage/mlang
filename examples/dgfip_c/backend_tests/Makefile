@@ -48,7 +48,7 @@ ir_%.c: %.m_spec $(SOURCE_FILES)
 ##################################################
 
 ### list existing C file from M equivalent
-M_C_FILES=$(filter $(wildcard *.c),$(notdir $(SOURCE_FILES:.m=.c)))
+M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
 CC=$(C_COMPILER)
 
@@ -74,7 +74,7 @@ ir_%.o: ir_%.c
 
 test_harness.exe: ir_tests.o test_harness.o
 	$(CC) -fPIE -lm -o $@ $^ \
-	$(M_C_FILES) \
+	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
 
@@ -84,7 +84,7 @@ run_tests: test_harness.exe FORCE
 
 perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^ \
-	$(M_C_FILES) \
+	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
 
@@ -133,8 +133,8 @@ clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
 
 clean:
-	rm -f ir_tests.* *.o tests.m_spec *.exe *.tmp ../m_value.o \
-	$(M_C_FILES) \
+	rm -f ir_tests.* *.o tests.m_spec *.exe *.tmp \
+	$(M_C_FILES) $(M_C_FILES:.c=.o) \
 	contexte.* famille.* penalite.* restitue.* revcor.* \
 	revenu.* tableg*.* tablev.* variatio.* var.* \
 	conf.h annee.h desc.h desc_inv.h
