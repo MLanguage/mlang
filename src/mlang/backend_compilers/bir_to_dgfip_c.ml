@@ -139,9 +139,50 @@ let fresh_c_local : string -> local_var =
     incr c;
     v
 
+let rec simpl_dexpr (de : dexpr) : dexpr =
+  match (de : dexpr) with
+  | Dlit f -> begin match f with 0. -> Dzero | 1. -> Done | _ -> de end
+  | Dand (de1, de2) -> begin
+      match (simpl_dexpr de1, simpl_dexpr de2) with
+      | Dzero, _ | _, Dzero -> Dzero
+      | Done, de | de, Done -> de
+      | de1, de2 -> Dand (de1, de2)
+    end
+  | Dor (de1, de2) -> begin
+      match (simpl_dexpr de1, simpl_dexpr de2) with
+      | Dzero, de | de, Dzero -> de
+      | Done, _ | _, Done -> Done
+      | de1, de2 -> Dor (de1, de2)
+    end
+  | Dunop ("!", de) -> begin
+      match simpl_dexpr de with
+      | Done -> Dzero
+      | Dlit f when f <> 0. -> Dzero
+      | Dzero -> Done
+      | _ -> de
+    end
+  | Dite (dec, det, dee) -> begin
+      match (simpl_dexpr dec, simpl_dexpr det, simpl_dexpr dee) with
+      | Dzero, _, de | Done, de, _ -> de
+      | dec, Done, Dzero -> dec
+      | _ -> de
+    end
+  | Dunop (op, de) -> Dunop (op, simpl_dexpr de)
+  | Dbinop (op, de1, de2) -> Dbinop (op, simpl_dexpr de1, simpl_dexpr de2)
+  | Dfun (fname, des) -> Dfun (fname, List.map simpl_dexpr des)
+  | Daccess _ | Done | Dzero | Dvar _ -> de
+
+let simpl_expr_comp (e : expression_composition) : expression_composition =
+  {
+    e with
+    def_test = simpl_dexpr e.def_test;
+    value_comp = simpl_dexpr e.value_comp;
+  }
+
 let build_transitive_composition (e : expression_composition) :
     expression_composition =
   let expr_v = fresh_c_local "expr" in
+  let e = simpl_expr_comp e in
   let def_test, use_subexpr =
     match e.def_test with
     | Dzero -> (Dzero, false)
@@ -262,11 +303,12 @@ let rec generate_c_expr (e : expression Pos.marked)
                 elseval.value_comp ),
             Dzero )
       in
-      {
-        def_test;
-        value_comp;
-        subs = ((cond_var, cond) :: thenval.subs) @ elseval.subs;
-      }
+      simpl_expr_comp
+        {
+          def_test;
+          value_comp;
+          subs = ((cond_var, cond) :: thenval.subs) @ elseval.subs;
+        }
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = Done in
@@ -310,14 +352,10 @@ let rec generate_c_expr (e : expression Pos.marked)
           ( "multimax",
             [ Dvar (Local bound_var, Val); Dvar (M (v2, PassPointer), Val) ] )
       in
-      { def_test; value_comp; subs = [ (bound_var, bound) ] }
+      simpl_expr_comp { def_test; value_comp; subs = [ (bound_var, bound) ] }
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) ->
-      {
-        def_test = Done;
-        value_comp = (match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f);
-        subs = [];
-      }
+      simpl_expr_comp { def_test = Done; value_comp = Dlit f; subs = [] }
   | Literal Undefined -> { def_test = Dzero; value_comp = Dzero; subs = [] }
   | Var var ->
       {
