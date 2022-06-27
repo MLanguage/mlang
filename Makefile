@@ -87,7 +87,7 @@ endif
 	$(MAKE) -C examples/java/ run_tests
 
 test_dgfip_c_backend:
-	$(MAKE) -C examples/dgfip_c/backend_tests run_tests
+	$(MAKE) -C examples/dgfip_c/ backend_tests
 
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)

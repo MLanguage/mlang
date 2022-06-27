@@ -61,7 +61,7 @@ run_%.exe: ir_%.o run_%.o
 ##################################################
 
 backend_tests: FORCE
-	$(MAKE) -C backend_tests run_tests
+	$(MAKE) -C ml_primitif run_tests
 
 clean:
 	$(MAKE) -C backend_tests clean
