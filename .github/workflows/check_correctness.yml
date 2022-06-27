@@ -62,7 +62,12 @@ jobs:
         run: |
           eval $(opam env)
           make test_c_backend
-          
+
+      - name: Test DGFIP C backend
+        run: |
+          eval $(opam env)
+          make test_dgfip_c_backend
+
       - name: Test Java backend
         run: |
           eval $(opam env)
