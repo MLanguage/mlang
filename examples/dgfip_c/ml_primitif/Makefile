@@ -1,11 +1,10 @@
-TEST_FILES=$(wildcard ../../../tests/2020/fuzzing/fuzzer_*)
+TEST_FILES=$(realpath ../../../tests/2020/fuzzing/)/fuzzer_*
 
 prim:
 	./build.sh
 
 run_tests: prim
-	./run_tests.sh ${TEST_FILES}
-
+	 ./prim ${TEST_FILES} || (echo "Test failure" && false)
 
 clean:
 	./build.sh clean

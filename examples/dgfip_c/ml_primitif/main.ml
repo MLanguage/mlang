@@ -3,10 +3,8 @@ open Common
 
 let read_test filename =
 
-  Printf.printf "Lecture du test\n";
   let test = Read_test.read_test filename in
 
-  Printf.printf "Traduction du test\n";
   List.fold_left (fun (tgv, res_prim) s ->
       match s with
       | `EntreesPrimitif pl ->
@@ -14,7 +12,7 @@ let read_test filename =
           List.fold_left (fun tgv (code, montant) ->
               try TGV.set tgv code montant
               with Not_found ->
-                Printf.printf "Variable %s inexistante, test invalide\n" code;
+                Printf.eprintf "Variable %s inexistante, test invalide\n" code;
                 exit 2
             ) tgv pl
         in
@@ -42,15 +40,10 @@ let check_result tgv err expected_tgv expected_err =
     ) expected_tgv;
   !result
 
-let main () =
+let run_test test_file =
+  Printf.printf "Testing %s...\n%!" test_file;
 
-  if Array.length Sys.argv < 2 then
-    begin
-      Printf.printf "Syntaxe :\n%s fichier_test\n" Sys.argv.(0);
-      exit 3
-    end;
-
-  let tgv, res_prim  = read_test Sys.argv.(1) in
+  let tgv, res_prim  = read_test test_file in
 
   (* Normalement fait par règle 1 *)
   let tgv = TGV.set_int tgv "APPLI_BATCH" 0 in
@@ -60,7 +53,7 @@ let main () =
   let annee_calc = M.annee_calc () in
   let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
   if annee_revenu <> annee_calc then
-    Printf.printf "Attention, année calculette (%d) <> année revenu (%d)\n"
+    Printf.eprintf "Attention, année calculette (%d) <> année revenu (%d)\n%!"
       annee_calc annee_revenu;
 
   let annee_courante = 1900 + (Unix.localtime (Unix.time ())).tm_year in
@@ -68,11 +61,27 @@ let main () =
   let tgv = TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *) in
   let tgv = TGV.set_int tgv "ANCSDED" annee_courante in
 
-  Printf.printf "Lancement du calcul\n%!";
   let tgv = M.traite_double_liquidation_2 tgv M.Primitif in
 
-  Printf.printf "Vérification du résultat\n";
   check_result tgv [] res_prim []
+
+let main () =
+
+  if Array.length Sys.argv < 2 then
+    begin
+      Printf.printf "Syntaxe :\n%s fichier_test\n" Sys.argv.(0);
+      exit 3
+    end;
+
+  let args = List.tl (Array.to_list Sys.argv) in
+  let rec loop =
+    function
+    | [] -> 0
+    | test_file::args ->
+      let res = run_test test_file in
+      if res <> 0 then res else loop args
+  in
+  loop args
 
 let () =
   Printexc.record_backtrace true;
