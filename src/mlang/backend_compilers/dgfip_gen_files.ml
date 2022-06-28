@@ -152,6 +152,15 @@ let computed_var_is_output cv =
       match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
     cv.Mast.comp_subtyp
 
+let consider_output is_ebcdic attribs =
+  is_ebcdic = false
+  || List.exists
+       (fun (an, av) ->
+         match (Pos.unmark an, Pos.unmark av) with
+         | "primrest", Mast.Float v -> v <> 0.0
+         | _ -> false)
+       attribs
+
 (* Used to generated the array names *)
 let subtype_name subtyp =
   match subtyp with
@@ -265,7 +274,10 @@ let get_vars prog is_ebcdic =
                   match cv.comp_table with Some i -> Pos.unmark i | None -> 1
                 in
                 let idx1, idx2, idxo_opt =
-                  next_idx idx tvar (computed_var_is_output cv) size
+                  next_idx idx tvar
+                    (computed_var_is_output cv
+                    && consider_output is_ebcdic cv.Mast.comp_attributes)
+                    size
                 in
                 let var =
                   ( tvar,
@@ -284,7 +296,10 @@ let get_vars prog is_ebcdic =
                 let iv = Pos.unmark iv in
                 let tvar = input_var_subtype iv in
                 let idx1, idx2, idxo_opt =
-                  next_idx idx tvar iv.input_given_back 1
+                  next_idx idx tvar
+                    (iv.input_given_back
+                    && consider_output is_ebcdic iv.Mast.input_attributes)
+                    1
                 in
                 let var =
                   ( tvar,
