@@ -45,11 +45,6 @@ let run_test test_file =
 
   let tgv, res_prim  = read_test test_file in
 
-  (* Normalement fait par règle 1 *)
-  let tgv = TGV.set_int tgv "APPLI_BATCH" 0 in
-  let tgv = TGV.set_int tgv "APPLI_OCEANS" 0 in
-  let tgv = TGV.set_int tgv "APPLI_ILIAD" 1 in
-
   let annee_calc = M.annee_calc () in
   let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
   if annee_revenu <> annee_calc then
