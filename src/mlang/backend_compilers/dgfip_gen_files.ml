@@ -251,6 +251,8 @@ let sort_vars_by_name vars is_ebcdic =
 let get_vars prog is_ebcdic =
   let open Mast in
   let idx = new_idx () in
+
+  (* Retrieve the variables in file-order and compute their IDs *)
   let vars =
     List.fold_left
       (fun vars file ->
@@ -302,6 +304,40 @@ let get_vars prog is_ebcdic =
             | _ -> vars)
           vars file)
       [] prog
+  in
+
+  let vars = sort_vars_by_name vars is_ebcdic in
+
+  let idx = new_idx () in
+
+  (* Recompute the indices of Restituee vars, as they are sorted by name (as
+     opposed to file-order) *)
+  let vars =
+    List.map
+      (fun ( tvar,
+             idx1,
+             idx2,
+             idxo_opt,
+             name,
+             alias_opt,
+             desc,
+             typ_opt,
+             attributes,
+             size ) ->
+        let _idx1, _idx2, idxo_opt =
+          next_idx idx tvar (idxo_opt <> None) size
+        in
+        ( tvar,
+          idx1,
+          idx2,
+          idxo_opt,
+          name,
+          alias_opt,
+          desc,
+          typ_opt,
+          attributes,
+          size ))
+      vars
   in
 
   let vars = sort_vars_by_alias vars is_ebcdic in
@@ -530,9 +566,8 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
 
   Format.fprintf fmt "};\n"
 
-let gen_desc fmt vars ~alias_only =
-  (* EBCDIC order not important as no binary search is done on descs*)
-  let vars = sort_vars_by_name vars false in
+let gen_desc fmt vars ~alias_only is_ebcdic =
+  let vars = sort_vars_by_name vars is_ebcdic in
 
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
@@ -1216,11 +1251,11 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
   in
 
   let oc, fmt = open_file (Filename.concat folder "desc.h") in
-  gen_desc fmt vars ~alias_only:true;
+  gen_desc fmt vars ~alias_only:true Dgfip_options.(flags.flg_tri_ebcdic);
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "desc_inv.h") in
-  gen_desc fmt vars ~alias_only:false;
+  gen_desc fmt vars ~alias_only:false Dgfip_options.(flags.flg_tri_ebcdic);
   close_out oc;
 
   let rules, verifs, errors, chainings = get_rules_verif_etc prog in
