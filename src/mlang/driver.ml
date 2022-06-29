@@ -34,6 +34,43 @@ let process_dgfip_options (backend : string option)
     end
   | _ -> Dgfip_options.default_flags
 
+(* The legacy compiler plays a nasty trick on us, that we have to reproduce:
+   rule 1 is modified to add assignments to APPLI_XXX variables according to the
+   target application (OCEANS, BATCH and ILIAD). *)
+let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
+    (source_file : Mast.source_file) =
+  let open Mast in
+  let mk_assign var val_ =
+    let v = if val_ then 1.0 else 0.0 in
+    ( SingleFormula
+        {
+          lvalue = ({ var = (Normal var, Pos.no_pos); index = None }, Pos.no_pos);
+          formula = (Literal (Float v), Pos.no_pos);
+        },
+      Pos.no_pos )
+  in
+  let oceans, batch, iliad =
+    match backend with
+    | Some backend when String.lowercase_ascii backend = "dgfip_c" ->
+        (dgfip_flags.flg_cfir, dgfip_flags.flg_gcos, dgfip_flags.flg_iliad)
+    | _ -> (false, false, true)
+  in
+  List.map
+    (fun item ->
+      match Pos.unmark item with
+      | Rule r when Pos.unmark r.rule_number = 1 ->
+          let fl =
+            [
+              mk_assign "APPLI_OCEANS" oceans;
+              mk_assign "APPLI_BATCH" batch;
+              mk_assign "APPLI_ILIAD" iliad;
+            ]
+          in
+          ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
+            Pos.get_position item )
+      | _ -> item)
+    source_file
+
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
 let driver (files : string list) (debug : bool) (var_info_debug : string list)
@@ -71,6 +108,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         in
         try
           let commands = Mparser.source_file token filebuf in
+          let commands = patch_rule_1 backend dgfip_flags commands in
           m_program := commands :: !m_program
         with Mparser.Error ->
           close_in input;
