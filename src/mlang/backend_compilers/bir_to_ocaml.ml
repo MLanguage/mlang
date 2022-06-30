@@ -172,13 +172,18 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
 let generate_verif (oc : Format.formatter) (condition_data : Bir.condition_data)
     =
   let open Strings in
-  let _cond_expr = condition_data.cond_expr in
   Format.fprintf oc "let verif_cond = %s in@,"
     (let se, _ = generate_ocaml_expr condition_data.cond_expr in
      se);
   let cond_error, alias = condition_data.cond_error in
   let error_name = sanitize_str cond_error.Mir.Error.name in
-  let error_kind = sanitize_str cond_error.Mir.Error.descr.kind in
+  let error_kind, exception_raising =
+    match cond_error.Mir.Error.typ with
+    | Anomaly -> ("Anomaly", ";raise (M_exn context.errors)")
+    | Discordance -> ("Discordance", "")
+    | Information -> ("Information", "")
+  in
+  let error_kind_code = sanitize_str cond_error.Mir.Error.descr.kind in
   let error_major_code = sanitize_str cond_error.Mir.Error.descr.major_code in
   let error_minor_code = sanitize_str cond_error.Mir.Error.descr.minor_code in
   let error_description = sanitize_str cond_error.Mir.Error.descr.description in
@@ -191,19 +196,19 @@ let generate_verif (oc : Format.formatter) (condition_data : Bir.condition_data)
     | None -> ""
   in
   Format.fprintf oc
-    "(match verif_cond with@,\
+    "match verif_cond with@,\
      | { undefined = true ; value = _ }@,\
      | { undefined = false ; value = 0.0 } -> ()@,\
      | _ -> (@[<v 0> context.errors <- {@,\
      name = \"%s\";@,\
-     kind = \"%s\";@,\
+     kind = \"%s (%s)\";@,\
      major_code = \"%s\";@,\
      minor_code = \"%s\";@,\
      description = \"%s\";@,\
      alias = \"%s\"} :: context.errors@,\
-     @]))"
-    error_name error_kind error_major_code error_minor_code error_description
-    error_alias
+     @])%s@,"
+    error_name error_kind error_kind_code error_major_code error_minor_code
+    error_description error_alias exception_raising
 
 let generate_rov_header (oc : Format.formatter) (rov : Bir.rule_or_verif) : unit
     =

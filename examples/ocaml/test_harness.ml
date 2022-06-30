@@ -160,24 +160,42 @@ let test_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   close_out _oc
 
 let print_error oc (error : m_error) : unit =
-  Format.fprintf oc "Name: %s, kind: %s, description: %s" error.name error.kind
-    error.description
+  Format.fprintf oc
+    "@[<v 0>Codename: %s@,\
+     kind: %s@,\
+     codes: major %s minor %s@,\
+     description: %s@,\
+     alias: %s@]" error.name error.kind error.major_code error.minor_code
+    error.description error.alias
 
 let print_errors oc error_list = Format.pp_print_list print_error oc error_list
+
+let () =
+  Printexc.register_printer (function
+    | M_exn e_list ->
+        Some (Format.asprintf "M_exn@;<0 4>M Exception: %a" print_errors e_list)
+    | _ -> None)
 
 let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   Format.printf "Simple test on file %s.@." fip_file;
   let _oc = open_out (output_file_name ^ "_disc.txt") in
   let oc = Format.formatter_of_out_channel _oc in
-  (* let _discrepancy_list = compute_discrepancies_from_file_2020 fip_file in *)
-  let tax_result, errors = Ir.calculate_tax (entry_list fip_file) in
+  let tax_result, errors =
+    try Ir.calculate_tax (entry_list fip_file)
+    with M_exn e_list ->
+      Format.fprintf oc "TEST CASE %s ends with M Exception:@,@,%a@." fip_file
+        print_errors e_list;
+      close_out _oc;
+      raise (M_exn e_list)
+  in
   let ref_list = reference_list fip_file in
   let print_list fmt code_list =
     Format.pp_print_list print_rev_code fmt code_list
   in
-  Format.printf "Test case: %s@." fip_file;
   Format.fprintf oc
-    "@[<v 0>ANOMALIES@,\
+    "@[<v 0>TEST CASE: %s@,\
+     @,\
+     ANOMALIES@,\
      @,\
      %a@,\
      @,\
@@ -191,9 +209,8 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
      @,\
      FILTERED OUTPUT@,\
      @,\
-     %a@,\
-     @]"
-    print_errors errors print_list
+     %a@]@."
+    fip_file print_errors errors print_list
     (List.sort compare_rev_code ref_list)
     print_list
     (List.sort compare_rev_code tax_result)

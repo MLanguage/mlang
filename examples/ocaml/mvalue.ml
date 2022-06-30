@@ -11,6 +11,8 @@ type m_error = {
   alias : string;
 }
 
+exception M_exn of m_error list
+
 type m_context = {
   tgv : m_array;
   local_variables : m_array;
