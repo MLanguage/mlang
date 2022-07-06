@@ -15,6 +15,7 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 val generate_c_program :
+  Dgfip_options.flags ->
   Bir.program ->
   Bir_interface.bir_function ->
   (* filename *) string ->
