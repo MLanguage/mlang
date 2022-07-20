@@ -109,7 +109,7 @@ let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
           List.exists
             (fun st ->
               match (st : Mir.variable_subtype) with
-              | Base | GivenBack | Computed -> true
+              | Base | Computed -> true
               | _ -> false)
             subtypes
       | Some st -> List.mem st subtypes)
@@ -263,7 +263,7 @@ let generate_verif_call (m_program : Mir_interface.full_program)
       Pos.map_under_mark
         (fun verif_id -> Bir.SRovCall verif_id)
         verif.Mir.cond_number)
-    verifs
+    verifs |> List.rev
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
