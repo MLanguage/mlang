@@ -1487,7 +1487,7 @@ let get_conds (error_decls : Mir.Error.t list)
                     conds)
                 conds verif.Mast.verif_conditions
           | _ -> conds)
-        conds source_file)
+        conds (List.rev source_file)) (* Order important for DGFiP *)
     Mir.VariableMap.empty p
 
 let translate (p : Mast.program) : Mir.program =

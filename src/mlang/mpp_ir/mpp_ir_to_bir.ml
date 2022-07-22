@@ -253,17 +253,19 @@ let generate_verif_call (m_program : Mir_interface.full_program)
   in
   let verifs =
     Mir.VariableMap.bindings relevant_verifs
+    |> List.sort (fun (v1, cond1) (v2, cond2) ->
+        let res = Mast.compare_error_type (fst cond1.Mir.cond_error).typ
+            (fst cond2.Mir.cond_error).typ in
+        if res <> 0 then res
+        else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
     |> List.map snd
-    |> List.sort (fun cond1 cond2 ->
-           Mast.compare_error_type (fst cond1.Mir.cond_error).typ
-             (fst cond2.Mir.cond_error).typ)
   in
   List.map
     (fun verif ->
       Pos.map_under_mark
         (fun verif_id -> Bir.SRovCall verif_id)
         verif.Mir.cond_number)
-    verifs |> List.rev
+    verifs
 
 let rec translate_mpp_function (mpp_program : Mpp_ir.mpp_compute list)
     (m_program : Mir_interface.full_program) (compute_decl : Mpp_ir.mpp_compute)
