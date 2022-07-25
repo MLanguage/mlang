@@ -1385,8 +1385,9 @@ let get_conds (error_decls : Mir.Error.t list)
           | Mast.Verification verif
             when belongs_to_iliad_app verif.Mast.verif_applications ->
               let rule_number = Pos.unmark verif.verif_number in
-              List.fold_left
-                (fun conds verif_cond ->
+              let conds, _ = List.fold_left
+                (fun (conds, id_offset) verif_cond ->
+                  let rule_number = rule_number + id_offset in
                   let e =
                     translate_expression
                       {
@@ -1466,9 +1467,8 @@ let get_conds (error_decls : Mir.Error.t list)
                   Mir.VariableMap.add dummy_var
                     {
                       Mir.cond_number =
-                        Pos.map_under_mark
-                          (fun n -> Mir.VerifID n)
-                          verif.verif_number;
+                        Pos.same_pos_as
+                          (Mir.VerifID rule_number) verif.verif_number;
                       Mir.cond_expr = e;
                       Mir.cond_error = err;
                       Mir.cond_tags =
@@ -1484,8 +1484,11 @@ let get_conds (error_decls : Mir.Error.t list)
                             :: l
                         | l -> l);
                     }
-                    conds)
-                conds verif.Mast.verif_conditions
+                    conds,
+                  (id_offset+1))
+                (conds,0) verif.Mast.verif_conditions
+            in
+            conds
           | _ -> conds)
         conds source_file)
     Mir.VariableMap.empty p
