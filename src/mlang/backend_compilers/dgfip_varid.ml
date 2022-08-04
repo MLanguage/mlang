@@ -40,3 +40,9 @@ let gen_access_pointer vm v =
   | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
   | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
   | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn
+
+let gen_access_pos_from_start vm v =
+  match Mir.VariableMap.find v vm with
+  | VarInput i -> Printf.sprintf "EST_SAISIE | %d" i
+  | VarBase i -> Printf.sprintf "EST_BASE | %d" i
+  | VarComputed i -> Printf.sprintf "EST_CALCULEE | %d" i

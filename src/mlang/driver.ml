@@ -271,8 +271,8 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
               Dgfip_gen_files.generate_auxiliary_files dgfip_flags
                 source_m_program combined_program
             in
-            Bir_to_dgfip_c.generate_c_program combined_program function_spec
-              !Cli.output_file vm;
+            Bir_to_dgfip_c.generate_c_program dgfip_flags combined_program
+              function_spec !Cli.output_file vm;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else
