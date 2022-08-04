@@ -1385,107 +1385,111 @@ let get_conds (error_decls : Mir.Error.t list)
           | Mast.Verification verif
             when belongs_to_iliad_app verif.Mast.verif_applications ->
               let rule_number = Pos.unmark verif.verif_number in
-              List.fold_left
-                (fun conds verif_cond ->
-                  let e =
-                    translate_expression
-                      {
-                        idmap;
-                        lc = None;
-                        const_map;
-                        table_definition = false;
-                        exec_number =
-                          {
-                            Mir.rule_number;
-                            Mir.seq_number = 0;
-                            Mir.pos = Pos.get_position verif_cond;
-                          };
-                      }
-                      (Pos.unmark verif_cond).Mast.verif_cond_expr
-                  in
-                  let subtypes =
-                    (* Verifications are maped to a dummy variable, we use it to
-                       store all the subtypes of variables appearing in its
-                       expression to avoid going through it later when we sort
-                       verifications chains out *)
-                    Mir.fold_expr_var
-                      (fun subtypes var ->
-                        List.fold_left
-                          (fun subtypes st ->
-                            if List.mem st subtypes then subtypes
-                            else st :: subtypes)
-                          subtypes var.Mir.subtypes)
-                      [] (Pos.unmark e)
-                  in
-                  let err =
-                    let err_name, err_var =
-                      (Pos.unmark verif_cond).Mast.verif_cond_error
+              let conds, _ =
+                List.fold_left
+                  (fun (conds, id_offset) verif_cond ->
+                    let rule_number = rule_number + id_offset in
+                    let e =
+                      translate_expression
+                        {
+                          idmap;
+                          lc = None;
+                          const_map;
+                          table_definition = false;
+                          exec_number =
+                            {
+                              Mir.rule_number;
+                              Mir.seq_number = 0;
+                              Mir.pos = Pos.get_position verif_cond;
+                            };
+                        }
+                        (Pos.unmark verif_cond).Mast.verif_cond_expr
                     in
-                    try
-                      ( List.find
-                          (fun e ->
-                            Pos.unmark e.Mir.Error.name = Pos.unmark err_name)
-                          error_decls,
-                        Option.map
-                          (fun v ->
-                            List.sort
-                              (fun v w ->
-                                -Mir.compare_execution_number
-                                   v.Mir.Variable.execution_number
-                                   w.Mir.Variable.execution_number)
-                              (Pos.VarNameToID.find (Pos.unmark v) idmap)
-                            |> List.hd)
-                          err_var )
-                    with Not_found ->
-                      Errors.raise_error
-                        (Format.asprintf "undeclared error %s %a"
-                           (Pos.unmark err_name) Pos.format_position
-                           (Pos.get_position err_name))
-                  in
-                  let dummy_var =
-                    Mir.Variable.new_var
-                      (Pos.same_pos_as
-                         (Format.sprintf "verification_condition_%d"
-                            (Mir.Variable.fresh_id ()))
-                         e)
-                      None
-                      (Pos.same_pos_as
-                         (let () =
-                            Pos.format_position Format.str_formatter
-                              (Pos.get_position e)
-                          in
-                          Format.flush_str_formatter ())
-                         e)
-                      {
-                        Mir.rule_number;
-                        Mir.seq_number = 0;
-                        Mir.pos = Pos.get_position verif_cond;
-                      }
-                      ~attributes:[] ~origin:None ~subtypes ~is_table:None
-                  in
-                  Mir.VariableMap.add dummy_var
-                    {
-                      Mir.cond_number =
-                        Pos.map_under_mark
-                          (fun n -> Mir.VerifID n)
-                          verif.verif_number;
-                      Mir.cond_expr = e;
-                      Mir.cond_error = err;
-                      Mir.cond_tags =
-                        (match verif.Mast.verif_tags with
-                        | [] ->
-                            [
-                              (Mast.Primitif, Pos.no_pos);
-                              (Mast.Corrective, Pos.no_pos);
-                            ]
-                        | [ (Mast.Custom _, _) ] as l ->
-                            (Mast.Primitif, Pos.no_pos)
-                            :: (Mast.Corrective, Pos.no_pos)
-                            :: l
-                        | l -> l);
-                    }
-                    conds)
-                conds verif.Mast.verif_conditions
+                    let subtypes =
+                      (* Verifications are maped to a dummy variable, we use it
+                         to store all the subtypes of variables appearing in its
+                         expression to avoid going through it later when we sort
+                         verifications chains out *)
+                      Mir.fold_expr_var
+                        (fun subtypes var ->
+                          List.fold_left
+                            (fun subtypes st ->
+                              if List.mem st subtypes then subtypes
+                              else st :: subtypes)
+                            subtypes var.Mir.subtypes)
+                        [] (Pos.unmark e)
+                    in
+                    let err =
+                      let err_name, err_var =
+                        (Pos.unmark verif_cond).Mast.verif_cond_error
+                      in
+                      try
+                        ( List.find
+                            (fun e ->
+                              Pos.unmark e.Mir.Error.name = Pos.unmark err_name)
+                            error_decls,
+                          Option.map
+                            (fun v ->
+                              List.sort
+                                (fun v w ->
+                                  -Mir.compare_execution_number
+                                     v.Mir.Variable.execution_number
+                                     w.Mir.Variable.execution_number)
+                                (Pos.VarNameToID.find (Pos.unmark v) idmap)
+                              |> List.hd)
+                            err_var )
+                      with Not_found ->
+                        Errors.raise_error
+                          (Format.asprintf "undeclared error %s %a"
+                             (Pos.unmark err_name) Pos.format_position
+                             (Pos.get_position err_name))
+                    in
+                    let dummy_var =
+                      Mir.Variable.new_var
+                        (Pos.same_pos_as
+                           (Format.sprintf "verification_condition_%d"
+                              (Mir.Variable.fresh_id ()))
+                           e)
+                        None
+                        (Pos.same_pos_as
+                           (let () =
+                              Pos.format_position Format.str_formatter
+                                (Pos.get_position e)
+                            in
+                            Format.flush_str_formatter ())
+                           e)
+                        {
+                          Mir.rule_number;
+                          Mir.seq_number = 0;
+                          Mir.pos = Pos.get_position verif_cond;
+                        }
+                        ~attributes:[] ~origin:None ~subtypes ~is_table:None
+                    in
+                    ( Mir.VariableMap.add dummy_var
+                        {
+                          Mir.cond_number =
+                            Pos.same_pos_as (Mir.VerifID rule_number)
+                              verif.verif_number;
+                          Mir.cond_expr = e;
+                          Mir.cond_error = err;
+                          Mir.cond_tags =
+                            (match verif.Mast.verif_tags with
+                            | [] ->
+                                [
+                                  (Mast.Primitif, Pos.no_pos);
+                                  (Mast.Corrective, Pos.no_pos);
+                                ]
+                            | [ (Mast.Custom _, _) ] as l ->
+                                (Mast.Primitif, Pos.no_pos)
+                                :: (Mast.Corrective, Pos.no_pos)
+                                :: l
+                            | l -> l);
+                        }
+                        conds,
+                      id_offset + 1 ))
+                  (conds, 0) verif.Mast.verif_conditions
+              in
+              conds
           | _ -> conds)
         conds (List.rev source_file)) (* Order important for DGFiP *)
     Mir.VariableMap.empty p
