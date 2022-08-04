@@ -415,8 +415,8 @@ let compare_error_type e1 e2 =
   match (e1, e2) with
   | Anomaly, (Discordance | Information) -> -1
   | (Discordance | Information), Anomaly -> 1
-  | Discordance, Information -> -1
-  | Information, Discordance -> 1
+  | Information, Discordance -> -1
+  | Discordance, Information -> 1
   | _ -> 0
 
 type error_ = {

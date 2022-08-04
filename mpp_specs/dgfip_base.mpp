@@ -115,6 +115,7 @@ verif_calcul_primitive_raw():
 
 verif_calcul_corrective_raw():
   outputs <- calcul_primitif_isf()
+  verif_calcul_primitive_isf_raw()
   call_m_verif(corrective,calculee)
 
 verif_saisie_cohe_primitive_isf_raw():

@@ -109,7 +109,7 @@ let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
           List.exists
             (fun st ->
               match (st : Mir.variable_subtype) with
-              | Base | GivenBack | Computed -> true
+              | Base | Computed -> true
               | _ -> false)
             subtypes
       | Some st -> List.mem st subtypes)
@@ -253,10 +253,12 @@ let generate_verif_call (m_program : Mir_interface.full_program)
   in
   let verifs =
     Mir.VariableMap.bindings relevant_verifs
+    |> List.sort (fun (v1, cond1) (v2, cond2) ->
+        let res = Mast.compare_error_type (fst cond1.Mir.cond_error).typ
+            (fst cond2.Mir.cond_error).typ in
+        if res <> 0 then res
+        else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
     |> List.map snd
-    |> List.sort (fun cond1 cond2 ->
-           Mast.compare_error_type (fst cond1.Mir.cond_error).typ
-             (fst cond2.Mir.cond_error).typ)
   in
   List.map
     (fun verif ->

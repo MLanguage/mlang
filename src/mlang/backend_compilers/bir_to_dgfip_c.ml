@@ -606,9 +606,9 @@ let generate_mpp_function (dgfip_flags : Dgfip_options.flags)
     mppf_stmts
     (if ret_type then
      {|#ifdef FLG_MULTITHREAD
-      return irdata->tas_discord;
+      return irdata->discords;
 #else
-      return tas_discord;
+      return discords;
 #endif
 |}
     else "")
