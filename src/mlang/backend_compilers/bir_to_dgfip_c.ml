@@ -233,7 +233,7 @@ let rec generate_c_expr (dgfip_flags : Dgfip_options.flags)
       {
         def_test = generate_variable ~def_flag:true var_indexes None var;
         value_comp =
-          generate_variable var_indexes ~debug_flag:dgfip_flags.flg_debug None
+          generate_variable var_indexes ~debug_flag:dgfip_flags.flg_trace None
             var;
         locals = [];
       }
@@ -272,7 +272,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
         se.def_test
         (generate_variable var_indexes None var)
         se.value_comp
-        (if dgfip_flags.flg_debug then
+        (if dgfip_flags.flg_trace then
          let var = Bir.var_to_mir var in
          Format.asprintf "aff2(\"%s\", irdata, %s);@\n"
            (Pos.unmark var.Mir.Variable.name)

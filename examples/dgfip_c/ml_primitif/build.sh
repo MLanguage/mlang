@@ -48,8 +48,8 @@ else
 
   cd ./calc
 
-  # Note: we MUST compile with -k1
-  $MLANG -b dgfip_c --mpp_file=$MPP_FILE --mpp_function=$MPP_FUN --dgfip_options=-Ailiad,-m$YEAR,-M,-t,-g,-k1 -o enchain.c $M_SOURCES/*.m >/dev/null
+  # Note: we MUST compile with -k1 (and its dependence -g, cf. how is defined NB_DEBUG01)
+  $MLANG -b dgfip_c --mpp_file=$MPP_FILE --mpp_function=$MPP_FUN --dgfip_options=-Ailiad,-m$YEAR,-M,-g,-k1 -o enchain.c $M_SOURCES/*.m >/dev/null
 
   if [ $? -ne 0 ]; then
     echo 'La compilation des fichiers M a échoué'
