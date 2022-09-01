@@ -70,15 +70,6 @@ test: build
 tests: build
 	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
-test_python_backend:
-	OPTIMIZE=1 $(MAKE) -C examples/python/backend_tests all_tests
-
-test_c_backend_perf:
-	$(MAKE) -C examples/c/backend_tests run_perf
-
-test_c_backend:
-	$(MAKE) -C examples/c/backend_tests run_tests
-
 test_java_backend:
 ifeq ($(OPTIMIZE), 0)
 	@echo "\033[0;31mWarning, non-optimized Java files cannot be executed for now (too many constants for the JVM)\033[0m"
@@ -92,8 +83,7 @@ test_dgfip_c_backend:
 quick_test:
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
-all: tests test_python_backend test_c_backend_perf \
-	test_c_backend test_java_backend test_dgfip_c_backend quick_test
+all: tests test_java_backend test_dgfip_c_backend quick_test
 
 ##################################################
 # Doc
@@ -104,9 +94,7 @@ doc: FORCE
 	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 clean:
-	$(MAKE) -C examples/c clean
 	$(MAKE) -C examples/dgfip_c clean
-	$(MAKE) -C examples/python clean
 	$(MAKE) -C examples/java clean
 	dune clean
 

@@ -240,22 +240,6 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
             in
             print_output ()
           end
-          else if String.lowercase_ascii backend = "python" then begin
-            Cli.debug_print "Compiling the codebase to Python...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            Bir_to_python.generate_python_program combined_program function_spec
-              !Cli.output_file;
-            Cli.debug_print "Result written to %s" !Cli.output_file
-          end
-          else if String.lowercase_ascii backend = "c" then begin
-            Cli.debug_print "Compiling the codebase to C...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            Bir_to_c.generate_c_program combined_program function_spec
-              !Cli.output_file;
-            Cli.debug_print "Result written to %s" !Cli.output_file
-          end
           else if String.lowercase_ascii backend = "java" then begin
             Cli.debug_print "Compiling codebase to Java...";
             if !Cli.output_file = "" then

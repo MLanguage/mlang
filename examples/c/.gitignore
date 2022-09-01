@@ -1,6 +1,0 @@
-ir_*.c
-ir_*.h
-*.exe
-*.o
-*.tmp
-*.bc
