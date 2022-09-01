@@ -571,8 +571,13 @@ module Make (N : Bir_number.NumberInterface) = struct
             in
             let maxi = ref (access_index 0) in
             for i = 0 to Int64.to_int up do
-              (* Fragile: rely on polymorphic compare where None < Some _ *)
-              maxi := max !maxi (access_index i)
+              match access_index i with
+              | None -> ()
+              | Some n ->
+                  maxi :=
+                    Option.fold ~none:(Some n)
+                      ~some:(fun m -> Some (max n m))
+                      !maxi
             done;
             match !maxi with None -> Undefined | Some f -> Number (N.of_int f))
         | FunctionCall (func, _) ->
