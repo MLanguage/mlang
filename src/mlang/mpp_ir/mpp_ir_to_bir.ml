@@ -254,10 +254,12 @@ let generate_verif_call (m_program : Mir_interface.full_program)
   let verifs =
     Mir.VariableMap.bindings relevant_verifs
     |> List.sort (fun (v1, cond1) (v2, cond2) ->
-        let res = Mast.compare_error_type (fst cond1.Mir.cond_error).typ
-            (fst cond2.Mir.cond_error).typ in
-        if res <> 0 then res
-        else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
+           let res =
+             Mast.compare_error_type (fst cond1.Mir.cond_error).typ
+               (fst cond2.Mir.cond_error).typ
+           in
+           if res <> 0 then res
+           else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
     |> List.map snd
   in
   List.map
