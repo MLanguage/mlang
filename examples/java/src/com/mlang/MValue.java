@@ -231,10 +231,10 @@ public class MValue {
 
     int bound = (int)Math.floor(boundMValue.getValue());
 
-    MValue max = mAdd(array[position], zero);
+    MValue max = array[position];
     for (int i = 0; i <= bound; i++) {
-      MValue challenger = mAdd(array[position + i], zero);
-      if (challenger.getValue() > max.getValue()) {
+      MValue challenger = array[position + i];
+      if (challenger.getValue() > max.getValue() || max.isUndefined()) {
         max = challenger;
       }
     }

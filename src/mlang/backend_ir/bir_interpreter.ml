@@ -559,7 +559,7 @@ module Make (N : Bir_number.NumberInterface) = struct
             let cast_to_int (v : value) : Int64.t option =
               match v with
               | Number f -> Some (N.to_int (roundf f))
-              | Undefined -> Some Int64.zero
+              | Undefined -> None
             in
             let pos = Pos.get_position arg2 in
             let access_index (i : int) : Int64.t option =
@@ -571,7 +571,13 @@ module Make (N : Bir_number.NumberInterface) = struct
             in
             let maxi = ref (access_index 0) in
             for i = 0 to Int64.to_int up do
-              maxi := max !maxi (access_index i)
+              match access_index i with
+              | None -> ()
+              | Some n ->
+                  maxi :=
+                    Option.fold ~none:(Some n)
+                      ~some:(fun m -> Some (max n m))
+                      !maxi
             done;
             match !maxi with None -> Undefined | Some f -> Number (N.of_int f))
         | FunctionCall (func, _) ->

@@ -27,7 +27,9 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
   let mvar = Bir.var_to_mir var in
   try
     match offset with
-    | PassPointer -> Dgfip_varid.gen_access_pointer vm mvar
+    | PassPointer ->
+        if def_flag then Dgfip_varid.gen_access_def_pointer vm mvar
+        else Dgfip_varid.gen_access_pointer vm mvar
     | _ ->
         let offset =
           match offset with
@@ -346,7 +348,11 @@ let rec generate_c_expr (e : expression Pos.marked)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
       let bound_var = fresh_c_local "bound" in
-      let def_test = Done in
+      let def_test =
+        Dfun
+          ( "multimax_def",
+            [ Dvar (Local bound_var, Val); Dvar (M (v2, PassPointer), Def) ] )
+      in
       let value_comp =
         Dfun
           ( "multimax",
