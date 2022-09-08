@@ -315,13 +315,13 @@ let generate_output (oc : Format.formatter)
       var_list
   in
   let print_line fmt (position, name) =
-    Format.fprintf fmt "{alias = \"%s\" ; value = (Array.get tgv %d).value} ::"
+    Format.fprintf fmt "{alias = \"%s\" ; value = (Array.get tgv %d).value}"
       name position
   in
   let pp_print_output_get fmt output_vars =
-    Format.pp_print_list print_line fmt (name_and_pos_list output_vars)
+    Format.pp_print_list ~pp_sep:pp_statement_separator print_line fmt (name_and_pos_list output_vars)
   in
-  Format.fprintf oc "let output (tgv : m_array) : output_list =@,%a []@,"
+  Format.fprintf oc "let output (tgv : m_array) : output_array =[|@,%a|]@,"
     pp_print_output_get output_vars
 
 let generate_input_handler (oc : Format.formatter)
@@ -341,7 +341,7 @@ let generate_input_handler (oc : Format.formatter)
           alias position
     | None -> ()
   in
-  let pp_print_position_map fmt input_vars =
+  let pp_print_position_map fmt input_vars =    
     Format.pp_print_list ~pp_sep:pp_empty_separator pp_print_line fmt input_vars
   in
   Format.fprintf oc
@@ -360,7 +360,7 @@ let generate_input_handler (oc : Format.formatter)
 let generate_main_function (locals_size : int) (var_table_size : int)
     (oc : Format.formatter) (program : Bir.program) : unit =
   Format.fprintf oc
-    "let calculate_tax entry_list : (output_list * (m_error list)) =@,\
+    "let calculate_tax entry_list : (output_array * (m_error list)) =@,\
      let tgv : m_array = Array.make %i m_undef in@,\
      let local_variables : m_array = Array.make %i m_undef in@,\
      let errors = [] in@,\

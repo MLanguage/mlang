@@ -25,7 +25,7 @@ module TgvPositionMap = Map.Make (String)
 
 type input_list = revenue_code list
 
-type output_list = revenue_code list
+type output_array = revenue_code array
 
 let m_undef : m_value = { undefined = true; value = 0.0 }
 

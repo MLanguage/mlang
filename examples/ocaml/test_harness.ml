@@ -100,7 +100,8 @@ let print_rev_code (oc : Format.formatter) (rev_code : Mvalue.revenue_code) :
 
 let compute_discrepancies_from_file_2020 (fip_file : string) :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
-  let tax_result, errors = Ir.calculate_tax (entry_list fip_file) in
+  let tax_result_array, errors = Ir.calculate_tax (entry_list fip_file) in
+  let tax_result = Array.to_list tax_result_array in
   let ref_list = reference_list fip_file in
   let filtered_ref_list = filter_rev_code_list ref_list tax_result in
   let was_erased ref_list code : bool = not (List.mem code ref_list) in
@@ -180,7 +181,7 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   Format.printf "Simple test on file %s.@." fip_file;
   let _oc = open_out (output_file_name ^ "_disc.txt") in
   let oc = Format.formatter_of_out_channel _oc in
-  let tax_result, errors =
+  let tax_result_array, errors =
     try Ir.calculate_tax (entry_list fip_file)
     with M_exn e_list ->
       Format.fprintf oc "TEST CASE %s ends with M Exception:@,@,%a@." fip_file
@@ -188,6 +189,7 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
       close_out _oc;
       raise (M_exn e_list)
   in
+  let tax_result = Array.to_list tax_result_array in
   let ref_list = reference_list fip_file in
   let print_list fmt code_list =
     Format.pp_print_list print_rev_code fmt code_list
