@@ -252,6 +252,9 @@ and generate_stmt (program : Bir.program) (oc : Format.formatter)
   | SFunctionCall (function_name, _) ->
       Format.fprintf oc "mpp_func_%s context" function_name
 
+let pp_empty_separator (f : Format.formatter) () : unit =
+  Format.fprintf f ""
+
 let pp_function_separator (f : Format.formatter) () : unit =
   Format.fprintf f "@,@,"
 
@@ -334,18 +337,18 @@ let generate_input_handler (oc : Format.formatter)
     match get_position_and_alias variable with
     | Some (position, alias) ->
         Format.fprintf fmt
-          "let tgv_positions = TgvPositionMap.add \"%s\" %d tgv_positions in"
+          "let tgv_positions = TgvPositionMap.add \"%s\" %d tgv_positions in@,"
           alias position
     | None -> ()
   in
   let pp_print_position_map fmt input_vars =
-    Format.pp_print_list pp_print_line fmt input_vars
+    Format.pp_print_list ~pp_sep:pp_empty_separator pp_print_line fmt input_vars
   in
   Format.fprintf oc
     "let input_handler (tgv : m_array) (entry_list : revenue_code list) : unit \
      =@,\
      let tgv_positions = TgvPositionMap.empty in@,\
-     %a@,\
+     %a\
      let init_tgv_var (entry_var : revenue_code) : unit =@,\
      Array.set tgv @,\
      (TgvPositionMap.find entry_var.alias tgv_positions)@,\
