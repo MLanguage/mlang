@@ -406,7 +406,7 @@ let generate_calculateTax_method (calculation_vars_len : int)
      @,"
     print_double_cut () calculation_vars_len locals_size print_double_cut ()
     print_double_cut () print_double_cut () (generate_stmts program)
-    (Bir.main_statements program)
+    (Bir.main_statements_with_context program)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =

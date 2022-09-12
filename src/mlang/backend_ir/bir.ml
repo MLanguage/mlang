@@ -135,15 +135,15 @@ type program = {
 }
 
 let main_statements (p : program) : stmt list =
+  try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
+  with Not_found ->
+    Errors.raise_error "Unable to find main function of Bir program"
+
+let main_statements_with_context (p : program) : stmt list =
   try (FunctionMap.find p.context_function p.mpp_functions).mppf_stmts
   with Not_found ->
     Errors.raise_error
       "Unable to find contextualized main function of Bir program"
-
-let main_statements_no_context (p : program) : stmt list =
-  try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
-  with Not_found ->
-    Errors.raise_error "Unable to find main function of Bir program"
 
 let main_statements_with_reset (p : program) : stmt list =
   try

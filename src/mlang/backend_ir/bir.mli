@@ -86,7 +86,7 @@ val rule_or_verif_as_statements : rule_or_verif -> stmt list
 
 val main_statements : program -> stmt list
 
-val main_statements_no_context : program -> stmt list
+val main_statements_with_context : program -> stmt list
 
 val main_statements_with_reset : program -> stmt list
 
