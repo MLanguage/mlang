@@ -151,7 +151,7 @@ let add_test_conds_to_combined_program (p : Bir.program)
         | _ -> Some stmt)
       stmts
   in
-  let new_stmts = filter_stmts (Bir.main_statements p) in
+  let new_stmts = filter_stmts (Bir.main_statements_with_reset p) in
   let conditions_stmts =
     Bir.VariableMap.fold
       (fun _ cond stmts ->
@@ -159,7 +159,7 @@ let add_test_conds_to_combined_program (p : Bir.program)
       conds []
   in
   let mpp_functions =
-    Bir.FunctionMap.add p.Bir.context_with_reset_function
+    Bir.FunctionMap.add p.Bir.context_function
       Bir.{ mppf_stmts = new_stmts @ conditions_stmts; mppf_is_verif = false }
       p.mpp_functions
   in

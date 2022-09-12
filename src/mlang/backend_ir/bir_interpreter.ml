@@ -752,7 +752,9 @@ module Make (N : Bir_number.NumberInterface) = struct
       (code_loc_start_value : int) : ctx =
     try
       let ctx =
-        evaluate_stmts p ctx (Bir.main_statements p) [] code_loc_start_value
+        evaluate_stmts p ctx
+          (Bir.main_statements_with_reset p)
+          [] code_loc_start_value
       in
       ctx
     with RuntimeError (e, ctx) ->

@@ -330,16 +330,24 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       f.func_conds []
   in
   let mpp_functions =
-    Bir.FunctionMap.add context_function
+    Bir.FunctionMap.add context_with_reset_function
       Bir.
         {
           mppf_stmts =
-            unused_input_stmts @ const_input_stmts
-            @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
-            @ conds_stmts;
+            (unused_input_stmts
+            @ Bir.[ (SFunctionCall (p.context_function, []), Pos.no_pos) ]);
           mppf_is_verif = false;
         }
-      p.mpp_functions
+      (Bir.FunctionMap.add context_function
+         Bir.
+           {
+             mppf_stmts =
+               const_input_stmts
+               @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
+               @ conds_stmts;
+             mppf_is_verif = false;
+           }
+         p.mpp_functions)
   in
   ( {
       p with
