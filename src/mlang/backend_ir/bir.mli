@@ -62,6 +62,7 @@ type program = {
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   context_function : function_name;
+  context_with_reset_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
@@ -86,6 +87,8 @@ val rule_or_verif_as_statements : rule_or_verif -> stmt list
 val main_statements : program -> stmt list
 
 val main_statements_no_context : program -> stmt list
+
+val main_statements_with_reset : program -> stmt list
 
 val get_all_statements : program -> stmt list
 

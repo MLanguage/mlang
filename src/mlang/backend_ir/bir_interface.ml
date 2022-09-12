@@ -255,6 +255,8 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
 
 let context_function = "contextualize"
 
+let context_with_reset_function = "contextualize_and_reset"
+
 let context_agnostic_mpp_functions (p : Bir.program) :
     Bir.mpp_function Bir.FunctionMap.t =
   Bir.FunctionMap.remove context_function p.Bir.mpp_functions
@@ -343,6 +345,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       p with
       mpp_functions;
       context_function;
+      context_with_reset_function;
       outputs = f.func_outputs;
     },
     List.length unused_input_stmts + List.length const_input_stmts )

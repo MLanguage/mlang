@@ -128,6 +128,7 @@ type program = {
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   context_function : function_name;
+  context_with_reset_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
@@ -143,6 +144,13 @@ let main_statements_no_context (p : program) : stmt list =
   try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
+
+let main_statements_with_reset (p : program) : stmt list =
+  try
+    (FunctionMap.find p.context_with_reset_function p.mpp_functions).mppf_stmts
+  with Not_found ->
+    Errors.raise_error
+      "Unable to find contextualized main function with reset of Bir program"
 
 let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
