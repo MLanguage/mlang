@@ -61,8 +61,8 @@ type program = {
   mpp_functions : mpp_function FunctionMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context_function : function_name;
-  context_with_reset_function : function_name;
+  context_function : mpp_function;
+  context_with_reset_function : mpp_function;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;

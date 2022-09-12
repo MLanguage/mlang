@@ -158,12 +158,10 @@ let add_test_conds_to_combined_program (p : Bir.program)
         (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
       conds []
   in
-  let mpp_functions =
-    Bir.FunctionMap.add p.Bir.context_function
-      Bir.{ mppf_stmts = new_stmts @ conditions_stmts; mppf_is_verif = false }
-      p.mpp_functions
+  let context_function =
+    Bir.{ mppf_stmts = new_stmts @ conditions_stmts; mppf_is_verif = false }
   in
-  { p with mpp_functions }
+  { p with context_function }
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool)

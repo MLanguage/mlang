@@ -555,8 +555,20 @@ let create_combined_program (m_program : Mir_interface.full_program)
       main_function = mpp_function_to_extract;
       (* Really just placeholders, as context will be computed in
          Bir_interface *)
-      context_function = mpp_function_to_extract;
-      context_with_reset_function = mpp_function_to_extract;
+      context_function =
+        Bir.
+          {
+            mppf_stmts =
+              Bir.[ (SFunctionCall (mpp_function_to_extract, []), Pos.no_pos) ];
+            mppf_is_verif = false;
+          };
+      context_with_reset_function =
+        Bir.
+          {
+            mppf_stmts =
+              Bir.[ (SFunctionCall (mpp_function_to_extract, []), Pos.no_pos) ];
+            mppf_is_verif = false;
+          };
       idmap = m_program.program.program_idmap;
       mir_program = m_program.program;
       outputs = Bir.VariableMap.empty;

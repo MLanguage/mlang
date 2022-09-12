@@ -255,8 +255,7 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
 
 let context_function = "contextualize"
 
-let context_with_reset_function = "contextualize_and_reset"
-
+(* Should probably be removed and replaced by the new main_function or context_function*)
 let context_agnostic_mpp_functions (p : Bir.program) :
     Bir.mpp_function Bir.FunctionMap.t =
   Bir.FunctionMap.remove context_function p.Bir.mpp_functions
@@ -329,29 +328,25 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
         Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  let mpp_functions =
-    Bir.FunctionMap.add context_with_reset_function
-      Bir.
-        {
-          mppf_stmts =
-            (unused_input_stmts
-            @ Bir.[ (SFunctionCall (p.context_function, []), Pos.no_pos) ]);
-          mppf_is_verif = false;
-        }
-      (Bir.FunctionMap.add context_function
-         Bir.
-           {
-             mppf_stmts =
-               const_input_stmts
-               @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
-               @ conds_stmts;
-             mppf_is_verif = false;
-           }
-         p.mpp_functions)
+  let context_function =
+    Bir.
+      {
+        mppf_stmts =
+          const_input_stmts
+          @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
+          @ conds_stmts;
+        mppf_is_verif = false;
+      }
+  in
+  let context_with_reset_function =
+    Bir.
+      {
+        mppf_stmts = unused_input_stmts @ context_function.mppf_stmts;
+        mppf_is_verif = false;
+      }
   in
   ( {
       p with
-      mpp_functions;
       context_function;
       context_with_reset_function;
       outputs = f.func_outputs;
