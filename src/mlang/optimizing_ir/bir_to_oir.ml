@@ -203,6 +203,7 @@ and re_translate_block (block_id : Oir.block_id)
       let stmts = List.rev stmts in
       (next_block_id, stmts, rules)
 
+(*WARNING : OIR is not tested, but change in Bir interface to main/context functions has probably broken it.*)
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   let statements, rules_and_verifs =
     re_translate_blocks_until p.entry_block p.blocks Bir.ROVMap.empty None
@@ -222,4 +223,5 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
     mir_program = p.mir_program;
     outputs = p.outputs;
     main_function = p.main_function;
+    context_function = p.main_function;
   }

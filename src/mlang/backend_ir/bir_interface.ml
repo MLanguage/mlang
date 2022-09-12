@@ -342,7 +342,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
   ( {
       p with
       mpp_functions;
-      main_function = context_function;
+      context_function;
       outputs = f.func_outputs;
     },
     List.length unused_input_stmts + List.length const_input_stmts )

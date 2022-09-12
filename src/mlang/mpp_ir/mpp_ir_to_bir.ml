@@ -553,6 +553,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
       rules_and_verifs;
       mpp_functions;
       main_function = mpp_function_to_extract;
+      (* Really just placeholders, as context will be computed in Bir_interface *)
+      context_function = mpp_function_to_extract;
       idmap = m_program.program.program_idmap;
       mir_program = m_program.program;
       outputs = Bir.VariableMap.empty;

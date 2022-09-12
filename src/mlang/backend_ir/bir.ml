@@ -127,12 +127,19 @@ type program = {
   mpp_functions : mpp_function FunctionMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
+  context_function : function_name;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
 }
 
 let main_statements (p : program) : stmt list =
+  try (FunctionMap.find p.context_function p.mpp_functions).mppf_stmts
+  with Not_found ->
+    Errors.raise_error
+      "Unable to find contextualized main function of Bir program"
+
+let main_statements_no_context (p : program) : stmt list =
   try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
