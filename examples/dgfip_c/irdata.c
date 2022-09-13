@@ -16,7 +16,7 @@ static bool alloc_tab(double **tab, char **def_tab, int taille)
     if (*tab == NULL) {
       return false;
     }
-    *def_tab = (char *)malloc(taille);
+    *def_tab = (char *)malloc(taille * sizeof(char));
     if (*def_tab == NULL) {
       free(*tab);
       *tab = NULL;

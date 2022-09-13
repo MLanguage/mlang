@@ -2,11 +2,14 @@
 #include "conf.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
 #include <math.h>
 #include <limits.h>
 #include "var.h"
+
+extern FILE * fd_trace_dialog;
 
 static void add_erreur_code(T_erreur *erreur, const char *code)
 {
@@ -149,6 +152,133 @@ void free_erreur()
 }
 
 #endif /* FLG_MULTITHREAD */
+
+
+
+#ifdef FLG_TRACE
+
+int niv_trace = 3;
+
+#ifdef FLG_API
+#define TRACE_FILE fd_trace_dialog
+#else
+#define TRACE_FILE stderr
+#endif /* FLG_API */
+
+void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi)
+{
+  double valeur;
+  int def;
+  if (expr < 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
+              color, typo, nom, expr, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
+#endif /* FLG_COLOR */
+    }
+    return;
+  } else if (expr >= maxi) {
+#ifdef FLG_COLOR
+    fprintf(TRACE_FILE,
+            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
+            color, typo, expr, maxi);
+#else
+    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
+            expr, maxi);
+#endif /* FLG_COLOR */
+    expr = 0;
+  }
+#ifdef FLG_COMPACT
+  valeur = irdata->valeurs[indice + expr];
+  def = irdata->defs[indice + expr];
+#else
+  switch (indice & EST_MASQUE) {
+    case EST_SAISIE:
+      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
+      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_CALCULEE:
+      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
+      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_BASE:
+      valeur = irdata->base[(indice & INDICE_VAL) + expr];
+      def = irdata->def_base[(indice & INDICE_VAL) + expr];
+      break;
+  }
+#endif /* FLG_COMPACT */
+  if (is_tab) {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
+                color, typo, nom, expr, valeur);
+#else
+        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
+#endif /* FLG_COLOR */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
+                color, typo, nom, expr, chaine);
+#else
+        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
+#endif /* FLG_COLOR */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
+              color, typo, nom, expr, def);
+#else
+      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
+#endif /* FLG_COLOR */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
+              color, typo, nom, expr, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
+#endif /* FLG_COLOR */
+    }
+  } else {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
+                color, typo, nom, valeur);
+#else
+        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
+#endif /* FLG_COLOR */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
+                color, typo, nom, chaine);
+#else
+        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
+#endif /* FLG_COLOR */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
+              color, typo, nom, def);
+#else
+      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
+#endif /* FLG_COLOR */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
+              color, typo, nom, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
+#endif /* FLG_COLOR */
+    }
+  }
+}
+
+#endif /* FLG_TRACE */
+
+
 
 T_discord * no_error(T_irdata *irdata)
 {
