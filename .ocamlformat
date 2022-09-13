@@ -2,5 +2,6 @@ profile = default
 margin = 80
 exp-grouping = preserve
 wrap-comments
+disable
 parse-docstrings
 version=0.19.0
