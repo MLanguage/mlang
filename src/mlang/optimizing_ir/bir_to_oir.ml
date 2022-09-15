@@ -224,16 +224,5 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
     mir_program = p.mir_program;
     outputs = p.outputs;
     main_function = p.main_function;
-    context_function =
-      Bir.
-        {
-          mppf_stmts = Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ];
-          mppf_is_verif = false;
-        };
-    context_with_reset_function =
-      Bir.
-        {
-          mppf_stmts = Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ];
-          mppf_is_verif = false;
-        };
+    context = None;
   }

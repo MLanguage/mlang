@@ -151,17 +151,28 @@ let add_test_conds_to_combined_program (p : Bir.program)
         | _ -> Some stmt)
       stmts
   in
-  let new_stmts = filter_stmts (Bir.main_statements_with_reset p) in
   let conditions_stmts =
     Bir.VariableMap.fold
       (fun _ cond stmts ->
         (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
       conds []
   in
-  let context_function =
-    Bir.{ mppf_stmts = new_stmts @ conditions_stmts; mppf_is_verif = false }
-  in
-  { p with context_function }
+  match p.context with
+  | None ->
+      Errors.raise_error
+        "No context was found in Bir.program, is the test file empty?"
+  | Some old_context ->
+      let new_stmts = filter_stmts old_context.constant_inputs_init_stmts in
+      {
+        p with
+        context =
+          Some
+            {
+              old_context with
+              constant_inputs_init_stmts = new_stmts;
+              adhoc_specs_conds_stmts = conditions_stmts;
+            };
+      }
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool)

@@ -57,12 +57,17 @@ type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 module FunctionMap : Map.S with type key = function_name
 
+type program_context = {
+  constant_inputs_init_stmts : stmt list;
+  adhoc_specs_conds_stmts : stmt list;
+  unused_inputs_init_stmts : stmt list;
+}
+
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context_function : mpp_function;
-  context_with_reset_function : mpp_function;
+  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
