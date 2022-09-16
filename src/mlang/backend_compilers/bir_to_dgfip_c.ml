@@ -68,7 +68,7 @@ type dexpr =
   | Dunop of string * dexpr
   | Dbinop of string * dexpr * dexpr
   | Dfun of string * dexpr list
-  | Daccess of variable * local_var
+  | Daccess of variable * dflag * local_var
   | Dite of dexpr * dexpr * dexpr
 
 type expression_composition = {
@@ -112,9 +112,10 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
-  | Daccess (var, lvar) ->
+  | Daccess (var, dflag, lvar) ->
       Format.fprintf fmt "(%s[(int)%a])"
-        (generate_variable ~debug_flag:dgfip_flags.flg_trace vm PassPointer var)
+        (generate_variable ~def_flag:(dflag = Def)
+           ~debug_flag:dgfip_flags.flg_trace vm PassPointer var)
         format_local_var (lvar, Val)
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(@,%a ?@ %a@ : %a@]@,)" format_dexpr dec
@@ -274,15 +275,17 @@ let rec generate_c_expr (e : expression Pos.marked)
       let idx_var = fresh_c_local "idx" in
       let def_test =
         Dand
-          ( Dvar (Local idx_var, Def),
-            Dbinop ("<=", Dvar (Local idx_var, Val), Dlit (float_of_int size))
-          )
+          ( Dand
+              ( Dvar (Local idx_var, Def),
+                Dbinop
+                  ("<=", Dvar (Local idx_var, Val), Dlit (float_of_int size)) ),
+            Daccess (Pos.unmark var, Def, idx_var) )
       in
       let value_comp =
         Dite
           ( Dbinop ("<", Dvar (Local idx_var, Val), Dzero),
             Dzero,
-            Daccess (Pos.unmark var, idx_var) )
+            Daccess (Pos.unmark var, Val, idx_var) )
       in
       build_transitive_composition
         { def_test; value_comp; subs = [ (idx_var, idx) ] }
