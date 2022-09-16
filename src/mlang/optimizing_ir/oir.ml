@@ -40,7 +40,6 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
-  context : Bir.program_context option;
 }
 
 let count_instr (p : program) : int =
