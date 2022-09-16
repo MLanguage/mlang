@@ -34,6 +34,8 @@ let print_done ?msg (init : int) (old : int) (new_ : int) : unit =
        reduction_percent)
 
 let optimize (p : program) : program =
+  (* We only use partial evalutation for now, as the others are unmaintained and
+     not meant as function optimisations *)
   let start_instrs = count_instr p in
   Cli.debug_print "Partial evaluation...";
   let old_instrs = count_instr p in
