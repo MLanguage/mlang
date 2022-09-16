@@ -424,9 +424,7 @@ let generate_mpp_function (program : program) (oc : Format.formatter)
     f (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : program) =
-  let functions =
-    FunctionMap.bindings (Bir_interface.context_agnostic_mpp_functions program)
-  in
+  let functions = FunctionMap.bindings program.Bir.mpp_functions in
   let function_names, _ = List.split functions in
   Format.pp_print_list ~pp_sep:print_double_cut
     (generate_mpp_function program)

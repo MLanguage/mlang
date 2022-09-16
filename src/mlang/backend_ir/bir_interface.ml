@@ -253,14 +253,6 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
-let context_function = "contextualize"
-
-(* Should probably be removed and replaced by the new main_function or
-   context_function*)
-let context_agnostic_mpp_functions (p : Bir.program) :
-    Bir.mpp_function Bir.FunctionMap.t =
-  Bir.FunctionMap.remove context_function p.Bir.mpp_functions
-
 (** Add varibles, constants, conditions and outputs from [f] to [p] *)
 let adapt_program_to_function (p : Bir.program) (f : bir_function) :
     Bir.program * int =

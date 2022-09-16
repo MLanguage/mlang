@@ -47,8 +47,3 @@ val read_inputs_from_stdin : bir_function -> Mir.literal Bir.VariableMap.t
 val adapt_program_to_function : Bir.program -> bir_function -> Bir.program * int
 (** [adapt_program_to_function program io] modifies [program] according to the
     input-output specification of [io]*)
-
-val context_agnostic_mpp_functions :
-  Bir.program -> Bir.mpp_function Bir.FunctionMap.t
-(** Returns the mpp functions of the specification without contextualization
-    from [adapt_proram_to_function] *)
