@@ -120,60 +120,6 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
   ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds },
     input_file )
 
-let add_test_conds_to_combined_program (p : Bir.program)
-    (conds : Bir.condition_data Bir.VariableMap.t) : Bir.program =
-  (* because evaluate_program redefines everything each time, we have to make
-     sure that the redefinitions of our constant inputs are removed from the
-     main list of statements *)
-  let filter_stmts stmts =
-    List.filter_map
-      (fun stmt ->
-        match Pos.unmark stmt with
-        | Bir.SAssign (var, var_data) -> (
-            let new_var_data =
-              {
-                var_data with
-                var_io = Regular;
-                var_definition =
-                  (match var_data.var_definition with
-                  | InputVar ->
-                      SimpleVar
-                        (Pos.same_pos_as (Mir.Literal Undefined)
-                           (Bir.var_to_mir var).Mir.Variable.name)
-                  | SimpleVar old -> SimpleVar old
-                  | TableVar (size, old) -> TableVar (size, old));
-              }
-            in
-            match new_var_data.var_definition with
-            | InputVar -> None
-            | _ -> Some (Pos.same_pos_as (Bir.SAssign (var, new_var_data)) stmt)
-            )
-        | _ -> Some stmt)
-      stmts
-  in
-  let conditions_stmts =
-    Bir.VariableMap.fold
-      (fun _ cond stmts ->
-        (Bir.SVerif cond, Pos.get_position cond.cond_expr) :: stmts)
-      conds []
-  in
-  match p.context with
-  | None ->
-      Errors.raise_error
-        "No context was found in Bir.program, is the test file empty?"
-  | Some old_context ->
-      let new_stmts = filter_stmts old_context.constant_inputs_init_stmts in
-      {
-        p with
-        context =
-          Some
-            {
-              old_context with
-              constant_inputs_init_stmts = new_stmts;
-              adhoc_specs_conds_stmts = conditions_stmts;
-            };
-      }
-
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool)
     (value_sort : Bir_interpreter.value_sort) (test_error_margin : float) :
@@ -187,9 +133,6 @@ let check_test (combined_program : Bir.program) (test_name : string)
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f
-  in
-  let combined_program =
-    add_test_conds_to_combined_program combined_program f.func_conds
   in
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program combined_program; *)
