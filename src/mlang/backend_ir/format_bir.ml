@@ -38,7 +38,7 @@ let rec format_stmt fmt (stmt : stmt) =
       let cond_error_opt_var =
         Option.map var_to_mir (snd cond_data.cond_error)
       in
-      Format.fprintf fmt "assert (%a) or raise %a%a" format_expression
+      Format.fprintf fmt "assert (%a) or raise %a@,%a" format_expression
         (Pos.unmark cond_data.cond_expr)
         Format_mir.format_error (fst cond_data.cond_error)
         (Format.pp_print_option (fun fmt v ->

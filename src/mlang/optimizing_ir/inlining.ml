@@ -248,7 +248,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
       in
       Mir.FunctionCall (f, new_args)
 
-let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
+let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
     (current_stmt_pos : int) : stmt * ctx * int =
   match Pos.unmark stmt with
   | SAssign (var, data) -> (
@@ -328,31 +328,14 @@ let rec inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
         Pos.same_pos_as (SConditional (new_cond, b1, b2, join)) stmt
       in
       (new_stmt, ctx, current_stmt_pos)
-  | SGoto _ -> (stmt, ctx, current_stmt_pos)
-  | SRovCall (rov_id, name, stmts) ->
-      let new_stmts, ctx, new_pos =
-        List.fold_left
-          (fun (stmts, ctx, stmt_pos) stmt ->
-            let new_stmt, new_ctx, new_pos =
-              inline_in_stmt stmt ctx current_block stmt_pos
-            in
-            (new_stmt :: stmts, new_ctx, new_pos + 1))
-          ([], ctx, current_stmt_pos)
-          stmts
-      in
-      let new_stmt =
-        Pos.same_pos_as (SRovCall (rov_id, name, List.rev new_stmts)) stmt
-      in
-      (new_stmt, ctx, new_pos)
-  | SFunctionCall _ -> assert false
-(* TODO: Implement me *)
+  | SGoto _ | SRovCall _ | SFunctionCall _ -> (stmt, ctx, current_stmt_pos)
 
-let inlining (p : program) : program =
-  let g = get_cfg p in
-  let p, _ =
+let inlining0 (cfg : cfg) : cfg =
+  let g = get_cfg cfg in
+  let cfg, _ =
     Topological.fold
-      (fun (block_id : block_id) (p, ctx) ->
-        let block = BlockMap.find block_id p.blocks in
+      (fun (block_id : block_id) (cfg, ctx) ->
+        let block = BlockMap.find block_id cfg.blocks in
         let new_block, ctx, _ =
           List.fold_left
             (fun (new_block, ctx, stmt_pos) stmt ->
@@ -362,9 +345,14 @@ let inlining (p : program) : program =
               (new_stmt :: new_block, new_ctx, new_pos + 1))
             ([], ctx, 0) block
         in
-        ( { p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks },
+        ( {
+            cfg with
+            blocks = BlockMap.add block_id (List.rev new_block) cfg.blocks;
+          },
           ctx ))
       g
-      (p, empty_ctx g p.entry_block)
+      (cfg, empty_ctx g cfg.entry_block)
   in
-  p
+  cfg
+
+let inlining (p : program) : program = map_program_cfgs inlining0 p

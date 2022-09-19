@@ -40,7 +40,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
           used_vars)
       stmt_used_vars used_vars
   in
-  let rec remove_dead_stmts_of stmts used_vars used_defs pos =
+  let remove_dead_stmts_of stmts used_vars used_defs pos =
     List.fold_left
       (fun ((used_vars : pos_map), (used_defs : pos_map), acc, pos) stmt ->
         match Pos.unmark stmt with
@@ -141,17 +141,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
               used_defs,
               stmt :: acc,
               pos - 1 )
-        | SGoto _ -> (used_vars, used_defs, stmt :: acc, pos - 1)
-        | SRovCall (rov_id, name, stmts) ->
-            let used_vars, used_defs, new_stmts, pos =
-              remove_dead_stmts_of stmts used_vars used_defs pos
-            in
-            let rule_call =
-              Pos.same_pos_as (SRovCall (rov_id, name, new_stmts)) stmt
-            in
-            (used_vars, used_defs, rule_call :: acc, pos - 1)
-        | SFunctionCall _ -> assert false
-        (* TODO: Implement me *))
+        | SGoto _ | SRovCall _ | SFunctionCall _ ->
+            (used_vars, used_defs, stmt :: acc, pos - 1))
       (used_vars, used_defs, [], pos)
       (List.rev stmts)
   in
@@ -162,17 +153,22 @@ let remove_dead_statements (stmts : block) (id : block_id)
   in
   (used_vars, used_defs, new_stmts)
 
-let dead_code_removal (p : program) : program =
-  let g = get_cfg p in
+let dead_code_removal0 (outputs : unit Bir.VariableMap.t) (cfg : cfg) : cfg =
+  let g = get_cfg cfg in
   let rev_topological_order = Topological.fold (fun id acc -> id :: acc) g [] in
-  let is_entry block_id = block_id = p.entry_block in
+  let is_entry block_id = block_id = cfg.entry_block in
   let is_reachable = Reachability.analyze is_entry g in
-  let p =
-    { p with blocks = BlockMap.filter (fun bid _ -> is_reachable bid) p.blocks }
+  let cfg =
+    {
+      cfg with
+      blocks = BlockMap.filter (fun bid _ -> is_reachable bid) cfg.blocks;
+    }
   in
   let path_checker = Paths.create g in
-  let doms = Dominators.idom_to_dom (Dominators.compute_idom g p.entry_block) in
-  let _, _, p =
+  let doms =
+    Dominators.idom_to_dom (Dominators.compute_idom g cfg.entry_block)
+  in
+  let _, _, cfg =
     List.fold_left
       (fun (used_vars, defs_vars, p) block_id ->
         try
@@ -185,10 +181,13 @@ let dead_code_removal (p : program) : program =
           (used_vars, defs_vars, p)
         with Not_found -> (used_vars, defs_vars, p))
       ( Bir.VariableMap.map
-          (fun () -> BlockMap.singleton p.exit_block (PosSet.singleton 1))
-          p.outputs,
+          (fun () -> BlockMap.singleton cfg.exit_block (PosSet.singleton 1))
+          outputs,
         Bir.VariableMap.empty,
-        p )
+        cfg )
       rev_topological_order
   in
-  p
+  cfg
+
+let dead_code_removal (p : program) : program =
+  map_program_cfgs (dead_code_removal0 p.outputs) p
