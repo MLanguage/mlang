@@ -118,10 +118,12 @@ let m_table_value_at_index (variable_array : m_array) (table_start : int)
     | _ -> Array.get variable_array (offset + table_start)
 
 let m_max (x : m_value) (y : m_value) : m_value =
-  { undefined = false; value = max x.value y.value }
+  if x.undefined && y.undefined then m_undef
+  else { undefined = false; value = max x.value y.value }
 
 let m_min (x : m_value) (y : m_value) : m_value =
-  { undefined = false; value = min x.value y.value }
+  if x.undefined && y.undefined then m_undef
+  else { undefined = false; value = min x.value y.value }
 
 let m_round (x : m_value) : m_value =
   if x.undefined then m_undef
@@ -146,17 +148,17 @@ let m_multimax (bound_variable : m_value) (variable_array : m_array)
   if bound_variable.undefined then failwith "Multimax bound undefined!"
   else
     let bound = int_of_float bound_variable.value in
-    let get_position_value_or_zero position =
-      m_add (Array.get variable_array position) m_zero
+    let get_position_value position =
+      Array.get variable_array position
     in
     let rec multimax variable_array current_index max_index reference =
       let new_max =
-        m_max reference (get_position_value_or_zero current_index)
+        m_max reference (get_position_value current_index)
       in
       if current_index = max_index then new_max
       else multimax variable_array (current_index + 1) max_index new_max
     in
     if bound >= 1 then
       multimax variable_array (position + 1) (position + bound)
-        (get_position_value_or_zero position)
-    else get_position_value_or_zero position
+        (get_position_value position)
+    else get_position_value position
