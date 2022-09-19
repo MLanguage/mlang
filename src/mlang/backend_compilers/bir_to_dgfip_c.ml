@@ -341,14 +341,14 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = Dor (se1.def_test, se2.def_test) in
-      let value_comp = Dfun ("_fmax", [ se1.value_comp; se2.value_comp ]) in
+      let value_comp = Dfun ("max", [ se1.value_comp; se2.value_comp ]) in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = Dor (se1.def_test, se2.def_test) in
-      let value_comp = Dfun ("_fmin", [ se1.value_comp; se2.value_comp ]) in
+      let value_comp = Dfun ("min", [ se1.value_comp; se2.value_comp ]) in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
@@ -819,13 +819,6 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
 #define add_erreur(a,b,c) add_erreur(b,c)
 #endif
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
-#define _fmax(x,y) fmax((x),(y))
-#define _fmin(x,y) fmin((x),(y))
-#else
-double _fmax(double x, double y);
-double _fmin(double x, double y);
-#endif
 |};
         generate_rov_functions dgfip_flags program vm fmt rovs;
         Format.pp_print_flush fmt ();
@@ -843,15 +836,6 @@ let generate_implem_header oc header_filename =
 
 #include "%s"
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
-#define _fmax(x,y) fmax((x),(y))
-#define _fmin(x,y) fmin((x),(y))
-#else
-double _fmax(double x, double y)
-{ return (x > y) ? x : y; }
-double _fmin(double x, double y)
-{ return (x < y) ? x : y; }
-#endif
 
 |}
     Prelude.message header_filename
