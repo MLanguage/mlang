@@ -25,26 +25,39 @@ and stmt_kind =
   | SConditional of Bir.expression * block_id * block_id * block_id
   | SVerif of Bir.condition_data
   | SGoto of block_id
-  | SRovCall of Bir.rov_id * string Pos.marked * stmt list
-  | SFunctionCall of Bir.function_name * Mir.variable list
+  | SRovCall of Bir.rov_id
+  | SFunctionCall of Bir.function_name * Mir.Variable.t list
 
 type block = stmt list
 
-type program = {
+type cfg = {
   blocks : block BlockMap.t;
   entry_block : block_id;
   exit_block : block_id;
+}
+
+type mpp_function = { cfg : cfg; is_verif : bool }
+
+type rov_code = Rule of cfg | Verif of cfg
+
+type rov = { id : Bir.rov_id; name : string Pos.marked; code : rov_code }
+
+type program = {
+  mpp_functions : mpp_function Bir.FunctionMap.t;
+  rules_and_verifs : rov Bir.ROVMap.t;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
 }
 
+val map_program_cfgs : (cfg -> cfg) -> program -> program
+
 val count_instr : program -> int
 
 module CFG : Graph.Sig.P with type V.t = int
 
-val get_cfg : program -> CFG.t
+val get_cfg : cfg -> CFG.t
 
 module Topological : sig
   val fold : (CFG.V.t -> 'a -> 'a) -> CFG.t -> 'a -> 'a

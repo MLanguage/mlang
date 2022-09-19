@@ -42,8 +42,8 @@ endif
 
 C_COMPILER?=clang
 
-ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O
-else
+ifeq ($(OPTIMIZE), 0)
     OPTIMIZE_FLAG=
+else
+    OPTIMIZE_FLAG=-O
 endif

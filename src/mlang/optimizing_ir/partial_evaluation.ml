@@ -129,6 +129,14 @@ let reset_ctx (ctx : partial_ev_ctx) (block_id : block_id) =
     ctx_inside_block = Some block_id;
   }
 
+let all_top_ctx (ctx : partial_ev_ctx) (block_id : block_id) =
+  {
+    ctx with
+    ctx_vars = Bir.VariableMap.empty;
+    ctx_local_vars = Mir.LocalVariableMap.empty;
+    ctx_inside_block = Some block_id;
+  }
+
 let compare_for_min_dom (dom : Dominators.dom) (id1 : block_id) (id2 : block_id)
     : int =
   (* the sort puts smaller items first, and we want the first item to be the
@@ -641,7 +649,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
       Format_bir.format_expression (Pos.unmark e) format_definedness d;
   (new_e, d)
 
-let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
+let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
     (ctx : partial_ev_ctx) (new_block : stmt list) (p : program) :
     stmt list * partial_ev_ctx =
   match Pos.unmark stmt with
@@ -748,26 +756,14 @@ let rec partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
             :: new_block,
             ctx ))
   | SGoto _ -> (stmt :: new_block, ctx)
-  | SRovCall (rov_id, name, stmts) ->
-      let stmts, ctx =
-        List.fold_left
-          (fun (new_block, ctx) stmt ->
-            partially_evaluate_stmt stmt block_id ctx new_block p)
-          ([], ctx) stmts
-      in
-      let stmt =
-        Pos.same_pos_as (SRovCall (rov_id, name, List.rev stmts)) stmt
-      in
-      (stmt :: new_block, ctx)
-  | SFunctionCall _ -> assert false
-(* TODO: Implement me *)
+  | SRovCall _ | SFunctionCall _ -> (stmt :: new_block, all_top_ctx ctx block_id)
 
-let partial_evaluation (p : program) : program =
-  let g = get_cfg p in
-  let p, _ =
+let partial_evaluation0 (p : program) (cfg : cfg) : cfg =
+  let g = get_cfg cfg in
+  let cfg, _ =
     Topological.fold
-      (fun (block_id : block_id) (p, ctx) ->
-        let block = BlockMap.find block_id p.blocks in
+      (fun (block_id : block_id) (cfg, ctx) ->
+        let block = BlockMap.find block_id cfg.blocks in
         let new_block, ctx =
           List.fold_left
             (fun (new_block, ctx) stmt ->
@@ -775,9 +771,15 @@ let partial_evaluation (p : program) : program =
               partially_evaluate_stmt stmt block_id ctx new_block p)
             ([], ctx) block
         in
-        ( { p with blocks = BlockMap.add block_id (List.rev new_block) p.blocks },
+        ( {
+            cfg with
+            blocks = BlockMap.add block_id (List.rev new_block) cfg.blocks;
+          },
           ctx ))
       g
-      (p, empty_ctx g p.entry_block)
+      (cfg, empty_ctx g cfg.entry_block)
   in
-  p
+  cfg
+
+let partial_evaluation (p : program) : program =
+  map_program_cfgs (partial_evaluation0 p) p
