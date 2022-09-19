@@ -27,32 +27,82 @@ and stmt_kind =
           the join point after *)
   | SVerif of Bir.condition_data
   | SGoto of block_id
-  | SRovCall of Bir.rov_id * string Pos.marked * stmt list
+  | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.variable list
 
 type block = stmt list
 
-type program = {
+type cfg = {
   blocks : block BlockMap.t;
   entry_block : block_id;
   exit_block : block_id;
+}
+
+type mpp_function = { cfg : cfg; is_verif : bool }
+
+type rov_code = Rule of cfg | Verif of cfg
+
+type rov = { id : Bir.rov_id; name : string Pos.marked; code : rov_code }
+
+type program = {
+  mpp_functions : mpp_function Bir.FunctionMap.t;
+  rules_and_verifs : rov Bir.ROVMap.t;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
 }
 
+let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
+  let mpp_functions =
+    Bir.FunctionMap.map
+      (fun func -> { func with cfg = f func.cfg })
+      p.mpp_functions
+  in
+  let rules_and_verifs =
+    Bir.ROVMap.map
+      (fun rov ->
+        {
+          rov with
+          code =
+            (match rov.code with
+            | Rule cfg -> Rule (f cfg)
+            | Verif cfg -> Verif (f cfg));
+        })
+      p.rules_and_verifs
+  in
+  {
+    mpp_functions;
+    rules_and_verifs;
+    idmap = p.idmap;
+    mir_program = p.mir_program;
+    outputs = p.outputs;
+    main_function = p.main_function;
+  }
+
 let count_instr (p : program) : int =
-  let rec aux acc stmts =
+  let aux acc stmts =
     List.fold_left
       (fun acc s ->
         match Pos.unmark s with
-        | SConditional _ | SAssign _ | SVerif _ | SFunctionCall _ -> acc + 1
-        | SGoto _ -> acc
-        | SRovCall (_, _, stmts) -> aux acc stmts)
+        | SConditional _ | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _
+          ->
+            acc + 1
+        | SGoto _ -> acc)
       acc stmts
   in
-  BlockMap.fold (fun _ block acc -> aux acc block) p.blocks 0
+  let count =
+    Bir.FunctionMap.fold
+      (fun _ { cfg; _ } acc ->
+        BlockMap.fold (fun _ block acc -> aux acc block) cfg.blocks acc)
+      p.mpp_functions 0
+  in
+  Bir.ROVMap.fold
+    (fun _ { code; _ } acc ->
+      match code with
+      | Rule cfg | Verif cfg ->
+          BlockMap.fold (fun _ block acc -> aux acc block) cfg.blocks acc)
+    p.rules_and_verifs count
 
 module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   type t = block_id
@@ -64,7 +114,7 @@ module CFG = Graph.Persistent.Digraph.ConcreteBidirectional (struct
   let equal v1 v2 = v1 = v2
 end)
 
-let get_cfg (p : program) : CFG.t =
+let get_cfg (cfg : cfg) : CFG.t =
   let g = CFG.empty in
   BlockMap.fold
     (fun (id : block_id) (block : block) (g : CFG.t) ->
@@ -78,7 +128,7 @@ let get_cfg (p : program) : CFG.t =
               CFG.add_edge g id next_b2
           | _ -> g)
         g block)
-    p.blocks g
+    cfg.blocks g
 
 module Topological = Graph.Topological.Make (CFG)
 module Dominators = Graph.Dominator.Make (CFG)

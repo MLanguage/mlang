@@ -3,12 +3,6 @@
 
 include Makefile.include
 
-ifeq ($(OPTIMIZE), 1)
-    OPTIMIZE_FLAG=-O --fast-math
-else
-    OPTIMIZE_FLAG=
-endif
-
 ifeq ($(CODE_COVERAGE), 1)
     CODE_COVERAGE_FLAG=--code_coverage
 else

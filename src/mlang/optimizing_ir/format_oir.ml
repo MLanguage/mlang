@@ -37,9 +37,8 @@ let rec format_stmt fmt (stmt : stmt) =
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
         cond_error_opt_var
   | SGoto b -> Format.fprintf fmt "goto %d@," b
-  | SRovCall (_rid, name, stmts) ->
-      Format.fprintf fmt "call(%s)@[<v 3>{@,%a@]}@," (Pos.unmark name)
-        format_stmts stmts
+  | SRovCall rid ->
+      Format.fprintf fmt "call(%d)@," (Mir.num_of_rule_or_verif_id rid)
   | SFunctionCall (func, args) ->
       Format.fprintf fmt "call_function: %s with args %a@," func
         (Format.pp_print_list (fun fmt arg ->
