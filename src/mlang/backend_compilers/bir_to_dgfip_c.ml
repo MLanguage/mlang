@@ -52,37 +52,185 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
       (Format.asprintf "Variable %s not found in TGV"
          (Pos.unmark mvar.Mir.Variable.name))
 
-type dflag = Def | Val
+module DecoupledExpr : sig
+  type dflag = Def | Val
 
-type local_var = string * int
+  type local_var = string * int
 
-type expr_var = Local of local_var | M of variable * offset
+  type expr_var = Local of local_var | M of variable * offset
 
-type dexpr =
-  | Done
-  | Dzero
-  | Dlit of float
-  | Dvar of expr_var * dflag
-  | Dand of dexpr * dexpr
-  | Dor of dexpr * dexpr
-  | Dunop of string * dexpr
-  | Dbinop of string * dexpr * dexpr
-  | Dfun of string * dexpr list
-  | Daccess of variable * dflag * local_var
-  | Dite of dexpr * dexpr * dexpr
+  type expr = private
+    | Done
+    | Dzero
+    | Dlit of float
+    | Dvar of expr_var * dflag
+    | Dand of expr * expr
+    | Dor of expr * expr
+    | Dunop of string * expr
+    | Dbinop of string * expr * expr
+    | Dfun of string * expr list
+    | Daccess of variable * dflag * local_var
+    | Dite of expr * expr * expr
+
+  val one : expr
+
+  val zero : expr
+
+  val lit : float -> expr
+
+  val var : expr_var -> dflag -> expr
+
+  val dand : expr -> expr -> expr
+
+  val dor : expr -> expr -> expr
+
+  val unop : string -> expr -> expr
+
+  val binop : string -> expr -> expr -> expr
+
+  val dfun : string -> expr list -> expr
+
+  val access : variable -> dflag -> local_var -> expr
+
+  val ite : expr -> expr -> expr -> expr
+
+  val fresh_c_local : string -> local_var
+end = struct
+  type dflag = Def | Val
+
+  type local_var = string * int
+
+  type expr_var = Local of local_var | M of variable * offset
+
+  type expr =
+    | Done
+    | Dzero
+    | Dlit of float
+    | Dvar of expr_var * dflag
+    | Dand of expr * expr
+    | Dor of expr * expr
+    | Dunop of string * expr
+    | Dbinop of string * expr * expr
+    | Dfun of string * expr list
+    | Daccess of variable * dflag * local_var
+    | Dite of expr * expr * expr
+
+  (** smart constructors *)
+
+  let one = Done
+
+  let zero = Dzero
+
+  let lit f = match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f
+
+  let var v df = Dvar (v, df)
+
+  let dand e1 e2 =
+    match (e1, e2) with
+    | (Done | Dlit _), e | e, (Done | Dlit _) -> e
+    | Dzero, _ | _, Dzero -> Dzero
+    | _ -> Dand (e1, e2)
+
+  let dor e1 e2 =
+    match (e1, e2) with
+    | (Done | Dlit _), _ | _, (Done | Dlit _) -> Done
+    | Dzero, e | e, Dzero -> e
+    | _ -> Dor (e1, e2)
+
+  let unop op e =
+    match op with
+    | "!" -> (
+        match e with
+        | Done -> Dzero
+        | Dzero -> Done
+        | Dunop ("!", e) -> e
+        | Dlit _ -> (* assuming nor 0 nor 1*) Dzero
+        | _ -> Dunop (op, e))
+    | "-" -> (
+        match e with
+        | Done -> Dlit (-1.)
+        | Dzero -> Dzero
+        | Dlit f -> lit (-.f)
+        | Dunop ("-", e) -> e
+        | _ -> Dunop (op, e))
+    | _ -> assert false
+
+  let binop op e1 e2 =
+    let arith o e1 e2 =
+      match (e1, e2) with
+      | Done, Done -> lit (o 1. 1.)
+      | Done, Dzero -> lit (o 1. 0.)
+      | Dzero, Done -> lit (o 0. 1.)
+      | Dzero, Dzero -> lit (o 0. 0.)
+      | Done, Dlit f -> lit (o 1. f)
+      | Dlit f, Done -> lit (o f 1.)
+      | Dzero, Dlit f -> lit (o 0. f)
+      | Dlit f, Dzero -> lit (o f 0.)
+      | Dlit f1, Dlit f2 -> lit (o f1 f2)
+      | _ -> Dbinop (op, e1, e2)
+    in
+    let comp o e1 e2 =
+      let b2d b = if b then Done else Dzero in
+      match (e1, e2) with
+      | Done, Done -> b2d (o 1. 1.)
+      | Done, Dzero -> b2d (o 1. 0.)
+      | Dzero, Done -> b2d (o 0. 1.)
+      | Dzero, Dzero -> b2d (o 0. 0.)
+      | Done, Dlit f -> b2d (o 1. f)
+      | Dlit f, Done -> b2d (o f 1.)
+      | Dzero, Dlit f -> b2d (o 0. f)
+      | Dlit f, Dzero -> b2d (o f 0.)
+      | Dlit f1, Dlit f2 -> b2d (o f1 f2)
+      | _ -> Dbinop (op, e1, e2)
+    in
+    match op with
+    | "+" -> arith ( +. ) e1 e2
+    | "-" -> arith ( -. ) e1 e2
+    | "*" -> arith ( *. ) e1 e2
+    | "/" -> arith (fun f1 f2 -> if f2 = 0. then 0. else f1 /. f2) e1 e2
+    | "==" -> comp ( = ) e1 e2
+    | "!=" -> comp ( <> ) e1 e2
+    | "<=" -> comp ( <= ) e1 e2
+    | "<" -> comp ( < ) e1 e2
+    | ">=" -> comp ( >= ) e1 e2
+    | ">" -> comp ( > ) e1 e2
+    | _ -> assert false
+
+  let dfun f args = Dfun (f, args)
+
+  let access v df lv = Daccess (v, df, lv)
+
+  let ite c t e =
+    match (c, t, e) with
+    | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> t
+    | Dzero, _, _ -> e
+    | _, Done, Dzero -> c
+    | _, Done, Done -> Done
+    | _, Dzero, Dzero -> Dzero
+    | _ -> Dite (c, t, e)
+
+  let fresh_c_local : string -> local_var =
+    let c = ref 0 in
+    fun name ->
+      let v = (name, !c) in
+      incr c;
+      v
+end
+
+module D = DecoupledExpr
 
 type expression_composition = {
-  def_test : dexpr;
-  value_comp : dexpr;
-  subs : (local_var * expression_composition) list;
+  def_test : D.expr;
+  value_comp : D.expr;
+  subs : (D.local_var * expression_composition) list;
 }
 
-let format_local_var fmt (((vname, vnum), df) : local_var * dflag) =
+let format_local_var fmt (((vname, vnum), df) : D.local_var * D.dflag) =
   let def_suffix = match df with Def -> "_d" | Val -> "" in
   Format.fprintf fmt "%s_%d%s" vname vnum def_suffix
 
 let format_expr_var (dgfip_flags : Dgfip_options.flags)
-    (vm : Dgfip_varid.var_id_map) fmt ((ev, df) : expr_var * dflag) =
+    (vm : Dgfip_varid.var_id_map) fmt ((ev, df) : D.expr_var * D.dflag) =
   match ev with
   | Local lvar -> format_local_var fmt (lvar, df)
   | M (var, offset) ->
@@ -92,7 +240,7 @@ let format_expr_var (dgfip_flags : Dgfip_options.flags)
            var)
 
 let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
-    (vm : Dgfip_varid.var_id_map) fmt (de : dexpr) =
+    (vm : Dgfip_varid.var_id_map) fmt (de : D.expr) =
   let format_dexpr = format_dexpr dgfip_flags vm in
   match de with
   | Done -> Format.fprintf fmt "1"
@@ -106,8 +254,12 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
   | Dvar (evar, dflag) -> format_expr_var dgfip_flags vm fmt (evar, dflag)
-  | Dand (de1, de2) -> format_dexpr fmt (Dbinop ("&&", de1, de2))
-  | Dor (de1, de2) -> format_dexpr fmt (Dbinop ("||", de1, de2))
+  | Dand (de1, de2) ->
+      Format.fprintf fmt "@[<hov 2>(@,%a@ && %a@]@,)" format_dexpr de1
+        format_dexpr de2
+  | Dor (de1, de2) ->
+      Format.fprintf fmt "@[<hov 2>(@,%a@ || %a@]@,)" format_dexpr de1
+        format_dexpr de2
   | Dunop (op, de) ->
       Format.fprintf fmt "@[<hov 2>(@,%s%a@]@,)" op format_dexpr de
   | Dbinop (op, de1, de2) ->
@@ -130,7 +282,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
 
 let rec format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
     (vm : Dgfip_varid.var_id_map) (fmt : Format.formatter)
-    (defs : (local_var * expression_composition) list) : unit =
+    (defs : (D.local_var * expression_composition) list) : unit =
   List.iter
     (fun (lvar, se) ->
       Format.fprintf fmt "%a@;int %a = %a;@;double %a = %a;"
@@ -142,72 +294,23 @@ let rec format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
         se.value_comp)
     defs
 
-let fresh_c_local : string -> local_var =
-  let c = ref 0 in
-  fun name ->
-    let v = (name, !c) in
-    incr c;
-    v
-
-let rec simpl_dexpr (de : dexpr) : dexpr =
-  match (de : dexpr) with
-  | Dlit f -> begin match f with 0. -> Dzero | 1. -> Done | _ -> de end
-  | Dand (de1, de2) -> begin
-      match (simpl_dexpr de1, simpl_dexpr de2) with
-      | Dzero, _ | _, Dzero -> Dzero
-      | Done, de | de, Done -> de
-      | de1, de2 -> Dand (de1, de2)
-    end
-  | Dor (de1, de2) -> begin
-      match (simpl_dexpr de1, simpl_dexpr de2) with
-      | Dzero, de | de, Dzero -> de
-      | Done, _ | _, Done -> Done
-      | de1, de2 -> Dor (de1, de2)
-    end
-  | Dunop ("!", de) -> begin
-      match simpl_dexpr de with
-      | Done -> Dzero
-      | Dlit f when f <> 0. -> Dzero
-      | Dzero -> Done
-      | de -> Dunop ("!", de)
-    end
-  | Dite (dec, det, dee) -> begin
-      match (simpl_dexpr dec, simpl_dexpr det, simpl_dexpr dee) with
-      | Dzero, _, de | Done, de, _ -> de
-      | dec, Done, Dzero -> dec
-      | _ -> de
-    end
-  | Dunop (op, de) -> Dunop (op, simpl_dexpr de)
-  | Dbinop (op, de1, de2) -> Dbinop (op, simpl_dexpr de1, simpl_dexpr de2)
-  | Dfun (fname, des) -> Dfun (fname, List.map simpl_dexpr des)
-  | Daccess _ | Done | Dzero | Dvar _ -> de
-
-let simpl_expr_comp (e : expression_composition) : expression_composition =
-  {
-    e with
-    def_test = simpl_dexpr e.def_test;
-    value_comp = simpl_dexpr e.value_comp;
-  }
-
 let build_transitive_composition (e : expression_composition) :
     expression_composition =
-  let expr_v = fresh_c_local "expr" in
-  let e = simpl_expr_comp e in
+  let expr_v = D.fresh_c_local "expr" in
   let def_test, use_subexpr =
     match e.def_test with
-    | Dzero -> (Dzero, false)
-    | Done -> (Done, false)
-    | Dvar _ as test -> (test, false)
-    | _ -> (Dvar (Local expr_v, Def), true)
+    | Dzero | Done | Dvar _ -> (e.def_test, false)
+    | _ -> (D.var (Local expr_v) Def, true)
   in
   let value_comp, use_subexpr =
     match e.value_comp with
     | Dzero | Done | Dlit _ | Dvar _ -> (e.value_comp, use_subexpr)
-    | _ -> (Dvar (Local expr_v, Val), true)
+    | _ -> (D.var (Local expr_v) Val, true)
   in
   let value_comp, use_subexpr =
-    if def_test = Done then (value_comp, use_subexpr)
-    else (Dite (Dvar (Local expr_v, Def), value_comp, Dzero), true)
+    match def_test with
+    | D.Done -> (value_comp, use_subexpr)
+    | _ -> (D.ite (D.var (Local expr_v) Def) value_comp D.zero, true)
   in
   let subs = if use_subexpr then [ (expr_v, e) ] else e.subs in
   { def_test; value_comp; subs }
@@ -218,7 +321,7 @@ let rec generate_c_expr (e : expression Pos.marked)
   | Comparison (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let def_test = Dand (se1.def_test, se2.def_test) in
+      let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
         let op =
           match Pos.unmark op with
@@ -229,19 +332,19 @@ let rec generate_c_expr (e : expression Pos.marked)
           | Mast.Eq -> "=="
           | Mast.Neq -> "!="
         in
-        Dbinop (op, se1.value_comp, se2.value_comp)
+        D.binop op se1.value_comp se2.value_comp
       in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
   | Binop ((Mast.Div, _), e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let def_test = Dand (se1.def_test, se2.def_test) in
+      let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
-        Dite
-          ( Dunop ("!", se2.value_comp),
-            Dzero,
-            Dbinop ("/", se1.value_comp, se2.value_comp) )
+        D.ite
+          (D.unop "!" se2.value_comp)
+          D.zero
+          (D.binop "/" se1.value_comp se2.value_comp)
       in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
@@ -250,18 +353,18 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test =
         match Pos.unmark op with
-        | Mast.And | Mast.Mul -> Dand (se1.def_test, se2.def_test)
-        | Mast.Or | Mast.Add | Mast.Sub -> Dor (se1.def_test, se2.def_test)
+        | Mast.And | Mast.Mul -> D.dand se1.def_test se2.def_test
+        | Mast.Or | Mast.Add | Mast.Sub -> D.dor se1.def_test se2.def_test
         | Mast.Div -> assert false
         (* see above *)
       in
       let op e1 e2 =
         match Pos.unmark op with
-        | Mast.And -> Dand (e1, e2)
-        | Mast.Or -> Dor (e1, e2)
-        | Mast.Add -> Dbinop ("+", e1, e2)
-        | Mast.Sub -> Dbinop ("-", e1, e2)
-        | Mast.Mul -> Dbinop ("*", e1, e2)
+        | Mast.And -> D.dand e1 e2
+        | Mast.Or -> D.dor e1 e2
+        | Mast.Add -> D.binop "+" e1 e2
+        | Mast.Sub -> D.binop "-" e1 e2
+        | Mast.Mul -> D.binop "*" e1 e2
         | Mast.Div -> assert false
         (* see above *)
       in
@@ -272,27 +375,28 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se = generate_c_expr e var_indexes in
       let def_test = se.def_test in
       let op = match op with Mast.Not -> "!" | Mast.Minus -> "-" in
-      let value_comp = Dunop (op, se.value_comp) in
+      let value_comp = D.unop op se.value_comp in
       build_transitive_composition { def_test; value_comp; subs = se.subs }
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
       let size =
         Option.get (Bir.var_to_mir (Pos.unmark var)).Mir.Variable.is_table
       in
-      let idx_var = fresh_c_local "idx" in
+      let idx_var = D.fresh_c_local "idx" in
       let def_test =
-        Dand
-          ( Dand
-              ( Dvar (Local idx_var, Def),
-                Dbinop ("<", Dvar (Local idx_var, Val), Dlit (float_of_int size))
-              ),
-            Daccess (Pos.unmark var, Def, idx_var) )
+        D.dand
+          (D.dand
+             (D.var (Local idx_var) Def)
+             (D.binop "<"
+                (D.var (Local idx_var) Val)
+                (D.lit (float_of_int size))))
+          (D.access (Pos.unmark var) Def idx_var)
       in
       let value_comp =
-        Dite
-          ( Dbinop ("<", Dvar (Local idx_var, Val), Dzero),
-            Dzero,
-            Daccess (Pos.unmark var, Val, idx_var) )
+        D.ite
+          (D.binop "<" (D.var (Local idx_var) Val) D.zero)
+          D.zero
+          (D.access (Pos.unmark var) Val idx_var)
       in
       build_transitive_composition
         { def_test; value_comp; subs = [ (idx_var, idx) ] }
@@ -300,23 +404,21 @@ let rec generate_c_expr (e : expression Pos.marked)
       let cond = generate_c_expr c var_indexes in
       let thenval = generate_c_expr t var_indexes in
       let elseval = generate_c_expr f var_indexes in
-      let cond_var = fresh_c_local "cond" in
+      let cond_var = D.fresh_c_local "cond" in
       let def_test =
-        Dand
-          ( Dvar (Local cond_var, Def),
-            Dite (Dvar (Local cond_var, Val), thenval.def_test, elseval.def_test)
-          )
+        D.dand
+          (D.var (Local cond_var) Def)
+          (D.ite (D.var (Local cond_var) Val) thenval.def_test elseval.def_test)
       in
       let value_comp =
-        Dite
-          ( Dvar (Local cond_var, Def),
-            Dite
-              ( Dvar (Local cond_var, Val),
-                thenval.value_comp,
-                elseval.value_comp ),
-            Dzero )
+        D.ite
+          (D.var (Local cond_var) Def)
+          (D.ite
+             (D.var (Local cond_var) Val)
+             thenval.value_comp elseval.value_comp)
+          D.zero
       in
-      simpl_expr_comp
+      build_transitive_composition
         {
           def_test;
           value_comp;
@@ -324,69 +426,68 @@ let rec generate_c_expr (e : expression Pos.marked)
         }
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
-      let def_test = Done in
+      let def_test = D.one in
       let value_comp = se.def_test in
       build_transitive_composition { def_test; value_comp; subs = se.subs }
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp = Dand (def_test, Dbinop ("==", se.value_comp, Dzero)) in
+      let value_comp = D.dand def_test (D.binop "==" se.value_comp D.zero) in
       build_transitive_composition { def_test; value_comp; subs = se.subs }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp = Dfun ("my_arr", [ se.value_comp ]) in
+      let value_comp = D.dfun "my_arr" [ se.value_comp ] in
       build_transitive_composition { def_test; value_comp; subs = se.subs }
   | FunctionCall (InfFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp = Dfun ("my_floor", [ se.value_comp ]) in
+      let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       build_transitive_composition { def_test; value_comp; subs = se.subs }
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let def_test = Dor (se1.def_test, se2.def_test) in
-      let value_comp = Dfun ("max", [ se1.value_comp; se2.value_comp ]) in
+      let def_test = D.dor se1.def_test se2.def_test in
+      let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let def_test = Dor (se1.def_test, se2.def_test) in
-      let value_comp = Dfun ("min", [ se1.value_comp; se2.value_comp ]) in
+      let def_test = D.dor se1.def_test se2.def_test in
+      let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       build_transitive_composition
         { def_test; value_comp; subs = se1.subs @ se2.subs }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
-      let bound_var = fresh_c_local "bound" in
+      let bound_var = D.fresh_c_local "bound" in
       let def_test =
-        Dfun
-          ( "multimax_def",
-            [ Dvar (Local bound_var, Val); Dvar (M (v2, PassPointer), Def) ] )
+        D.dfun "multimax_def"
+          [ D.var (Local bound_var) Val; D.var (M (v2, PassPointer)) Def ]
       in
       let value_comp =
-        Dfun
-          ( "multimax",
-            [ Dvar (Local bound_var, Val); Dvar (M (v2, PassPointer), Val) ] )
+        D.dfun "multimax"
+          [ D.var (Local bound_var) Val; D.var (M (v2, PassPointer)) Val ]
       in
-      simpl_expr_comp { def_test; value_comp; subs = [ (bound_var, bound) ] }
+      build_transitive_composition
+        { def_test; value_comp; subs = [ (bound_var, bound) ] }
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) ->
-      simpl_expr_comp { def_test = Done; value_comp = Dlit f; subs = [] }
-  | Literal Undefined -> { def_test = Dzero; value_comp = Dzero; subs = [] }
+  | Literal (Float f) -> { def_test = D.one; value_comp = D.lit f; subs = [] }
+  | Literal Undefined -> { def_test = D.zero; value_comp = D.zero; subs = [] }
   | Var var ->
       {
-        def_test = Dvar (M (var, None), Def);
-        value_comp = Dvar (M (var, None), Val);
+        def_test = D.var (M (var, None)) Def;
+        value_comp = D.var (M (var, None)) Val;
         subs = [];
       }
   | LocalVar lvar ->
       let lvar = ("mlocal", lvar.Mir.LocalVariable.id) in
-      {
-        def_test = Dvar (Local lvar, Def);
-        value_comp = Dvar (Local lvar, Val);
-        subs = [];
-      }
+      build_transitive_composition
+        {
+          def_test = D.var (Local lvar) Def;
+          value_comp = D.var (Local lvar) Val;
+          subs = [];
+        }
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
@@ -394,7 +495,8 @@ let rec generate_c_expr (e : expression Pos.marked)
       let local_var = ("mlocal", lvar.Mir.LocalVariable.id) in
       let def_test = se2.def_test in
       let value_comp = se2.value_comp in
-      { def_test; value_comp; subs = (local_var, se1) :: se2.subs }
+      build_transitive_composition
+        { def_test; value_comp; subs = (local_var, se1) :: se2.subs }
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : variable)
@@ -484,7 +586,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
   | SAssign (var, vdata) ->
       generate_var_def dgfip_flags var_indexes var vdata oc
   | SConditional (cond, iftrue, iffalse) ->
-      let cond_v = fresh_c_local "mpp_cond" in
+      let cond_v = D.fresh_c_local "mpp_cond" in
       let cond = generate_c_expr (Pos.same_pos_as cond stmt) var_indexes in
       Format.fprintf oc "%a@[<hov 2>%a = %a;@]@;@[<hov 2>%a = %a;@]@;"
         (format_local_vars_defs dgfip_flags var_indexes)
