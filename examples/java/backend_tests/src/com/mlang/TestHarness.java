@@ -95,7 +95,7 @@ public class TestHarness {
   private static List<String> extractTestErrorsFromData(TestData test, Map<String, MValue> realOutputs) {
     List<String> errorsWithVars = new ArrayList<>();
     test.getExceptedVariables().forEach((name, value) -> {
-      if (!realOutputs.get(name).equals(value)) {
+      if (!(realOutputs.get(name).getValue() == value.getValue())) {
         errorsWithVars.add("Code " + name + ", expected: " + value + ", got: " + realOutputs.get(name));
       }
     });
