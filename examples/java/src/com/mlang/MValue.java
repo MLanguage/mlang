@@ -199,11 +199,21 @@ public class MValue {
   }
 
   static MValue m_max(MValue x, MValue y) {
+    
+    if (x.isUndefined() && y.isUndefined()) {
+      return mUndefined;
+    }
+
     return new MValue(Math.max(x.getValue(), y.getValue()));
   }
 
   static MValue m_min(MValue x, MValue y) {
-    return new MValue(Math.min(x.getValue(), y.getValue()));
+ 
+    if (x.isUndefined() && y.isUndefined()) {
+      return mUndefined;
+    }
+
+   return new MValue(Math.min(x.getValue(), y.getValue()));
   }
 
   static MValue mNeg(MValue x) {

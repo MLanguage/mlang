@@ -132,7 +132,10 @@ clean_fuzz_findings:
 clean_fuzz_tests:
 	rm -rf fuzz_tests/*.m_crash
 
-clean:
+clean_ml_primitif:
+	rm -rf ../ml_primitif/calc/* ../ml_primitif/*.o ../ml_primitif/*.cmx ../ml_primitif/*.cmi ../ml_primitif/prim
+
+clean: clean_ml_primitif
 	rm -f ir_tests.* *.o tests.m_spec *.exe *.tmp \
 	$(M_C_FILES) $(M_C_FILES:.c=.o) \
 	contexte.* famille.* penalite.* restitue.* revcor.* \

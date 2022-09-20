@@ -527,13 +527,13 @@ module Make (N : Bir_number.NumberInterface) = struct
             | Number f -> if N.is_zero f then true_value () else false_value ())
         | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
+            | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.min (N.zero ()) f)
-            | Undefined, Undefined -> Number (N.zero ())
             | Number fl, Number fr -> Number (N.min fl fr))
         | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
-            | Undefined, Undefined -> Number (N.zero ())
+            | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))

@@ -618,27 +618,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             from_literal (Bir_interpreter.evaluate_expr p new_e RegularFloat)
           else
             match func with
-            | ArrFunc | InfFunc -> (Pos.unmark new_e, List.hd new_ds)
+            | ArrFunc | InfFunc | MinFunc | MaxFunc | Multimax ->
+                (Pos.unmark new_e, List.hd new_ds)
             | PresentFunc -> (
                 match List.hd new_ds with
                 | Undefined -> from_literal Mir.false_literal
                 | Float -> from_literal Mir.true_literal
                 | _ -> (Pos.unmark new_e, Float))
-            | MinFunc | MaxFunc | Multimax ->
-                (* in the functions, undef is implicitly cast to 0, so let's
-                   cast it! *)
-                let new_args =
-                  List.map2
-                    (fun a d ->
-                      if Pos.unmark a = Mir.Literal Undefined || d = Undefined
-                      then Pos.same_pos_as (Mir.Literal (Float 0.)) a
-                      else a)
-                    new_args new_ds
-                in
-                let new_e =
-                  Pos.same_pos_as (Mir.FunctionCall (func, new_args)) e
-                in
-                (Pos.unmark new_e, Float)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
