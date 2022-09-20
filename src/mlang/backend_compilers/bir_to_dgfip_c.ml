@@ -100,7 +100,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
   | Dlit f ->
       (* Print literal floats as precisely as possible, without cluttering the
          generated code *)
-      Format.fprintf fmt "%.19g" f
+      Format.fprintf fmt "%#.19g" f
   | Dvar (evar, dflag) -> format_expr_var dgfip_flags vm fmt (evar, dflag)
   | Dand (de1, de2) -> format_dexpr fmt (Dbinop ("&&", de1, de2))
   | Dor (de1, de2) -> format_dexpr fmt (Dbinop ("||", de1, de2))
