@@ -124,6 +124,7 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
     mir_program = p.mir_program;
     outputs = p.outputs;
     main_function = p.main_function;
+    context = p.context;
   }
 
 let rec re_translate_statement (s : Oir.stmt)
@@ -212,5 +213,5 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
     mir_program = p.mir_program;
     outputs = p.outputs;
     main_function = p.main_function;
-    context = None;
+    context = p.context;
   }
