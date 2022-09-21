@@ -270,10 +270,7 @@ let generate_mpp_function (program : Bir.program) (oc : Format.formatter)
   else Format.fprintf oc "%a@]" (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : Bir.program) =
-  let functions =
-    Bir.FunctionMap.bindings
-      (Bir_interface.context_agnostic_mpp_functions program)
-  in
+  let functions = Bir.FunctionMap.bindings program.Bir.mpp_functions in
   let function_names, _ = List.split functions in
   let pp_print_mpp_functions fmt function_names =
     Format.pp_print_list ~pp_sep:pp_mpp_function_separator
