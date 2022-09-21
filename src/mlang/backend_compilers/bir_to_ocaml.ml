@@ -311,14 +311,18 @@ let generate_output (oc : Format.formatter)
       var_list
   in
   let print_line fmt (position, name) =
-    Format.fprintf fmt "{alias = \"%s\" ; value = (Array.get tgv %d).value}"
-      name position
+    Format.fprintf fmt "(\"%s\", %d)" name position
   in
   let pp_print_output_get fmt output_vars =
     Format.pp_print_list ~pp_sep:pp_statement_separator print_line fmt
       (name_and_pos_list output_vars)
   in
-  Format.fprintf oc "let output (tgv : m_array) : output_array =[|@,%a|]@,"
+  Format.fprintf oc
+    "let output (tgv : m_array) : output_array =@,\
+     let rev_code_from_position (x , p) : revenue_code = {alias = x; value = \
+     (Array.get tgv p).value} in@,\
+     let output_positions_array = @[<v>[|%a|]@] in@,\
+     Array.map rev_code_from_position output_positions_array"
     pp_print_output_get output_vars
 
 let generate_input_handler (oc : Format.formatter)
@@ -333,9 +337,7 @@ let generate_input_handler (oc : Format.formatter)
   let pp_print_line fmt variable : unit =
     match get_position_and_alias variable with
     | Some (position, alias) ->
-        Format.fprintf fmt
-          "let tgv_positions = TgvPositionMap.add \"%s\" %d tgv_positions in@,"
-          alias position
+        Format.fprintf fmt "(\"%s\", %d);@," alias position
     | None -> ()
   in
   let pp_print_position_map fmt input_vars =
@@ -344,11 +346,14 @@ let generate_input_handler (oc : Format.formatter)
   Format.fprintf oc
     "let input_handler (tgv : m_array) (entry_list : revenue_code list) : unit \
      =@,\
-     let tgv_positions = TgvPositionMap.empty in@,\
-     %alet init_tgv_var (entry_var : revenue_code) : unit =@,\
-     Array.set tgv @,\
-     (TgvPositionMap.find entry_var.alias tgv_positions)@,\
-    \ {undefined = false ; value = entry_var.value} in@,\
+     let entry_positions_array = @[<v>[|%a|]@] in@,\
+     let entry_positions_map = @,\
+     Array.fold_left (fun pos_map (alias, position) -> TgvPositionMap.add \
+     alias position pos_map)@,\
+     TgvPositionMap.empty entry_positions_array in@,\
+     let init_tgv_var (entry_var : revenue_code) : unit =@,\
+     Array.set tgv (TgvPositionMap.find entry_var.alias entry_positions_map)@,\
+     {undefined = false ; value = entry_var.value} in@,\
      List.iter init_tgv_var entry_list" pp_print_position_map input_vars
 (* Prévoir les cas : variable manquante, variable en trop dans entry_list,
    variable définie n fois*)
