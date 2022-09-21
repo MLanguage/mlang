@@ -178,10 +178,6 @@ and re_translate_block (block_id : Oir.block_id)
 let cfg_to_bir_stmts (cfg : Oir.cfg) : Bir.stmt list =
   re_translate_blocks_until cfg.entry_block cfg.blocks None
 
-(*WARNING : OIR is not tested, but changes in Bir interface to "context" of the
-  program (Bir_interface.adapt_program_to_function) could have broken it. In any
-  cases : its behavior is modified as the context is no more included in the
-  optimisations.*)
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   let mpp_functions =
     Bir.FunctionMap.map
