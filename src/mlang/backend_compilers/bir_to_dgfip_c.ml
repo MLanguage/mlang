@@ -298,9 +298,10 @@ let rec generate_c_expr (e : expression Pos.marked)
       let elseval = generate_c_expr f var_indexes in
       let cond_var = fresh_c_local "cond" in
       let def_test =
-        Dor
-          ( Dand (Dvar (Local cond_var, Val), thenval.def_test),
-            Dand (Dvar (Local cond_var, Def), elseval.def_test) )
+        Dand
+          ( Dvar (Local cond_var, Def),
+            Dite (Dvar (Local cond_var, Val), thenval.def_test, elseval.def_test)
+          )
       in
       let value_comp =
         Dite
