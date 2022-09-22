@@ -82,7 +82,7 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code)
 
   if (strcmp(erreur->isisf, "O")) {
     if ((erreur->type == ANOMALIE) && (++irdata->nb_bloquantes >= irdata->max_bloquantes)) {
-//      longjmp(irdata->jmp_bloq, 1);
+/*      longjmp(irdata->jmp_bloq, 1); */
     }
   }
 }
@@ -126,7 +126,7 @@ void add_erreur(T_erreur *erreur, char *code)
 
   if (strcmp(erreur->isisf, "O")) {
     if (erreur->type == ANOMALIE) {
-//      longjmp(jmp_bloq, 1);
+/*      longjmp(jmp_bloq, 1); */
     }
   }
 }
@@ -315,7 +315,8 @@ double floor_g(double a)
 
 int multimax_def(int nbopd, char *var)
 {
-  for (int i = 0; i < nbopd; i++) {
+  int i = 0;
+  for (i = 0; i < nbopd; i++) {
     if (var[i] == 1) return 1;
   }
   return 0;
@@ -323,8 +324,9 @@ int multimax_def(int nbopd, char *var)
 
 double multimax(double nbopd, double *var)
 {
+  int i = 0;
   double s = 0.0;
-  for (int i = 0; i < (int)nbopd; i++) {
+  for (i = 0; i < (int)nbopd; i++) {
     if (var[i] >= s) s = var[i];
   }
   return s;
@@ -344,7 +346,7 @@ double modulo(double a, double b)
 
 
 
-// Temporary wrapper functions for verifications
+/* Temporary wrapper functions for verifications */
 
 struct S_discord * verif_saisie_cohe_primitive_raw(T_irdata *irdata);
 struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata)
