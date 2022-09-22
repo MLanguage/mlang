@@ -100,7 +100,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
   | Dlit f ->
       (* Print literal floats as precisely as possible, without cluttering the
          generated code *)
-      Format.fprintf fmt "%.19g" f
+      Format.fprintf fmt "%#.19g" f
   | Dvar (evar, dflag) -> format_expr_var dgfip_flags vm fmt (evar, dflag)
   | Dand (de1, de2) -> format_dexpr fmt (Dbinop ("&&", de1, de2))
   | Dor (de1, de2) -> format_dexpr fmt (Dbinop ("||", de1, de2))
@@ -298,9 +298,10 @@ let rec generate_c_expr (e : expression Pos.marked)
       let elseval = generate_c_expr f var_indexes in
       let cond_var = fresh_c_local "cond" in
       let def_test =
-        Dor
-          ( Dand (Dvar (Local cond_var, Val), thenval.def_test),
-            Dand (Dvar (Local cond_var, Def), elseval.def_test) )
+        Dand
+          ( Dvar (Local cond_var, Def),
+            Dite (Dvar (Local cond_var, Val), thenval.def_test, elseval.def_test)
+          )
       in
       let value_comp =
         Dite
