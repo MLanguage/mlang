@@ -81,9 +81,9 @@ struct S_discord
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 extern void free_erreur();
 
-extern double my_ceil(double); // ceil(a - 0.000001);
-extern double my_floor(double); // floor(a + 0.000001);
-extern double my_arr(double); // floor(v1 + v2 + 0.5)
+extern double my_ceil(double); /* ceil(a - 0.000001); */
+extern double my_floor(double); /* floor(a + 0.000001); */
+extern double my_arr(double); /* floor(v1 + v2 + 0.5) */
 
 #else
 
