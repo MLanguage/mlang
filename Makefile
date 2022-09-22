@@ -50,10 +50,10 @@ dune:
 
 # Run only in an opam switch with musl and static options activated
 build-static: DUNE_OPTIONS+=--profile=static 
-build-static: dune
+build-static: build
 
 dev: DUNE_OPTIONS+=--profile=dev 
-dev: build
+dev: dune
 
 ##################################################
 # Testing the compiler
