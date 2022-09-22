@@ -230,37 +230,43 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         else combined_program
       in
       match backend with
-      | Some backend ->
-          if String.lowercase_ascii backend = "interpreter" then begin
-            Cli.debug_print "Interpreting the program...";
-            let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let print_output =
-              Bir_interpreter.evaluate_program function_spec combined_program
-                inputs 0 value_sort
-            in
-            print_output ()
-          end
-          else if String.lowercase_ascii backend = "java" then begin
-            Cli.debug_print "Compiling codebase to Java...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            Bir_to_java.generate_java_program combined_program function_spec
-              !Cli.output_file
-          end
-          else if String.lowercase_ascii backend = "dgfip_c" then begin
-            Cli.debug_print "Compiling the codebase to DGFiP C...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            let vm =
-              Dgfip_gen_files.generate_auxiliary_files dgfip_flags
-                source_m_program combined_program
-            in
-            Bir_to_dgfip_c.generate_c_program dgfip_flags combined_program
-              function_spec !Cli.output_file vm;
-            Cli.debug_print "Result written to %s" !Cli.output_file
-          end
-          else
-            Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+      | Some backend -> begin
+          match String.lowercase_ascii backend with
+          | "interpreter" ->
+              Cli.debug_print "Interpreting the program...";
+              let inputs = Bir_interface.read_inputs_from_stdin function_spec in
+              let print_output =
+                Bir_interpreter.evaluate_program function_spec combined_program
+                  inputs 0 value_sort
+              in
+              print_output ()
+          | "java" ->
+              Cli.debug_print "Compiling codebase to Java...";
+              if !Cli.output_file = "" then
+                Errors.raise_error
+                  "an output file must be defined with --output";
+              Bir_to_java.generate_java_program combined_program function_spec
+                !Cli.output_file
+          | "dgfip_c" ->
+              Cli.debug_print "Compiling the codebase to DGFiP C...";
+              if !Cli.output_file = "" then
+                Errors.raise_error
+                  "an output file must be defined with --output";
+              let vm =
+                Dgfip_gen_files.generate_auxiliary_files dgfip_flags
+                  source_m_program combined_program
+              in
+              Bir_to_dgfip_c.generate_c_program dgfip_flags combined_program
+                function_spec !Cli.output_file vm;
+              Cli.debug_print "Result written to %s" !Cli.output_file
+          | "cgir" ->
+              let gen_cgir =
+                Cgir.bir_to_cgir source_m_program combined_program function_spec
+              in
+              Format.fprintf Format.std_formatter "@[<v>CGIR@;%a@]" gen_cgir ()
+          | _ ->
+              Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
+        end
       | None -> Errors.raise_error "No backend specified!"
     end
   with Errors.StructuredError (msg, pos, kont) ->
