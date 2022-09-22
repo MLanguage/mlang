@@ -76,6 +76,8 @@ module type S = sig
 
   val var_value_to_var_literal : var_value -> var_literal
 
+  val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
+
   type run_error =
     | ErrorValue of string * Pos.t
     | FloatIndex of string * Pos.t
@@ -95,24 +97,27 @@ module type S = sig
   val replace_undefined_with_input_variables :
     Mir.program -> Mir.VariableDict.t -> Mir.program
 
+  val print_output : Bir_interface.bir_function -> ctx -> unit
+
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
+
+  val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
+
+  val evaluate_program : Bir.program -> ctx -> int -> ctx
 end
 
-module Make (N : Bir_number.NumberInterface) = struct
+module Make (N : Bir_number.NumberInterface) (RF : Bir_roundops.RoundOpsFunctor) =
+struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
+  module R = RF (N)
+
   type custom_float = N.t
 
-  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float 0.000001)
+  let truncatef (x : N.t) : N.t = R.truncatef x
 
-  (* Careful : rounding in M is done with this arbitrary behavior. We can't use
-     copysign here because [x < zero] is critical to have the correct behavior
-     on -0 *)
-  let roundf (x : N.t) =
-    N.of_int
-      (N.to_int
-         N.(x +. N.of_float (if N.(x < zero ()) then -0.50005 else 0.50005)))
+  let roundf (x : N.t) = R.roundf x
 
   type value = Number of N.t | Undefined
 
@@ -760,95 +765,109 @@ module Make (N : Bir_number.NumberInterface) = struct
       else raise (RuntimeError (e, ctx))
 end
 
-module RegularFloatInterpreter = Make (Bir_number.RegularFloatNumber)
-module MPFRInterpreter = Make (Bir_number.MPFRNumber)
-
 module BigIntPrecision = struct
   let scaling_factor_bits = ref 64
 end
 
-module BigIntInterpreter =
-  Make (Bir_number.BigIntFixedPointNumber (BigIntPrecision))
-module IntervalInterpreter = Make (Bir_number.IntervalNumber)
-module RationalInterpreter = Make (Bir_number.RationalNumber)
+module MainframeLongSize = struct
+  let max_long = ref Int64.max_int
+end
 
-type value_sort =
-  | RegularFloat
-  | MPFR of int
-  | BigInt of int
-  | Interval
-  | Rational
+module FloatDefInterp =
+  Make (Bir_number.RegularFloatNumber) (Bir_roundops.DefaultRoundOps)
+module FloatMultInterp =
+  Make (Bir_number.RegularFloatNumber) (Bir_roundops.MultiRoundOps)
+module FloatMfInterp =
+  Make
+    (Bir_number.RegularFloatNumber)
+    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+module MPFRDefInterp =
+  Make (Bir_number.MPFRNumber) (Bir_roundops.DefaultRoundOps)
+module MPFRMultInterp =
+  Make (Bir_number.MPFRNumber) (Bir_roundops.MultiRoundOps)
+module MPFRMfInterp =
+  Make
+    (Bir_number.MPFRNumber)
+    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+module BigIntDefInterp =
+  Make
+    (Bir_number.BigIntFixedPointNumber
+       (BigIntPrecision))
+       (Bir_roundops.DefaultRoundOps)
+module BigIntMultInterp =
+  Make
+    (Bir_number.BigIntFixedPointNumber
+       (BigIntPrecision))
+       (Bir_roundops.MultiRoundOps)
+module BigIntMfInterp =
+  Make
+    (Bir_number.BigIntFixedPointNumber
+       (BigIntPrecision))
+       (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+module IntvDefInterp =
+  Make (Bir_number.IntervalNumber) (Bir_roundops.DefaultRoundOps)
+module IntvMultInterp =
+  Make (Bir_number.IntervalNumber) (Bir_roundops.MultiRoundOps)
+module IntvMfInterp =
+  Make
+    (Bir_number.IntervalNumber)
+    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+module RatDefInterp =
+  Make (Bir_number.RationalNumber) (Bir_roundops.DefaultRoundOps)
+module RatMultInterp =
+  Make (Bir_number.RationalNumber) (Bir_roundops.MultiRoundOps)
+module RatMfInterp =
+  Make
+    (Bir_number.RationalNumber)
+    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+
+let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
+  match (sort, roundops) with
+  | RegularFloat, RODefault -> (module FloatDefInterp)
+  | RegularFloat, ROMulti -> (module FloatMultInterp)
+  | RegularFloat, ROMainframe _ -> (module FloatMfInterp)
+  | MPFR _, RODefault -> (module MPFRDefInterp)
+  | MPFR _, ROMulti -> (module MPFRMultInterp)
+  | MPFR _, ROMainframe _ -> (module MPFRMfInterp)
+  | BigInt _, RODefault -> (module BigIntDefInterp)
+  | BigInt _, ROMulti -> (module BigIntMultInterp)
+  | BigInt _, ROMainframe _ -> (module BigIntMfInterp)
+  | Interval, RODefault -> (module IntvDefInterp)
+  | Interval, ROMulti -> (module IntvMultInterp)
+  | Interval, ROMainframe _ -> (module IntvMfInterp)
+  | Rational, RODefault -> (module RatDefInterp)
+  | Rational, ROMulti -> (module RatMultInterp)
+  | Rational, ROMainframe _ -> (module RatMfInterp)
+
+let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
+  begin
+    match sort with
+    | MPFR prec -> Mpfr.set_default_prec prec
+    | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
+    | Interval -> Mpfr.set_default_prec 64
+    | _ -> ()
+  end;
+  match roundops with
+  | ROMainframe long_size ->
+      let max_long =
+        if long_size = 32 then Int64.of_int32 Int32.max_int
+        else if long_size = 64 then Int64.max_int
+        else assert false
+        (* checked when parsing command line *)
+      in
+      MainframeLongSize.max_long := max_long
+  | _ -> ()
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
     (inputs : Mir.literal Bir.VariableMap.t) (code_loc_start_value : int)
-    (sort : value_sort) : unit -> unit =
-  match sort with
-  | RegularFloat ->
-      let ctx =
-        RegularFloatInterpreter.update_ctx_with_inputs
-          RegularFloatInterpreter.empty_ctx inputs
-      in
-      let ctx =
-        RegularFloatInterpreter.evaluate_program p ctx code_loc_start_value
-      in
-      fun () -> RegularFloatInterpreter.print_output bir_func ctx
-  | MPFR prec ->
-      Mpfr.set_default_prec prec;
-      let ctx =
-        MPFRInterpreter.update_ctx_with_inputs MPFRInterpreter.empty_ctx inputs
-      in
-      let ctx = MPFRInterpreter.evaluate_program p ctx code_loc_start_value in
-      fun () -> MPFRInterpreter.print_output bir_func ctx
-  | BigInt prec ->
-      BigIntPrecision.scaling_factor_bits := prec;
-      let ctx =
-        BigIntInterpreter.update_ctx_with_inputs BigIntInterpreter.empty_ctx
-          inputs
-      in
-      let ctx = BigIntInterpreter.evaluate_program p ctx code_loc_start_value in
-      fun () -> BigIntInterpreter.print_output bir_func ctx
-  | Interval ->
-      Mpfr.set_default_prec 64;
-      let ctx =
-        IntervalInterpreter.update_ctx_with_inputs IntervalInterpreter.empty_ctx
-          inputs
-      in
-      let ctx =
-        IntervalInterpreter.evaluate_program p ctx code_loc_start_value
-      in
-      fun () -> IntervalInterpreter.print_output bir_func ctx
-  | Rational ->
-      let ctx =
-        RationalInterpreter.update_ctx_with_inputs RationalInterpreter.empty_ctx
-          inputs
-      in
-      let ctx =
-        RationalInterpreter.evaluate_program p ctx code_loc_start_value
-      in
-      fun () -> RationalInterpreter.print_output bir_func ctx
+    (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit -> unit =
+  prepare_interp sort roundops;
+  let module Interp = (val get_interp sort roundops : S) in
+  let ctx = Interp.update_ctx_with_inputs Interp.empty_ctx inputs in
+  let ctx = Interp.evaluate_program p ctx code_loc_start_value in
+  fun () -> Interp.print_output bir_func ctx
 
 let evaluate_expr (p : Mir.program) (e : Bir.expression Pos.marked)
-    (sort : value_sort) : Mir.literal =
-  let f p e =
-    match sort with
-    | RegularFloat ->
-        RegularFloatInterpreter.value_to_literal
-          (RegularFloatInterpreter.evaluate_expr
-             RegularFloatInterpreter.empty_ctx p e)
-    | MPFR prec ->
-        Mpfr.set_default_prec prec;
-        MPFRInterpreter.value_to_literal
-          (MPFRInterpreter.evaluate_expr MPFRInterpreter.empty_ctx p e)
-    | BigInt prec ->
-        BigIntPrecision.scaling_factor_bits := prec;
-        BigIntInterpreter.value_to_literal
-          (BigIntInterpreter.evaluate_expr BigIntInterpreter.empty_ctx p e)
-    | Interval ->
-        Mpfr.set_default_prec 64;
-        IntervalInterpreter.value_to_literal
-          (IntervalInterpreter.evaluate_expr IntervalInterpreter.empty_ctx p e)
-    | Rational ->
-        RationalInterpreter.value_to_literal
-          (RationalInterpreter.evaluate_expr RationalInterpreter.empty_ctx p e)
-  in
-  f p e
+    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Mir.literal =
+  let module Interp = (val get_interp sort roundops : S) in
+  Interp.value_to_literal (Interp.evaluate_expr Interp.empty_ctx p e)

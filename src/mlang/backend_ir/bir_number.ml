@@ -19,7 +19,11 @@ module type NumberInterface = sig
 
   val format_t : Format.formatter -> t -> unit
 
+  val abs : t -> t
+
   val floor : t -> t
+
+  val ceil : t -> t
 
   val of_int : Int64.t -> t
 
@@ -69,7 +73,11 @@ module RegularFloatNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%f" f
 
+  let abs x = Float.abs x
+
   let floor x = Float.floor x
+
+  let ceil x = Float.ceil x
 
   let of_int i = Int64.to_float i
 
@@ -112,9 +120,19 @@ module RegularFloatNumber : NumberInterface = struct
   let is_zero x = x = 0.
 end
 
-let mpfr_float (x : Mpfrf.t) : Mpfrf.t =
+let mpfr_abs (x : Mpfrf.t) : Mpfrf.t =
+  let out = Mpfr.init2 (Mpfr.get_prec x) in
+  ignore (Mpfr.abs out x Mpfr.Near);
+  Mpfrf.of_mpfr out
+
+let mpfr_floor (x : Mpfrf.t) : Mpfrf.t =
   let out = Mpfr.init () in
   ignore (Mpfr.floor out x);
+  Mpfrf.of_mpfr out
+
+let mpfr_ceil (x : Mpfrf.t) : Mpfrf.t =
+  let out = Mpfr.init () in
+  ignore (Mpfr.ceil out x);
   Mpfrf.of_mpfr out
 
 module MPFRNumber : NumberInterface = struct
@@ -124,7 +142,11 @@ module MPFRNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
 
-  let floor (x : t) : t = mpfr_float x
+  let abs (x : t) : t = mpfr_abs x
+
+  let floor (x : t) : t = mpfr_floor x
+
+  let ceil (x : t) : t = mpfr_ceil x
 
   let of_int i = Mpfrf.of_int (Int64.to_int i) rounding
 
@@ -175,9 +197,19 @@ module IntervalNumber : NumberInterface = struct
   let format_t fmt f =
     Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
 
+  let abs x =
+    let id = mpfr_abs x.down in
+    let iu = mpfr_abs x.up in
+    v id iu
+
   let floor x =
-    let id = mpfr_float x.down in
-    let iu = mpfr_float x.up in
+    let id = mpfr_floor x.down in
+    let iu = mpfr_floor x.up in
+    v id iu
+
+  let ceil x =
+    let id = mpfr_ceil x.down in
+    let iu = mpfr_ceil x.up in
     v id iu
 
   let of_int i =
@@ -276,10 +308,17 @@ module RationalNumber : NumberInterface = struct
 
   let format_t fmt f = Mpqf.print fmt f
 
+  let abs x = Mpqf.abs x
+
   let floor x =
     let num = Mpqf.get_num x in
     let dem = Mpqf.get_den x in
-    Mpqf.of_mpz (Mpzf.tdiv_q num dem)
+    Mpqf.of_mpz (Mpzf.fdiv_q num dem)
+
+  let ceil x =
+    let num = Mpqf.get_num x in
+    let dem = Mpqf.get_den x in
+    Mpqf.of_mpz (Mpzf.cdiv_q num dem)
 
   let of_int i = Mpqf.of_int (Int64.to_int i)
 
@@ -352,7 +391,15 @@ end) : NumberInterface = struct
     let int_part = Mpzf.mul int_part (precision_modulo ()) in
     (frac_part, int_part)
 
-  let floor x = snd (modf x)
+  let abs x = Mpzf.abs x
+
+  let floor x =
+    let prec_mod = precision_modulo () in
+    Mpzf.mul (Mpzf.fdiv_q x prec_mod) prec_mod
+
+  let ceil x =
+    let prec_mod = precision_modulo () in
+    Mpzf.mul (Mpzf.cdiv_q x prec_mod) prec_mod
 
   let of_int i = Mpzf.mul (Mpzf.of_int (Int64.to_int i)) (precision_modulo ())
 

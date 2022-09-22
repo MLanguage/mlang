@@ -203,9 +203,8 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
     {
       m_program with
       program =
-        Bir_interpreter.RegularFloatInterpreter
-        .replace_undefined_with_input_variables m_program.program
-          ctx.variables_used_as_inputs;
+        Bir_interpreter.FloatDefInterp.replace_undefined_with_input_variables
+          m_program.program ctx.variables_used_as_inputs;
     }
   in
   let execution_order =
@@ -557,6 +556,6 @@ let create_combined_program (m_program : Mir_interface.full_program)
       mir_program = m_program.program;
       outputs = Bir.VariableMap.empty;
     }
-  with Bir_interpreter.RegularFloatInterpreter.RuntimeError (r, ctx) ->
-    Bir_interpreter.RegularFloatInterpreter.raise_runtime_as_structured r ctx
+  with Bir_interpreter.FloatDefInterp.RuntimeError (r, ctx) ->
+    Bir_interpreter.FloatDefInterp.raise_runtime_as_structured r ctx
       m_program.program

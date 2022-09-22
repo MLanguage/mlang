@@ -95,7 +95,8 @@ extern void free_erreur();
 #ifdef FLG_OPTIM_MIN_MAX
 
 #define my_floor(a)	(floor_g((a) + 0.000001))
-#define my_arr(a)	(floor_g((a) + 0.50005))
+/*#define my_arr(a)	(floor_g((a) + 0.50005)) *//* Ancienne version (2021) */
+#define my_arr(a)	(((a) < 0.0) ? ceil_g((a) - .50005) : floor_g((a) + .50005))
 
 #else
 
@@ -117,6 +118,7 @@ extern void free_erreur();
 #endif /* FLG_OPTIM_MIN_MAX */
 
 extern double floor_g(double);
+extern double ceil_g(double);
 extern int multimax_def(int, char *);
 extern double multimax(double, double *);
 extern int modulo_def(int, int);
