@@ -266,13 +266,27 @@ end = struct
     { def_test = (de, dle); value_comp = (ve, vle) }
 
   let build_transitive_composition { def_test; value_comp } =
-    match fst def_test with
-    | Done -> { def_test; value_comp }
-    | _ ->
-        let def_v = fresh_c_local "def" in
-        let def_test = local_var def_v Def def_test in
-        let value_comp = ite def_test value_comp zero in
-        { def_test; value_comp }
+    let fresh_inter_var =
+      let v = lazy (fresh_c_local "expr") in
+      fun () -> Lazy.force v
+    in
+    let def_test, value_comp =
+      match fst def_test with
+      | Done -> (def_test, value_comp)
+      | _ ->
+          let def_v = fresh_inter_var () in
+          let def_test = local_var def_v Def def_test in
+          let value_comp = ite def_test value_comp zero in
+          (def_test, value_comp)
+    in
+    let value_comp =
+      match fst value_comp with
+      | Done | Dzero | Dlit _ | Dvar _ -> value_comp
+      | _ ->
+          let expr_v = fresh_inter_var () in
+          local_var expr_v Val value_comp
+    in
+    { def_test; value_comp }
 
   let clean_local_duplicates { def_test = de, dle; value_comp = ve, vle } =
     let vle =
