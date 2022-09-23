@@ -340,13 +340,13 @@ end = struct
 
   let format_local_vars_defs dgfip_flags vm fmt lde =
     let format_one fmt ((lvar, df), e) =
-      Format.fprintf fmt "%s %a = %a;@,"
+      Format.fprintf fmt "@[<hov 2>%s %a =@ %a;@]@,"
         (match df with Def -> "int" | Val -> "double")
         format_local_var (lvar, df)
         (format_dexpr dgfip_flags vm)
         e
     in
-    Format.pp_print_list ~pp_sep:Format.pp_print_cut format_one fmt lde
+    List.iter (format_one fmt) lde
 
   let format_assign dgfip_flags var_indexes var fmt (e, le) =
     Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
@@ -533,20 +533,20 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
   let def_var = generate_variable ~def_flag:true var_indexes offset var in
   let val_var = generate_variable var_indexes offset var in
   if D.is_always_defined se then
-    Format.fprintf oc "%a@;%a"
+    Format.fprintf oc "%a@,%a"
       (D.format_assign dgfip_flags var_indexes def_var)
       se.def_test
       (D.format_assign dgfip_flags var_indexes val_var)
       se.value_comp
   else
-    Format.fprintf oc "%a@;@[<hov 2>if(%s){@;%a@]@;}@;else %s = 0.;"
+    Format.fprintf oc "%a@,@[<hov 2>if(%s){@,%a@]@,}@,else %s = 0.;"
       (D.format_assign dgfip_flags var_indexes def_var)
       se.def_test def_var
       (D.format_assign dgfip_flags var_indexes val_var)
       se.value_comp val_var;
   if dgfip_flags.flg_trace then
     let var = Bir.var_to_mir var in
-    Format.fprintf oc "@;aff2(\"%s\", irdata, %s);@\n"
+    Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
       (Pos.unmark var.Mir.Variable.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
@@ -605,11 +605,13 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
     =
-  Format.fprintf oc "@[<hov 2>{@;";
-  (match Pos.unmark stmt with
+  match Pos.unmark stmt with
   | SAssign (var, vdata) ->
-      generate_var_def dgfip_flags var_indexes var vdata oc
+      Format.fprintf oc "@[<v 2>{@,";
+      generate_var_def dgfip_flags var_indexes var vdata oc;
+      Format.fprintf oc "@]@,}"
   | SConditional (cond, iftrue, iffalse) ->
+      Format.fprintf oc "@[<v 2>{@,";
       let cond_v = D.fresh_c_local "mpp_cond" in
       let cond_def = Format.asprintf "%a" D.format_local_var (cond_v, Def) in
       let cond_val = Format.asprintf "%a" D.format_local_var (cond_v, Val) in
@@ -617,29 +619,31 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         D.clean_local_duplicates
         @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
       in
-      Format.fprintf oc "%a@;%a@;"
+      Format.fprintf oc "%a@;%a"
         (D.format_assign dgfip_flags var_indexes cond_def)
         cond.def_test
         (D.format_assign dgfip_flags var_indexes cond_val)
         cond.value_comp;
-      Format.fprintf oc "@[<hv 2>if(%s && %s){@,%a@]@,}@;" cond_def cond_val
+      Format.fprintf oc "@[<hov 2>if(%s && %s){@,%a@]@,}" cond_def cond_val
         (generate_stmts dgfip_flags program var_indexes)
         iftrue;
       if iffalse <> [] then
-        Format.fprintf oc "@[<hv 2>else if(%s){@,%a@]@,}@;" cond_def
+        Format.fprintf oc "@[<hov 2>else if(%s){@,%a@]@,}" cond_def
           (generate_stmts dgfip_flags program var_indexes)
-          iffalse
+          iffalse;
+      Format.fprintf oc "@]@,}"
   | SVerif v -> generate_var_cond dgfip_flags var_indexes v oc
   | SRovCall r ->
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_function_header ~definition:false oc rov
-  | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);\n" f);
-  Format.fprintf oc "@]@,}@;"
+  | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);" f
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     (stmts : stmt list) =
-  Format.pp_print_list (generate_stmt dgfip_flags program var_indexes) oc stmts
+  Format.fprintf oc "@[<v>";
+  Format.pp_print_list (generate_stmt dgfip_flags program var_indexes) oc stmts;
+  Format.fprintf oc "@]"
 
 and generate_rov_function_header ~(definition : bool) (oc : Format.formatter)
     (rov : rule_or_verif) =
@@ -650,7 +654,7 @@ and generate_rov_function_header ~(definition : bool) (oc : Format.formatter)
     | Verif _ -> ("verif", "void ")
   in
   let ret_type = if definition then ret_type else "" in
-  Format.fprintf oc "%s%s_%s(%sirdata)%s@\n" ret_type tname
+  Format.fprintf oc "%s%s_%s(%sirdata)%s" ret_type tname
     (Pos.unmark rov.rov_name) arg_type
     (if definition then "" else ";")
 
@@ -660,12 +664,12 @@ let generate_rov_function (dgfip_flags : Dgfip_options.flags)
   let decl, ret =
     let noprint _ _ = () in
     match rov.rov_code with
-    | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@ return 0;")
+    | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@,return 0;")
     | Verif _ ->
         ( (fun fmt () -> Format.fprintf fmt "int cond_def;@ double cond;@;"),
           noprint )
   in
-  Format.fprintf oc "%a@[<v 2>{@ %a%a%a@]@;}@\n"
+  Format.fprintf oc "@[<v 2>%a{@,%a%a%a@]@,}"
     (generate_rov_function_header ~definition:true)
     rov decl ()
     (generate_stmts (dgfip_flags : Dgfip_options.flags) program var_indexes)
@@ -675,11 +679,13 @@ let generate_rov_function (dgfip_flags : Dgfip_options.flags)
 let generate_rov_functions (dgfip_flags : Dgfip_options.flags)
     (program : program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (rovs : rule_or_verif list) =
+  Format.fprintf oc "@[<v>";
   Format.pp_print_list ~pp_sep:Format.pp_print_cut
     (generate_rov_function
        (dgfip_flags : Dgfip_options.flags)
        program var_indexes)
-    oc rovs
+    oc rovs;
+  Format.fprintf oc "@]"
 
 let generate_main_function_signature (oc : Format.formatter)
     (add_semicolon : bool) =
@@ -874,13 +880,14 @@ let generate_mpp_function (dgfip_flags : Dgfip_options.flags)
   let { mppf_stmts; mppf_is_verif } =
     Bir.FunctionMap.find f program.mpp_functions
   in
-  Format.fprintf oc "@[<hv 4>%a{@,int cond_def;@,double cond;@,%a%s@]}@,"
+  Format.fprintf oc "@[<v 2>%a{@,%a%s@]@,}@,"
     (generate_mpp_function_protoype false mppf_is_verif)
     f
     (generate_stmts dgfip_flags program var_indexes)
     mppf_stmts
     (if ret_type then
-     {|#ifdef FLG_MULTITHREAD
+     {|
+#ifdef FLG_MULTITHREAD
       return irdata->discords;
 #else
       return discords;
