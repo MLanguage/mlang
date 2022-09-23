@@ -547,7 +547,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
   let def_var = generate_variable ~def_flag:true var_indexes offset var in
   let val_var = generate_variable var_indexes offset var in
   if D.is_always_defined se then
-    Format.fprintf oc "%a@,%a"
+    Format.fprintf oc "%a@,@[<hov 2>{@,%a@,@]}"
       (D.format_assign dgfip_flags var_indexes def_var)
       se.def_test
       (D.format_assign dgfip_flags var_indexes val_var)
@@ -575,14 +575,14 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
       Mir.IndexMap.iter
         (fun i v ->
           let sv = generate_c_expr v var_indexes in
-          Format.fprintf fmt "%a@;"
+          Format.fprintf fmt "@[<hov 2>{@,%a@]}@,"
             (generate_m_assign dgfip_flags var_indexes var (GetValueConst i))
             sv)
         es
   | TableVar (_size, IndexGeneric (v, e)) ->
       (* TODO: boundary checks *)
       let sv = generate_c_expr e var_indexes in
-      Format.fprintf fmt "if(%s)@[<hov 2>{%a@]@;}@\n"
+      Format.fprintf fmt "if(%s)@[<hov 2>{%a@]@;}"
         (generate_variable var_indexes None ~def_flag:true v)
         (generate_m_assign dgfip_flags var_indexes var (GetValueVar v))
         sv
@@ -603,18 +603,12 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
           (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
   in
   Format.fprintf oc
-    {|
-    %a;
-    %a;
-    if (cond_def && (cond != 0.0))
-    {
-      add_erreur(irdata, &erreur_%s, %s);
-    }
-|}
+    "%a@,@[<hov 2>{@,%a@]@,}@,@[<hov 2>if(cond_def && (cond != 0.0)){@,"
     (D.format_assign dgfip_flags var_indexes "cond_def")
     scond.def_test
     (D.format_assign dgfip_flags var_indexes "cond")
-    scond.value_comp erreur code
+    scond.value_comp;
+  Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" erreur code
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
@@ -968,7 +962,7 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
 
 |};
         generate_rov_functions dgfip_flags program vm fmt rovs;
-        Format.pp_print_flush fmt ();
+        Format.fprintf fmt "@\n@.";
         close_out oc;
         orphan)
     filemap []
@@ -998,7 +992,7 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a\n"
+  Format.fprintf oc "%a%a%a@\n@."
     generate_header ()
     (* error_table_definitions program  *)
     (* generate_get_input_index_prototype true *)
@@ -1014,7 +1008,7 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a\n"
+  Format.fprintf oc "%a%a%a@\n@."
     generate_implem_header header_filename
     (* generate_errors_table program *)
     (* generate_get_error_count_func program  *)
