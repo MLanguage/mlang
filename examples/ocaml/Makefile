@@ -42,6 +42,8 @@ cleanstat: cleantest
 	rm -f mvalue.cmi mvalue.cmx mvalue.o mvalue.cmo
 cleanresult:
 	rm -f results/*
+cleanparser:
+	$(MAKE) -C parser/ clean
 
 ##################################################
 # Implicit rules for OCaml modules
@@ -63,13 +65,25 @@ ir.ml: $(SPEC_DEP)
 		--backend ocaml --output ir.ml \
 		$(SOURCE_FILES)
 
+test_harness.cmo : test_harness.ml
+	ocamlc.opt -c $(DEBUG_FLAG) -I parser $^
+
 .INTERMEDIATE : test_harness.cmo test_harness.cmi test_harness.o test_harness.cmx
 # Compiling bytecode
-test.bc: mvalue.cmo ir.cmo test_harness.cmo 
-	ocamlc.opt $(DEBUG_FLAG) -o $@ unix.cma $^
+types_module.cmo: 
+	$(MAKE) -C parser/ types_module.cmo
+test_lexer.cmo :
+	$(MAKE) -C parser/ test_lexer.cmo
+test_parser.cmo :
+	$(MAKE) -C parser/ test_parser.cmo
+fip.cmo :
+	$(MAKE) -C parser/ fip.cmo
+
+test.bc: types_module.cmo test_lexer.cmo test_parser.cmo fip.cmo mvalue.cmo ir.cmo test_harness.cmo
+	ocamlc.opt $(DEBUG_FLAG) -o $@ -I parser unix.cma $^
 
 # Compiling native code
-test.exe: mvalue.cmx ir.cmx test_harness.cmx
+test.exe: parser/fip.cmx mvalue.cmx ir.cmx test_harness.cmx
 	ocamlopt $(DEBUG_FLAG) -o $@ unix.cmxa $^
 
 # Running test suite
