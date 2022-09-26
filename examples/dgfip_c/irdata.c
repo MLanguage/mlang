@@ -119,6 +119,7 @@ void IRDATA_reset_erreur(T_irdata *irdata)
 
 T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur)
 {
+  int indice = 0;
   T_discord *discord = NULL;
   if (valeur < 0) {
     discord = err_NEGATIF(irdata);
@@ -129,11 +130,11 @@ T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur)
     return discord;
   }
 #ifdef FLG_COMPACT
-  int indice = desc->indice;
+  indice = desc->indice;
   irdata->valeurs[indice] = valeur;
   irdata->defs[indice] = 1;
 #else
-  int indice = desc->indice & INDICE_VAL;
+  indice = desc->indice & INDICE_VAL;
   if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
     return (0);
   }
@@ -170,17 +171,18 @@ void IRDATA_range_base(T_irdata *irdata, T_desc_var *desc, double valeur)
 
 struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_desc_var *desc, int ind, double valeur)
 {
+  int indice = 0;
   T_discord *discord = NULL;
   discord = (*desc->verif)(irdata);
   if ((discord != NULL) && (discord->erreur->type == ANOMALIE)) {
     return discord;
   }
 #ifdef FLG_COMPACT
-  int indice = desc->indice + ind;
+  indice = desc->indice + ind;
   irdata->defs[indice] = 1;
   irdata->valeurs[indice] = valeur;
 #else
-  int indice = (desc->indice & INDICE_VAL) + ind;
+  indice = (desc->indice & INDICE_VAL) + ind;
   switch (desc->indice & EST_MASQUE) {
     case EST_SAISIE:
       irdata->def_saisie[indice] = 1;
@@ -257,7 +259,7 @@ static T_desc_var * cherche_desc_var(const char *nom, T_desc_var *table, int tai
   int res = -1, inf = 0, millieu;
   while ((res != 0) && (inf < sup)) {
     millieu = (inf + sup) / 2;
-    desc = (T_desc_var *)((void *)table + (taille * millieu));
+    desc = (T_desc_var *)((char *)table + (taille * millieu));
     res = strcmp(nom, desc->nom);
     if (res < 0) sup = millieu;
     else if (res > 0) inf = millieu + 1;
@@ -279,7 +281,8 @@ T_desc_var * IRDATA_cherche_desc_var(const char *nom)
   static const int nb[6] = {
     NB_CONTEXTE, NB_FAMILLE, NB_REVENU,
     NB_REVENU_CORREC, NB_VARIATION, NB_RESTITUEE };
-  for (int i = 0; i < 6; ++i) {
+  int i = 0;
+  for (i = 0; i < 6; ++i) {
     T_desc_var *res = cherche_desc_var(nom, desc[i], size[i], nb[i]);
     if (res != NULL) return res;
   }

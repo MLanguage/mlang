@@ -554,6 +554,7 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
           table_name table_NAME
   end;
 
+  let empty = ref true in
   List.iter
     (fun ( tvar,
            idx1,
@@ -566,7 +567,8 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
            attributes,
            _size ) ->
       let is_output = match idxo_opt with Some _ -> true | _ -> false in
-      if var_matches req_type tvar is_output then
+      if var_matches req_type tvar is_output then begin
+        empty := false;
         match req_type with
         | Debug _i ->
             (* Special case for debug *)
@@ -576,8 +578,13 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
         | _ ->
             (* General case*)
             gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
-              ~attributes ~desc ~alias_opt)
+              ~attributes ~desc ~alias_opt
+      end)
     vars;
+
+  if !empty then
+    gen_var fmt req_type opt ~idx:0 ~name:"" ~tvar:Computed ~is_output:false
+      ~typ_opt:None ~attributes:[] ~desc:"" ~alias_opt:None;
 
   Format.fprintf fmt "};\n"
 

@@ -412,33 +412,20 @@ expression:
 | OR { (Or, mk_position $sloc) }
 
 sum_expression:
-| e = diff_expression { e }
-| e1 = diff_expression op = sum_operator e2 = sum_expression { (Binop (op, e1, e2), mk_position $sloc) }
-
-diff_expression:
 | e = product_expression { e }
-| e1 = diff_expression op = diff_operator e2 = product_expression { (Binop (op, e1, e2), mk_position $sloc) }
+| e1 = sum_expression op = sum_operator e2 = product_expression { (Binop (op, e1, e2), mk_position $sloc) }
 
 sum_operator:
 | PLUS { (Add, mk_position $sloc) }
-
-diff_operator:
 | MINUS { (Sub, mk_position $sloc) }
 
 product_expression:
-| e = div_expression { e }
-| e1 = product_expression op = product_operator e2 = div_expression
+| e = factor { e }
+| e1 = product_expression op = product_operator e2 = factor
 { (Binop (op, e1, e2), mk_position $sloc) }
 
 product_operator:
 | TIMES { (Mul, mk_position $sloc) }
-
-div_expression:
-| e = factor { e }
-| e1 = div_expression op = div_operator e2 = factor
-{ (Binop (op, e1, e2), mk_position $sloc) }
-
-div_operator:
 | DIV { (Div, mk_position $sloc) }
 
 table_index_name:

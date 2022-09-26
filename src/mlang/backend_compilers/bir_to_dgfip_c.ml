@@ -97,10 +97,14 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
   match de with
   | Done -> Format.fprintf fmt "1"
   | Dzero -> Format.fprintf fmt "0"
-  | Dlit f ->
-      (* Print literal floats as precisely as possible, without cluttering the
-         generated code *)
-      Format.fprintf fmt "%#.19g" f
+  | Dlit f -> (
+      match Float.modf f with
+      | 0., _ ->
+          (* Print at least one decimal, distinction from integers *)
+          Format.fprintf fmt "%.1f" f
+      | _ ->
+          (* Print literal floats as precisely as possible *)
+          Format.fprintf fmt "%#.19g" f)
   | Dvar (evar, dflag) -> format_expr_var dgfip_flags vm fmt (evar, dflag)
   | Dand (de1, de2) -> format_dexpr fmt (Dbinop ("&&", de1, de2))
   | Dor (de1, de2) -> format_dexpr fmt (Dbinop ("||", de1, de2))
