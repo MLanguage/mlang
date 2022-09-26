@@ -313,42 +313,32 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                    (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
                    !Cli.value_sort !Cli.round_ops)
               (* first all the combinations giving undefined *)
-          | Mast.And, (Literal Undefined, _ | _, Undefined), _ ->
-              from_literal Undefined
-          | Mast.And, _, (Literal Undefined, _ | _, Undefined) ->
-              from_literal Undefined
-          | Mast.Mul, _, (Literal Undefined, _ | _, Undefined) ->
-              from_literal Undefined
-          | Mast.Mul, (Literal Undefined, _ | _, Undefined), _ ->
-              from_literal Undefined
-          | Mast.Div, (Literal Undefined, _ | _, Undefined), _ ->
-              from_literal Undefined
+          | Mast.And, (Literal Undefined, _ | _, Undefined), _
+          | Mast.And, _, (Literal Undefined, _ | _, Undefined)
+          | Mast.Mul, _, (Literal Undefined, _ | _, Undefined)
+          | Mast.Mul, (Literal Undefined, _ | _, Undefined), _
+          | Mast.Div, (Literal Undefined, _ | _, Undefined), _
           | Mast.Div, _, (Literal Undefined, _ | _, Undefined) ->
               from_literal Undefined
           (* logical or *)
-          | Mast.Or, (Literal Undefined, _ | _, Undefined), _ ->
-              (Pos.unmark new_e2, d2)
-          | Mast.Or, _, (Literal Undefined, _ | _, Undefined) ->
-              (Pos.unmark new_e1, d1)
-          | Mast.Or, (Literal (Float f), _), (_, Float) when f <> 0. ->
-              from_literal Mir.true_literal
-          | Mast.Or, (_, Float), (Literal (Float f), _) when f <> 0. ->
-              from_literal Mir.true_literal
+          | Mast.Or, (Literal Undefined, _ | _, Undefined), _
           | Mast.Or, (Literal (Float 0.), _), (_, Float) ->
               (Pos.unmark new_e2, d2)
+          | Mast.Or, _, (Literal Undefined, _ | _, Undefined)
           | Mast.Or, (_, Float), (Literal (Float 0.), _) ->
               (Pos.unmark new_e1, d1)
+          | Mast.Or, (Literal (Float _), _), _
+          | Mast.Or, _, (Literal (Float _), _) ->
+              from_literal Mir.true_literal
           (* logican and *)
-          | Mast.And, (Literal (Float 0.), _), (_, Float) ->
+          | Mast.And, (Literal (Float 0.), _), _
+          | Mast.And, _, (Literal (Float 0.), _) ->
               from_literal Mir.false_literal
-          | Mast.And, (_, Float), (Literal (Float 0.), _) ->
-              from_literal Mir.false_literal
-          | Mast.And, (Literal (Float f), _), (_, Float) when f <> 0. ->
-              (Pos.unmark new_e2, d2)
-          | Mast.And, (_, Float), (Literal (Float f), _) when f <> 0. ->
-              (Pos.unmark new_e1, d1)
+          | Mast.And, (Literal (Float _), _), _ -> (Pos.unmark new_e2, d2)
+          | Mast.And, _, (Literal (Float _), _) -> (Pos.unmark new_e1, d1)
           (* addition *)
-          | Mast.Add, (Literal Undefined, _ | _, Undefined), _ ->
+          | Mast.Add, (Literal Undefined, _ | _, Undefined), _
+          | Mast.Add, (Literal (Float 0.), _), (_, Float) ->
               (Pos.unmark new_e2, d2)
           | Mast.Add, _, (Literal Undefined, _ | _, Undefined) ->
               (Pos.unmark new_e1, d1)
@@ -361,8 +351,6 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Mast.Add, _, (Unop (Minus, e2'), _) ->
               ( Binop (Pos.same_pos_as Mast.Sub op, new_e1, e2'),
                 undef_cast d1 d2 )
-          | Mast.Add, (Literal (Float 0.), _), (_, Float) ->
-              (Pos.unmark new_e2, d2)
           | (Mast.Add | Mast.Sub), (_, Float), (Literal (Float 0.), _)
             when !Cli.optimize_unsafe_float ->
               (Pos.unmark new_e1, d1)
@@ -392,12 +380,13 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               from_literal (Float 0.)
           (* division *)
           | Mast.Div, (e', _), (Literal (Float 1.), _) -> (e', d1)
+          | Mast.Div, (_, Float), (Literal (Float 0.), _)
           | Mast.Div, (Literal (Float 0.), _), (_, Float) ->
               from_literal (Mir.Float 0.)
           (* default case *)
-          | (Mast.Add | Mast.Sub), _, _ ->
+          | (Mast.Add | Mast.Sub | Mast.Or), _, _ ->
               (Binop (op, new_e1, new_e2), undef_cast d1 d2)
-          | (Mast.Mul | Mast.Div | Mast.And | Mast.Or), _, _ ->
+          | (Mast.Mul | Mast.Div | Mast.And), _, _ ->
               (Binop (op, new_e1, new_e2), undef_absorb d1 d2)
         in
         (Pos.same_pos_as new_e e, d)
@@ -410,16 +399,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 (Bir_interpreter.evaluate_expr p
                    (Pos.same_pos_as (Mir.Unop (op, new_e1)) e1)
                    !Cli.value_sort !Cli.round_ops)
-          | _ -> (
-              ( Unop (op, new_e1),
-                match (op, d1) with
-                | Not, Float -> Float
-                | Not, Undefined -> Undefined
-                | Not, Top -> Top
-                | Minus, Float -> Float
-                | Minus, Undefined -> Float
-                | Minus, Top -> Float
-                | _ -> assert false ))
+          | _ -> (Unop (op, new_e1), d1)
         in
         (Pos.same_pos_as new_e e, d)
     | Conditional (e1, e2, e3) -> (
@@ -429,13 +409,12 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
         match Pos.unmark new_e1 with
         | Literal (Float 0.) -> (new_e3, d3)
         | Literal (Float _) -> (new_e2, d2)
+        | Literal Undefined ->
+            (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
         | _ ->
-            if Pos.unmark new_e1 = Literal Undefined || d1 = Undefined then
-              (Pos.same_pos_as (Mir.Literal Undefined) e, Undefined)
-            else
-              ( Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e,
-                if maybe_undefined d1 then join Undefined (join d2 d3)
-                else join d2 d3 ))
+            ( Pos.same_pos_as (Mir.Conditional (new_e1, new_e2, new_e3)) e,
+              if maybe_undefined d1 then join Undefined (join d2 d3)
+              else join d2 d3 ))
     | Index (var, e1) ->
         let new_e1, d1 = partially_evaluate_expr ctx p e1 in
         let new_e, d =
@@ -463,7 +442,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               match get_closest_dominating_def (Pos.unmark var) ctx with
               | Some (SimpleVar _) -> assert false (* should not happen *)
               | Some (TableVar (size, es')) -> (
-                  if idx >= size || idx < 0 then from_literal Undefined
+                  if idx >= size then from_literal Undefined
+                  else if idx < 0 then from_literal (Float 0.)
                   else
                     match es'.(idx) with
                     | PartialLiteral e' -> from_literal e'
@@ -474,8 +454,9 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
               else (Mir.Index (var, new_e1), Top)
         in
         (Pos.same_pos_as new_e e, d)
-    | Literal l -> (
-        (e, match l with Undefined -> Undefined | Float _ -> Float))
+    | Literal l ->
+        let _, d = from_literal l in
+        (e, d)
     | Var var -> (
         match get_closest_dominating_def var ctx with
         | Some (SimpleVar pexpr) ->
@@ -667,9 +648,27 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
             | IndexGeneric (v, e) ->
                 let e', d' = partially_evaluate_expr ctx p.mir_program e in
                 let partial_e' =
-                  Option.map
-                    (fun x -> TableVar (size, Array.init size (fun _ -> x)))
-                    (expr_to_partial (Pos.unmark e') d')
+                  match get_closest_dominating_def v ctx with
+                  | Some (TableVar _) -> assert false (* should not happen *)
+                  | Some (SimpleVar (PartialLiteral (Float f))) -> (
+                      let partial_var =
+                        match get_closest_dominating_def var ctx with
+                        | None -> None
+                        | Some (TableVar (_, partial)) -> Some partial
+                        | Some (SimpleVar _) -> assert false
+                        (* should not happen *)
+                      in
+                      match
+                        (partial_var, expr_to_partial (Pos.unmark e') d')
+                      with
+                      | Some ps, Some i' ->
+                          let ps' =
+                            Array.init size (fun i ->
+                                if i = int_of_float f then i' else ps.(i))
+                          in
+                          Some (TableVar (size, ps'))
+                      | _ -> None)
+                  | _ -> None
                 in
                 ( TableVar (size, IndexGeneric (v, e')),
                   add_var_def_to_ctx ctx block_id var partial_e' )
@@ -725,7 +724,8 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
       match expr_to_partial (Pos.unmark new_e) d with
       | Some (PartialLiteral (Undefined | Float 0.0)) -> (new_block, ctx)
       | Some (PartialLiteral (Float _)) ->
-          Cli.error_print "Error during partial evaluation!";
+          Cli.error_print
+            "Error during partial evaluation : staticaly violated condition";
           let err, ctx =
             ( Bir_interpreter.FloatDefInterp.ConditionViolated
                 (fst cond.cond_error, cond.cond_expr, []),
