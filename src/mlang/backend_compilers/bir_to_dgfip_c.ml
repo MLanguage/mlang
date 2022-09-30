@@ -169,7 +169,7 @@ let rec simpl_dexpr (de : dexpr) : dexpr =
       | Done -> Dzero
       | Dlit f when f <> 0. -> Dzero
       | Dzero -> Done
-      | _ -> de
+      | de -> Dunop ("!", de)
     end
   | Dite (dec, det, dee) -> begin
       match (simpl_dexpr dec, simpl_dexpr det, simpl_dexpr dee) with
