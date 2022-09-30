@@ -62,6 +62,23 @@ type program_context = {
   adhoc_specs_conds_stmts : stmt list;
   unused_inputs_init_stmts : stmt list;
 }
+(** This record allows to store statements generated from the m_spec file
+    without modifying the [Bir.program] function map. Thus the map reflects the
+    computation strictly as described in M and MPP.
+
+    Bir module public interface can then provide access to the statements
+    associated with the declared main function either:
+
+    - as defined in M source,
+    - composed with the m_spec constant assignations and conditions,
+    - composed with an initialisation of the variable dictionnary and the m_spec
+      features.
+
+    Initialisation of the variables at the [Bir] level including unused
+    variables is necessary to the [Bir.interpreter] but frowned upon in code
+    generation backends where the data structure size incites to use idiomatic
+    efficient methods of initialisation instead of resting upon a row of
+    assignments. *)
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
