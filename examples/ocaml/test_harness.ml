@@ -175,7 +175,7 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
 let run_test_directory (directory : string) (output_file_name : string) : unit =
   let dir_handle = Unix.opendir directory in
   let file_list =
-    List.map (String.cat directory) (get_file_in_dir dir_handle)
+    List.map (fun (file_name) -> directory ^ file_name) (get_file_in_dir dir_handle)
   in
   let files_discrepancies_list =
     List.combine file_list
