@@ -153,7 +153,7 @@ let main_statements_with_context (p : program) : stmt list =
       Errors.raise_error
         "This Bir program has no context constants and conditions stored"
 
-let main_statements_with_reset (p : program) : stmt list =
+let main_statements_with_context_and_tgv_init (p : program) : stmt list =
   match p.context with
   | Some context ->
       context.unused_inputs_init_stmts @ main_statements_with_context p

@@ -93,7 +93,7 @@ val main_statements : program -> stmt list
 
 val main_statements_with_context : program -> stmt list
 
-val main_statements_with_reset : program -> stmt list
+val main_statements_with_context_and_tgv_init : program -> stmt list
 
 val get_all_statements : program -> stmt list
 
