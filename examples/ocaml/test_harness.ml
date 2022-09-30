@@ -15,20 +15,6 @@ let entry_list_parsed (fichier : Types_module.test_file) : Mvalue.revenue_code l
 
 let reference_list_parsed (fichier : Types_module.test_file) : Mvalue.revenue_code list = revenue_code_list_from_var_values fichier.rp
 
-let load_file (input_file : string) : string list =
-  let ic = open_in input_file in
-  let rec build_list line_list =
-    match input_line ic with
-    | next_line -> build_list (next_line :: line_list)
-    | exception End_of_file ->
-        close_in ic;
-        List.rev line_list
-    | exception e ->
-        close_in_noerr ic;
-        raise e
-  in
-  build_list []
-
 let get_file_in_dir (dir_handle : Unix.dir_handle) : string list =
   let rec build_list file_list =
     match Unix.readdir dir_handle with
@@ -44,51 +30,6 @@ let get_file_in_dir (dir_handle : Unix.dir_handle) : string list =
   build_list []
 
 let compare_rev_code code1 code2 : int = compare code1.alias code2.alias
-
-let line2revenue_code line : Mvalue.revenue_code =
-  match String.split_on_char '/' line with
-  | [ head; tail ] -> { alias = head; value = Float.of_string tail }
-  | [] -> failwith "Empty line !"
-  | _ :: tail -> failwith "Line with multiple separators /."
-
-let parse_codes line_list : Mvalue.revenue_code list =
-  match line_list with [] -> [] | _ -> List.map line2revenue_code line_list
-
-let parse_block line_list : test_block =
-  match line_list with
-  | head :: tail when String.starts_with ~prefix:"#" head ->
-      { block_name = head; block_data = parse_codes tail }
-  | _ -> failwith "Data block has not the expected structure."
-
-let rec split_blocks (line_list : string list)
-    (line_list_list : string list list) : string list list =
-  match line_list with
-  | [] -> List.rev (List.map List.rev line_list_list)
-  | line :: tail ->
-      if String.starts_with ~prefix:"#" line then
-        split_blocks tail ([ [ line ] ] @ line_list_list)
-      else
-        split_blocks tail
-          (([ line ] @ List.hd line_list_list) :: List.tl line_list_list)
-
-let parse_FIP line_list : test_data =
-  match line_list with
-  | head :: name :: tail ->
-      { test_name = name; blocks = List.map parse_block (split_blocks tail []) }
-  | _ -> failwith "FIP file has not the expected structure."
-
-let get_data_block (input_file : string) (block_name : string) :
-    Mvalue.revenue_code list =
-  (List.find
-     (fun block -> block.block_name = block_name)
-     (parse_FIP (load_file input_file)).blocks)
-    .block_data
-
-let entry_list (input_file : string) : Mvalue.revenue_code list =
-  get_data_block input_file "#ENTREES-PRIMITIF"
-
-let reference_list (input_file : string) : Mvalue.revenue_code list =
-  get_data_block input_file "#RESULTATS-PRIMITIF"
 
 let filter_rev_code_list initial_list ref_list : Mvalue.revenue_code list =
   let alias_eq code1 code2 = code1.alias = code2.alias in
