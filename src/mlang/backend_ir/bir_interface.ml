@@ -253,12 +253,6 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
-let context_function = "contextualize"
-
-let context_agnostic_mpp_functions (p : Bir.program) :
-    Bir.mpp_function Bir.FunctionMap.t =
-  Bir.FunctionMap.remove context_function p.Bir.mpp_functions
-
 (** Add varibles, constants, conditions and outputs from [f] to [p] *)
 let adapt_program_to_function (p : Bir.program) (f : bir_function) :
     Bir.program * int =
@@ -327,22 +321,16 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
         Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  let mpp_functions =
-    Bir.FunctionMap.add context_function
-      Bir.
-        {
-          mppf_stmts =
-            unused_input_stmts @ const_input_stmts
-            @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
-            @ conds_stmts;
-          mppf_is_verif = false;
-        }
-      p.mpp_functions
-  in
   ( {
       p with
-      mpp_functions;
-      main_function = context_function;
+      context =
+        Some
+          Bir.
+            {
+              constant_inputs_init_stmts = const_input_stmts;
+              adhoc_specs_conds_stmts = conds_stmts;
+              unused_inputs_init_stmts = unused_input_stmts;
+            };
       outputs = f.func_outputs;
     },
     List.length unused_input_stmts + List.length const_input_stmts )

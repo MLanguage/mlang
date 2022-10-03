@@ -49,6 +49,7 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
+  context : Bir.program_context option;
 }
 
 val map_program_cfgs : (cfg -> cfg) -> program -> program

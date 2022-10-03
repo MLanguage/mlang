@@ -764,10 +764,7 @@ let generate_mpp_function (dgfip_flags : Dgfip_options.flags)
 let generate_mpp_functions (dgfip_flags : Dgfip_options.flags)
     (program : Bir.program) (oc : Format.formatter)
     (var_indexes : Dgfip_varid.var_id_map) =
-  let funcs =
-    Bir.FunctionMap.bindings
-      (Bir_interface.context_agnostic_mpp_functions program)
-  in
+  let funcs = Bir.FunctionMap.bindings program.Bir.mpp_functions in
   List.iter
     (fun (fname, { mppf_is_verif; _ }) ->
       generate_mpp_function
@@ -777,10 +774,7 @@ let generate_mpp_functions (dgfip_flags : Dgfip_options.flags)
 
 let generate_mpp_functions_signatures (oc : Format.formatter)
     (program : Bir.program) =
-  let funcs =
-    Bir.FunctionMap.bindings
-      (Bir_interface.context_agnostic_mpp_functions program)
-  in
+  let funcs = Bir.FunctionMap.bindings program.Bir.mpp_functions in
   Format.fprintf oc "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun ppf (func, { mppf_is_verif; _ }) ->
          generate_mpp_function_protoype true mppf_is_verif ppf func))

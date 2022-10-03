@@ -57,10 +57,34 @@ type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 module FunctionMap : Map.S with type key = function_name
 
+type program_context = {
+  constant_inputs_init_stmts : stmt list;
+  adhoc_specs_conds_stmts : stmt list;
+  unused_inputs_init_stmts : stmt list;
+}
+(** This record allows to store statements generated from the m_spec file
+    without modifying the [Bir.program] function map. Thus the map reflects the
+    computation strictly as described in M and MPP.
+
+    Bir module public interface can then provide access to the statements
+    associated with the declared main function either:
+
+    - as defined in M source,
+    - composed with the m_spec constant assignations and conditions,
+    - composed with an initialisation of the variable dictionnary and the m_spec
+      features.
+
+    Initialisation of the variables at the [Bir] level including unused
+    variables is necessary to the [Bir.interpreter] but frowned upon in code
+    generation backends where the data structure size incites to use idiomatic
+    efficient methods of initialisation instead of resting upon a row of
+    assignments. *)
+
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
+  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
@@ -83,6 +107,10 @@ val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
 val rule_or_verif_as_statements : rule_or_verif -> stmt list
 
 val main_statements : program -> stmt list
+
+val main_statements_with_context : program -> stmt list
+
+val main_statements_with_context_and_tgv_init : program -> stmt list
 
 val get_all_statements : program -> stmt list
 

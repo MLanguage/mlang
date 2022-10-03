@@ -752,7 +752,20 @@ module Make (N : Bir_number.NumberInterface) = struct
       (code_loc_start_value : int) : ctx =
     try
       let ctx =
-        evaluate_stmts p ctx (Bir.main_statements p) [] code_loc_start_value
+        evaluate_stmts p ctx
+          (Bir.main_statements_with_context_and_tgv_init p)
+          [] code_loc_start_value
+        (* For the interpreter to operate properly, all input variables must be
+           declared at some point, even if they aren't used as input (either
+           contextual constants or entered at interpreter prompt). The M program
+           doesn't include default assignation for non-entered input variables,
+           so unused inputs are not declared in the main statements.
+
+           The use of main_statement_with_context_and_tgv_init ensures every
+           variable from the TGV dictionnary is assigned to "undefined" by
+           default, before context statements overload the contextual constants
+           according to the spec file and interpreter prompt assignements
+           overload entered variables. *)
       in
       ctx
     with RuntimeError (e, ctx) ->
