@@ -181,7 +181,10 @@ let run_test_directory (directory : string) (output_file_name : string) : unit =
     List.combine file_list
       (List.map compute_discrepancies_from_file_2020 file_list)
   in
-  let _oc = open_out (output_file_name ^ "_disc.txt") in
+  let _oc =
+    if String.length output_file_name = 0 then stdout
+    else open_out (output_file_name ^ "_disc.txt")
+  in
   let oc = Format.formatter_of_out_channel _oc in
   let print_discrepancy_report fmt files_discrepancies_list =
     Format.pp_print_list print_file_discrepancies fmt files_discrepancies_list

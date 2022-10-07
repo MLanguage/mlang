@@ -88,7 +88,14 @@ test.exe: parser/fip.cmx mvalue.cmx ir.cmx test_harness.cmx
 
 # Running test suite
 run: test.bc
-	./test.bc "multi" $(TESTS_DIR) "results/y$(YEAR)"
+	./test.bc "multi" $(TESTS_DIR) "results/y_$(YEAR)"
+
+runfile: test.bc
+	./test.bc "raw" $(FILE) "results/f_$(notdir $(FILE))"
 
 runx: test.exe
-	./test.exe "multi" $(TESTS_DIR) "results/y$(YEAR)"
+	./test.exe "multi" $(TESTS_DIR) "results/y_$(YEAR)"
+
+# run_tests uses an empty string to disable the file output (output is enabled on stdout).
+run_tests: test.exe
+	./test.exe "multi" $(TESTS_DIR) ""
