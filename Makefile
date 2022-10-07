@@ -83,10 +83,13 @@ endif
 test_dgfip_c_backend: build
 	$(MAKE) -C examples/dgfip_c/ml_primitif backend_tests
 
+test_ocaml_backend: build
+	$(MAKE) -C examples/ocaml/ run_tests
+
 quick_test: build
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
-all: tests test_java_backend test_dgfip_c_backend quick_test
+all: tests test_java_backend test_dgfip_c_backend test_ocaml_backend quick_test
 
 ##################################################
 # Doc
@@ -99,6 +102,7 @@ doc: FORCE build
 clean:
 	$(MAKE) -C examples/dgfip_c/ml_primitif cleanall
 	$(MAKE) -C examples/java clean
+	$(MAKE) -C examples/ocaml clean
 	rm -f doc/doc.html
 	dune clean
 
