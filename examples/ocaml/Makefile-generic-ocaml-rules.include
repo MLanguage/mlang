@@ -1,0 +1,12 @@
+##################################################
+# Implicit rules for OCaml modules
+##################################################
+
+%.cmi: %.mli
+	ocamlc.opt -c $(DEBUG_FLAG) $^
+
+%.cmo: %.ml
+	ocamlc.opt -c $(DEBUG_FLAG) $(OCAMLC_INCLUDE_LIST) $^
+
+%.cmx: %.ml
+	ocamlopt -c $(DEBUG_FLAG) $(OCAMLC_INCLUDE_LIST) $^

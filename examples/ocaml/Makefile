@@ -1,3 +1,4 @@
+include Makefile-generic-ocaml-rules.include
 include ../../Makefile.include
 
 ########
@@ -28,9 +29,12 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 SPEC_DEP=$(MPP_FILE)
 endif
 
-.PHONY : clean cleangen cleancalc cleanstat cleantest cleanresult
+# Include parser lib directory to make its module available
+OCAMLC_INCLUDE_LIST= -I parser
 
-clean: cleancalc cleanstat cleanresult
+.PHONY : clean cleangen cleancalc cleanstat cleantest cleanresult run_tests
+
+clean: cleancalc cleanstat cleanresult cleanparser
 
 cleangen:
 	rm -f ir.ml
@@ -46,16 +50,6 @@ cleanparser:
 	$(MAKE) -C parser/ clean
 
 ##################################################
-# Implicit rules for OCaml modules
-##################################################
-
-%.cmo: %.ml
-	ocamlc.opt -c $(DEBUG_FLAG) $^
-
-%.cmx: %.ml
-	ocamlopt -c $(DEBUG_FLAG) $^
-
-##################################################
 # Generating and running OCaml files from Mlang
 ##################################################
 
@@ -65,26 +59,20 @@ ir.ml: $(SPEC_DEP)
 		--backend ocaml --output ir.ml \
 		$(SOURCE_FILES)
 
-test_harness.cmo : test_harness.ml
-	ocamlc.opt -c $(DEBUG_FLAG) -I parser $^
-
 .INTERMEDIATE : test_harness.cmo test_harness.cmi test_harness.o test_harness.cmx
 # Compiling bytecode
-types_module.cmo: 
-	$(MAKE) -C parser/ types_module.cmo
-test_lexer.cmo :
-	$(MAKE) -C parser/ test_lexer.cmo
-test_parser.cmo :
-	$(MAKE) -C parser/ test_parser.cmo
-fip.cmo :
+types_module.cmo test_lexer.cmo test_parser.cmo fip.cmo:
 	$(MAKE) -C parser/ fip.cmo
 
 test.bc: types_module.cmo test_lexer.cmo test_parser.cmo fip.cmo mvalue.cmo ir.cmo test_harness.cmo
-	ocamlc.opt $(DEBUG_FLAG) -o $@ -I parser unix.cma $^
+	ocamlc.opt $(DEBUG_FLAG) -o $@ $(OCAMLC_INCLUDE_LIST) unix.cma $^
 
 # Compiling native code
-test.exe: parser/fip.cmx mvalue.cmx ir.cmx test_harness.cmx
-	ocamlopt $(DEBUG_FLAG) -o $@ unix.cmxa $^
+types_module.cmx test_lexer.cmx test_parser.cmx fip.cmx:
+	$(MAKE) -C parser/ fip.cmx
+
+test.exe: types_module.cmx test_lexer.cmx test_parser.cmx fip.cmx mvalue.cmx ir.cmx test_harness.cmx
+	ocamlopt $(DEBUG_FLAG) -o $@ $(OCAMLC_INCLUDE_LIST) unix.cmxa $^
 
 # Running test suite
 run: test.bc
