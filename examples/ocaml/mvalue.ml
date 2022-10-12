@@ -114,7 +114,7 @@ let m_table_value_at_index (variable_array : m_array) (table_start : int)
     let offset = int_of_float index.value in
     match offset with
     | x when x < 0 -> m_zero
-    | x when x > size -> m_undef
+    | x when x >= size -> m_undef
     | _ -> Array.get variable_array (offset + table_start)
 
 let m_max (x : m_value) (y : m_value) : m_value =
