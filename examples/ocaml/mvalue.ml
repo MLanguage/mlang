@@ -148,17 +148,8 @@ let m_multimax (bound_variable : m_value) (variable_array : m_array)
   if bound_variable.undefined then failwith "Multimax bound undefined!"
   else
     let bound = int_of_float bound_variable.value in
+    let sub_array = Array.sub variable_array (position+1) (bound) in
     let get_position_value position =
       Array.get variable_array position
     in
-    let rec multimax variable_array current_index max_index reference =
-      let new_max =
-        m_max reference (get_position_value current_index)
-      in
-      if current_index = max_index then new_max
-      else multimax variable_array (current_index + 1) max_index new_max
-    in
-    if bound >= 1 then
-      multimax variable_array (position + 1) (position + bound)
-        (get_position_value position)
-    else get_position_value position
+    Array.fold_left (m_max) (get_position_value position) sub_array 
