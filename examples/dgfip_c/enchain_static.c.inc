@@ -82,7 +82,7 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code)
 
   if (strcmp(erreur->isisf, "O")) {
     if ((erreur->type == ANOMALIE) && (++irdata->nb_bloquantes >= irdata->max_bloquantes)) {
-/*      longjmp(irdata->jmp_bloq, 1); */
+      longjmp(irdata->jmp_bloq, 1);
     }
   }
 }
@@ -126,7 +126,7 @@ void add_erreur(T_erreur *erreur, char *code)
 
   if (strcmp(erreur->isisf, "O")) {
     if (erreur->type == ANOMALIE) {
-/*      longjmp(jmp_bloq, 1); */
+      longjmp(jmp_bloq, 1);
     }
   }
 }
@@ -571,6 +571,11 @@ struct S_discord * verif_calcul_primitive(T_irdata *irdata)
 struct S_discord * verif_calcul_primitive_isf_raw(T_irdata *irdata);
 struct S_discord * verif_calcul_primitive_isf(T_irdata *irdata)
 {
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+#else
+  init_erreur();
+#endif /* FLG_MULTITHREAD */
   return verif_calcul_primitive_isf_raw(irdata);
 }
 
