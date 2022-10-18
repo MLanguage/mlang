@@ -313,6 +313,15 @@ double floor_g(double a)
   }
 }
 
+double ceil_g(double a)
+{
+  if (fabs(a) <= LONG_MAX) {
+    return ceil(a);
+  } else {
+    return a;
+  }
+}
+
 int multimax_def(int nbopd, char *var)
 {
   int i = 0;

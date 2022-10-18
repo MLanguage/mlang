@@ -36,6 +36,7 @@ val mlang_t :
   bool ->
   bool ->
   string option ->
+  string option ->
   float option ->
   bool ->
   string list option ->
@@ -48,6 +49,27 @@ val info : Cmdliner.Cmd.info
 (** Command-line man page for --help *)
 
 (**{2 Flags and parameters}*)
+
+(** According on the [value_sort], a specific interpreter will be called with
+    the right kind of floating-point value *)
+type value_sort =
+  | RegularFloat
+  | MPFR of int  (** bitsize of the floats *)
+  | BigInt of int  (** precision of the fixed point *)
+  | Interval
+  | Rational
+
+(** Rounding operations to use in the interpreter. They correspond to the
+    rounding operations used by the DGFiP calculator in different execution
+    contexts.
+
+    - RODefault: rounding operations used in the PC/single-thread context
+    - ROMulti: rouding operations used in the PC/multi-thread context
+    - ROMainframe rounding operations used in the mainframe context *)
+type round_ops =
+  | RODefault
+  | ROMulti
+  | ROMainframe of int  (** size of type long, either 32 or 64 *)
 
 val source_files : string list ref
 (** M source files to be compiled *)
@@ -85,6 +107,10 @@ val optimize_unsafe_float : bool ref
 val m_clean_calls : bool ref
 (** Clean regular variables between M calls *)
 
+val value_sort : value_sort ref
+
+val round_ops : round_ops ref
+
 val set_all_arg_refs :
   (* files *) string list ->
   (* debug *) bool ->
@@ -95,6 +121,8 @@ val set_all_arg_refs :
   (* output_file *) string option ->
   (* optimize_unsafe_float *) bool ->
   (* m_clean_call *) bool ->
+  value_sort ->
+  round_ops ->
   unit
 
 val add_prefix_to_each_line : string -> (int -> string) -> string

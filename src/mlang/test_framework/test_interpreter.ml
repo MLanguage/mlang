@@ -121,8 +121,8 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
     input_file )
 
 let check_test (combined_program : Bir.program) (test_name : string)
-    (optimize : bool) (code_coverage : bool)
-    (value_sort : Bir_interpreter.value_sort) (test_error_margin : float) :
+    (optimize : bool) (code_coverage : bool) (value_sort : Cli.value_sort)
+    (round_ops : Cli.round_ops) (test_error_margin : float) :
     Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = parse_file test_name in
@@ -151,7 +151,7 @@ let check_test (combined_program : Bir.program) (test_name : string)
   if code_coverage then Bir_instrumentation.code_coverage_init ();
   let _print_outputs =
     Bir_interpreter.evaluate_program f combined_program input_file
-      (-code_loc_offset) value_sort
+      (-code_loc_offset) value_sort round_ops
   in
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
@@ -173,8 +173,8 @@ let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
   | Some i -> IntMap.add key (i + 1) m
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
-    (code_coverage_activated : bool) (value_sort : Bir_interpreter.value_sort)
-    (test_error_margin : float) =
+    (code_coverage_activated : bool) (value_sort : Cli.value_sort)
+    (round_ops : Cli.round_ops) (test_error_margin : float) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -220,11 +220,14 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
             (Pos.unmark err.Mir.Error.name);
           (successes, failures, code_coverage_acc)
     in
+    let module Interp = (val Bir_interpreter.get_interp value_sort round_ops
+                           : Bir_interpreter.S)
+    in
     try
       Cli.debug_flag := false;
       let code_coverage_result =
         check_test p (test_dir ^ name) optimize code_coverage_activated
-          value_sort test_error_margin
+          value_sort round_ops test_error_margin
       in
       Cli.debug_flag := true;
       let code_coverage_acc =
@@ -233,119 +236,27 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       in
       (name :: successes, failures, code_coverage_acc)
     with
-    | Bir_interpreter.RegularFloatInterpreter.RuntimeError
-        ((ConditionViolated _ as cv), _) ->
+    | Interp.RuntimeError ((ConditionViolated _ as cv), _) ->
         let expr, err, bindings =
           match cv with
-          | Bir_interpreter.RegularFloatInterpreter.ConditionViolated
-              (err, expr, bindings) -> (
+          | Interp.ConditionViolated (err, expr, bindings) -> (
               ( expr,
                 err,
                 match bindings with
-                | [ (v, Bir_interpreter.RegularFloatInterpreter.SimpleVar l1) ]
-                  ->
-                    Some
-                      ( v,
-                        Bir_interpreter.RegularFloatInterpreter.value_to_literal
-                          l1 )
+                | [ (v, Interp.SimpleVar l1) ] ->
+                    Some (v, Interp.value_to_literal l1)
                 | _ -> None ))
           | _ -> assert false
           (* should not happen *)
         in
         report_violated_condition_error bindings expr err
-    | Bir_interpreter.MPFRInterpreter.RuntimeError
-        ((ConditionViolated _ as cv), _) ->
-        let expr, err, bindings =
-          match cv with
-          | Bir_interpreter.MPFRInterpreter.ConditionViolated
-              (err, expr, bindings) -> (
-              ( expr,
-                err,
-                match bindings with
-                | [ (v, Bir_interpreter.MPFRInterpreter.SimpleVar l1) ] ->
-                    Some (v, Bir_interpreter.MPFRInterpreter.value_to_literal l1)
-                | _ -> None ))
-          | _ -> assert false
-          (* should not happen *)
-        in
-        report_violated_condition_error bindings expr err
-    | Bir_interpreter.BigIntInterpreter.RuntimeError
-        ((ConditionViolated _ as cv), _) ->
-        let expr, err, bindings =
-          match cv with
-          | Bir_interpreter.BigIntInterpreter.ConditionViolated
-              (err, expr, bindings) -> (
-              ( expr,
-                err,
-                match bindings with
-                | [ (v, Bir_interpreter.BigIntInterpreter.SimpleVar l1) ] ->
-                    Some
-                      (v, Bir_interpreter.BigIntInterpreter.value_to_literal l1)
-                | _ -> None ))
-          | _ -> assert false
-          (* should not happen *)
-        in
-        report_violated_condition_error bindings expr err
-    | Bir_interpreter.IntervalInterpreter.RuntimeError
-        ((ConditionViolated _ as cv), _) ->
-        let expr, err, bindings =
-          match cv with
-          | Bir_interpreter.IntervalInterpreter.ConditionViolated
-              (err, expr, bindings) -> (
-              ( expr,
-                err,
-                match bindings with
-                | [ (v, Bir_interpreter.IntervalInterpreter.SimpleVar l1) ] ->
-                    Some
-                      ( v,
-                        Bir_interpreter.IntervalInterpreter.value_to_literal l1
-                      )
-                | _ -> None ))
-          | _ -> assert false
-          (* should not happen *)
-        in
-        report_violated_condition_error bindings expr err
-    | Bir_interpreter.RationalInterpreter.RuntimeError
-        ((ConditionViolated _ as cv), _) ->
-        let expr, err, bindings =
-          match cv with
-          | Bir_interpreter.RationalInterpreter.ConditionViolated
-              (err, expr, bindings) -> (
-              ( expr,
-                err,
-                match bindings with
-                | [ (v, Bir_interpreter.RationalInterpreter.SimpleVar l1) ] ->
-                    Some
-                      ( v,
-                        Bir_interpreter.RationalInterpreter.value_to_literal l1
-                      )
-                | _ -> None ))
-          | _ -> assert false
-          (* should not happen *)
-        in
-        report_violated_condition_error bindings expr err
-    | Bir_interpreter.IntervalInterpreter.RuntimeError
-        (Bir_interpreter.IntervalInterpreter.StructuredError (msg, pos, kont), _)
-    | Bir_interpreter.BigIntInterpreter.RuntimeError
-        (Bir_interpreter.BigIntInterpreter.StructuredError (msg, pos, kont), _)
-    | Bir_interpreter.MPFRInterpreter.RuntimeError
-        (Bir_interpreter.MPFRInterpreter.StructuredError (msg, pos, kont), _)
-    | Bir_interpreter.RegularFloatInterpreter.RuntimeError
-        ( Bir_interpreter.RegularFloatInterpreter.StructuredError
-            (msg, pos, kont),
-          _ )
-    | Bir_interpreter.RationalInterpreter.RuntimeError
-        (Bir_interpreter.RationalInterpreter.StructuredError (msg, pos, kont), _)
+    | Interp.RuntimeError (Interp.StructuredError (msg, pos, kont), _)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures, code_coverage_acc)
-    | Bir_interpreter.IntervalInterpreter.RuntimeError (_, _)
-    | Bir_interpreter.BigIntInterpreter.RuntimeError (_, _)
-    | Bir_interpreter.MPFRInterpreter.RuntimeError (_, _)
-    | Bir_interpreter.RegularFloatInterpreter.RuntimeError (_, _)
-    | Bir_interpreter.RationalInterpreter.RuntimeError (_, _) ->
+    | Interp.RuntimeError (_, _) ->
         Cli.error_print "Runtime error in test %s" name;
         (successes, failures, code_coverage_acc)
   in

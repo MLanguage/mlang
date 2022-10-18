@@ -79,11 +79,55 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     (mpp_file : string) (output : string option) (run_all_tests : string option)
     (run_test : string option) (mpp_function : string) (optimize : bool)
     (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (test_error_margin : float option)
-    (m_clean_calls : bool) (dgfip_options : string list option)
+    (precision : string option) (roundops : string option)
+    (test_error_margin : float option) (m_clean_calls : bool)
+    (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
+  let value_sort =
+    let precision = Option.get precision in
+    if precision = "double" then Cli.RegularFloat
+    else
+      let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
+      if Re.Pcre.pmatch ~rex:mpfr_regex precision then
+        let mpfr_prec =
+          Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1
+        in
+        Cli.MPFR (int_of_string mpfr_prec)
+      else if precision = "interval" then Cli.Interval
+      else
+        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:bigint_regex precision then
+          let fixpoint_prec =
+            Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
+          in
+          Cli.BigInt (int_of_string fixpoint_prec)
+        else if precision = "mpq" then Cli.Rational
+        else
+          Errors.raise_error
+            (Format.asprintf "Unkown precision option: %s" precision)
+  in
+  let round_ops =
+    let roundops = Option.get roundops in
+    if roundops = "default" then Cli.RODefault
+    else if roundops = "multi" then Cli.ROMulti
+    else
+      let mf_regex = Re.Pcre.regexp "^mainframe(\\d+)$" in
+      if Re.Pcre.pmatch ~rex:mf_regex roundops then
+        let mf_long_size =
+          Re.Pcre.get_substring (Re.Pcre.exec ~rex:mf_regex roundops) 1
+        in
+        match int_of_string mf_long_size with
+        | (32 | 64) as sz -> Cli.ROMainframe sz
+        | _ ->
+            Errors.raise_error
+              (Format.asprintf "Invalid long size for mainframe: %s"
+                 mf_long_size)
+      else
+        Errors.raise_error
+          (Format.asprintf "Unkown roundops option: %s" roundops)
+  in
   Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
-    print_cycles output optimize_unsafe_float m_clean_calls;
+    print_cycles output optimize_unsafe_float m_clean_calls value_sort round_ops;
   try
     let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
@@ -156,29 +200,6 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     let combined_program =
       Mpp_ir_to_bir.create_combined_program full_m_program mpp mpp_function
     in
-    let value_sort =
-      let precision = Option.get precision in
-      if precision = "double" then Bir_interpreter.RegularFloat
-      else
-        let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:mpfr_regex precision then
-          let mpfr_prec =
-            Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1
-          in
-          Bir_interpreter.MPFR (int_of_string mpfr_prec)
-        else if precision = "interval" then Bir_interpreter.Interval
-        else
-          let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
-          if Re.Pcre.pmatch ~rex:bigint_regex precision then
-            let fixpoint_prec =
-              Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
-            in
-            Bir_interpreter.BigInt (int_of_string fixpoint_prec)
-          else if precision = "mpq" then Bir_interpreter.Rational
-          else
-            Errors.raise_error
-              (Format.asprintf "Unkown precision option: %s" precision)
-    in
     if run_all_tests <> None then begin
       if code_coverage && optimize then
         Errors.raise_error
@@ -188,7 +209,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         match run_all_tests with Some s -> s | _ -> assert false
       in
       Test_interpreter.check_all_tests combined_program tests optimize
-        code_coverage value_sort
+        code_coverage value_sort round_ops
         (Option.get test_error_margin)
     end
     else if run_test <> None then begin
@@ -201,7 +222,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       in
       ignore
         (Test_interpreter.check_test combined_program test optimize false
-           value_sort
+           value_sort round_ops
            (Option.get test_error_margin));
       Cli.result_print "Test passed!"
     end
@@ -236,7 +257,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
             let print_output =
               Bir_interpreter.evaluate_program function_spec combined_program
-                inputs 0 value_sort
+                inputs 0 value_sort round_ops
             in
             print_output ()
           end

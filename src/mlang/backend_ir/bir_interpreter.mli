@@ -23,7 +23,7 @@ type var_literal =
   | SimpleVar of Mir.literal
   | TableVar of int * Mir.literal array
 
-(**{1 Instrumentation of he interpreter}*)
+(**{1 Instrumentation of the interpreter}*)
 
 (** The BIR interpreter can be instrumented to record which program locations
     have been executed. *)
@@ -96,6 +96,8 @@ module type S = sig
 
   val var_value_to_var_literal : var_value -> var_literal
 
+  val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
+
   (** Interpreter runtime errors *)
   type run_error =
     | ErrorValue of string * Pos.t
@@ -118,41 +120,82 @@ module type S = sig
   (** Before execution of the program, replaces the [undefined] stubs for input
       variables by their true input value *)
 
+  val print_output : Bir_interface.bir_function -> ctx -> unit
+
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
   (** Raises a runtime error with a formatted error message and context *)
+
+  val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
+
+  val evaluate_program : Bir.program -> ctx -> int -> ctx
 end
 
-module RegularFloatInterpreter : S
+module FloatDefInterp : S
+(** The different interpreters, which combine a representation of numbers and
+    rounding operations. The first part of the name corresponds to the
+    representation of numbers, and is one of the following:
 
-module MPFRInterpreter : S
+    - Float: "regular" IEE754 floating point numbers
+    - MPFR: arbitrary precision floating-point numbers using MPFR
+    - BigInt: fixed-point numbers
+    - Intv: intervals of two IEEE754 floating-point numbers
+    - Rat: rationals
 
-module BigIntInterpreter : S
+    The second part indicates the rounding operations to use, and is one of the
+    following:
 
-module IntervalInterpreter : S
+    - Def: use the default rounding operations, those of the PC/single-thread
+      context
+    - Multi: use the rouding operations of the PC/multi-thread context
+    - Mf: use the rounding operations of the mainframe context *)
 
-module RationalInterpreter : S
+module FloatMultInterp : S
+
+module FloatMfInterp : S
+
+module MPFRDefInterp : S
+
+module MPFRMultInterp : S
+
+module MPFRMfInterp : S
+
+module BigIntDefInterp : S
+
+module BigIntMultInterp : S
+
+module BigIntMfInterp : S
+
+module IntvDefInterp : S
+
+module IntvMultInterp : S
+
+module IntvMfInterp : S
+
+module RatDefInterp : S
+
+module RatMultInterp : S
+
+module RatMfInterp : S
 
 (** {1 Generic interpretation API}*)
 
-(** According on the [value_sort], a specific interpreter will be called with
-    the right kind of floating-point value *)
-type value_sort =
-  | RegularFloat
-  | MPFR of int  (** bitsize of the floats *)
-  | BigInt of int  (** precision of the fixed point *)
-  | Interval
-  | Rational
+val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
   Bir_interface.bir_function ->
   Bir.program ->
   Mir.literal Bir.VariableMap.t ->
   int ->
-  value_sort ->
+  Cli.value_sort ->
+  Cli.round_ops ->
   unit ->
   unit
 (** Main interpreter function *)
 
 val evaluate_expr :
-  Mir.program -> Bir.expression Pos.marked -> value_sort -> Mir.literal
+  Mir.program ->
+  Bir.expression Pos.marked ->
+  Cli.value_sort ->
+  Cli.round_ops ->
+  Mir.literal
 (** Interprets only an expression *)
