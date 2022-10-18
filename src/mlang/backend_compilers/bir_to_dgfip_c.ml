@@ -284,8 +284,8 @@ let rec generate_c_expr (e : expression Pos.marked)
         Dand
           ( Dand
               ( Dvar (Local idx_var, Def),
-                Dbinop
-                  ("<=", Dvar (Local idx_var, Val), Dlit (float_of_int size)) ),
+                Dbinop ("<", Dvar (Local idx_var, Val), Dlit (float_of_int size))
+              ),
             Daccess (Pos.unmark var, Def, idx_var) )
       in
       let value_comp =

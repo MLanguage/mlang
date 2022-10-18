@@ -276,7 +276,7 @@ public class MValue {
     
     if (indexInteger < 0) {
       return zero;
-    } else if (indexInteger > size) {
+    } else if (indexInteger >= size) {
       return mUndefined;
     } else {
       return array[tableStart + indexInteger];
