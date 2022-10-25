@@ -3,106 +3,7 @@ let ( => ) x l = List.mem x l
 
 let ( =: ) x (l, u) = x >= l && x <= u
 
-module StrMap = Map.Make (String)
-
-module IntMap = Map.Make (Int)
-
-module IndexedVarMap = struct
-
-  type value =
-    | Single of float
-    | Indexed of float IntMap.t
-
-  type t = value StrMap.t
-
-  let empty =
-    StrMap.empty
-
-  let mem x i m =
-    match StrMap.find_opt x m, i with
-    | Some (Single _), None -> true
-    | Some (Indexed _), None -> true
-    | Some (Indexed m'), Some i' -> IntMap.mem i' m'
-    | _ -> false
-
-  let find_opt x i m =
-    match StrMap.find_opt x m, i with
-    | Some (Single v), None -> Some (v)
-    | Some (Indexed _), None -> None
-    | Some (Indexed m'), Some i' -> IntMap.find_opt i' m'
-    | _ -> None
-
-  let add x i v m =
-    match StrMap.find_opt x m, i with
-    | Some (Single _), None ->
-        StrMap.add x (Single v) m
-    | Some (Indexed _), None ->
-        failwith "IndexedVarMap.add single overwrites indexed"
-    | Some (Indexed m'), Some i ->
-        StrMap.add x (Indexed (IntMap.add i v m')) m
-    | Some (Single _), Some _ ->
-        failwith "IndexedVarMap.add indexed overwrites single"
-    | None, None ->
-        StrMap.add x (Single v) m
-    | None, Some i ->
-        StrMap.add x (Indexed (IntMap.singleton i v)) m
-
-  let remove x i m =
-    match StrMap.find_opt x m, i with
-    | Some (Single _), None ->
-        StrMap.remove x m
-    | Some (Indexed _), None ->
-        failwith "IndexedVarMap.remove single overwrites indexed"
-    | Some (Indexed m'), Some i ->
-        let m' = IntMap.remove i m' in
-        if IntMap.cardinal m' = 0 then StrMap.remove x m
-        else StrMap.add x (Indexed (m')) m
-    | Some (Single _), Some _ ->
-        failwith "IndexedVarMap.remove indexed overwrites single"
-    | None, _ ->
-        m
-
-  let iter f m =
-    StrMap.iter (fun x v ->
-        match v with
-        | Single v' -> f x None v'
-        | Indexed m' -> IntMap.iter (fun i v' -> f x (Some i) v') m'
-      ) m
-
-  let map f m =
-    StrMap.map (fun x v ->
-        match v with
-        | Single v' -> Single (f x v')
-        | Indexed m' -> Indexed (IntMap.map (fun v' -> f x v') m')
-      ) m
-
-  let mapi f m =
-    StrMap.map (fun x v ->
-        match v with
-        | Single v' -> Single (f x None v')
-        | Indexed m' -> Indexed (IntMap.mapi (fun i v' -> f x (Some i) v') m')
-      ) m
-
-  let fold f m acc =
-    StrMap.fold (fun x v acc ->
-        match v with
-        | Single v' -> f x None v' acc
-        | Indexed m' -> IntMap.fold (fun i v' acc -> f x (Some i) v' acc) m' acc
-      ) m acc
-
-  let filter f m =
-    StrMap.fold (fun x v acc ->
-        match v with
-        | Single v' ->
-            if f x None v' then StrMap.add x (Single v') acc else acc
-        | Indexed m' ->
-            let m' = IntMap.filter (fun i v' -> f x (Some i) v') m' in
-            if IntMap.cardinal m' <> 0 then StrMap.add x (Indexed m') acc else acc
-      ) m StrMap.empty
-
-end
-
-
+module StrMap = Map.Make(String)
 
 type nature = Indefinie | Revenu | Charge
 
@@ -144,16 +45,19 @@ end
 
 module VarDict = struct
 
+  type t = (string, Var.t) Hashtbl.t
+
   external charge_vars :
     unit -> (string * string option * int * int * int * int * int * int *
              int * bool * int * int * int * bool * int * bool) list
     = "ml_charge_vars"
 
-  let vars =
-    List.fold_left (fun vars (code, alias, genre, domaine, type_, nature,
-                              classe, cat_tl, cot_soc, ind_abat, rap_cat,
-                              sanction, indice_tab, acompte, avfisc,
-                              restituee) ->
+  let vars : t =
+    let vars = Hashtbl.create 70000 in
+    List.iter (fun (code, alias, genre, domaine, type_, nature,
+                    classe, cat_tl, cot_soc, ind_abat, rap_cat,
+                    sanction, indice_tab, acompte, avfisc,
+                    restituee) ->
         let genre =
           match genre with
           | 1 -> Saisie
@@ -189,15 +93,16 @@ module VarDict = struct
         let var = Var.{ code; alias; genre; domaine; type_; nature;
                         classe; cat_tl; cot_soc; ind_abat; rap_cat;
                         sanction; acompte; avfisc; restituee } in
-        let vars = StrMap.add code var vars in
+        Hashtbl.add vars code var;
         match alias with
-        | None -> vars
-        | Some alias -> StrMap.add alias var vars
-      ) StrMap.empty (charge_vars ())
+        | None -> ()
+        | Some alias -> Hashtbl.add vars alias var
+      ) (charge_vars ());
+    vars
 
   let is_alias code =
     try
-      let var = StrMap.find code vars in
+      let var = Hashtbl.find vars code in
       match var.Var.alias with
       | None -> false
       | Some alias -> code = alias
@@ -207,7 +112,7 @@ module VarDict = struct
 
   let alias code =
     try
-      let var = StrMap.find code vars in
+      let var = Hashtbl.find vars code in
       match var.Var.alias with
       | None -> var.code
       | Some alias -> alias
@@ -217,202 +122,165 @@ module VarDict = struct
 
   let unalias code =
     try
-      let var = StrMap.find code vars in
+      let var = Hashtbl.find vars code in
       var.Var.code
     with e ->
       Printf.printf "Variable non trouvee: %s\n" code;
       raise e
 
   let mem code =
-    StrMap.mem code vars
+    Hashtbl.mem vars code
 
   let find code =
     try
-      StrMap.find code vars
+      Hashtbl.find vars code
     with e ->
       Printf.printf "Variable non trouvee: %s\n" code;
       raise e
 
-  let exists pred =
-    StrMap.exists pred vars
-
   let filter pred =
-    StrMap.filter pred vars
+    Hashtbl.fold
+      (fun a b map -> if pred a b then StrMap.add a b map else map)
+      vars StrMap.empty
 
-  let fold pred acc =
-    StrMap.fold pred vars acc
+  let fold f acc =
+    Hashtbl.fold f vars acc
 
 end
 
-
-
 module TGV = struct
 
-  type t = IndexedVarMap.t
+  type t
 
-  let empty =
-    IndexedVarMap.empty
+  external alloc_tgv : unit -> t = "ml_tgv_alloc"
+  external udefined : t -> string -> bool = "ml_tgv_defined"
+  external ureset : t -> string -> unit = "ml_tgv_reset"
+  external uget : t -> string -> float option = "ml_tgv_get"
+  external uget_array : t -> string -> int -> float option = "ml_tgv_get_array"
+  external uset : t -> string -> float -> unit = "ml_tgv_set"
+  external reset_calculee : t -> unit = "ml_tgv_reset_calculee"
+  external reset_base : t -> unit = "ml_tgv_reset_base"
 
-  let defined tgv var =
-    IndexedVarMap.mem (VarDict.unalias var) None tgv
+  let defined tgv var = udefined tgv (VarDict.unalias var)
 
-  let reset tgv var =
-    IndexedVarMap.remove (VarDict.unalias var) None tgv
+  let reset tgv var = ureset tgv (VarDict.unalias var)
 
-  let reset_list tgv var_list =
-    List.fold_left (fun tgv var ->
-        IndexedVarMap.remove (VarDict.unalias var) None tgv) tgv var_list
+  let reset_list (tgv : t) var_list =
+    List.iter (fun var -> reset tgv var) var_list
 
-  let get_opt tgv var =
-    IndexedVarMap.find_opt (VarDict.unalias var) None tgv
+  let get_opt (tgv : t) var = uget tgv (VarDict.unalias var)
 
-  let get_bool_opt tgv var =
+  let get_bool_opt (tgv : t) var =
     match get_opt tgv var with
     | None -> None
     | Some v -> Some (v <> 0.0)
 
-  let get_int_opt tgv var =
+  let get_int_opt (tgv : t) var =
     match get_opt tgv var with
     | None -> None
     | Some v -> Some (int_of_float v)
 
-  let get_def tgv var def =
+  let get_def (tgv : t) var def =
     match get_opt tgv var with
     | None -> def
     | Some v -> v
 
-  let get_bool_def tgv var def =
+  let get_bool_def (tgv : t) var def =
     match get_opt tgv var with
     | None -> def
     | Some v -> v <> 0.0
 
-  let get_int_def tgv var def =
+  let get_int_def (tgv : t) var def =
     match get_opt tgv var with
     | None -> def
     | Some v -> int_of_float v
 
-  let get_map_opt tgv var_list =
+  let get_map_opt (tgv : t) var_list =
     List.fold_left (fun map var ->
         match get_opt tgv var with
         | None -> map
-        | Some v -> StrMap.add (VarDict.unalias var) v map
-      ) StrMap.empty var_list
+        | Some v -> StrMap.add (VarDict.unalias var) v map)
+      StrMap.empty var_list
 
-  let get_map_def tgv var_list def =
+  let get_map_def (tgv : t) var_list def =
     List.fold_left (fun map var ->
-        StrMap.add (VarDict.unalias var) (get_def tgv var def) map
-      ) StrMap.empty var_list
+        StrMap.add (VarDict.unalias var) (get_def tgv var def) map)
+      StrMap.empty var_list
 
-  let get_array_opt tgv var idx =
-    IndexedVarMap.find_opt (VarDict.unalias var) (Some idx) tgv
+  let get_array_opt (tgv : t) var idx =
+    uget_array tgv (VarDict.unalias var) idx
 
-  let get_array_def tgv var idx def =
+  let get_array_def (tgv : t) var idx def =
     match get_array_opt tgv var idx with
     | None -> def
     | Some v -> v
 
-  let set tgv var v =
-    IndexedVarMap.add (VarDict.unalias var) None v tgv
+  let set (tgv : t) var v = uset tgv (VarDict.unalias var) v
 
-  let set_bool tgv var v =
+  let set_bool (tgv : t) var v =
     set tgv var (if v then 1.0 else 0.0)
 
-  let set_int tgv var v =
+  let set_int (tgv : t) var v =
     set tgv var (float_of_int v)
 
-  let set_list tgv var_v_list =
-    List.fold_left (fun tgv (var, v) -> set tgv var v) tgv var_v_list
+  let set_list0 set (tgv : t) var_v_list =
+    List.iter (fun (var, v) -> set tgv var v) var_v_list
 
-  let set_bool_list tgv var_v_list =
-    List.fold_left (fun tgv (var, v) -> set_bool tgv var v) tgv var_v_list
+  let set_list (tgv : t) var_v_list =
+    set_list0 set tgv var_v_list
 
-  let set_int_list tgv var_v_list =
-    List.fold_left (fun tgv (var, v) -> set_int tgv var v) tgv var_v_list
+  let set_bool_list (tgv : t) var_v_list =
+    set_list0 set_bool tgv var_v_list
 
-  let set_map ?(ignore_negative=false) tgv var_v_map =
-    StrMap.fold (fun var montant tgv ->
-        if ignore_negative && montant < 0.0 then tgv
-        else set tgv (VarDict.unalias var) montant
-      ) var_v_map tgv
+  let set_int_list (tgv : t) var_v_list =
+    set_list0 set_int tgv var_v_list
 
-  let set_array tgv var idx v =
-    IndexedVarMap.add (VarDict.unalias var) (Some idx) v tgv
+  let set_map ?(ignore_negative=false) (tgv : t) var_v_map =
+    StrMap.iter (fun var montant ->
+        if ignore_negative && montant < 0.0 then ()
+        else set tgv var montant
+      ) var_v_map
 
-  let update tgv var v_opt =
+  let update (tgv : t) var v_opt =
     match v_opt with
     | None -> reset tgv var
     | Some v -> set tgv var v
 
-  let update_bool tgv var v_opt =
+  let update_bool (tgv : t) var v_opt =
     match v_opt with
     | None -> reset tgv var
     | Some v -> set_bool tgv var v
 
-  let update_int tgv var v_opt =
+  let update_int (tgv : t) var v_opt =
     match v_opt with
     | None ->  reset tgv var
     | Some v -> set_int tgv var v
 
-  let copy_abs tgv svar dvar signvar =
+  let copy_abs (tgv : t) svar dvar signvar =
     match get_opt tgv svar with
-    | None -> tgv
+    | None -> ()
     | Some v ->
-        let tgv = set_bool tgv signvar (v < 0.0) in
-        set tgv dvar (Float.abs v)
+      set_bool tgv signvar (v < 0.0);
+      set tgv dvar (Float.abs v)
 
-  let internal_copy ~ignore_undefined tgv var_list =
-    List.fold_left (fun tgv (svar, dvar) ->
+  let reset_calculee tgv = reset_calculee tgv
+
+  let reset_base tgv = reset_base tgv
+
+  let internal_copy ~ignore_undefined (tgv : t) var_list =
+    List.iter (fun (svar, dvar) ->
         match get_opt tgv svar with
-        | None when ignore_undefined -> tgv
+        | None when ignore_undefined -> ()
         | None -> reset tgv dvar
         | Some v -> set tgv dvar v
-      ) tgv var_list
+      ) var_list
 
-  let copy ~ignore_undefined stgv dtgv var_list =
-    List.fold_left (fun dtgv (svar, dvar) ->
-        match IndexedVarMap.find_opt (VarDict.unalias svar) None stgv with
-        | None when ignore_undefined -> dtgv
-        | None -> IndexedVarMap.remove (VarDict.unalias dvar) None dtgv
-        | Some v -> IndexedVarMap.add (VarDict.unalias dvar) None v dtgv
-      ) dtgv var_list
-
-  let reset_matching ~except f tgv =
-    let keep_vars =
-      VarDict.filter (fun code var ->
-          if code <> var.code then false
-          else if List.exists (fun code ->
-              VarDict.unalias code = var.code
-            ) except then true
-          else f var
-        ) in
-    IndexedVarMap.filter (fun code _id_opt _montant ->
-        StrMap.mem code keep_vars) tgv
-
-  let reset_saisie_calc ~except tgv =
-    reset_matching ~except (fun var ->
-        match var.Var.genre with
-        | Saisie | Calculee -> false
-        | Base -> true) tgv
-
-  let reset_calculee tgv =
-    reset_matching ~except:[] (fun var ->
-        match var.Var.genre with
-        | Calculee -> false
-        | Saisie | Base -> true) tgv
-
-  let reset_base tgv =
-    reset_matching ~except:[] (fun var ->
-        match var.Var.genre with
-        | Base -> false
-        | Saisie | Calculee -> true) tgv
-
-  let iter f tgv =
-    IndexedVarMap.iter f tgv
-
-  let map f tgv =
-    IndexedVarMap.map f tgv
-
-  let fold f tgv acc =
-    IndexedVarMap.fold f tgv acc
+  let copy ~ignore_undefined (stgv : t) (dtgv : t) var_list =
+    List.iter (fun (svar, dvar) ->
+        match get_opt stgv svar with
+        | None when ignore_undefined -> ()
+        | None -> reset dtgv dvar
+        | Some v -> set dtgv dvar v
+      ) var_list
 
 end

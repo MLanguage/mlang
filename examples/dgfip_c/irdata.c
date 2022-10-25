@@ -106,6 +106,24 @@ void IRDATA_reset_irdata(T_irdata *irdata)
 #endif /* FLG_MULTITHREAD */
 }
 
+void IRDATA_reset_base(T_irdata *irdata)
+{
+#ifdef FLG_COMPACT
+  reset_tab(irdata->valeurs + TAILLE_SAISIE + TAILLE_CALCULEE, irdata->defs + TAILLE_SAISIE + TAILLE_CALCULEE, TAILLE_BASE);
+#else
+  reset_tab(irdata->base, irdata->def_base, TAILLE_BASE);
+#endif /* FLG_COMPACT */
+}
+
+void IRDATA_reset_calculee(T_irdata *irdata)
+{
+#ifdef FLG_COMPACT
+  reset_tab(irdata->valeurs + TAILLE_SAISIE, irdata->defs + TAILLE_SAISIE, TAILLE_CALCULEE);
+#else
+  reset_tab(irdata->calculee, irdata->def_calculee, TAILLE_CALCULEE);
+#endif /* FLG_COMPACT */
+}
+
 void IRDATA_reset_erreur(T_irdata *irdata)
 {
 #ifdef FLG_MULTITHREAD

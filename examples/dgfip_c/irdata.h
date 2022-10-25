@@ -35,6 +35,9 @@ extern T_irdata * IRDATA_new_irdata(void);
 extern void IRDATA_delete_irdata(T_irdata *irdata);
 extern void IRDATA_reset_irdata(T_irdata *irdata);
 
+extern void IRDATA_reset_base(T_irdata *irdata);
+extern void IRDATA_reset_calculee(T_irdata *irdata);
+
 extern void IRDATA_reset_erreur(T_irdata *irdata);
 
 extern T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur);

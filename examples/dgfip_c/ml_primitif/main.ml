@@ -4,29 +4,27 @@ open Common
 let read_test filename =
 
   let test = Read_test.read_test filename in
-
-  List.fold_left (fun (tgv, res_prim) s ->
-      match s with
-      | `EntreesPrimitif pl ->
-        let tgv =
-          List.fold_left (fun tgv (code, montant) ->
-              try TGV.set tgv code montant
-              with Not_found ->
-                Printf.eprintf "Variable %s inexistante, test invalide\n" code;
-                exit 2
-            ) tgv pl
-        in
-        tgv, res_prim
-      | `ResultatsPrimitif pl ->
-        let res_prim =
-          List.fold_left (fun resultats (code, montant) ->
-              StrMap.add code montant resultats
-            ) res_prim pl
-        in
-        tgv, res_prim
-      | _ ->
-        tgv, res_prim
-    ) (TGV.empty, StrMap.empty) test
+  let tgv = TGV.alloc_tgv () in
+  let res_prim =
+    List.fold_left (fun res_prim s ->
+        match s with
+        | `EntreesPrimitif pl ->
+          List.iter (fun (code, montant) ->
+              TGV.set tgv code montant)
+            pl;
+          res_prim
+        | `ResultatsPrimitif pl ->
+          let res_prim =
+            List.fold_left (fun resultats (code, montant) ->
+                StrMap.add code montant resultats
+              ) res_prim pl
+          in
+          res_prim
+        | _ ->
+          res_prim
+      ) StrMap.empty test
+  in
+  tgv, res_prim
 
 let check_result tgv err expected_tgv expected_err =
   let result = ref 0 in
@@ -53,10 +51,10 @@ let run_test test_file =
 
   let annee_courante = 1900 + (Unix.localtime (Unix.time ())).tm_year in
 
-  let tgv = TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *) in
-  let tgv = TGV.set_int tgv "ANCSDED" annee_courante in
+  TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
+  TGV.set_int tgv "ANCSDED" annee_courante;
 
-  let tgv = M.traite_double_liquidation_2 tgv M.Primitif in
+  M.traite_double_liquidation_2 tgv M.Primitif;
 
   check_result tgv [] res_prim []
 
