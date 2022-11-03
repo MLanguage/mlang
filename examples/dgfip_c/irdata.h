@@ -36,7 +36,10 @@ extern void IRDATA_delete_irdata(T_irdata *irdata);
 extern void IRDATA_reset_irdata(T_irdata *irdata);
 
 extern void IRDATA_reset_base(T_irdata *irdata);
+extern void IRDATA_reset_light(T_irdata *irdata);
 extern void IRDATA_reset_calculee(T_irdata *irdata);
+
+extern void IRDATA_recopie_irdata(T_irdata *src_irdata, T_irdata *dst_irdata);
 
 extern void IRDATA_reset_erreur(T_irdata *irdata);
 

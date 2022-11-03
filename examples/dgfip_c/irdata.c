@@ -115,6 +115,13 @@ void IRDATA_reset_base(T_irdata *irdata)
 #endif /* FLG_COMPACT */
 }
 
+void IRDATA_reset_light(irdata)
+T_irdata *irdata ;
+{
+reset_tab(irdata->saisie, irdata->def_saisie, TAILLE_SAISIE) ;
+reset_tab(irdata->calculee, irdata->def_calculee, TAILLE_CALCULEE) ;
+}
+
 void IRDATA_reset_calculee(T_irdata *irdata)
 {
 #ifdef FLG_COMPACT
@@ -122,6 +129,18 @@ void IRDATA_reset_calculee(T_irdata *irdata)
 #else
   reset_tab(irdata->calculee, irdata->def_calculee, TAILLE_CALCULEE);
 #endif /* FLG_COMPACT */
+}
+
+void IRDATA_recopie_irdata(irdata_src, irdata_dst)
+T_irdata *irdata_src ;
+T_irdata *irdata_dst ;
+{
+memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double)) ;
+memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE) ;
+memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double)) ;
+memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE) ;
+memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double)) ;
+memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE) ;
 }
 
 void IRDATA_reset_erreur(T_irdata *irdata)
