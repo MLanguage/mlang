@@ -11,7 +11,6 @@ let exec_ench ench tgv = exec_ench_raw ench tgv
 let exec_verif ench tgv = exec_verif_raw ench tgv
 
 let calcul_primitif tgv = exec_ench "calcul_primitif" tgv
-let calcul_irisf tgv = exec_ench "calcul_irisf" tgv
 let calcul_primitif_isf tgv = exec_ench "calcul_primitif_isf" tgv
 let calcul_primitif_taux tgv = exec_ench "calcul_primitif_taux" tgv
 let calcul_correctif tgv = exec_ench "calcul_correctif" tgv
@@ -227,8 +226,11 @@ and calcule_acomptes tgv traitement =
   TGV.set_int tgv "FLAG_ACO" 2;
   let sauve = TGV.get_map_def tgv [ "ART1731BIS"; "PREM8_11" ] 0.0 in
   TGV.reset_calculee tgv;
-  TGV.reset_base tgv;
-  if traitement = Primitif then TGV.set_map tgv sauve
+  if traitement = Primitif then
+    begin
+      TGV.reset_base tgv;
+      TGV.set_map tgv sauve
+    end
 
 and calcule_avfiscal tgv traitement =
   let vars_av = VarDict.filter (fun code var ->
@@ -240,16 +242,21 @@ and calcule_avfiscal tgv traitement =
   let sauve_av = TGV.get_map_opt tgv vars_av in
   TGV.reset_list tgv vars_av;
   if is_code_supp_avfisc tgv || List.length vars_av <> 0 (* subsumes the previous ? *) then
-    TGV.set_bool_list tgv [ "INDTEO", true; "CALCUL_NAPS", true ];
-    calcul_prim_corr tgv traitement;
-    TGV.set_bool tgv "CALCUL_NAPS" false;
-    let sauve1 = TGV.get_map_def tgv [ "ART1731BIS"; "PREM8_11" ] 0.0 in
-    let sauve2 = TGV.get_map_def tgv [ "IAD11"; "INE"; "IRE" ] 0.0 in
-    TGV.reset_calculee tgv;
-    TGV.reset_base tgv;
-    if traitement = Primitif then TGV.set_map tgv sauve1;
-    TGV.set_map tgv sauve_av;
-    TGV.set_list tgv
-      [ "IAD11TEO", StrMap.find "IAD11" sauve2;
-        "IRETEO", StrMap.find "IRE" sauve2;
-        "INETEO", StrMap.find "INE" sauve2 ]
+    begin
+      TGV.set_bool_list tgv [ "INDTEO", true; "CALCUL_NAPS", true ];
+      calcul_prim_corr tgv traitement;
+      TGV.set_bool tgv "CALCUL_NAPS" false;
+      let sauve1 = TGV.get_map_def tgv [ "ART1731BIS"; "PREM8_11" ] 0.0 in
+      let sauve2 = TGV.get_map_def tgv [ "IAD11"; "INE"; "IRE" ] 0.0 in
+      TGV.reset_calculee tgv;
+      if traitement = Primitif then
+        begin
+          TGV.reset_base tgv;
+          TGV.set_map tgv sauve1
+        end;
+      TGV.set_map tgv sauve_av;
+      TGV.set_list tgv
+        [ "IAD11TEO", StrMap.find "IAD11" sauve2;
+          "IRETEO", StrMap.find "IRE" sauve2;
+          "INETEO", StrMap.find "INE" sauve2 ]
+    end

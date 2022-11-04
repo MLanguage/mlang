@@ -215,7 +215,9 @@ module TGV = struct
     | None -> def
     | Some v -> v
 
-  let set (tgv : t) var v = uset tgv (VarDict.unalias var) v
+  let set ?(ignore_negative=false) (tgv : t) var v =
+    if ignore_negative && v < 0.0 then ()
+    else uset tgv (VarDict.unalias var) v
 
   let set_bool (tgv : t) var v =
     set tgv var (if v then 1.0 else 0.0)
@@ -260,12 +262,9 @@ module TGV = struct
     match get_opt tgv svar with
     | None -> ()
     | Some v ->
-      set_bool tgv signvar (v < 0.0);
-      set tgv dvar (Float.abs v)
-
-  let reset_calculee tgv = reset_calculee tgv
-
-  let reset_base tgv = reset_base tgv
+        set tgv svar (Float.abs v);
+        set_bool tgv signvar (v < 0.0);
+        set tgv dvar (Float.abs v)
 
   let internal_copy ~ignore_undefined (tgv : t) var_list =
     List.iter (fun (svar, dvar) ->
