@@ -48,6 +48,11 @@ jobs:
           opam update
           make deps-without-ocaml
 
+      - name: Formatting
+        run : |
+          eval $(opam env)
+          dune build @fmt
+
       - name: Build Mlang
         run: |
           eval $(opam env)
