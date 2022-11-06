@@ -710,7 +710,7 @@ struct
   let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt)
       (loc : code_location) =
     match Pos.unmark stmt with
-    | Bir.SAssign (var, vdata) ->
+    | Bir.SAssign (var, vdef) ->
         let value =
           try Bir.VariableMap.find var ctx.ctx_vars
           with Not_found -> (
@@ -718,7 +718,7 @@ struct
             | Some size -> TableVar (size, Array.make size Undefined)
             | None -> SimpleVar Undefined)
         in
-        let res = evaluate_variable p ctx value vdata.var_definition in
+        let res = evaluate_variable p ctx value vdef in
         !assign_hook var (fun _ -> var_value_to_var_literal res) loc;
         { ctx with ctx_vars = Bir.VariableMap.add var res ctx.ctx_vars }
     | Bir.SConditional (b, t, f) -> (

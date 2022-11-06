@@ -214,9 +214,9 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : variable)
-    (data : variable_data) (fmt : Format.formatter) : unit =
-  match data.var_definition with
+    (var_indexes : Dgfip_varid.var_id_map) (var : variable) (def : variable_def)
+    (fmt : Format.formatter) : unit =
+  match def with
   | SimpleVar e ->
       let se = generate_c_expr e var_indexes in
       generate_m_assign dgfip_flags var_indexes var None fmt se

@@ -108,7 +108,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
                     used_blocks
             then
               let stmt_used_vars =
-                match var_def.Mir.var_definition with
+                match var_def with
                 | Mir.SimpleVar e -> Bir.get_used_variables e
                 | Mir.TableVar (_, def) -> (
                     match def with

@@ -21,7 +21,7 @@ module BlockMap = Map.Make (Int)
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Bir.variable * Bir.variable_data
+  | SAssign of Bir.variable * Bir.variable_def
   | SConditional of Bir.expression * block_id * block_id * block_id
       (** The first two block ids are the true and false branch, the third is
           the join point after *)

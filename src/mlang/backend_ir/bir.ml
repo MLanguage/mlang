@@ -91,8 +91,6 @@ type condition_data = variable Mir.condition_data_
 
 type variable_def = variable Mir.variable_def_
 
-type variable_data = variable Mir.variable_data_
-
 type function_name = string
 
 type rule_or_verif_code = Rule of stmt list | Verif of stmt
@@ -106,7 +104,7 @@ and rule_or_verif = {
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of variable * variable_data
+  | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
   | SRovCall of rov_id
@@ -291,8 +289,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif cond -> get_local_vars_expr acc cond.Mir.cond_expr
-        | SAssign (_, data) -> (
-            match data.Mir.var_definition with
+        | SAssign (_, def) -> (
+            match def with
             | Mir.SimpleVar e -> get_local_vars_expr acc e
             | Mir.TableVar (_, defs) -> (
                 match defs with

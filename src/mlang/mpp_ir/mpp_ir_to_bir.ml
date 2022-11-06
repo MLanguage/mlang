@@ -189,9 +189,8 @@ let translate_m_code (m_program : Mir_interface.full_program)
         match var_definition with
         | InputVar -> None
         | TableVar _ | SimpleVar _ ->
-            let vdef = { vdef with var_definition } in
             Some
-              ( Bir.SAssign (Bir.(var_from_mir default_tgv) var, vdef),
+              ( Bir.SAssign (Bir.(var_from_mir default_tgv) var, var_definition),
                 var.Mir.Variable.execution_number.pos )
       with Not_found -> None)
     vars
@@ -351,13 +350,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         [
           Pos.same_pos_as
             (Bir.SAssign
-               ( new_l,
-                 {
-                   var_definition =
-                     SimpleVar (translate_mpp_expr m_program ctx expr, pos);
-                   var_typ = None;
-                   var_io = Regular;
-                 } ))
+               (new_l, SimpleVar (translate_mpp_expr m_program ctx expr, pos)))
             stmt;
         ] )
   | Mpp_ir.Assign (Mbased (var, _), expr) ->
@@ -370,12 +363,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
           Pos.same_pos_as
             (Bir.SAssign
                ( Bir.(var_from_mir default_tgv) var,
-                 {
-                   var_definition =
-                     SimpleVar (translate_mpp_expr m_program ctx expr, pos);
-                   var_typ = None;
-                   var_io = Mir.Input;
-                 } ))
+                 SimpleVar (translate_mpp_expr m_program ctx expr, pos) ))
             stmt;
         ] )
   | Mpp_ir.Conditional (e, t, f) ->
@@ -394,11 +382,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
           Pos.same_pos_as
             (Bir.SAssign
                ( Bir.(var_from_mir default_tgv) var,
-                 {
-                   var_definition = SimpleVar (Mir.Literal Undefined, pos);
-                   var_typ = None;
-                   var_io = Mir.Input;
-                 } ))
+                 SimpleVar (Mir.Literal Undefined, pos) ))
             stmt;
         ] )
   | Mpp_ir.Delete (Local l) ->
@@ -406,13 +390,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       ( ctx,
         [
           Pos.same_pos_as
-            (Bir.SAssign
-               ( var,
-                 {
-                   var_definition = SimpleVar (Mir.Literal Undefined, pos);
-                   var_typ = None;
-                   var_io = Regular;
-                 } ))
+            (Bir.SAssign (var, SimpleVar (Mir.Literal Undefined, pos)))
             stmt;
         ] )
   | Mpp_ir.Expr (Call (MppFunction f, args), pos) ->

@@ -32,8 +32,6 @@ type condition_data = variable Mir.condition_data_
 
 type variable_def = variable Mir.variable_def_
 
-type variable_data = variable Mir.variable_data_
-
 type function_name = string
 
 type rule_or_verif_code = Rule of stmt list | Verif of stmt
@@ -47,7 +45,7 @@ and rule_or_verif = {
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of variable * variable_data
+  | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
   | SRovCall of rov_id
