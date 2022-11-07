@@ -62,7 +62,7 @@ test: build
 
 # use: TESTS_DIR=bla make test
 tests: build
-	$(MLANG) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
+	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
 
 test_java_backend:
 ifeq ($(OPTIMIZE), 0)

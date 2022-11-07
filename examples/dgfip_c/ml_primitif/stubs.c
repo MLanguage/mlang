@@ -10,6 +10,7 @@
 #include "caml/memory.h"
 #include "caml/alloc.h"
 #include "caml/fail.h"
+#include "caml/custom.h"
 
 #include "calc/annee.h"
 #include "calc/conf.h"
@@ -180,7 +181,51 @@ static size_t var_index_size = 0;
 
 static bool var_chargees = false;
 
-static T_irdata *tgv = NULL;
+/* static T_irdata *tgv = NULL; */
+
+#define Tgv_val(v) (*((T_irdata **) Data_custom_val(v)))
+
+static void finalize_tgv(value tgv_block){
+  CAMLparam1(tgv_block);
+  T_irdata *tgv = Tgv_val(tgv_block);
+  IRDATA_delete_irdata(tgv);
+  CAMLreturn0;
+}
+
+static struct custom_operations tgv_block_ops = {
+  "tgv.custom.block.ops",
+  *finalize_tgv,
+  custom_compare_default,
+  custom_hash_default,
+  custom_serialize_default,
+  custom_deserialize_default,
+  custom_compare_ext_default,
+  custom_fixed_length_default
+};
+
+static value alloc_tgv()
+{
+  T_irdata *tgv = IRDATA_new_irdata();
+  value v = caml_alloc_custom(&tgv_block_ops, sizeof(T_irdata *), 0, 1);
+  Tgv_val(v) = tgv;
+  return v;
+}
+
+CAMLprim value
+ml_tgv_alloc(void){
+  CAMLparam0();
+  CAMLlocal1(mlTgv);
+  mlTgv = alloc_tgv();
+  CAMLreturn(mlTgv);
+}
+
+/* CAMLprim value */
+/* ml_tgv_alloc(void){ */
+/*   CAMLparam0(); */
+/*   tgv = IRDATA_new_irdata(); */
+/*   IRDATA_reset_irdata(tgv); */
+/*   CAMLreturnT ((T_irdata *), tgv); */
+/* } */
 
 static genre_t convert_genre(int indice)
 {
@@ -557,6 +602,20 @@ static void init_var_dict(void)
   sort_index();
 }
 
+void efface_var(T_irdata *irdata, T_var_irdata desc)
+{
+#ifdef FLG_COMPACT
+  int indice = desc->indice;
+  irdata->valeurs[indice] = 0;
+  irdata->defs[indice] = 0;
+#else
+  int indice = desc->indice & INDICE_VAL;
+  irdata->saisie[indice] = 0;
+  irdata->def_saisie[indice] = 0;
+#endif /* FLG_COMPACT */
+}
+
+
 static var_t *
 cherche_var(
   const char *code)
@@ -577,7 +636,6 @@ cherche_var(
 
   return NULL;
 }
-
 CAMLprim value
 ml_charge_vars(void)
 {
@@ -622,88 +680,128 @@ ml_charge_vars(void)
   CAMLreturn(mlListOut);
 }
 
-static CAMLprim value
-convert_tgv_to_c(
-  value mlTGVList)
+CAMLprim value
+ml_tgv_defined(value mlTgv, value mlCode)
 {
-  CAMLparam1(mlTGVList);
-  CAMLlocal1(mlTGVListTemp);
+  CAMLparam2(mlTgv,mlCode);
 
-  mlTGVListTemp = mlTGVList;
-  while (mlTGVListTemp != Val_emptylist) {
-    const char *code = String_val(Field(Field(mlTGVListTemp, 0), 0));
-    int id = Int_val(Field(Field(mlTGVListTemp, 0), 1));
-    double montant = Double_val(Field(Field(mlTGVListTemp, 0), 2));
-    var_t *var = cherche_var(code);
-    if (var == NULL) {
-      fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
-      exit(1);
-    }
-    if (id < 0) {
-      IRDATA_range_base(tgv, var->desc, montant);
-    } else {
-      IRDATA_range_tableau(tgv, var->desc, id, montant);
-    }
-    mlTGVListTemp = Field(mlTGVListTemp, 1);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  var_t *var = cherche_var(code);
+  if (var == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
   }
+  double *montant = IRDATA_extrait_special(tgv, var->desc);
+
+  CAMLreturn(Val_int(montant != NULL));
+}
+
+CAMLprim value
+ml_tgv_reset(value mlTgv, value mlCode)
+{
+  CAMLparam2(mlTgv,mlCode);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  var_t *var = cherche_var(code);
+  if (var == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
+  }
+  efface_var(tgv, var->desc);
 
   CAMLreturn(Val_unit);
 }
 
-static CAMLprim value
-convert_tgv_to_ml(
-  void)
+CAMLprim value
+ml_tgv_get(value mlTgv, value mlCode)
 {
-  CAMLparam0();
-  CAMLlocal3(mlTGVListOut, mlTGVListTemp, mlTemp);
+  CAMLparam2(mlTgv,mlCode);
+  CAMLlocal1(optOut);
 
-  mlTGVListOut = Val_emptylist;
-  size_t nb_vars = sizeof(var) / ((void *)(var + 1) - (void *)var);
-  for (size_t i = 0; i < nb_vars; ++i) {
-    if (var[i].code != NULL) {
-      double *montant = NULL;
-      if (var[i].indice_tab < 0) {
-        montant = IRDATA_extrait_special(tgv, var[i].desc);
-      } else {
-        montant = IRDATA_extrait_tableau(tgv, var[i].desc, var[i].indice_tab);
-      }
-      if (montant != NULL) {
-        mlTemp = caml_alloc_tuple(3);
-        Store_field(mlTemp, 0, caml_copy_string(var[i].code));
-        Store_field(mlTemp, 1, Val_int(var[i].indice_tab));
-        Store_field(mlTemp, 2, caml_copy_double(*montant));
-        mlTGVListTemp = caml_alloc_small(2, Tag_cons);
-        Field(mlTGVListTemp, 0) = mlTemp;
-        Field(mlTGVListTemp, 1) = mlTGVListOut;
-        mlTGVListOut = mlTGVListTemp;
-      }
-    } else {
-      fprintf(stderr, "Code indéfini indice %ld\n", i);
-      exit(1);
-    }
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  var_t *var = cherche_var(code);
+  if (var == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
   }
+  double *montant = IRDATA_extrait_special(tgv, var->desc);
+  if(montant == NULL) optOut = Val_none;
+  else optOut = caml_alloc_some(caml_copy_double(*montant));
 
-  CAMLreturn(mlTGVListOut);
+  CAMLreturn(optOut);
+}
+
+CAMLprim value
+ml_tgv_get_array(value mlTgv, value mlCode, value mlIdx)
+{
+  CAMLparam3(mlTgv,mlCode, mlIdx);
+  CAMLlocal1(optOut);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  int idx = Int_val(mlIdx);
+  var_t *var = cherche_var(code);
+  if (var == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
+  }
+  double *montant = IRDATA_extrait_tableau(tgv, var->desc, idx);
+  if(montant == NULL) optOut = Val_none;
+  else optOut = caml_alloc_some(*montant);
+
+  CAMLreturn(optOut);
+}
+
+CAMLprim value
+ml_tgv_set(value mlTgv, value mlCode, value mlMontant)
+{
+  CAMLparam3(mlTgv, mlCode, mlMontant);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  double montant = Double_val(mlMontant);
+  var_t *var = cherche_var(code);
+  if (var == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
+  }
+  IRDATA_range_base(tgv, var->desc, montant);
+
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value
+ml_tgv_reset_calculee(value mlTgv)
+{
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  IRDATA_reset_calculee(tgv);
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value
+ml_tgv_reset_base(value mlTgv)
+{
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  IRDATA_reset_base(tgv);
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value
 ml_exec_ench(
   value mlEnch,
-  value mlTGVList)
+  value mlTgv)
 {
-  CAMLparam2(mlEnch, mlTGVList);
-  CAMLlocal2(mlTGVListOut, mlTemp);
+  CAMLparam2(mlEnch, mlTgv);
 
   init_var_dict();
-  if (tgv == NULL) {
-    tgv = IRDATA_new_irdata();
-  } else {
-    IRDATA_reset_irdata(tgv);
-  }
 
+  T_irdata *tgv = Tgv_val(mlTgv);
   const char *ench = String_val(mlEnch);
-
-  mlTemp = convert_tgv_to_c(mlTGVList);
 
   size_t nb_ench = sizeof(enchaineurs) / ((void *)(enchaineurs + 1) - (void *)enchaineurs);
   size_t i = 0;
@@ -719,29 +817,20 @@ ml_exec_ench(
 
   enchaineurs[i].function(tgv);
 
-  mlTGVListOut = convert_tgv_to_ml();
-
-  CAMLreturn(mlTGVListOut);
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value
 ml_exec_verif(
   value mlVerif,
-  value mlTGVList)
+  value mlTgv)
 {
-  CAMLparam2(mlVerif, mlTGVList);
-  CAMLlocal2(mlTGVListOut, mlTemp);
+  CAMLparam2(mlVerif, mlTgv);
 
   init_var_dict();
-  if (tgv == NULL) {
-    tgv = IRDATA_new_irdata();
-  } else {
-    IRDATA_reset_irdata(tgv);
-  }
 
+  T_irdata *tgv = Tgv_val(mlTgv);
   const char *verif = String_val(mlVerif);
-
-  mlTemp = convert_tgv_to_c(mlTGVList);
 
   size_t nb_verif = sizeof(verifications) / ((void *)(verifications + 1) - (void *)verifications);
   size_t i = 0;
@@ -757,10 +846,8 @@ ml_exec_verif(
 
   struct S_discord * erreurs = verifications[i].function(tgv);
 
-  mlTGVListOut = convert_tgv_to_ml();
-
 // TODO: renvoyer les erreurs
-  CAMLreturn(mlTGVListOut);
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value
