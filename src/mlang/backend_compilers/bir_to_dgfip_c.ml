@@ -98,7 +98,7 @@ module DecoupledExpr : sig
   val fresh_c_local : string -> local_var
 
   val build_transitive_composition :
-    expression_composition -> expression_composition
+    ?safe_def:bool -> expression_composition -> expression_composition
 
   val clean_local_duplicates : expression_composition -> expression_composition
 
@@ -265,7 +265,13 @@ end = struct
     let vle = unify_locals (unify_locals let_def let_val) vle in
     { def_test = (de, dle); value_comp = (ve, vle) }
 
-  let build_transitive_composition { def_test; value_comp } =
+  let build_transitive_composition ?(safe_def = false) { def_test; value_comp }
+      =
+    (* `safe_def` can be set on call when we are sure that `value_comp` will
+       always happen to be zero when `def_test` ends up false. E.g. arithmetic
+       operation have such semantic property (funny question is what's the
+       causality ?). This allows to remove a check to the definition flag when
+       we compute the value, avoiding a lot of unnecessary code. *)
     let fresh_inter_var =
       let v = lazy (fresh_c_local "expr") in
       fun () -> Lazy.force v
@@ -276,7 +282,9 @@ end = struct
       | _ ->
           let def_v = fresh_inter_var () in
           let def_test = local_var def_v Def def_test in
-          let value_comp = ite def_test value_comp zero in
+          let value_comp =
+            if safe_def then value_comp else ite def_test value_comp zero
+          in
           (def_test, value_comp)
     in
     let value_comp =
@@ -402,7 +410,7 @@ let rec generate_c_expr (e : expression Pos.marked)
           D.zero
           (D.binop "/" se1.value_comp se2.value_comp)
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Binop (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
@@ -424,13 +432,15 @@ let rec generate_c_expr (e : expression Pos.marked)
         (* see above *)
       in
       let value_comp = op se1.value_comp se2.value_comp in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Unop (op, e) ->
       let se = generate_c_expr e var_indexes in
       let def_test = se.def_test in
-      let op = match op with Mast.Not -> "!" | Mast.Minus -> "-" in
+      let op, safe_def =
+        match op with Mast.Not -> ("!", false) | Mast.Minus -> ("-", true)
+      in
       let value_comp = D.unop op se.value_comp in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
       let size =
@@ -469,33 +479,34 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       let value_comp =
         D.ite
-          (D.local_var cond_var Def cond.def_test)
-          (D.ite
-             (D.local_var cond_var Val cond.value_comp)
-             thenval.value_comp elseval.value_comp)
-          D.zero
+          (D.local_var cond_var Val cond.value_comp)
+          thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = D.one in
       let value_comp = se.def_test in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dand def_test (D.binop "==" se.value_comp D.zero) in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_arr" [ se.value_comp ] in
-      D.build_transitive_composition { def_test; value_comp }
+      (* Here we boldly assume that rounding value of `undef` will give zero,
+         given the invariant. Pretty sure that not true, in case of doubt, turn
+         `safe_def` to false *)
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (InfFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
-      D.build_transitive_composition { def_test; value_comp }
+      (* same as above *)
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
