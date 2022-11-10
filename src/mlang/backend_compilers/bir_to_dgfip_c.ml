@@ -276,6 +276,11 @@ end = struct
       let v = lazy (fresh_c_local "expr") in
       fun () -> Lazy.force v
     in
+    let value_is_atomic =
+      match fst value_comp with
+      | Done | Dzero | Dlit _ | Dvar _ -> true
+      | _ -> false
+    in
     let def_test, value_comp =
       match fst def_test with
       | Done -> (def_test, value_comp)
@@ -283,16 +288,16 @@ end = struct
           let def_v = fresh_inter_var () in
           let def_test = local_var def_v Def def_test in
           let value_comp =
-            if safe_def then value_comp else ite def_test value_comp zero
+            if safe_def || value_is_atomic then value_comp
+            else ite def_test value_comp zero
           in
           (def_test, value_comp)
     in
     let value_comp =
-      match fst value_comp with
-      | Done | Dzero | Dlit _ | Dvar _ -> value_comp
-      | _ ->
-          let expr_v = fresh_inter_var () in
-          local_var expr_v Val value_comp
+      if value_is_atomic then value_comp
+      else
+        let expr_v = fresh_inter_var () in
+        local_var expr_v Val value_comp
     in
     { def_test; value_comp }
 
@@ -564,7 +569,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
       (D.format_assign dgfip_flags var_indexes val_var)
       se.value_comp
   else
-    Format.fprintf oc "%a@,@[<hov 2>if(%s){@,%a@]@,}@,else %s = 0.;"
+    Format.fprintf oc "%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
       (D.format_assign dgfip_flags var_indexes def_var)
       se.def_test def_var
       (D.format_assign dgfip_flags var_indexes val_var)
