@@ -307,14 +307,14 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
                (Conditional
                   ( Pos.same_pos_as
                       (Comparison
-                         ( Pos.same_pos_as Mast.Lt e,
+                         ( Pos.same_pos_as Mast.Gt e,
                            Pos.same_pos_as (LocalVar arg_var) e,
                            Pos.same_pos_as (Literal (Float 0.0)) e ))
                       e,
+                    Pos.same_pos_as (LocalVar arg_var) e,
                     Pos.same_pos_as
                       (Unop (Mast.Minus, Pos.same_pos_as (LocalVar arg_var) e))
-                      e,
-                    Pos.same_pos_as (LocalVar arg_var) e ))
+                      e ))
                e ))
         e
   | FunctionCall (NullFunc, [ arg ]) ->

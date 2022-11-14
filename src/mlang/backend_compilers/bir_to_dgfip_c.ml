@@ -391,6 +391,12 @@ let rec generate_c_expr (e : expression Pos.marked)
   | Comparison (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
+      let safe_def =
+        match (Pos.unmark op, Pos.unmark e2) with
+        | Mast.Gt, Mir.(Literal (Undefined | Float 0.)) ->
+            (* hack to catch positive test in M *) true
+        | _ -> false
+      in
       let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
         let op =
@@ -404,7 +410,7 @@ let rec generate_c_expr (e : expression Pos.marked)
         in
         D.binop op se1.value_comp se2.value_comp
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Binop ((Mast.Div, _), e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
