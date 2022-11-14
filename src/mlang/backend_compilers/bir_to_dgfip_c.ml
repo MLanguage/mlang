@@ -523,13 +523,15 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { def_test; value_comp }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { def_test; value_comp }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
       let bound_var = D.fresh_c_local "bound" in
@@ -569,7 +571,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
   let def_var = generate_variable ~def_flag:true var_indexes offset var in
   let val_var = generate_variable var_indexes offset var in
   if D.is_always_defined se then
-    Format.fprintf oc "%a@,@[<hov 2>{@,%a@,@]}"
+    Format.fprintf oc "%a@,@[<v 2>{@,%a@,@]}"
       (D.format_assign dgfip_flags var_indexes def_var)
       se.def_test
       (D.format_assign dgfip_flags var_indexes val_var)
