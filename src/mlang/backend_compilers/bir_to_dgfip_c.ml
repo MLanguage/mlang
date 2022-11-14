@@ -55,54 +55,54 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
 module DecoupledExpr : sig
   type dflag = Def | Val
 
-  type local_var = string * int
+  type local_var
 
   type t
 
-  type expression_composition = { def_test : t; value_comp : t }
+  type constr
 
-  val is_always_defined : expression_composition -> bool
+  type expression_composition = { def_test : constr; value_comp : constr }
 
-  val one : t
+  val is_always_true : t -> bool
 
-  val zero : t
+  val locals_from_m : Mir.LocalVariable.t -> local_var * local_var
 
-  val lit : float -> t
+  val new_local : unit -> local_var
 
-  val m_var : variable -> offset -> dflag -> t
+  val one : constr
 
-  val local_var : local_var -> dflag -> t -> t
+  val zero : constr
 
-  val m_local_var : int -> dflag -> t
+  val lit : float -> constr
 
-  val let_m_local_var :
-    int ->
-    expression_composition ->
-    expression_composition ->
-    expression_composition
+  val m_var : variable -> offset -> dflag -> constr
 
-  val dand : t -> t -> t
+  val let_local : local_var -> dflag -> constr -> constr -> constr
 
-  val dor : t -> t -> t
+  val local_var : local_var -> constr
 
-  val unop : string -> t -> t
+  val dand : constr -> constr -> constr
 
-  val binop : string -> t -> t -> t
+  val dor : constr -> constr -> constr
 
-  val dfun : string -> t list -> t
+  val dnot : constr -> constr
 
-  val access : variable -> dflag -> t -> t
+  val minus : constr -> constr
 
-  val ite : t -> t -> t -> t
+  val binop : string -> constr -> constr -> constr
 
-  val fresh_c_local : string -> local_var
+  val dfun : string -> constr list -> constr
+
+  val access : variable -> dflag -> constr -> constr
+
+  val ite : constr -> constr -> constr -> constr
 
   val build_transitive_composition :
     ?safe_def:bool -> expression_composition -> expression_composition
 
-  val clean_local_duplicates : expression_composition -> expression_composition
+  val build_expression : expression_composition -> t * t
 
-  val format_local_var : Format.formatter -> local_var * dflag -> unit
+  (* val format_local_var : Format.formatter -> local_var * dflag -> unit *)
 
   val format_assign :
     Dgfip_options.flags ->
@@ -112,13 +112,27 @@ module DecoupledExpr : sig
     t ->
     unit
 end = struct
+  type local_var = Anon | Refered of int
+
   type dflag = Def | Val
 
-  type expr =
+  type stack_slot = { kind : dflag; depth : int }
+
+  type stack_assignment = { slot : stack_slot; expr : expr }
+
+  and local_stacks = {
+    def_top : int;
+    val_top : int;
+    var_substs : (int * expr) list;
+  }
+
+  and local_vars = (local_var * stack_assignment) list
+
+  and expr =
     | Done
     | Dzero
     | Dlit of float
-    | Dvar of expr_var * dflag
+    | Dvar of expr_var
     | Dand of expr * expr
     | Dor of expr * expr
     | Dunop of string * expr
@@ -127,143 +141,209 @@ end = struct
     | Daccess of variable * dflag * expr
     | Dite of expr * expr * expr
 
-  and expr_var = Local of local_var | M of variable * offset
+  and expr_var = Local of stack_slot | M of variable * offset * dflag
 
-  and local_var = string * int
+  and t = expr * local_vars
 
-  and t = expr * ((local_var * dflag) * expr) list
+  and constr = local_stacks -> local_vars -> t
+
+  type expression_composition = { def_test : constr; value_comp : constr }
+
+  type stack_position = Not_to_stack | Must_be_pushed
+
+  let is_always_true (expr, _lv) = expr = Done
+
+  (** local stacks operations *)
+
+  let bump_stack kind st =
+    match kind with
+    | Def -> { st with def_top = st.def_top + 1 }
+    | Val -> { st with val_top = st.val_top + 1 }
+
+  let stack_top kind st =
+    match kind with Def -> st.def_top | Val -> st.val_top
+
+  let is_in_stack_scope { kind; depth } st =
+    match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
+
+  let expr_position expr st =
+    match expr with
+    | Done | Dzero | Dlit _ | Dvar (M _) -> Not_to_stack
+    | Dvar (Local slot) ->
+        if is_in_stack_scope slot st then Not_to_stack else Must_be_pushed
+    | _ -> Must_be_pushed
+
+  let store_local st lv v kind expr =
+    match expr_position expr st with
+    | Not_to_stack ->
+        let st =
+          match v with
+          | Anon -> st
+          | Refered v -> { st with var_substs = (v, expr) :: st.var_substs }
+        in
+        (st, lv, expr)
+    | Must_be_pushed ->
+        let depth = stack_top kind st in
+        let st = bump_stack kind st in
+        let slot = { kind; depth } in
+        let assignment = { slot; expr } in
+        let lv = (v, assignment) :: lv in
+        (st, lv, Dvar (Local slot))
+
+  let push_as st lv kind expr =
+    let expr, lv = expr st lv in
+    let r = store_local st lv Anon kind expr in
+    r
 
   (** smart constructors *)
 
-  let empty_locals = []
+  let locals_from_m lvar =
+    ( Refered (-(2 * lvar.Mir.LocalVariable.id)),
+      Refered (-((2 * lvar.Mir.LocalVariable.id) + 1)) )
 
-  let add_local v df e l =
-    let k = (v, df) in
-    match List.assoc_opt k l with None -> l @ [ (k, e) ] | Some _ -> l
+  let new_local =
+    let c = ref 0 in
+    fun () ->
+      let i = !c in
+      incr c;
+      Refered i
 
-  let unify_locals l1 l2 =
-    l1
-    @ List.filter
-        (fun (v, _) ->
-          match List.assoc_opt v l1 with None -> true | Some _ -> false)
-        l2
+  let let_local v df bound e st lv =
+    let bound, lv = bound st lv in
+    let st, lv, _ = store_local st lv v df bound in
+    e st lv
 
-  let one = (Done, empty_locals)
+  let one _st lv = (Done, lv)
 
-  let zero = (Dzero, empty_locals)
+  let zero _st lv = (Dzero, lv)
 
-  let lit f =
-    ((match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f), empty_locals)
+  let lit0 f = match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f
 
-  let m_var v offset df = (Dvar (M (v, offset), df), empty_locals)
+  let lit f _st lv = (lit0 f, lv)
 
-  let local_var lvar df (e, le) =
-    match e with
-    | Done | Dzero | Dlit _ | Dvar _ -> (e, le)
-    | _ -> (Dvar (Local lvar, df), add_local lvar df e le)
+  let m_var v offset df _st lv = (Dvar (M (v, offset, df)), lv)
 
-  let m_local_var i df = (Dvar (Local ("mlocal", -i), df), empty_locals)
+  let local_var lvar st lv =
+    match lvar with
+    | Anon -> Errors.raise_error "Tried to access anonymous local variable"
+    | Refered v -> (
+        match List.assoc_opt v st.var_substs with
+        | Some e -> (e, lv)
+        | None -> (
+            match List.assoc_opt lvar lv with
+            | Some { slot; _ } -> (Dvar (Local slot), lv)
+            | None -> Errors.raise_error "Local variable not found in context"))
 
-  let dand (e1, le1) (e2, le2) =
-    match (e1, e2) with
-    | (Done | Dlit _), _ -> (e2, le2)
-    | _, (Done | Dlit _) -> (e1, le1)
-    | Dzero, _ | _, Dzero -> (Dzero, empty_locals)
-    | _ -> (Dand (e1, e2), unify_locals le1 le2)
+  let dand e1 e2 st lv =
+    let st', lv, e1 = push_as st lv Def e1 in
+    let _, lv, e2 = push_as st' lv Def e2 in
+    let e =
+      match (e1, e2) with
+      | (Done | Dlit _), _ -> e2
+      | _, (Done | Dlit _) -> e1
+      | Dzero, _ | _, Dzero -> Dzero
+      | _ -> Dand (e1, e2)
+    in
+    (e, lv)
 
-  let dor (e1, le1) (e2, le2) =
-    match (e1, e2) with
-    | (Done | Dlit _), _ | _, (Done | Dlit _) -> (Done, empty_locals)
-    | Dzero, _ -> (e2, le2)
-    | _, Dzero -> (e1, le1)
-    | _ -> (Dor (e1, e2), unify_locals le1 le2)
+  let dor e1 e2 st lv =
+    let st', lv, e1 = push_as st lv Def e1 in
+    let _, lv, e2 = push_as st' lv Def e2 in
+    let e =
+      match (e1, e2) with
+      | (Done | Dlit _), _ | _, (Done | Dlit _) -> Done
+      | Dzero, _ -> e2
+      | _, Dzero -> e1
+      | _ -> Dor (e1, e2)
+    in
+    (e, lv)
 
-  let unop op (e, le) =
-    match op with
-    | "!" -> (
-        match e with
-        | Done -> (Dzero, empty_locals)
-        | Dzero -> (Done, empty_locals)
-        | Dlit _ -> (* assuming nor 0 nor 1*) (Dzero, empty_locals)
-        | Dunop ("!", e) -> (e, le)
-        | _ -> (Dunop (op, e), le))
-    | "-" -> (
-        match e with
-        | Done -> (Dlit (-1.), empty_locals)
-        | Dzero -> (Dzero, empty_locals)
-        | Dlit f -> lit (-.f)
-        | Dunop ("-", e) -> (e, le)
-        | _ -> (Dunop (op, e), le))
-    | _ -> assert false
+  let dnot e st lv =
+    let _, lv, e = push_as st lv Def e in
+    let e =
+      match e with
+      | Done -> Dzero
+      | Dzero -> Done
+      | Dlit _ -> (* assuming nor 0 nor 1*) Dzero
+      | Dunop ("!", e) -> e
+      | _ -> Dunop ("!", e)
+    in
+    (e, lv)
 
-  let binop op (e1, le1) (e2, le2) =
+  let minus e st lv =
+    let _, lv, e = push_as st lv Val e in
+    let e =
+      match e with
+      | Done -> Dlit (-1.)
+      | Dzero -> Dzero
+      | Dlit f -> lit0 (-.f)
+      | Dunop ("-", e) -> e
+      | _ -> Dunop ("-", e)
+    in
+    (e, lv)
+
+  (* TODO optimize neutral ops *)
+  let binop op e1 e2 st lv =
+    let st', lv, e1 = push_as st lv Val e1 in
+    let _, lv, e2 = push_as st' lv Val e2 in
     let arith o =
       match (e1, e2) with
-      | Done, Done -> lit (o 1. 1.)
-      | Done, Dzero -> lit (o 1. 0.)
-      | Dzero, Done -> lit (o 0. 1.)
-      | Dzero, Dzero -> lit (o 0. 0.)
-      | Done, Dlit f -> lit (o 1. f)
-      | Dlit f, Done -> lit (o f 1.)
-      | Dzero, Dlit f -> lit (o 0. f)
-      | Dlit f, Dzero -> lit (o f 0.)
-      | Dlit f1, Dlit f2 -> lit (o f1 f2)
-      | _ -> (Dbinop (op, e1, e2), unify_locals le1 le2)
+      | Done, Done -> lit0 (o 1. 1.)
+      | Done, Dzero -> lit0 (o 1. 0.)
+      | Dzero, Done -> lit0 (o 0. 1.)
+      | Dzero, Dzero -> lit0 (o 0. 0.)
+      | Done, Dlit f -> lit0 (o 1. f)
+      | Dlit f, Done -> lit0 (o f 1.)
+      | Dzero, Dlit f -> lit0 (o 0. f)
+      | Dlit f, Dzero -> lit0 (o f 0.)
+      | Dlit f1, Dlit f2 -> lit0 (o f1 f2)
+      | _ -> Dbinop (op, e1, e2)
     in
     let comp o = arith (fun f1 f2 -> if o f1 f2 then 1. else 0.) in
-    match op with
-    | "+" -> arith ( +. )
-    | "-" -> arith ( -. )
-    | "*" -> arith ( *. )
-    | "/" -> arith (fun f1 f2 -> if f2 = 0. then 0. else f1 /. f2)
-    | "==" -> comp ( = )
-    | "!=" -> comp ( <> )
-    | "<=" -> comp ( <= )
-    | "<" -> comp ( < )
-    | ">=" -> comp ( >= )
-    | ">" -> comp ( > )
-    | _ -> assert false
+    let e =
+      match op with
+      | "+" -> arith ( +. )
+      | "-" -> arith ( -. )
+      | "*" -> arith ( *. )
+      | "/" -> arith (fun f1 f2 -> if f2 = 0. then 0. else f1 /. f2)
+      | "==" -> comp ( = )
+      | "!=" -> comp ( <> )
+      | "<=" -> comp ( <= )
+      | "<" -> comp ( < )
+      | ">=" -> comp ( >= )
+      | ">" -> comp ( > )
+      | _ -> assert false
+    in
+    (e, lv)
 
-  let dfun f args =
-    let le, args =
+  let dfun f args st lv =
+    let (_, lv), args =
       List.fold_left_map
-        (fun le (e, l) -> (unify_locals le l, e))
-        empty_locals args
+        (fun (st, lv) e ->
+          let st, lv, e = push_as st lv Val e in
+          ((st, lv), e))
+        (st, lv) args
     in
-    (Dfun (f, args), le)
+    (Dfun (f, args), lv)
 
-  let access var df (e, le) = (Daccess (var, df, e), le)
+  let access var df e st lv =
+    let _, lv, e = push_as st lv Val e in
+    (Daccess (var, df, e), lv)
 
-  let ite (c, lc) (t, lt) (e, le) =
-    match (c, t, e) with
-    | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> (t, lt)
-    | Dzero, _, _ -> (e, le)
-    | _, Done, Dzero -> (c, lc)
-    | _, Done, Done -> (Done, empty_locals)
-    | _, Dzero, Dzero -> (Dzero, empty_locals)
-    | _ -> (Dite (c, t, e), unify_locals (unify_locals lc lt) le)
-
-  let fresh_c_local =
-    let c = ref 0 in
-    fun name ->
-      let v = (name, !c) in
-      incr c;
-      v
-
-  type expression_composition = { def_test : t; value_comp : t }
-
-  let is_always_defined { def_test = e, _; _ } = e = Done
-
-  let let_m_local_var i de1 { def_test = de, dle; value_comp = ve, vle } =
-    let let_def =
-      add_local ("mlocal", -i) Def (fst de1.def_test) (snd de1.def_test)
+  let ite c t e st lv =
+    let st', lv, c = push_as st lv Def c in
+    let st', lv, t = push_as st' lv Val t in
+    let _, lv, e = push_as st' lv Val e in
+    let e =
+      match (c, t, e) with
+      | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> t
+      | Dzero, _, _ -> e
+      | _, Done, Dzero -> c
+      | _, Done, Done -> Done
+      | _, Dzero, Dzero -> Dzero
+      | _ -> Dite (c, t, e)
     in
-    let let_val =
-      add_local ("mlocal", -i) Val (fst de1.value_comp) (snd de1.value_comp)
-    in
-    let dle = unify_locals (unify_locals let_def let_val) dle in
-    let vle = unify_locals (unify_locals let_def let_val) vle in
-    { def_test = (de, dle); value_comp = (ve, vle) }
+    (e, lv)
 
   let build_transitive_composition ?(safe_def = false) { def_test; value_comp }
       =
@@ -272,53 +352,49 @@ end = struct
        operation have such semantic property (funny question is what's the
        causality ?). This allows to remove a check to the definition flag when
        we compute the value, avoiding a lot of unnecessary code. *)
-    let fresh_inter_var =
-      let v = lazy (fresh_c_local "expr") in
-      fun () -> Lazy.force v
-    in
-    let value_is_atomic =
-      match fst value_comp with
-      | Done | Dzero | Dlit _ | Dvar _ -> true
-      | _ -> false
-    in
-    let def_test, value_comp =
-      match fst def_test with
-      | Done -> (def_test, value_comp)
-      | _ ->
-          let def_v = fresh_inter_var () in
-          let def_test = local_var def_v Def def_test in
-          let value_comp =
-            if safe_def || value_is_atomic then value_comp
-            else ite def_test value_comp zero
-          in
-          (def_test, value_comp)
-    in
+    (* let value_is_atomic =
+     *   match fst value_comp with
+     *   | Done | Dzero | Dlit _ | Dvar _ -> true
+     *   | _ -> false
+     * in
+     * let def_test, value_comp, assign =
+     *   match fst def_test with
+     *   | Done -> (def_test, value_comp, false)
+     *   | _ ->
+     *       let def_v = fresh_inter_var () in
+     *       let def_test = local_var def_v Def def_test in
+     *       let value_comp =
+     *         if safe_def || value_is_atomic then value_comp
+     *         else ite def_test value_comp zero
+     *       in
+     *       (def_test, value_comp, true)
+     * in
+     * let value_comp, assign =
+     *   if value_is_atomic then (value_comp, assign)
+     *   else
+     *     let expr_v = fresh_inter_var () in
+     *     (local_var expr_v Val value_comp, true)
+     * in *)
     let value_comp =
-      if value_is_atomic then value_comp
-      else
-        let expr_v = fresh_inter_var () in
-        local_var expr_v Val value_comp
+      if safe_def then value_comp else ite def_test value_comp zero
     in
     { def_test; value_comp }
 
-  let clean_local_duplicates { def_test = de, dle; value_comp = ve, vle } =
-    let vle =
-      List.filter
-        (fun (v, _e) ->
-          match List.assoc_opt v dle with Some _ -> false | None -> true)
-        vle
-    in
-    { def_test = (de, dle); value_comp = (ve, vle) }
+  let build_expression expr_comp =
+    let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
+    let empty_locals = [] in
+    ( expr_comp.def_test empty_stacks empty_locals,
+      expr_comp.value_comp empty_stacks empty_locals )
 
-  let format_local_var fmt (((vname, vnum), df) : local_var * dflag) =
-    let def_suffix = match df with Def -> "_d" | Val -> "" in
-    Format.fprintf fmt "%s_%d%s" vname (abs vnum) def_suffix
+  let format_slot fmt ({ kind; depth } : stack_slot) =
+    let kind = match kind with Def -> "int" | Val -> "real" in
+    Format.fprintf fmt "%s%d" kind depth
 
   let format_expr_var (dgfip_flags : Dgfip_options.flags)
-      (vm : Dgfip_varid.var_id_map) fmt ((ev, df) : expr_var * dflag) =
+      (vm : Dgfip_varid.var_id_map) fmt (ev : expr_var) =
     match ev with
-    | Local (lvar, i) -> format_local_var fmt ((lvar, i), df)
-    | M (var, offset) ->
+    | Local slot -> format_slot fmt slot
+    | M (var, offset, df) ->
         let def_flag = df = Def in
         Format.fprintf fmt "%s"
           (generate_variable ~debug_flag:dgfip_flags.flg_trace vm offset
@@ -338,7 +414,7 @@ end = struct
         | _ ->
             (* Print literal floats as precisely as possible *)
             Format.fprintf fmt "%#.19g" f)
-    | Dvar (evar, dflag) -> format_expr_var dgfip_flags vm fmt (evar, dflag)
+    | Dvar evar -> format_expr_var dgfip_flags vm fmt evar
     | Dand (de1, de2) ->
         Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1
           format_dexpr de2
@@ -365,20 +441,31 @@ end = struct
         Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
           format_dexpr det format_dexpr dee
 
-  let format_local_vars_defs dgfip_flags vm fmt lde =
-    let format_one fmt ((lvar, df), e) =
-      Format.fprintf fmt "@[<hov 2>%s %a =@ %a;@]@,"
-        (match df with Def -> "int" | Val -> "double")
-        format_local_var (lvar, df)
-        (format_dexpr dgfip_flags vm)
-        e
+  let format_local_vars_defs dgfip_flags vm fmt (lv : local_vars) =
+    let lv = List.rev lv in
+    let _ =
+      List.fold_left
+        (fun seen (_, { slot; _ }) ->
+          if List.mem slot seen then seen
+          else begin
+            Format.fprintf fmt "@[<hov 2>%s %a;@]@,"
+              (match slot.kind with Def -> "int" | Val -> "double")
+              format_slot slot;
+            slot :: seen
+          end)
+        [] lv
     in
-    List.iter (format_one fmt) lde
+    let format_one_assign fmt (_, { slot; expr }) =
+      Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
+        (format_dexpr dgfip_flags vm)
+        expr
+    in
+    List.iter (format_one_assign fmt) lv
 
-  let format_assign dgfip_flags var_indexes var fmt (e, le) =
+  let format_assign dgfip_flags var_indexes var fmt (e, lv) =
     Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
       (format_local_vars_defs dgfip_flags var_indexes)
-      le var
+      lv var
       (format_dexpr dgfip_flags var_indexes)
       e
 end
@@ -416,10 +503,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
-        D.ite
-          (D.unop "!" se2.value_comp)
-          D.zero
-          (D.binop "/" se1.value_comp se2.value_comp)
+        D.ite se2.value_comp (D.binop "/" se1.value_comp se2.value_comp) D.zero
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Binop (op, e1, e2) ->
@@ -448,50 +532,43 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se = generate_c_expr e var_indexes in
       let def_test = se.def_test in
       let op, safe_def =
-        match op with Mast.Not -> ("!", false) | Mast.Minus -> ("-", true)
+        match op with
+        | Mast.Not -> (D.dnot, false)
+        | Mast.Minus -> (D.minus, true)
       in
-      let value_comp = D.unop op se.value_comp in
+      let value_comp = op se.value_comp in
       D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
       let size =
         Option.get (Bir.var_to_mir (Pos.unmark var)).Mir.Variable.is_table
       in
-      let idx_var = D.fresh_c_local "idx" in
+      let idx_var = D.new_local () in
       let def_test =
-        D.dand
+        D.let_local idx_var Def idx.value_comp
           (D.dand
-             (D.local_var idx_var Def idx.def_test)
-             (D.binop "<"
-                (D.local_var idx_var Val idx.value_comp)
-                (D.lit (float_of_int size))))
-          (D.access (Pos.unmark var) Def
-             (D.local_var idx_var Val idx.value_comp))
+             (D.dand idx.def_test
+                (D.binop "<" (D.local_var idx_var) (D.lit (float_of_int size))))
+             (D.access (Pos.unmark var) Def (D.local_var idx_var)))
       in
       let value_comp =
-        D.ite
-          (D.binop "<" (D.local_var idx_var Val idx.value_comp) D.zero)
-          D.zero
-          (D.access (Pos.unmark var) Val
-             (D.local_var idx_var Val idx.value_comp))
+        D.let_local idx_var Val idx.value_comp
+          (D.ite
+             (D.binop "<" (D.local_var idx_var) D.zero)
+             D.zero
+             (D.access (Pos.unmark var) Val (D.local_var idx_var)))
       in
       D.build_transitive_composition { def_test; value_comp }
   | Conditional (c, t, f) ->
       let cond = generate_c_expr c var_indexes in
       let thenval = generate_c_expr t var_indexes in
       let elseval = generate_c_expr f var_indexes in
-      let cond_var = D.fresh_c_local "cond" in
       let def_test =
-        D.dand
-          (D.local_var cond_var Def cond.def_test)
-          (D.ite
-             (D.local_var cond_var Val cond.value_comp)
-             thenval.def_test elseval.def_test)
+        D.dand cond.def_test
+          (D.ite cond.value_comp thenval.def_test elseval.def_test)
       in
       let value_comp =
-        D.ite
-          (D.local_var cond_var Val cond.value_comp)
-          thenval.value_comp elseval.value_comp
+        D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall (PresentFunc, [ arg ]) ->
@@ -523,31 +600,20 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true
-        { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true
-        { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
-      let bound_var = D.fresh_c_local "bound" in
       let def_test =
-        D.dfun "multimax_def"
-          [
-            D.local_var bound_var Val bound.value_comp;
-            D.m_var v2 PassPointer Def;
-          ]
+        D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
       in
       let value_comp =
-        D.dfun "multimax"
-          [
-            D.local_var bound_var Val bound.value_comp;
-            D.m_var v2 PassPointer Val;
-          ]
+        D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall _ -> assert false (* should not happen *)
@@ -556,32 +622,40 @@ let rec generate_c_expr (e : expression Pos.marked)
   | Var var ->
       { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
   | LocalVar lvar ->
-      let lvar = lvar.Mir.LocalVariable.id in
-      { def_test = D.m_local_var lvar Def; value_comp = D.m_local_var lvar Val }
+      let ldef, lval = D.locals_from_m lvar in
+      { def_test = D.local_var ldef; value_comp = D.local_var lval }
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      D.let_m_local_var lvar.Mir.LocalVariable.id se1 se2
+      let ldef, lval = D.locals_from_m lvar in
+      let declare_local constr =
+        D.let_local ldef Def se1.def_test
+          (D.let_local lval Val se1.value_comp constr)
+      in
+      {
+        def_test = declare_local se2.def_test;
+        value_comp = declare_local se2.value_comp;
+      }
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : variable) (offset : offset)
     (oc : Format.formatter) (se : D.expression_composition) : unit =
-  let se = D.clean_local_duplicates se in
   let def_var = generate_variable ~def_flag:true var_indexes offset var in
   let val_var = generate_variable var_indexes offset var in
-  if D.is_always_defined se then
+  let def, value = D.build_expression se in
+  if D.is_always_true def then
     Format.fprintf oc "%a@,@[<v 2>{@,%a@,@]}"
       (D.format_assign dgfip_flags var_indexes def_var)
-      se.def_test
+      def
       (D.format_assign dgfip_flags var_indexes val_var)
-      se.value_comp
+      value
   else
     Format.fprintf oc "%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
       (D.format_assign dgfip_flags var_indexes def_var)
-      se.def_test def_var
+      def def_var
       (D.format_assign dgfip_flags var_indexes val_var)
-      se.value_comp val_var;
+      value val_var;
   if dgfip_flags.flg_trace then
     let var = Bir.var_to_mir var in
     Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
@@ -615,8 +689,8 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
 let generate_var_cond (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (cond : condition_data)
     (oc : Format.formatter) =
-  let scond =
-    D.clean_local_duplicates @@ generate_c_expr cond.cond_expr var_indexes
+  let def, value =
+    D.build_expression @@ generate_c_expr cond.cond_expr var_indexes
   in
   let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
   let code =
@@ -629,10 +703,17 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
   Format.fprintf oc
     "%a@,@[<hov 2>{@,%a@]@,}@,@[<hov 2>if(cond_def && (cond != 0.0)){@,"
     (D.format_assign dgfip_flags var_indexes "cond_def")
-    scond.def_test
+    def
     (D.format_assign dgfip_flags var_indexes "cond")
-    scond.value_comp;
+    value;
   Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" erreur code
+
+let fresh_c_local =
+  let c = ref 0 in
+  fun name ->
+    let s = name ^ string_of_int !c in
+    incr c;
+    s
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
@@ -644,18 +725,17 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       Format.fprintf oc "@]@,}"
   | SConditional (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
-      let cond_v = D.fresh_c_local "mpp_cond" in
-      let cond_def = Format.asprintf "%a" D.format_local_var (cond_v, Def) in
-      let cond_val = Format.asprintf "%a" D.format_local_var (cond_v, Val) in
-      let cond =
-        D.clean_local_duplicates
+      let cond_val = fresh_c_local "mpp_cond" in
+      let cond_def = cond_val ^ "_d" in
+      let def, value =
+        D.build_expression
         @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
       in
       Format.fprintf oc "%a@;%a"
         (D.format_assign dgfip_flags var_indexes cond_def)
-        cond.def_test
+        def
         (D.format_assign dgfip_flags var_indexes cond_val)
-        cond.value_comp;
+        value;
       Format.fprintf oc "@[<hov 2>if(%s && %s){@,%a@]@,}" cond_def cond_val
         (generate_stmts dgfip_flags program var_indexes)
         iftrue;
