@@ -118,7 +118,7 @@ end = struct
 
   type stack_slot = { kind : dflag; depth : int }
 
-  type stack_assignment = { slot : stack_slot; expr : expr }
+  type stack_assignment = { slot : stack_slot; subexpr : expr }
 
   and local_stacks = {
     def_top : int;
@@ -149,9 +149,9 @@ end = struct
 
   type expression_composition = { def_test : constr; value_comp : constr }
 
-  type stack_position = Not_to_stack | Must_be_pushed
+  type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
 
-  let is_always_true (expr, _lv) = expr = Done
+  let is_always_true (expr, _) = expr = Done
 
   (** local stacks operations *)
 
@@ -160,40 +160,49 @@ end = struct
     | Def -> { st with def_top = st.def_top + 1 }
     | Val -> { st with val_top = st.val_top + 1 }
 
+  let add_substitution st v expr =
+    match v with
+    | Anon -> st
+    | Refered v -> { st with var_substs = (v, expr) :: st.var_substs }
+
   let stack_top kind st =
     match kind with Def -> st.def_top | Val -> st.val_top
 
   let is_in_stack_scope { kind; depth } st =
     match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
 
+  let is_on_top { kind; depth } st =
+    match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
+
   let expr_position expr st =
     match expr with
     | Done | Dzero | Dlit _ | Dvar (M _) -> Not_to_stack
     | Dvar (Local slot) ->
-        if is_in_stack_scope slot st then Not_to_stack else Must_be_pushed
+        if is_in_stack_scope slot st then Not_to_stack
+        else if is_on_top slot st then On_top slot.kind
+        else Must_be_pushed
     | _ -> Must_be_pushed
 
-  let store_local st lv v kind expr =
-    match expr_position expr st with
-    | Not_to_stack ->
-        let st =
-          match v with
-          | Anon -> st
-          | Refered v -> { st with var_substs = (v, expr) :: st.var_substs }
-        in
-        (st, lv, expr)
+  let store_local st ctx v kind subexpr =
+    match expr_position subexpr st with
+    | Not_to_stack -> (add_substitution st v subexpr, ctx, subexpr)
+    | On_top kind ->
+        (add_substitution st v subexpr |> bump_stack kind, ctx, subexpr)
     | Must_be_pushed ->
         let depth = stack_top kind st in
         let st = bump_stack kind st in
         let slot = { kind; depth } in
-        let assignment = { slot; expr } in
-        let lv = (v, assignment) :: lv in
-        (st, lv, Dvar (Local slot))
+        let assignment = { slot; subexpr } in
+        let ctx = (v, assignment) :: ctx in
+        (st, ctx, Dvar (Local slot))
 
-  let push_as st lv kind expr =
-    let expr, lv = expr st lv in
-    let r = store_local st lv Anon kind expr in
-    r
+  let collapse_constr st ctx constr =
+    let expr, lv = constr st ctx in
+    (expr, lv @ ctx)
+
+  let push_as st ctx kind expr =
+    let expr, lv = expr st ctx in
+    store_local st lv Anon kind expr
 
   (** smart constructors *)
 
@@ -208,84 +217,72 @@ end = struct
       incr c;
       Refered i
 
-  let let_local v df bound e st lv =
-    let bound, lv = bound st lv in
-    let st, lv, _ = store_local st lv v df bound in
-    e st lv
+  let let_local v df bound e st ctx =
+    let bound, lv = collapse_constr st ctx bound in
+    let st, ctx, _ = store_local st lv v df bound in
+    collapse_constr st ctx e
 
-  let one _st lv = (Done, lv)
+  let one _st _ctx = (Done, [])
 
-  let zero _st lv = (Dzero, lv)
+  let zero _st _ctx = (Dzero, [])
 
   let lit0 f = match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f
 
-  let lit f _st lv = (lit0 f, lv)
+  let lit f _st _ctx = (lit0 f, [])
 
-  let m_var v offset df _st lv = (Dvar (M (v, offset, df)), lv)
+  let m_var v offset df _st _ctx = (Dvar (M (v, offset, df)), [])
 
-  let local_var lvar st lv =
+  let local_var lvar st ctx =
     match lvar with
     | Anon -> Errors.raise_error "Tried to access anonymous local variable"
     | Refered v -> (
         match List.assoc_opt v st.var_substs with
-        | Some e -> (e, lv)
+        | Some e -> (e, [])
         | None -> (
-            match List.assoc_opt lvar lv with
-            | Some { slot; _ } -> (Dvar (Local slot), lv)
+            match List.assoc_opt lvar ctx with
+            | Some { slot; _ } -> (Dvar (Local slot), [])
             | None -> Errors.raise_error "Local variable not found in context"))
 
-  let dand e1 e2 st lv =
-    let st', lv, e1 = push_as st lv Def e1 in
-    let _, lv, e2 = push_as st' lv Def e2 in
-    let e =
-      match (e1, e2) with
-      | (Done | Dlit _), _ -> e2
-      | _, (Done | Dlit _) -> e1
-      | Dzero, _ | _, Dzero -> Dzero
-      | _ -> Dand (e1, e2)
-    in
-    (e, lv)
+  let dand e1 e2 st ctx =
+    let st', lv1, e1 = push_as st ctx Def e1 in
+    let _, lv2, e2 = push_as st' ctx Def e2 in
+    match (e1, e2) with
+    | (Done | Dlit _), _ -> (e2, lv2)
+    | _, (Done | Dlit _) -> (e1, lv1)
+    | Dzero, _ | _, Dzero -> (Dzero, [])
+    | _ -> (Dand (e1, e2), lv2 @ lv1)
 
-  let dor e1 e2 st lv =
-    let st', lv, e1 = push_as st lv Def e1 in
-    let _, lv, e2 = push_as st' lv Def e2 in
-    let e =
-      match (e1, e2) with
-      | (Done | Dlit _), _ | _, (Done | Dlit _) -> Done
-      | Dzero, _ -> e2
-      | _, Dzero -> e1
-      | _ -> Dor (e1, e2)
-    in
-    (e, lv)
+  let dor e1 e2 st ctx =
+    let st', lv1, e1 = push_as st ctx Def e1 in
+    let _, lv2, e2 = push_as st' ctx Def e2 in
+    match (e1, e2) with
+    | (Done | Dlit _), _ | _, (Done | Dlit _) -> (Done, [])
+    | Dzero, _ -> (e2, lv2)
+    | _, Dzero -> (e1, lv1)
+    | _ -> (Dor (e1, e2), lv2 @ lv1)
 
-  let dnot e st lv =
-    let _, lv, e = push_as st lv Def e in
-    let e =
-      match e with
-      | Done -> Dzero
-      | Dzero -> Done
-      | Dlit _ -> (* assuming nor 0 nor 1*) Dzero
-      | Dunop ("!", e) -> e
-      | _ -> Dunop ("!", e)
-    in
-    (e, lv)
+  let dnot e st ctx =
+    let _, lv, e = push_as st ctx Def e in
+    match e with
+    | Done -> (Dzero, [])
+    | Dzero -> (Done, [])
+    | Dlit _ -> (* assuming nor 0 nor 1*) (Dzero, [])
+    | Dunop ("!", e) -> (e, lv)
+    | _ -> (Dunop ("!", e), lv)
 
-  let minus e st lv =
-    let _, lv, e = push_as st lv Val e in
-    let e =
-      match e with
-      | Done -> Dlit (-1.)
-      | Dzero -> Dzero
-      | Dlit f -> lit0 (-.f)
-      | Dunop ("-", e) -> e
-      | _ -> Dunop ("-", e)
-    in
-    (e, lv)
+  let minus e st ctx =
+    let _, lv, e = push_as st ctx Val e in
+    match e with
+    | Done -> (Dlit (-1.), [])
+    | Dzero -> (Dzero, [])
+    | Dlit f -> (lit0 (-.f), [])
+    | Dunop ("-", e) -> (e, lv)
+    | _ -> (Dunop ("-", e), lv)
 
   (* TODO optimize neutral ops *)
-  let binop op e1 e2 st lv =
-    let st', lv, e1 = push_as st lv Val e1 in
-    let _, lv, e2 = push_as st' lv Val e2 in
+  let binop op e1 e2 st ctx =
+    let st', lv1, e1 = push_as st ctx Val e1 in
+    let _, lv2, e2 = push_as st' ctx Val e2 in
     let arith o =
       match (e1, e2) with
       | Done, Done -> lit0 (o 1. 1.)
@@ -314,36 +311,33 @@ end = struct
       | ">" -> comp ( > )
       | _ -> assert false
     in
-    (e, lv)
+    (e, lv2 @ lv1)
 
-  let dfun f args st lv =
+  let dfun f args st ctx =
     let (_, lv), args =
       List.fold_left_map
         (fun (st, lv) e ->
-          let st, lv, e = push_as st lv Val e in
-          ((st, lv), e))
-        (st, lv) args
+          let st, lv', e = push_as st ctx Val e in
+          ((st, lv' @ lv), e))
+        (st, []) args
     in
     (Dfun (f, args), lv)
 
-  let access var df e st lv =
-    let _, lv, e = push_as st lv Val e in
+  let access var df e st ctx =
+    let _, lv, e = push_as st ctx Val e in
     (Daccess (var, df, e), lv)
 
-  let ite c t e st lv =
-    let st', lv, c = push_as st lv Def c in
-    let st', lv, t = push_as st' lv Val t in
-    let _, lv, e = push_as st' lv Val e in
-    let e =
-      match (c, t, e) with
-      | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> t
-      | Dzero, _, _ -> e
-      | _, Done, Dzero -> c
-      | _, Done, Done -> Done
-      | _, Dzero, Dzero -> Dzero
-      | _ -> Dite (c, t, e)
-    in
-    (e, lv)
+  let ite c t e st ctx =
+    let st', lvc, c = push_as st ctx Def c in
+    let st', lvt, t = push_as st' ctx Val t in
+    let _, lve, e = push_as st' ctx Val e in
+    match (c, t, e) with
+    | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> (t, lvt)
+    | Dzero, _, _ -> (e, lve)
+    | _, Done, Dzero -> (c, lvc)
+    | _, Done, Done -> (Done, [])
+    | _, Dzero, Dzero -> (Dzero, [])
+    | _ -> (Dite (c, t, e), lve @ lvt @ lvc)
 
   let build_transitive_composition ?(safe_def = false) { def_test; value_comp }
       =
@@ -383,8 +377,8 @@ end = struct
   let build_expression expr_comp =
     let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
     let empty_locals = [] in
-    ( expr_comp.def_test empty_stacks empty_locals,
-      expr_comp.value_comp empty_stacks empty_locals )
+    ( collapse_constr empty_stacks empty_locals expr_comp.def_test,
+      collapse_constr empty_stacks empty_locals expr_comp.value_comp )
 
   let format_slot fmt ({ kind; depth } : stack_slot) =
     let kind = match kind with Def -> "int" | Val -> "real" in
@@ -455,10 +449,10 @@ end = struct
           end)
         [] lv
     in
-    let format_one_assign fmt (_, { slot; expr }) =
+    let format_one_assign fmt (_, { slot; subexpr }) =
       Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
         (format_dexpr dgfip_flags vm)
-        expr
+        subexpr
     in
     List.iter (format_one_assign fmt) lv
 
