@@ -69,15 +69,15 @@ module DecoupledExpr : sig
 
   val new_local : unit -> local_var
 
-  val one : constr
+  val dtrue : constr
 
-  val zero : constr
+  val dfalse : constr
 
   val lit : float -> constr
 
   val m_var : variable -> offset -> dflag -> constr
 
-  val let_local : local_var -> dflag -> constr -> constr -> constr
+  val let_local : local_var -> constr -> constr -> constr
 
   val local_var : local_var -> constr
 
@@ -123,14 +123,14 @@ end = struct
   and local_stacks = {
     def_top : int;
     val_top : int;
-    var_substs : (int * expr) list;
+    var_substs : (int * (expr * dflag)) list;
   }
 
   and local_vars = (local_var * stack_assignment) list
 
   and expr =
-    | Done
-    | Dzero
+    | Dtrue
+    | Dfalse
     | Dlit of float
     | Dvar of expr_var
     | Dand of expr * expr
@@ -143,7 +143,7 @@ end = struct
 
   and expr_var = Local of stack_slot | M of variable * offset * dflag
 
-  and t = expr * local_vars
+  and t = expr * dflag * local_vars
 
   and constr = local_stacks -> local_vars -> t
 
@@ -151,43 +151,54 @@ end = struct
 
   type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
 
-  let is_always_true (expr, _) = expr = Done
+  let is_always_true ((expr, _kind, _lv) : t) = expr = Dtrue
+
+  let cast (kind : dflag) (expr : expr) =
+    match (expr, kind) with
+    | Dtrue, Val -> Dlit 1.
+    | Dfalse, Val -> Dlit 0.
+    | Dlit 0., Def -> Dfalse
+    | Dlit _, Def -> Dtrue
+    | _, Def -> Dbinop ("!=", expr, Dlit 0.)
+    | _, Val -> expr
 
   (** local stacks operations *)
 
-  let bump_stack kind st =
+  let bump_stack (kind : dflag) (st : local_stacks) =
     match kind with
     | Def -> { st with def_top = st.def_top + 1 }
     | Val -> { st with val_top = st.val_top + 1 }
 
-  let add_substitution st v expr =
+  let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
+      (expr : expr) =
     match v with
     | Anon -> st
-    | Refered v -> { st with var_substs = (v, expr) :: st.var_substs }
+    | Refered v -> { st with var_substs = (v, (expr, kind)) :: st.var_substs }
 
-  let stack_top kind st =
+  let stack_top (kind : dflag) (st : local_stacks) =
     match kind with Def -> st.def_top | Val -> st.val_top
 
-  let is_in_stack_scope { kind; depth } st =
+  let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
     match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
 
-  let is_on_top { kind; depth } st =
+  let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
     match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
 
-  let expr_position expr st =
+  let expr_position (expr : expr) (st : local_stacks) =
     match expr with
-    | Done | Dzero | Dlit _ | Dvar (M _) -> Not_to_stack
+    | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
     | Dvar (Local slot) ->
         if is_in_stack_scope slot st then Not_to_stack
         else if is_on_top slot st then On_top slot.kind
         else Must_be_pushed
     | _ -> Must_be_pushed
 
-  let store_local st ctx v kind subexpr =
+  let store_local (st : local_stacks) (ctx : local_vars) (v : local_var)
+      (kind : dflag) (subexpr : expr) =
     match expr_position subexpr st with
-    | Not_to_stack -> (add_substitution st v subexpr, ctx, subexpr)
+    | Not_to_stack -> (add_substitution st v kind subexpr, ctx, subexpr)
     | On_top kind ->
-        (add_substitution st v subexpr |> bump_stack kind, ctx, subexpr)
+        (add_substitution st v kind subexpr |> bump_stack kind, ctx, subexpr)
     | Must_be_pushed ->
         let depth = stack_top kind st in
         let st = bump_stack kind st in
@@ -196,108 +207,106 @@ end = struct
         let ctx = (v, assignment) :: ctx in
         (st, ctx, Dvar (Local slot))
 
-  let collapse_constr st ctx constr =
-    let expr, lv = constr st ctx in
-    (expr, lv @ ctx)
+  let collapse_constr (st : local_stacks) (ctx : local_vars) (constr : constr) =
+    let expr, kind, lv = constr st ctx in
+    (expr, kind, lv @ ctx)
 
-  let push_as st ctx kind expr =
-    let expr, lv = expr st ctx in
+  let push_as (st : local_stacks) (ctx : local_vars) (kind : dflag)
+      (constr : constr) =
+    let expr, ekind, lv = constr st ctx in
+    let expr = if kind = ekind then expr else cast kind expr in
     store_local st lv Anon kind expr
 
   (** smart constructors *)
 
-  let locals_from_m lvar =
+  let locals_from_m (lvar : Mir.local_variable) =
     ( Refered (-(2 * lvar.Mir.LocalVariable.id)),
       Refered (-((2 * lvar.Mir.LocalVariable.id) + 1)) )
 
-  let new_local =
+  let new_local : unit -> local_var =
     let c = ref 0 in
     fun () ->
       let i = !c in
       incr c;
       Refered i
 
-  let let_local v df bound e st ctx =
-    let bound, lv = collapse_constr st ctx bound in
-    let st, ctx, _ = store_local st lv v df bound in
-    collapse_constr st ctx e
+  let let_local (v : local_var) (bound : constr) (body : constr)
+      (st : local_stacks) (ctx : local_vars) =
+    let bound, kind, lv = collapse_constr st ctx bound in
+    let st, ctx, _ = store_local st lv v kind bound in
+    collapse_constr st ctx body
 
-  let one _st _ctx = (Done, [])
+  let dtrue _st _lv : t = (Dtrue, Def, [])
 
-  let zero _st _ctx = (Dzero, [])
+  let dfalse _st _lv : t = (Dfalse, Def, [])
 
-  let lit0 f = match f with 0. -> Dzero | 1. -> Done | _ -> Dlit f
+  let lit (f : float) _st _lv : t = (Dlit f, Val, [])
 
-  let lit f _st _ctx = (lit0 f, [])
+  let m_var (v : variable) (offset : offset) (df : dflag) _st _lv : t =
+    (Dvar (M (v, offset, df)), df, [])
 
-  let m_var v offset df _st _ctx = (Dvar (M (v, offset, df)), [])
-
-  let local_var lvar st ctx =
+  let local_var (lvar : local_var) (st : local_stacks) (ctx : local_vars) : t =
     match lvar with
     | Anon -> Errors.raise_error "Tried to access anonymous local variable"
     | Refered v -> (
         match List.assoc_opt v st.var_substs with
-        | Some e -> (e, [])
+        | Some (e, kind) -> (e, kind, [])
         | None -> (
             match List.assoc_opt lvar ctx with
-            | Some { slot; _ } -> (Dvar (Local slot), [])
+            | Some { slot; _ } -> (Dvar (Local slot), slot.kind, [])
             | None -> Errors.raise_error "Local variable not found in context"))
 
-  let dand e1 e2 st ctx =
+  let dand (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) :
+      t =
     let st', lv1, e1 = push_as st ctx Def e1 in
     let _, lv2, e2 = push_as st' ctx Def e2 in
     match (e1, e2) with
-    | (Done | Dlit _), _ -> (e2, lv2)
-    | _, (Done | Dlit _) -> (e1, lv1)
-    | Dzero, _ | _, Dzero -> (Dzero, [])
-    | _ -> (Dand (e1, e2), lv2 @ lv1)
+    | Dtrue, _ -> (e2, Def, lv2)
+    | _, Dtrue -> (e1, Def, lv1)
+    | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
+    | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
 
-  let dor e1 e2 st ctx =
+  let dor (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
+      =
     let st', lv1, e1 = push_as st ctx Def e1 in
     let _, lv2, e2 = push_as st' ctx Def e2 in
     match (e1, e2) with
-    | (Done | Dlit _), _ | _, (Done | Dlit _) -> (Done, [])
-    | Dzero, _ -> (e2, lv2)
-    | _, Dzero -> (e1, lv1)
-    | _ -> (Dor (e1, e2), lv2 @ lv1)
+    | Dtrue, _ | _, Dtrue -> (Dtrue, Def, [])
+    | Dfalse, _ -> (e2, Def, lv2)
+    | _, Dfalse -> (e1, Def, lv1)
+    | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
 
-  let dnot e st ctx =
+  let dnot (e : constr) (st : local_stacks) (ctx : local_vars) : t =
     let _, lv, e = push_as st ctx Def e in
     match e with
-    | Done -> (Dzero, [])
-    | Dzero -> (Done, [])
-    | Dlit _ -> (* assuming nor 0 nor 1*) (Dzero, [])
-    | Dunop ("!", e) -> (e, lv)
-    | _ -> (Dunop ("!", e), lv)
+    | Dtrue -> (Dfalse, Def, [])
+    | Dfalse -> (Dtrue, Def, [])
+    | Dunop ("!", e) -> (e, Def, lv)
+    | _ -> (Dunop ("!", e), Def, lv)
 
-  let minus e st ctx =
+  let minus (e : constr) (st : local_stacks) (ctx : local_vars) : t =
     let _, lv, e = push_as st ctx Val e in
     match e with
-    | Done -> (Dlit (-1.), [])
-    | Dzero -> (Dzero, [])
-    | Dlit f -> (lit0 (-.f), [])
-    | Dunop ("-", e) -> (e, lv)
-    | _ -> (Dunop ("-", e), lv)
+    | Dlit f -> (Dlit (-.f), Val, [])
+    | Dunop ("-", e) -> (e, Val, lv)
+    | _ -> (Dunop ("-", e), Val, lv)
 
   (* TODO optimize neutral ops *)
-  let binop op e1 e2 st ctx =
+  let binop op (e1 : constr) (e2 : constr) (st : local_stacks)
+      (ctx : local_vars) : t =
     let st', lv1, e1 = push_as st ctx Val e1 in
     let _, lv2, e2 = push_as st' ctx Val e2 in
     let arith o =
       match (e1, e2) with
-      | Done, Done -> lit0 (o 1. 1.)
-      | Done, Dzero -> lit0 (o 1. 0.)
-      | Dzero, Done -> lit0 (o 0. 1.)
-      | Dzero, Dzero -> lit0 (o 0. 0.)
-      | Done, Dlit f -> lit0 (o 1. f)
-      | Dlit f, Done -> lit0 (o f 1.)
-      | Dzero, Dlit f -> lit0 (o 0. f)
-      | Dlit f, Dzero -> lit0 (o f 0.)
-      | Dlit f1, Dlit f2 -> lit0 (o f1 f2)
-      | _ -> Dbinop (op, e1, e2)
+      | Dlit f1, Dlit f2 -> (Dlit (o f1 f2), Val)
+      | _ -> (Dbinop (op, e1, e2), Val)
     in
-    let comp o = arith (fun f1 f2 -> if o f1 f2 then 1. else 0.) in
-    let e =
+    let comp o =
+      match (e1, e2) with
+      | Dlit f1, Dlit f2 -> ((if o f1 f2 then Dtrue else Dfalse), Def)
+      | _ -> (Dbinop (op, e1, e2), Def)
+    in
+    let e, kind =
       match op with
       | "+" -> arith ( +. )
       | "-" -> arith ( -. )
@@ -311,9 +320,10 @@ end = struct
       | ">" -> comp ( > )
       | _ -> assert false
     in
-    (e, lv2 @ lv1)
+    (e, kind, lv2 @ lv1)
 
-  let dfun f args st ctx =
+  let dfun (f : string) (args : constr list) (st : local_stacks)
+      (ctx : local_vars) : t =
     let (_, lv), args =
       List.fold_left_map
         (fun (st, lv) e ->
@@ -321,60 +331,39 @@ end = struct
           ((st, lv' @ lv), e))
         (st, []) args
     in
-    (Dfun (f, args), lv)
+    (* TODO : distinguish kinds *)
+    (Dfun (f, args), Val, lv)
 
-  let access var df e st ctx =
+  let access (var : variable) (df : dflag) (e : constr) (st : local_stacks)
+      (ctx : local_vars) : t =
     let _, lv, e = push_as st ctx Val e in
-    (Daccess (var, df, e), lv)
+    (Daccess (var, df, e), df, lv)
 
-  let ite c t e st ctx =
+  let ite (c : constr) (t : constr) (e : constr) (st : local_stacks)
+      (ctx : local_vars) : t =
     let st', lvc, c = push_as st ctx Def c in
     let st', lvt, t = push_as st' ctx Val t in
     let _, lve, e = push_as st' ctx Val e in
     match (c, t, e) with
-    | (Done | Dlit _ (* assuming nor 0 nor 1 *)), _, _ -> (t, lvt)
-    | Dzero, _, _ -> (e, lve)
-    | _, Done, Dzero -> (c, lvc)
-    | _, Done, Done -> (Done, [])
-    | _, Dzero, Dzero -> (Dzero, [])
-    | _ -> (Dite (c, t, e), lve @ lvt @ lvc)
+    | Dtrue, _, _ -> (t, Val, lvt)
+    | Dfalse, _, _ -> (e, Val, lve)
+    | _, Dlit 1., Dlit 0. -> (c, Val, lvc)
+    | _, Dlit f, Dlit f' when f = f' -> (Dlit f, Val, [])
+    | _ -> (Dite (c, t, e), Val, lve @ lvt @ lvc)
 
-  let build_transitive_composition ?(safe_def = false) { def_test; value_comp }
-      =
+  let build_transitive_composition ?(safe_def = false)
+      ({ def_test; value_comp } : expression_composition) =
     (* `safe_def` can be set on call when we are sure that `value_comp` will
        always happen to be zero when `def_test` ends up false. E.g. arithmetic
        operation have such semantic property (funny question is what's the
        causality ?). This allows to remove a check to the definition flag when
        we compute the value, avoiding a lot of unnecessary code. *)
-    (* let value_is_atomic =
-     *   match fst value_comp with
-     *   | Done | Dzero | Dlit _ | Dvar _ -> true
-     *   | _ -> false
-     * in
-     * let def_test, value_comp, assign =
-     *   match fst def_test with
-     *   | Done -> (def_test, value_comp, false)
-     *   | _ ->
-     *       let def_v = fresh_inter_var () in
-     *       let def_test = local_var def_v Def def_test in
-     *       let value_comp =
-     *         if safe_def || value_is_atomic then value_comp
-     *         else ite def_test value_comp zero
-     *       in
-     *       (def_test, value_comp, true)
-     * in
-     * let value_comp, assign =
-     *   if value_is_atomic then (value_comp, assign)
-     *   else
-     *     let expr_v = fresh_inter_var () in
-     *     (local_var expr_v Val value_comp, true)
-     * in *)
     let value_comp =
-      if safe_def then value_comp else ite def_test value_comp zero
+      if safe_def then value_comp else ite def_test value_comp (lit 0.)
     in
     { def_test; value_comp }
 
-  let build_expression expr_comp =
+  let build_expression (expr_comp : expression_composition) =
     let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
     let empty_locals = [] in
     ( collapse_constr empty_stacks empty_locals expr_comp.def_test,
@@ -395,11 +384,11 @@ end = struct
              ~def_flag var)
 
   let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
-      (vm : Dgfip_varid.var_id_map) fmt de =
+      (vm : Dgfip_varid.var_id_map) fmt (de : expr) =
     let format_dexpr = format_dexpr dgfip_flags vm in
     match de with
-    | Done -> Format.fprintf fmt "1"
-    | Dzero -> Format.fprintf fmt "0"
+    | Dtrue -> Format.fprintf fmt "1"
+    | Dfalse -> Format.fprintf fmt "0"
     | Dlit f -> (
         match Float.modf f with
         | 0., _ ->
@@ -435,7 +424,8 @@ end = struct
         Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
           format_dexpr det format_dexpr dee
 
-  let format_local_vars_defs dgfip_flags vm fmt (lv : local_vars) =
+  let format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
+      (vm : Dgfip_varid.var_id_map) fmt (lv : local_vars) =
     let lv = List.rev lv in
     let _ =
       List.fold_left
@@ -456,7 +446,9 @@ end = struct
     in
     List.iter (format_one_assign fmt) lv
 
-  let format_assign dgfip_flags var_indexes var fmt (e, lv) =
+  let format_assign (dgfip_flags : Dgfip_options.flags)
+      (var_indexes : Dgfip_varid.var_id_map) (var : string) fmt
+      ((e, _kind, lv) : t) =
     Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
       (format_local_vars_defs dgfip_flags var_indexes)
       lv var
@@ -497,7 +489,9 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
-        D.ite se2.value_comp (D.binop "/" se1.value_comp se2.value_comp) D.zero
+        D.ite se2.value_comp
+          (D.binop "/" se1.value_comp se2.value_comp)
+          (D.lit 0.)
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Binop (op, e1, e2) ->
@@ -539,17 +533,17 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       let idx_var = D.new_local () in
       let def_test =
-        D.let_local idx_var Def idx.value_comp
+        D.let_local idx_var idx.value_comp
           (D.dand
              (D.dand idx.def_test
                 (D.binop "<" (D.local_var idx_var) (D.lit (float_of_int size))))
              (D.access (Pos.unmark var) Def (D.local_var idx_var)))
       in
       let value_comp =
-        D.let_local idx_var Val idx.value_comp
+        D.let_local idx_var idx.value_comp
           (D.ite
-             (D.binop "<" (D.local_var idx_var) D.zero)
-             D.zero
+             (D.binop "<" (D.local_var idx_var) (D.lit 0.))
+             (D.lit 0.)
              (D.access (Pos.unmark var) Val (D.local_var idx_var)))
       in
       D.build_transitive_composition { def_test; value_comp }
@@ -567,13 +561,15 @@ let rec generate_c_expr (e : expression Pos.marked)
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
-      let def_test = D.one in
+      let def_test = D.dtrue in
       let value_comp = se.def_test in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp = D.dand def_test (D.binop "==" se.value_comp D.zero) in
+      let value_comp =
+        D.dand def_test (D.binop "==" se.value_comp (D.lit 0.))
+      in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
@@ -611,8 +607,8 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> { def_test = D.one; value_comp = D.lit f }
-  | Literal Undefined -> { def_test = D.zero; value_comp = D.zero }
+  | Literal (Float f) -> { def_test = D.dtrue; value_comp = D.lit f }
+  | Literal Undefined -> { def_test = D.dfalse; value_comp = D.lit 0. }
   | Var var ->
       { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
   | LocalVar lvar ->
@@ -624,8 +620,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let ldef, lval = D.locals_from_m lvar in
       let declare_local constr =
-        D.let_local ldef Def se1.def_test
-          (D.let_local lval Val se1.value_comp constr)
+        D.let_local ldef se1.def_test (D.let_local lval se1.value_comp constr)
       in
       {
         def_test = declare_local se2.def_test;
