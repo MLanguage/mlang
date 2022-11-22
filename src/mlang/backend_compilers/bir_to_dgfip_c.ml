@@ -585,6 +585,11 @@ let rec generate_c_expr (e : expression Pos.marked)
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       (* same as above *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      let se = generate_c_expr arg var_indexes in
+      let def_test = se.def_test in
+      let value_comp = D.dfun "fabs" [ se.value_comp ] in
+      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in

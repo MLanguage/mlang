@@ -128,6 +128,10 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
       (se2, s2)
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      let se, s = generate_java_expr arg in
+      let se2, s2 = (Format.asprintf "m_abs(%s)" se, s) in
+      (se2, s2)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in

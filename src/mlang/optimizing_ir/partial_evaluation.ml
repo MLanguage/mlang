@@ -599,7 +599,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                  !Cli.round_ops)
           else
             match func with
-            | ArrFunc | InfFunc | MinFunc | MaxFunc | Multimax ->
+            | AbsFunc | ArrFunc | InfFunc | MinFunc | MaxFunc | Multimax ->
                 (Pos.unmark new_e, List.hd new_ds)
             | PresentFunc -> (
                 match List.hd new_ds with
