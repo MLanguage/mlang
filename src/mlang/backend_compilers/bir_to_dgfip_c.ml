@@ -240,8 +240,14 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
 let generate_var_cond (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (cond : condition_data)
     (oc : Format.formatter) =
-  let locals, def, value =
-    D.build_expression @@ generate_c_expr cond.cond_expr var_indexes
+  let econd = generate_c_expr cond.cond_expr var_indexes in
+  let locals, _def, value =
+    D.build_expression
+    @@ D.build_transitive_composition ~safe_def:true
+         {
+           def_test = D.dtrue;
+           value_comp = D.dand econd.def_test (D.dnot econd.value_comp);
+         }
   in
   let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
   let code =
@@ -251,10 +257,8 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
         Format.sprintf "\"%s\""
           (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
   in
-  Format.fprintf oc "%a%a@,@[<v>@,%a@]@,@[<v 2>if(cond_def && (cond != 0.0)){@,"
-    D.format_local_declarations locals
-    (D.format_assign dgfip_flags var_indexes "cond_def")
-    def
+  Format.fprintf oc "%a%a@,@[<v 2>if(cond){@," D.format_local_declarations
+    locals
     (D.format_assign dgfip_flags var_indexes "cond")
     value;
   Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" erreur code
@@ -329,8 +333,7 @@ let generate_rov_function (dgfip_flags : Dgfip_options.flags)
     match rov.rov_code with
     | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@,return 0;")
     | Verif _ ->
-        ( (fun fmt () -> Format.fprintf fmt "int cond_def;@ double cond;@;"),
-          noprint )
+        ((fun fmt () -> Format.fprintf fmt "register int cond;@;"), noprint)
   in
   Format.fprintf oc "@[<v 2>%a{@,%a%a%a@]@,}"
     (generate_rov_function_header ~definition:true)
