@@ -348,26 +348,6 @@ let generate_rov_functions (dgfip_flags : Dgfip_options.flags)
     oc rovs;
   Format.fprintf oc "@]"
 
-let generate_main_function_signature (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_extracted(T_irdata* irdata)%s"
-    (if add_semicolon then ";" else "")
-
-let _generate_main_function_signature_and_var_decls (oc : Format.formatter) () =
-  Format.fprintf oc "%a {@\n@[<h 4>    @\n" generate_main_function_signature
-    false;
-  Format.fprintf oc "int cond_def;@\ndouble cond;@\n@\n";
-  Format.fprintf oc
-    {|
-  #ifdef ANOMALY_LIMIT
-  int anomaly_count = 0;
-  int max_anomalies = ANOMALY_LIMIT;
-  #endif /* ANOMALY_LIMIT */
-|}
-
-let _generate_return (oc : Format.formatter) () =
-  Format.fprintf oc "@\nreturn 0;@]@\n}\n"
-
 let generate_header (oc : Format.formatter) () : unit =
   Format.fprintf oc
     {|
@@ -393,141 +373,6 @@ double my_var1;
 
 let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
-
-let _generate_get_input_index_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_get_input_index(char *name)%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_input_name_from_index_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "char* m_get_input_name_from_index(int index)%s"
-    (if add_semicolon then ";\n" else "")
-
-let generate_get_input_num_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_num_inputs()%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_input_num_func (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
-  in
-  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n}@\n@\n"
-    generate_get_input_num_prototype false (List.length input_vars)
-
-let generate_get_output_index_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_get_output_index(char *name)%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_output_index_func (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
-  in
-  Format.fprintf oc
-    "%a {@\n\
-     @[<h 4>    %a@\n\
-     printf(\"Output var %%s not found!\\n\", name);@\n\
-     exit(-1);@]@\n\
-     }@\n\
-     @\n"
-    generate_get_output_index_prototype false
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, i) ->
-         Format.fprintf fmt "if (strcmp(\"%s\", name) == 0) { return %d; }"
-           (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
-           i))
-    (List.mapi (fun i x -> (x, i)) output_vars)
-
-let generate_get_output_name_from_index_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "char* m_get_output_name_from_index(int index)%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_output_name_from_index_func (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
-  in
-  Format.fprintf oc
-    "%a {@\n\
-     @[<h 4>    %a@\n\
-     printf(\"Output index %%d not found!\\n\", index);@\n\
-     exit(-1);@]@\n\
-     }@\n\
-     @\n"
-    generate_get_output_name_from_index_prototype false
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-       (fun fmt (var, i) ->
-         Format.fprintf fmt "if (index == %d) { return \"%s\"; }" i
-           (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)))
-    (List.mapi (fun i x -> (x, i)) output_vars)
-
-let generate_get_output_num_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_num_outputs()%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_output_num_func (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let output_vars =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
-  in
-  Format.fprintf oc "%a {@\n@[<h 4>    return %d;@]@\n}@\n@\n"
-    generate_get_output_num_prototype false (List.length output_vars)
-
-let _error_table_definitions (oc : Format.formatter) (program : program) =
-  let error_set_size =
-    Mir.VariableMap.cardinal program.mir_program.program_conds
-  in
-  Format.fprintf oc "typedef m_error_occurrence error_occurrences[%d];\n"
-    error_set_size;
-  Format.fprintf oc "typedef m_error errors[%d];\n" error_set_size
-
-let print_error_line (oc : Format.formatter) (cond_data : Mir.condition_data) =
-  let err, var = cond_data.cond_error in
-  Format.fprintf oc
-    "{.kind = \"%s\", .major_code = \"%s\", .minor_code = \"%s\", .isisf = \
-     \"%s\",.description = \"%s\", .code_information = %s},@,"
-    (Strings.sanitize_str err.descr.kind)
-    (Strings.sanitize_str err.descr.major_code)
-    (Strings.sanitize_str err.descr.minor_code)
-    (Strings.sanitize_str err.descr.isisf)
-    (Strings.sanitize_str err.descr.description)
-    (match var with
-    | None -> "\"\""
-    | Some v -> (
-        match v.alias with
-        | Some alias -> "\"" ^ alias ^ "\""
-        | None -> assert false))
-
-let _generate_errors_table (oc : Format.formatter) (program : program) =
-  Format.fprintf oc "@[<hv 2>static const errors m_errors = {@,%a@]};"
-    (fun oc conds ->
-      Mir.VariableMap.iter
-        (fun _ cond_data -> print_error_line oc cond_data)
-        conds)
-    program.mir_program.program_conds
-
-let generate_get_error_count_prototype (oc : Format.formatter)
-    (add_semicolon : bool) =
-  Format.fprintf oc "int m_num_errors()%s"
-    (if add_semicolon then ";\n\n" else "")
-
-let _generate_get_error_count_func (oc : Format.formatter) (program : program) =
-  Format.fprintf oc {|
-%a {
-  return %d;
-}
-
-|}
-    generate_get_error_count_prototype false
-    (Mir.VariableMap.cardinal program.mir_program.program_conds)
 
 let generate_mpp_function_protoype (add_semicolon : bool) (return_type : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
@@ -647,32 +492,13 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a@\n@."
     generate_header ()
-    (* error_table_definitions program  *)
-    (* generate_get_input_index_prototype true *)
-    (* generate_get_input_num_prototype true *)
-    (* generate_get_input_name_from_index_prototype true *)
-    (* generate_get_output_index_prototype true *)
-    (* generate_get_output_name_from_index_prototype true *)
-    (* generate_get_output_num_prototype true  *)
-    (* generate_get_error_count_prototype true  *)
     generate_mpp_functions_signatures program
-    (* generate_main_function_signature true  *)
     generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a@\n@."
     generate_implem_header header_filename
-    (* generate_errors_table program *)
-    (* generate_get_error_count_func program  *)
-    (* generate_get_input_num_func function_spec *)
-    (* generate_get_output_index_func function_spec *)
-    (* generate_get_output_name_from_index_func function_spec *)
-    (* generate_get_output_num_func function_spec *)
     (generate_rov_functions dgfip_flags program vm) orphan_rovs
-    (generate_mpp_functions dgfip_flags program) vm
-    (* generate_main_function_signature_and_var_decls ()
-     * (generate_stmt program vm)
-     *   (Bir.SFunctionCall (program.Bir.main_function, []), Pos.no_pos)
-     * generate_return () *) ;
+    (generate_mpp_functions dgfip_flags program) vm;
   close_out _oc[@@ocamlformat "disable"]
