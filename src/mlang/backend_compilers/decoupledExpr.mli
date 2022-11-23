@@ -48,7 +48,15 @@ val dnot : constr -> constr
 
 val minus : constr -> constr
 
-val binop : string -> constr -> constr -> constr
+val plus : constr -> constr -> constr
+
+val sub : constr -> constr -> constr
+
+val mult : constr -> constr -> constr
+
+val div : constr -> constr -> constr
+
+val comp : string -> constr -> constr -> constr
 
 val dfun : string -> constr list -> constr
 

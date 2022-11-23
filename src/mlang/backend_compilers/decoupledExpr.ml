@@ -212,27 +212,58 @@ let minus (e : constr) (st : local_stacks) (ctx : local_vars) : t =
   | Dunop ("-", e) -> (e, Val, lv)
   | _ -> (Dunop ("-", e), Val, lv)
 
-(* TODO optimize neutral ops *)
-let binop op (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars)
-    : t =
+let plus (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
+    =
   let st', lv1, e1 = push_as st ctx Val e1 in
   let _, lv2, e2 = push_as st' ctx Val e2 in
-  let arith o =
-    match (e1, e2) with
-    | Dlit f1, Dlit f2 -> (Dlit (o f1 f2), Val)
-    | _ -> (Dbinop (op, e1, e2), Val)
-  in
+  match (e1, e2) with
+  | Dlit 0., _ -> (e2, Val, lv2)
+  | _, Dlit 0. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 -> (Dlit (f1 +. f2), Val, [])
+  | _ -> (Dbinop ("+", e1, e2), Val, lv2 @ lv1)
+
+let sub (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
+  let st', lv1, e1 = push_as st ctx Val e1 in
+  let _, lv2, e2 = push_as st' ctx Val e2 in
+  match (e1, e2) with
+  | Dlit 0., _ -> (Dunop ("-", e2), Val, lv2)
+  | _, Dlit 0. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 -> (Dlit (f1 -. f2), Val, [])
+  | _ -> (Dbinop ("-", e1, e2), Val, lv2 @ lv1)
+
+let mult (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
+    =
+  let st', lv1, e1 = push_as st ctx Val e1 in
+  let _, lv2, e2 = push_as st' ctx Val e2 in
+  match (e1, e2) with
+  | Dlit 1., _ -> (e2, Val, lv2)
+  | _, Dlit 1. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 -> (Dlit (f1 *. f2), Val, [])
+  | _ -> (Dbinop ("*", e1, e2), Val, lv2 @ lv1)
+
+let div (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
+  let st', lv1, e1 = push_as st ctx Val e1 in
+  let _, lv2, e2 = push_as st' ctx Val e2 in
+  match (e1, e2) with
+  | _, Dlit 1. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 ->
+      let f = if f2 = 0. then 0. else f1 /. f2 in
+      (Dlit f, Val, [])
+  | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
+
+let comp op (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) :
+    t =
+  let st', lv1, e1 = push_as st ctx Val e1 in
+  let _, lv2, e2 = push_as st' ctx Val e2 in
   let comp o =
     match (e1, e2) with
-    | Dlit f1, Dlit f2 -> ((if o f1 f2 then Dtrue else Dfalse), Def)
-    | _ -> (Dbinop (op, e1, e2), Def)
+    | Dlit f1, Dlit f2 -> if o f1 f2 then Dtrue else Dfalse
+    | Dvar v1, Dvar v2 ->
+        if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
+    | _ -> Dbinop (op, e1, e2)
   in
-  let e, kind =
+  let e =
     match op with
-    | "+" -> arith ( +. )
-    | "-" -> arith ( -. )
-    | "*" -> arith ( *. )
-    | "/" -> arith (fun f1 f2 -> if f2 = 0. then 0. else f1 /. f2)
     | "==" -> comp ( = )
     | "!=" -> comp ( <> )
     | "<=" -> comp ( <= )
@@ -241,7 +272,7 @@ let binop op (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars)
     | ">" -> comp ( > )
     | _ -> assert false
   in
-  (e, kind, lv2 @ lv1)
+  (e, Def, lv2 @ lv1)
 
 let dfun (f : string) (args : constr list) (st : local_stacks)
     (ctx : local_vars) : t =

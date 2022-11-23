@@ -40,7 +40,7 @@ let rec generate_c_expr (e : expression Pos.marked)
           | Mast.Eq -> "=="
           | Mast.Neq -> "!="
         in
-        D.binop op se1.value_comp se2.value_comp
+        D.comp op se1.value_comp se2.value_comp
       in
       D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Binop ((Mast.Div, _), e1, e2) ->
@@ -48,9 +48,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
-        D.ite se2.value_comp
-          (D.binop "/" se1.value_comp se2.value_comp)
-          (D.lit 0.)
+        D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Binop (op, e1, e2) ->
@@ -67,9 +65,9 @@ let rec generate_c_expr (e : expression Pos.marked)
         match Pos.unmark op with
         | Mast.And -> D.dand e1 e2
         | Mast.Or -> D.dor e1 e2
-        | Mast.Add -> D.binop "+" e1 e2
-        | Mast.Sub -> D.binop "-" e1 e2
-        | Mast.Mul -> D.binop "*" e1 e2
+        | Mast.Add -> D.plus e1 e2
+        | Mast.Sub -> D.sub e1 e2
+        | Mast.Mul -> D.mult e1 e2
         | Mast.Div -> assert false
         (* see above *)
       in
@@ -95,13 +93,13 @@ let rec generate_c_expr (e : expression Pos.marked)
         D.let_local idx_var idx.value_comp
           (D.dand
              (D.dand idx.def_test
-                (D.binop "<" (D.local_var idx_var) (D.lit (float_of_int size))))
+                (D.comp "<" (D.local_var idx_var) (D.lit (float_of_int size))))
              (D.access (Pos.unmark var) Def (D.local_var idx_var)))
       in
       let value_comp =
         D.let_local idx_var idx.value_comp
           (D.ite
-             (D.binop "<" (D.local_var idx_var) (D.lit 0.))
+             (D.comp "<" (D.local_var idx_var) (D.lit 0.))
              (D.lit 0.)
              (D.access (Pos.unmark var) Val (D.local_var idx_var)))
       in
@@ -126,9 +124,7 @@ let rec generate_c_expr (e : expression Pos.marked)
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp =
-        D.dand def_test (D.binop "==" se.value_comp (D.lit 0.))
-      in
+      let value_comp = D.dand def_test (D.comp "==" se.value_comp (D.lit 0.)) in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
