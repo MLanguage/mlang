@@ -383,7 +383,7 @@ let format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
       (fun seen (_, { slot; _ }) ->
         if List.mem slot seen then seen
         else begin
-          Format.fprintf fmt "@[<hov 2>%s %a;@]@,"
+          Format.fprintf fmt "@[<hov 2>register %s %a;@]@,"
             (match slot.kind with Def -> "int" | Val -> "double")
             format_slot slot;
           slot :: seen
