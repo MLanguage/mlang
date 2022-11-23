@@ -138,8 +138,9 @@ let collapse_constr (st : local_stacks) (ctx : local_vars) (constr : constr) =
 let push_as (st : local_stacks) (ctx : local_vars) (kind : dflag)
     (constr : constr) =
   let expr, ekind, lv = constr st ctx in
+  let st, lv, expr = store_local st lv Anon kind expr in
   let expr = if kind = ekind then expr else cast kind expr in
-  store_local st lv Anon kind expr
+  (st, lv, expr)
 
 (** smart constructors *)
 

@@ -251,8 +251,7 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
         Format.sprintf "\"%s\""
           (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
   in
-  Format.fprintf oc
-    "%a%a@,@[<hov 2>{@,%a@]@,}@,@[<hov 2>if(cond_def && (cond != 0.0)){@,"
+  Format.fprintf oc "%a%a@,@[<v>@,%a@]@,@[<v 2>if(cond_def && (cond != 0.0)){@,"
     D.format_local_declarations locals
     (D.format_assign dgfip_flags var_indexes "cond_def")
     def
