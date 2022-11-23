@@ -18,6 +18,8 @@ type local_var
 
 type t
 
+type local_decls
+
 type constr
 
 type expression_composition = { def_test : constr; value_comp : constr }
@@ -67,7 +69,9 @@ val ite : constr -> constr -> constr -> constr
 val build_transitive_composition :
   ?safe_def:bool -> expression_composition -> expression_composition
 
-val build_expression : expression_composition -> t * t
+val build_expression : expression_composition -> local_decls * t * t
+
+val format_local_declarations : Format.formatter -> local_decls -> unit
 
 val format_assign :
   Dgfip_options.flags ->

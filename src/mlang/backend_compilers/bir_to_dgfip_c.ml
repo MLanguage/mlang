@@ -192,15 +192,17 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
     (oc : Format.formatter) (se : D.expression_composition) : unit =
   let def_var = D.generate_variable ~def_flag:true var_indexes offset var in
   let val_var = D.generate_variable var_indexes offset var in
-  let def, value = D.build_expression se in
+  let locals, def, value = D.build_expression se in
   if D.is_always_true def then
-    Format.fprintf oc "%a@,@[<v 2>{@,%a@,@]}"
+    Format.fprintf oc "%a%a@,@[<v 2>{@,%a@,@]}" D.format_local_declarations
+      locals
       (D.format_assign dgfip_flags var_indexes def_var)
       def
       (D.format_assign dgfip_flags var_indexes val_var)
       value
   else
-    Format.fprintf oc "%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
+    Format.fprintf oc "%a%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
+      D.format_local_declarations locals
       (D.format_assign dgfip_flags var_indexes def_var)
       def def_var
       (D.format_assign dgfip_flags var_indexes val_var)
@@ -238,7 +240,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
 let generate_var_cond (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (cond : condition_data)
     (oc : Format.formatter) =
-  let def, value =
+  let locals, def, value =
     D.build_expression @@ generate_c_expr cond.cond_expr var_indexes
   in
   let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
@@ -250,7 +252,8 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
           (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
   in
   Format.fprintf oc
-    "%a@,@[<hov 2>{@,%a@]@,}@,@[<hov 2>if(cond_def && (cond != 0.0)){@,"
+    "%a%a@,@[<hov 2>{@,%a@]@,}@,@[<hov 2>if(cond_def && (cond != 0.0)){@,"
+    D.format_local_declarations locals
     (D.format_assign dgfip_flags var_indexes "cond_def")
     def
     (D.format_assign dgfip_flags var_indexes "cond")
@@ -276,11 +279,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       Format.fprintf oc "@[<v 2>{@,";
       let cond_val = fresh_c_local "mpp_cond" in
       let cond_def = cond_val ^ "_d" in
-      let def, value =
+      let locals, def, value =
         D.build_expression
         @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
       in
-      Format.fprintf oc "%a@;%a"
+      Format.fprintf oc "%a%a@;%a" D.format_local_declarations locals
         (D.format_assign dgfip_flags var_indexes cond_def)
         def
         (D.format_assign dgfip_flags var_indexes cond_val)

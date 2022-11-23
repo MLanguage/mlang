@@ -67,6 +67,8 @@ and expr_var = Local of stack_slot | M of Bir.variable * offset * dflag
 
 and t = expr * dflag * local_vars
 
+and local_decls = int * int
+
 and constr = local_stacks -> local_vars -> t
 
 type expression_composition = { def_test : constr; value_comp : constr }
@@ -304,7 +306,8 @@ let ite (c : constr) (t : constr) (e : constr) (st : local_stacks)
   | _ -> (Dite (c, t, e), Val, lve @ lvt @ lvc)
 
 let build_transitive_composition ?(safe_def = false)
-    ({ def_test; value_comp } : expression_composition) =
+    ({ def_test; value_comp } : expression_composition) : expression_composition
+    =
   (* `safe_def` can be set on call when we are sure that `value_comp` will
      always happen to be zero when `def_test` ends up false. E.g. arithmetic
      operation have such semantic property (funny question is what's the
@@ -315,11 +318,26 @@ let build_transitive_composition ?(safe_def = false)
   in
   { def_test; value_comp }
 
-let build_expression (expr_comp : expression_composition) =
+let build_expression (expr_comp : expression_composition) : local_decls * t * t
+    =
   let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
   let empty_locals = [] in
-  ( collapse_constr empty_stacks empty_locals expr_comp.def_test,
-    collapse_constr empty_stacks empty_locals expr_comp.value_comp )
+  let ((_, _, def_locals) as def_test) =
+    collapse_constr empty_stacks empty_locals expr_comp.def_test
+  in
+  let ((_, _, value_locals) as value_comp) =
+    collapse_constr empty_stacks empty_locals expr_comp.value_comp
+  in
+  let stacks_size =
+    List.fold_left
+      (fun (def_s, val_s) (_, { slot; _ }) ->
+        match slot.kind with
+        | Def -> (max slot.depth def_s, val_s)
+        | Val -> (def_s, max slot.depth val_s))
+      (0, 0)
+      (def_locals @ value_locals)
+  in
+  (stacks_size, def_test, value_comp)
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
   let kind = match kind with Def -> "int" | Val -> "real" in
@@ -375,21 +393,18 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
 
+let rec format_local_declarations fmt ((def_s, val_s) : local_decls) =
+  if def_s >= 0 then (
+    Format.fprintf fmt "@[<hov 2>register int int%d;@]@," def_s;
+    format_local_declarations fmt (def_s - 1, val_s))
+  else if val_s >= 0 then (
+    Format.fprintf fmt "@[<hov 2>register double real%d;@]@," val_s;
+    format_local_declarations fmt (def_s, val_s - 1))
+  else ()
+
 let format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
     (vm : Dgfip_varid.var_id_map) fmt (lv : local_vars) =
   let lv = List.rev lv in
-  let _ =
-    List.fold_left
-      (fun seen (_, { slot; _ }) ->
-        if List.mem slot seen then seen
-        else begin
-          Format.fprintf fmt "@[<hov 2>register %s %a;@]@,"
-            (match slot.kind with Def -> "int" | Val -> "double")
-            format_slot slot;
-          slot :: seen
-        end)
-      [] lv
-  in
   let format_one_assign fmt (_, { slot; subexpr }) =
     Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
       (format_dexpr dgfip_flags vm)
