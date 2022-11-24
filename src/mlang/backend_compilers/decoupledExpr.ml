@@ -189,6 +189,7 @@ let dand (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
   | Dtrue, _ -> (e2, Def, lv2)
   | _, Dtrue -> (e1, Def, lv1)
   | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
+  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
   | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
 
 let dor (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
@@ -198,6 +199,7 @@ let dor (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
   | Dtrue, _ | _, Dtrue -> (Dtrue, Def, [])
   | Dfalse, _ -> (e2, Def, lv2)
   | _, Dfalse -> (e1, Def, lv1)
+  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
   | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
 
 let dnot (e : constr) (st : local_stacks) (ctx : local_vars) : t =
