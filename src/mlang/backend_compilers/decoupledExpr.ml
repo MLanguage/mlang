@@ -135,12 +135,17 @@ let collapse_constr (st : local_stacks) (ctx : local_vars) (constr : constr) =
   let expr, kind, lv = constr st ctx in
   (expr, kind, lv @ ctx)
 
-let push_as (st : local_stacks) (ctx : local_vars) (kind : dflag)
+let push_with_kind (st : local_stacks) (ctx : local_vars) (kind : dflag)
     (constr : constr) =
   let expr, ekind, lv = constr st ctx in
   let st, lv, expr = store_local st lv Anon kind expr in
   let expr = if kind = ekind then expr else cast kind expr in
   (st, lv, expr)
+
+let push (st : local_stacks) (ctx : local_vars) (constr : constr) =
+  let expr, kind, lv = constr st ctx in
+  let st, lv, expr = store_local st lv Anon kind expr in
+  (st, lv, expr, kind)
 
 (** smart constructors *)
 
@@ -183,8 +188,8 @@ let local_var (lvar : local_var) (st : local_stacks) (ctx : local_vars) : t =
 
 let dand (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
     =
-  let st', lv1, e1 = push_as st ctx Def e1 in
-  let _, lv2, e2 = push_as st' ctx Def e2 in
+  let st', lv1, e1 = push_with_kind st ctx Def e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Def e2 in
   match (e1, e2) with
   | Dtrue, _ -> (e2, Def, lv2)
   | _, Dtrue -> (e1, Def, lv1)
@@ -193,8 +198,8 @@ let dand (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
   | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
 
 let dor (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
-  let st', lv1, e1 = push_as st ctx Def e1 in
-  let _, lv2, e2 = push_as st' ctx Def e2 in
+  let st', lv1, e1 = push_with_kind st ctx Def e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Def e2 in
   match (e1, e2) with
   | Dtrue, _ | _, Dtrue -> (Dtrue, Def, [])
   | Dfalse, _ -> (e2, Def, lv2)
@@ -203,7 +208,7 @@ let dor (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
   | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
 
 let dnot (e : constr) (st : local_stacks) (ctx : local_vars) : t =
-  let _, lv, e = push_as st ctx Def e in
+  let _, lv, e = push_with_kind st ctx Def e in
   match e with
   | Dtrue -> (Dfalse, Def, [])
   | Dfalse -> (Dtrue, Def, [])
@@ -211,7 +216,7 @@ let dnot (e : constr) (st : local_stacks) (ctx : local_vars) : t =
   | _ -> (Dunop ("!", e), Def, lv)
 
 let minus (e : constr) (st : local_stacks) (ctx : local_vars) : t =
-  let _, lv, e = push_as st ctx Val e in
+  let _, lv, e = push_with_kind st ctx Val e in
   match e with
   | Dlit f -> (Dlit (-.f), Val, [])
   | Dunop ("-", e) -> (e, Val, lv)
@@ -219,8 +224,8 @@ let minus (e : constr) (st : local_stacks) (ctx : local_vars) : t =
 
 let plus (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
     =
-  let st', lv1, e1 = push_as st ctx Val e1 in
-  let _, lv2, e2 = push_as st' ctx Val e2 in
+  let st', lv1, e1 = push_with_kind st ctx Val e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   match (e1, e2) with
   | Dlit 0., _ -> (e2, Val, lv2)
   | _, Dlit 0. -> (e1, Val, lv1)
@@ -228,8 +233,8 @@ let plus (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
   | _ -> (Dbinop ("+", e1, e2), Val, lv2 @ lv1)
 
 let sub (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
-  let st', lv1, e1 = push_as st ctx Val e1 in
-  let _, lv2, e2 = push_as st' ctx Val e2 in
+  let st', lv1, e1 = push_with_kind st ctx Val e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   match (e1, e2) with
   | Dlit 0., _ -> (Dunop ("-", e2), Val, lv2)
   | _, Dlit 0. -> (e1, Val, lv1)
@@ -238,8 +243,8 @@ let sub (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
 
 let mult (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
     =
-  let st', lv1, e1 = push_as st ctx Val e1 in
-  let _, lv2, e2 = push_as st' ctx Val e2 in
+  let st', lv1, e1 = push_with_kind st ctx Val e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   match (e1, e2) with
   | Dlit 1., _ -> (e2, Val, lv2)
   | _, Dlit 1. -> (e1, Val, lv1)
@@ -247,8 +252,8 @@ let mult (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
   | _ -> (Dbinop ("*", e1, e2), Val, lv2 @ lv1)
 
 let div (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
-  let st', lv1, e1 = push_as st ctx Val e1 in
-  let _, lv2, e2 = push_as st' ctx Val e2 in
+  let st', lv1, e1 = push_with_kind st ctx Val e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   match (e1, e2) with
   | _, Dlit 1. -> (e1, Val, lv1)
   | Dlit f1, Dlit f2 ->
@@ -258,8 +263,8 @@ let div (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
 
 let comp op (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) :
     t =
-  let st', lv1, e1 = push_as st ctx Val e1 in
-  let _, lv2, e2 = push_as st' ctx Val e2 in
+  let st', lv1, e1 = push_with_kind st ctx Val e1 in
+  let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   let comp o =
     match (e1, e2) with
     | Dlit f1, Dlit f2 -> if o f1 f2 then Dtrue else Dfalse
@@ -284,7 +289,7 @@ let dfun (f : string) (args : constr list) (st : local_stacks)
   let (_, lv), args =
     List.fold_left_map
       (fun (st, lv) e ->
-        let st, lv', e = push_as st ctx Val e in
+        let st, lv', e = push_with_kind st ctx Val e in
         ((st, lv' @ lv), e))
       (st, []) args
   in
@@ -293,20 +298,24 @@ let dfun (f : string) (args : constr list) (st : local_stacks)
 
 let access (var : Bir.variable) (df : dflag) (e : constr) (st : local_stacks)
     (ctx : local_vars) : t =
-  let _, lv, e = push_as st ctx Val e in
+  let _, lv, e = push_with_kind st ctx Val e in
   (Daccess (var, df, e), df, lv)
 
 let ite (c : constr) (t : constr) (e : constr) (st : local_stacks)
     (ctx : local_vars) : t =
-  let st', lvc, c = push_as st ctx Def c in
-  let st', lvt, t = push_as st' ctx Val t in
-  let _, lve, e = push_as st' ctx Val e in
+  let st', lvc, c = push_with_kind st ctx Def c in
+  let st', lvt, t, tkind = push st' ctx t in
+  let _, lve, e, ekind = push st' ctx e in
+  let ite_kind =
+    if tkind = ekind then tkind
+    else (* this will happen. Staying on the safe side *) Val
+  in
   match (c, t, e) with
-  | Dtrue, _, _ -> (t, Val, lvt)
-  | Dfalse, _, _ -> (e, Val, lve)
-  | _, Dlit 1., Dlit 0. -> (c, Val, lvc)
-  | _, Dlit f, Dlit f' when f = f' -> (Dlit f, Val, [])
-  | _ -> (Dite (c, t, e), Val, lve @ lvt @ lvc)
+  | Dtrue, _, _ -> (t, tkind, lvt)
+  | Dfalse, _, _ -> (e, ekind, lve)
+  | _, Dlit 1., Dlit 0. -> (c, Def, lvc)
+  | _, Dlit f, Dlit f' when f = f' -> (Dlit f, ite_kind, [])
+  | _ -> (Dite (c, t, e), ite_kind, lve @ lvt @ lvc)
 
 let build_transitive_composition ?(safe_def = false)
     ({ def_test; value_comp } : expression_composition) : expression_composition
