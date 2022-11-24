@@ -346,7 +346,7 @@ let build_expression (expr_comp : expression_composition) : local_decls * t * t
         match slot.kind with
         | Def -> (max slot.depth def_s, val_s)
         | Val -> (def_s, max slot.depth val_s))
-      (0, 0)
+      (-1, -1)
       (def_locals @ value_locals)
   in
   (stacks_size, def_test, value_comp)
