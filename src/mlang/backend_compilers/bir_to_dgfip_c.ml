@@ -246,7 +246,7 @@ let generate_var_cond (dgfip_flags : Dgfip_options.flags)
     @@ D.build_transitive_composition ~safe_def:true
          {
            def_test = D.dtrue;
-           value_comp = D.dand econd.def_test (D.dnot econd.value_comp);
+           value_comp = D.dand econd.def_test econd.value_comp;
          }
   in
   let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
