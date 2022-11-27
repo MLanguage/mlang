@@ -10,7 +10,7 @@ cal:
 	./build.sh
 
 run_tests: cal
-	 ./cal ${TEST_FILES} || (echo "Test failure" && false)
+	 ./cal ${TEST_FILES}
 
 clean:
 	./build.sh cleanall
