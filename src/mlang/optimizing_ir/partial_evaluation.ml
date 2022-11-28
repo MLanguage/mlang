@@ -312,7 +312,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
                 (Bir_interpreter.evaluate_expr p
                    (Pos.same_pos_as (Mir.Binop (op, new_e1, new_e2)) e1)
                    !Cli.value_sort !Cli.round_ops)
-              (* first all the combinations giving undefined *)
+          (* first all the combinations giving undefined *)
           | Mast.And, (Literal Undefined, _ | _, Undefined), _
           | Mast.And, _, (Literal Undefined, _ | _, Undefined)
           | Mast.Mul, _, (Literal Undefined, _ | _, Undefined)
@@ -327,8 +327,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
           | Mast.Or, _, (Literal Undefined, _ | _, Undefined)
           | Mast.Or, (_, Float), (Literal (Float 0.), _) ->
               (Pos.unmark new_e1, d1)
-          | Mast.Or, (Literal (Float _), _), _
-          | Mast.Or, _, (Literal (Float _), _) ->
+          | Mast.Or, (Literal (Float _), _), (_, Float)
+          | Mast.Or, (_, Float), (Literal (Float _), _) ->
               from_literal Mir.true_literal
           (* logican and *)
           | Mast.And, (Literal (Float 0.), _), _
