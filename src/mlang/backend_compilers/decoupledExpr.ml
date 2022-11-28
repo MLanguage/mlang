@@ -224,11 +224,14 @@ let minus (e : constr) (st : local_stacks) (ctx : local_vars) : t =
 
 let plus (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
     =
+  (* This optimisation causes some valuation to end at -0.0 where +0.0 was
+     expected. Staying conservative for now *)
+  let reduce_zero_add = false in
   let st', lv1, e1 = push_with_kind st ctx Val e1 in
   let _, lv2, e2 = push_with_kind st' ctx Val e2 in
   match (e1, e2) with
-  | Dlit 0., _ -> (e2, Val, lv2)
-  | _, Dlit 0. -> (e1, Val, lv1)
+  | Dlit 0., _ when reduce_zero_add -> (e2, Val, lv2)
+  | _, Dlit 0. when reduce_zero_add -> (e1, Val, lv1)
   | Dlit f1, Dlit f2 -> (Dlit (f1 +. f2), Val, [])
   | _ -> (Dbinop ("+", e1, e2), Val, lv2 @ lv1)
 
