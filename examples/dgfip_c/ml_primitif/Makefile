@@ -6,11 +6,11 @@ else
     TEST_FILES=$(TESTS_DIR)*
 endif
 
-prim:
+cal:
 	./build.sh
 
-run_tests: prim
-	 ./prim ${TEST_FILES} || (echo "Test failure" && false)
+run_tests: cal
+	 ./cal ${TEST_FILES} || (echo "Test failure" && false)
 
 clean:
-	./build.sh clean
+	./build.sh cleanall

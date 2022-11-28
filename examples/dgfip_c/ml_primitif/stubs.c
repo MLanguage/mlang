@@ -9,6 +9,7 @@
 #include "caml/mlvalues.h"
 #include "caml/memory.h"
 #include "caml/alloc.h"
+#include "caml/callback.h"
 #include "caml/fail.h"
 #include "caml/custom.h"
 
@@ -181,8 +182,6 @@ static size_t var_index_size = 0;
 
 static bool var_chargees = false;
 
-/* static T_irdata *tgv = NULL; */
-
 #define Tgv_val(v) (*((T_irdata **) Data_custom_val(v)))
 
 static void finalize_tgv(value tgv_block){
@@ -218,14 +217,6 @@ ml_tgv_alloc(void){
   mlTgv = alloc_tgv();
   CAMLreturn(mlTgv);
 }
-
-/* CAMLprim value */
-/* ml_tgv_alloc(void){ */
-/*   CAMLparam0(); */
-/*   tgv = IRDATA_new_irdata(); */
-/*   IRDATA_reset_irdata(tgv); */
-/*   CAMLreturnT ((T_irdata *), tgv); */
-/* } */
 
 static genre_t convert_genre(int indice)
 {
@@ -783,11 +774,32 @@ ml_tgv_reset_calculee(value mlTgv)
 }
 
 CAMLprim value
+ml_tgv_reset_saisie_calculee(value mlTgv)
+{
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  IRDATA_reset_light(tgv);
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value
 ml_tgv_reset_base(value mlTgv)
 {
   CAMLparam1(mlTgv);
   T_irdata *tgv = Tgv_val(mlTgv);
   IRDATA_reset_base(tgv);
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value
+ml_tgv_copy(value mlSTgv, value mlDTgv)
+{
+  CAMLparam2(mlSTgv, mlDTgv);
+
+  T_irdata *stgv = Tgv_val(mlSTgv);
+  T_irdata *dtgv = Tgv_val(mlDTgv);
+  IRDATA_recopie_irdata(stgv, dtgv);
+
   CAMLreturn(Val_unit);
 }
 
@@ -826,6 +838,7 @@ ml_exec_verif(
   value mlTgv)
 {
   CAMLparam2(mlVerif, mlTgv);
+  CAMLlocal2(mlErrListTemp, mlErrListOut);
 
   init_var_dict();
 
@@ -846,8 +859,18 @@ ml_exec_verif(
 
   struct S_discord * erreurs = verifications[i].function(tgv);
 
-// TODO: renvoyer les erreurs
-  CAMLreturn(Val_unit);
+  mlErrListOut = Val_emptylist;
+  while (erreurs != NULL) {
+    if (erreurs->erreur != NULL) {
+      mlErrListTemp = caml_alloc_small(2, Tag_cons); // add code ?
+      Field(mlErrListTemp, 0) = caml_copy_string(erreurs->erreur->nom);
+      Field(mlErrListTemp, 1) = mlErrListOut;
+      mlErrListOut = mlErrListTemp;
+    }
+    erreurs = erreurs->suivant;
+  }
+
+  CAMLreturn(mlErrListOut);
 }
 
 CAMLprim value
@@ -855,4 +878,122 @@ ml_annee_calc(void)
 {
   CAMLparam0();
   CAMLreturn(Val_int(ANNEE_REVENU));
+}
+
+
+
+
+
+static void
+dump_vars(
+  void)
+{
+  static bool dumped = false;
+
+  if (dumped == true) {
+    return;
+  }
+  dumped = true;
+
+  size_t nb_vars = sizeof(var) / ((void *)(var + 1) - (void *)var);
+
+  char *dump = calloc(nb_vars, 32);
+
+  for (size_t i = 0; i < nb_vars; ++i) {
+    if (var[i].code != NULL) {
+
+      int indice = var[i].desc->indice & INDICE_VAL;
+      if (var[i].indice_tab > 0) indice += var[i].indice_tab;
+      switch (var[i].desc->indice & EST_MASQUE) {
+        case EST_SAISIE: break;
+        case EST_CALCULEE: indice += TAILLE_SAISIE; break;
+        case EST_BASE: indice += TAILLE_SAISIE + TAILLE_CALCULEE; break;
+        default: fprintf(stderr, "Code indéfini indice %ld\n", i); exit(1);
+      }
+
+      if (var[i].indice_tab < 0) {
+        snprintf(&dump[indice * 32], 32, "%05x %s", indice * 8, var[i].code);
+      } else {
+        snprintf(&dump[indice * 32], 32, "%05x %s[%d]", indice * 8,
+                 var[i].code, var[i].indice_tab);
+      }
+
+    } else {
+      fprintf(stderr, "Code indéfini indice %ld\n", i);
+      exit(1);
+    }
+  }
+
+  for (int i = 0; i < nb_vars * 32; ++i) {
+    if (dump[i] == '\0') {
+      dump[i] = ' ';
+    }
+  }
+  for (int i = 0; i < nb_vars * 32; i += 32) {
+    dump[i+31] = '\n';
+  }
+
+  FILE *f = fopen("vars.txt", "wb");
+  fwrite(dump, 32, nb_vars, f);
+  fclose(f);
+
+  free(dump);
+}
+
+static void
+dump_array(
+  char *def,
+  double *val,
+  size_t size,
+  FILE *f)
+{
+  static const char undef[16] =
+    { 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF,
+      0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF };
+  for (size_t i = 0; i < size; ++i) {
+    if (def[i]) {
+      fwrite(&val[i], sizeof(double), 1, f);
+    } else {
+      fwrite(undef, 1, sizeof(double), f);
+    }
+  }
+}
+
+CAMLprim value
+ml_dump_raw_tgv(
+  value mlFilename,
+  value mlTgv,
+  value mlErrList)
+{
+  CAMLparam3(mlFilename, mlTgv, mlErrList);
+  CAMLlocal1(mlErrListTemp);
+
+  init_var_dict();
+  dump_vars();
+
+  const char *filename = String_val(mlFilename);
+  T_irdata *tgv = Tgv_val(mlTgv);
+
+  const char undef[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF };
+  FILE *f = fopen(filename, "wb");
+  if (f == NULL) {
+    printf("Can't open file %s\n", filename);
+    CAMLreturn(Val_unit);
+  }
+  dump_array(tgv->def_saisie, tgv->saisie, TAILLE_SAISIE, f);
+  dump_array(tgv->def_calculee, tgv->calculee, TAILLE_CALCULEE, f);
+  dump_array(tgv->def_base, tgv->base, TAILLE_BASE, f);
+
+  mlErrListTemp = mlErrList;
+  while (mlErrListTemp != Val_emptylist) {
+    const char *err = String_val(Field(mlErrListTemp, 0));
+    char data[32] = { 0 };
+    memcpy(data, err, strlen(err));
+    fwrite(data, sizeof(char), 8, f);
+    mlErrListTemp = Field(mlErrListTemp, 1);
+  }
+
+  fclose(f);
+
+  CAMLreturn(Val_unit);
 }
