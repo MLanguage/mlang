@@ -117,11 +117,16 @@ let expr_position (expr : expr) (st : local_stacks) =
       else Must_be_pushed
   | _ -> Must_be_pushed
 
+(* allocate to local variable if necessary *)
 let store_local (st : local_stacks) (ctx : local_vars) (v : local_var)
     (kind : dflag) (subexpr : expr) =
+  (* we allocate only expression that are non-atomic *)
   match expr_position subexpr st with
   | Not_to_stack -> (add_substitution st v kind subexpr, ctx, subexpr)
   | On_top kind ->
+      (* this happens when a subexpression is lifted through several
+         constructors. e.g. [ 0 || (0 || e) ] where [e] is allocated and is
+         trivially lifted from the or constructors. *)
       (add_substitution st v kind subexpr |> bump_stack kind, ctx, subexpr)
   | Must_be_pushed ->
       let depth = stack_top kind st in
@@ -131,10 +136,14 @@ let store_local (st : local_stacks) (ctx : local_vars) (v : local_var)
       let ctx = (v, assignment) :: ctx in
       (st, ctx, Dvar (Local slot))
 
+(* the following functions resolve [constr] values by applying them to a given
+   context (both stacks state and existing local allocations) *)
+
 let collapse_constr (st : local_stacks) (ctx : local_vars) (constr : constr) =
   let expr, kind, lv = constr st ctx in
   (expr, kind, lv @ ctx)
 
+(* eval and store with enforced kind *)
 let push_with_kind (st : local_stacks) (ctx : local_vars) (kind : dflag)
     (constr : constr) =
   let expr, ekind, lv = constr st ctx in
@@ -142,6 +151,7 @@ let push_with_kind (st : local_stacks) (ctx : local_vars) (kind : dflag)
   let expr = if kind = ekind then expr else cast kind expr in
   (st, lv, expr)
 
+(* eval and store without enforcing kind *)
 let push (st : local_stacks) (ctx : local_vars) (constr : constr) =
   let expr, kind, lv = constr st ctx in
   let st, lv, expr = store_local st lv Anon kind expr in
@@ -185,6 +195,12 @@ let local_var (lvar : local_var) (st : local_stacks) (ctx : local_vars) : t =
           match List.assoc_opt lvar ctx with
           | Some { slot; _ } -> (Dvar (Local slot), slot.kind, [])
           | None -> Errors.raise_error "Local variable not found in context"))
+
+(* Note on constructors with several subexpressions. To correctly allocate
+   subvalues in the stacks, the stacks state must flow through all constructor
+   arguments to increment "pointers" accordingly. The state at entry represents
+   the point at which the constructed expression is expected to be allocated (if
+   needded). *)
 
 let dand (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
     =
@@ -260,7 +276,7 @@ let div (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t =
   match (e1, e2) with
   | _, Dlit 1. -> (e1, Val, lv1)
   | Dlit f1, Dlit f2 ->
-      let f = if f2 = 0. then 0. else f1 /. f2 in
+      let f = f1 /. f2 in
       (Dlit f, Val, [])
   | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
 
@@ -333,6 +349,8 @@ let build_transitive_composition ?(safe_def = false)
   in
   { def_test; value_comp }
 
+(* evaluate a complete (AKA, context free) expression. Not to be used for
+   further construction. *)
 let build_expression (expr_comp : expression_composition) : local_decls * t * t
     =
   let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
