@@ -25,10 +25,12 @@ of the source files responsible for computing the tax on the 2018, 2019, 2020 an
 Mlang is implemented in OCaml. To manage dependencies,
 [install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
 of OCaml that is at least 4.0.9. In order to support multi-precision floating-point
-computation, you will need also need to install the MPFR library. For Debian-based
-distributions, simply invoke
+computation, you will need also need to install the MPFR library.
 
-    sudo apt install libgmp-dev libmpfr-dev m4 perl python3 clang git opam
+For Debian-based distributions, simply invoke
+
+    sudo apt install libgmp-dev libmpfr-dev git opam
+
 
 If you would like to generate tests using the fuzzer, you will need to install AFL:
 
