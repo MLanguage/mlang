@@ -952,8 +952,8 @@ let rec translate_expression (ctx : translating_context)
               Pos.same_pos_as
                 (Mir.Binop
                    ( Pos.same_pos_as Mast.Or f,
-                     Pos.same_pos_as equal_test f,
-                     or_chain ))
+                     or_chain,
+                     Pos.same_pos_as equal_test f ))
                 f)
             (Pos.same_pos_as (Mir.Literal Mir.Undefined) f)
             values

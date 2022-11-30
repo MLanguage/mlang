@@ -271,26 +271,16 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
         e
   | FunctionCall (GtzFunc, [ arg ]) ->
       Pos.same_pos_as
-        (Conditional
-           ( Pos.same_pos_as
-               (Comparison
-                  ( Pos.same_pos_as Mast.Gt e,
-                    expand_functions_expr arg,
-                    Pos.same_pos_as (Literal (Float 0.0)) e ))
-               e,
-             Pos.same_pos_as (Literal (Float 1.0)) e,
+        (Comparison
+           ( Pos.same_pos_as Mast.Gt e,
+             expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
   | FunctionCall (GtezFunc, [ arg ]) ->
       Pos.same_pos_as
-        (Conditional
-           ( Pos.same_pos_as
-               (Comparison
-                  ( Pos.same_pos_as Mast.Gte e,
-                    expand_functions_expr arg,
-                    Pos.same_pos_as (Literal (Float 0.0)) e ))
-               e,
-             Pos.same_pos_as (Literal (Float 1.0)) e,
+        (Comparison
+           ( Pos.same_pos_as Mast.Gte e,
+             expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
   | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
@@ -298,35 +288,12 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
       let earg2 = expand_functions_expr arg2 in
       Pos.same_pos_as (FunctionCall (f, [ earg1; earg2 ])) e
   | FunctionCall (AbsFunc, [ arg ]) ->
-      let arg_var = LocalVariable.new_var () in
-      Pos.same_pos_as
-        (LocalLet
-           ( arg_var,
-             expand_functions_expr arg,
-             Pos.same_pos_as
-               (Conditional
-                  ( Pos.same_pos_as
-                      (Comparison
-                         ( Pos.same_pos_as Mast.Lt e,
-                           Pos.same_pos_as (LocalVar arg_var) e,
-                           Pos.same_pos_as (Literal (Float 0.0)) e ))
-                      e,
-                    Pos.same_pos_as
-                      (Unop (Mast.Minus, Pos.same_pos_as (LocalVar arg_var) e))
-                      e,
-                    Pos.same_pos_as (LocalVar arg_var) e ))
-               e ))
-        e
+      Pos.same_pos_as (FunctionCall (AbsFunc, [ expand_functions_expr arg ])) e
   | FunctionCall (NullFunc, [ arg ]) ->
       Pos.same_pos_as
-        (Conditional
-           ( Pos.same_pos_as
-               (Comparison
-                  ( Pos.same_pos_as Mast.Eq e,
-                    expand_functions_expr arg,
-                    Pos.same_pos_as (Literal (Float 0.0)) e ))
-               e,
-             Pos.same_pos_as (Literal (Float 1.0)) e,
+        (Comparison
+           ( Pos.same_pos_as Mast.Eq e,
+             expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
   | FunctionCall (PresentFunc, [ arg ]) ->
