@@ -8,16 +8,17 @@ The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
-of the syntax and the semantics of M, from the [codebase](https://framagit.org/dgfip/ir-calcul)
-released by the DGFiP.
+of the syntax and the semantics of M, from the codebase previously released by the DGFiP on 
+[Framagit forge](https://framagit.org) and now regularly published on 
+[Adullact forge](https://gitlab.adullact.net/dgfip/ir-calcul).
 
 ## Disclaimer
 
 There is currently no legal guarantee of any kind about the correctness of the code
 produced by the Mlang compiler, or by the results produced by the interpreter of
 Mlang. However, authors have been in contact with DGFiP to validate Mlang, and
-the system passes all the private DGFiP tests as of Sept. 2021 for the version
-of the source files responsible for computing the tax on the 2018, 2019 and 2020 income.
+the system passes all the private DGFiP tests as of Sept. 2022 for the version
+of the source files responsible for computing the tax on the 2018, 2019, 2020 and 2021 income.
 
 ## Installation
 
