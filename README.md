@@ -107,7 +107,7 @@ the testing process of the interpreter (with or without optimizations) and
 report test errors in a convenient format.
 
 Mlang backends are also tested using the same `FIP` format, see for instance
-`examples/python/backend_test`.
+`examples/java/backend_test`.
 
 When running `--run_all_tests`, you can enable code coverage instrumentation
 with the `--code_coverage` option. Another interesting option is `--precision`,
