@@ -31,6 +31,14 @@ For Debian-based distributions, simply invoke
 
     sudo apt install libgmp-dev libmpfr-dev git opam
 
+For Red Hat-based distributions, first invoke
+
+    sudo yum install gmp-devel mpfr-devel git
+
+Opam is only packaged for Fedora. For other distributions using RPM, please refer to
+the [official documentation](https://opam.ocaml.org/doc/Install.html). Note that to use
+the Opam binary release and install Mlang dependencies, you will need a C compiler and
+the following softwares as Opam dependencies: `patch`,`unzip`, `bubblewrap` and `bzip2`.
 
 If you would like to generate tests using the fuzzer, you will need to install AFL:
 
@@ -58,7 +66,7 @@ You can then use
 to build the compiler.
 
 The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
-as the C compiler was installed for Opam. Mlang result are tested on GCC and Clang, the latter
+as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
 being preferred if available.
 ## Usage
 
