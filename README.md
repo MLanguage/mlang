@@ -55,6 +55,9 @@ You can then use
 
 to build the compiler.
 
+The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
+as the C compiler was installed for Opam. Mlang result are tested on GCC and Clang, the latter
+being preferred if available.
 ## Usage
 
 Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
