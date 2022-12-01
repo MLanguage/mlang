@@ -66,6 +66,27 @@ to build the compiler.
 The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
 as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
 being preferred if available.
+
+The Java backend in `examples/java/` requires Java development environment.
+The generated code targets Java 7, and could be used with OpenJDK 1.7 or more.
+However, the test harness code requires Java 8, so to use the automated backend tests, we ask for 
+OpenJDK 1.8 or more.
+
+For Debian-based distributions, you can try:
+
+    sudo apt install default-jdk
+
+For Red Hat-based distributions, depending on your version:
+
+    sudo yum install java-1.8.0-openjdk-devel
+
+or
+
+    sudo yum install java-11-openjdk-devel
+
+NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7 
+installed in order to provide the correct version of the base classes.
+
 ## Usage
 
 Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
