@@ -32,11 +32,16 @@ default: build
 # Building the compiler
 ##################################################
 
-init:
-# Workaround for Opam 2.0 bug. Could be "opam switch create . --deps-only" otherwise
+# Workaround for Opam 2.0 bug. Empty switch creation then installation could be a one line
+# "opam switch create . --deps-only" otherwise
+create-switch:
 	opam switch create . --empty
+
+init-without-switch:
 	opam install . --deps-only
 	git submodule update --init
+
+init: create-switch init-without-switch
 
 deps:
 	opam switch reinstall --deps-only
