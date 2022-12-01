@@ -92,6 +92,7 @@ doc: FORCE
 clean:
 	$(MAKE) -C examples/dgfip_c clean
 	$(MAKE) -C examples/java clean
+	rm -f doc/doc.html
 	dune clean
 
 FORCE:
