@@ -32,13 +32,15 @@ default: build
 # Building the compiler
 ##################################################
 
-deps-without-ocaml:
+init:
+# Workaround for Opam 2.0 bug. Could be "opam switch create . --deps-only" otherwise
+	opam switch create . --empty
 	opam install . --deps-only
-	git submodule update --init --recursive
+	git submodule update --init
 
 deps:
-	opam switch create . --deps-only
-	git submodule update --init --recursive
+	opam switch reinstall --deps-only
+	git submodule update
 
 format:
 	dune build @fmt --auto-promote | true

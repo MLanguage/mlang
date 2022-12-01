@@ -49,19 +49,26 @@ If you have not used opam before, run:
     opam init
     opam update -y
 
-Then, you can install Mlang's Ocaml dependencies using
+Then, you can initialize your Mlang projet using
 
-    make deps
+    make init
 
-This command also fetchs the M source code released by the DGFiP with
+This command creates a local Opam switch (analogous to a virtual environment), installs
+Mlang's OCaml dependencies and clones the M source code repository released by the DGFiP with
 
-    git submodule update --init --recursive
+    git submodule update --init
 
 You can then use
 
     make build
 
 to build the compiler.
+
+If needed,
+
+    make deps
+
+will reinstall OCaml dependencies and refetch the M source code.
 
 The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
 as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
