@@ -47,13 +47,19 @@ src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 		--function_spec $^ \
 		$(SOURCE_FILES)
 
-target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java
+target:
+	mkdir $@
+
+backend_tests/target:
+	mkdir $@
+
+target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java | target
 ifeq ($(JAVAC8),0)
 	@echo "Cross-compiling Java 7 sources with JDK 8, using JAVA7_PATH=$(JAVA7_PATH) if present. Feel free to override it."
 endif
 	javac -J-Xss10m -J-Xmx4096m $(JAVACOPT_CALC) -d target -cp src src/com/mlang/*.java
 
-backend_tests/target/TestHarness.class: target/com/mlang/Ir_tests_2020.class
+backend_tests/target/TestHarness.class: target/com/mlang/Ir_tests_2020.class | backend_tests/target
 	javac $(JAVACOPT_TEST) -cp "backend_tests/src/:target" -d backend_tests/target backend_tests/src/com/mlang/TestHarness.java
 
 run_tests: backend_tests/target/TestHarness.class
