@@ -86,7 +86,7 @@ fi
 
 echo 'Compilation de la calculette primitive'
 
-ocamlopt -cc clang -ccopt -fbracket-depth=2048 unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
+ocamlopt -cc clang -ccopt -fno-common -ccopt -fbracket-depth=2048 unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
 
 if [ $? -ne 0 ]; then
   echo 'La compilation de la calculette primitive a échoué'
