@@ -367,8 +367,6 @@ let generate_header (oc : Format.formatter) () : unit =
 #include "const.h"
 #include "var.h"
 
-double my_var1;
-
 #ifndef FLG_MULTITHREAD
 #define add_erreur(a,b,c) add_erreur(b,c)
 #endif
