@@ -96,7 +96,7 @@ fi
 
 echo 'Compilation de la calculette primitive'
 
-ocamlopt -cc $CCOMPILER -ccopt $CCOPTIONS -ccopt -std=c99 unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
+ocamlopt -cc $CCOMPILER -ccopt $CCOPTIONS -ccopt -std=c99 -ccopt -fno-common unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
 
 if [ $? -ne 0 ]; then
   echo 'La compilation de la calculette primitive a échoué'
