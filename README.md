@@ -8,51 +8,91 @@ The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
-of the syntax and the semantics of M, from the [codebase](https://framagit.org/dgfip/ir-calcul)
-released by the DGFiP.
+of the syntax and the semantics of M, from the codebase previously released by the DGFiP on 
+[Framagit forge](https://framagit.org) and now regularly published on 
+[Adullact forge](https://gitlab.adullact.net/dgfip/ir-calcul).
 
 ## Disclaimer
 
 There is currently no legal guarantee of any kind about the correctness of the code
 produced by the Mlang compiler, or by the results produced by the interpreter of
 Mlang. However, authors have been in contact with DGFiP to validate Mlang, and
-the system passes all the private DGFiP tests as of Sept. 2021 for the version
-of the source files responsible for computing the tax on the 2018, 2019 and 2020 income.
+the system passes all the private DGFiP tests as of Sept. 2022 for the version
+of the source files responsible for computing the tax on the 2018, 2019, 2020 and 2021 income.
 
 ## Installation
 
 Mlang is implemented in OCaml. To manage dependencies,
 [install opam](https://opam.ocaml.org/doc/Install.html) and switch to a version
 of OCaml that is at least 4.0.9. In order to support multi-precision floating-point
-computation, you will need also need to install the MPFR library. For Debian-based
-distributions, simply invoke
+computation, you will need also need to install the MPFR library.
 
-    sudo apt install libgmp-dev libmpfr-dev m4 perl python3 clang git opam
+For Debian-based distributions, simply invoke
+
+    sudo apt install libgmp-dev libmpfr-dev git opam
+
+For Red Hat-based distributions, first invoke
+
+    sudo yum install gmp-devel mpfr-devel git
+
+Opam is only packaged for Fedora. For other distributions using RPM, please refer to
+the [official documentation](https://opam.ocaml.org/doc/Install.html). Note that to use
+the Opam binary release and install Mlang dependencies, you will need a C compiler and
+the following softwares as Opam dependencies: `patch`,`unzip`, `bubblewrap` and `bzip2`.
 
 If you would like to generate tests using the fuzzer, you will need to install AFL:
 
     sudo apt install afl++ afl++-clang
 
-We require OCaml >= 4.0.9. If you have not used opam before, run:
+If you have not used opam before, run:
 
     opam init
     opam update -y
-    opam switch create 4.11.1 -y
 
+Then, you can initialize your Mlang projet using
 
-Then, you can install Mlang's Ocaml dependencies using
+    make init
 
-    make deps
+This command creates a local Opam switch (analogous to a virtual environment), installs
+Mlang's OCaml dependencies and clones the M source code repository released by the DGFiP with
 
-This command also fetchs the M source code released by the DGFiP with
-
-    git submodule update --init --recursive
+    git submodule update --init
 
 You can then use
 
     make build
 
 to build the compiler.
+
+If needed,
+
+    make deps
+
+will reinstall OCaml dependencies and refetch the M source code.
+
+The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
+as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
+being preferred if available.
+
+The Java backend in `examples/java/` requires Java development environment.
+The generated code targets Java 7, and could be used with OpenJDK 1.7 or more.
+However, the test harness code requires Java 8, so to use the automated backend tests, we ask for 
+OpenJDK 1.8 or more.
+
+For Debian-based distributions, you can try:
+
+    sudo apt install default-jdk
+
+For Red Hat-based distributions, depending on your version:
+
+    sudo yum install java-1.8.0-openjdk-devel
+
+or
+
+    sudo yum install java-11-openjdk-devel
+
+NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7 
+installed in order to provide the correct version of the base classes.
 
 ## Usage
 
@@ -106,7 +146,7 @@ the testing process of the interpreter (with or without optimizations) and
 report test errors in a convenient format.
 
 Mlang backends are also tested using the same `FIP` format, see for instance
-`examples/python/backend_test`.
+`examples/java/backend_test`.
 
 When running `--run_all_tests`, you can enable code coverage instrumentation
 with the `--code_coverage` option. Another interesting option is `--precision`,

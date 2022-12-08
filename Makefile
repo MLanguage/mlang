@@ -32,13 +32,20 @@ default: build
 # Building the compiler
 ##################################################
 
-deps-without-ocaml:
+# Workaround for Opam 2.0 bug. Empty switch creation then installation could be a one line
+# "opam switch create . --deps-only" otherwise
+create-switch:
+	opam switch create . --empty
+
+init-without-switch:
 	opam install . --deps-only
-	git submodule update --init --recursive
+	git submodule update --init
+
+init: create-switch init-without-switch
 
 deps:
-	opam switch create . --deps-only
-	git submodule update --init --recursive
+	opam switch reinstall --deps-only
+	git submodule update
 
 format:
 	dune build @fmt --auto-promote | true
@@ -90,6 +97,7 @@ doc: FORCE
 clean:
 	$(MAKE) -C examples/dgfip_c clean
 	$(MAKE) -C examples/java clean
+	rm -f doc/doc.html
 	dune clean
 
 FORCE:

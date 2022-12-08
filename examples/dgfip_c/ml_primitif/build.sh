@@ -68,12 +68,22 @@ if [ "$1" == 'nomc' ]; then
   echo 'Compilation des fichiers C issus des fichiers M ignorée'
 
 else
+  if command -v clang; then
+    echo "Compilation avec Clang."
+    CCOMPILER="clang"
+    CCOPTIONS="-fbracket-depth=2048"
+  else
+    echo "Clang est absent. Compilation avec GCC."
+    CCOMPILER="gcc"
+    CCOPTIONS=""
+  fi
 
   echo "Compilation des fichiers C issus des fichiers M"
 
+
   cd ./calc
 
-  clang -std=c89 -pedantic -fbracket-depth=2048 -O2 -c irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
+  $CCOMPILER -std=c89 -pedantic $CCOPTIONS -O2 -c irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
   if [ $? -ne 0 ]; then
     echo 'La compilation des fichiers C issus des fichiers M a échoué'
@@ -86,7 +96,7 @@ fi
 
 echo 'Compilation de la calculette primitive'
 
-ocamlopt -cc clang -ccopt -fno-common -ccopt -fbracket-depth=2048 unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
+ocamlopt -cc $CCOMPILER -ccopt $CCOPTIONS -ccopt -std=c99 -ccopt -fno-common unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
 
 if [ $? -ne 0 ]; then
   echo 'La compilation de la calculette primitive a échoué'
