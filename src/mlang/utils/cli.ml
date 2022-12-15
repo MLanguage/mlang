@@ -117,6 +117,13 @@ let run_all_tests =
     & info [ "run_all_tests"; "R" ] ~docv:"TESTS"
         ~doc:"Run all tests in folder specified folder")
 
+let dgfip_test_filter =
+  let doc =
+    "Filter test files on filename: keep only tests beginning by an uppercase \
+     character (use with --run-al-tests)"
+  in
+  Arg.(value & flag & info [ "dgfip_test_filter" ] ~doc)
+
 let run_test =
   Arg.(
     value
@@ -196,9 +203,9 @@ let mlang_t f =
   Term.(
     const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file
     $ no_print_cycles $ backend $ function_spec $ mpp_file $ output
-    $ run_all_tests $ run_test $ mpp_function $ optimize $ optimize_unsafe_float
-    $ code_coverage $ precision $ roundops $ test_error_margin $ m_clean_calls
-    $ dgfip_options $ var_dependencies)
+    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function $ optimize
+    $ optimize_unsafe_float $ code_coverage $ precision $ roundops
+    $ test_error_margin $ m_clean_calls $ dgfip_options $ var_dependencies)
 
 let info =
   let doc =
