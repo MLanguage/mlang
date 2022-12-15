@@ -211,7 +211,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       let filter_function =
         match dgfip_test_filter with
         | false -> fun _ -> true
-        | true -> fun _x -> false
+        | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
       in
       Test_interpreter.check_all_tests combined_program tests optimize
         code_coverage value_sort round_ops
