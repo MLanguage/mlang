@@ -29,12 +29,15 @@ let read_test filename =
 let check_result tgv err expected_tgv expected_err =
   let result = ref 0 in
   StrMap.iter (fun code montant ->
-      (* Consider missing variables as 0.0 (DGFiP does the same) *)
-      let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
-      if montant <> montant' then
+      (* Consider missing variables as 0.0 and dismiss NBPT (DGFiP does the same) *)
+      (* NBPT variable doesn't bear any meaning due to DGFiP test generation method*)
+      match code with
+      | "NBPT" -> ()
+      | _ -> (let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
+       if montant <> montant' then
         (result := 1;
          Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
-           code montant montant')
+           code montant montant'))
     ) expected_tgv;
   !result
 
