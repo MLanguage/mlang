@@ -4,3 +4,4 @@ ir_*.h
 *.o
 *.tmp
 *.bc
+ml_primitif/build.conf

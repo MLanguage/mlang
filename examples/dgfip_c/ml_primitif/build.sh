@@ -1,6 +1,10 @@
 #!/bin/bash
 
-. build.conf
+if test -f "build.conf"; then
+    . build.conf
+else
+    . build.conf.default
+fi
 
 if [ "$1" == 'help' ]; then
   echo "La commande $0 sans option compile la calculette corrective".
@@ -72,7 +76,7 @@ else
     echo "Compilation avec Clang."
     CCOMPILER="clang"
     CCOPTIONS="-fbracket-depth=2048"
-  else
+    else
     echo "Clang est absent. Compilation avec GCC."
     CCOMPILER="gcc"
     CCOPTIONS=""
@@ -96,7 +100,7 @@ fi
 
 echo 'Compilation de la calculette primitive'
 
-ocamlopt -cc $CCOMPILER -ccopt $CCOPTIONS -ccopt -std=c99 -ccopt -fno-common unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
+ocamlopt -cc $CCOMPILER -ccopt -std=c99 -ccopt -fno-common unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o prim
 
 if [ $? -ne 0 ]; then
   echo 'La compilation de la calculette primitive a échoué'
