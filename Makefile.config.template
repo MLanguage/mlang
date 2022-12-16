@@ -8,6 +8,9 @@
 
 # TESTS_DIR=$(SELF_DIR)/tests/2018/fuzzing/
 
+# Enable filter on tests filename (Keep only if name begins by an uppercase ASCII character)
+# TEST_FILTER=1
+
 # M_SPEC_FILE=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
 
 # CC:=gcc
