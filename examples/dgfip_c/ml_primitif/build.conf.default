@@ -6,10 +6,10 @@ MPP_FUN=dgfip_calculation
 
 #YEAR=2019   # Ajuster selon l'année
 #M_SOURCES=$MLANG_ROOT/ir-calcul/sources2019m_8_0 # Ajuster selon l'année
-#M_TGV= # Utiliser si tgv.m dans dossier différent de M_SOURCES
-#M_ERR= # Utiliser si err.m dans dossier différent de M_SOURCES
+#M_TGV= # Fichier à utiliser si tgv.m dans dossier différent de M_SOURCES
+#M_ERR= # Fichier à utiliser si err.m dans dossier différent de M_SOURCES
 
 YEAR=2020   # Ajuster selon l'année
 M_SOURCES=$MLANG_ROOT/ir-calcul/sources2020m_6_5 # Ajuster selon l'année
-M_TGV= # Utiliser si tgv.m dans dossier différent de M_SOURCES
-M_ERR= # Utiliser si err.m dans dossier différent de M_SOURCES
+M_TGV= # Fichier à utiliser si tgv.m dans dossier différent de M_SOURCES
+M_ERR= # Fichier à utiliser si err.m dans dossier différent de M_SOURCES

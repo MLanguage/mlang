@@ -39,5 +39,6 @@ val check_all_tests :
   Cli.value_sort ->
   Cli.round_ops ->
   float ->
+  (string -> bool) ->
   unit
 (** Similar to [check_test] but tests a whole folder full of test files *)

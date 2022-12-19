@@ -9,6 +9,12 @@ else
     CODE_COVERAGE_FLAG=
 endif
 
+ifeq ($(TEST_FILTER), 1)
+    TEST_FILTER_FLAG=--dgfip_test_filter
+else
+    TEST_FILTER_FLAG=
+endif
+
 MLANG_BIN=dune exec --no-print-director src/main.exe --
 
 MPP_FUNCTION?=compute_double_liquidation_pvro
@@ -69,7 +75,7 @@ test: build
 
 # use: TESTS_DIR=bla make test
 tests: build
-	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(SOURCE_FILES)
+	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES)
 
 test_java_backend:
 ifeq ($(OPTIMIZE), 0)

@@ -174,10 +174,12 @@ let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     (code_coverage_activated : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (test_error_margin : float) =
+    (round_ops : Cli.round_ops) (test_error_margin : float)
+    (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
+    @@ List.filter filter_function
     @@ List.filter
          (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x))
          (Array.to_list arr)

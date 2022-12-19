@@ -77,11 +77,11 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
     (backend : string option) (function_spec : string option)
     (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (run_test : string option) (mpp_function : string) (optimize : bool)
-    (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (roundops : string option)
-    (test_error_margin : float option) (m_clean_calls : bool)
-    (dgfip_options : string list option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
+    (code_coverage : bool) (precision : string option)
+    (roundops : string option) (test_error_margin : float option)
+    (m_clean_calls : bool) (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
   let value_sort =
     let precision = Option.get precision in
@@ -208,9 +208,15 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       let tests : string =
         match run_all_tests with Some s -> s | _ -> assert false
       in
+      let filter_function =
+        match dgfip_test_filter with
+        | false -> fun _ -> true
+        | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
+      in
       Test_interpreter.check_all_tests combined_program tests optimize
         code_coverage value_sort round_ops
         (Option.get test_error_margin)
+        filter_function
     end
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
