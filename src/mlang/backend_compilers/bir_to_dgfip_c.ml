@@ -502,7 +502,7 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a@\n@."
-    generate_implem_header header_filename
+    generate_implem_header (Filename.basename header_filename)
     (generate_rov_functions dgfip_flags program vm) orphan_rovs
     (generate_mpp_functions dgfip_flags program) vm;
   close_out _oc[@@ocamlformat "disable"]
