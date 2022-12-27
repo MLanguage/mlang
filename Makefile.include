@@ -37,7 +37,8 @@ else ifeq ($(YEAR), 2020)
 	TESTS_DIR?=$(SELF_DIR)/tests/2020/fuzzing/
 	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 else
-    $(error Unsupported year: $(YEAR))
+ 	$(warning WARNING: there is no default configuration for year: $(YEAR))
+    $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
 C_COMPILER?=clang
