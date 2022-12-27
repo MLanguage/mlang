@@ -35,7 +35,7 @@ MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
 default: build
 
 ##################################################
-# Building the compiler
+# Initializing the project
 ##################################################
 
 # Workaround for Opam 2.0 bug. Empty switch creation then installation could be a one line
@@ -52,6 +52,10 @@ init: create-switch init-without-switch
 deps:
 	opam switch reinstall --deps-only
 	git submodule update
+
+##################################################
+# Building the compiler
+##################################################
 
 format:
 	dune build @fmt --auto-promote | true
