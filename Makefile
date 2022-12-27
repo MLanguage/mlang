@@ -15,22 +15,14 @@ else
     TEST_FILTER_FLAG=
 endif
 
-MLANG_BIN=dune exec --no-print-director src/main.exe --
-
-MPP_FUNCTION?=compute_double_liquidation_pvro
-
-PRECISION?=double
-
 TEST_ERROR_MARGIN?=0.
 
-MLANG_DEFAULT_OPTS=\
-	--display_time --debug \
-	--precision $(PRECISION) \
-	--mpp_file=$(MPP_FILE) \
+MLANG_INTERPRETER_OPTS=\
 	--test_error_margin=$(TEST_ERROR_MARGIN) \
+	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
-MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG) $(CODE_COVERAGE_FLAG)
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_INTERPRETER_OPTS) $(CODE_COVERAGE_FLAG)
 
 default: build
 

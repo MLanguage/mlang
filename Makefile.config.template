@@ -1,4 +1,5 @@
-# Copy this file as Makefile.config and change some of these variables
+# Copy this file as Makefile.config
+# and change some of these variables to overwrite the default values.
 
 # YEAR=2018
 

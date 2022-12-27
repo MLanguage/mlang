@@ -5,7 +5,7 @@ MLANG_BIN=dune exec --no-print-director ../../src/main.exe --
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--mpp_file=$(MPP_FILE) \
-	--mpp_function=compute_double_liquidation_pvro
+	--mpp_function=$(MPP_FUNCTION)
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
 

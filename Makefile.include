@@ -1,5 +1,3 @@
-# Create this file to overwrite typical variables (see Makefile.config.template)
-
 ##################################################
 # Variables
 ##################################################
@@ -26,16 +24,19 @@ ifeq ($(YEAR), 2018)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2018_6_7.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2018/fuzzing/
 	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
+	MPP_FUNCTION?=compute_double_liquidation_pvro
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(SOURCE_DIR_2019)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2019/fuzzing/
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
+	MPP_FUNCTION?=compute_double_liquidation_pvro
 else ifeq ($(YEAR), 2020)
 	SOURCE_FILES?=$(SOURCE_DIR_2020)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2020_6_5.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2020/fuzzing/
 	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
+	MPP_FUNCTION?=compute_double_liquidation_pvro
 else
  	$(warning WARNING: there is no default configuration for year: $(YEAR))
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
@@ -48,3 +49,11 @@ ifeq ($(OPTIMIZE), 0)
 else
     OPTIMIZE_FLAG=-O
 endif
+
+MLANG_BIN=dune exec $(SELF_DIR)/_build/default/src/main.exe --
+PRECISION?=double
+
+MLANG_DEFAULT_OPTS=\
+	--display_time --debug \
+	--precision $(PRECISION) \
+	$(OPTIMIZE_FLAG)

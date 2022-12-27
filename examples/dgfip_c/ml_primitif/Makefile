@@ -6,20 +6,15 @@ else
     TEST_FILES=$(TESTS_DIR)*
 endif
 
-MLANG_BIN=dune exec --no-print-director ../../../src/main.exe --
-PRECISION?=double
-TEST_ERROR_MARGIN?=0.
-#MPP_FUNCTION?=compute_double_liquidation_pvro
-
+# DGFiP C backend works only with these specifications at the moment.
 MPP_FILE=../../../mpp_specs/dgfip_base.mpp
 MPP_FUNCTION=dgfip_calculation
 
-MLANG_DEFAULT_OPTS=\
-	--display_time --debug \
+MLANG_DGFIP_C_OPTS=\
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
-MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(OPTIMIZE_FLAG)
+MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 
 C_OPTIONS="-fbracket-depth=2048"
 ##################################################
