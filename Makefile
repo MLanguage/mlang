@@ -81,17 +81,17 @@ test: build
 tests: build
 	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES)
 
-test_java_backend:
+test_java_backend: build
 ifeq ($(OPTIMIZE), 0)
 	@echo "\033[0;31mWarning, non-optimized Java files cannot be executed for now (too many constants for the JVM)\033[0m"
 else
 endif
 	$(MAKE) -C examples/java/ run_tests
 
-test_dgfip_c_backend:
+test_dgfip_c_backend: build
 	$(MAKE) -C examples/dgfip_c/ backend_tests
 
-quick_test:
+quick_test: build
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 all: tests test_java_backend test_dgfip_c_backend quick_test
@@ -100,7 +100,7 @@ all: tests test_java_backend test_dgfip_c_backend quick_test
 # Doc
 ##################################################
 
-doc: FORCE
+doc: FORCE build
 	dune build @doc
 	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
