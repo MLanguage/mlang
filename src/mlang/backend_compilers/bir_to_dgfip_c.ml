@@ -424,7 +424,7 @@ let generate_mpp_functions_signatures (oc : Format.formatter)
     funcs
 
 let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
-    (vm : Dgfip_varid.var_id_map) =
+    (folder : string) (vm : Dgfip_varid.var_id_map) =
   let module StringMap = Map.Make (String) in
   let default_file = "default" in
   let filemap =
@@ -449,7 +449,7 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
     (fun file rovs orphan ->
       if String.equal file default_file then rovs @ orphan
       else
-        let oc = open_out file in
+        let oc = open_out (Filename.concat folder file) in
         let fmt = Format.formatter_of_out_channel oc in
         Format.fprintf fmt
           {|
@@ -489,7 +489,8 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
-  let orphan_rovs = generate_rovs_files dgfip_flags program vm in
+  let folder = Filename.dirname filename in
+  let orphan_rovs = generate_rovs_files dgfip_flags program folder vm in
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
@@ -501,7 +502,7 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a%a%a@\n@."
-    generate_implem_header header_filename
+    generate_implem_header (Filename.basename header_filename)
     (generate_rov_functions dgfip_flags program vm) orphan_rovs
     (generate_mpp_functions dgfip_flags program) vm;
   close_out _oc[@@ocamlformat "disable"]
