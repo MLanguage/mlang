@@ -969,6 +969,15 @@ let rec translate_expression (ctx : translating_context)
         let new_e2 = translate_expression ctx e2 in
         Mir.Comparison (op, new_e1, new_e2)
     | Mast.Binop (op, e1, e2) ->
+        if
+          Pos.unmark op = Mast.Mul
+          && (Pos.unmark e1 = Mast.Literal (Float 0.)
+             || Pos.unmark e2 = Mast.Literal (Float 0.))
+        then
+          (* It is difficult to do a broarder or deeper analysis because of
+             constant substitutions that could wrongly trigger the warning *)
+          Errors.print_spanned_warning
+            "Nullifying constant multiplication found." (Pos.get_position f);
         let new_e1 = translate_expression ctx e1 in
         let new_e2 = translate_expression ctx e2 in
         Mir.Binop (op, new_e1, new_e2)
