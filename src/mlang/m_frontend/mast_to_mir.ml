@@ -974,7 +974,7 @@ let rec translate_expression (ctx : translating_context)
           && (Pos.unmark e1 = Mast.Literal (Float 0.)
              || Pos.unmark e2 = Mast.Literal (Float 0.))
         then
-          (* It is difficult to do a broarder or deeper analysis because of
+          (* It is difficult to do a broader or deeper analysis because of
              constant substitutions that could wrongly trigger the warning *)
           Errors.print_spanned_warning
             "Nullifying constant multiplication found." (Pos.get_position f);
