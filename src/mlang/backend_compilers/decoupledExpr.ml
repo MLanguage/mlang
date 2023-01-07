@@ -267,6 +267,7 @@ let mult (e1 : constr) (e2 : constr) (st : local_stacks) (ctx : local_vars) : t
   match (e1, e2) with
   | Dlit 1., _ -> (e2, Val, lv2)
   | _, Dlit 1. -> (e1, Val, lv1)
+  | Dlit 0., _ | _, Dlit 0. -> (Dlit 0., Val, [])
   | Dlit f1, Dlit f2 -> (Dlit (f1 *. f2), Val, [])
   | _ -> (Dbinop ("*", e1, e2), Val, lv2 @ lv1)
 
