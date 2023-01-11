@@ -112,12 +112,13 @@ let compare_dump out outexp =
 let run_test test_file =
   Printf.printf "Testing %s...\n%!" test_file;
 
+  let annee_calc = M.annee_calc () in
+
   let out = Printf.sprintf "output/%s.tgv" (Filename.basename test_file) in
-  let out_exp = Printf.sprintf "output.expected/%s.tgv" (Filename.basename test_file) in
+  let out_exp = Printf.sprintf "%d.expected/%s.tgv" annee_calc (Filename.basename test_file) in
 
   let tgv, res_prim  = read_test test_file in
 
-  let annee_calc = M.annee_calc () in
   let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
   if annee_revenu <> annee_calc then
     Printf.eprintf "Attention, année calculette (%d) <> année revenu (%d)\n%!"
