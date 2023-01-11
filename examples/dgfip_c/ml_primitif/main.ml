@@ -157,6 +157,12 @@ let run_test test_file =
 
   let res_ok = check_result tgv [] res_prim [] in
 
+  if not (Sys.file_exists out_exp)
+  then begin
+    Printf.eprintf "Expected results file %s not found." out_exp;
+    exit (if res_ok then 10 else 11)
+  end;
+
   begin
     match Unix.system (Printf.sprintf "diff -q %s %s 1>/dev/null 2>&1" out out_exp) with
     | WEXITED 0 ->
