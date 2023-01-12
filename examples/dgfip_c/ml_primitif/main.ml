@@ -114,7 +114,7 @@ let run_test test_file =
 
   let annee_calc = M.annee_calc () in
 
-  let out = Printf.sprintf "output/%s.tgv" (Filename.basename test_file) in
+  let out = Printf.sprintf "%d.output/%s.tgv" annee_calc (Filename.basename test_file) in
   let out_exp = Printf.sprintf "%d.expected/%s.tgv" annee_calc (Filename.basename test_file) in
 
   let tgv, res_prim  = read_test test_file in
@@ -124,7 +124,7 @@ let run_test test_file =
     Printf.eprintf "Attention, année calculette (%d) <> année revenu (%d)\n%!"
       annee_calc annee_revenu;
 
-  let annee_courante = 1900 + (Unix.localtime (Unix.time ())).tm_year in
+  let annee_courante = annee_calc + 1 in
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
   TGV.set_int tgv "ANCSDED" annee_courante;
@@ -186,7 +186,8 @@ let main () =
       exit 31
     end;
 
-  (try Unix.mkdir "output" 0o755 with _ -> ());
+  (try Unix.mkdir ((string_of_int (M.annee_calc ()))^".output")
+         0o755 with _ -> ());
 
   let args = List.tl (Array.to_list Sys.argv) in
   let rec loop =
