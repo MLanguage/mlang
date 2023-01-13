@@ -48,10 +48,10 @@ src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 		$(SOURCE_FILES)
 
 target:
-	mkdir $@
+	mkdir -p $@
 
 backend_tests/target:
-	mkdir $@
+	mkdir -p $@
 
 target/com/mlang/Ir_%.class:  src/com/mlang/Ir_%.java | target
 ifeq ($(JAVAC8),0)
