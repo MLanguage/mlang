@@ -47,17 +47,11 @@ ifeq ($(WITH_BISECT), 1)
 endif
 
 ##################################################
-# Initialisation
-##################################################
-
-calc:
-	mkdir $@
-
-##################################################
 # C sources generation
 ##################################################
 
-calc/var_static.c.inc: calc
+calc/var_static.c.inc:
+	mkdir -p calc
 	@echo "Copie des fichiers C statiques"
 	cp static/* calc/
 
@@ -65,6 +59,7 @@ calc/var_static.c.inc: calc
 # -----------------------------
 # Note: compilation avec -g et -k1 OBLIGATOIREMENT
 calc/enchain.c: $(SOURCE_FILES)
+	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR) MPP_FUNCTION=$(MPP_FUNCTION))"
 	@$(MLANG) \
 		--dgfip_options=-g,-k1,-b0,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
