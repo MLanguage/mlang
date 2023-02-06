@@ -47,7 +47,7 @@ ifeq ($(WITH_BISECT), 1)
 endif
 
 ##################################################
-# C sources generation
+# Generating C files from M sources with Mlang
 ##################################################
 
 calc/var_static.c.inc:
@@ -55,7 +55,7 @@ calc/var_static.c.inc:
 	@echo "Copie des fichiers C statiques"
 	cp static/* calc/
 
-# Ancien makefile ml_primitif
+# Ml_primitif (current main build)
 # -----------------------------
 # Note: compilation avec -g et -k1 OBLIGATOIREMENT
 calc/enchain.c: $(SOURCE_FILES)
@@ -68,10 +68,10 @@ calc/enchain.c: $(SOURCE_FILES)
 	@echo "Compilation terminée"
 
 ##################################################
-# Building "La Calculette"
+# Compiling the generated C
 ##################################################
 
-# Ml_primitif
+# Ml_primitif (current main build)
 # -----------------------------
 calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(C_COMPILER), CFLAGS=$(CFLAGS))"
@@ -79,6 +79,13 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
+
+#################################################
+# Final targets
+##################################################
+
+# Ml_primitif (current main build)
+# -----------------------------
 cal: calc/enchain.o
 	@echo "Compilation de la calculette primitive (OCAMLFLAGS=$(OCAMLFLAGS), WITH_BISECT=$(WITH_BISECT))"
 ifeq ($(WITH_BISECT), 1)
@@ -95,6 +102,8 @@ endif
 # Running the tests
 ##################################################
 
+# Ml_primitif (current main build)
+# -----------------------------
 run_tests: cal
 	 ./cal ${TEST_FILES}
 
