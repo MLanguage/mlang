@@ -46,6 +46,15 @@ ifeq ($(WITH_BISECT), 1)
     endif
 endif
 
+
+##################################################
+# Generating the tests.m_spec
+##################################################
+
+# Obsolète ?
+tests.m_spec: gen_m_spec.py
+	python3 $< $(TESTS_DIR) $@
+
 ##################################################
 # Generating C files from M sources with Mlang
 ##################################################
@@ -72,13 +81,29 @@ calc/enchain.c: $(SOURCE_FILES)
 .SECONDARY: calc/ir_%.c calc/ir_%.h
 .PRECIOUS: calc/ir_%.c calc/ir_%.h
 
-calc/ir_%.c: $(SOURCE_FILES)
+calc/old_ir_%.c: $(SOURCE_FILES)
 	$(MLANG) \
 		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES)
 
-##################################################
+# Ancien makefile backend_tests
+# -----------------------------
+# branche morte : il n'y a pas de quoi construire un exécutable qui corresponde dans le makefile.
+calc/ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
+	$(MLANG) \
+		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
+		--backend dgfip_c --output $@ \
+		--function_spec $< \
+		$(SOURCE_FILES)
+calc/ir_%.c: %.m_spec $(SOURCE_FILES)
+	$(MLANG) \
+		--dgfip_options=-rXMk1,-b0,-Ailiad,-m$(YEAR)\
+		--backend dgfip_c --output $@ \
+		--function_spec $< \
+		$(SOURCE_FILES)
+
+#################################################
 # Compiling the generated C
 ##################################################
 
@@ -95,8 +120,8 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 ### list existing C file from M equivalent
 M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
-calc/ir_%.o: calc/var_static.c.inc calc/ir_%.c
-	cd calc && $(C_COMPILER) $(F_BRACKET_OPT) $(C_OPT) -c $(<F) \
+calc/old_ir_%.o: calc/old_ir_%.c calc/var_static.c.inc
+	cd calc && $(C_COMPILER) -c $(<F) \
 	$(M_C_FILES) \
 	contexte.c famille.c penalite.c restitue.c revcor.c \
 	revenu.c variatio.c var.c irdata.c
@@ -106,6 +131,18 @@ calc/ir_%.o: calc/var_static.c.inc calc/ir_%.c
 # system default.
 %.o: %.c
 	$(C_COMPILER) -c $<
+
+# Ancien makefile backend_tests
+# -----------------------------
+calc/ir_%.o: export AFL_DONT_OPTIMIZE=1
+calc/ir_%.o: calc/ir_%.c calc/var_static.c.inc
+	cd calc && $(C_COMPILER) -c $(<F) \
+	$(M_C_FILES) \
+	contexte.c famille.c penalite.c restitue.c revcor.c \
+	revenu.c variatio.c var.c irdata.c
+
+calc/test_harness.o: calc/ir_tests.c
+	$(C_COMPILER) -O3 -c -o $@ test_harness.c
 
 #################################################
 # Final targets
@@ -131,11 +168,24 @@ endif
 # ça ne fonctinne plus depuis le commit initial de ce backend, et probablement depuis plus de deux ans sur
 # l'ancien backend C non plus, à cause de l'absence de header correspondant.
 # To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
-run_%.exe: calc/ir_%.o run_%.o
-	cd calc && $(C_COMPILER) -lm -o $(@F) $(^F) \
+run_%.exe: calc/old_ir_%.o run_%.o
+	cd calc && $(C_COMPILER) -lm -o $@ $(^F) \
 	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
+
+# Ancien makefile backend_tests
+# -----------------------------
+test_harness.exe: calc/ir_tests.o calc/test_harness.o
+	cd calc && $(C_COMPILER) -fPIE -lm -o ../$@ $(^F) \
+	$(M_C_FILES:.c=.o) \
+	contexte.o famille.o penalite.o restitue.o revcor.o \
+	revenu.o variatio.o var.o irdata.o
+
+# Ne passe plus les tests 2020 en l'état (mais c'était déjà le cas avant la réorganisation.)
+run_test_harness: test_harness.exe FORCE
+	ulimit -s 32768; \
+	./$< $(TESTS_DIR)
 
 ##################################################
 # Running the tests
@@ -179,6 +229,7 @@ cleantmp:
 
 cleanall: clean cleanc cleanexe
 	rm -f vars.txt
+	rm -f tests.m_spec
 
 
 ##################################################
@@ -186,3 +237,54 @@ cleanall: clean cleanc cleanexe
 ##################################################
 # Really, we can hope to be cutting edge enough for .PHONY
 FORCE:
+
+#########################################################################
+# Broken legacy from old C backend (used for perf and fuzzing)
+#########################################################################
+# N'existe plus depuis la suppression de l'ancien backend C
+perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
+	$(CC) -fPIE -lm -o $@ $^ \
+	$(M_C_FILES:.c=.o) \
+	contexte.o famille.o penalite.o restitue.o revcor.o \
+	revenu.o variatio.o var.o irdata.o
+
+run_perf: perf_harness.exe FORCE
+	ulimit -s 32768; \
+	time ./$< $(ONE_TEST_FILE)
+
+
+FUZZ_M_SPEC=tests
+
+fuzz_harness.exe: CC=afl-$(C_COMPILER)
+fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
+	$(CC) -fPIE -lm -o $@ $^
+
+AFL_FUZZ=afl-fuzz
+
+ifeq ($(JOB_NO), 0)
+	AFL_JOB_FLAG=-M fuzzer$(JOB_NO)
+else
+	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
+endif
+
+# Usage: NO_JOB=<0,1,2...> make launch_fuzz
+launch_fuzz: fuzz_harness.exe
+	ulimit -s 32768; \
+	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
+		-m 500 -t 1000 $(AFL_JOB_FLAG) \
+		-- ./fuzz_harness.exe @@
+
+FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
+
+sanitize_crash_names:
+	./sanitize_crash_names.sh
+
+%.m_test: %.m_crash FORCE
+	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
+
+transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
+
+clean_fuzz_findings:
+	rm -rf fuzz_findings/*
+clean_fuzz_tests:
+	rm -rf fuzz_tests/*.m_crash

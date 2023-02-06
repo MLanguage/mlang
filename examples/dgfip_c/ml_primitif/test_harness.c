@@ -4,10 +4,10 @@
 #include <string.h>
 #include <dirent.h>
 
-#include "ir_tests.h"
+#include "calc/ir_tests.h"
 
-#include "irdata.h"
-#include "desc.h"
+#include "calc/irdata.h"
+#include "calc/desc.h"
 
 #define MAX_PATH_LENGTH 4096 /* Arbitrary value */
 

@@ -7,4 +7,9 @@ ir_*.h
 
 ml_primitif/calc/*
 ml_primitif/*.cm*
-ml_primitif/prim
+ml_primitif/cal
+ml_primitif/vars.txt
+
+fuzz_findings/*
+fuzz_tests/*
+klee-*
