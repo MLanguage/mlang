@@ -26,7 +26,7 @@ QUIET=>/dev/null # Uncomment to suppress output
 # Le flag sur la profondeur des blocs ne semble plus nécessaire.
 COMMON_CFLAGS=-std=c89 -pedantic
 ifeq ($(C_COMPILER), clang)
-	COMPILER_SPECIFIC_CFLAGS=-O2 -fbracket-depth=2048
+    COMPILER_SPECIFIC_CFLAGS=-O2 -fbracket-depth=2048
 else ifeq ($(C_COMPILER), gcc)
     COMPILER_SPECIFIC_CFLAGS=-O1
 endif
@@ -67,6 +67,17 @@ calc/enchain.c: $(SOURCE_FILES)
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
 
+# Ancien makefile racine du backend
+# -----------------------------
+.SECONDARY: calc/ir_%.c calc/ir_%.h
+.PRECIOUS: calc/ir_%.c calc/ir_%.h
+
+calc/ir_%.c: $(SOURCE_FILES)
+	$(MLANG) \
+		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
+		--backend dgfip_c --output $@ \
+		$(SOURCE_FILES)
+
 ##################################################
 # Compiling the generated C
 ##################################################
@@ -79,6 +90,22 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
+# Ancien makefile racine du backend
+# -----------------------------
+### list existing C file from M equivalent
+M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
+
+calc/ir_%.o: calc/var_static.c.inc calc/ir_%.c
+	cd calc && $(C_COMPILER) $(F_BRACKET_OPT) $(C_OPT) -c $(<F) \
+	$(M_C_FILES) \
+	contexte.c famille.c penalite.c restitue.c revcor.c \
+	revenu.c variatio.c var.c irdata.c
+
+# This overloaded implicit rule could be avoided by using $(CC) variable everywhere instead of $(C_COMPILER)
+# thus the default compiler used by make would be the one defined as CC in the configuration instead of the
+# system default.
+%.o: %.c
+	$(C_COMPILER) -c $<
 
 #################################################
 # Final targets
@@ -97,6 +124,18 @@ else
 	ocamlopt -cc $(C_COMPILER) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
 	unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
 endif
+
+# Ancien makefile racine du backend
+# -----------------------------
+# Même en réutilisant le fichier .c pour les tests 2018 présent dans le dossier parent
+# ça ne fonctinne plus depuis le commit initial de ce backend, et probablement depuis plus de deux ans sur
+# l'ancien backend C non plus, à cause de l'absence de header correspondant.
+# To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
+run_%.exe: calc/ir_%.o run_%.o
+	cd calc && $(C_COMPILER) -lm -o $(@F) $(^F) \
+	$(M_C_FILES:.c=.o) \
+	contexte.o famille.o penalite.o restitue.o revcor.o \
+	revenu.o variatio.o var.o irdata.o
 
 ##################################################
 # Running the tests
@@ -119,6 +158,11 @@ clean:
 	rm -f *.o
 	rm -f *.cm*
 
+# To keep in mind
+# rm -f $(M_C_FILES) $(M_C_FILES:.c=.o) \
+	contexte.* famille.* penalite.* restitue.* revcor.* \
+	revenu.* tableg*.* tablev.* variatio.* var.* \
+	conf.h annee.h desc.h desc_inv.h
 cleanc:
 	@echo "Nettoyage des sources C"
 	rm -f calc/*.[ch]
@@ -127,8 +171,14 @@ cleanc:
 cleanexe:
 	@echo "Nettoyage des exécutables"
 	rm -f cal
+	rm -f *.exe
+
+cleantmp:
+	@echo "Nettoyage des fichiers temporaires"
+	rm -f *.tmp
 
 cleanall: clean cleanc cleanexe
+	rm -f vars.txt
 
 
 ##################################################
