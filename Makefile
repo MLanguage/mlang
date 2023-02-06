@@ -81,7 +81,7 @@ endif
 	$(MAKE) -C examples/java/ run_tests
 
 test_dgfip_c_backend: build
-	$(MAKE) -C examples/dgfip_c/ backend_tests
+	$(MAKE) -C examples/dgfip_c/ml_primitif backend_tests
 
 quick_test: build
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
@@ -97,7 +97,7 @@ doc: FORCE build
 	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 
 clean:
-	$(MAKE) -C examples/dgfip_c clean
+	$(MAKE) -C examples/dgfip_c/ml_primitif cleanall
 	$(MAKE) -C examples/java clean
 	rm -f doc/doc.html
 	dune clean

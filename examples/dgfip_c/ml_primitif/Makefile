@@ -107,6 +107,8 @@ endif
 run_tests: cal
 	 ./cal ${TEST_FILES}
 
+backend_tests: FORCE run_tests
+
 ##################################################
 # Cleaners
 ##################################################
@@ -127,3 +129,10 @@ cleanexe:
 	rm -f cal
 
 cleanall: clean cleanc cleanexe
+
+
+##################################################
+# Utilities
+##################################################
+# Really, we can hope to be cutting edge enough for .PHONY
+FORCE:
