@@ -19,6 +19,7 @@ MLANG_DGFIP_C_OPTS=\
 DGFIPFLAGS=-X,-O  # = environnement DGFiP
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
+QUIET=>/dev/null # Uncomment to suppress output
 
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
@@ -68,7 +69,8 @@ calc/enchain.c: $(SOURCE_FILES)
 	@$(MLANG) \
 		--dgfip_options=-g,-k1,-b0,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
 		--backend dgfip_c --output $@ \
-		$(SOURCE_FILES) >/dev/null
+		$(SOURCE_FILES) $(QUIET)
+	@echo "Compilation terminée"
 
 ##################################################
 # Building "La Calculette"
