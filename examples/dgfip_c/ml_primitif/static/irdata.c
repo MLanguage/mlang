@@ -6,6 +6,16 @@
 #include <string.h>
 #include "var.h"
 
+struct S_desc_var
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord * (*verif)(T_irdata *);
+};
+
+typedef struct S_desc_var T_desc_var;
+
 static bool alloc_tab(double **tab, char **def_tab, int taille)
 {
   if ((tab == NULL) || (def_tab == NULL)) {
@@ -154,8 +164,9 @@ void IRDATA_reset_erreur(T_irdata *irdata)
 #endif /* FLG_MULTITHREAD */
 }
 
-T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur)
+T_discord * IRDATA_range(T_irdata *irdata, T_var_irdata p_desc, double valeur)
 {
+  T_desc_var *desc = (T_desc_var *)p_desc;
   int indice = 0;
   T_discord *discord = NULL;
   if (valeur < 0) {
@@ -181,8 +192,9 @@ T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur)
   return discord;
 }
 
-void IRDATA_range_base(T_irdata *irdata, T_desc_var *desc, double valeur)
+void IRDATA_range_base(T_irdata *irdata, T_var_irdata p_desc, double valeur)
 {
+  T_desc_var *desc = (T_desc_var *)p_desc;
 #ifdef FLG_COMPACT
   int indice = desc->indice;
   irdata->defs[indice] = 1;
@@ -206,8 +218,9 @@ void IRDATA_range_base(T_irdata *irdata, T_desc_var *desc, double valeur)
 #endif /* FLG_COMPACT */
 }
 
-struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_desc_var *desc, int ind, double valeur)
+struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind, double valeur)
 {
+  T_desc_var *desc = (T_desc_var *)p_desc;
   int indice = 0;
   T_discord *discord = NULL;
   discord = (*desc->verif)(irdata);
@@ -238,8 +251,9 @@ struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_desc_var *desc, int 
   return discord;
 }
 
-double * IRDATA_extrait_special(T_irdata *irdata, T_desc_var *desc)
+double * IRDATA_extrait_special(T_irdata *irdata, T_var_irdata p_desc)
 {
+  T_desc_var *desc = (T_desc_var *)p_desc;
   double *res = NULL;
 #ifdef FLG_COMPACT
   int indice = desc->indice;
@@ -264,8 +278,9 @@ double * IRDATA_extrait_special(T_irdata *irdata, T_desc_var *desc)
   return res;
 }
 
-double * IRDATA_extrait_tableau(T_irdata *irdata, T_desc_var *desc, int ind)
+double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
 {
+  T_desc_var *desc = (T_desc_var *)p_desc;
   double *res = NULL;
 #ifdef FLG_COMPACT
   int indice = desc->indice + ind;
@@ -290,7 +305,7 @@ double * IRDATA_extrait_tableau(T_irdata *irdata, T_desc_var *desc, int ind)
   return res;
 }
 
-static T_desc_var * cherche_desc_var(const char *nom, T_desc_var *table, int taille, int sup)
+static T_var_irdata cherche_desc_var(const char *nom, T_var_irdata table, int taille, int sup)
 {
   T_desc_var *desc = NULL;
   int res = -1, inf = 0, millieu;
@@ -302,12 +317,12 @@ static T_desc_var * cherche_desc_var(const char *nom, T_desc_var *table, int tai
     else if (res > 0) inf = millieu + 1;
   }
   if (res == 0)
-    return desc;
+    return (T_var_irdata)desc;
   else
     return NULL;
 }
 
-T_desc_var * IRDATA_cherche_desc_var(const char *nom)
+T_var_irdata IRDATA_cherche_desc_var(const char *nom)
 {
   static T_desc_var * desc[6] = {
     (T_desc_var *)desc_contexte, (T_desc_var *)desc_famille, (T_desc_var *)desc_revenu,
@@ -321,7 +336,7 @@ T_desc_var * IRDATA_cherche_desc_var(const char *nom)
   int i = 0;
   for (i = 0; i < 6; ++i) {
     T_desc_var *res = cherche_desc_var(nom, desc[i], size[i], nb[i]);
-    if (res != NULL) return res;
+    if (res != NULL) return (T_var_irdata)res;
   }
   return NULL;
 }

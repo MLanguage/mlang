@@ -24,9 +24,8 @@
 #define DATE           (DATE_JJMMAAAA|DATE_MMAAAA|DATE_AAAA|DATE_JJMM|DATE_MM)
 #define NUMERIQUE      (ENTIER|REEL|REEL1|REEL2|REEL3)
 
-#define T_var_irdata T_desc_var *
+typedef void *T_var_irdata;
 
-typedef struct S_desc_var T_desc_var;
 typedef struct S_irdata T_irdata;
 typedef struct S_discord T_discord;
 typedef struct S_erreur T_erreur;
@@ -43,14 +42,14 @@ extern void IRDATA_recopie_irdata(T_irdata *src_irdata, T_irdata *dst_irdata);
 
 extern void IRDATA_reset_erreur(T_irdata *irdata);
 
-extern T_discord * IRDATA_range(T_irdata *irdata, T_desc_var *desc, double valeur);
-extern void IRDATA_range_base(T_irdata *irdata, T_desc_var *desc, double valeur);
-struct S_discord *IRDATA_range_tableau(T_irdata *irdata, T_desc_var *desc, int ind, double valeur);
+extern T_discord * IRDATA_range(T_irdata *irdata, T_var_irdata desc, double valeur);
+extern void IRDATA_range_base(T_irdata *irdata, T_var_irdata desc, double valeur);
+struct S_discord *IRDATA_range_tableau(T_irdata *irdata, T_var_irdata desc, int ind, double valeur);
 
-extern double * IRDATA_extrait_special (T_irdata *irdata, T_desc_var *desc);
-double * IRDATA_extrait_tableau(T_irdata *irdata, T_desc_var *desc, int ind);
+extern double * IRDATA_extrait_special (T_irdata *irdata, T_var_irdata desc);
+double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata desc, int ind);
 
-extern T_desc_var * IRDATA_cherche_desc_var(const char *nom);
+extern T_var_irdata IRDATA_cherche_desc_var(const char *nom);
 
 extern T_discord * err_NEGATIF(T_irdata *irdata);
 
