@@ -62,7 +62,7 @@ calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR) MPP_FUNCTION=$(MPP_FUNCTION))"
 	@$(MLANG) \
-		--dgfip_options=-g,-k1,-b0,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
+		--dgfip_options=-g,-k1,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
@@ -74,7 +74,7 @@ calc/enchain.c: $(SOURCE_FILES)
 # Ml_primitif
 # -----------------------------
 calc/enchain.o: calc/var_static.c.inc calc/enchain.c
-	@echo "Compilation des fichiers C issus des fichiers M (CC=$CC, CFLAGS=$CFLAGS)"
+	@echo "Compilation des fichiers C issus des fichiers M (CC=$(C_COMPILER), CFLAGS=$(CFLAGS))"
 	cd calc && $(C_COMPILER) $(CFLAGS) -c \
 	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
@@ -96,7 +96,7 @@ endif
 ##################################################
 
 run_tests: cal
-	 ./cal ${TEST_FILES} || (echo "Test failure" && false)
+	 ./cal ${TEST_FILES}
 
 ##################################################
 # Cleaners
