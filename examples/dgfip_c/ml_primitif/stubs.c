@@ -37,6 +37,18 @@ CAMLexport value caml_alloc_some(value v)
 extern T_desc_penalite desc_penalite[];
 extern T_desc_debug desc_debug01[];
 
+struct S_desc_var
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord * (*verif)(T_irdata *);
+};
+
+typedef struct S_desc_var T_desc_var;
+
+#define T_var_irdata T_desc_var *
+
 typedef void (*ench_fun)(T_irdata *);
 
 typedef struct ench_t {
