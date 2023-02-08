@@ -37,6 +37,18 @@ CAMLexport value caml_alloc_some(value v)
 // Non exportés dans headers standards
 extern T_desc_penalite desc_penalite[];
 extern T_desc_debug desc_debug01[];
+#if NB_DEBUG_C >= 2
+extern T_desc_debug desc_debug02[];
+#endif
+#if NB_DEBUG_C >= 3
+extern T_desc_debug desc_debug03[];
+#endif
+#if NB_DEBUG_C >= 4
+extern T_desc_debug desc_debug04[];
+#endif
+#if NB_DEBUG_C >= 5
+#error "Ne fonctionne qu'avec NB_DEBUG_C compris entre 1 et 4"
+#endif
 
 struct S_desc_var
 {
@@ -330,6 +342,60 @@ static void sort_index(void)
   sort_index_aux(0, var_index_entries - 1);
 }
 
+static void init_var_dict_debug(T_desc_debug desc_debug[], int nb_debug)
+{
+  for (size_t i = 0; i < nb_debug; ++i) {
+    genre_t genre = convert_genre(desc_debug[i].indice);
+    size_t id = desc_debug[i].indice & INDICE_VAL;
+    if (genre == G_CALCULEE) id += TAILLE_SAISIE;
+    else if (genre == G_BASE) id += TAILLE_SAISIE + TAILLE_CALCULEE;
+    if (genre == G_SAISIE) {
+      if (var[id].desc == NULL) {
+        fprintf(stderr,
+                "Variable saisie à l'indice %ld sans définition (%s)\n",
+                id, desc_debug[i].nom);
+        exit(1);
+      }
+      if (var[id].alias == NULL) {
+        fprintf(stderr,
+                "Variable saisie à l'indice %ld sans alias (%s)\n",
+                id, desc_debug[i].nom);
+        exit(1);
+      }
+      if (strcmp(var[id].alias, desc_debug[i].nom) != 0) {
+        var[id].code = desc_debug[i].nom;
+        add_var_to_index(var[id].code, &var[id]);
+      }
+    } else {
+      if (var[id].desc != NULL) {
+        fprintf(stderr,
+                "Variable base/calculée à l'indice %ld existe déjà (%s/%s)\n",
+                id, var[id].code, desc_debug[i].nom);
+        exit(1);
+      }
+      var[id].code = desc_debug[i].nom;
+      var[id].alias = NULL;
+      var[id].genre = genre;
+      var[id].domaine = D_INDEFINI;
+      var[id].type = convert_type(desc_debug[i].type_donnee);
+      var[id].nature = convert_nature(desc_debug[i].nat_code);
+      var[id].classe = desc_debug[i].classe;
+      var[id].cat_tl = desc_debug[i].categorie_TL;
+      var[id].cot_soc = desc_debug[i].cotsoc;
+      var[id].ind_abat = desc_debug[i].ind_abat != 0;
+      var[id].rap_cat = desc_debug[i].rapcat;
+      var[id].sanction = desc_debug[i].sanction;
+      var[id].cat_1731b = -1;
+      var[id].indice_tab = -1;
+      var[id].acompte = false;
+      var[id].avfisc = -1;
+      var[id].restituee = false;
+      var[id].desc = (T_desc_var *)&desc_debug[i];
+      add_var_to_index(var[id].code, &var[id]);
+    }
+  }
+}
+
 static void init_var_dict(void)
 {
   if (var_chargees == true) {
@@ -518,6 +584,17 @@ static void init_var_dict(void)
   }
 
   //printf("Chargement des variables calculée/base\n");
+  init_var_dict_debug(desc_debug01, NB_DEBUG01);
+#if NB_DEBUG_C >= 2
+  init_var_dict_debug(desc_debug02, NB_DEBUG02);
+#endif
+#if NB_DEBUG_C >= 3
+  init_var_dict_debug(desc_debug03, NB_DEBUG03);
+#endif
+#if NB_DEBUG_C >= 4
+  init_var_dict_debug(desc_debug04, NB_DEBUG04);
+#endif
+/*
   for (size_t i = 0; i < NB_DEBUG01; ++i) {
     genre_t genre = convert_genre(desc_debug01[i].indice);
     size_t id = desc_debug01[i].indice & INDICE_VAL;
@@ -568,6 +645,7 @@ static void init_var_dict(void)
       add_var_to_index(var[id].code, &var[id]);
     }
   }
+*/
 
   //printf("Chargement des variables restituées\n");
   for (size_t i = 0; i < NB_RESTITUEE; ++i) {
