@@ -59,7 +59,7 @@ tests.m_spec: gen_m_spec.py
 # Generating C files from M sources with Mlang
 ##################################################
 
-calc/var_static.c.inc:
+calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/const.h calc/dbg.h calc/irdata.c calc/irdata.h &:
 	mkdir -p calc
 	@echo "Copie des fichiers C statiques"
 	cp static/* calc/
