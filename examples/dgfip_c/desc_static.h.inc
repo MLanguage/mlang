@@ -4,14 +4,6 @@
 
 #include "conf.h"
 
-struct S_desc_var
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord * (*verif)(T_irdata *);
-};
-
 typedef struct S_desc_contexte
 {
   char *nom;
@@ -56,7 +48,7 @@ typedef struct S_desc_revenu
   int rapcat;
   int sanction;
   int modcat;
-  T_desc_var *liee;
+  T_var_irdata liee;
   char *libelle;
   char *code;
 } T_desc_revenu;
@@ -78,7 +70,7 @@ typedef struct S_desc_revenu_correc
   int rapcat;
   int sanction;
   int modcat;
-  T_desc_var *liee;
+  T_var_irdata liee;
   char *libelle;
 } T_desc_revenu_correc;
 
@@ -131,7 +123,7 @@ typedef struct S_desc_debug
   int sanction;
   int modcat;
   int nat_code;
-  T_desc_var *liee;
+  T_var_irdata liee;
 #ifdef FLG_EXTRACTION
   int est_extraite;
 #endif /* FLG_EXTRACTION */
