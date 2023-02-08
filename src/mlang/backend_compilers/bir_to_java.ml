@@ -173,9 +173,9 @@ let format_local_vars_defs (oc : Format.formatter)
       Format.fprintf fmt "localVariables[%d] = %s;" lvar.Mir.LocalVariable.id se)
     oc defs
 
-let generate_var_def (var : variable) (data : variable_data)
+let generate_var_def (var : variable) (def : variable_def)
     (oc : Format.formatter) =
-  match data.var_definition with
+  match def with
   | SimpleVar e ->
       let se, defs = generate_java_expr e in
       Format.fprintf oc "%a%s = %s;" format_local_vars_defs defs

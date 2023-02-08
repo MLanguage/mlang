@@ -259,16 +259,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
   let const_input_stmts =
     Bir.VariableMap.fold
       (fun var e acc ->
-        Pos.same_pos_as
-          (Bir.SAssign
-             ( var,
-               {
-                 Mir.var_typ = None;
-                 Mir.var_io = Regular;
-                 Mir.var_definition = Mir.SimpleVar e;
-               } ))
-          e
-        :: acc)
+        Pos.same_pos_as (Bir.SAssign (var, Mir.SimpleVar e)) e :: acc)
       f.func_constant_inputs []
   in
   let unused_input_stmts =
@@ -285,31 +276,22 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
               let pos = Pos.no_pos in
               ( Bir.SAssign
                   ( Bir.(var_from_mir default_tgv) var,
-                    {
-                      Mir.var_typ = None;
-                      Mir.var_io = Regular;
-                      Mir.var_definition =
-                        begin
-                          match var.Mir.Variable.is_table with
-                          | None ->
-                              Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
-                          | Some size ->
-                              let idxmap =
-                                let rec loop i acc =
-                                  if i < 0 then acc
-                                  else
-                                    loop (i - 1)
-                                      (Mir.IndexMap.add i
-                                         (Pos.same_pos_as
-                                            (Mir.Literal Mir.Undefined)
-                                            var.Mir.Variable.name)
-                                         acc)
-                                in
-                                loop (size - 1) Mir.IndexMap.empty
-                              in
-                              Mir.TableVar (size, Mir.IndexTable idxmap)
-                        end;
-                    } ),
+                    match var.Mir.Variable.is_table with
+                    | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
+                    | Some size ->
+                        let idxmap =
+                          let rec loop i acc =
+                            if i < 0 then acc
+                            else
+                              loop (i - 1)
+                                (Mir.IndexMap.add i
+                                   (Pos.same_pos_as (Mir.Literal Mir.Undefined)
+                                      var.Mir.Variable.name)
+                                   acc)
+                          in
+                          loop (size - 1) Mir.IndexMap.empty
+                        in
+                        Mir.TableVar (size, Mir.IndexTable idxmap) ),
                 pos )
               :: acc
         | _ -> acc)

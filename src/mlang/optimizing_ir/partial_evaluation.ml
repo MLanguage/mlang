@@ -625,7 +625,7 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
         List.mem (Pos.unmark (Bir.var_to_mir var).name) !Cli.var_info_debug
       in
       let new_def, new_ctx =
-        match def.var_definition with
+        match def with
         | InputVar -> (Mir.InputVar, ctx)
         | SimpleVar e ->
             if peval_debug then
@@ -698,11 +698,7 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
                 (TableVar (size, IndexTable (Mir.IndexMap.map fst es')), new_ctx)
             )
       in
-      let new_stmt =
-        Pos.same_pos_as
-          (SAssign (var, { def with var_definition = new_def }))
-          stmt
-      in
+      let new_stmt = Pos.same_pos_as (SAssign (var, new_def)) stmt in
       (new_stmt :: new_block, new_ctx)
   | SConditional (e, b1, b2, join) -> (
       let new_e, d =

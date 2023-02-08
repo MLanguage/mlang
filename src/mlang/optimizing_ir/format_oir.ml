@@ -18,10 +18,10 @@ open Oir
 
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
-  | SAssign (v, vdata) ->
+  | SAssign (v, vdef) ->
       Format.fprintf fmt "%s = %a@,"
         (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
-        Format_bir.format_variable_def vdata.var_definition
+        Format_bir.format_variable_def vdef
   | SConditional (cond, b1, b2, _) ->
       Format.fprintf fmt "if(%a) then goto %d else goto %d@,"
         Format_bir.format_expression cond b1 b2

@@ -21,7 +21,7 @@ module BlockMap : Map.S with type key = block_id
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Bir.variable * Bir.variable_data
+  | SAssign of Bir.variable * Bir.variable_def
   | SConditional of Bir.expression * block_id * block_id * block_id
   | SVerif of Bir.condition_data
   | SGoto of block_id
