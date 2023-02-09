@@ -160,6 +160,8 @@ module TGV = struct
   external uset : t -> string -> float -> unit = "ml_tgv_set"
   external reset_calculee : t -> unit = "ml_tgv_reset_calculee"
   external reset_base : t -> unit = "ml_tgv_reset_base"
+  external reset_saisie_calculee : t -> unit = "ml_tgv_reset_saisie_calculee"
+  external copy_all : t -> t -> unit = "ml_tgv_copy"
 
   let defined tgv var = udefined tgv (VarDict.unalias var)
 
@@ -266,20 +268,36 @@ module TGV = struct
         set_bool tgv signvar (v < 0.0);
         set tgv dvar (Float.abs v)
 
-  let internal_copy ~ignore_undefined (tgv : t) var_list =
+  let reset_saisie_calc ~except tgv =
+    let save = get_map_opt tgv except in
+    reset_saisie_calculee tgv;
+    set_map tgv save
+
+  type undef_action =
+    | UDIgnore
+    | UDZero
+    | UDCopy
+
+  let internal_copy ~undef (tgv : t) var_list =
     List.iter (fun (svar, dvar) ->
         match get_opt tgv svar with
-        | None when ignore_undefined -> ()
-        | None -> reset tgv dvar
         | Some v -> set tgv dvar v
+        | None ->
+            match undef with
+            | UDIgnore -> ()
+            | UDZero -> set tgv dvar 0.0
+            | UDCopy -> reset tgv dvar
       ) var_list
 
-  let copy ~ignore_undefined (stgv : t) (dtgv : t) var_list =
+  let copy_list ~undef (stgv : t) (dtgv : t) var_list =
     List.iter (fun (svar, dvar) ->
         match get_opt stgv svar with
-        | None when ignore_undefined -> ()
-        | None -> reset dtgv dvar
         | Some v -> set dtgv dvar v
+        | None ->
+            match undef with
+            | UDIgnore -> ()
+            | UDZero -> set dtgv dvar 0.0
+            | UDCopy -> reset dtgv dvar
       ) var_list
 
 end

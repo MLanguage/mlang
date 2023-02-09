@@ -51,12 +51,12 @@ if [ "$1" == 'nom' ] || [ "$1" == 'nomc' ]; then
 
 else
 
-  echo "Compilation des fichiers M avec Mlang (YEAR=$YEAR)"
+  echo "Compilation des fichiers M avec Mlang (YEAR=$YEAR, DGFIPFLAGS=$DGFIPFLAGS)"
 
   cd ./calc
 
-  # Note: we MUST compile with -kN whith N=1..4 (and its dependence -g, cf. how is defined NB_DEBUG01)
-  $MLANG -O -b dgfip_c --mpp_file=$MPP_FILE --mpp_function=$MPP_FUN --dgfip_options=-Ailiad,-m$YEAR,-X,-O,-g,-k4 -o enchain.c $M_SOURCES/*.m $M_TGV $M_ERR >/dev/null
+  # Note: compilation avec -g et -kN (N=1..4) OBLIGATOIREMENT
+  $MLANG -O -b dgfip_c --mpp_file=$MPP_FILE --mpp_function=$MPP_FUN --dgfip_options=-Ailiad,-m$YEAR,-g,-k4,$DGFIPFLAGS -o enchain.c $M_SOURCES/*.m $M_TGV $M_ERR >/dev/null
 
   if [ $? -ne 0 ]; then
     echo 'La compilation des fichiers M a échoué'

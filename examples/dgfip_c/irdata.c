@@ -2,9 +2,11 @@
 #include "conf.h"
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include "var.h"
+
+#define FALSE 0
+#define TRUE 1
 
 struct S_desc_var
 {
@@ -16,24 +18,24 @@ struct S_desc_var
 
 typedef struct S_desc_var T_desc_var;
 
-static bool alloc_tab(double **tab, char **def_tab, int taille)
+static int alloc_tab(double **tab, char **def_tab, int taille)
 {
   if ((tab == NULL) || (def_tab == NULL)) {
-    return false;
+    return FALSE;
   }
   if (taille > 0) {
     *tab = (double *)malloc(taille * sizeof(double));
     if (*tab == NULL) {
-      return false;
+      return FALSE;
     }
     *def_tab = (char *)malloc(taille * sizeof(char));
     if (*def_tab == NULL) {
       free(*tab);
       *tab = NULL;
-      return false;
+      return FALSE;
     }
   }
-  return true;
+  return TRUE;
 }
 
 T_irdata * IRDATA_new_irdata(void)
@@ -49,15 +51,15 @@ T_irdata * IRDATA_new_irdata(void)
   irdata->def_calculee = NULL;
   irdata->base = NULL;
   irdata->def_base = NULL;
-  if (alloc_tab(&irdata->saisie, &irdata->def_saisie, TAILLE_SAISIE) == false) {
+  if (alloc_tab(&irdata->saisie, &irdata->def_saisie, TAILLE_SAISIE) == FALSE) {
     IRDATA_delete_irdata(irdata);
     return NULL;
   }
-  if (alloc_tab(&irdata->calculee, &irdata->def_calculee, TAILLE_CALCULEE) == false) {
+  if (alloc_tab(&irdata->calculee, &irdata->def_calculee, TAILLE_CALCULEE) == FALSE) {
     IRDATA_delete_irdata(irdata);
     return NULL;
   }
-  if (alloc_tab(&irdata->base, &irdata->def_base, TAILLE_BASE) == false) {
+  if (alloc_tab(&irdata->base, &irdata->def_base, TAILLE_BASE) == FALSE) {
     IRDATA_delete_irdata(irdata);
     return NULL;
   }
@@ -249,6 +251,44 @@ struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_var_irdata p_desc, i
   }
 #endif /* FLG_COMPACT */
   return discord;
+}
+
+void IRDATA_efface(T_irdata *irdata, T_var_irdata p_desc)
+{
+  T_desc_var *desc = (T_desc_var *)p_desc;
+  int indice = 0;
+#ifdef FLG_COMPACT
+  indice = desc->indice;
+  irdata->valeurs[indice] = 0;
+  irdata->defs[indice] = 0;
+#else
+  indice = desc->indice & INDICE_VAL;
+  if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
+    return;
+  }
+  irdata->saisie[indice] = 0;
+  irdata->def_saisie[indice] = 0;
+#endif /* FLG_COMPACT */
+  return;
+}
+
+void IRDATA_efface_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
+{
+  T_desc_var *desc = (T_desc_var *)p_desc;
+  int indice = 0;
+#ifdef FLG_COMPACT
+  indice = desc->indice + ind;
+  irdata->valeurs[indice] = 0;
+  irdata->defs[indice] = 0;
+#else
+  indice = (desc->indice & INDICE_VAL) + ind;
+  if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
+    return;
+  }
+  irdata->saisie[indice] = 0;
+  irdata->def_saisie[indice] = 0;
+#endif /* FLG_COMPACT */
+  return;
 }
 
 double * IRDATA_extrait_special(T_irdata *irdata, T_var_irdata p_desc)

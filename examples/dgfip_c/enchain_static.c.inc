@@ -306,7 +306,7 @@ T_discord * err_NEGATIF(T_irdata *irdata)
 
 double floor_g(double a)
 {
-  if (fabs(a) <= LONG_MAX) {
+  if (fabs(a) <= (double)LONG_MAX) {
     return floor(a);
   } else {
     return a;
@@ -315,7 +315,7 @@ double floor_g(double a)
 
 double ceil_g(double a)
 {
-  if (fabs(a) <= LONG_MAX) {
+  if (fabs(a) <= (double)LONG_MAX) {
     return ceil(a);
   } else {
     return a;

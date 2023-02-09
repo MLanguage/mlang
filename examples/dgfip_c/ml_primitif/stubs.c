@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 
 #define CAML_NAME_SPACE
 #include "caml/version.h"
@@ -594,58 +595,6 @@ static void init_var_dict(void)
 #if NB_DEBUG_C >= 4
   init_var_dict_debug(desc_debug04, NB_DEBUG04);
 #endif
-/*
-  for (size_t i = 0; i < NB_DEBUG01; ++i) {
-    genre_t genre = convert_genre(desc_debug01[i].indice);
-    size_t id = desc_debug01[i].indice & INDICE_VAL;
-    if (genre == G_CALCULEE) id += TAILLE_SAISIE;
-    else if (genre == G_BASE) id += TAILLE_SAISIE + TAILLE_CALCULEE;
-    if (genre == G_SAISIE) {
-      if (var[id].desc == NULL) {
-        fprintf(stderr,
-                "Variable saisie à l'indice %ld sans définition (%s)\n",
-                id, desc_debug01[i].nom);
-        exit(1);
-      }
-      if (var[id].alias == NULL) {
-        fprintf(stderr,
-                "Variable saisie à l'indice %ld sans alias (%s)\n",
-                id, desc_debug01[i].nom);
-        exit(1);
-      }
-      if (strcmp(var[id].alias, desc_debug01[i].nom) != 0) {
-        var[id].code = desc_debug01[i].nom;
-        add_var_to_index(var[id].code, &var[id]);
-      }
-    } else {
-      if (var[id].desc != NULL) {
-        fprintf(stderr,
-                "Variable base/calculée à l'indice %ld existe déjà (%s/%s)\n",
-                id, var[id].code, desc_debug01[i].nom);
-        exit(1);
-      }
-      var[id].code = desc_debug01[i].nom;
-      var[id].alias = NULL;
-      var[id].genre = genre;
-      var[id].domaine = D_INDEFINI;
-      var[id].type = convert_type(desc_debug01[i].type_donnee);
-      var[id].nature = convert_nature(desc_debug01[i].nat_code);
-      var[id].classe = desc_debug01[i].classe;
-      var[id].cat_tl = desc_debug01[i].categorie_TL;
-      var[id].cot_soc = desc_debug01[i].cotsoc;
-      var[id].ind_abat = desc_debug01[i].ind_abat != 0;
-      var[id].rap_cat = desc_debug01[i].rapcat;
-      var[id].sanction = desc_debug01[i].sanction;
-      var[id].cat_1731b = -1;
-      var[id].indice_tab = -1;
-      var[id].acompte = false;
-      var[id].avfisc = -1;
-      var[id].restituee = false;
-      var[id].desc = (T_desc_var *)&desc_debug01[i];
-      add_var_to_index(var[id].code, &var[id]);
-    }
-  }
-*/
 
   //printf("Chargement des variables restituées\n");
   for (size_t i = 0; i < NB_RESTITUEE; ++i) {
@@ -683,20 +632,6 @@ static void init_var_dict(void)
   sort_index();
 }
 
-void efface_var(T_irdata *irdata, T_var_irdata desc)
-{
-#ifdef FLG_COMPACT
-  int indice = desc->indice;
-  irdata->valeurs[indice] = 0;
-  irdata->defs[indice] = 0;
-#else
-  int indice = desc->indice & INDICE_VAL;
-  irdata->saisie[indice] = 0;
-  irdata->def_saisie[indice] = 0;
-#endif /* FLG_COMPACT */
-}
-
-
 static var_t *
 cherche_var(
   const char *code)
@@ -717,6 +652,7 @@ cherche_var(
 
   return NULL;
 }
+
 CAMLprim value
 ml_charge_vars(void)
 {
@@ -790,7 +726,7 @@ ml_tgv_reset(value mlTgv, value mlCode)
     fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
     exit(1);
   }
-  efface_var(tgv, var->desc);
+  IRDATA_efface(tgv, var->desc);
 
   CAMLreturn(Val_unit);
 }
@@ -889,7 +825,6 @@ ml_tgv_copy(value mlSTgv, value mlDTgv)
   T_irdata *stgv = Tgv_val(mlSTgv);
   T_irdata *dtgv = Tgv_val(mlDTgv);
   IRDATA_recopie_irdata(stgv, dtgv);
-
   CAMLreturn(Val_unit);
 }
 
@@ -913,8 +848,8 @@ ml_exec_ench(
     ++i;
   }
   if (i >= nb_ench) {
-      fprintf(stderr, "L'enchaineur %s n'existe pas\n", ench);
-      exit(1);
+    fprintf(stderr, "L'enchaineur %s n'existe pas\n", ench);
+    exit(1);
   }
 
   enchaineurs[i].function(tgv);
@@ -943,8 +878,8 @@ ml_exec_verif(
     ++i;
   }
   if (i >= nb_verif) {
-      fprintf(stderr, "La verification %s n'existe pas\n", verif);
-      exit(1);
+    fprintf(stderr, "La verification %s n'existe pas\n", verif);
+    exit(1);
   }
 
   struct S_discord * erreurs = verifications[i].function(tgv);
