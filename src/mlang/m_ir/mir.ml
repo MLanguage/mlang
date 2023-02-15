@@ -34,18 +34,6 @@ let compare_execution_number (n1 : execution_number) (n2 : execution_number) :
   if n1.rule_number = n2.rule_number then compare n1.seq_number n2.seq_number
   else compare n1.rule_number n2.rule_number
 
-type max_result =
-  | Left
-  | Right  (** Operator used to select the most preferable variable to choose *)
-
-let max_exec_number (left : execution_number) (right : execution_number) :
-    max_result =
-  if left.rule_number > right.rule_number then Left
-  else if left.rule_number < right.rule_number then Right
-  else if left.seq_number > right.seq_number then Left
-  else if left.seq_number < right.seq_number then Right
-  else Left
-
 (** This is the operator used to determine the if a candidate definition is
     valid at a given point *)
 let is_candidate_valid (candidate : execution_number)
@@ -570,10 +558,14 @@ let sort_by_lowest_exec_number v1 v2 =
 let sort_by_highest_exec_number v1 v2 =
   compare v1.Variable.execution_number v2.Variable.execution_number
 
+let get_max_var_sorted_by_execution_number compare (name : string)
+    (idmap : _ Pos.VarNameToID.t) : Variable.t =
+  let vars = Pos.VarNameToID.find name idmap |> List.sort compare in
+  match vars with [] -> raise Not_found | hd :: _ -> hd
+
 let get_var_sorted_by_execution_number (p : program) (name : string) sort :
     Variable.t =
-  let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
-  match vars with [] -> raise Not_found | hd :: _ -> hd
+  get_max_var_sorted_by_execution_number sort name p.program_idmap
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try

@@ -249,12 +249,12 @@ formula_list:
 | f = formula_kind SEMICOLON fs = formula_list { f::fs }
 
 formula_kind:
-| f = formula_one { (SingleFormula f, mk_position $sloc) }
+| f = formula { (SingleFormula f, mk_position $sloc) }
 | fs = for_formula
   { let (lv, ft) = fs in (MultipleFormulaes (lv, ft), mk_position $sloc) }
 
 for_formula:
-| FOR lv = loop_variables COLON ft = formula_two { (lv, ft) }
+| FOR lv = loop_variables COLON ft = formula { (lv, ft) }
 
 
 lvalue_name:
@@ -263,13 +263,7 @@ lvalue_name:
 lvalue:
 | s = lvalue_name i = brackets? { ({ var = s; index = i}, mk_position $sloc) }
 
-formula_two:
-| l = lvalue EQUALS e = expression { {
-    lvalue = l;
-    formula =  e
-  } }
-
-formula_one:
+formula:
 | l = lvalue EQUALS e = expression { {
     lvalue = l;
     formula =  e

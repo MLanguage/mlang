@@ -21,10 +21,6 @@ type execution_number = {
   pos : Pos.t;
 }
 
-type max_result =
-  | Left
-  | Right  (** Operator used to select the most preferable variable to choose *)
-
 type variable_id = int
 (** Each variable has an unique ID *)
 
@@ -324,9 +320,15 @@ val compare_execution_number : execution_number -> execution_number -> int
 
 val find_var_definition : program -> variable -> rule_data * variable_data
 
-val max_exec_number : execution_number -> execution_number -> max_result
-
 val is_candidate_valid : execution_number -> execution_number -> bool -> bool
+
+val sort_by_lowest_exec_number : Variable.t -> Variable.t -> int
+
+val get_max_var_sorted_by_execution_number :
+  (Variable.t -> Variable.t -> int) ->
+  string ->
+  Variable.t list Pos.VarNameToID.t ->
+  Variable.t
 
 val fresh_rule_num : unit -> int
 
