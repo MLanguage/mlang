@@ -147,8 +147,8 @@ let collapse_constr (st : local_stacks) (ctx : local_vars) (constr : constr) =
 let push_with_kind (st : local_stacks) (ctx : local_vars) (kind : dflag)
     (constr : constr) =
   let expr, ekind, lv = constr st ctx in
-  let st, lv, expr = store_local st lv Anon kind expr in
   let expr = if kind = ekind then expr else cast kind expr in
+  let st, lv, expr = store_local st lv Anon kind expr in
   (st, lv, expr)
 
 (* eval and store without enforcing kind *)
@@ -333,9 +333,23 @@ let ite (c : constr) (t : constr) (e : constr) (st : local_stacks)
   match (c, t, e) with
   | Dtrue, _, _ -> (t, tkind, lvt)
   | Dfalse, _, _ -> (e, ekind, lve)
+  | _, Dtrue, Dtrue | _, Dfalse, Dfalse -> (t, tkind, lvt)
   | _, Dlit 1., Dlit 0. -> (c, Def, lvc)
   | _, Dlit f, Dlit f' when f = f' -> (Dlit f, ite_kind, [])
   | _ -> (Dite (c, t, e), ite_kind, lve @ lvt @ lvc)
+
+let it0 (c : constr) (t : constr) (st : local_stacks) (ctx : local_vars) : t =
+  let st', lvc, c = push_with_kind st ctx Def c in
+  let _, lvt, t, tkind = push st' ctx t in
+  let e, ekind =
+    match tkind with Def -> (Dfalse, Def) | Val -> (Dlit 0., Val)
+  in
+  match (c, t) with
+  | Dtrue, _ -> (t, tkind, lvt)
+  | Dfalse, _ -> (e, ekind, [])
+  | _, (Dlit 1. | Dtrue) -> (c, Def, lvc)
+  | _, (Dlit 0. | Dfalse) -> (t, tkind, [])
+  | _ -> (Dite (c, t, e), tkind, lvt @ lvc)
 
 let build_transitive_composition ?(safe_def = false)
     ({ def_test; value_comp } : expression_composition) : expression_composition
@@ -345,9 +359,7 @@ let build_transitive_composition ?(safe_def = false)
      operation have such semantic property (funny question is what's the
      causality ?). This allows to remove a check to the definition flag when we
      compute the value, avoiding a lot of unnecessary code. *)
-  let value_comp =
-    if safe_def then value_comp else ite def_test value_comp (lit 0.)
-  in
+  let value_comp = if safe_def then value_comp else it0 def_test value_comp in
   { def_test; value_comp }
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
