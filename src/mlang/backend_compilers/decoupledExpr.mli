@@ -39,7 +39,7 @@ val locals_from_m : Mir.LocalVariable.t -> local_var * local_var
 val new_local : unit -> local_var
 (** Create a fresh local variable *)
 
-(** {2:constr Expresssion constructors} *)
+(** {2:constr Expression constructors} *)
 
 (** These are the smart constructors used to build expressions. In effect, they
     represent the language in which computations are defined. *)
