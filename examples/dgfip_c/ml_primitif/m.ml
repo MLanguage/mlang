@@ -5,7 +5,9 @@ external annee_calc : unit -> int = "ml_annee_calc"
 
 external exec_ench_raw : string -> TGV.t -> unit = "ml_exec_ench"
 
-external exec_verif_raw : string -> TGV.t -> unit = "ml_exec_verif"
+external exec_verif_raw : string -> TGV.t -> string list = "ml_exec_verif"
+
+external dump_raw_tgv_in : string -> TGV.t -> string list -> unit = "ml_dump_raw_tgv" (* filename, tgv, err *)
 
 let exec_ench ench tgv = exec_ench_raw ench tgv
 let exec_verif ench tgv = exec_verif_raw ench tgv
@@ -73,7 +75,7 @@ and traite_double_liquidation_pvro tgv traitement =
   if TGV.defined tgv "3WG" then
     begin
       TGV.set_bool tgv "FLAG_PVRO" true;
-      traite_double_liquidation_exit_taxe tgv traitement;
+      let _err = traite_double_liquidation_exit_taxe tgv traitement in
       TGV.internal_copy ~ignore_undefined:true tgv [ "IAD11", "IPVRO" ]
     end;
   TGV.set_bool tgv "FLAG_PVRO" false;
@@ -86,7 +88,7 @@ and traite_double_liquidation_exit_taxe tgv traitement =
       begin
         TGV.set_bool tgv code_3WNEG false; (* do we have to reset it right now ? *)
         TGV.set_int tgv "FLAG_EXIT" flag_EXIT;
-        traite_double_liquidation3 tgv traitement false;
+        let _err = traite_double_liquidation3 tgv traitement false in
         TGV.copy_abs tgv "NAPTIR" code_NAPTIR3W code_3WNEG;
         TGV.internal_copy ~ignore_undefined:true tgv
           [ "IHAUTREVT", code_CHR3W; "ID11", code_ID113W ];
@@ -98,7 +100,7 @@ and traite_double_liquidation_exit_taxe tgv traitement =
   traite_3W_RW tgv 2 "3WA" "RWA"
     "FLAG_3WANEG" "NAPTIR3WA" "CHR3WA" "ID113WA";
   TGV.set_bool tgv "FLAG_BAREM" true;
-  traite_double_liquidation3 tgv traitement true;
+  let _err = traite_double_liquidation3 tgv traitement true in
   TGV.internal_copy ~ignore_undefined:true tgv
     [ "RASTXFOYER", "BARTXFOYER";
       "RASTXDEC1", "BARTXDEC1";
@@ -156,6 +158,7 @@ and traite_double_liquidation3 tgv traitement p_is_calcul_acomptes =
   calcul_prim_corr tgv traitement;
   calcul_primitif_taux tgv;
   if traitement = Primitif then verif_calcul_primitive tgv
+  else []
 
 and calcul_prim_corr tgv traitement =
   if traitement = Primitif then calcul_primitif tgv

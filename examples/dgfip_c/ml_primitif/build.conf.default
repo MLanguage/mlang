@@ -11,5 +11,24 @@ MPP_FUN=dgfip_calculation
 
 YEAR=2020   # Ajuster selon l'année
 M_SOURCES=$MLANG_ROOT/ir-calcul/sources2020m_6_5 # Ajuster selon l'année
-M_TGV= # Fichier à utiliser si tgv.m dans dossier différent de M_SOURCES
-M_ERR= # Fichier à utiliser si err.m dans dossier différent de M_SOURCES
+
+M_TGV= # Utiliser si tgv.m dans dossier différent de M_SOURCES
+M_ERR= # Utiliser si err.m dans dossier différent de M_SOURCES
+
+# Options supplémentaires pour le backend Mlang/DGFiP
+# Note: les flags -Ailiad, -m, -g et -k sont déjà définis
+DGFIPFLAGS="-X,-O"  # = environnement DGFiP
+
+# Options pour le compilateur C (si gcc)
+# Attention, très long à compiler en O2/O3 (~40min)
+#CC=gcc
+#CFLAGS="-O1 -std=c89 -pedantic"
+
+# Options pour le compilateur C (si clang)
+CC=clang
+CFLAGS="-O1 -std=c89 -pedantic -fbracket-depth=2048"
+
+# Options pour le compilateur OCaml
+OCAMLFLAGS=
+#OCAMLFLAGS="-g -inline 0"
+WITH_BISECT=0 # 1 pour activer la couverture de code
