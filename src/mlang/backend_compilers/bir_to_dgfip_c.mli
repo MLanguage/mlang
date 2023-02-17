@@ -14,6 +14,12 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+(** This module with a single entry point generates C files from a
+    {!Bir.program}. *)
+
+(** The optimized code generation for M code, which represents the vast majority
+    of the output, is built in {!DecoupledExpr}. *)
+
 val generate_c_program :
   Dgfip_options.flags ->
   Bir.program ->
