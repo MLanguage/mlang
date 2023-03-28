@@ -25,9 +25,9 @@ QUIET=>/dev/null # Uncomment to suppress output
 # Attention, très long à compiler avec GCC en O2/O3
 # Le flag sur la profondeur des blocs ne semble plus nécessaire.
 COMMON_CFLAGS=-std=c89 -pedantic
-ifeq ($(C_COMPILER), clang)
+ifeq ($(CC), clang)
     COMPILER_SPECIFIC_CFLAGS=-O2 -fbracket-depth=2048
-else ifeq ($(C_COMPILER), gcc)
+else ifeq ($(CC), gcc)
     COMPILER_SPECIFIC_CFLAGS=-O1
 endif
 CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
@@ -110,8 +110,8 @@ calc/ir_%.c: %.m_spec $(SOURCE_FILES)
 # Ml_primitif (current main build)
 # -----------------------------
 calc/enchain.o: calc/var_static.c.inc calc/enchain.c
-	@echo "Compilation des fichiers C issus des fichiers M (CC=$(C_COMPILER), CFLAGS=$(CFLAGS))"
-	cd calc && $(C_COMPILER) $(CFLAGS) -c \
+	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), CFLAGS=$(CFLAGS))"
+	cd calc && $(CC) $(CFLAGS) -c \
 	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
@@ -121,28 +121,22 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
 calc/old_ir_%.o: calc/old_ir_%.c calc/var_static.c.inc
-	cd calc && $(C_COMPILER) -c $(<F) \
+	cd calc && $(CC) -c $(<F) \
 	$(M_C_FILES) \
 	contexte.c famille.c penalite.c restitue.c revcor.c \
 	revenu.c variatio.c var.c irdata.c
-
-# This overloaded implicit rule could be avoided by using $(CC) variable everywhere instead of $(C_COMPILER)
-# thus the default compiler used by make would be the one defined as CC in the configuration instead of the
-# system default.
-%.o: %.c
-	$(C_COMPILER) -c $<
 
 # Ancien makefile backend_tests
 # -----------------------------
 calc/ir_%.o: export AFL_DONT_OPTIMIZE=1
 calc/ir_%.o: calc/ir_%.c calc/var_static.c.inc
-	cd calc && $(C_COMPILER) -c $(<F) \
+	cd calc && $(CC) -c $(<F) \
 	$(M_C_FILES) \
 	contexte.c famille.c penalite.c restitue.c revcor.c \
 	revenu.c variatio.c var.c irdata.c
 
 calc/test_harness.o: calc/ir_tests.c
-	$(C_COMPILER) -O3 -c -o $@ test_harness.c
+	$(CC) -O3 -c -o $@ test_harness.c
 
 #################################################
 # Final targets
@@ -153,12 +147,12 @@ calc/test_harness.o: calc/ir_tests.c
 cal: calc/enchain.o
 	@echo "Compilation de la calculette primitive (OCAMLFLAGS=$(OCAMLFLAGS), WITH_BISECT=$(WITH_BISECT))"
 ifeq ($(WITH_BISECT), 1)
-	ocamlopt -cc $(C_COMPILER) -ccopt -std=c99 -ccopt -fno-common \
+	ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
 	-I $(BISECT_PATH)/common -I $(BISECT_PATH)/runtime \
 	-ppx "$(BISECT_PATH)/ppx.exe --as-ppx" \
 	unix.cmxa bisect_common.cmxa bisect.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
 else
-	ocamlopt -cc $(C_COMPILER) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
+	ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
 	unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
 endif
 
@@ -169,7 +163,7 @@ endif
 # l'ancien backend C non plus, à cause de l'absence de header correspondant.
 # To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
 run_%.exe: calc/old_ir_%.o run_%.o
-	cd calc && $(C_COMPILER) -lm -o $@ $(^F) \
+	cd calc && $(CC) -lm -o $@ $(^F) \
 	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
@@ -177,7 +171,7 @@ run_%.exe: calc/old_ir_%.o run_%.o
 # Ancien makefile backend_tests
 # -----------------------------
 test_harness.exe: calc/ir_tests.o calc/test_harness.o
-	cd calc && $(C_COMPILER) -fPIE -lm -o ../$@ $(^F) \
+	cd calc && $(CC) -fPIE -lm -o ../$@ $(^F) \
 	$(M_C_FILES:.c=.o) \
 	contexte.o famille.o penalite.o restitue.o revcor.o \
 	revenu.o variatio.o var.o irdata.o
@@ -255,7 +249,7 @@ run_perf: perf_harness.exe FORCE
 
 FUZZ_M_SPEC=tests
 
-fuzz_harness.exe: CC=afl-$(C_COMPILER)
+fuzz_harness.exe: CC=afl-$(CC)
 fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
 	$(CC) -fPIE -lm -o $@ $^
 

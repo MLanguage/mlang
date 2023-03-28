@@ -42,7 +42,12 @@ else
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
-C_COMPILER?=clang
+# CC is a GNU make default variable defined to CC
+# It so can't be overriden by conditional operator ?=
+# We check the origin of CC value to not override CL argument or explicit environment.
+ifeq ($(origin CC),default)
+    CC=clang
+endif
 
 ifeq ($(OPTIMIZE), 0)
     OPTIMIZE_FLAG=
