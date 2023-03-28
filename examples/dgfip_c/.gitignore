@@ -9,6 +9,7 @@ ml_primitif/calc/*
 ml_primitif/*.cm*
 ml_primitif/cal
 ml_primitif/vars.txt
+ml_primitif/*.output
 
 fuzz_findings/*
 fuzz_tests/*
