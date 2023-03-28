@@ -44,7 +44,10 @@ extern void IRDATA_reset_erreur(T_irdata *irdata);
 
 extern T_discord * IRDATA_range(T_irdata *irdata, T_var_irdata desc, double valeur);
 extern void IRDATA_range_base(T_irdata *irdata, T_var_irdata desc, double valeur);
-struct S_discord *IRDATA_range_tableau(T_irdata *irdata, T_var_irdata desc, int ind, double valeur);
+struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_var_irdata desc, int ind, double valeur);
+
+extern void IRDATA_efface(T_irdata *irdata, T_var_irdata desc);
+extern void IRDATA_efface_tableau(T_irdata *irdata, T_var_irdata desc, int ind);
 
 extern double * IRDATA_extrait_special (T_irdata *irdata, T_var_irdata desc);
 double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata desc, int ind);

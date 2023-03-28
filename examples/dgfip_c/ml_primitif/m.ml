@@ -76,7 +76,7 @@ and traite_double_liquidation_pvro tgv traitement =
     begin
       TGV.set_bool tgv "FLAG_PVRO" true;
       let _err = traite_double_liquidation_exit_taxe tgv traitement in
-      TGV.internal_copy ~ignore_undefined:true tgv [ "IAD11", "IPVRO" ]
+      TGV.internal_copy ~undef:UDIgnore tgv [ "IAD11", "IPVRO" ]
     end;
   TGV.set_bool tgv "FLAG_PVRO" false;
   traite_double_liquidation_exit_taxe tgv traitement
@@ -90,7 +90,7 @@ and traite_double_liquidation_exit_taxe tgv traitement =
         TGV.set_int tgv "FLAG_EXIT" flag_EXIT;
         let _err = traite_double_liquidation3 tgv traitement false in
         TGV.copy_abs tgv "NAPTIR" code_NAPTIR3W code_3WNEG;
-        TGV.internal_copy ~ignore_undefined:true tgv
+        TGV.internal_copy ~undef:UDIgnore tgv
           [ "IHAUTREVT", code_CHR3W; "ID11", code_ID113W ];
         TGV.set_int tgv "FLAG_EXIT" 0
       end
@@ -101,7 +101,7 @@ and traite_double_liquidation_exit_taxe tgv traitement =
     "FLAG_3WANEG" "NAPTIR3WA" "CHR3WA" "ID113WA";
   TGV.set_bool tgv "FLAG_BAREM" true;
   let _err = traite_double_liquidation3 tgv traitement true in
-  TGV.internal_copy ~ignore_undefined:true tgv
+  TGV.internal_copy ~undef:UDIgnore tgv
     [ "RASTXFOYER", "BARTXFOYER";
       "RASTXDEC1", "BARTXDEC1";
       "RASTXDEC2", "BARTXDEC2";

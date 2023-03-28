@@ -25,12 +25,19 @@ let convert_int s =
 
 let convert_float s =
   try Float.of_string s
-  with _ -> 0.0
+  (* with _ -> 0.0 *)
+  with _ -> (* to cope with badly formatted tests *)
+    try Float.of_string
+          (String.sub s 0
+             (String.index_from s
+                ((String.index s '.') + 1) '.'))
+    with _ -> 0.0
 
 let parse_generic s =
   let sl = String.split_on_char '/' s in
   match sl with
   | [ code; montant ] -> (code, convert_float montant)
+  | [ code ] -> (code, 0.0) (* to cope with badly formatted tests *)
   | _ -> failwith (Printf.sprintf "Ligne generique invalide: '%s'" s)
 
 let parse_controle s =
@@ -68,7 +75,9 @@ let read_section_contents f parsefun =
     let s = read_line f in
     if String.length s < 1 then
       aux contents
-    else if s.[0] = '#' then
+    (* else if s.[0] = '#' then *)
+    else if s.[0] = '#' ||
+            s = "CONTROLES-PRIMITIF" then (* to cope with badly formatted tests *)
       (put_back_line f s; List.rev contents)
     else
       aux (parsefun s :: contents)
@@ -88,7 +97,9 @@ let read_file f =
         | "#NOM" -> `Nom (read_section_contents f (fun x -> x))
         | "#ENTREES-PRIMITIF" ->
             `EntreesPrimitif (read_section_contents f parse_generic)
-        | "#CONTROLES-PRIMITIF" ->
+        (* | "#CONTROLES-PRIMITIF" -> *)
+        | "#CONTROLES-PRIMITIF"
+        | "CONTROLES-PRIMITIF" -> (* to cope with badly formatted tests *)
             `ControlesPrimitif (read_section_contents f parse_controle)
         | "#RESULTATS-PRIMITIF" ->
             `ResultatsPrimitif (read_section_contents f parse_generic)

@@ -66,12 +66,12 @@ calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/cons
 
 # Ml_primitif (current main build)
 # -----------------------------
-# Note: compilation avec -g et -k1 OBLIGATOIREMENT
+# Note: compilation avec -g et -kN (N=1..4) OBLIGATOIREMENT
 calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
-	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR) MPP_FUNCTION=$(MPP_FUNCTION))"
+	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR), MPP_FUNCTION=$(MPP_FUNCTION), DGFIPFLAGS=$(DGFIPFLAGS))"
 	@$(MLANG) \
-		--dgfip_options=-g,-k1,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
+		--dgfip_options=-g,-k4,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
@@ -112,7 +112,7 @@ calc/ir_%.c: %.m_spec $(SOURCE_FILES)
 calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(C_COMPILER), CFLAGS=$(CFLAGS))"
 	cd calc && $(C_COMPILER) $(CFLAGS) -c \
-	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg01.c restitue.c \
+	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
 # Ancien makefile racine du backend
