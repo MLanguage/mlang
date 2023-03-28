@@ -48,6 +48,7 @@ ifeq ($(WITH_BISECT), 1)
     endif
 endif
 
+.DEFAULT_GOAL := cal
 
 ##################################################
 # Generating the tests.m_spec

@@ -30,7 +30,7 @@ JAVACOPT_CALC=--release 7
 JAVACOPT_TEST=--release 8
 endif
 
-all: backend_tests $(shell find . -name "run_*.py")
+.DEFAULT_GOAL := backend_tests/target/TestHarness.class
 
 clean: 
 	rm -f src/com/mlang/Ir_*.java target/com/mlang/*.class backend_tests/target/com/mlang/*.class
