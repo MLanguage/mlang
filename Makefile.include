@@ -1,10 +1,14 @@
 ##################################################
-# Variables
+# Local customization
 ##################################################
 
 SELF_DIR=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 
 -include $(SELF_DIR)/Makefile.config
+
+##################################################
+# Tax computation configuration
+##################################################
 
 define source_dir
 	$(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort) $(1)errI.m $(1)tgvI.m
@@ -42,12 +46,9 @@ else
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
-# CC is a GNU make default variable defined to CC
-# It so can't be overriden by conditional operator ?=
-# We check the origin of CC value to not override CL argument or explicit environment.
-ifeq ($(origin CC),default)
-    CC=clang
-endif
+##################################################
+# Mlang configuration
+##################################################
 
 ifeq ($(OPTIMIZE), 0)
     OPTIMIZE_FLAG=
@@ -63,7 +64,21 @@ MLANG_DEFAULT_OPTS=\
 	--precision $(PRECISION) \
 	$(OPTIMIZE_FLAG)
 
+##################################################
+# C backend configuration
+##################################################
+
+# CC is a GNU make default variable defined to CC
+# It so can't be overriden by conditional operator ?=
+# We check the origin of CC value to not override CL argument or explicit environment.
+ifeq ($(origin CC),default)
+    CC=clang
+endif
+
+##################################################
 # Exports to call backends from main Makefile
+##################################################
+
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
