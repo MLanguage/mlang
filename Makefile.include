@@ -56,9 +56,17 @@ else
 endif
 
 MLANG_BIN=dune exec $(SELF_DIR)/_build/default/src/main.exe --
-PRECISION?=double
 
+PRECISION?=double
 MLANG_DEFAULT_OPTS=\
 	--display_time --debug \
 	--precision $(PRECISION) \
 	$(OPTIMIZE_FLAG)
+
+# Exports to call backends from main Makefile
+# common
+export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
+# for C backend (Java compilation is year-independent)
+export YEAR CC
+# for Java backend (C overload these now)
+export MPP_FUNCTION MPP_FILE

@@ -1,4 +1,6 @@
-include ../../../Makefile.include
+ifeq ($(MAKELEVEL), 0)
+    include ../../../Makefile.include
+endif
 
 ifeq ($(TEST_FILTER), 1)
     TEST_FILES=$(TESTS_DIR)[A-Z]*
