@@ -939,7 +939,7 @@ let rec translate_expression (ctx : translating_context)
                      or_chain,
                      Pos.same_pos_as equal_test f ))
                 f)
-            (Pos.same_pos_as (Mir.Literal Mir.false_literal) f)
+            (Pos.same_pos_as (Mir.Literal Mir.Undefined) f)
             values
         in
         let or_chain =
