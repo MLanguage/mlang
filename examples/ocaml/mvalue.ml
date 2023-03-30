@@ -141,6 +141,10 @@ let m_floor (x : m_value) : m_value =
   if x.undefined then m_undef
   else { undefined = false; value = floor (x.value +. 0.000001) }
 
+let m_abs (x : m_value) : m_value =
+  if x.undefined then m_undef
+  else { undefined = false; value = abs_float x.value }
+
 let m_present (x : m_value) : m_value = if x.undefined then m_zero else m_one
 
 let m_multimax (bound_variable : m_value) (variable_array : m_array)

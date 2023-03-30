@@ -71,6 +71,9 @@ let rec generate_ocaml_expr (e : Bir.expression Pos.marked) :
   | FunctionCall (InfFunc, [ arg ]) ->
       let s, local = generate_ocaml_expr arg in
       (Format.asprintf "(m_floor %s)" s, local)
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      let se, s = generate_ocaml_expr arg in
+      (Format.asprintf "(m_abs %s)" se, s)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let s1, local1 = generate_ocaml_expr e1 in
       let s2, local2 = generate_ocaml_expr e2 in
