@@ -143,7 +143,7 @@ let generate_local_defs (oc : Format.formatter)
         (Format.pp_print_list ~pp_sep:pp_statement_separator format_local_set)
         defs
 
-let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
+let generate_var_def (variable : Bir.variable) (def : Bir.variable_def)
     (oc : Format.formatter) : unit =
   let generate_one_var position oc (e : Bir.expression Pos.marked) : unit =
     let tgv_expression, local_defs = generate_ocaml_expr e in
@@ -152,7 +152,7 @@ let generate_var_def (variable : Bir.variable) (vdata : Bir.variable_data)
       (format_tgv_set tgv_expression)
       position
   in
-  match vdata.var_definition with
+  match def with
   | SimpleVar e -> generate_one_var (get_var_pos variable) oc e
   | TableVar (_, IndexTable es) ->
       let bindings_list = Mir.IndexMap.bindings es in
