@@ -38,7 +38,8 @@ CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 OCAMLFLAGS=
 #OCAMLFLAGS="-g -inline 0"
 # Pour instrumenter la couverture de code, il est nécessaire d'installer le paquet OCaml bisect_ppx
-# 1 pour activer la couverture de code
+# Utiliser l'indicateur WITH_BISECT=1 pour activer l'instrumentation nécessaire à l'analyse de la couverture de code
+# lors des étapes de compilation.
 WITH_BISECT?=0
 ifeq ($(WITH_BISECT), 1)
     BISECT_PATH:=$(shell ocamlfind query bisect_ppx)
