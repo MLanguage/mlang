@@ -8,26 +8,28 @@ MLANG_JAVA_OPTS=\
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_JAVA_OPTS)
 
-# Check Java compiler version : 
+# Check Java compiler version :
 #   - if < 8 : backend won't compile due to TestHarness, period.
 #   - if = 8 : calculator code prefers JRE 7 base class rt.jar to be compiled targetting Java 7, so we try to find it.
 #   - if > 8 : calculator code is cross-compiled to Java 7, test code is cross-compiled to Java 8.
 JAVAC8=$(shell javac -version 2>&1|grep -q "javac 1.8"; printf $$?)
 ifeq ($(JAVAC8),0)
-# Default path is debian-based OpenJDK 7 package path, overridable by environment variables.
-JAVA7_PATH?=/usr/lib/jvm/java-7-openjdk-amd64
-# if path exists, use it as bootclasspath
-ifeq (test -d $(JAVA7_PATH),0)
-BOOTCLASSPATH=-bootclasspath $(JAVA7_PATH)/jre/lib/rt.jar
-# Otherwise we default to empty bootclasspath, meaning javac will use its own version of base class (JRE 8).
-endif
-# JDK 8 specific cross-compilation option: -source and optional -bootclasspath. -target defaults to the value of -source
-JAVACOPT_CALC=-source 7 $(BOOTCLASSPATH)
-JAVACOPT_TEST=
+    # Default path is debian-based OpenJDK 7 package path, overridable by environment variables.
+    JAVA7_PATH?=/usr/lib/jvm/java-7-openjdk-amd64
+    # if path exists, use it as bootclasspath
+    ifeq (test -d $(JAVA7_PATH),0)
+        BOOTCLASSPATH=-bootclasspath $(JAVA7_PATH)/jre/lib/rt.jar
+        # Otherwise we default to empty bootclasspath, meaning javac will use its own version of base class (JRE 8).
+    else
+        $(warning Warning: Java 7 path not found)
+    endif
+    # JDK 8 specific cross-compilation option: -source and optional -bootclasspath. -target defaults to the value of -source
+    JAVACOPT_CALC=-source 7 $(BOOTCLASSPATH)
+    JAVACOPT_TEST=
 else
-# JDK9+ cross-compilation options. From version 9, reference base classes for older JRE are provided.
-JAVACOPT_CALC=--release 7
-JAVACOPT_TEST=--release 8
+    # JDK9+ cross-compilation options. From version 9, reference base classes for older JRE are provided.
+    JAVACOPT_CALC=--release 7
+    JAVACOPT_TEST=--release 8
 endif
 
 .DEFAULT_GOAL := backend_tests/target/TestHarness.class
