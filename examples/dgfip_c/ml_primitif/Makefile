@@ -145,10 +145,13 @@ cleantmp:
 	@echo "Nettoyage des fichiers temporaires"
 	rm -f *.tmp
 
-cleanall: clean cleanc cleanexe
+cleanres:
+	@echo "Nettoyage des résultats de test"
+	rm -f *.output/*.tgv
+
+cleanall: clean cleanc cleanexe cleanres
 	rm -f vars.txt
 	rm -f tests.m_spec
-
 
 ##################################################
 # Utilities
