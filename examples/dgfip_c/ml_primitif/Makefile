@@ -25,10 +25,9 @@ QUIET=>/dev/null # Uncomment to suppress output
 
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
-# Le flag sur la profondeur des blocs ne semble plus nécessaire.
 COMMON_CFLAGS=-std=c89 -pedantic
 ifeq ($(CC), clang)
-    COMPILER_SPECIFIC_CFLAGS=-O2 -fbracket-depth=2048
+    COMPILER_SPECIFIC_CFLAGS=-O2
 else ifeq ($(CC), gcc)
     COMPILER_SPECIFIC_CFLAGS=-O1
 endif
@@ -52,14 +51,6 @@ endif
 .DEFAULT_GOAL := cal
 
 ##################################################
-# Generating the tests.m_spec
-##################################################
-
-# Obsolète ?
-tests.m_spec: gen_m_spec.py
-	python3 $< $(TESTS_DIR) $@
-
-##################################################
 # Generating C files from M sources with Mlang
 ##################################################
 
@@ -70,7 +61,8 @@ calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/cons
 
 # Ml_primitif (current main build)
 # -----------------------------
-# Note: compilation avec -g et -kN (N=1..4) OBLIGATOIREMENT
+# Note : compilation avec -g et -kN (N=1..4) OBLIGATOIREMENT
+# Note : la compilation mainframe en 2022 a pu se faire avec -rXMk4,-b0,-Ailiad ?
 calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR), MPP_FUNCTION=$(MPP_FUNCTION), DGFIPFLAGS=$(DGFIPFLAGS))"
@@ -80,36 +72,12 @@ calc/enchain.c: $(SOURCE_FILES)
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
 
-# Ancien makefile racine du backend
-# -----------------------------
-.SECONDARY: calc/ir_%.c calc/ir_%.h
-.PRECIOUS: calc/ir_%.c calc/ir_%.h
-
-calc/old_ir_%.c: $(SOURCE_FILES)
-	$(MLANG) \
-		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
-		--backend dgfip_c --output $@ \
-		$(SOURCE_FILES)
-
-# Ancien makefile backend_tests
-# -----------------------------
-# branche morte : il n'y a pas de quoi construire un exécutable qui corresponde dans le makefile.
-calc/ir_%.c: ../../../m_specs/%.m_spec $(SOURCE_FILES)
-	$(MLANG) \
-		--dgfip_options=-rXMk4,-b0,-Ailiad,-m$(YEAR)\
-		--backend dgfip_c --output $@ \
-		--function_spec $< \
-		$(SOURCE_FILES)
-calc/ir_%.c: %.m_spec $(SOURCE_FILES)
-	$(MLANG) \
-		--dgfip_options=-rXMk1,-b0,-Ailiad,-m$(YEAR)\
-		--backend dgfip_c --output $@ \
-		--function_spec $< \
-		$(SOURCE_FILES)
-
 #################################################
 # Compiling the generated C
 ##################################################
+
+# list existing C file from M equivalent (Useful idea to improve upon)
+M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
 # Ml_primitif (current main build)
 # -----------------------------
@@ -118,29 +86,6 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 	cd calc && $(CC) $(CFLAGS) -c \
 	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
-
-# Ancien makefile racine du backend
-# -----------------------------
-### list existing C file from M equivalent
-M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
-
-calc/old_ir_%.o: calc/old_ir_%.c calc/var_static.c.inc
-	cd calc && $(CC) -c $(<F) \
-	$(M_C_FILES) \
-	contexte.c famille.c penalite.c restitue.c revcor.c \
-	revenu.c variatio.c var.c irdata.c
-
-# Ancien makefile backend_tests
-# -----------------------------
-calc/ir_%.o: export AFL_DONT_OPTIMIZE=1
-calc/ir_%.o: calc/ir_%.c calc/var_static.c.inc
-	cd calc && $(CC) -c $(<F) \
-	$(M_C_FILES) \
-	contexte.c famille.c penalite.c restitue.c revcor.c \
-	revenu.c variatio.c var.c irdata.c
-
-calc/test_harness.o: calc/ir_tests.c
-	$(CC) -O3 -c -o $@ test_harness.c
 
 #################################################
 # Final targets
@@ -159,31 +104,6 @@ else
 	ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
 	unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
 endif
-
-# Ancien makefile racine du backend
-# -----------------------------
-# Même en réutilisant le fichier .c pour les tests 2018 présent dans le dossier parent
-# ça ne fonctinne plus depuis le commit initial de ce backend, et probablement depuis plus de deux ans sur
-# l'ancien backend C non plus, à cause de l'absence de header correspondant.
-# To call this target, use "make run_<name of file in m_spec/ without extension>.exe"
-run_%.exe: calc/old_ir_%.o run_%.o
-	cd calc && $(CC) -lm -o $@ $(^F) \
-	$(M_C_FILES:.c=.o) \
-	contexte.o famille.o penalite.o restitue.o revcor.o \
-	revenu.o variatio.o var.o irdata.o
-
-# Ancien makefile backend_tests
-# -----------------------------
-test_harness.exe: calc/ir_tests.o calc/test_harness.o
-	cd calc && $(CC) -fPIE -lm -o ../$@ $(^F) \
-	$(M_C_FILES:.c=.o) \
-	contexte.o famille.o penalite.o restitue.o revcor.o \
-	revenu.o variatio.o var.o irdata.o
-
-# Ne passe plus les tests 2020 en l'état (mais c'était déjà le cas avant la réorganisation.)
-run_test_harness: test_harness.exe FORCE
-	ulimit -s 32768; \
-	./$< $(TESTS_DIR)
 
 ##################################################
 # Running the tests
@@ -235,54 +155,3 @@ cleanall: clean cleanc cleanexe
 ##################################################
 # Really, we can hope to be cutting edge enough for .PHONY
 FORCE:
-
-#########################################################################
-# Broken legacy from old C backend (used for perf and fuzzing)
-#########################################################################
-# N'existe plus depuis la suppression de l'ancien backend C
-perf_harness.exe: ir_tests.o perf_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^ \
-	$(M_C_FILES:.c=.o) \
-	contexte.o famille.o penalite.o restitue.o revcor.o \
-	revenu.o variatio.o var.o irdata.o
-
-run_perf: perf_harness.exe FORCE
-	ulimit -s 32768; \
-	time ./$< $(ONE_TEST_FILE)
-
-
-FUZZ_M_SPEC=tests
-
-fuzz_harness.exe: CC=afl-$(CC)
-fuzz_harness.exe: ir_$(FUZZ_M_SPEC).o fuzz_harness.o ../m_value.o
-	$(CC) -fPIE -lm -o $@ $^
-
-AFL_FUZZ=afl-fuzz
-
-ifeq ($(JOB_NO), 0)
-	AFL_JOB_FLAG=-M fuzzer$(JOB_NO)
-else
-	AFL_JOB_FLAG=-S fuzzer$(JOB_NO)
-endif
-
-# Usage: NO_JOB=<0,1,2...> make launch_fuzz
-launch_fuzz: fuzz_harness.exe
-	ulimit -s 32768; \
-	$(AFL_FUZZ) -i fuzz_inputs -o fuzz_findings \
-		-m 500 -t 1000 $(AFL_JOB_FLAG) \
-		-- ./fuzz_harness.exe @@
-
-FUZZER_CRASHES=$(shell find fuzz_tests/ -name "*.m_crash" 2> /dev/null)
-
-sanitize_crash_names:
-	./sanitize_crash_names.sh
-
-%.m_test: %.m_crash FORCE
-	-stdbuf -oL bash -c "./fuzz_harness.exe $< > $@"
-
-transform_crashes_into_tests: $(patsubst %.m_crash,%.m_test,$(FUZZER_CRASHES))
-
-clean_fuzz_findings:
-	rm -rf fuzz_findings/*
-clean_fuzz_tests:
-	rm -rf fuzz_tests/*.m_crash
