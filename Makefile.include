@@ -75,6 +75,9 @@ ifeq ($(origin CC),default)
     CC=clang
 endif
 
+# Directory of the static C sources for tax calculator interface
+STATIC_DIR?=static/
+
 ##################################################
 # Exports to call backends from main Makefile
 ##################################################
@@ -82,6 +85,6 @@ endif
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
-export YEAR CC
+export YEAR CC STATIC_DIR
 # for Java backend (C overload these now)
 export MPP_FUNCTION MPP_FILE

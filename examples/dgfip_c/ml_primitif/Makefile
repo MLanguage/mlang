@@ -56,8 +56,8 @@ endif
 
 calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/const.h calc/dbg.h calc/irdata.c calc/irdata.h &:
 	mkdir -p calc
-	@echo "Copie des fichiers C statiques"
-	cp static/* calc/
+	@echo "Copie des fichiers C statiques depuis $(STATIC_DIR)"
+	cp $(STATIC_DIR)* calc/
 
 # Ml_primitif (current main build)
 # -----------------------------
