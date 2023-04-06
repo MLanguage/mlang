@@ -78,6 +78,9 @@ endif
 # Directory of the static C sources for tax calculator interface
 STATIC_DIR?=static/
 
+# Directory of the driver sources for tax calculator
+DRIVER_DIR?=ml_driver/
+
 ##################################################
 # Exports to call backends from main Makefile
 ##################################################
@@ -85,6 +88,6 @@ STATIC_DIR?=static/
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
-export YEAR CC STATIC_DIR
+export YEAR CC STATIC_DIR DRIVER_DIR
 # for Java backend (C overload these now)
 export MPP_FUNCTION MPP_FILE

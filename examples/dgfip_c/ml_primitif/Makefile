@@ -91,18 +91,23 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c
 # Final targets
 ##################################################
 
+# TODO: use &: when upgraded to GNU Make 4.3+
+calc/stubs.c calc/common.ml calc/m.ml calc/main.ml calc/read_test.ml :
+	echo "Copie des sources du pilote depuis $(DRIVER_DIR)"
+	cp $(DRIVER_DIR)* calc/
+
 # Ml_primitif (current main build)
 # -----------------------------
-cal: calc/enchain.o
+cal: calc/enchain.o calc/stubs.c
 	@echo "Compilation de la calculette primitive (OCAMLFLAGS=$(OCAMLFLAGS), WITH_BISECT=$(WITH_BISECT))"
 ifeq ($(WITH_BISECT), 1)
-	ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
+	cd calc && ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
 	-I $(BISECT_PATH)/common -I $(BISECT_PATH)/runtime \
 	-ppx "$(BISECT_PATH)/ppx.exe --as-ppx" \
-	unix.cmxa bisect_common.cmxa bisect.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
+	unix.cmxa bisect_common.cmxa bisect.cmxa *.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
 else
-	ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
-	unix.cmxa ./calc/*.o stubs.c common.ml m.ml read_test.ml main.ml -o cal
+	cd calc && ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
+	unix.cmxa *.o stubs.c common.ml m.ml read_test.ml main.ml -o ../cal
 endif
 
 ##################################################
@@ -132,9 +137,11 @@ clean:
 	revenu.* tableg*.* tablev.* variatio.* var.* \
 	conf.h annee.h desc.h desc_inv.h
 cleanc:
-	@echo "Nettoyage des sources C"
+	@echo "Nettoyage des sources"
 	rm -f calc/*.[ch]
 	rm -f calc/*.inc
+	rm -f calc/version.*
+	rm -f calc/*.ml
 
 cleanexe:
 	@echo "Nettoyage des exécutables"

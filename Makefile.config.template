@@ -49,7 +49,11 @@
 ##################################################
 # CC=gcc
 
+# Mlang includes a light C interface and a light Ocaml driver to build an autotest application.
+# "Autotest" is a standalone CLI tax calculator using FIP files as its data format and limited to
+# initial tax computation.
 # STATIC_DIR?=static/
+# DRIVER_DIR?=ml_driver/
 
 ##################################################
 # Exports 
