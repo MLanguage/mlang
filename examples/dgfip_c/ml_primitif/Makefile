@@ -128,8 +128,7 @@ backend_tests: FORCE run_tests
 clean:
 	@echo "Nettoyage des fichiers binaires intermédiaires"
 	rm -f calc/*.o
-	rm -f *.o
-	rm -f *.cm*
+	rm -f calc/*.cm*
 
 # To keep in mind
 # rm -f $(M_C_FILES) $(M_C_FILES:.c=.o) \
