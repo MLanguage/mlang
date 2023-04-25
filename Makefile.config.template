@@ -55,6 +55,11 @@
 # STATIC_DIR?=static/
 # DRIVER_DIR?=ml_driver/
 
+# C backend test harness features a binary comparison between the dumped computed raw data structure
+# and a reference dump. This flag disables it, falling back to the FIP specified test results only.
+# Useful when you don't have reference dumps.
+# NO_BINARY_COMPARE=1
+
 ##################################################
 # Exports 
 ##################################################

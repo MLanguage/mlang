@@ -81,6 +81,9 @@ STATIC_DIR?=static/
 # Directory of the driver sources for tax calculator
 DRIVER_DIR?=ml_driver/
 
+# Flag to disable binary dump comparison
+NO_BINARY_COMPARE?=0
+
 ##################################################
 # Exports to call backends from main Makefile
 ##################################################
@@ -88,6 +91,6 @@ DRIVER_DIR?=ml_driver/
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
-export YEAR CC STATIC_DIR DRIVER_DIR
+export YEAR CC STATIC_DIR DRIVER_DIR NO_BINARY_COMPARE
 # for Java backend (C overload these now)
 export MPP_FUNCTION MPP_FILE
