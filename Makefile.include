@@ -14,12 +14,12 @@ define source_dir
 	$(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort) $(1)errI.m $(1)tgvI.m
 endef
 
-SOURCE_DIR_2015=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2015m_4_6/)
-SOURCE_DIR_2016=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2016m_4_5/)
-SOURCE_DIR_2017=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2017m_6_10/)
-SOURCE_DIR_2018=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2018m_6_7/)
-SOURCE_DIR_2019=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2019m_8_0/)
-SOURCE_DIR_2020=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2020m_6_5/)
+SOURCE_DIR_2015:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2015m_4_6/)
+SOURCE_DIR_2016:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2016m_4_5/)
+SOURCE_DIR_2017:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2017m_6_10/)
+SOURCE_DIR_2018:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2018m_6_7/)
+SOURCE_DIR_2019:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2019m_8_0/)
+SOURCE_DIR_2020:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2020m_6_5/)
 
 YEAR?=2020
 
