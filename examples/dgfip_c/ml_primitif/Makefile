@@ -62,8 +62,6 @@ calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/cons
 	@echo "Copie des fichiers C statiques depuis $(STATIC_DIR)"
 	cp $(STATIC_DIR)* calc/
 
-# Ml_primitif (current main build)
-# -----------------------------
 calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS), DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS))"
@@ -80,12 +78,13 @@ calc/enchain.c: $(SOURCE_FILES)
 # list existing C file from M equivalent (Useful idea to improve upon)
 M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
-# Ml_primitif (current main build)
-# -----------------------------
-calc/enchain.o: calc/var_static.c.inc calc/enchain.c
+C_SOURCES_TARGETS?=calc/var_static.c.inc calc/enchain.c
+
+calc/enchain.o: $(C_SOURCES_TARGETS)
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), CFLAGS=$(CFLAGS))"
 	cd calc && $(CC) $(CFLAGS) -c \
-	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
+	*.c
+#	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
 #################################################
