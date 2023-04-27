@@ -16,9 +16,16 @@ MLANG_DGFIP_C_OPTS=\
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
-# Options supplémentaires pour le backend Mlang/DGFiP
-# Note: les flags -Ailiad, -m, -g et -k sont déjà définis
-DGFIPFLAGS=-X,-O  # = environnement DGFiP
+# Options supplémentaires pour le backend Mlang/DGFiP communes à tous les build :
+# Note: les flags -Ailiad, -g et -k sont déjà définis
+# -Ailiad : ensemble de règles sélectionné ("Application ciblée")
+# -m : millésime de calculette compilé (année des revenus taxés)
+# -kN : nombre de segment pour la table de débogage.
+#        N=1 à 4 pour le pilotage Mlang ml_primitif
+#        N=4 pour utiliser le pilotage DGFiP.
+# -X : génération de fonctions d'extraction globale dans l'interface,
+#      bouclant sur la table des variables restituables (IN_init_extraction).
+DGFIPFLAGS=-Ailiad,-m$(YEAR),-k4,-X
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 QUIET=>/dev/null # Uncomment to suppress output
@@ -54,20 +61,21 @@ endif
 # Generating C files from M sources with Mlang
 ##################################################
 
-calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/const.h calc/dbg.h calc/irdata.c calc/irdata.h &:
+# TODO: use &: when upgraded to GNU Make 4.3+
+calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/const.h calc/dbg.h calc/irdata.c calc/irdata.h :
 	mkdir -p calc
 	@echo "Copie des fichiers C statiques depuis $(STATIC_DIR)"
 	cp $(STATIC_DIR)* calc/
 
 # Ml_primitif (current main build)
 # -----------------------------
-# Note : compilation avec -g et -kN (N=1..4) OBLIGATOIREMENT
-# Note : la compilation mainframe en 2022 a pu se faire avec -rXMk4,-b0,-Ailiad ?
+# Note : compilation avec -g (informations pour tests et débogage) OBLIGATOIREMENT
+# Note : compilation avec -O (optimisation par inlining)
 calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
-	@echo "Compilation des fichiers M avec Mlang (YEAR=$(YEAR), MPP_FUNCTION=$(MPP_FUNCTION), DGFIPFLAGS=$(DGFIPFLAGS))"
+	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIPFLAGS=$(DGFIPFLAGS))"
 	@$(MLANG) \
-		--dgfip_options=-g,-k4,-Ailiad,-m$(YEAR),$(DGFIPFLAGS)\
+		--dgfip_options=-g,-O,$(DGFIPFLAGS)\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
