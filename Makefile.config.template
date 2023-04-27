@@ -47,13 +47,17 @@
 ##################################################
 # C backend configuration
 ##################################################
-# CC=gcc
+# CC=clang
+
+# Optimization level is selected based on compiler. Other flags may be set here.
+# COMMON_CFLAGS=-std=c89 -pedantic
 
 # Mlang includes a light C interface and a light Ocaml driver to build an autotest application.
 # "Autotest" is a standalone CLI tax calculator using FIP files as its data format and limited to
 # initial tax computation.
 # STATIC_DIR?=static/
 # DRIVER_DIR?=ml_driver/
+# DRIVER_FILES?=stubs.c common.ml m.ml read_test.ml main.ml
 
 # C backend test harness features a binary comparison between the dumped computed raw data structure
 # and a reference dump. This flag disables it, falling back to the FIP specified test results only.

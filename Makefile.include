@@ -75,6 +75,16 @@ ifeq ($(origin CC),default)
     CC=clang
 endif
 
+# Options pour le compilateur C
+# Attention, très long à compiler avec GCC en O2/O3
+COMMON_CFLAGS?=-std=c89 -pedantic
+ifeq ($(CC), clang)
+    COMPILER_SPECIFIC_CFLAGS=-O2
+else ifeq ($(CC), gcc)
+    COMPILER_SPECIFIC_CFLAGS=-O1
+endif
+CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
+
 # Directory of the static C sources for tax calculator interface
 STATIC_DIR?=static/
 
@@ -93,6 +103,6 @@ NO_BINARY_COMPARE?=0
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
-export YEAR CC STATIC_DIR DRIVER_DIR NO_BINARY_COMPARE
+export YEAR CC CFLAGS STATIC_DIR DRIVER_DIR DRIVER_FILES NO_BINARY_COMPARE
 # for Java backend (C overload these now)
 export MPP_FUNCTION MPP_FILE

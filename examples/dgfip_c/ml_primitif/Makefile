@@ -30,16 +30,6 @@ DGFIPFLAGS=-Ailiad,-m$(YEAR),-k4,-X
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 QUIET=>/dev/null # Uncomment to suppress output
 
-# Options pour le compilateur C
-# Attention, très long à compiler avec GCC en O2/O3
-COMMON_CFLAGS=-std=c89 -pedantic
-ifeq ($(CC), clang)
-    COMPILER_SPECIFIC_CFLAGS=-O2
-else ifeq ($(CC), gcc)
-    COMPILER_SPECIFIC_CFLAGS=-O1
-endif
-CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
-
 # Options pour le compilateur OCaml
 OCAMLFLAGS=
 #OCAMLFLAGS="-g -inline 0"
