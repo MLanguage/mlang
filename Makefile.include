@@ -80,6 +80,8 @@ STATIC_DIR?=static/
 
 # Directory of the driver sources for tax calculator
 DRIVER_DIR?=ml_driver/
+# Driver sources for tax calculator (must be manually ordered for OCaml compiler)
+DRIVER_FILES?=stubs.c common.ml m.ml read_test.ml main.ml
 
 # Flag to disable binary dump comparison
 NO_BINARY_COMPARE?=0
