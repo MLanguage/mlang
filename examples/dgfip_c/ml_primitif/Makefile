@@ -16,6 +16,11 @@ MLANG_DGFIP_C_OPTS=\
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
+# Options supplémentaires pour le backend Mlang/DGFiP spécifiques à la cible
+# Par défaut ici pour l'autotest Mlang et l'intégration continue.
+# Note : compilation avec -g (informations pour tests et débogage) OBLIGATOIREMENT
+# Note : compilation avec -O (optimisation par inlining)
+DGFIP_TARGET_FLAGS?=-g,-O
 # Options supplémentaires pour le backend Mlang/DGFiP communes à tous les build :
 # Note: les flags -Ailiad, -g et -k sont déjà définis
 # -Ailiad : ensemble de règles sélectionné ("Application ciblée")
@@ -25,7 +30,7 @@ MLANG_DGFIP_C_OPTS=\
 #        N=4 pour utiliser le pilotage DGFiP.
 # -X : génération de fonctions d'extraction globale dans l'interface,
 #      bouclant sur la table des variables restituables (IN_init_extraction).
-DGFIPFLAGS=-Ailiad,-m$(YEAR),-k4,-X
+DGFIP_COMMON_FLAGS=-Ailiad,-m$(YEAR),-k4,-X
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 QUIET=>/dev/null # Uncomment to suppress output
@@ -59,13 +64,11 @@ calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/cons
 
 # Ml_primitif (current main build)
 # -----------------------------
-# Note : compilation avec -g (informations pour tests et débogage) OBLIGATOIREMENT
-# Note : compilation avec -O (optimisation par inlining)
 calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
-	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIPFLAGS=$(DGFIPFLAGS))"
+	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS), DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS))"
 	@$(MLANG) \
-		--dgfip_options=-g,-O,$(DGFIPFLAGS)\
+		--dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS)\
 		--backend dgfip_c --output $@ \
 		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
