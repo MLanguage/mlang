@@ -78,9 +78,8 @@ calc/enchain.c: $(SOURCE_FILES)
 # list existing C file from M equivalent (Useful idea to improve upon)
 M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
-C_SOURCES_TARGETS?=calc/var_static.c.inc calc/enchain.c
-
-calc/enchain.o: $(C_SOURCES_TARGETS)
+# ADDITIONAL_C_SOURCES_TARGETS allows to create new targets in configuration to produce or load in the source folder before compiling.
+calc/enchain.o: calc/var_static.c.inc calc/enchain.c $(ADDITIONAL_C_SOURCES_TARGETS)
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), BACKEND_CFLAGS=$(BACKEND_CFLAGS))"
 	cd calc && $(CC) $(BACKEND_CFLAGS) -c \
 	*.c
