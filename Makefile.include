@@ -83,7 +83,7 @@ ifeq ($(CC), clang)
 else ifeq ($(CC), gcc)
     COMPILER_SPECIFIC_CFLAGS=-O1
 endif
-CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
+BACKEND_CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the static C sources for tax calculator interface
 STATIC_DIR?=static/
@@ -103,6 +103,6 @@ NO_BINARY_COMPARE?=0
 # common
 export SOURCE_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
-export YEAR CC CFLAGS STATIC_DIR DRIVER_DIR DRIVER_FILES NO_BINARY_COMPARE
+export YEAR CC BACKEND_CFLAGS STATIC_DIR DRIVER_DIR DRIVER_FILES NO_BINARY_COMPARE
 # for Java backend (C overload these now)
 export MPP_FUNCTION MPP_FILE

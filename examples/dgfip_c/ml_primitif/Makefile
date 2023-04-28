@@ -81,8 +81,8 @@ M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 C_SOURCES_TARGETS?=calc/var_static.c.inc calc/enchain.c
 
 calc/enchain.o: $(C_SOURCES_TARGETS)
-	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), CFLAGS=$(CFLAGS))"
-	cd calc && $(CC) $(CFLAGS) -c \
+	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), BACKEND_CFLAGS=$(BACKEND_CFLAGS))"
+	cd calc && $(CC) $(BACKEND_CFLAGS) -c \
 	*.c
 #	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
