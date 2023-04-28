@@ -18,19 +18,20 @@ MLANG_DGFIP_C_OPTS=\
 
 # Options supplémentaires pour le backend Mlang/DGFiP spécifiques à la cible
 # Par défaut ici pour l'autotest Mlang et l'intégration continue.
-# Note : compilation avec -g (informations pour tests et débogage) OBLIGATOIREMENT
+# Note : compilation avec -g et -k OBLIGATOIREMENT
+#  -g  : informations pour tests et débogage
+#  -kN : nombre de segment pour la table de débogage.
+#        N=1 à 4 pour le pilotage Mlang ml_primitif
+#        N=4 pour utiliser le pilotage DGFiP.
 # Note : compilation avec -O (optimisation par inlining)
-DGFIP_TARGET_FLAGS?=-g,-O
+DGFIP_TARGET_FLAGS?=-g,-O,-k4
 # Options supplémentaires pour le backend Mlang/DGFiP communes à tous les build :
 # Note: les flags -Ailiad, -g et -k sont déjà définis
 # -Ailiad : ensemble de règles sélectionné ("Application ciblée")
 # -m : millésime de calculette compilé (année des revenus taxés)
-# -kN : nombre de segment pour la table de débogage.
-#        N=1 à 4 pour le pilotage Mlang ml_primitif
-#        N=4 pour utiliser le pilotage DGFiP.
 # -X : génération de fonctions d'extraction globale dans l'interface,
 #      bouclant sur la table des variables restituables (IN_init_extraction).
-DGFIP_COMMON_FLAGS=-Ailiad,-m$(YEAR),-k4,-X
+DGFIP_COMMON_FLAGS=-Ailiad,-m$(YEAR),-X
 
 MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 QUIET=>/dev/null # Uncomment to suppress output
