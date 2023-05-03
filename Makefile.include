@@ -2,6 +2,10 @@
 # Local customization
 ##################################################
 
+# WARNING: Use of simple expansion here (":=" operator) is important to ensure the value of SELF_DIR
+#          is not evaluated again after inclusion of other makefiles. If these files are in 
+#          another directory, this directory would have been the new SELF_DIR after them. You probably
+#          do not want that. Replace by "=" only if you understand this paragraph and know you need it.
 SELF_DIR:=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 
 -include $(SELF_DIR)/Makefile.config
