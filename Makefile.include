@@ -2,7 +2,7 @@
 # Local customization
 ##################################################
 
-SELF_DIR=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
+SELF_DIR:=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 
 -include $(SELF_DIR)/Makefile.config
 
