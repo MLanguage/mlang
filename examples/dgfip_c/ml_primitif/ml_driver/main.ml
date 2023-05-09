@@ -118,7 +118,7 @@ let compare_dump out outexp =
   close_in out;
   close_in outexp
 
-let run_test test_file =
+let run_test test_file flag_no_bin_compare =
   Printf.printf "Testing %s...\n%!" test_file;
 
   let annee_calc = M.annee_calc () in
@@ -157,26 +157,29 @@ let run_test test_file =
 
   let res_ok = check_result tgv err res_prim ctl_prim in
 
-  if not (Sys.file_exists out_exp)
-  then begin
-    Printf.eprintf "Expected results file %s not found." out_exp;
-    exit (if res_ok then 10 else 11)
-  end;
+  match flag_no_bin_compare with
+  | true -> if res_ok then 0 else 1
+  | false -> 
+    if not (Sys.file_exists out_exp)
+      then begin
+      Printf.eprintf "Expected results file %s not found." out_exp;
+      exit (if res_ok then 10 else 11)
+    end;
 
-  begin
-    match Unix.system (Printf.sprintf "diff -q %s %s 1>/dev/null 2>&1" out out_exp) with
-    | WEXITED 0 ->
-        if res_ok then 0 else 1
-    | WEXITED 1 -> (* Differences *)
-        compare_dump out out_exp;
-        if res_ok then 20 else 21
-    | WEXITED 2 -> (* Other error *)
-        if res_ok then 30 else 31
-    | WEXITED _ ->
-        32
-    | WSIGNALED _ | WSTOPPED _ ->
-        33
-  end
+    begin
+      match Unix.system (Printf.sprintf "diff -q %s %s 1>/dev/null 2>&1" out out_exp) with
+      | WEXITED 0 ->
+          if res_ok then 0 else 1
+      | WEXITED 1 -> (* Differences *)
+          compare_dump out out_exp;
+          if res_ok then 20 else 21
+      | WEXITED 2 -> (* Other error *)
+          if res_ok then 30 else 31
+      | WEXITED _ ->
+          32
+      | WSIGNALED _ | WSTOPPED _ ->
+          33
+      end
 
 let main () =
   if Array.length Sys.argv < 2 then
@@ -189,11 +192,17 @@ let main () =
          0o755 with _ -> ());
 
   let args = List.tl (Array.to_list Sys.argv) in
+  let flag_no_bin_compare = 
+    match Sys.getenv_opt "NO_BINARY_COMPARE" with
+    | Some "1" -> true
+    | None | Some "0"-> false
+    | _ -> exit 31
+  in
   let rec loop =
     function
     | [] -> 0
     | test_file::args ->
-        let res = run_test test_file in
+        let res = run_test test_file flag_no_bin_compare in
         if res <> 0 then res else loop args
   in
   loop args

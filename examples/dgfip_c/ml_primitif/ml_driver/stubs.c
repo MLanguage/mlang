@@ -14,12 +14,12 @@
 #include "caml/fail.h"
 #include "caml/custom.h"
 
-#include "calc/annee.h"
-#include "calc/conf.h"
-#include "calc/irdata.h"
-#include "calc/const.h"
-#include "calc/var.h"
-#include "calc/enchain.h"
+#include "annee.h"
+#include "conf.h"
+#include "irdata.h"
+#include "const.h"
+#include "var.h"
+#include "enchain.h"
 
 #if OCAML_VERSION < 41200
 
