@@ -62,10 +62,6 @@ rule token = parse
   { INTEGER }
 | "REEL"
   { REAL }
-| "base"
-  { BASE }
-| "restituee"
-  { GIVEN_BACK }
 | "tableau"
   { TABLE }
 | '['
@@ -78,16 +74,12 @@ rule token = parse
   { CONST }
 | "alias"
   { ALIAS }
-| "contexte"
-  { CONTEXT }
-| "famille"
-  { FAMILY }
-| "penalite"
-  { PENALITY }
-| "revenu"
-  { INCOME }
 | "saisie"
   { INPUT }
+| "variable"
+  { VARIABLE }
+| "attribut"
+  { ATTRIBUT }
 | '('
   { LPAREN }
 | ')'

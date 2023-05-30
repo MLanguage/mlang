@@ -340,12 +340,7 @@ type rule = {
 
 (**{3 Input variables}*)
 
-(** Unused for now, except for typechecking: [Income] should be a real number
-    corresponding to an amount of money *)
-type input_variable_subtype = Context | Family | Penality | Income
-
-type input_variable_attribute = string
-(** Attributes are unused for now *)
+type variable_attribute = string Pos.marked * literal Pos.marked
 
 (** Here are all the types a value can have. Date types don't seem to be used at
     all though. *)
@@ -359,9 +354,8 @@ type value_typ =
 
 type input_variable = {
   input_name : variable_name Pos.marked;
-  input_subtyp : input_variable_subtype Pos.marked;
-  input_attributes :
-    (input_variable_attribute Pos.marked * literal Pos.marked) list;
+  input_subtyp : string Pos.marked list;
+  input_attributes : variable_attribute list;
   input_given_back : bool;
       (** An input variable given back ("restituee") means that it's also an
           output *)
@@ -370,16 +364,12 @@ type input_variable = {
   input_typ : value_typ Pos.marked option;
 }
 
-(** A [GivenBack] variable is an output of the program *)
-type computed_typ = Base | GivenBack
-
 type computed_variable = {
   comp_name : variable_name Pos.marked;
   comp_table : int Pos.marked option;
       (** size of the table, [None] for non-table variables *)
-  comp_attributes :
-    (input_variable_attribute Pos.marked * literal Pos.marked) list;
-  comp_subtyp : computed_typ Pos.marked list;
+  comp_attributes : variable_attribute list;
+  comp_subtyp : string Pos.marked list;
   comp_typ : value_typ Pos.marked option;
   comp_description : string Pos.marked;
 }
@@ -389,6 +379,14 @@ type variable_decl =
   | ConstVar of variable_name Pos.marked * literal Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
+
+type var_type = Input | Computed
+
+type var_category_decl = {
+  var_type : var_type;
+  var_category : string Pos.marked list;
+  var_attributes : string Pos.marked list;
+}
 
 (**{2 Verification clauses}*)
 
@@ -437,7 +435,7 @@ type source_file_item =
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
   | Function  (** Declares a function, unused *)
-
+  | VarCatDecl of var_category_decl
 (* TODO: parse something here *)
 
 type source_file = source_file_item Pos.marked list

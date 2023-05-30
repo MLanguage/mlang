@@ -130,26 +130,31 @@ let is_input st = match st with Base | Computed -> false | _ -> true
 let is_computed st = match st with Base | Computed -> true | _ -> false
 
 let input_var_subtype iv : var_subtype =
-  match Pos.unmark iv.Mast.input_subtyp with
-  | Mast.Context -> Context
-  | Family -> Family
-  | Penality -> Penality
-  | Income -> Income
+  List.find_map
+    (fun t ->
+      match Pos.unmark t with
+      | "contexte" -> Some Context
+      | "famille" -> Some Family
+      | "penalite" -> Some Penality
+      | "revenu" -> Some Income
+      | _ -> None)
+    iv.Mast.input_subtyp
+  |> function
+  | Some s -> s
+  | None -> assert false
 (* Missing CorrIncome and Variation (actually not used *)
 
 let computed_var_subtype cv : var_subtype =
   let is_base =
     List.exists
-      (fun ct ->
-        match Pos.unmark ct with Mast.Base -> true | GivenBack -> false)
+      (fun ct -> String.equal (Pos.unmark ct) "base")
       cv.Mast.comp_subtyp
   in
   if is_base then Base else Computed
 
 let computed_var_is_output cv =
   List.exists
-    (fun st ->
-      match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
+    (fun st -> String.equal (Pos.unmark st) "restituee")
     cv.Mast.comp_subtyp
 
 let consider_output is_ebcdic attribs =
@@ -510,7 +515,7 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
   if opt.with_libelle then Format.fprintf fmt ", \"%s\"" desc
   else Format.fprintf fmt " /*\"%s\"*/" desc;
   begin
-    match (req_type, tvar) with
+    match ((req_type : gen_type), tvar) with
     | Input _, Income -> Format.fprintf fmt ", \"%s\"" name
     | _ -> ()
   end;
