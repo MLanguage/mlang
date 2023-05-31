@@ -249,24 +249,23 @@ let format_input_attribute fmt ((n, v) : variable_attribute) =
   Format.fprintf fmt "%s = %a" (Pos.unmark n) format_literal (Pos.unmark v)
 
 let format_input_variable fmt (v : input_variable) =
-  Format.fprintf fmt "%a saisie %a %a%s %a : %s%a;" format_variable_name
-    (Pos.unmark v.input_name)
+  Format.fprintf fmt "%a %s %a %a %a : %s%a;" format_variable_name
+    (Pos.unmark v.input_name) input_category
     (pp_print_list_space Format.pp_print_string)
-    (List.map Pos.unmark v.input_subtyp)
+    (List.map Pos.unmark v.input_category)
     (pp_print_list_space format_input_attribute)
-    v.input_attributes
-    (if v.input_given_back then " restituee" else "")
-    format_variable_name (Pos.unmark v.input_alias)
+    v.input_attributes format_variable_name (Pos.unmark v.input_alias)
     (Pos.unmark v.input_description)
     (option_print format_value_typ)
     (option_bind Pos.unmark v.input_typ)
 
 let format_computed_variable fmt (v : computed_variable) =
-  Format.fprintf fmt "%s%a calculee %a : %a%s;" (Pos.unmark v.comp_name)
+  Format.fprintf fmt "%s%a %s %a : %a%s;" (Pos.unmark v.comp_name)
     (option_print Format.pp_print_int)
     (option_bind Pos.unmark v.comp_table)
+    computed_category
     (pp_print_list_space (pp_unmark Format.pp_print_string))
-    v.comp_subtyp
+    v.comp_category
     (option_print format_value_typ)
     (option_bind Pos.unmark v.comp_typ)
     (Pos.unmark v.comp_description)
@@ -311,7 +310,7 @@ let format_error_ fmt (e : error_) =
     e.error_descr
 
 let format_var_type (t : var_type) =
-  match t with Input -> "saisie" | Computed -> "calculee"
+  match t with Input -> input_category | Computed -> computed_category
 
 let format_var_category fmt (c : var_category_decl) =
   Format.fprintf fmt "%s %a :@ attributs %a"

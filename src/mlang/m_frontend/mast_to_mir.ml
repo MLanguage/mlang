@@ -561,10 +561,16 @@ let check_var_category (categories : Mast.var_category_decl Pos.marked list)
     | Mast.ConstVar _ -> assert false
     | Mast.ComputedVar v ->
         let v = Pos.unmark v in
-        (Pos.unmark v.comp_name, Mast.Computed, v.comp_subtyp, v.comp_attributes)
+        ( Pos.unmark v.comp_name,
+          Mast.Computed,
+          v.comp_category,
+          v.comp_attributes )
     | Mast.InputVar v ->
         let v = Pos.unmark v in
-        (Pos.unmark v.input_name, Mast.Input, v.input_subtyp, v.input_attributes)
+        ( Pos.unmark v.input_name,
+          Mast.Input,
+          v.input_category,
+          v.input_attributes )
   in
   let var_cat = List.map Pos.unmark var_cat in
   if categories = [] then ()
@@ -667,7 +673,8 @@ let get_variables_decl (p : Mast.program)
                       | Mast.ComputedVar cvar ->
                           let cvar = Pos.unmark cvar in
                           let category =
-                            "calculee" :: List.map Pos.unmark cvar.comp_subtyp
+                            Mast.computed_category
+                            :: List.map Pos.unmark cvar.comp_category
                           in
                           let new_var =
                             Mir.Variable.new_var cvar.Mast.comp_name None
@@ -702,8 +709,9 @@ let get_variables_decl (p : Mast.program)
                             if
                               List.exists
                                 (fun x ->
-                                  String.equal (Pos.unmark x) "restituee")
-                                cvar.Mast.comp_subtyp
+                                  String.equal (Pos.unmark x)
+                                    Mast.givenback_category)
+                                cvar.Mast.comp_category
                             then cvar.Mast.comp_name :: out_list
                             else out_list
                           in
@@ -711,7 +719,8 @@ let get_variables_decl (p : Mast.program)
                       | Mast.InputVar ivar ->
                           let ivar = Pos.unmark ivar in
                           let category =
-                            "saisie" :: List.map Pos.unmark ivar.input_subtyp
+                            Mast.input_category
+                            :: List.map Pos.unmark ivar.input_category
                           in
                           let new_var =
                             Mir.Variable.new_var ivar.Mast.input_name
@@ -735,8 +744,9 @@ let get_variables_decl (p : Mast.program)
                                       if
                                         List.exists
                                           (fun t ->
-                                            String.equal "revenu" (Pos.unmark t))
-                                          ivar.input_subtyp
+                                            String.equal Mast.income_category
+                                              (Pos.unmark t))
+                                          ivar.input_category
                                       then Some Mast.Real
                                       else None
                                 end;

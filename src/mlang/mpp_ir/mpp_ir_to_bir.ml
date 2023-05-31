@@ -103,7 +103,9 @@ let var_filter_compatible_subtypes (subtypes : string list)
               | _ -> false)
             subtypes
       | Some st -> List.mem st subtypes)
-      && List.for_all (fun x -> not (String.equal "calculee" x)) subtypes
+      && List.for_all
+           (fun x -> not (String.equal Mast.computed_category x))
+           subtypes
   | Calculee st -> (
       match st with
       | None ->
@@ -239,7 +241,7 @@ let generate_verif_call (m_program : Mir_interface.full_program)
     in
     if
       test && chain_tag <> Horizontale
-      && List.exists (String.equal "penalite") var.Mir.category
+      && List.exists (String.equal Mast.penality_category) var.Mir.category
     then
       Errors.raise_spanned_error "Penality variable used in verification"
         (Pos.get_position cond.Mir.cond_expr)

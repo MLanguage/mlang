@@ -138,7 +138,7 @@ let input_var_subtype iv : var_subtype =
       | "penalite" -> Some Penality
       | "revenu" -> Some Income
       | _ -> None)
-    iv.Mast.input_subtyp
+    iv.Mast.input_category
   |> function
   | Some s -> s
   | None -> assert false
@@ -147,15 +147,20 @@ let input_var_subtype iv : var_subtype =
 let computed_var_subtype cv : var_subtype =
   let is_base =
     List.exists
-      (fun ct -> String.equal (Pos.unmark ct) "base")
-      cv.Mast.comp_subtyp
+      (fun ct -> String.equal (Pos.unmark ct) Mast.base_category)
+      cv.Mast.comp_category
   in
   if is_base then Base else Computed
 
 let computed_var_is_output cv =
   List.exists
-    (fun st -> String.equal (Pos.unmark st) "restituee")
-    cv.Mast.comp_subtyp
+    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
+    cv.Mast.comp_category
+
+let input_var_is_output iv =
+  List.exists
+    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
+    iv.Mast.input_category
 
 let consider_output is_ebcdic attribs =
   is_ebcdic = false
@@ -169,12 +174,12 @@ let consider_output is_ebcdic attribs =
 (* Used to generated the array names *)
 let subtype_name subtyp =
   match subtyp with
-  | Context -> "contexte"
-  | Family -> "famille"
-  | Income -> "revenu"
+  | Context -> Mast.context_category
+  | Family -> Mast.family_category
+  | Income -> Mast.income_category
   | CorrIncome -> "revenu_correc"
   | Variation -> "variation"
-  | Penality -> "penalite"
+  | Penality -> Mast.penality_category
   | Base -> assert false (* never used *)
   | Computed -> assert false
 (* never used *)
@@ -183,10 +188,10 @@ let subtype_name subtyp =
 let req_type_name req_type =
   match req_type with
   | Computed (Some typ) -> subtype_name typ
-  | Computed None -> "calculee"
+  | Computed None -> Mast.computed_category
   | Input (Some typ) -> subtype_name typ
-  | Input None -> "saisie"
-  | Output -> "restituee"
+  | Input None -> Mast.input_category
+  | Output -> Mast.givenback_category
   | Debug i when i <= 0 -> "debug"
   | Debug i -> Printf.sprintf "debug%02d" i
 
@@ -304,7 +309,7 @@ let get_vars prog is_ebcdic =
                 let tvar = input_var_subtype iv in
                 let idx1, idx2, idxo_opt =
                   next_idx idx tvar
-                    (iv.input_given_back
+                    (input_var_is_output iv
                     && consider_output is_ebcdic iv.Mast.input_attributes)
                     1
                 in
@@ -620,7 +625,7 @@ let gen_desc fmt vars ~alias_only is_ebcdic =
           | Base | Computed -> begin
               (* computed var: only output *)
               match idxo_opt with
-              | Some idx -> Some ("restituee", idx)
+              | Some idx -> Some (Mast.givenback_category, idx)
               | None -> None
             end
           | _ -> Some (subtype_name tvar, idx2)

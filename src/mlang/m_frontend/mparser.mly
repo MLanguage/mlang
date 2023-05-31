@@ -157,7 +157,7 @@ computed_variable:
     comp_table = size;
     comp_attributes = List.map (fun x -> match x with Attr (x, y) -> (x, y) | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
-    comp_subtyp = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
+    comp_category = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
     comp_description = descr;
     comp_typ = typ;
@@ -172,23 +172,22 @@ input_variable_name:
 input_descr:
 descr = STRING { (parse_string descr, mk_position $sloc) }
 
-input_attr_or_subtyp:
-| attr = variable_attribute { ((None, Some attr), false) }
-| cat = symbol_with_pos { ((Some cat, None), false) }
+input_attr_or_category:
+| attr = variable_attribute { (None, Some attr) }
+| cat = symbol_with_pos { (Some cat, None) }
 
 input_variable:
 | name = input_variable_name INPUT
-  subtyp = input_attr_or_subtyp* alias = input_variable_alias COLON descr = input_descr
+  category_attrs = input_attr_or_category* alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
   SEMICOLON {
-  let (subtyp_attrs, given_back) = List.split subtyp in
-  let (subtyp, attrs) = List.split subtyp_attrs in
+  let (category, attrs) = List.split category_attrs in
   InputVar ({
     input_name = name;
-    input_subtyp =
+    input_category =
       List.map
         (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-        (List.filter (fun x -> x <> None) subtyp);
+        (List.filter (fun x -> x <> None) category);
     input_attributes = begin
         let attrs  =
           List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
@@ -196,7 +195,6 @@ input_variable:
         in
         attrs
     end;
-    input_given_back = List.exists (fun x -> x) given_back;
     input_alias = alias;
     input_typ = typ;
     input_description = descr;

@@ -354,11 +354,8 @@ type value_typ =
 
 type input_variable = {
   input_name : variable_name Pos.marked;
-  input_subtyp : string Pos.marked list;
+  input_category : string Pos.marked list;
   input_attributes : variable_attribute list;
-  input_given_back : bool;
-      (** An input variable given back ("restituee") means that it's also an
-          output *)
   input_alias : variable_name Pos.marked;  (** Unused for now *)
   input_description : string Pos.marked;
   input_typ : value_typ Pos.marked option;
@@ -369,7 +366,7 @@ type computed_variable = {
   comp_table : int Pos.marked option;
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
-  comp_subtyp : string Pos.marked list;
+  comp_category : string Pos.marked list;
   comp_typ : value_typ Pos.marked option;
   comp_description : string Pos.marked;
 }
@@ -387,6 +384,23 @@ type var_category_decl = {
   var_category : string Pos.marked list;
   var_attributes : string Pos.marked list;
 }
+
+(* standard categories *)
+let input_category = "saisie"
+
+let computed_category = "calculee"
+
+let base_category = "base"
+
+let givenback_category = "restituee"
+
+let family_category = "famille"
+
+let income_category = "revenu"
+
+let context_category = "contexte"
+
+let penality_category = "penalite"
 
 (**{2 Verification clauses}*)
 
