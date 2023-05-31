@@ -86,11 +86,14 @@ source_file_item:
 var_category_decl:
 | VARIABLE var_type = var_typ c = symbol_with_pos* COLON ATTRIBUT
   attr = separated_nonempty_list(COMMA, symbol_with_pos) SEMICOLON
-  {{
-      var_type;
-      var_category = c;
-      var_attributes = attr;
-  }}
+  {
+    ({
+       var_type;
+       var_category = c;
+       var_attributes = attr;
+      },
+     mk_position $sloc)
+  }
 
 var_typ:
 | INPUT { Input }

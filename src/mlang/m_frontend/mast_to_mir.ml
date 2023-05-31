@@ -466,7 +466,7 @@ let get_var_categories (p : Mast.program) =
         List.fold_left
           (fun decls source_file_item ->
             match Pos.unmark source_file_item with
-            | Mast.VarCatDecl catdecl ->
+            | Mast.VarCatDecl (catdecl, pos) ->
                 let normalized_decl =
                   {
                     catdecl with
@@ -482,7 +482,30 @@ let get_var_categories (p : Mast.program) =
                         catdecl.var_attributes;
                   }
                 in
-                normalized_decl :: decls
+                let already_defined =
+                  let decl_l = List.length normalized_decl.var_category in
+                  List.find_opt
+                    (fun (decl, _pos) ->
+                      decl_l = List.length decl.Mast.var_category
+                      && List.for_all2
+                           (fun a b ->
+                             String.equal (Pos.unmark a) (Pos.unmark b))
+                           normalized_decl.var_category decl.Mast.var_category)
+                    decls
+                in
+                begin
+                  match already_defined with
+                  | None -> ()
+                  | Some (_decl, pos) ->
+                      Cli.warning_print
+                        "Category \"%s\" defined more than once:@;\
+                         Already defined %a"
+                        (String.concat " "
+                           (Format_mast.format_var_type normalized_decl.var_type
+                           :: List.map Pos.unmark normalized_decl.var_category))
+                        Pos.format_position pos
+                end;
+                (normalized_decl, pos) :: decls
             | _ -> decls)
           decls source_file)
       [] p
@@ -492,8 +515,8 @@ let get_var_categories (p : Mast.program) =
     List.sort
       (fun c1 c2 ->
         compare
-          (List.length c2.Mast.var_category)
-          (List.length c1.Mast.var_category))
+          (List.length (Pos.unmark c2).Mast.var_category)
+          (List.length (Pos.unmark c1).Mast.var_category))
       categories
   in
   if categories = [] then
@@ -501,7 +524,7 @@ let get_var_categories (p : Mast.program) =
       "No variable categories defined. No check will be performed.";
   categories
 
-let check_var_category (categories : Mast.var_category_decl list)
+let check_var_category (categories : Mast.var_category_decl Pos.marked list)
     (var : Mast.variable_decl) =
   let rec category_included_in cbase ctest =
     (* assume sorted lists *)
@@ -547,24 +570,26 @@ let check_var_category (categories : Mast.var_category_decl list)
   if categories = [] then ()
   else
     let categories =
-      List.filter (fun cat -> cat.Mast.var_type = var_typ) categories
+      List.filter
+        (fun cat -> (Pos.unmark cat).Mast.var_type = var_typ)
+        categories
     in
     let var_cat = List.sort String.compare var_cat in
     let var_attrs = sort_attributes var_attrs in
     match
-      List.find_opt
+      List.find_all
         (fun cat ->
           category_included_in
-            (List.map Pos.unmark cat.Mast.var_category)
+            (List.map Pos.unmark (Pos.unmark cat).Mast.var_category)
             var_cat)
         categories
     with
-    | None ->
+    | [] ->
         Cli.warning_print "Variable %s does not fit in any declared categories."
           var_name
-    | Some cat ->
+    | [ cat ] ->
         let missing, surplus =
-          attributes_triaging cat.var_attributes var_attrs
+          attributes_triaging (Pos.unmark cat).var_attributes var_attrs
         in
         if missing <> [] then
           Cli.warning_print
@@ -578,12 +603,20 @@ let check_var_category (categories : Mast.var_category_decl list)
             var_name
             (String.concat " " var_cat)
             (String.concat " " surplus)
+    | multiple_cats ->
+        Cli.warning_print "Variable %s fits more than one category:@\n%a"
+          var_name
+          (Format.pp_print_list ~pp_sep:Format.pp_print_newline (fun fmt cat ->
+               Format.fprintf fmt "- %s"
+                 (String.concat " "
+                    (List.map Pos.unmark (Pos.unmark cat).Mast.var_category))))
+          multiple_cats
 
 (** Retrieves variable declaration data. Done in a separate pass because we
     don't want to deal with sorting the dependencies between files or inside
     files. *)
 let get_variables_decl (p : Mast.program)
-    (categories : Mast.var_category_decl list)
+    (categories : Mast.var_category_decl Pos.marked list)
     (const_map : float Pos.marked ConstMap.t) :
     var_decl_data Mir.VariableMap.t * Mir.Error.t list * Mir.idmap =
   let vars, idmap, errors, out_list =

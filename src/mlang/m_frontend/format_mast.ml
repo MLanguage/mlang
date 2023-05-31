@@ -337,7 +337,8 @@ let format_source_file_item fmt (i : source_file_item) =
   | Output o ->
       Format.fprintf fmt "sortie(%a);" format_variable_name (Pos.unmark o)
   | VarCatDecl c ->
-      Format.fprintf fmt "variable category %a;" format_var_category c
+      Format.fprintf fmt "variable category %a;" format_var_category
+        (Pos.unmark c)
 
 let format_source_file fmt (f : source_file) =
   pp_print_list_endline (pp_unmark format_source_file_item) fmt f

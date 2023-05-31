@@ -435,7 +435,7 @@ type source_file_item =
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
   | Function  (** Declares a function, unused *)
-  | VarCatDecl of var_category_decl
+  | VarCatDecl of var_category_decl Pos.marked
 (* TODO: parse something here *)
 
 type source_file = source_file_item Pos.marked list
