@@ -538,7 +538,7 @@ let check_var_category (categories : Mast.var_category_decl list)
     | Mast.ConstVar _ -> assert false
     | Mast.ComputedVar v ->
         let v = Pos.unmark v in
-        (Pos.unmark v.comp_name, Mast.Input, v.comp_subtyp, v.comp_attributes)
+        (Pos.unmark v.comp_name, Mast.Computed, v.comp_subtyp, v.comp_attributes)
     | Mast.InputVar v ->
         let v = Pos.unmark v in
         (Pos.unmark v.input_name, Mast.Input, v.input_subtyp, v.input_attributes)
