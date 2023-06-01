@@ -91,7 +91,8 @@ let compare_dump out outexp =
   let rec read_strings ic strs =
     try
       let str = read64 ic in
-      StrSet.add (Bytes.to_string str) strs
+      let strs = StrSet.add (Bytes.to_string str) strs in
+      read_strings ic strs
     with
     | End_of_file -> strs
   in
@@ -111,10 +112,11 @@ let compare_dump out outexp =
     else string_of_float(Int64.float_of_bits i64)
   in
   List.iter (fun (var, res, exp) ->
-      Printf.eprintf "%s: %s found, expected %s\n%!"
+      Printf.eprintf "%s: %s found, expected %s\n"
         var (hex2floatstr res) (hex2floatstr exp)
     )
     diffs;
+  flush stderr;
   close_in out;
   close_in outexp
 
