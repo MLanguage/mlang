@@ -82,8 +82,14 @@ M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 # ADDITIONAL_C_SOURCES_TARGETS allows to create new targets in configuration to produce or load in the source folder before compiling.
 calc/enchain.o: calc/var_static.c.inc calc/enchain.c $(ADDITIONAL_C_SOURCES_TARGETS)
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), BACKEND_CFLAGS=$(BACKEND_CFLAGS))"
-	cd calc && $(CC) $(BACKEND_CFLAGS) -c \
-	*.c
+# If calc/ directory was not cleaned between builds, some driver C files are present that mustn't be compiled at this stage.
+# We use find to scan the directory and keep every .c except files which are in DRIVER_FILES list.
+# To exclude files string1, string2 and string3 from the match, the syntax is '-not \( -name "string1" -o -name "string2" -o -name "string3" \)'
+# so we use string substitution to replace the space separator by the '" -o -name "' between the file names.
+# $() is an empty variable, canonical way to force make to take into account the space as the string to be replaced.
+	cd calc && find ./ -name "*.c" -not \( -name "$(subst $() ," -o -name ",$(DRIVER_FILES))" \) \
+	-exec $(CC) $(BACKEND_CFLAGS) -c \
+	{} +
 #	irdata.c enchain.c var.c contexte.c famille.c revenu.c revcor.c penalite.c variatio.c tableg??.c restitue.c \
 	chap-*.c res-ser*.c coc*.c coi*.c horiz*.c
 
@@ -91,16 +97,20 @@ calc/enchain.o: calc/var_static.c.inc calc/enchain.c $(ADDITIONAL_C_SOURCES_TARG
 # Final targets
 ##################################################
 
+# Build derivative file lists
 DRIVER_TARGETS:=$(foreach file,$(DRIVER_FILES),calc/$(file))
+DRIVER_TEMP:=$(DRIVER_FILES:.ml=.o)
+DRIVER_OBJECT_FILES:=$(DRIVER_TEMP:.c=.o)
 # TODO: use &: when upgraded to GNU Make 4.3+
 $(DRIVER_TARGETS) :
-	echo "Copie des sources du pilote depuis $(DRIVER_DIR)"
+	@echo "Copie des sources du pilote depuis $(DRIVER_DIR)"
 	cp $(DRIVER_DIR)* calc/
 
 # Ml_primitif (current main build)
 # -----------------------------
 cal: calc/enchain.o $(DRIVER_TARGETS)
 	@echo "Compilation de la calculette primitive (OCAMLFLAGS=$(OCAMLFLAGS), WITH_BISECT=$(WITH_BISECT))"
+	cd calc && rm -f $(DRIVER_OBJECT_FILES)
 ifeq ($(WITH_BISECT), 1)
 	cd calc && ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
 	-I $(BISECT_PATH)/common -I $(BISECT_PATH)/runtime \
