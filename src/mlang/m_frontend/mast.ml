@@ -330,6 +330,13 @@ type rule = {
       (** A rule can contain many variable definitions *)
 }
 
+type rule_domain_decl = {
+  rdom_names : string Pos.marked list Pos.marked list;
+  rdom_parents : string Pos.marked list Pos.marked list;
+  rdom_computable : bool;
+  rdom_by_default : bool;
+}
+
 (**{2 Variable declaration}*)
 
 (** The M language has prototypes for declaring variables with types and various
@@ -437,6 +444,7 @@ type source_file_item =
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
   | Function  (** Declares a function, unused *)
+  | RuleDomDecl of rule_domain_decl
 
 (* TODO: parse something here *)
 

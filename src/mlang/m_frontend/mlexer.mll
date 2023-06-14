@@ -116,6 +116,14 @@ rule token = parse
   { NOTIN }
 | "non"
   { NOT }
+| "domaine"
+  { DOMAIN }
+| "specialise"
+  { SPECIALIZE }
+| "calculable"
+  { COMPUTABLE }
+| "par_defaut"
+  { BY_DEFAULT }
 | "regle"
   { RULE }
 | "si"

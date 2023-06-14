@@ -49,6 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS CONTEXT FAMILY PENALITY INCOME INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION
+%token DOMAIN SPECIALIZE COMPUTABLE BY_DEFAULT
 
 %token EOF
 
@@ -82,6 +83,57 @@ source_file_item:
 | e = error_ { (Error e, mk_position $sloc) }
 | o = output { (Output o, mk_position $sloc) }
 | fonction { (Function, mk_position $sloc) }
+| cr = rule_domain_decl { (RuleDomDecl cr, mk_position $sloc) }
+
+rule_domain_decl:
+| DOMAIN RULE rdom_params = separated_nonempty_list(COLON, rdom_param_with_pos) SEMICOLON
+  {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (dno, dso, dco, dpdo) = function
+    | Some dn, _, _, _, pos ->
+        if dno = None then Some dn, dso, dco, dpdo
+        else err "rule domain names are already defined" pos
+    | _, Some ds, _, _, pos ->
+        if dso = None then dno, Some ds, dco, dpdo
+        else err "rule domain specialization is already specified" pos
+    | _, _, Some dc, _, pos ->
+        if dco = None then dno, dso, Some dc, dpdo
+        else err "rule domain is already calculated" pos
+    | _, _, _, Some dpd, pos ->
+        if dpdo = None then dno, dso, dco, Some dpd
+        else err "rule domain is already defined by defaut" pos
+    | _, _, _, _, _ -> assert false
+    in
+    let init = None, None, None, None in
+    let dno, dso, dco, dpdo = List.fold_left fold init rdom_params in
+    let rdom_names =
+      match dno with
+      | None -> err "rule domain names must be defined" (mk_position $sloc)
+      | Some dn -> dn
+    in
+    {
+      rdom_names;
+      rdom_parents = (match dso with None -> [] | Some ds -> ds);
+      rdom_computable = (match dco with None -> false | _ -> true);
+      rdom_by_default = (match dpdo with None -> false | _ -> true);
+    }
+  }
+
+rdom_param_with_pos:
+| rdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (Some rdom_names, None, None, None, mk_position $sloc) }
+| SPECIALIZE rdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (None, Some rdom_parents, None, None, mk_position $sloc) }
+| COMPUTABLE
+  { (None, None, Some (), None, mk_position $sloc) }
+| BY_DEFAULT
+  { (None, None, None, Some (), mk_position $sloc) }
+
+%inline symbol_with_pos:
+| s = SYMBOL { (s, mk_position $sloc) }
+
+%inline symbol_list_with_pos:
+| sl = nonempty_list(symbol_with_pos) { (sl, mk_position $sloc) }
 
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }

@@ -168,7 +168,17 @@ type rov_id = RuleID of int | VerifID of int
 
 module RuleMap : Map.S with type key = rov_id
 
+type rule_domain = {
+  rdom_id : StrSet.t;
+  rdom_names : StrSetSet.t;
+  rdom_computable : bool;
+  rdom_by_default : bool;
+  rdom_min : StrSetSet.t;
+  rdom_max : StrSetSet.t;
+}
+
 type rule_data = {
+  rule_domain : rule_domain;
   rule_vars : (variable_id * variable_data) list;
   rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;

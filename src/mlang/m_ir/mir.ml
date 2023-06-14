@@ -389,7 +389,17 @@ let fresh_rule_num =
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = RuleID (-1)
 
+type rule_domain = {
+  rdom_id : StrSet.t;
+  rdom_names : StrSetSet.t;
+  rdom_computable : bool;
+  rdom_by_default : bool;
+  rdom_min : StrSetSet.t;
+  rdom_max : StrSetSet.t;
+}
+
 type rule_data = {
+  rule_domain : rule_domain;
   rule_vars : (Variable.id * variable_data) list;
   rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;
