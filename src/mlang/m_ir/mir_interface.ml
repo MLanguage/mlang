@@ -60,13 +60,18 @@ type full_program = {
 
 let to_full_program (program : program) (chains : Mast.chain_tag list) :
     full_program =
-  let chains_orders, _ =
+  let chains_orders =
     List.fold_left
-      (fun (chains, seen_customs) tag ->
+      (fun chains tag ->
         let vars_to_rules, chain_rules =
           Mir.RuleMap.fold
             (fun rov_id rule (vars, rules) ->
-              if Mast.are_tags_part_of_chain rule.rule_tags tag then
+              let rule_domain = rule.rule_domain in
+              let tag_domain_id = tag_to_rule_domain_id tag in
+              let is_max = StrSetSet.mem tag_domain_id rule_domain.rdom_max in
+              let is_eq = rule_domain.rdom_id = tag_domain_id in
+              let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
+              if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
                     (fun vars (vid, _def) ->
                       let var = VariableDict.find vid program.program_vars in
@@ -84,63 +89,26 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
         let execution_order =
           Mir_dependency_graph.get_rules_execution_order dep_graph
         in
-        let customs, _ =
+        let customs =
           RuleMap.fold
-            (fun rov_id rule (customs, in_primcorr) ->
+            (fun rov_id rule customs ->
               List.fold_left
-                (fun (customs, in_primcorr) tag ->
+                (fun customs tag ->
                   match tag with
-                  | Mast.Custom _ -> (
-                      let ipc =
-                        Mast.are_tags_part_of_chain rule.rule_tags Mast.PrimCorr
-                      in
-                      if in_primcorr && not ipc then
-                        Errors.raise_error
-                          "Custom chain must be attributed to rules with all \
-                           the exact same tagging."
-                      else
-                        match TagMap.find_opt tag customs with
-                        | Some rs ->
-                            ( TagMap.add tag (rov_id :: rs) customs,
-                              ipc || in_primcorr )
-                        | None ->
-                            ( TagMap.add tag [ rov_id ] customs,
-                              ipc || in_primcorr ))
-                  | _ -> (customs, in_primcorr))
-                (customs, in_primcorr) rule.rule_tags)
-            chain_rules (TagMap.empty, false)
+                  | Mast.Custom _ -> begin
+                      match TagMap.find_opt tag customs with
+                      | Some rs -> TagMap.add tag (rov_id :: rs) customs
+                      | None -> TagMap.add tag [ rov_id ] customs
+                    end
+                  | _ -> customs)
+                customs rule.rule_tags)
+            chain_rules TagMap.empty
         in
         let customs =
           TagMap.map
             (fun rules ->
               Mir_dependency_graph.pull_rules_dependencies dep_graph rules)
             customs
-        in
-        let seen_customs =
-          TagMap.merge
-            (fun custom_tag seen curr ->
-              match (seen, curr) with
-              | None, None -> None
-              | Some _, None -> seen
-              | None, Some _ -> Some tag
-              | Some s, Some _ -> (
-                  match (s, tag) with
-                  | Mast.Primitif, Mast.Corrective
-                  | Mast.Corrective, Mast.Primitif ->
-                      (* ignore this case *) seen
-                  | _ ->
-                      let custom_tag =
-                        match custom_tag with
-                        | Mast.Custom s -> s
-                        | _ -> assert false
-                      in
-                      Errors.raise_error
-                        (Format.asprintf
-                           "Rules with custom chain %s found with incompatible \
-                            tags %a and %a."
-                           custom_tag Format_mast.format_chain_tag s
-                           Format_mast.format_chain_tag tag)))
-            seen_customs customs
         in
         let chains =
           TagMap.fold
@@ -149,9 +117,8 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
             customs
             (Mir.TagMap.add tag { dep_graph; execution_order } chains)
         in
-        (chains, seen_customs))
-      (Mir.TagMap.empty, Mir.TagMap.empty)
-      chains
+        chains)
+      Mir.TagMap.empty chains
   in
   { program; chains_orders }
 

@@ -400,6 +400,7 @@ type rule_domain = {
 
 type rule_data = {
   rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
   rule_vars : (Variable.id * variable_data) list;
   rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;
@@ -648,3 +649,48 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
+
+let tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t = function
+  | Mast.Primitif -> StrSet.from_list [ "primitive" ]
+  | Mast.Corrective -> StrSet.from_list [ "corrective" ]
+  | Mast.Isf -> StrSet.from_list [ "isf" ]
+  | Mast.Taux -> StrSet.from_list [ "taux" ]
+  | Mast.Irisf -> StrSet.from_list [ "irisf" ]
+  | Mast.Base_hr -> StrSet.from_list [ "corrective"; "base_HR" ]
+  | Mast.Base_tl -> StrSet.from_list [ "corrective"; "base_tl" ]
+  | Mast.Base_tl_init -> StrSet.from_list [ "corrective"; "base_tl_init" ]
+  | Mast.Base_tl_rect -> StrSet.from_list [ "corrective"; "base_tl_rect" ]
+  | Mast.Base_initial -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
+  | Mast.Base_inr -> StrSet.from_list [ "corrective"; "base_INR" ]
+  | Mast.Base_inr_ref -> StrSet.from_list [ "corrective"; "base_inr_ref" ]
+  | Mast.Base_inr_tl -> StrSet.from_list [ "corrective"; "base_inr_tl" ]
+  | Mast.Base_inr_tl22 -> StrSet.from_list [ "corrective"; "base_inr_tl22" ]
+  | Mast.Base_inr_tl24 -> StrSet.from_list [ "corrective"; "base_inr_tl24" ]
+  | Mast.Base_inr_ntl -> StrSet.from_list [ "corrective"; "base_inr_ntl" ]
+  | Mast.Base_inr_ntl22 -> StrSet.from_list [ "corrective"; "base_inr_ntl22" ]
+  | Mast.Base_inr_ntl24 -> StrSet.from_list [ "corrective"; "base_inr_ntl24" ]
+  | Mast.Base_inr_inter22 ->
+      StrSet.from_list [ "corrective"; "base_inr_inter22" ]
+  | Mast.Base_inr_intertl ->
+      StrSet.from_list [ "corrective"; "base_inr_intertl" ]
+  | Mast.Base_inr_r9901 -> StrSet.from_list [ "corrective"; "base_inr_r9901" ]
+  | Mast.Base_inr_cimr07 -> StrSet.from_list [ "corrective"; "base_inr_cimr07" ]
+  | Mast.Base_inr_cimr24 -> StrSet.from_list [ "corrective"; "base_inr_cimr24" ]
+  | Mast.Base_inr_cimr99 -> StrSet.from_list [ "corrective"; "base_inr_cimr99" ]
+  | Mast.Base_inr_tlcimr07 ->
+      StrSet.from_list [ "corrective"; "base_inr_tlcimr07" ]
+  | Mast.Base_inr_tlcimr24 ->
+      StrSet.from_list [ "corrective"; "base_inr_tlcimr24" ]
+  | Mast.Base_abat98 -> StrSet.from_list [ "corrective"; "base_ABAT98" ]
+  | Mast.Base_abat99 -> StrSet.from_list [ "corrective"; "base_ABAT99" ]
+  | Mast.Base_majo -> StrSet.from_list [ "corrective"; "base_MAJO" ]
+  | Mast.Base_premier -> StrSet.from_list [ "corrective"; "base_premier" ]
+  | Mast.Base_anterieure -> StrSet.from_list [ "corrective"; "base_anterieure" ]
+  | Mast.Base_anterieure_cor ->
+      StrSet.from_list [ "corrective"; "base_anterieure_cor" ]
+  | Mast.Base_stratemajo -> StrSet.from_list [ "corrective"; "base_stratemajo" ]
+  | Mast.Non_auto_cc -> StrSet.from_list [ "non_auto_cc" ]
+  | Mast.Horizontale -> StrSet.from_list [ "horizontale" ]
+  | Mast.PrimCorr -> StrSet.from_list [ "irisf"; "corrective" ]
+  | Mast.Custom _ -> assert false
+(* StrSet.from_list [ "custom"; ch ] *)

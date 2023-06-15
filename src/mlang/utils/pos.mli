@@ -22,6 +22,8 @@ type t
 
 val make_position : string -> Lexing.position * Lexing.position -> t
 
+val make_position_between : t -> t -> t
+
 val format_position_short : Format.formatter -> t -> unit
 
 val format_position : Format.formatter -> t -> unit

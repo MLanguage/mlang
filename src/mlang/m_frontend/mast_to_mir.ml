@@ -1168,18 +1168,10 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
   Mir.VariableMap.add var_lvalue vdata var_data
 
 let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
-  let sl_to_ss sl =
-    let fold ss s = StrSet.add (Pos.unmark s) ss in
-    List.fold_left fold StrSet.empty (Pos.unmark sl)
-  in
-  let sll_to_sss sll =
-    let fold sss sl = StrSetSet.add (sl_to_ss sl) sss in
-    List.fold_left fold StrSetSet.empty sll
-  in
   let fold_items (domains, synonyms, by_default) marked_item =
     match Pos.unmark marked_item with
     | Mast.RuleDomDecl decl ->
-        let rdom_names = sll_to_sss decl.rdom_names in
+        let rdom_names = StrSetSet.from_marked_list_list decl.rdom_names in
         let rdom_id = StrSetSet.min_elt rdom_names in
         let domain =
           Mir.
@@ -1188,13 +1180,13 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
               rdom_names;
               rdom_computable = decl.rdom_computable;
               rdom_by_default = decl.rdom_by_default;
-              rdom_min = sll_to_sss decl.rdom_parents;
+              rdom_min = StrSetSet.from_marked_list_list decl.rdom_parents;
               rdom_max = StrSetSet.empty;
             }
         in
         let domains = StrSetMap.add rdom_id domain domains in
         let fold syn sl =
-          let name = sl_to_ss sl in
+          let name = StrSet.from_marked_list (Pos.unmark sl) in
           if StrSetMap.mem name syn then
             let msg = "there is already a domain with this name" in
             Errors.raise_spanned_error msg (Pos.get_position sl)
@@ -1285,8 +1277,37 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
      Format.fprintf fmt "%a, " pp_ss ss in StrSetSet.iter iter sss in
      Format.printf "XXX %a\n: min: %a\n: max: %a\n" pp_ss id pp_sss
      dom.Mir.rdom_min pp_sss dom.Mir.rdom_max in StrSetMap.iter iter domains;
-     exit 0 in*)
+     exit 0 in *)
   domains
+
+let get_rule_chains (domains : Mir.rule_domain StrSetMap.t) (p : Mast.program) :
+    Mir.rule_domain StrMap.t =
+  let fold_rules chains marked_item =
+    match Pos.unmark marked_item with
+    | Mast.Rule r when r.rule_chaining <> None ->
+        let ch_name, ch_pos = Option.get r.rule_chaining in
+        let rule_domain =
+          let rdom_id = StrSet.from_marked_list (Pos.unmark r.rule_tag_names) in
+          StrSetMap.find rdom_id domains
+        in
+        let ch_dom =
+          match StrMap.find_opt ch_name chains with
+          | Some dom -> dom
+          | None -> rule_domain
+        in
+        let rdom_is_min = StrSetSet.mem rule_domain.rdom_id ch_dom.rdom_min in
+        let rdom_is_max = StrSetSet.mem rule_domain.rdom_id ch_dom.rdom_max in
+        let rdom_is_eq = rule_domain.rdom_id = ch_dom.rdom_id in
+        if rdom_is_min || rdom_is_max || rdom_is_eq then
+          if not rdom_is_min then StrMap.add ch_name rule_domain chains
+          else chains
+        else
+          let msg = "chaining incompatible with rule domain" in
+          Errors.raise_spanned_error msg ch_pos
+    | _ -> chains
+  in
+  let fold_sources chains source = List.fold_left fold_rules chains source in
+  List.fold_left fold_sources StrMap.empty p
 
 (** Main translation pass that deal with regular variable definition; returns a
     map whose keys are the variables being defined (with the execution number
@@ -1297,6 +1318,8 @@ let get_rules_and_var_data (idmap : Mir.idmap)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
     (Mir.Variable.t list
     * Mir.rov_id Pos.marked
+    * string Pos.marked list Pos.marked
+    * Mast.chaining Pos.marked option
     * Mast.chain_tag Pos.marked list)
     Mir.RuleMap.t
     * Mir.variable_data Mir.VariableMap.t =
@@ -1387,7 +1410,13 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                 let rule_number =
                   Pos.map_under_mark (fun n -> Mir.RuleID n) r.rule_number
                 in
-                let rule = (List.rev rule_vars, rule_number, rule_tags) in
+                let rule =
+                  ( List.rev rule_vars,
+                    rule_number,
+                    r.rule_tag_names,
+                    r.rule_chaining,
+                    rule_tags )
+                in
                 ( Mir.RuleMap.add (Pos.unmark rule_number) rule rule_data,
                   var_data )
           | _ -> (rule_data, var_data))
@@ -1554,6 +1583,7 @@ let translate (p : Mast.program) : Mir.program =
   let idmap = get_var_redefinitions p idmap const_map in
   let rule_domains = get_rule_domains p in
   let rule_domain_by_default = StrSetMap.find StrSet.empty rule_domains in
+  let rule_chains = get_rule_chains rule_domains p in
   let rule_data, var_data =
     get_rules_and_var_data idmap var_decl_data const_map p
   in
@@ -1562,8 +1592,24 @@ let translate (p : Mast.program) : Mir.program =
   in
   let rules, rule_vars =
     Mir.RuleMap.fold
-      (fun rule_id (rule_vars, rule_number, rule_tags) (rules, vars) ->
-        let rule_domain = rule_domain_by_default in
+      (fun rule_id
+           (rule_vars, rule_number, rule_tag_names, rule_chaining, rule_tags)
+           (rules, vars) ->
+        let domain_id = StrSet.from_marked_list (Pos.unmark rule_tag_names) in
+        let rule_domain =
+          match StrSetMap.find_opt domain_id rule_domains with
+          | Some domain -> domain
+          | None ->
+              Errors.raise_spanned_error "unknown rule domain"
+                (Pos.get_position rule_tag_names)
+        in
+        let rule_chain =
+          match rule_chaining with
+          | None -> None
+          | Some mch ->
+              let ch_name = Pos.unmark mch in
+              Some (ch_name, StrMap.find ch_name rule_chains)
+        in
         let rule_vars, vars =
           List.fold_left
             (fun (rule_vars, vars) var ->
@@ -1574,7 +1620,7 @@ let translate (p : Mast.program) : Mir.program =
         in
         let rule_tags = List.map Pos.unmark rule_tags in
         let rule_data =
-          Mir.{ rule_domain; rule_vars; rule_number; rule_tags }
+          Mir.{ rule_domain; rule_chain; rule_vars; rule_number; rule_tags }
         in
         (Mir.RuleMap.add rule_id rule_data rules, vars))
       rule_data
@@ -1596,6 +1642,7 @@ let translate (p : Mast.program) : Mir.program =
       Mir.
         {
           rule_domain = rule_domain_by_default;
+          rule_chain = None;
           rule_vars = orphans;
           rule_number = (RuleID 0, Pos.no_pos);
           rule_tags = [];

@@ -22,6 +22,20 @@ type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
 let make_position (f : string) (loc : Lexing.position * Lexing.position) =
   { pos_filename = f; pos_loc = loc }
 
+let make_position_between (p1 : t) (p2 : t) : t =
+  if p1.pos_filename <> p2.pos_filename then begin
+    Cli.error_print "Conflicting position filenames: %s <> %s" p1.pos_filename
+      p2.pos_filename;
+    exit (-1)
+  end
+  else
+    let b1, e1 = p1.pos_loc in
+    let b2, e2 = p2.pos_loc in
+    let b = if b1.Lexing.pos_cnum < b2.Lexing.pos_cnum then b1 else b2 in
+    let e = if e2.Lexing.pos_cnum < e1.Lexing.pos_cnum then e1 else e2 in
+    let pos_loc = (b, e) in
+    { p1 with pos_loc }
+
 let format_position_short fmt pos =
   let s, e = pos.pos_loc in
   if s.Lexing.pos_lnum = e.Lexing.pos_lnum then

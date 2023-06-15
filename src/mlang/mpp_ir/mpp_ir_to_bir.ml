@@ -23,7 +23,8 @@ end)
 type translation_ctx = {
   new_variables : Bir.variable StringMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
-  used_chains : unit Mir.TagMap.t;
+  used_rule_domains : StrSetSet.t;
+  used_chainings : StrSet.t;
   verif_seen : bool;
 }
 
@@ -31,7 +32,8 @@ let empty_translation_ctx : translation_ctx =
   {
     new_variables = StringMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
-    used_chains = Mir.TagMap.empty;
+    used_rule_domains = StrSetSet.empty;
+    used_chainings = StrSet.empty;
     verif_seen = false;
   }
 
@@ -46,8 +48,9 @@ let ctx_join ctx1 ctx2 =
     variables_used_as_inputs =
       Mir.VariableDict.union ctx1.variables_used_as_inputs
         ctx2.variables_used_as_inputs;
-    used_chains =
-      Mir.TagMap.union (fun _ _ () -> Some ()) ctx1.used_chains ctx2.used_chains;
+    used_rule_domains =
+      StrSetSet.union ctx1.used_rule_domains ctx2.used_rule_domains;
+    used_chainings = StrSet.union ctx1.used_chainings ctx2.used_chainings;
     verif_seen = ctx1.verif_seen || ctx2.verif_seen;
   }
 
@@ -410,7 +413,15 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
         ] )
   | Mpp_ir.Expr (Call (Program chain_tag, _args), _) ->
       let ctx =
-        { ctx with used_chains = Mir.TagMap.add chain_tag () ctx.used_chains }
+        let used_rule_domains, used_chainings =
+          match chain_tag with
+          | Custom ch ->
+              (ctx.used_rule_domains, StrSet.add ch ctx.used_chainings)
+          | _ ->
+              let dom = Mir.tag_to_rule_domain_id chain_tag in
+              (StrSetSet.add dom ctx.used_rule_domains, ctx.used_chainings)
+        in
+        { ctx with used_rule_domains; used_chainings }
       in
       wrap_m_code_call m_program chain_tag ctx
   | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
@@ -492,10 +503,23 @@ let create_combined_program (m_program : Mir_interface.full_program)
       Mir.RuleMap.fold
         (fun rov_id rule_data rules ->
           if
-            Mir.TagMap.exists
-              (fun chain () ->
-                Mast.are_tags_part_of_chain rule_data.Mir.rule_tags chain)
-              ctx.used_chains
+            let rule_domain = rule_data.Mir.rule_domain in
+            let has_max =
+              not
+                (StrSetSet.disjoint ctx.used_rule_domains rule_domain.rdom_max)
+            in
+            let has_used_domain =
+              StrSetSet.mem rule_domain.rdom_id ctx.used_rule_domains
+            in
+            let has_used_chaining =
+              match rule_data.Mir.rule_chain with
+              | None -> false
+              | Some (ch, _) -> StrSet.mem ch ctx.used_chainings
+            in
+            let is_not_rule_0 =
+              Pos.unmark rule_data.Mir.rule_number <> RuleID 0
+            in
+            is_not_rule_0 && (has_max || has_used_domain || has_used_chaining)
           then
             let rov_name =
               Pos.map_under_mark

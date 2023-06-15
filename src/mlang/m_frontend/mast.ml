@@ -80,7 +80,7 @@ let all_tags : chain_tag list =
     Corrective;
     Isf;
     Taux;
-    Irisf;
+    (* Irisf;*)
     Base_hr;
     Base_tl;
     Base_tl_init;
@@ -109,8 +109,7 @@ let all_tags : chain_tag list =
     Base_anterieure;
     Base_anterieure_cor;
     Base_stratemajo;
-    Non_auto_cc;
-    Horizontale;
+    (* Non_auto_cc; Horizontale;*)
   ]
 
 let chain_tag_of_string : string -> chain_tag = function
@@ -181,6 +180,25 @@ let number_and_tags_of_name (name : string Pos.marked list) :
         (PrimCorr, Pos.no_pos); (Primitif, Pos.no_pos); (Corrective, Pos.no_pos);
       ] ) (* No tags means both in primitive and corrective *)
   else (number, tags)
+
+let tags_of_name (name : string Pos.marked list) : chain_tag Pos.marked list =
+  let rec aux tags = function
+    | [] -> tags
+    | h :: t ->
+        let tag =
+          try Pos.map_under_mark chain_tag_of_string h
+          with _ ->
+            Errors.raise_spanned_error
+              ("Unknown chain tag " ^ Pos.unmark h)
+              (Pos.get_position h)
+        in
+        aux (tag :: tags) t
+  in
+  let tags = aux [] name in
+  if List.length tags = 0 then
+    [ (PrimCorr, Pos.no_pos); (Primitif, Pos.no_pos); (Corrective, Pos.no_pos) ]
+    (* No tags means both in primitive and corrective *)
+  else tags
 
 type variable_name = string
 (** Variables are just strings *)
@@ -323,6 +341,7 @@ type formula =
 
 type rule = {
   rule_number : int Pos.marked;
+  rule_tag_names : string Pos.marked list Pos.marked;
   rule_tags : chain_tag Pos.marked list;
   rule_applications : application Pos.marked list;
   rule_chaining : chaining Pos.marked option;
@@ -465,30 +484,6 @@ type function_spec = {
 
 let get_variable_name (v : variable) : string =
   match v with Normal s -> s | Generic s -> s.base
-
-let are_tags_part_of_chain (tags : chain_tag list) (chain : chain_tag) : bool =
-  let is_part_of chain = List.exists (( = ) chain) tags in
-  match chain with
-  | Irisf -> false (* Not a real chain *)
-  | Corrective ->
-      (* Specific exclusion of "base_" rules in corrective *)
-      (not
-         (List.exists
-            (function
-              | Base_hr | Base_tl | Base_tl_init | Base_tl_rect | Base_initial
-              | Base_inr | Base_inr_ref | Base_inr_tl | Base_inr_tl22
-              | Base_inr_tl24 | Base_inr_ntl | Base_inr_ntl22 | Base_inr_ntl24
-              | Base_inr_inter22 | Base_inr_intertl | Base_inr_r9901
-              | Base_inr_cimr07 | Base_inr_cimr99 | Base_inr_cimr24
-              | Base_inr_tlcimr07 | Base_inr_tlcimr24 | Base_abat98
-              | Base_abat99 | Base_majo | Base_premier | Base_anterieure
-              | Base_anterieure_cor | Base_stratemajo ->
-                  true
-              | _ -> false)
-            tags))
-      && (is_part_of chain || is_part_of Irisf)
-  | Primitif | Isf -> is_part_of chain || is_part_of Irisf
-  | _ -> is_part_of chain
 
 let are_tags_part_of_verif_chain (tags : chain_tag list) (chain : chain_tag) :
     bool =

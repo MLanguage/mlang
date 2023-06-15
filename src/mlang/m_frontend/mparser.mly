@@ -278,17 +278,38 @@ value_type_prim:
 | INTEGER { (Integer, mk_position $sloc) }
 | REAL { (Real, mk_position $sloc) }
 
-rule_name_symbol:
-name = SYMBOL { (name, mk_position $sloc) }
-
 rule:
-| RULE name = rule_name_symbol+ COLON apps = application_reference
+| RULE name = symbol_list_with_pos COLON apps = application_reference
   SEMICOLON c = chaining_reference?
   formulaes = formula_list
   {
-    let rule_number, rule_tags = Mast.number_and_tags_of_name name in
+    let num, rule_tag_names =
+      let uname = Pos.unmark name in
+      let begPos =
+        match uname with
+        | h :: _ -> Pos.get_position h
+        | [] -> assert false
+      in
+      let rec aux tags endPos = function
+      | [num] ->
+           let pos = Pos.make_position_between begPos endPos in
+           num, (tags, pos)
+      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | [] -> assert false
+      in
+      aux [] begPos uname
+    in
+    let rule_number =
+      try Pos.map_under_mark int_of_string num
+      with _ ->
+        Errors.raise_spanned_error
+          "this rule or verification doesn't have an execution number"
+          (Pos.get_position num)
+    in
+    let rule_tags = Mast.tags_of_name (Pos.unmark rule_tag_names) in
     {
       rule_number;
+      rule_tag_names;
       rule_tags;
       rule_applications = apps;
       rule_chaining = c;

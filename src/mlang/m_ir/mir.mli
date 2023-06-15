@@ -179,6 +179,7 @@ type rule_domain = {
 
 type rule_data = {
   rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
   rule_vars : (variable_id * variable_data) list;
   rule_number : rov_id Pos.marked;
   rule_tags : Mast.chain_tag list;
@@ -358,3 +359,5 @@ val find_vars_by_io : program -> io -> VariableDict.t
 (** Returns a VariableDict.t containing all the variables that have a given io
     type, only one variable per name is entered in the VariableDict.t, this
     function chooses the one with the highest execution number*)
+
+val tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t
