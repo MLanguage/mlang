@@ -1651,6 +1651,8 @@ let translate (p : Mast.program) : Mir.program =
   in
   let conds = get_conds error_decls const_map idmap p in
   {
+    Mir.program_domains = rule_domains;
+    Mir.program_chainings = rule_chains;
     Mir.program_vars = var_data;
     Mir.program_rules = rules;
     Mir.program_conds = conds;

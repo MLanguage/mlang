@@ -29,6 +29,8 @@ type chain_order = {
 type full_program = {
   program : Mir.program;
   chains_orders : chain_order Mir.TagMap.t;
+  domains_orders : chain_order StrSetMap.t;
+  chainings_orders : chain_order StrMap.t;
 }
 
 val to_full_program : Mir.program -> Mast.chain_tag list -> full_program

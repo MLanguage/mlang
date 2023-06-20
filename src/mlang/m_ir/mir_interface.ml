@@ -56,6 +56,8 @@ type chain_order = {
 type full_program = {
   program : Mir.program;
   chains_orders : chain_order Mir.TagMap.t;
+  domains_orders : chain_order StrSetMap.t;
+  chainings_orders : chain_order StrMap.t;
 }
 
 let to_full_program (program : program) (chains : Mast.chain_tag list) :
@@ -120,7 +122,66 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
         chains)
       Mir.TagMap.empty chains
   in
-  { program; chains_orders }
+  let domains_orders =
+    StrSetMap.fold
+      (fun dom_id _ domains_orders ->
+        let vars_to_rules, chain_rules =
+          Mir.RuleMap.fold
+            (fun rov_id rule (vars, rules) ->
+              let rule_domain = rule.rule_domain in
+              let is_max = StrSetSet.mem dom_id rule_domain.rdom_max in
+              let is_eq = rule_domain.rdom_id = dom_id in
+              let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
+              if is_not_rule_0 && (is_max || is_eq) then
+                ( List.fold_left
+                    (fun vars (vid, _def) ->
+                      let var = VariableDict.find vid program.program_vars in
+                      VariableMap.add var rov_id vars)
+                    vars rule.rule_vars,
+                  RuleMap.add rov_id rule rules )
+              else (vars, rules))
+            program.program_rules
+            (VariableMap.empty, RuleMap.empty)
+        in
+        let dep_graph =
+          Mir_dependency_graph.create_rules_dependency_graph chain_rules
+            vars_to_rules
+        in
+        let execution_order =
+          Mir_dependency_graph.get_rules_execution_order dep_graph
+        in
+        StrSetMap.add dom_id { dep_graph; execution_order } domains_orders)
+      program.program_domains StrSetMap.empty
+  in
+  let chainings_orders =
+    let chainings_roots =
+      StrMap.map
+        (fun chain_dom ->
+          let dep_graph =
+            (StrSetMap.find chain_dom.rdom_id domains_orders).dep_graph
+          in
+          (dep_graph, []))
+        program.program_chainings
+    in
+    let chainings_roots =
+      RuleMap.fold
+        (fun rov_id rule chainings_roots ->
+          match rule.rule_chain with
+          | Some (chain_id, _) ->
+              let g, rs = StrMap.find chain_id chainings_roots in
+              StrMap.add chain_id (g, rov_id :: rs) chainings_roots
+          | None -> chainings_roots)
+        program.program_rules chainings_roots
+    in
+    StrMap.fold
+      (fun chain_id (dep_graph, chain_roots) chainings_orders ->
+        let dep_graph, execution_order =
+          Mir_dependency_graph.pull_rules_dependencies dep_graph chain_roots
+        in
+        StrMap.add chain_id { dep_graph; execution_order } chainings_orders)
+      chainings_roots StrMap.empty
+  in
+  { program; chains_orders; domains_orders; chainings_orders }
 
 let output_var_dependencies (p : full_program) (chain : Mast.chain_tag)
     (var : Mir.variable) =
