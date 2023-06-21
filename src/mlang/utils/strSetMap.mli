@@ -1,1 +1,3 @@
-include Map.S with type key = StrSet.t
+module type T = Map.S with type key = StrSet.t
+
+include T

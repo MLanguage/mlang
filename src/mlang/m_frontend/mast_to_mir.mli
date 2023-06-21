@@ -27,7 +27,7 @@
 (** The values of the map can be either strings of integers *)
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
-module ConstMap : Map.S with type key = Mast.variable_name
+module ConstMap : StrMap.T
 
 module ParamsMap : Map.S with type key = Char.t
 (** Map whose keys are loop parameters *)

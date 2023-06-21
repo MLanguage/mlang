@@ -425,7 +425,6 @@ let generate_mpp_functions_signatures (oc : Format.formatter)
 
 let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
     (folder : string) (vm : Dgfip_varid.var_id_map) =
-  let module StringMap = Map.Make (String) in
   let default_file = "default" in
   let filemap =
     ROVMap.fold
@@ -438,14 +437,12 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
             ^ ".c"
         in
         let filerovs =
-          match StringMap.find_opt file filemap with
-          | None -> []
-          | Some fr -> fr
+          match StrMap.find_opt file filemap with None -> [] | Some fr -> fr
         in
-        StringMap.add file (rov :: filerovs) filemap)
-      program.rules_and_verifs StringMap.empty
+        StrMap.add file (rov :: filerovs) filemap)
+      program.rules_and_verifs StrMap.empty
   in
-  StringMap.fold
+  StrMap.fold
     (fun file rovs orphan ->
       if String.equal file default_file then rovs @ orphan
       else

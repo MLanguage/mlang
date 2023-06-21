@@ -43,7 +43,7 @@ module VariableSet = Set.Make (struct
   let compare = compare_variable
 end)
 
-module NameMap = Map.Make (String)
+module NameMap = StrMap
 
 type offset_alloc = { mutable name_map : int NameMap.t; mutable size : int }
 

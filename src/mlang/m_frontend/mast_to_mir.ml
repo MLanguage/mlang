@@ -35,7 +35,7 @@ type var_decl_data = {
 }
 (** Intermediate container for variable declaration info *)
 
-module ConstMap = Map.Make (String)
+module ConstMap = StrMap
 
 (** {2 Loop translation context} *)
 

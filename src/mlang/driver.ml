@@ -171,7 +171,7 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
       (fun rdom_id Mir_interface.{ dep_graph; _ } ->
         Cli.debug_print
           "Checking for circular variable definitions for rule domain %a..."
-          (StrSet.pp " ") rdom_id;
+          (StrSet.pp ()) rdom_id;
         if
           Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
             true
