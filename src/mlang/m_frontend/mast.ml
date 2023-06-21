@@ -72,45 +72,6 @@ type chain_tag =
   | Base_stratemajo
   | Non_auto_cc
   | Horizontale
-(* Make sure to update [all_tags] below when patching this *)
-
-let all_tags : chain_tag list =
-  [
-    Primitif;
-    Corrective;
-    Isf;
-    Taux;
-    (* Irisf;*)
-    Base_hr;
-    Base_tl;
-    Base_tl_init;
-    Base_tl_rect;
-    Base_initial;
-    Base_inr;
-    Base_inr_ref;
-    Base_inr_tl;
-    Base_inr_tl22;
-    Base_inr_tl24;
-    Base_inr_ntl;
-    Base_inr_ntl22;
-    Base_inr_ntl24;
-    Base_inr_inter22;
-    Base_inr_intertl;
-    Base_inr_r9901;
-    Base_inr_cimr07;
-    Base_inr_cimr24;
-    Base_inr_cimr99;
-    Base_inr_tlcimr07;
-    Base_inr_tlcimr24;
-    Base_abat98;
-    Base_abat99;
-    Base_majo;
-    Base_premier;
-    Base_anterieure;
-    Base_anterieure_cor;
-    Base_stratemajo;
-    (* Non_auto_cc; Horizontale;*)
-  ]
 
 let chain_tag_of_string : string -> chain_tag = function
   | "primitif" -> Primitif

@@ -199,7 +199,7 @@ let translate_m_code (m_program : Mir_interface.full_program)
     vars
 
 let wrap_m_code_call (m_program : Mir_interface.full_program)
-    (chain_tag : Mast.chain_tag) (ctx : translation_ctx) :
+    (order : Mir_interface.chain_order) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
   let m_program =
     {
@@ -209,15 +209,12 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
           m_program.program ctx.variables_used_as_inputs;
     }
   in
-  let execution_order =
-    (Mir.TagMap.find chain_tag m_program.chains_orders).execution_order
-  in
   let program_stmts =
     List.fold_left
       (fun stmts rov_id ->
         let rule = Mir.RuleMap.find rov_id m_program.program.program_rules in
         Pos.same_pos_as (Bir.SRovCall rov_id) rule.Mir.rule_number :: stmts)
-      [] execution_order
+      [] order.execution_order
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
@@ -412,18 +409,23 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             pos );
         ] )
   | Mpp_ir.Expr (Call (Program chain_tag, _args), _) ->
-      let ctx =
-        let used_rule_domains, used_chainings =
+      let order, ctx =
+        let order, used_rule_domains, used_chainings =
           match chain_tag with
           | Custom ch ->
-              (ctx.used_rule_domains, StrSet.add ch ctx.used_chainings)
+              let order = StrMap.find ch m_program.chainings_orders in
+              (order, ctx.used_rule_domains, StrSet.add ch ctx.used_chainings)
           | _ ->
+              let rdom_id = Mir.tag_to_rule_domain_id chain_tag in
+              let order = StrSetMap.find rdom_id m_program.domains_orders in
               let dom = Mir.tag_to_rule_domain_id chain_tag in
-              (StrSetSet.add dom ctx.used_rule_domains, ctx.used_chainings)
+              ( order,
+                StrSetSet.add dom ctx.used_rule_domains,
+                ctx.used_chainings )
         in
-        { ctx with used_rule_domains; used_chainings }
+        (order, { ctx with used_rule_domains; used_chainings })
       in
-      wrap_m_code_call m_program chain_tag ctx
+      wrap_m_code_call m_program order ctx
   | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
       ( { ctx with verif_seen = true },
         generate_verif_call m_program chain_tag filter )

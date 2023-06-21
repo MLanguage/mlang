@@ -696,3 +696,44 @@ let tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t = function
   | Mast.PrimCorr -> StrSet.from_list [ "irisf"; "corrective" ]
   | Mast.Custom _ -> assert false
 (* StrSet.from_list [ "custom"; ch ] *)
+
+let string_to_rule_domain_id : string -> StrSet.t = function
+  | "primitif" -> StrSet.from_list [ "primitive" ]
+  | "corrective" -> StrSet.from_list [ "corrective" ]
+  | "isf" -> StrSet.from_list [ "isf" ]
+  | "taux" -> StrSet.from_list [ "taux" ]
+  | "irisf" -> StrSet.from_list [ "irisf" ]
+  | "base_HR" -> StrSet.from_list [ "corrective"; "base_HR" ]
+  | "base_tl" -> StrSet.from_list [ "corrective"; "base_tl" ]
+  | "base_tl_init" -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
+  | "base_tl_rect" -> StrSet.from_list [ "corrective"; "base_tl_rect" ]
+  | "base_INITIAL" -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
+  | "base_INR" -> StrSet.from_list [ "corrective"; "base_INR" ]
+  | "base_inr_ref" -> StrSet.from_list [ "corrective"; "base_inr_ref" ]
+  | "base_inr_tl" -> StrSet.from_list [ "corrective"; "base_inr_tl" ]
+  | "base_inr_tl22" -> StrSet.from_list [ "corrective"; "base_inr_tl22" ]
+  | "base_inr_tl24" -> StrSet.from_list [ "corrective"; "base_inr_tl24" ]
+  | "base_inr_ntl" -> StrSet.from_list [ "corrective"; "base_inr_ntl" ]
+  | "base_inr_ntl22" -> StrSet.from_list [ "corrective"; "base_inr_ntl22" ]
+  | "base_inr_ntl24" -> StrSet.from_list [ "corrective"; "base_inr_ntl24" ]
+  | "base_inr_inter22" -> StrSet.from_list [ "corrective"; "base_inr_inter22" ]
+  | "base_inr_intertl" -> StrSet.from_list [ "corrective"; "base_inr_intertl" ]
+  | "base_inr_r9901" -> StrSet.from_list [ "corrective"; "base_inr_r9901" ]
+  | "base_inr_cimr07" -> StrSet.from_list [ "corrective"; "base_inr_cimr07" ]
+  | "base_inr_cimr24" -> StrSet.from_list [ "corrective"; "base_inr_cimr24" ]
+  | "base_inr_cimr99" -> StrSet.from_list [ "corrective"; "base_inr_cimr99" ]
+  | "base_inr_tlcimr07" ->
+      StrSet.from_list [ "corrective"; "base_inr_tlcimr07" ]
+  | "base_inr_tlcimr24" ->
+      StrSet.from_list [ "corrective"; "base_inr_tlcimr24" ]
+  | "base_ABAT98" -> StrSet.from_list [ "corrective"; "base_ABAT98" ]
+  | "base_ABAT99" -> StrSet.from_list [ "corrective"; "base_ABAT99" ]
+  | "base_MAJO" -> StrSet.from_list [ "corrective"; "base_MAJO" ]
+  | "base_premier" -> StrSet.from_list [ "corrective"; "base_premier" ]
+  | "base_anterieure" -> StrSet.from_list [ "corrective"; "base_anterieure" ]
+  | "base_anterieure_cor" ->
+      StrSet.from_list [ "corrective"; "base_anterieure_cor" ]
+  | "base_stratemajo" -> StrSet.from_list [ "corrective"; "base_stratemajo" ]
+  | "non_auto_cc" -> StrSet.from_list [ "non_auto_cc" ]
+  | "horizontale" -> StrSet.from_list [ "horizontale" ]
+  | _ -> raise Not_found

@@ -55,73 +55,11 @@ type chain_order = {
 
 type full_program = {
   program : Mir.program;
-  chains_orders : chain_order Mir.TagMap.t;
   domains_orders : chain_order StrSetMap.t;
   chainings_orders : chain_order StrMap.t;
 }
 
-let to_full_program (program : program) (chains : Mast.chain_tag list) :
-    full_program =
-  let chains_orders =
-    List.fold_left
-      (fun chains tag ->
-        let vars_to_rules, chain_rules =
-          Mir.RuleMap.fold
-            (fun rov_id rule (vars, rules) ->
-              let rule_domain = rule.rule_domain in
-              let tag_domain_id = tag_to_rule_domain_id tag in
-              let is_max = StrSetSet.mem tag_domain_id rule_domain.rdom_max in
-              let is_eq = rule_domain.rdom_id = tag_domain_id in
-              let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
-              if is_not_rule_0 && (is_max || is_eq) then
-                ( List.fold_left
-                    (fun vars (vid, _def) ->
-                      let var = VariableDict.find vid program.program_vars in
-                      VariableMap.add var rov_id vars)
-                    vars rule.rule_vars,
-                  RuleMap.add rov_id rule rules )
-              else (vars, rules))
-            program.program_rules
-            (VariableMap.empty, RuleMap.empty)
-        in
-        let dep_graph =
-          Mir_dependency_graph.create_rules_dependency_graph chain_rules
-            vars_to_rules
-        in
-        let execution_order =
-          Mir_dependency_graph.get_rules_execution_order dep_graph
-        in
-        let customs =
-          RuleMap.fold
-            (fun rov_id rule customs ->
-              List.fold_left
-                (fun customs tag ->
-                  match tag with
-                  | Mast.Custom _ -> begin
-                      match TagMap.find_opt tag customs with
-                      | Some rs -> TagMap.add tag (rov_id :: rs) customs
-                      | None -> TagMap.add tag [ rov_id ] customs
-                    end
-                  | _ -> customs)
-                customs rule.rule_tags)
-            chain_rules TagMap.empty
-        in
-        let customs =
-          TagMap.map
-            (fun rules ->
-              Mir_dependency_graph.pull_rules_dependencies dep_graph rules)
-            customs
-        in
-        let chains =
-          TagMap.fold
-            (fun tag (dep_graph, execution_order) chains ->
-              TagMap.add tag { dep_graph; execution_order } chains)
-            customs
-            (Mir.TagMap.add tag { dep_graph; execution_order } chains)
-        in
-        chains)
-      Mir.TagMap.empty chains
-  in
+let to_full_program (program : program) : full_program =
   let domains_orders =
     StrSetMap.fold
       (fun dom_id _ domains_orders ->
@@ -181,13 +119,12 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
         StrMap.add chain_id { dep_graph; execution_order } chainings_orders)
       chainings_roots StrMap.empty
   in
-  { program; chains_orders; domains_orders; chainings_orders }
+  { program; domains_orders; chainings_orders }
 
-let output_var_dependencies (p : full_program) (chain : Mast.chain_tag)
+let output_var_dependencies (p : full_program) (order : chain_order)
     (var : Mir.variable) =
-  let chain = TagMap.find chain p.chains_orders in
   let deps =
-    Mir_dependency_graph.get_var_dependencies p.program chain.execution_order
+    Mir_dependency_graph.get_var_dependencies p.program order.execution_order
       var
   in
   List.iter

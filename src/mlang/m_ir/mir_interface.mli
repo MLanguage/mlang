@@ -28,15 +28,14 @@ type chain_order = {
 
 type full_program = {
   program : Mir.program;
-  chains_orders : chain_order Mir.TagMap.t;
   domains_orders : chain_order StrSetMap.t;
   chainings_orders : chain_order StrMap.t;
 }
 
-val to_full_program : Mir.program -> Mast.chain_tag list -> full_program
+val to_full_program : Mir.program -> full_program
 (** Creates the dependency graph and stores it *)
 
 val output_var_dependencies :
-  full_program -> Mast.chain_tag -> Mir.variable -> unit
+  full_program -> chain_order -> Mir.variable -> unit
 (** Print list of input variables effecting the valuation of the given variable
     in the given chain *)

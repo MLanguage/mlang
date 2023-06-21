@@ -363,3 +363,5 @@ val find_vars_by_io : program -> io -> VariableDict.t
     function chooses the one with the highest execution number*)
 
 val tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t
+
+val string_to_rule_domain_id : string -> StrSet.t
