@@ -14,14 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module StringMap = Map.Make (struct
-  type t = string
-
-  let compare = compare
-end)
-
 type translation_ctx = {
-  new_variables : Bir.variable StringMap.t;
+  new_variables : Bir.variable StrMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
   used_rule_domains : StrSetSet.t;
   used_chainings : StrSet.t;
@@ -30,7 +24,7 @@ type translation_ctx = {
 
 let empty_translation_ctx : translation_ctx =
   {
-    new_variables = StringMap.empty;
+    new_variables = StrMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
     used_rule_domains = StrSetSet.empty;
     used_chainings = StrSet.empty;
@@ -40,7 +34,7 @@ let empty_translation_ctx : translation_ctx =
 let ctx_join ctx1 ctx2 =
   {
     new_variables =
-      StringMap.union
+      StrMap.union
         (fun _ v1 v2 ->
           assert (Bir.compare_variable v1 v2 = 0);
           Some v2)
@@ -280,7 +274,7 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
   | Mpp_ir.Constant i -> Mir.Literal (Float (float_of_int i))
   | Variable (Mbased (var, _)) -> Var Bir.(var_from_mir default_tgv var)
   | Variable (Local l) -> (
-      try Var (StringMap.find l ctx.new_variables)
+      try Var (StrMap.find l ctx.new_variables)
       with Not_found ->
         Cli.error_print "Local Variable %s not found in ctx" l;
         assert false)
@@ -327,7 +321,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
   match Pos.unmark stmt with
   | Mpp_ir.Assign (Local l, expr) ->
       let ctx, new_l =
-        match StringMap.find_opt l ctx.new_variables with
+        match StrMap.find_opt l ctx.new_variables with
         | None ->
             let new_l =
               Mir.Variable.new_var
@@ -338,10 +332,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =
-              {
-                ctx with
-                new_variables = StringMap.add l new_l ctx.new_variables;
-              }
+              { ctx with new_variables = StrMap.add l new_l ctx.new_variables }
             in
             (ctx, new_l)
         | Some new_l -> (ctx, new_l)
@@ -386,7 +377,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             stmt;
         ] )
   | Mpp_ir.Delete (Local l) ->
-      let var = StringMap.find l ctx.new_variables in
+      let var = StrMap.find l ctx.new_variables in
       ( ctx,
         [
           Pos.same_pos_as

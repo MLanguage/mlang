@@ -31,13 +31,13 @@ let compare_variable v1 v2 =
     let c = Stdlib.compare v1.offset v2.offset in
     if c <> 0 then c else Mir.Variable.compare v1.mir_var v2.mir_var
 
-module VariableMap = Map.Make (struct
+module VariableMap = MapExt.Make (struct
   type t = variable
 
   let compare = compare_variable
 end)
 
-module VariableSet = Set.Make (struct
+module VariableSet = SetExt.Make (struct
   type t = variable
 
   let compare = compare_variable
@@ -115,7 +115,7 @@ let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
-module FunctionMap = Map.Make (struct
+module FunctionMap = MapExt.Make (struct
   type t = function_name
 
   let compare = String.compare

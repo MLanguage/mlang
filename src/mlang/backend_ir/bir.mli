@@ -22,9 +22,9 @@ type tgv_id = string
 
 type variable = { on_tgv : tgv_id; offset : int; mir_var : Mir.Variable.t }
 
-module VariableMap : Map.S with type key = variable
+module VariableMap : MapExt.T with type key = variable
 
-module VariableSet : Set.S with type elt = variable
+module VariableSet : SetExt.T with type elt = variable
 
 type expression = variable Mir.expression_
 
@@ -53,7 +53,7 @@ and stmt_kind =
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
-module FunctionMap : Map.S with type key = function_name
+module FunctionMap : MapExt.T with type key = function_name
 
 type program_context = {
   constant_inputs_init_stmts : stmt list;

@@ -276,17 +276,22 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
 module VariableMap = struct
-  include Map.Make (Variable)
+  include MapExt.Make (Variable)
 
-  let map_printer key_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun k v ->
-            Format.fprintf fmt "%a ~> %a, " key_printer k value_printer v))
-      map
+  let pp_key fmt key =
+    Format.fprintf fmt "Variable %s%s"
+      (Pos.unmark key.Variable.name)
+      (match key.Variable.alias with
+      | Some x -> " (alias " ^ x ^ ")"
+      | None -> "")
+
+  let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
-(* module VariableDictMap = Map.Make (struct
+(* module VariableDictMap = MapExt.Make (struct
  *   type t = Variable.id
  * 
  *   let compare = compare
@@ -305,33 +310,28 @@ module VariableDict = Dict.Make (struct
   let compare = compare
 end)
 
-module VariableSet = Set.Make (Variable)
+module VariableSet = SetExt.Make (Variable)
 
 module LocalVariableMap = struct
-  include Map.Make (LocalVariable)
+  include MapExt.Make (LocalVariable)
 
-  let map_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun var v ->
-            Format.fprintf fmt "%d ~> %a, " var.id value_printer v))
-      map
+  let pp_key fmt key = Format.fprintf fmt "%d" key.id
+
+  let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
 (** This map is used to store the definitions of all the cells of a table
     variable that is not not defined generically *)
 module IndexMap = struct
-  include Map.Make (struct
-    type t = int
+  include IntMap
 
-    let compare = compare
-  end)
-
-  let map_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun k v -> Format.fprintf fmt "%d ~> %a, " k value_printer v))
-      map
+  let pp ?(sep = ", ") ?(pp_key = Format.pp_print_int) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
 type 'variable index_def =
@@ -406,13 +406,13 @@ type rule_data = {
   rule_tags : Mast.chain_tag list;
 }
 
-module RuleMap = Map.Make (struct
+module RuleMap = MapExt.Make (struct
   type t = rov_id
 
   let compare = compare
 end)
 
-module TagMap = Map.Make (struct
+module TagMap = MapExt.Make (struct
   type t = Mast.chain_tag
 
   let compare t1 t2 =

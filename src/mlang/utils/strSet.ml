@@ -1,4 +1,4 @@
-module type T = SetExt.T with type elt = String.t
+module type T = SetExt.T with type elt = string
 
 include SetExt.Make (String)
 

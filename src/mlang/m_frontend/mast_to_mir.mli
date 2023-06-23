@@ -29,7 +29,7 @@ type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
 module ConstMap : StrMap.T
 
-module ParamsMap : Map.S with type key = Char.t
+module ParamsMap : CharMap.T
 (** Map whose keys are loop parameters *)
 
 type loop_context = (loop_param_value * int) ParamsMap.t

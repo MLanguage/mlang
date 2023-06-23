@@ -40,13 +40,12 @@ module ConstMap = StrMap
 (** {2 Loop translation context} *)
 
 module ParamsMap = struct
-  include Map.Make (Char)
+  include CharMap
 
-  let map_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun k v -> Format.fprintf fmt "%c=%a; " k value_printer v))
-      map
+  let pp ?(sep = "; ") ?(pp_key = Format.pp_print_char) ?(assoc = "=")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
@@ -64,12 +63,10 @@ type loop_domain = (loop_param_value * int) list ParamsMap.t
 (** Loops can have multiple loop parameters *)
 
 let _format_loop_context fmt (ld : loop_context) =
-  ParamsMap.map_printer format_loop_param_value fmt ld
+  ParamsMap.pp format_loop_param_value fmt ld
 
 let _format_loop_domain fmt (ld : loop_domain) =
-  ParamsMap.map_printer
-    (Format_mast.pp_print_list_comma format_loop_param_value)
-    fmt ld
+  ParamsMap.pp (Format_mast.pp_print_list_comma format_loop_param_value) fmt ld
 
 (** From a loop domain of varying loop parameters, builds by cartesian product
     the list of all iterations that the loop will take, each time assigining a
@@ -176,8 +173,6 @@ let find_var_among_candidates (exec_number : Mir.execution_number)
   in
   if List.length same_rule = 0 then list_max_execution_number l
   else list_max_execution_number same_rule
-
-module IntMap = Map.Make (Int)
 
 (** Implementation of legacy hack to use TGV variables as reusable local
     variables *)

@@ -16,7 +16,7 @@
 
 type block_id = int
 
-module BlockMap = Map.Make (Int)
+module BlockMap = IntMap
 
 type stmt = stmt_kind Pos.marked
 

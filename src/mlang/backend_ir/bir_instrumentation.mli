@@ -18,7 +18,7 @@
 
 (** {1 Code coverage for a single run}*)
 
-module CodeLocationMap : Map.S with type key = Bir_interpreter.code_location
+module CodeLocationMap : MapExt.T with type key = Bir_interpreter.code_location
 
 type code_coverage_result =
   Bir_interpreter.var_literal CodeLocationMap.t Bir.VariableMap.t
@@ -40,7 +40,7 @@ val code_coverage_result : unit -> code_coverage_result
 (** Code coverage is best measured for multiple runs of the interpreter on a set
     of test files. *)
 
-module VarLiteralSet : Set.S with type elt = Bir_interpreter.var_literal
+module VarLiteralSet : SetExt.T with type elt = Bir_interpreter.var_literal
 
 type code_coverage_map_value = VarLiteralSet.t
 

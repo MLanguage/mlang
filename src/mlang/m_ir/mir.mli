@@ -109,36 +109,19 @@ type 'variable expression_ =
 
 type expression = variable expression_
 
+module VariableMap : MapExt.T with type key = variable
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
-module VariableMap : sig
-  include Map.S with type key = variable
-
-  val map_printer :
-    (Format.formatter -> variable -> unit) ->
-    (Format.formatter -> 'a -> unit) ->
-    Format.formatter ->
-    'a t ->
-    unit
-end
 
 module VariableDict : Dict.S with type key = variable_id and type elt = variable
 
-module VariableSet : Set.S with type elt = variable
+module VariableSet : SetExt.T with type elt = variable
 
 module LocalVariableMap : sig
-  include Map.S with type key = local_variable
-
-  val map_printer :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  include MapExt.T with type key = local_variable
 end
 
-module IndexMap : sig
-  include Map.S with type key = int
-
-  val map_printer :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-end
+module IndexMap : IntMap.T
 
 type 'variable index_def =
   | IndexTable of
@@ -166,7 +149,7 @@ type variable_data = variable variable_data_
 
 type rov_id = RuleID of int | VerifID of int
 
-module RuleMap : Map.S with type key = rov_id
+module RuleMap : MapExt.T with type key = rov_id
 
 type rule_domain = {
   rdom_id : StrSet.t;
@@ -185,7 +168,7 @@ type rule_data = {
   rule_tags : Mast.chain_tag list;
 }
 
-module TagMap : Map.S with type key = Mast.chain_tag
+module TagMap : MapExt.T with type key = Mast.chain_tag
 
 type error_descr = {
   kind : string Pos.marked;

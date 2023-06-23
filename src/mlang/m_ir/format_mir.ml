@@ -111,7 +111,7 @@ let format_variable_def fmt (def : variable_def) =
         (Pos.unmark v.Variable.name)
         format_expression (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
-      IndexMap.map_printer (Format_mast.pp_unmark format_expression) fmt defs
+      IndexMap.pp (Format_mast.pp_unmark format_expression) fmt defs
 
 let format_variable_data fmt (def : variable_data) =
   Format.fprintf fmt "type %a, io %a:\n%a"
@@ -122,14 +122,7 @@ let format_variable_data fmt (def : variable_data) =
     () format_io def.var_io format_variable_def def.var_definition
 
 let format_variables fmt (p : variable_data VariableMap.t) =
-  VariableMap.map_printer
-    (fun fmt var ->
-      Format.fprintf fmt "Variable %s%s"
-        (Pos.unmark var.Variable.name)
-        (match var.Variable.alias with
-        | Some x -> " (alias " ^ x ^ ")"
-        | None -> ""))
-    format_variable_data fmt p
+  VariableMap.pp format_variable_data fmt p
 
 let format_error fmt (e : Error.t) =
   Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)

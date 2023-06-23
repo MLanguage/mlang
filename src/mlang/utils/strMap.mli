@@ -1,3 +1,3 @@
-module type T = Map.S with type key = String.t
+module type T = MapExt.T with type key = string
 
 include T

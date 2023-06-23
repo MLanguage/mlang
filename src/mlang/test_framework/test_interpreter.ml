@@ -165,8 +165,6 @@ type coverage_kind =
   | NotCovered
   | Covered of int  (** The int is the number of different values *)
 
-module IntMap = Map.Make (Int)
-
 let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
   match IntMap.find_opt key m with
   | None -> IntMap.add key 0 m

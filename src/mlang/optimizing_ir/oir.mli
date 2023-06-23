@@ -16,7 +16,7 @@
 
 type block_id = int
 
-module BlockMap : Map.S with type key = block_id
+module BlockMap : MapExt.T with type key = block_id
 
 type stmt = stmt_kind Pos.marked
 
