@@ -21,6 +21,7 @@
 val mlang_t :
   (string list ->
   bool ->
+  bool ->
   string list ->
   bool ->
   string ->
@@ -114,6 +115,7 @@ val round_ops : round_ops ref
 
 val set_all_arg_refs :
   (* files *) string list ->
+  (* without_dgfip_m *) bool ->
   (* debug *) bool ->
   (* var_info_debug *) string list ->
   (* display_time *) bool ->

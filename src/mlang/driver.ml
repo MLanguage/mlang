@@ -73,15 +73,16 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
-let driver (files : string list) (debug : bool) (var_info_debug : string list)
-    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
-    (backend : string option) (function_spec : string option)
-    (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (dgfip_test_filter : bool) (run_test : string option)
-    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
-    (code_coverage : bool) (precision : string option)
-    (roundops : string option) (test_error_margin : float option)
-    (m_clean_calls : bool) (dgfip_options : string list option)
+let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
+    (var_info_debug : string list) (display_time : bool)
+    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
+    (function_spec : string option) (mpp_file : string) (output : string option)
+    (run_all_tests : string option) (dgfip_test_filter : bool)
+    (run_test : string option) (mpp_function : string) (optimize : bool)
+    (optimize_unsafe_float : bool) (code_coverage : bool)
+    (precision : string option) (roundops : string option)
+    (test_error_margin : float option) (m_clean_calls : bool)
+    (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
   let value_sort =
     let precision = Option.get precision in
@@ -126,15 +127,32 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         Errors.raise_error
           (Format.asprintf "Unkown roundops option: %s" roundops)
   in
-  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
-    print_cycles output optimize_unsafe_float m_clean_calls value_sort round_ops;
+  Cli.set_all_arg_refs files without_dgfip_m debug var_info_debug display_time
+    dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
+    value_sort round_ops;
   try
     let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
-    let m_program = ref [] in
+    let current_progress, finish = Cli.create_progress_bar "Parsing" in
+    let m_program =
+      ref
+        (let filebuf = Lexing.from_string Dgfip_m.declarations in
+         current_progress "internal DGFiP M";
+         let filebuf =
+           {
+             filebuf with
+             lex_curr_p =
+               { filebuf.lex_curr_p with pos_fname = "internal DGFiP M" };
+           }
+         in
+         try
+           let commands = Mparser.source_file token filebuf in
+           [ commands ]
+         with Mparser.Error ->
+           Errors.raise_error "M syntax error in internal DGFiP M")
+    in
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
-    let current_progress, finish = Cli.create_progress_bar "Parsing" in
     List.iter
       (fun source_file ->
         let filebuf, input =
