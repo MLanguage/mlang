@@ -26,6 +26,8 @@ val format_variable : Format.formatter -> Mast.variable -> unit
 
 val format_rule_domain : Format.formatter -> Mast.rule_domain_decl -> unit
 
+val format_verif_domain : Format.formatter -> Mast.verif_domain_decl -> unit
+
 val format_source_file : Format.formatter -> Mast.source_file -> unit
 
 val pp_print_list_endline :

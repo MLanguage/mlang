@@ -67,8 +67,8 @@ let to_full_program (program : program) : full_program =
           Mir.RuleMap.fold
             (fun rov_id rule (vars, rules) ->
               let rule_domain = rule.rule_domain in
-              let is_max = StrSetSet.mem dom_id rule_domain.rdom_max in
-              let is_eq = rule_domain.rdom_id = dom_id in
+              let is_max = StrSetSet.mem dom_id rule_domain.rdom.dom_max in
+              let is_eq = rule_domain.rdom.dom_id = dom_id in
               let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
               if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
@@ -89,14 +89,14 @@ let to_full_program (program : program) : full_program =
           Mir_dependency_graph.get_rules_execution_order dep_graph
         in
         StrSetMap.add dom_id { dep_graph; execution_order } domains_orders)
-      program.program_domains StrSetMap.empty
+      program.program_rule_domains StrSetMap.empty
   in
   let chainings_orders =
     let chainings_roots =
       StrMap.map
         (fun chain_dom ->
           let dep_graph =
-            (StrSetMap.find chain_dom.rdom_id domains_orders).dep_graph
+            (StrSetMap.find chain_dom.rdom.dom_id domains_orders).dep_graph
           in
           (dep_graph, []))
         program.program_chainings

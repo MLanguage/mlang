@@ -1166,32 +1166,32 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
   let fold_items (domains, synonyms, by_default) marked_item =
     match Pos.unmark marked_item with
     | Mast.RuleDomDecl decl ->
-        let rdom_names = StrSetSet.from_marked_list_list decl.rdom_names in
-        let rdom_id = StrSetSet.min_elt rdom_names in
-        let domain =
+        let dom_names = StrSetSet.from_marked_list_list decl.rdom_names in
+        let dom_id = StrSetSet.min_elt dom_names in
+        let rdom =
           Mir.
             {
-              rdom_id;
-              rdom_names;
-              rdom_computable = decl.rdom_computable;
-              rdom_by_default = decl.rdom_by_default;
-              rdom_min = StrSetSet.from_marked_list_list decl.rdom_parents;
-              rdom_max = StrSetSet.empty;
+              dom_id;
+              dom_names;
+              dom_by_default = decl.rdom_by_default;
+              dom_min = StrSetSet.from_marked_list_list decl.rdom_parents;
+              dom_max = StrSetSet.empty;
             }
         in
-        let domains = StrSetMap.add rdom_id domain domains in
+        let domain = Mir.{ rdom; rdom_computable = decl.rdom_computable } in
+        let domains = StrSetMap.add dom_id domain domains in
         let fold syn sl =
           let name = StrSet.from_marked_list (Pos.unmark sl) in
           if StrSetMap.mem name syn then
             let msg = "there is already a domain with this name" in
             Errors.raise_spanned_error msg (Pos.get_position sl)
-          else StrSetMap.add name rdom_id syn
+          else StrSetMap.add name dom_id syn
         in
         let synonyms = List.fold_left fold synonyms decl.rdom_names in
         let by_default =
           if decl.rdom_by_default then
             match by_default with
-            | None -> Some rdom_id
+            | None -> Some dom_id
             | _ ->
                 let msg = "there is already a default rule domain" in
                 Errors.raise_spanned_error msg (Pos.get_position marked_item)
@@ -1216,24 +1216,24 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
           let parentMap =
             let fold parentId map =
               let parentDom = get_dom parentId doms in
-              let parentId = parentDom.Mir.rdom_id in
+              let parentId = parentDom.Mir.rdom.dom_id in
               StrSetMap.add parentId parentDom map
             in
-            StrSetSet.fold fold dom.Mir.rdom_min StrSetMap.empty
+            StrSetSet.fold fold dom.Mir.rdom.dom_min StrSetMap.empty
           in
           StrSetMap.fold set_min parentMap (visiting, visited, doms)
         in
-        let rdom_min =
+        let dom_min =
           let fold parentId res =
             let parentDom = get_dom parentId doms in
-            let parentId = parentDom.Mir.rdom_id in
+            let parentId = parentDom.Mir.rdom.dom_id in
             StrSetSet.singleton parentId
-            |> StrSetSet.union parentDom.Mir.rdom_min
+            |> StrSetSet.union parentDom.Mir.rdom.dom_min
             |> StrSetSet.union res
           in
-          StrSetSet.fold fold dom.Mir.rdom_min StrSetSet.empty
+          StrSetSet.fold fold dom.Mir.rdom.dom_min StrSetSet.empty
         in
-        let dom = Mir.{ dom with rdom_min } in
+        let dom = Mir.{ dom with rdom = { dom.rdom with dom_min } } in
         let doms = StrSetMap.add id dom doms in
         let visiting = StrSetSet.remove id visiting in
         let visited = StrSetSet.add id visited in
@@ -1247,11 +1247,11 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
     let set_max id dom doms =
       let fold minId doms =
         let minDom = StrSetMap.find minId doms in
-        let rdom_max = StrSetSet.add id minDom.Mir.rdom_max in
-        let minDom = Mir.{ minDom with rdom_max } in
+        let dom_max = StrSetSet.add id minDom.Mir.rdom.dom_max in
+        let minDom = Mir.{ minDom with rdom = { minDom.rdom with dom_max } } in
         StrSetMap.add minId minDom doms
       in
-      StrSetSet.fold fold dom.Mir.rdom_min doms
+      StrSetSet.fold fold dom.Mir.rdom.dom_min doms
     in
     StrSetMap.fold set_max domains domains
   in
@@ -1260,7 +1260,7 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
     | Some def_id ->
         let fold _ dom doms =
           let foldName name doms = StrSetMap.add name dom doms in
-          StrSetSet.fold foldName dom.Mir.rdom_names doms
+          StrSetSet.fold foldName dom.Mir.rdom.dom_names doms
         in
         StrSetMap.empty
         |> StrSetMap.fold fold domains
@@ -1271,8 +1271,8 @@ let get_rule_domains (p : Mast.program) : Mir.rule_domain StrSetMap.t =
      fmt "<%s> " s in StrSet.iter iter ss in let pp_sss fmt sss = let iter ss =
      Format.fprintf fmt "%a, " pp_ss ss in StrSetSet.iter iter sss in
      Format.printf "XXX %a\n: min: %a\n: max: %a\n" pp_ss id pp_sss
-     dom.Mir.rdom_min pp_sss dom.Mir.rdom_max in StrSetMap.iter iter domains;
-     exit 0 in *)
+     dom.Mir.rdom.dom_min pp_sss dom.Mir.rdom.dom_max in StrSetMap.iter iter
+     domains; exit 0 in *)
   domains
 
 let get_rule_chains (domains : Mir.rule_domain StrSetMap.t) (p : Mast.program) :
@@ -1282,17 +1282,21 @@ let get_rule_chains (domains : Mir.rule_domain StrSetMap.t) (p : Mast.program) :
     | Mast.Rule r when r.rule_chaining <> None ->
         let ch_name, ch_pos = Option.get r.rule_chaining in
         let rule_domain =
-          let rdom_id = StrSet.from_marked_list (Pos.unmark r.rule_tag_names) in
-          StrSetMap.find rdom_id domains
+          let dom_id = StrSet.from_marked_list (Pos.unmark r.rule_tag_names) in
+          StrSetMap.find dom_id domains
         in
         let ch_dom =
           match StrMap.find_opt ch_name chains with
           | Some dom -> dom
           | None -> rule_domain
         in
-        let rdom_is_min = StrSetSet.mem rule_domain.rdom_id ch_dom.rdom_min in
-        let rdom_is_max = StrSetSet.mem rule_domain.rdom_id ch_dom.rdom_max in
-        let rdom_is_eq = rule_domain.rdom_id = ch_dom.rdom_id in
+        let rdom_is_min =
+          StrSetSet.mem rule_domain.rdom.dom_id ch_dom.rdom.dom_min
+        in
+        let rdom_is_max =
+          StrSetSet.mem rule_domain.rdom.dom_id ch_dom.rdom.dom_max
+        in
+        let rdom_is_eq = rule_domain.rdom.dom_id = ch_dom.rdom.dom_id in
         if rdom_is_min || rdom_is_max || rdom_is_eq then
           if not rdom_is_min then StrMap.add ch_name rule_domain chains
           else chains
@@ -1303,6 +1307,119 @@ let get_rule_chains (domains : Mir.rule_domain StrSetMap.t) (p : Mast.program) :
   in
   let fold_sources chains source = List.fold_left fold_rules chains source in
   List.fold_left fold_sources StrMap.empty p
+
+let get_verif_domains (p : Mast.program) : Mir.verif_domain StrSetMap.t =
+  let fold_items (domains, synonyms, by_default) marked_item =
+    match Pos.unmark marked_item with
+    | Mast.VerifDomDecl decl ->
+        let dom_names = StrSetSet.from_marked_list_list decl.vdom_names in
+        let dom_id = StrSetSet.min_elt dom_names in
+        let vdom =
+          Mir.
+            {
+              dom_id;
+              dom_names;
+              dom_by_default = decl.vdom_by_default;
+              dom_min = StrSetSet.from_marked_list_list decl.vdom_parents;
+              dom_max = StrSetSet.empty;
+            }
+        in
+        let domain = Mir.{ vdom; vdom_auto_cc = decl.vdom_auto_cc } in
+        let domains = StrSetMap.add dom_id domain domains in
+        let fold syn sl =
+          let name = StrSet.from_marked_list (Pos.unmark sl) in
+          if StrSetMap.mem name syn then
+            let msg = "there is already a domain with this name" in
+            Errors.raise_spanned_error msg (Pos.get_position sl)
+          else StrSetMap.add name dom_id syn
+        in
+        let synonyms = List.fold_left fold synonyms decl.vdom_names in
+        let by_default =
+          if decl.vdom_by_default then
+            match by_default with
+            | None -> Some dom_id
+            | _ ->
+                let msg = "there is already a default verif domain" in
+                Errors.raise_spanned_error msg (Pos.get_position marked_item)
+          else by_default
+        in
+        (domains, synonyms, by_default)
+    | _ -> (domains, synonyms, by_default)
+  in
+  let fold_sources doms source = List.fold_left fold_items doms source in
+  let domains, synonyms, by_default =
+    List.fold_left fold_sources (StrSetMap.empty, StrSetMap.empty, None) p
+  in
+  let get_dom id dom = StrSetMap.find (StrSetMap.find id synonyms) dom in
+  let domains =
+    let rec set_min id dom (visiting, visited, doms) =
+      if StrSetSet.mem id visited then (visiting, visited, doms)
+      else if StrSetSet.mem id visiting then
+        Errors.raise_error "there is a loop in the verif domain hierarchy"
+      else
+        let visiting = StrSetSet.add id visiting in
+        let visiting, visited, doms =
+          let parentMap =
+            let fold parentId map =
+              let parentDom = get_dom parentId doms in
+              let parentId = parentDom.Mir.vdom.dom_id in
+              StrSetMap.add parentId parentDom map
+            in
+            StrSetSet.fold fold dom.Mir.vdom.dom_min StrSetMap.empty
+          in
+          StrSetMap.fold set_min parentMap (visiting, visited, doms)
+        in
+        let dom_min =
+          let fold parentId res =
+            let parentDom = get_dom parentId doms in
+            let parentId = parentDom.Mir.vdom.dom_id in
+            StrSetSet.singleton parentId
+            |> StrSetSet.union parentDom.Mir.vdom.dom_min
+            |> StrSetSet.union res
+          in
+          StrSetSet.fold fold dom.Mir.vdom.dom_min StrSetSet.empty
+        in
+        let dom = Mir.{ dom with vdom = { dom.vdom with dom_min } } in
+        let doms = StrSetMap.add id dom doms in
+        let visiting = StrSetSet.remove id visiting in
+        let visited = StrSetSet.add id visited in
+        (visiting, visited, doms)
+    in
+    let init = (StrSetSet.empty, StrSetSet.empty, domains) in
+    let _, _, domains = StrSetMap.fold set_min domains init in
+    domains
+  in
+  let domains =
+    let set_max id dom doms =
+      let fold minId doms =
+        let minDom = StrSetMap.find minId doms in
+        let dom_max = StrSetSet.add id minDom.Mir.vdom.dom_max in
+        let minDom = Mir.{ minDom with vdom = { minDom.vdom with dom_max } } in
+        StrSetMap.add minId minDom doms
+      in
+      StrSetSet.fold fold dom.Mir.vdom.dom_min doms
+    in
+    StrSetMap.fold set_max domains domains
+  in
+  let domains =
+    match by_default with
+    | Some def_id ->
+        let fold _ dom doms =
+          let foldName name doms = StrSetMap.add name dom doms in
+          StrSetSet.fold foldName dom.Mir.vdom.dom_names doms
+        in
+        StrSetMap.empty
+        |> StrSetMap.fold fold domains
+        |> StrSetMap.add StrSet.empty (get_dom def_id domains)
+    | None -> Errors.raise_error "there are no default verif domain"
+  in
+  (* let _ = let iter id dom = let pp_ss fmt ss = let iter s = Format.fprintf
+     fmt "<%s> " s in StrSet.iter iter ss in let pp_sss fmt sss = let iter ss =
+     Format.fprintf fmt "%a, " pp_ss ss in StrSetSet.iter iter sss in
+     Format.printf "XXX %a\n: min: %a\n: max: %a\n" pp_ss id pp_sss
+     dom.Mir.rdom.dom_min pp_sss dom.Mir.rdom.dom_max in StrSetMap.iter iter
+     domains; exit 0 in *)
+  domains
 
 (** Main translation pass that deal with regular variable definition; returns a
     map whose keys are the variables being defined (with the execution number
@@ -1579,6 +1696,9 @@ let translate (p : Mast.program) : Mir.program =
   let rule_domains = get_rule_domains p in
   let rule_domain_by_default = StrSetMap.find StrSet.empty rule_domains in
   let rule_chains = get_rule_chains rule_domains p in
+  let verif_domains = get_verif_domains p in
+  (* let verif_domain_by_default = StrSetMap.find StrSet.empty verif_domains
+     in *)
   let rule_data, var_data =
     get_rules_and_var_data idmap var_decl_data const_map p
   in
@@ -1646,7 +1766,8 @@ let translate (p : Mast.program) : Mir.program =
   in
   let conds = get_conds error_decls const_map idmap p in
   {
-    Mir.program_domains = rule_domains;
+    Mir.program_rule_domains = rule_domains;
+    Mir.program_verif_domains = verif_domains;
     Mir.program_chainings = rule_chains;
     Mir.program_vars = var_data;
     Mir.program_rules = rules;

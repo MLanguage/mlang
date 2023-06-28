@@ -345,6 +345,16 @@ let format_rule_domain fmt (rd : rule_domain_decl) =
     (format_domain_attribute "par_defaut")
     rd.rdom_by_default
 
+let format_verif_domain fmt (vd : verif_domain_decl) =
+  Format.fprintf fmt "%a%a%a%a"
+    (pp_print_list_comma
+       (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string))))
+    vd.vdom_names format_specialize_domain vd.vdom_parents
+    (format_domain_attribute "auto_cc")
+    vd.vdom_auto_cc
+    (format_domain_attribute "par_defaut")
+    vd.vdom_by_default
+
 let format_source_file_item fmt (i : source_file_item) =
   match i with
   | Application app ->
@@ -361,6 +371,8 @@ let format_source_file_item fmt (i : source_file_item) =
   | Output o ->
       Format.fprintf fmt "sortie(%a);" format_variable_name (Pos.unmark o)
   | RuleDomDecl rd -> Format.fprintf fmt "rule domain %a;" format_rule_domain rd
+  | VerifDomDecl vd ->
+      Format.fprintf fmt "verif domain %a;" format_verif_domain vd
 
 let format_source_file fmt (f : source_file) =
   pp_print_list_endline (pp_unmark format_source_file_item) fmt f

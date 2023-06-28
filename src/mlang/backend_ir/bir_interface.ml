@@ -138,6 +138,7 @@ let translate_external_conditions idmap
     Mast.Verification
       {
         verif_number = (0, Pos.no_pos);
+        verif_tag_names = ([], Pos.no_pos);
         verif_tags = [];
         verif_applications = [ ("iliad", Pos.no_pos) ];
         verif_conditions = verif_conds;

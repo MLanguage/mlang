@@ -151,14 +151,15 @@ type rov_id = RuleID of int | VerifID of int
 
 module RuleMap : MapExt.T with type key = rov_id
 
-type rule_domain = {
-  rdom_id : StrSet.t;
-  rdom_names : StrSetSet.t;
-  rdom_computable : bool;
-  rdom_by_default : bool;
-  rdom_min : StrSetSet.t;
-  rdom_max : StrSetSet.t;
+type domain = {
+  dom_id : StrSet.t;
+  dom_names : StrSetSet.t;
+  dom_by_default : bool;
+  dom_min : StrSetSet.t;
+  dom_max : StrSetSet.t;
 }
+
+type rule_domain = { rdom : domain; rdom_computable : bool }
 
 type rule_data = {
   rule_domain : rule_domain;
@@ -186,6 +187,8 @@ type error = {
   typ : Mast.error_typ;
 }
 
+type verif_domain = { vdom : domain; vdom_auto_cc : bool }
+
 type 'variable condition_data_ = {
   cond_number : rov_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
@@ -203,7 +206,8 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_domains : rule_domain StrSetMap.t;
+  program_rule_domains : rule_domain StrSetMap.t;
+  program_verif_domains : verif_domain StrSetMap.t;
   program_chainings : rule_domain StrMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a

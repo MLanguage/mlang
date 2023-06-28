@@ -389,14 +389,15 @@ let fresh_rule_num =
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = RuleID (-1)
 
-type rule_domain = {
-  rdom_id : StrSet.t;
-  rdom_names : StrSetSet.t;
-  rdom_computable : bool;
-  rdom_by_default : bool;
-  rdom_min : StrSetSet.t;
-  rdom_max : StrSetSet.t;
+type domain = {
+  dom_id : StrSet.t;
+  dom_names : StrSetSet.t;
+  dom_by_default : bool;
+  dom_min : StrSetSet.t;
+  dom_max : StrSetSet.t;
 }
+
+type rule_domain = { rdom : domain; rdom_computable : bool }
 
 type rule_data = {
   rule_domain : rule_domain;
@@ -498,6 +499,8 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
+type verif_domain = { vdom : domain; vdom_auto_cc : bool }
+
 type 'variable condition_data_ = {
   cond_number : rov_id Pos.marked;
   cond_expr : 'variable expression_ Pos.marked;
@@ -527,7 +530,8 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_domains : rule_domain StrSetMap.t;
+  program_rule_domains : rule_domain StrSetMap.t;
+  program_verif_domains : verif_domain StrSetMap.t;
   program_chainings : rule_domain StrMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a

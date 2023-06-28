@@ -111,37 +111,6 @@ let chain_tag_of_string : string -> chain_tag = function
   | "horizontale" -> Horizontale
   | s -> Custom s
 
-let number_and_tags_of_name (name : string Pos.marked list) :
-    int Pos.marked * chain_tag Pos.marked list =
-  let rec aux tags = function
-    | [] -> assert false (* M parser shouldn't allow it *)
-    | [ n ] ->
-        let num =
-          try Pos.map_under_mark int_of_string n
-          with _ ->
-            Errors.raise_spanned_error
-              "this rule or verification doesn't have an execution number"
-              (Pos.get_position (List.hd name))
-        in
-        (num, tags)
-    | h :: t ->
-        let tag =
-          try Pos.map_under_mark chain_tag_of_string h
-          with _ ->
-            Errors.raise_spanned_error
-              ("Unknown chain tag " ^ Pos.unmark h)
-              (Pos.get_position h)
-        in
-        aux (tag :: tags) t
-  in
-  let number, tags = aux [] name in
-  if List.length tags = 0 then
-    ( number,
-      [
-        (PrimCorr, Pos.no_pos); (Primitif, Pos.no_pos); (Corrective, Pos.no_pos);
-      ] ) (* No tags means both in primitive and corrective *)
-  else (number, tags)
-
 let tags_of_name (name : string Pos.marked list) : chain_tag Pos.marked list =
   let rec aux tags = function
     | [] -> tags
@@ -390,10 +359,18 @@ type verification_condition = {
 
 type verification = {
   verif_number : int Pos.marked;
+  verif_tag_names : string Pos.marked list Pos.marked;
   verif_tags : chain_tag Pos.marked list;
   verif_applications : application Pos.marked list;
       (** Verification conditions are application-specific *)
   verif_conditions : verification_condition Pos.marked list;
+}
+
+type verif_domain_decl = {
+  vdom_names : string Pos.marked list Pos.marked list;
+  vdom_parents : string Pos.marked list Pos.marked list;
+  vdom_auto_cc : bool;
+  vdom_by_default : bool;
 }
 
 type error_typ = Anomaly | Discordance | Information
@@ -425,6 +402,7 @@ type source_file_item =
   | Output of variable_name Pos.marked  (** Declares an output variable *)
   | Function  (** Declares a function, unused *)
   | RuleDomDecl of rule_domain_decl
+  | VerifDomDecl of verif_domain_decl
 
 (* TODO: parse something here *)
 

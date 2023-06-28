@@ -49,7 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS CONTEXT FAMILY PENALITY INCOME INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION
-%token DOMAIN SPECIALIZE COMPUTABLE BY_DEFAULT
+%token DOMAIN SPECIALIZE COMPUTABLE BY_DEFAULT AUTO_CC NON_AUTO_CC
 
 %token EOF
 
@@ -73,7 +73,6 @@ source_file:
 | i = source_file_item is = source_file { i::is }
 | EOF { [] }
 
-
 source_file_item:
 | a = application { (Application a, mk_position $sloc) }
 | c = chaining { let (s, aps) = c in (Chaining (s, aps), mk_position $sloc) }
@@ -84,6 +83,7 @@ source_file_item:
 | o = output { (Output o, mk_position $sloc) }
 | fonction { (Function, mk_position $sloc) }
 | cr = rule_domain_decl { (RuleDomDecl cr, mk_position $sloc) }
+| cv = verif_domain_decl { (VerifDomDecl cv, mk_position $sloc) }
 
 rule_domain_decl:
 | DOMAIN RULE rdom_params = separated_nonempty_list(COLON, rdom_param_with_pos) SEMICOLON
@@ -125,6 +125,50 @@ rdom_param_with_pos:
 | SPECIALIZE rdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
   { (None, Some rdom_parents, None, None, mk_position $sloc) }
 | COMPUTABLE
+  { (None, None, Some (), None, mk_position $sloc) }
+| BY_DEFAULT
+  { (None, None, None, Some (), mk_position $sloc) }
+
+verif_domain_decl:
+| DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, vdom_param_with_pos) SEMICOLON
+  {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (dno, dso, dao, dpdo) = function
+    | Some dn, _, _, _, pos ->
+        if dno = None then Some dn, dso, dao, dpdo
+        else err "verif domain names are already defined" pos
+    | _, Some ds, _, _, pos ->
+        if dso = None then dno, Some ds, dao, dpdo
+        else err "verif domain specialization is already specified" pos
+    | _, _, Some da, _, pos ->
+        if dao = None then dno, dso, Some da, dpdo
+        else err "verif domain is already auto-consistent" pos
+    | _, _, _, Some dpd, pos ->
+        if dpdo = None then dno, dso, dao, Some dpd
+        else err "verif domain is already defined by defaut" pos
+    | _, _, _, _, _ -> assert false
+    in
+    let init = None, None, None, None in
+    let dno, dso, dao, dpdo = List.fold_left fold init vdom_params in
+    let vdom_names =
+      match dno with
+      | None -> err "rule domain names must be defined" (mk_position $sloc)
+      | Some dn -> dn
+    in
+    {
+      vdom_names;
+      vdom_parents = (match dso with None -> [] | Some ds -> ds);
+      vdom_auto_cc = (match dao with None -> false | _ -> true);
+      vdom_by_default = (match dpdo with None -> false | _ -> true);
+    }
+  }
+
+vdom_param_with_pos:
+| vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (Some vdom_names, None, None, None, mk_position $sloc) }
+| SPECIALIZE vdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (None, Some vdom_parents, None, None, mk_position $sloc) }
+| AUTO_CC
   { (None, None, Some (), None, mk_position $sloc) }
 | BY_DEFAULT
   { (None, None, None, Some (), mk_position $sloc) }
@@ -303,7 +347,7 @@ rule:
       try Pos.map_under_mark int_of_string num
       with _ ->
         Errors.raise_spanned_error
-          "this rule or verification doesn't have an execution number"
+          "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
     let rule_tags = Mast.tags_of_name (Pos.unmark rule_tag_names) in
@@ -346,11 +390,35 @@ verification_name:
 | name = SYMBOL { (name, mk_position $sloc) }
 
 verification:
-| VERIFICATION name = verification_name+ COLON apps = application_reference
+| VERIFICATION NON_AUTO_CC? name = symbol_list_with_pos COLON apps = application_reference
   SEMICOLON conds = verification_condition* {
-    let verif_number, verif_tags = Mast.number_and_tags_of_name name in
+    let num, verif_tag_names =
+      let uname = Pos.unmark name in
+      let begPos =
+        match uname with
+        | h :: _ -> Pos.get_position h
+        | [] -> assert false
+      in
+      let rec aux tags endPos = function
+      | [num] ->
+           let pos = Pos.make_position_between begPos endPos in
+           num, (tags, pos)
+      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | [] -> assert false
+      in
+      aux [] begPos uname
+    in
+    let verif_number =
+      try Pos.map_under_mark int_of_string num
+      with _ ->
+        Errors.raise_spanned_error
+          "this verification doesn't have an execution number"
+          (Pos.get_position num)
+    in
+    let verif_tags = Mast.tags_of_name (Pos.unmark verif_tag_names) in
     {
       verif_number;
+      verif_tag_names;
       verif_tags;
       verif_applications = apps;
       verif_conditions = conds;

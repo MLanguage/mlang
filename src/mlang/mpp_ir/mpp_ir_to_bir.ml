@@ -499,10 +499,11 @@ let create_combined_program (m_program : Mir_interface.full_program)
             let rule_domain = rule_data.Mir.rule_domain in
             let has_max =
               not
-                (StrSetSet.disjoint ctx.used_rule_domains rule_domain.rdom_max)
+                (StrSetSet.disjoint ctx.used_rule_domains
+                   rule_domain.rdom.dom_max)
             in
             let has_used_domain =
-              StrSetSet.mem rule_domain.rdom_id ctx.used_rule_domains
+              StrSetSet.mem rule_domain.rdom.dom_id ctx.used_rule_domains
             in
             let has_used_chaining =
               match rule_data.Mir.rule_chain with

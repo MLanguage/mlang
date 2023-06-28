@@ -183,45 +183,45 @@ domaine regle corrective base_inr_r9901
 let verif_domains_declaration =
   {|
 domaine verif primitive corrective, isf corrective
-: autorise
-    calculee *,
-    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation
-: auto_cc contexte, famille, revenu, revenu corrective, variation
+#: autorise
+#    calculee *,
+#    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
+#    saisie variation
+#: auto_cc contexte, famille, revenu, revenu corrective, variation
 : par_defaut;
 
 domaine verif primitive
-: autorise
-    calculee *,
-    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation
+#: autorise
+#    calculee *,
+#    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
+#    saisie variation
 : specialise primitive corrective;
 
 domaine verif isf
-: autorise
-    calculee *,
-    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation;
+#: autorise
+#    calculee *,
+#    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
+#    saisie variation
+;
 
 domaine verif corrective
-: autorise
-    calculee *,
-    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation
+#: autorise
+#    calculee *,
+#    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
+#    saisie variation
 : specialise primitive corrective;
 
 domaine verif corrective horizontale
-: autorise
-    calculee *,
-    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation, saisie penalite
-: auto_cc penalite;
+#: autorise
+#    calculee *,
+#    saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
+#    saisie variation, saisie penalite
+#: auto_cc penalite
+;
 |}
 
 let declarations =
   Format.sprintf "%s%s%s"
     (ignore variable_domains_declaration;
      "")
-    rule_domains_declaration
-    (ignore verif_domains_declaration;
-     "")
+    rule_domains_declaration verif_domains_declaration
