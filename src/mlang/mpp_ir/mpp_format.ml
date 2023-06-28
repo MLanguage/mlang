@@ -25,9 +25,9 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
 
 let format_var_filter (fmt : formatter) (f : var_filter) : unit =
   match f with
-  | Saisie None -> fprintf fmt "saisie"
-  | Calculee None -> fprintf fmt "calculee"
-  | Calculee (Some st) | Saisie (Some st) -> Format_mir.format_subtype fmt st
+  | Saisie None -> pp_print_string fmt Mast.input_category
+  | Calculee None -> pp_print_string fmt Mast.computed_category
+  | Calculee (Some st) | Saisie (Some st) -> fprintf fmt "%s" st
 
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
