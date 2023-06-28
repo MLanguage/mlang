@@ -221,7 +221,5 @@ domaine verif corrective horizontale
 |}
 
 let declarations =
-  Format.sprintf "%s%s%s"
-    (ignore variable_domains_declaration;
-     "")
-    rule_domains_declaration verif_domains_declaration
+  Format.sprintf "%s%s%s" variable_domains_declaration rule_domains_declaration
+    verif_domains_declaration

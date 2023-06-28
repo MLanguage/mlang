@@ -22,8 +22,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  open Parse_utils
 
  type comp_subtyp_or_attr =
- | CompSubTyp of computed_typ Pos.marked
- | Attr of input_variable_attribute Pos.marked * literal Pos.marked
+ | CompSubTyp of string Pos.marked
+ | Attr of variable_attribute
 
  let parse_to_literal (v: parse_val) : literal = match v with
  | ParseVar v -> Variable v
@@ -45,10 +45,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token RANGE
 
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
-%token ONE IN APPLICATION CHAINING TYPE BASE GIVEN_BACK TABLE
-%token COMPUTED CONST ALIAS CONTEXT FAMILY PENALITY INCOME INPUT FOR
+%token ONE IN APPLICATION CHAINING TYPE TABLE
+%token COMPUTED CONST ALIAS INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
-%token INFORMATIVE OUTPUT FONCTION
+%token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE COMPUTABLE BY_DEFAULT AUTO_CC NON_AUTO_CC
 
 %token EOF
@@ -82,8 +82,31 @@ source_file_item:
 | e = error_ { (Error e, mk_position $sloc) }
 | o = output { (Output o, mk_position $sloc) }
 | fonction { (Function, mk_position $sloc) }
+| c = var_category_decl { (VarCatDecl c, mk_position $sloc) }
 | cr = rule_domain_decl { (RuleDomDecl cr, mk_position $sloc) }
 | cv = verif_domain_decl { (VerifDomDecl cv, mk_position $sloc) }
+
+%inline symbol_with_pos:
+| s = SYMBOL { (s, mk_position $sloc) }
+
+%inline symbol_list_with_pos:
+| sl = nonempty_list(symbol_with_pos) { (sl, mk_position $sloc) }
+
+var_category_decl:
+| VARIABLE var_type = var_typ c = symbol_with_pos* COLON ATTRIBUT
+  attr = separated_nonempty_list(COMMA, symbol_with_pos) SEMICOLON
+  {
+    ({
+       var_type;
+       var_category = c;
+       var_attributes = attr;
+      },
+     mk_position $sloc)
+  }
+
+var_typ:
+| INPUT { Input }
+| COMPUTED { Computed }
 
 rule_domain_decl:
 | DOMAIN RULE rdom_params = separated_nonempty_list(COLON, rdom_param_with_pos) SEMICOLON
@@ -173,12 +196,6 @@ vdom_param_with_pos:
 | BY_DEFAULT
   { (None, None, None, Some (), mk_position $sloc) }
 
-%inline symbol_with_pos:
-| s = SYMBOL { (s, mk_position $sloc) }
-
-%inline symbol_list_with_pos:
-| sl = nonempty_list(symbol_with_pos) { (sl, mk_position $sloc) }
-
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
 
@@ -222,8 +239,8 @@ computed_variable_descr:
 | descr = STRING { (parse_string descr, mk_position $sloc) }
 
 computed_attr_or_subtyp:
-| attr = input_variable_attribute { let (x, y) = attr in Attr (x,y) }
-| subtyp = computed_variable_subtype { CompSubTyp subtyp }
+| attr = variable_attribute { let (x, y) = attr in Attr (x,y) }
+| cat = symbol_with_pos { CompSubTyp cat }
 
 computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
@@ -234,7 +251,7 @@ computed_variable:
     comp_table = size;
     comp_attributes = List.map (fun x -> match x with Attr (x, y) -> (x, y) | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
-    comp_subtyp = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
+    comp_category = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
     comp_description = descr;
     comp_typ = typ;
@@ -243,41 +260,28 @@ computed_variable:
 computed_variable_table:
 | TABLE LBRACKET size = SYMBOL RBRACKET { (int_of_string size, mk_position $sloc) }
 
-computed_variable_subtype:
-| BASE { (Base, mk_position $sloc) }
-| GIVEN_BACK { (GivenBack, mk_position $sloc) }
-
 input_variable_name:
 | name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
 
 input_descr:
 descr = STRING { (parse_string descr, mk_position $sloc) }
 
-input_attr_or_subtyp_or_given_back:
-| attr = input_variable_attribute { ((None, Some attr), false) }
-| subtyp = input_variable_subtype { ((Some subtyp, None), false) }
-| GIVEN_BACK { ((None, None), true) }
-
+input_attr_or_category:
+| attr = variable_attribute { (None, Some attr) }
+| cat = symbol_with_pos { (Some cat, None) }
 
 input_variable:
 | name = input_variable_name INPUT
-  subtyp = input_attr_or_subtyp_or_given_back* alias = input_variable_alias COLON descr = input_descr
+  category_attrs = input_attr_or_category* alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
   SEMICOLON {
-  let (subtyp_attrs, given_back) = List.split subtyp in
-  let (subtyp, attrs) = List.split subtyp_attrs in
+  let (category, attrs) = List.split category_attrs in
   InputVar ({
     input_name = name;
-    input_subtyp = begin
-      let subtyp  =
-        List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-          (List.filter (fun x -> x <> None) subtyp)
-      in
-      if List.length subtyp > 1 then
-        Errors.raise_spanned_error "multiple subtypes for an input variable" (mk_position $sloc)
-      else
-        List.hd subtyp
-    end;
+    input_category =
+      List.map
+        (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
+        (List.filter (fun x -> x <> None) category);
     input_attributes = begin
         let attrs  =
           List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
@@ -285,7 +289,6 @@ input_variable:
         in
         attrs
     end;
-    input_given_back = List.exists (fun x -> x) given_back;
     input_alias = alias;
     input_typ = typ;
     input_description = descr;
@@ -294,22 +297,16 @@ input_variable:
 input_variable_alias:
 | ALIAS alias = SYMBOL { (parse_variable_name $sloc alias, mk_position $sloc) }
 
-input_variable_attribute_name:
+variable_attribute_name:
 | attr = SYMBOL { (attr, mk_position $sloc) }
 
-input_variable_attribute_value:
+variable_attribute_value:
  lit = SYMBOL { (parse_literal $sloc lit, mk_position $sloc) }
 
-input_variable_attribute:
-| attr = input_variable_attribute_name EQUALS
-  lit = input_variable_attribute_value
+variable_attribute:
+| attr = variable_attribute_name EQUALS
+  lit = variable_attribute_value
 { (attr, lit) }
-
-input_variable_subtype:
-| CONTEXT { (Context, mk_position $sloc) }
-| FAMILY { (Family, mk_position $sloc) }
-| PENALITY { (Penality, mk_position $sloc) }
-| INCOME { (Income, mk_position $sloc) }
 
 value_type:
 | TYPE typ = value_type_prim { typ }

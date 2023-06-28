@@ -22,6 +22,8 @@ val format_unop : Format.formatter -> Mast.unop -> unit
 
 val format_value_typ : Format.formatter -> Mast.value_typ -> unit
 
+val format_var_type : Mast.var_type -> string
+
 val format_variable : Format.formatter -> Mast.variable -> unit
 
 val format_rule_domain : Format.formatter -> Mast.rule_domain_decl -> unit

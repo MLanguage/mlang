@@ -449,10 +449,175 @@ let get_constants (p : Mast.program) : float Pos.marked ConstMap.t =
 let belongs_to_iliad_app (r : Mast.application Pos.marked list) : bool =
   List.exists (fun app -> Pos.unmark app = "iliad") r
 
+let sort_attributes (attrs : Mast.variable_attribute list) =
+  List.sort
+    (fun c1 c2 -> String.compare (Pos.unmark (fst c1)) (Pos.unmark (fst c2)))
+    attrs
+
+let get_var_categories (p : Mast.program) =
+  let categories =
+    List.fold_left
+      (fun decls source_file ->
+        List.fold_left
+          (fun decls source_file_item ->
+            match Pos.unmark source_file_item with
+            | Mast.VarCatDecl (catdecl, pos) ->
+                let normalized_decl =
+                  {
+                    catdecl with
+                    var_category =
+                      List.sort
+                        (fun c1 c2 ->
+                          String.compare (Pos.unmark c1) (Pos.unmark c2))
+                        catdecl.var_category;
+                    var_attributes =
+                      List.sort
+                        (fun c1 c2 ->
+                          String.compare (Pos.unmark c1) (Pos.unmark c2))
+                        catdecl.var_attributes;
+                  }
+                in
+                let already_defined =
+                  let decl_l = List.length normalized_decl.var_category in
+                  List.find_opt
+                    (fun (decl, _pos) ->
+                      decl_l = List.length decl.Mast.var_category
+                      && List.for_all2
+                           (fun a b ->
+                             String.equal (Pos.unmark a) (Pos.unmark b))
+                           normalized_decl.var_category decl.Mast.var_category)
+                    decls
+                in
+                begin
+                  match already_defined with
+                  | None -> ()
+                  | Some (_decl, pos) ->
+                      Cli.warning_print
+                        "Category \"%s\" defined more than once:@;\
+                         Already defined %a"
+                        (String.concat " "
+                           (Format_mast.format_var_type normalized_decl.var_type
+                           :: List.map Pos.unmark normalized_decl.var_category))
+                        Pos.format_position pos
+                end;
+                (normalized_decl, pos) :: decls
+            | _ -> decls)
+          decls source_file)
+      [] p
+  in
+  let categories =
+    (* Sorted to match longest category first *)
+    List.sort
+      (fun c1 c2 ->
+        compare
+          (List.length (Pos.unmark c2).Mast.var_category)
+          (List.length (Pos.unmark c1).Mast.var_category))
+      categories
+  in
+  categories
+
+let check_var_category (categories : Mast.var_category_decl Pos.marked list)
+    (var : Mast.variable_decl) =
+  let rec category_included_in cbase ctest =
+    (* assume sorted lists *)
+    match (cbase, ctest) with
+    | [], _ -> true
+    | _, [] -> false
+    | chb :: ctb, cht :: ctt ->
+        if String.equal chb cht then category_included_in ctb ctt
+        else
+          (* Allows variables to have more tags than the declared category.
+             Since the declaration are sorted by tag number, we will match the
+             most precise one first. We can however have have two declared
+             categories that fits but are not included in one another. *)
+          category_included_in cbase ctt
+  in
+  let attributes_triaging abase atest =
+    let rec aux (missing, surplus) abase atest =
+      match (abase, atest) with
+      | [], _ ->
+          (missing, List.map (fun a -> Pos.unmark (fst a)) atest @ surplus)
+      | _, [] -> (List.map (fun a -> Pos.unmark a) abase @ missing, surplus)
+      | ahb :: atb, aht :: att ->
+          let ahb = Pos.unmark ahb in
+          let aht = Pos.unmark (fst aht) in
+          let comp = String.compare ahb aht in
+          if comp = 0 then aux (missing, surplus) atb att
+          else if comp < 0 then aux (ahb :: missing, surplus) atb atest
+          else aux (missing, aht :: surplus) abase att
+    in
+    aux ([], []) abase atest
+  in
+  let var_name, var_pos, var_typ, var_cat, var_attrs =
+    match var with
+    | Mast.ConstVar _ -> assert false
+    | Mast.ComputedVar v ->
+        let v = Pos.unmark v in
+        ( Pos.unmark v.comp_name,
+          snd v.comp_name,
+          Mast.Computed,
+          v.comp_category,
+          v.comp_attributes )
+    | Mast.InputVar v ->
+        let v = Pos.unmark v in
+        ( Pos.unmark v.input_name,
+          snd v.input_name,
+          Mast.Input,
+          v.input_category,
+          v.input_attributes )
+  in
+  let var_cat = List.map Pos.unmark var_cat in
+  let categories =
+    List.filter (fun cat -> (Pos.unmark cat).Mast.var_type = var_typ) categories
+  in
+  let var_cat = List.sort String.compare var_cat in
+  let var_attrs = sort_attributes var_attrs in
+  match
+    List.find_all
+      (fun cat ->
+        category_included_in
+          (List.map Pos.unmark (Pos.unmark cat).Mast.var_category)
+          var_cat)
+      categories
+  with
+  | [] ->
+      Errors.raise_spanned_error
+        "Variable does not fit in any declared categories." var_pos
+  | [ cat ] ->
+      let missing, surplus =
+        attributes_triaging (Pos.unmark cat).var_attributes var_attrs
+      in
+      if missing <> [] then
+        Errors.raise_spanned_error
+          (Format.sprintf
+             "Variable %s (category %s) is missing the following attributes: %s"
+             var_name
+             (String.concat " " var_cat)
+             (String.concat " " missing))
+          var_pos;
+      if surplus <> [] then
+        Errors.raise_spanned_error
+          (Format.sprintf
+             "Variable %s (category %s) has some unexpected attributes: %s"
+             var_name
+             (String.concat " " var_cat)
+             (String.concat " " surplus))
+          var_pos
+  | multiple_cats ->
+      Errors.raise_spanned_error
+        (Format.asprintf "Variable fits more than one category:@\n%a"
+           (Format.pp_print_list ~pp_sep:Format.pp_print_newline (fun fmt cat ->
+                Format.fprintf fmt "- %s"
+                  (String.concat " "
+                     (List.map Pos.unmark (Pos.unmark cat).Mast.var_category))))
+           multiple_cats)
+        var_pos
+
 (** Retrieves variable declaration data. Done in a separate pass because we
     don't want to deal with sorting the dependencies between files or inside
     files. *)
 let get_variables_decl (p : Mast.program)
+    (categories : Mast.var_category_decl Pos.marked list)
     (const_map : float Pos.marked ConstMap.t) :
     var_decl_data Mir.VariableMap.t * Mir.Error.t list * Mir.idmap =
   let vars, idmap, errors, out_list =
@@ -462,11 +627,11 @@ let get_variables_decl (p : Mast.program)
           (fun (vars, (idmap : Mir.idmap), errors, out_list) source_file_item ->
             match Pos.unmark source_file_item with
             | Mast.VariableDecl var_decl -> (
-                let subtypes = Mir.subtypes_of_decl var_decl in
                 match var_decl with
                 | Mast.ConstVar (_, _) ->
                     (vars, idmap, errors, out_list) (* already treated before *)
                 | Mast.ComputedVar _ | Mast.InputVar _ -> (
+                    check_var_category categories var_decl;
                     let var_name =
                       match var_decl with
                       | Mast.ComputedVar v -> (Pos.unmark v).Mast.comp_name
@@ -502,30 +667,17 @@ let get_variables_decl (p : Mast.program)
                       match var_decl with
                       | Mast.ComputedVar cvar ->
                           let cvar = Pos.unmark cvar in
-                          let attrs =
-                            ( Pos.same_pos_as "calculee" cvar.Mast.comp_name,
-                              Pos.same_pos_as (Mast.Float 1.)
-                                cvar.Mast.comp_name )
-                            :: cvar.comp_attributes
-                          in
-                          let attrs =
-                            if
-                              List.exists
-                                (fun x -> Pos.unmark x = Mast.Base)
-                                cvar.Mast.comp_subtyp
-                            then
-                              ( Pos.same_pos_as "base" cvar.Mast.comp_name,
-                                Pos.same_pos_as (Mast.Float 1.)
-                                  cvar.Mast.comp_name )
-                              :: attrs
-                            else attrs
+                          let category =
+                            Mast.computed_category
+                            :: List.map Pos.unmark cvar.comp_category
                           in
                           let new_var =
                             Mir.Variable.new_var cvar.Mast.comp_name None
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
-                              ~attributes:attrs ~subtypes ~origin:None
+                              ~attributes:cvar.comp_attributes ~category
+                              ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                           in
                           let new_var_data =
@@ -552,16 +704,19 @@ let get_variables_decl (p : Mast.program)
                             if
                               List.exists
                                 (fun x ->
-                                  match Pos.unmark x with
-                                  | Mast.GivenBack -> true
-                                  | Mast.Base -> false)
-                                cvar.Mast.comp_subtyp
+                                  String.equal (Pos.unmark x)
+                                    Mast.givenback_category)
+                                cvar.Mast.comp_category
                             then cvar.Mast.comp_name :: out_list
                             else out_list
                           in
                           (new_vars, new_idmap, errors, new_out_list)
                       | Mast.InputVar ivar ->
                           let ivar = Pos.unmark ivar in
+                          let category =
+                            Mast.input_category
+                            :: List.map Pos.unmark ivar.input_category
+                          in
                           let new_var =
                             Mir.Variable.new_var ivar.Mast.input_name
                               (Some (Pos.unmark ivar.Mast.input_alias))
@@ -569,7 +724,7 @@ let get_variables_decl (p : Mast.program)
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
-                              ~subtypes ~is_table:None
+                              ~category ~is_table:None
                             (* Input variables also have a low order *)
                           in
                           let new_var_data =
@@ -580,12 +735,15 @@ let get_variables_decl (p : Mast.program)
                                     Pos.unmark_option ivar.Mast.input_typ
                                   with
                                   | Some x -> Some x
-                                  | None -> (
-                                      match
-                                        Pos.unmark ivar.Mast.input_subtyp
-                                      with
-                                      | Mast.Income -> Some Mast.Real
-                                      | _ -> None)
+                                  | None ->
+                                      if
+                                        List.exists
+                                          (fun t ->
+                                            String.equal Mast.income_category
+                                              (Pos.unmark t))
+                                          ivar.input_category
+                                      then Some Mast.Real
+                                      else None
                                 end;
                               var_decl_is_table = None;
                               var_decl_descr =
@@ -731,7 +889,7 @@ let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
        local variables *)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin ~subtypes:var.subtypes
+    ~attributes:var.attributes ~origin ~category:var.category
     ~is_table:var.is_table
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
@@ -1613,7 +1771,7 @@ let get_conds (error_decls : Mir.Error.t list)
                         }
                         (Pos.unmark verif_cond).Mast.verif_cond_expr
                     in
-                    let subtypes =
+                    let category =
                       (* Verifications are maped to a dummy variable, we use it
                          to store all the subtypes of variables appearing in its
                          expression to avoid going through it later when we sort
@@ -1624,7 +1782,7 @@ let get_conds (error_decls : Mir.Error.t list)
                             (fun subtypes st ->
                               if List.mem st subtypes then subtypes
                               else st :: subtypes)
-                            subtypes var.Mir.subtypes)
+                            subtypes var.Mir.category)
                         [] (Pos.unmark e)
                     in
                     let err =
@@ -1669,7 +1827,7 @@ let get_conds (error_decls : Mir.Error.t list)
                           Mir.seq_number = 0;
                           Mir.pos = Pos.get_position verif_cond;
                         }
-                        ~attributes:[] ~origin:None ~subtypes ~is_table:None
+                        ~attributes:[] ~origin:None ~category ~is_table:None
                     in
                     ( Mir.VariableMap.add dummy_var
                         {
@@ -1691,7 +1849,10 @@ let get_conds (error_decls : Mir.Error.t list)
 
 let translate (p : Mast.program) : Mir.program =
   let const_map = get_constants p in
-  let var_decl_data, error_decls, idmap = get_variables_decl p const_map in
+  let var_category_decls = get_var_categories p in
+  let var_decl_data, error_decls, idmap =
+    get_variables_decl p var_category_decls const_map
+  in
   let idmap = get_var_redefinitions p idmap const_map in
   let rule_domains = get_rule_domains p in
   let rule_domain_by_default = StrSetMap.find StrSet.empty rule_domains in

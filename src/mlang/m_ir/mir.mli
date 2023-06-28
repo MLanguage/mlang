@@ -24,16 +24,6 @@ type execution_number = {
 type variable_id = int
 (** Each variable has an unique ID *)
 
-type variable_subtype =
-  | Context
-  | Family
-  | Penality
-  | Income
-  | Base
-  | GivenBack
-  | Computed
-  | Input
-
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
@@ -43,12 +33,11 @@ type variable = {
   id : variable_id;
   descr : string Pos.marked;
       (** Description taken from the variable declaration *)
-  attributes :
-    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  attributes : Mast.variable_attribute list;
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  subtypes : variable_subtype list;
+  category : string list;
   is_table : int option;
 }
 
@@ -234,12 +223,11 @@ module Variable : sig
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
-    attributes :
-      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    attributes : Mast.variable_attribute list;
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    subtypes : variable_subtype list;
+    category : string list;
     is_table : int option;
   }
 
@@ -250,9 +238,9 @@ module Variable : sig
     string option ->
     string Pos.marked ->
     execution_number ->
-    attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
+    attributes:Mast.variable_attribute list ->
     origin:variable option ->
-    subtypes:variable_subtype list ->
+    category:string list ->
     is_table:int option ->
     variable
 
@@ -333,8 +321,6 @@ val get_max_var_sorted_by_execution_number :
 val fresh_rule_num : unit -> int
 
 val initial_undef_rule_id : rov_id
-
-val subtypes_of_decl : Mast.variable_decl -> variable_subtype list
 
 val find_var_by_name : program -> string Pos.marked -> variable
 (** Get a variable for a given name or alias, because of SSA multiple variables

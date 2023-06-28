@@ -61,43 +61,6 @@ let same_execution_number (en1 : execution_number) (en2 : execution_number) :
 type variable_id = int
 (** Each variable has an unique ID *)
 
-type variable_subtype =
-  | Context
-  | Family
-  | Penality
-  | Income
-  | Base
-  | GivenBack
-  | Computed
-  | Input
-
-let subtypes_of_decl (var_decl : Mast.variable_decl) : variable_subtype list =
-  match var_decl with
-  | ConstVar _ -> []
-  | ComputedVar cv ->
-      let subtypes =
-        List.map
-          (fun subtyp ->
-            match (Pos.unmark subtyp : Mast.computed_typ) with
-            | Base -> Base
-            | GivenBack -> GivenBack)
-          (Pos.unmark cv).comp_subtyp
-      in
-      Computed :: subtypes
-  | InputVar iv ->
-      let iv = Pos.unmark iv in
-      let subtypes =
-        match (Pos.unmark iv.input_subtyp : Mast.input_variable_subtype) with
-        | Context -> [ Context ]
-        | Family -> [ Family ]
-        | Penality -> [ Penality ]
-        | Income -> [ Income ]
-      in
-      let subtypes =
-        if iv.input_given_back then GivenBack :: subtypes else subtypes
-      in
-      Input :: subtypes
-
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
   execution_number : execution_number;
@@ -107,12 +70,11 @@ type variable = {
   id : variable_id;
   descr : string Pos.marked;
       (** Description taken from the variable declaration *)
-  attributes :
-    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  attributes : Mast.variable_attribute list;
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  subtypes : variable_subtype list;
+  category : string list;
   is_table : int option;
 }
 
@@ -128,12 +90,11 @@ module Variable = struct
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
-    attributes :
-      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    attributes : Mast.variable_attribute list;
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    subtypes : variable_subtype list;
+    category : string list;
     is_table : int option;
   }
 
@@ -146,10 +107,8 @@ module Variable = struct
 
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
-      ~(attributes :
-         (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked)
-         list) ~(origin : t option) ~(subtypes : variable_subtype list)
-      ~(is_table : int option) : t =
+      ~(attributes : Mast.variable_attribute list) ~(origin : t option)
+      ~(category : string list) ~(is_table : int option) : t =
     {
       name;
       id = fresh_id ();
@@ -158,7 +117,7 @@ module Variable = struct
       execution_number;
       attributes;
       origin;
-      subtypes;
+      category;
       is_table;
     }
 

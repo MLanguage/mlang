@@ -86,7 +86,7 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
+let var_filter_compatible_subtypes (subtypes : string list)
     (filter : Mpp_ir.var_filter) : bool =
   match (filter : Mpp_ir.var_filter) with
   | Saisie st ->
@@ -94,20 +94,20 @@ let var_filter_compatible_subtypes (subtypes : Mir.variable_subtype list)
       | None ->
           List.exists
             (fun st ->
-              match (st : Mir.variable_subtype) with
-              | Context | Family | Income | Penality | Input -> true
+              match st with
+              | "contexte" | "famille" | "revenu" | "penalite" | "saisie" ->
+                  true
               | _ -> false)
             subtypes
       | Some st -> List.mem st subtypes)
-      && List.for_all (( <> ) (Computed : Mir.variable_subtype)) subtypes
+      && List.for_all
+           (fun x -> not (String.equal Mast.computed_category x))
+           subtypes
   | Calculee st -> (
       match st with
       | None ->
           List.exists
-            (fun st ->
-              match (st : Mir.variable_subtype) with
-              | Base | Computed -> true
-              | _ -> false)
+            (fun st -> match st with "base" | "calculee" -> true | _ -> false)
             subtypes
       | Some st -> List.mem st subtypes)
 
@@ -231,10 +231,11 @@ let generate_verif_call (m_program : Mir_interface.full_program)
       &&
       match filter with
       | None -> true
-      | Some filter -> var_filter_compatible_subtypes var.Mir.subtypes filter
+      | Some filter -> var_filter_compatible_subtypes var.Mir.category filter
     in
     if
-      test && chain_tag <> Horizontale && List.mem Mir.Penality var.Mir.subtypes
+      test && chain_tag <> Horizontale
+      && List.exists (String.equal Mast.penality_category) var.Mir.category
     then
       Errors.raise_spanned_error "Penality variable used in verification"
         (Pos.get_position cond.Mir.cond_expr)
@@ -328,7 +329,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~origin:None ~subtypes:[] ~is_table:None
+                ~attributes:[] ~origin:None ~category:[] ~is_table:None
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =

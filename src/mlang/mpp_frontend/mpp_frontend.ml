@@ -20,15 +20,16 @@
 open Mpp_ir
 
 let filter_of_string (s : string Pos.marked) : var_filter =
-  match Pos.unmark s with
+  let us = Pos.unmark s in
+  match us with
   | "saisie" -> Saisie None
   | "calculee" -> Calculee None
-  | "contexte" -> Saisie (Some Context)
-  | "famille" -> Saisie (Some Family)
-  | "revenu" -> Saisie (Some Income)
-  | "penalite" -> Saisie (Some Penality)
-  | "base" -> Calculee (Some Base)
-  | "restituee" -> Calculee (Some GivenBack)
+  | "contexte" -> Saisie (Some us)
+  | "famille" -> Saisie (Some us)
+  | "revenu" -> Saisie (Some us)
+  | "penalite" -> Saisie (Some us)
+  | "base" -> Calculee (Some us)
+  | "restituee" -> Calculee (Some us)
   | unknown ->
       Errors.raise_spanned_error
         (Format.sprintf "unknown variable category %s" unknown)
