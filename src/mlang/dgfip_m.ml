@@ -232,7 +232,7 @@ let string_to_rule_domain_id : string -> Mast.DomainId.t = function
   | "irisf" -> Mast.DomainId.from_list [ "irisf" ]
   | "base_HR" -> Mast.DomainId.from_list [ "corrective"; "base_HR" ]
   | "base_tl" -> Mast.DomainId.from_list [ "corrective"; "base_tl" ]
-  | "base_tl_init" -> Mast.DomainId.from_list [ "corrective"; "base_INITIAL" ]
+  | "base_tl_init" -> Mast.DomainId.from_list [ "corrective"; "base_tl_init" ]
   | "base_tl_rect" -> Mast.DomainId.from_list [ "corrective"; "base_tl_rect" ]
   | "base_INITIAL" -> Mast.DomainId.from_list [ "corrective"; "base_INITIAL" ]
   | "base_INR" -> Mast.DomainId.from_list [ "corrective"; "base_INR" ]
