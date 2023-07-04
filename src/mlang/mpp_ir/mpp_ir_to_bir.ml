@@ -17,8 +17,8 @@
 type translation_ctx = {
   new_variables : Bir.variable StrMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
-  used_rule_domains : StrSetSet.t;
-  used_chainings : StrSet.t;
+  used_rule_domains : Mast.DomainIdSet.t;
+  used_chainings : Mast.ChainingSet.t;
   verif_seen : bool;
 }
 
@@ -26,8 +26,8 @@ let empty_translation_ctx : translation_ctx =
   {
     new_variables = StrMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
-    used_rule_domains = StrSetSet.empty;
-    used_chainings = StrSet.empty;
+    used_rule_domains = Mast.DomainIdSet.empty;
+    used_chainings = Mast.ChainingSet.empty;
     verif_seen = false;
   }
 
@@ -43,8 +43,9 @@ let ctx_join ctx1 ctx2 =
       Mir.VariableDict.union ctx1.variables_used_as_inputs
         ctx2.variables_used_as_inputs;
     used_rule_domains =
-      StrSetSet.union ctx1.used_rule_domains ctx2.used_rule_domains;
-    used_chainings = StrSet.union ctx1.used_chainings ctx2.used_chainings;
+      Mast.DomainIdSet.union ctx1.used_rule_domains ctx2.used_rule_domains;
+    used_chainings =
+      Mast.ChainingSet.union ctx1.used_chainings ctx2.used_chainings;
     verif_seen = ctx1.verif_seen || ctx2.verif_seen;
   }
 
@@ -218,23 +219,23 @@ let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   (Bir.SVerif data, Pos.get_position data.cond_expr)
 
 let generate_verif_call (m_program : Mir_interface.full_program)
-    (chain_tag : Mast.chain_tag) (filter : Mpp_ir.var_filter option) :
+    (chain : Mast.DomainId.t) (filter : Mpp_ir.var_filter option) :
     Bir.stmt list =
   let is_verif_relevant var cond =
     (* specific restriction *)
     let test =
-      Mast.are_tags_part_of_verif_chain
-        (List.map Pos.unmark cond.Mir.cond_tags)
-        chain_tag
-      (* We use the constructed subtypes of the dummy variable built in
-         [Mast_to_mir] *)
+      let verif_domain = cond.Mir.cond_domain in
+      let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
+      let is_eq = verif_domain.dom_id = chain in
+      (is_max || is_eq)
       &&
       match filter with
       | None -> true
       | Some filter -> var_filter_compatible_subtypes var.Mir.category filter
     in
     if
-      test && chain_tag <> Horizontale
+      test
+      && (not (Mast.DomainId.mem "horizontale" chain))
       && List.exists (String.equal Mast.penality_category) var.Mir.category
     then
       Errors.raise_spanned_error "Penality variable used in verification"
@@ -400,27 +401,38 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                   real_args ),
             pos );
         ] )
-  | Mpp_ir.Expr (Call (Program chain_tag, _args), _) ->
+  | Mpp_ir.Expr (Call (Program chain, _args), _) ->
       let order, ctx =
         let order, used_rule_domains, used_chainings =
-          match chain_tag with
-          | Custom ch ->
-              let order = StrMap.find ch m_program.chainings_orders in
-              (order, ctx.used_rule_domains, StrSet.add ch ctx.used_chainings)
-          | _ ->
-              let rdom_id = Mir.tag_to_rule_domain_id chain_tag in
-              let order = StrSetMap.find rdom_id m_program.domains_orders in
-              let dom = Mir.tag_to_rule_domain_id chain_tag in
+          match Mast.DomainIdMap.find_opt chain m_program.domains_orders with
+          | Some order ->
               ( order,
-                StrSetSet.add dom ctx.used_rule_domains,
+                Mast.DomainIdSet.add chain ctx.used_rule_domains,
                 ctx.used_chainings )
+          | None ->
+              if Mast.DomainId.cardinal chain = 1 then
+                let chain_id = Mast.DomainId.min_elt chain in
+                match
+                  Mast.ChainingMap.find_opt chain_id m_program.chainings_orders
+                with
+                | Some order ->
+                    ( order,
+                      ctx.used_rule_domains,
+                      Mast.ChainingSet.add chain_id ctx.used_chainings )
+                | None ->
+                    Errors.raise_error
+                      (Format.asprintf "Unknown chaining: %s" chain_id)
+              else
+                Errors.raise_error
+                  (Format.asprintf "Unknown rule domain: %a"
+                     (Mast.DomainId.pp ()) chain)
         in
         (order, { ctx with used_rule_domains; used_chainings })
       in
       wrap_m_code_call m_program order ctx
-  | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
+  | Mpp_ir.Expr (Call (Verif (chain, filter), _args), _) ->
       ( { ctx with verif_seen = true },
-        generate_verif_call m_program chain_tag filter )
+        generate_verif_call m_program chain filter )
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
@@ -500,16 +512,16 @@ let create_combined_program (m_program : Mir_interface.full_program)
             let rule_domain = rule_data.Mir.rule_domain in
             let has_max =
               not
-                (StrSetSet.disjoint ctx.used_rule_domains
-                   rule_domain.rdom.dom_max)
+                (Mast.DomainIdSet.disjoint ctx.used_rule_domains
+                   rule_domain.dom_max)
             in
             let has_used_domain =
-              StrSetSet.mem rule_domain.rdom.dom_id ctx.used_rule_domains
+              Mast.DomainIdSet.mem rule_domain.dom_id ctx.used_rule_domains
             in
             let has_used_chaining =
               match rule_data.Mir.rule_chain with
               | None -> false
-              | Some (ch, _) -> StrSet.mem ch ctx.used_chainings
+              | Some (ch, _) -> Mast.ChainingSet.mem ch ctx.used_chainings
             in
             let is_not_rule_0 =
               Pos.unmark rule_data.Mir.rule_number <> RuleID 0

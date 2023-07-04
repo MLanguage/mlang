@@ -31,104 +31,15 @@ type application = string
     - [bareme]: seems to compute the income tax;
     - [iliad]: usage unkown, much bigger than [bareme]. *)
 
+module DomainId = StrSet
+module DomainIdSet = StrSetSet
+module DomainIdMap = StrSetMap
+
 type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
 
-type chain_tag =
-  | Custom of string (* Custom chain, not an actual rule tag *)
-  | PrimCorr (* empty tag *)
-  | Primitif
-  | Corrective
-  | Isf
-  | Taux
-  | Irisf
-  | Base_hr
-  | Base_tl
-  | Base_tl_init
-  | Base_tl_rect
-  | Base_initial
-  | Base_inr
-  | Base_inr_ref
-  | Base_inr_tl
-  | Base_inr_tl22
-  | Base_inr_tl24
-  | Base_inr_ntl
-  | Base_inr_ntl22
-  | Base_inr_ntl24
-  | Base_inr_inter22
-  | Base_inr_intertl
-  | Base_inr_r9901
-  | Base_inr_cimr07
-  | Base_inr_cimr24
-  | Base_inr_cimr99
-  | Base_inr_tlcimr07
-  | Base_inr_tlcimr24
-  | Base_abat98
-  | Base_abat99
-  | Base_majo
-  | Base_premier
-  | Base_anterieure
-  | Base_anterieure_cor
-  | Base_stratemajo
-  | Non_auto_cc
-  | Horizontale
-
-let chain_tag_of_string : string -> chain_tag = function
-  | "primitif" -> Primitif
-  | "corrective" -> Corrective
-  | "isf" -> Isf
-  | "taux" -> Taux
-  | "irisf" -> Irisf
-  | "base_HR" -> Base_hr
-  | "base_tl" -> Base_tl
-  | "base_tl_init" -> Base_tl_init
-  | "base_tl_rect" -> Base_tl_rect
-  | "base_INR" -> Base_inr
-  | "base_inr_ref" -> Base_inr_ref
-  | "base_inr_tl" -> Base_inr_tl
-  | "base_inr_tl22" -> Base_inr_tl22
-  | "base_inr_tl24" -> Base_inr_tl24
-  | "base_inr_ntl" -> Base_inr_ntl
-  | "base_inr_ntl22" -> Base_inr_ntl22
-  | "base_inr_ntl24" -> Base_inr_ntl24
-  | "base_inr_inter22" -> Base_inr_inter22
-  | "base_inr_intertl" -> Base_inr_intertl
-  | "base_inr_r9901" -> Base_inr_r9901
-  | "base_inr_cimr07" -> Base_inr_cimr07
-  | "base_inr_cimr24" -> Base_inr_cimr24
-  | "base_inr_cimr99" -> Base_inr_cimr99
-  | "base_inr_tlcimr07" -> Base_inr_tlcimr07
-  | "base_inr_tlcimr24" -> Base_inr_tlcimr24
-  | "base_ABAT98" -> Base_abat98
-  | "base_ABAT99" -> Base_abat99
-  | "base_INITIAL" -> Base_initial
-  | "base_premier" -> Base_premier
-  | "base_anterieure" -> Base_anterieure
-  | "base_anterieure_cor" -> Base_anterieure_cor
-  | "base_MAJO" -> Base_majo
-  | "base_stratemajo" -> Base_stratemajo
-  | "non_auto_cc" -> Non_auto_cc
-  | "horizontale" -> Horizontale
-  | s -> Custom s
-
-let tags_of_name (name : string Pos.marked list) : chain_tag Pos.marked list =
-  let rec aux tags = function
-    | [] -> tags
-    | h :: t ->
-        let tag =
-          try Pos.map_under_mark chain_tag_of_string h
-          with _ ->
-            Errors.raise_spanned_error
-              ("Unknown chain tag " ^ Pos.unmark h)
-              (Pos.get_position h)
-        in
-        aux (tag :: tags) t
-  in
-  let tags = aux [] name in
-  if List.length tags = 0 then
-    [ (PrimCorr, Pos.no_pos); (Primitif, Pos.no_pos); (Corrective, Pos.no_pos) ]
-    (* No tags means both in primitive and corrective *)
-  else tags
+module ChainingSet = StrSet
+module ChainingMap = StrMap
 
 type variable_name = string
 (** Variables are just strings *)
@@ -272,19 +183,22 @@ type formula =
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
-  rule_tags : chain_tag Pos.marked list;
   rule_applications : application Pos.marked list;
   rule_chaining : chaining Pos.marked option;
   rule_formulaes : formula Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
 
-type rule_domain_decl = {
-  rdom_names : string Pos.marked list Pos.marked list;
-  rdom_parents : string Pos.marked list Pos.marked list;
-  rdom_computable : bool;
-  rdom_by_default : bool;
+type 'a domain_decl = {
+  dom_names : string Pos.marked list Pos.marked list;
+  dom_parents : string Pos.marked list Pos.marked list;
+  dom_by_default : bool;
+  dom_data : 'a;
 }
+
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain_decl = rule_domain_data domain_decl
 
 (**{2 Variable declaration}*)
 
@@ -372,18 +286,14 @@ type verification_condition = {
 type verification = {
   verif_number : int Pos.marked;
   verif_tag_names : string Pos.marked list Pos.marked;
-  verif_tags : chain_tag Pos.marked list;
   verif_applications : application Pos.marked list;
       (** Verification conditions are application-specific *)
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_domain_decl = {
-  vdom_names : string Pos.marked list Pos.marked list;
-  vdom_parents : string Pos.marked list Pos.marked list;
-  vdom_auto_cc : bool;
-  vdom_by_default : bool;
-}
+type verif_domain_data = { vdom_auto_cc : bool }
+
+type verif_domain_decl = verif_domain_data domain_decl
 
 type error_typ = Anomaly | Discordance | Information
 
@@ -436,16 +346,3 @@ type function_spec = {
 
 let get_variable_name (v : variable) : string =
   match v with Normal s -> s | Generic s -> s.base
-
-let are_tags_part_of_verif_chain (tags : chain_tag list) (chain : chain_tag) :
-    bool =
-  let is_part_of = List.mem chain tags in
-  match chain with
-  | Primitif ->
-      is_part_of || (List.mem Isf tags && List.mem Corrective tags)
-      (* include "isf corrective" *)
-  | Isf ->
-      is_part_of && not (List.mem Corrective tags)
-      (* exclude "isf corrective" *)
-  | Corrective -> is_part_of && not (List.mem Horizontale tags)
-  | _ -> is_part_of

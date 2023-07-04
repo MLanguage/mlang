@@ -33,8 +33,8 @@ type mpp_compute_name = string
 type var_filter = Saisie of string option | Calculee of string option
 
 type mpp_callable =
-  | Program of Mast.chain_tag (* M codebase *)
-  | Verif of Mast.chain_tag * var_filter option (* M codebase *)
+  | Program of Mast.DomainId.t (* M codebase *)
+  | Verif of Mast.DomainId.t * var_filter option (* M codebase *)
   | MppFunction of mpp_compute_name
   | Present
   | Abs

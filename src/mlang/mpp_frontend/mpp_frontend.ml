@@ -69,7 +69,7 @@ let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
           Errors.raise_spanned_error "Expected a chain to call"
             (Pos.get_position cname)
       | chain :: args ->
-          (Program (Mast.chain_tag_of_string (Pos.unmark chain)), args)
+          (Program (Dgfip_m.string_to_rule_domain_id (Pos.unmark chain)), args)
     end
   | "call_m_verif" -> begin
       match args with
@@ -77,7 +77,7 @@ let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
           Errors.raise_spanned_error "Expected a chain to call"
             (Pos.get_position cname)
       | chain :: args ->
-          let chain = Mast.chain_tag_of_string (Pos.unmark chain) in
+          let chain = Dgfip_m.string_to_verif_domain_id (Pos.unmark chain) in
           let filter =
             match args with
             | [] -> None

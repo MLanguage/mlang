@@ -42,5 +42,3 @@ val pp_print_list_space :
   (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit
 
 val pp_unmark : ('a -> 'b -> 'c) -> 'a -> 'b Pos.marked -> 'c
-
-val format_chain_tag : Format.formatter -> Mast.chain_tag -> unit

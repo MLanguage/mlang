@@ -348,37 +348,30 @@ let fresh_rule_num =
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = RuleID (-1)
 
-type domain = {
-  dom_id : StrSet.t;
-  dom_names : StrSetSet.t;
+type 'a domain = {
+  dom_id : Mast.DomainId.t;
+  dom_names : Mast.DomainIdSet.t;
   dom_by_default : bool;
-  dom_min : StrSetSet.t;
-  dom_max : StrSetSet.t;
+  dom_min : Mast.DomainIdSet.t;
+  dom_max : Mast.DomainIdSet.t;
+  dom_data : 'a;
 }
 
-type rule_domain = { rdom : domain; rdom_computable : bool }
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
 
 type rule_data = {
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
   rule_vars : (Variable.id * variable_data) list;
   rule_number : rov_id Pos.marked;
-  rule_tags : Mast.chain_tag list;
 }
 
 module RuleMap = MapExt.Make (struct
   type t = rov_id
 
   let compare = compare
-end)
-
-module TagMap = MapExt.Make (struct
-  type t = Mast.chain_tag
-
-  let compare t1 t2 =
-    match (t1, t2) with
-    | Mast.Custom s1, Mast.Custom s2 -> String.compare s1 s2
-    | _ -> Stdlib.compare t1 t2
 end)
 
 (**{1 Verification conditions}*)
@@ -458,24 +451,26 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type verif_domain = { vdom : domain; vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auto_cc : bool }
+
+type verif_domain = verif_domain_data domain
 
 type 'variable condition_data_ = {
   cond_number : rov_id Pos.marked;
+  cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
-  cond_tags : Mast.chain_tag Pos.marked list;
 }
 
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     'v2 condition_data_ =
   {
     cond_number = cond.cond_number;
+    cond_domain = cond.cond_domain;
     cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
     cond_error =
       (let e, v = cond.cond_error in
        (e, Option.map f v));
-    cond_tags = cond.cond_tags;
   }
 
 type condition_data = variable condition_data_
@@ -489,9 +484,9 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_rule_domains : rule_domain StrSetMap.t;
-  program_verif_domains : verif_domain StrSetMap.t;
-  program_chainings : rule_domain StrMap.t;
+  program_rule_domains : rule_domain Mast.DomainIdMap.t;
+  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
@@ -614,89 +609,3 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
-
-let tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t = function
-  | Mast.Primitif -> StrSet.from_list [ "primitive" ]
-  | Mast.Corrective -> StrSet.from_list [ "corrective" ]
-  | Mast.Isf -> StrSet.from_list [ "isf" ]
-  | Mast.Taux -> StrSet.from_list [ "taux" ]
-  | Mast.Irisf -> StrSet.from_list [ "irisf" ]
-  | Mast.Base_hr -> StrSet.from_list [ "corrective"; "base_HR" ]
-  | Mast.Base_tl -> StrSet.from_list [ "corrective"; "base_tl" ]
-  | Mast.Base_tl_init -> StrSet.from_list [ "corrective"; "base_tl_init" ]
-  | Mast.Base_tl_rect -> StrSet.from_list [ "corrective"; "base_tl_rect" ]
-  | Mast.Base_initial -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
-  | Mast.Base_inr -> StrSet.from_list [ "corrective"; "base_INR" ]
-  | Mast.Base_inr_ref -> StrSet.from_list [ "corrective"; "base_inr_ref" ]
-  | Mast.Base_inr_tl -> StrSet.from_list [ "corrective"; "base_inr_tl" ]
-  | Mast.Base_inr_tl22 -> StrSet.from_list [ "corrective"; "base_inr_tl22" ]
-  | Mast.Base_inr_tl24 -> StrSet.from_list [ "corrective"; "base_inr_tl24" ]
-  | Mast.Base_inr_ntl -> StrSet.from_list [ "corrective"; "base_inr_ntl" ]
-  | Mast.Base_inr_ntl22 -> StrSet.from_list [ "corrective"; "base_inr_ntl22" ]
-  | Mast.Base_inr_ntl24 -> StrSet.from_list [ "corrective"; "base_inr_ntl24" ]
-  | Mast.Base_inr_inter22 ->
-      StrSet.from_list [ "corrective"; "base_inr_inter22" ]
-  | Mast.Base_inr_intertl ->
-      StrSet.from_list [ "corrective"; "base_inr_intertl" ]
-  | Mast.Base_inr_r9901 -> StrSet.from_list [ "corrective"; "base_inr_r9901" ]
-  | Mast.Base_inr_cimr07 -> StrSet.from_list [ "corrective"; "base_inr_cimr07" ]
-  | Mast.Base_inr_cimr24 -> StrSet.from_list [ "corrective"; "base_inr_cimr24" ]
-  | Mast.Base_inr_cimr99 -> StrSet.from_list [ "corrective"; "base_inr_cimr99" ]
-  | Mast.Base_inr_tlcimr07 ->
-      StrSet.from_list [ "corrective"; "base_inr_tlcimr07" ]
-  | Mast.Base_inr_tlcimr24 ->
-      StrSet.from_list [ "corrective"; "base_inr_tlcimr24" ]
-  | Mast.Base_abat98 -> StrSet.from_list [ "corrective"; "base_ABAT98" ]
-  | Mast.Base_abat99 -> StrSet.from_list [ "corrective"; "base_ABAT99" ]
-  | Mast.Base_majo -> StrSet.from_list [ "corrective"; "base_MAJO" ]
-  | Mast.Base_premier -> StrSet.from_list [ "corrective"; "base_premier" ]
-  | Mast.Base_anterieure -> StrSet.from_list [ "corrective"; "base_anterieure" ]
-  | Mast.Base_anterieure_cor ->
-      StrSet.from_list [ "corrective"; "base_anterieure_cor" ]
-  | Mast.Base_stratemajo -> StrSet.from_list [ "corrective"; "base_stratemajo" ]
-  | Mast.Non_auto_cc -> StrSet.from_list [ "non_auto_cc" ]
-  | Mast.Horizontale -> StrSet.from_list [ "horizontale" ]
-  | Mast.PrimCorr -> StrSet.from_list [ "irisf"; "corrective" ]
-  | Mast.Custom _ -> assert false
-(* StrSet.from_list [ "custom"; ch ] *)
-
-let string_to_rule_domain_id : string -> StrSet.t = function
-  | "primitif" -> StrSet.from_list [ "primitive" ]
-  | "corrective" -> StrSet.from_list [ "corrective" ]
-  | "isf" -> StrSet.from_list [ "isf" ]
-  | "taux" -> StrSet.from_list [ "taux" ]
-  | "irisf" -> StrSet.from_list [ "irisf" ]
-  | "base_HR" -> StrSet.from_list [ "corrective"; "base_HR" ]
-  | "base_tl" -> StrSet.from_list [ "corrective"; "base_tl" ]
-  | "base_tl_init" -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
-  | "base_tl_rect" -> StrSet.from_list [ "corrective"; "base_tl_rect" ]
-  | "base_INITIAL" -> StrSet.from_list [ "corrective"; "base_INITIAL" ]
-  | "base_INR" -> StrSet.from_list [ "corrective"; "base_INR" ]
-  | "base_inr_ref" -> StrSet.from_list [ "corrective"; "base_inr_ref" ]
-  | "base_inr_tl" -> StrSet.from_list [ "corrective"; "base_inr_tl" ]
-  | "base_inr_tl22" -> StrSet.from_list [ "corrective"; "base_inr_tl22" ]
-  | "base_inr_tl24" -> StrSet.from_list [ "corrective"; "base_inr_tl24" ]
-  | "base_inr_ntl" -> StrSet.from_list [ "corrective"; "base_inr_ntl" ]
-  | "base_inr_ntl22" -> StrSet.from_list [ "corrective"; "base_inr_ntl22" ]
-  | "base_inr_ntl24" -> StrSet.from_list [ "corrective"; "base_inr_ntl24" ]
-  | "base_inr_inter22" -> StrSet.from_list [ "corrective"; "base_inr_inter22" ]
-  | "base_inr_intertl" -> StrSet.from_list [ "corrective"; "base_inr_intertl" ]
-  | "base_inr_r9901" -> StrSet.from_list [ "corrective"; "base_inr_r9901" ]
-  | "base_inr_cimr07" -> StrSet.from_list [ "corrective"; "base_inr_cimr07" ]
-  | "base_inr_cimr24" -> StrSet.from_list [ "corrective"; "base_inr_cimr24" ]
-  | "base_inr_cimr99" -> StrSet.from_list [ "corrective"; "base_inr_cimr99" ]
-  | "base_inr_tlcimr07" ->
-      StrSet.from_list [ "corrective"; "base_inr_tlcimr07" ]
-  | "base_inr_tlcimr24" ->
-      StrSet.from_list [ "corrective"; "base_inr_tlcimr24" ]
-  | "base_ABAT98" -> StrSet.from_list [ "corrective"; "base_ABAT98" ]
-  | "base_ABAT99" -> StrSet.from_list [ "corrective"; "base_ABAT99" ]
-  | "base_MAJO" -> StrSet.from_list [ "corrective"; "base_MAJO" ]
-  | "base_premier" -> StrSet.from_list [ "corrective"; "base_premier" ]
-  | "base_anterieure" -> StrSet.from_list [ "corrective"; "base_anterieure" ]
-  | "base_anterieure_cor" ->
-      StrSet.from_list [ "corrective"; "base_anterieure_cor" ]
-  | "base_stratemajo" -> StrSet.from_list [ "corrective"; "base_stratemajo" ]
-  | "non_auto_cc" -> StrSet.from_list [ "non_auto_cc" ]
-  | "horizontale" -> StrSet.from_list [ "horizontale" ]
-  | _ -> raise Not_found

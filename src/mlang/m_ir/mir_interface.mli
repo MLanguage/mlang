@@ -28,8 +28,8 @@ type chain_order = {
 
 type full_program = {
   program : Mir.program;
-  domains_orders : chain_order StrSetMap.t;
-  chainings_orders : chain_order StrMap.t;
+  domains_orders : chain_order Mast.DomainIdMap.t;
+  chainings_orders : chain_order Mast.ChainingMap.t;
 }
 
 val to_full_program : Mir.program -> full_program

@@ -140,25 +140,25 @@ type rov_id = RuleID of int | VerifID of int
 
 module RuleMap : MapExt.T with type key = rov_id
 
-type domain = {
-  dom_id : StrSet.t;
-  dom_names : StrSetSet.t;
+type 'a domain = {
+  dom_id : Mast.DomainId.t;
+  dom_names : Mast.DomainIdSet.t;
   dom_by_default : bool;
-  dom_min : StrSetSet.t;
-  dom_max : StrSetSet.t;
+  dom_min : Mast.DomainIdSet.t;
+  dom_max : Mast.DomainIdSet.t;
+  dom_data : 'a;
 }
 
-type rule_domain = { rdom : domain; rdom_computable : bool }
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
 
 type rule_data = {
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
   rule_vars : (variable_id * variable_data) list;
   rule_number : rov_id Pos.marked;
-  rule_tags : Mast.chain_tag list;
 }
-
-module TagMap : MapExt.T with type key = Mast.chain_tag
 
 type error_descr = {
   kind : string Pos.marked;
@@ -176,13 +176,15 @@ type error = {
   typ : Mast.error_typ;
 }
 
-type verif_domain = { vdom : domain; vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auto_cc : bool }
+
+type verif_domain = verif_domain_data domain
 
 type 'variable condition_data_ = {
   cond_number : rov_id Pos.marked;
+  cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
-  cond_tags : Mast.chain_tag Pos.marked list;
 }
 
 type condition_data = variable condition_data_
@@ -195,9 +197,9 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
-  program_rule_domains : rule_domain StrSetMap.t;
-  program_verif_domains : verif_domain StrSetMap.t;
-  program_chainings : rule_domain StrMap.t;
+  program_rule_domains : rule_domain Mast.DomainIdMap.t;
+  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
@@ -334,7 +336,3 @@ val find_vars_by_io : program -> io -> VariableDict.t
 (** Returns a VariableDict.t containing all the variables that have a given io
     type, only one variable per name is entered in the VariableDict.t, this
     function chooses the one with the highest execution number*)
-
-val tag_to_rule_domain_id : Mast.chain_tag -> StrSet.t
-
-val string_to_rule_domain_id : string -> StrSet.t

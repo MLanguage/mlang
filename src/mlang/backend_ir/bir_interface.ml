@@ -135,20 +135,30 @@ let translate_external_conditions idmap
       [] conds
   in
   let program =
-    Mast.Verification
-      {
-        verif_number = (0, Pos.no_pos);
-        verif_tag_names = ([], Pos.no_pos);
-        verif_tags = [];
-        verif_applications = [ ("iliad", Pos.no_pos) ];
-        verif_conditions = verif_conds;
-      }
+    List.map
+      (fun item -> (item, Pos.no_pos))
+      [
+        Mast.Verification
+          {
+            verif_number = (0, Pos.no_pos);
+            verif_tag_names = ([], Pos.no_pos);
+            verif_applications = [ ("iliad", Pos.no_pos) ];
+            verif_conditions = verif_conds;
+          };
+        Mast.VerifDomDecl
+          {
+            dom_names = [ ([], Pos.no_pos) ];
+            dom_parents = [];
+            dom_by_default = true;
+            dom_data = { vdom_auto_cc = false };
+          };
+      ]
   in
-  let conds =
+  let _, conds =
     (* Leave a constant map empty is risky, it will fail if we allow tests to
        refer to M constants in their expressions *)
     Mast_to_mir.get_conds [ test_error ] Mast_to_mir.ConstMap.empty idmap
-      [ [ (program, Pos.no_pos) ] ]
+      [ program ]
   in
   Mir.VariableMap.fold
     (fun v data acc ->

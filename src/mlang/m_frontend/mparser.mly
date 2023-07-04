@@ -129,16 +129,16 @@ rule_domain_decl:
     in
     let init = None, None, None, None in
     let dno, dso, dco, dpdo = List.fold_left fold init rdom_params in
-    let rdom_names =
+    let dom_names =
       match dno with
       | None -> err "rule domain names must be defined" (mk_position $sloc)
       | Some dn -> dn
     in
     {
-      rdom_names;
-      rdom_parents = (match dso with None -> [] | Some ds -> ds);
-      rdom_computable = (match dco with None -> false | _ -> true);
-      rdom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_names;
+      dom_parents = (match dso with None -> [] | Some ds -> ds);
+      dom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_data = {rdom_computable = (match dco with None -> false | _ -> true)};
     }
   }
 
@@ -173,16 +173,16 @@ verif_domain_decl:
     in
     let init = None, None, None, None in
     let dno, dso, dao, dpdo = List.fold_left fold init vdom_params in
-    let vdom_names =
+    let dom_names =
       match dno with
       | None -> err "rule domain names must be defined" (mk_position $sloc)
       | Some dn -> dn
     in
     {
-      vdom_names;
-      vdom_parents = (match dso with None -> [] | Some ds -> ds);
-      vdom_auto_cc = (match dao with None -> false | _ -> true);
-      vdom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_names;
+      dom_parents = (match dso with None -> [] | Some ds -> ds);
+      dom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_data = {vdom_auto_cc = (match dao with None -> false | _ -> true);};
     }
   }
 
@@ -347,11 +347,9 @@ rule:
           "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
-    let rule_tags = Mast.tags_of_name (Pos.unmark rule_tag_names) in
     {
       rule_number;
       rule_tag_names;
-      rule_tags;
       rule_applications = apps;
       rule_chaining = c;
       rule_formulaes = formulaes;
@@ -412,11 +410,9 @@ verification:
           "this verification doesn't have an execution number"
           (Pos.get_position num)
     in
-    let verif_tags = Mast.tags_of_name (Pos.unmark verif_tag_names) in
     {
       verif_number;
       verif_tag_names;
-      verif_tags;
       verif_applications = apps;
       verif_conditions = conds;
     } }

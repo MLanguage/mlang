@@ -39,47 +39,6 @@ let format_application fmt (app : application) = Format.fprintf fmt "%s" app
 
 let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
-let format_chain_tag fmt (t : chain_tag) =
-  Format.pp_print_string fmt
-    (match t with
-    | Custom name -> "\"" ^ name ^ "\""
-    | PrimCorr -> ""
-    | Primitif -> "primitif"
-    | Corrective -> "corrective"
-    | Isf -> "isf"
-    | Taux -> "taux"
-    | Irisf -> "irisf"
-    | Base_hr -> "base_HR"
-    | Base_tl -> "base_tl"
-    | Base_tl_init -> "base_tl_init"
-    | Base_tl_rect -> "base_tl_rect"
-    | Base_inr -> "base_INR"
-    | Base_inr_ref -> "base_inr_ref"
-    | Base_inr_tl -> "base_inr_tl"
-    | Base_inr_tl22 -> "base_inr_tl22"
-    | Base_inr_tl24 -> "base_inr_tl24"
-    | Base_inr_ntl -> "base_inr_ntl"
-    | Base_inr_ntl22 -> "base_inr_ntl22"
-    | Base_inr_ntl24 -> "base_inr_ntl24"
-    | Base_inr_inter22 -> "base_inr_inter22"
-    | Base_inr_intertl -> "base_inr_intertl"
-    | Base_inr_r9901 -> "base_inr_r9901"
-    | Base_inr_cimr07 -> "base_inr_cimr07"
-    | Base_inr_cimr24 -> "base_inr_cimr24"
-    | Base_inr_cimr99 -> "base_inr_cimr99"
-    | Base_inr_tlcimr07 -> "base_inr_tlcimr07"
-    | Base_inr_tlcimr24 -> "base_inr_tlcimr24"
-    | Base_abat98 -> "base_ABAT98"
-    | Base_abat99 -> "base_ABAT99"
-    | Base_initial -> "base_INITIAL"
-    | Base_premier -> "base_premier"
-    | Base_anterieure -> "base_anterieure"
-    | Base_anterieure_cor -> "base_anterieure_cor"
-    | Base_majo -> "base_MAJO"
-    | Base_stratemajo -> "base_stratemajo"
-    | Non_auto_cc -> "non_auto_cc"
-    | Horizontale -> "horizontale")
-
 let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
 
 let format_func_name fmt (f : func_name) = Format.fprintf fmt "%s" f
@@ -332,25 +291,30 @@ let format_specialize_domain fmt (dl : string Pos.marked list Pos.marked list) =
 let format_domain_attribute attr fmt b =
   if b then Format.fprintf fmt " :@ %s" attr
 
-let format_rule_domain fmt (rd : rule_domain_decl) =
+let format_domain (pp_data : Format.formatter -> 'a -> unit) fmt
+    (d : 'a domain_decl) =
   Format.fprintf fmt "%a%a%a%a"
     (pp_print_list_comma
        (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string))))
-    rd.rdom_names format_specialize_domain rd.rdom_parents
-    (format_domain_attribute "calculable")
-    rd.rdom_computable
+    d.dom_names format_specialize_domain d.dom_parents
     (format_domain_attribute "par_defaut")
-    rd.rdom_by_default
+    d.dom_by_default pp_data d.dom_data
+
+let format_rule_domain fmt (rd : rule_domain_decl) =
+  let pp_data fmt data =
+    Format.fprintf fmt "%a"
+      (format_domain_attribute "calculable")
+      data.rdom_computable
+  in
+  format_domain pp_data fmt rd
 
 let format_verif_domain fmt (vd : verif_domain_decl) =
-  Format.fprintf fmt "%a%a%a%a"
-    (pp_print_list_comma
-       (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string))))
-    vd.vdom_names format_specialize_domain vd.vdom_parents
-    (format_domain_attribute "auto_cc")
-    vd.vdom_auto_cc
-    (format_domain_attribute "par_defaut")
-    vd.vdom_by_default
+  let pp_data fmt data =
+    Format.fprintf fmt "%a"
+      (format_domain_attribute "auto_cc")
+      data.vdom_auto_cc
+  in
+  format_domain pp_data fmt vd
 
 let format_source_file_item fmt (i : source_file_item) =
   match i with

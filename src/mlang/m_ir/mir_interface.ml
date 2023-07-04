@@ -55,20 +55,20 @@ type chain_order = {
 
 type full_program = {
   program : Mir.program;
-  domains_orders : chain_order StrSetMap.t;
-  chainings_orders : chain_order StrMap.t;
+  domains_orders : chain_order Mast.DomainIdMap.t;
+  chainings_orders : chain_order Mast.ChainingMap.t;
 }
 
 let to_full_program (program : program) : full_program =
   let domains_orders =
-    StrSetMap.fold
+    Mast.DomainIdMap.fold
       (fun dom_id _ domains_orders ->
         let vars_to_rules, chain_rules =
           Mir.RuleMap.fold
             (fun rov_id rule (vars, rules) ->
               let rule_domain = rule.rule_domain in
-              let is_max = StrSetSet.mem dom_id rule_domain.rdom.dom_max in
-              let is_eq = rule_domain.rdom.dom_id = dom_id in
+              let is_max = Mast.DomainIdSet.mem dom_id rule_domain.dom_max in
+              let is_eq = rule_domain.dom_id = dom_id in
               let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
               if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
@@ -88,15 +88,17 @@ let to_full_program (program : program) : full_program =
         let execution_order =
           Mir_dependency_graph.get_rules_execution_order dep_graph
         in
-        StrSetMap.add dom_id { dep_graph; execution_order } domains_orders)
-      program.program_rule_domains StrSetMap.empty
+        Mast.DomainIdMap.add dom_id
+          { dep_graph; execution_order }
+          domains_orders)
+      program.program_rule_domains Mast.DomainIdMap.empty
   in
   let chainings_orders =
     let chainings_roots =
-      StrMap.map
+      Mast.ChainingMap.map
         (fun chain_dom ->
           let dep_graph =
-            (StrSetMap.find chain_dom.rdom.dom_id domains_orders).dep_graph
+            (Mast.DomainIdMap.find chain_dom.dom_id domains_orders).dep_graph
           in
           (dep_graph, []))
         program.program_chainings
@@ -106,18 +108,20 @@ let to_full_program (program : program) : full_program =
         (fun rov_id rule chainings_roots ->
           match rule.rule_chain with
           | Some (chain_id, _) ->
-              let g, rs = StrMap.find chain_id chainings_roots in
-              StrMap.add chain_id (g, rov_id :: rs) chainings_roots
+              let g, rs = Mast.ChainingMap.find chain_id chainings_roots in
+              Mast.ChainingMap.add chain_id (g, rov_id :: rs) chainings_roots
           | None -> chainings_roots)
         program.program_rules chainings_roots
     in
-    StrMap.fold
+    Mast.ChainingMap.fold
       (fun chain_id (dep_graph, chain_roots) chainings_orders ->
         let dep_graph, execution_order =
           Mir_dependency_graph.pull_rules_dependencies dep_graph chain_roots
         in
-        StrMap.add chain_id { dep_graph; execution_order } chainings_orders)
-      chainings_roots StrMap.empty
+        Mast.ChainingMap.add chain_id
+          { dep_graph; execution_order }
+          chainings_orders)
+      chainings_roots Mast.ChainingMap.empty
   in
   { program; domains_orders; chainings_orders }
 

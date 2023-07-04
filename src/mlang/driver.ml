@@ -185,17 +185,17 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
-    StrSetMap.iter
+    Mast.DomainIdMap.iter
       (fun rdom_id Mir_interface.{ dep_graph; _ } ->
         Cli.debug_print
           "Checking for circular variable definitions for rule domain %a..."
-          (StrSet.pp ()) rdom_id;
+          (Mast.DomainId.pp ()) rdom_id;
         if
           Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
             true
         then Errors.raise_error "Cycles between rules.")
       full_m_program.domains_orders;
-    StrMap.iter
+    Mast.ChainingMap.iter
       (fun chaining_id Mir_interface.{ dep_graph; _ } ->
         Cli.debug_print
           "Checking for circular variable definitions for chaining %s..."
@@ -219,12 +219,16 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         in
         let order =
           try
-            let rdom_id = Mir.string_to_rule_domain_id chain in
-            match StrSetMap.find_opt rdom_id full_m_program.domains_orders with
+            let rdom_id = Dgfip_m.string_to_rule_domain_id chain in
+            match
+              Mast.DomainIdMap.find_opt rdom_id full_m_program.domains_orders
+            with
             | Some order -> order
             | None -> Errors.raise_error ("unknown rule domain: " ^ chain)
           with Not_found -> (
-            match StrMap.find_opt chain full_m_program.chainings_orders with
+            match
+              Mast.ChainingMap.find_opt chain full_m_program.chainings_orders
+            with
             | Some order -> order
             | None -> Errors.raise_error ("unknown chaining: " ^ chain))
         in

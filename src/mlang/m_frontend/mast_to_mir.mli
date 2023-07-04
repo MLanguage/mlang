@@ -78,7 +78,7 @@ val get_conds :
   float Pos.marked ConstMap.t ->
   Mir.idmap ->
   Mast.program ->
-  Mir.condition_data Mir.VariableMap.t
+  Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.VariableMap.t
 (** Returns a map whose keys are dummy variables and whose values are the
     verification conditions. *)
 
