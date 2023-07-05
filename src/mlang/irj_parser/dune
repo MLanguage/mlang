@@ -1,0 +1,4 @@
+(ocamllex irj_lexer)
+
+(menhir
+ (modules irj_parser))
