@@ -14,12 +14,14 @@ type literal = I of int | F of float
 
 type var_values = (string * literal * t) list
 
-type test_file = {
+type errors = (string * t) list
+
+type rappels = (string * string * (string * literal * t) * string * string * string * string * string) list
+
+type irj_file = {
   nom : string;
-  ep : var_values;
-  cp : var_values;
-  rp : var_values;
-  corr : (var_values * var_values * var_values) option;
+  prim : (var_values * errors * var_values);
+  rapp : (rappels * errors * var_values) option;
 }
 
 (*For both lexer and parser, from m_frontend/parse_utils*)

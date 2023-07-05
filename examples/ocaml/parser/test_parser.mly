@@ -20,48 +20,51 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %}
 
 %token<string> SYMBOL NAME INTEGER FLOAT
+/* Possibly use stronger constraints than just string on rappel's fields
+some are characters, some are 0/1, etc. */
 
 %token SLASH
 %token NOM FIP
-%token ENTREESP CONTROLESP RESULTATSP
-%token ENTREESC CONTROLESC RESULTATSC
-%token DATES AVISIR AVISCSG
+%token ENTREESPRIM CONTROLESPRIM RESULTATSPRIM
+%token ENTREESCORR CONTROLESCORR RESULTATSCORR
+%token ENTREESRAPP CONTROLESRAPP RESULTATSRAPP
+/* %token DATES AVISIR AVISCSG*/
 %token ENDSHARP
 
 %token EOF
 
-%type<Types_module.test_file> test_file
+%type<Types_module.irj_file> irj_file
 
-%start test_file
+%start irj_file
 
 %%
 
-
-
-test_file:
+irj_file:
 | NOM nom = name
   fip?
-  ENTREESP
-  ep = list(variable_and_value)
-  CONTROLESP
-  cp = list(variable_and_value)
-  RESULTATSP
-  rp = list(variable_and_value)
-  corr = correctif?
-  DATES?
-  AVISIR?
-  AVISCSG?
-  ENDSHARP { { nom; ep; cp; rp; corr } }
+  prim = primitif
+  rapp = rappels
+  ENDSHARP { { nom; prim; rapp } }
 | EOF { assert false }
 
-correctif:
-  ENTREESC
-  ec = list(variable_and_value)
-  CONTROLESC
-  cc = list(variable_and_value)
-  RESULTATSC
-  rc = list(variable_and_value) { (ec, cc, rc) }
+primitif:
+  ENTREESPRIM
+  entrees_primitif = list(variable_and_value)
+  CONTROLESPRIM
+  erreurs_attendues_primitif = list(error_code)
+  RESULTATSPRIM
+  resultats_attendus_primitif = list(variable_and_value) 
+  { (entrees_primitif, erreurs_attendues_primitif, resultats_attendus_primitif) }
 
+rappels:
+| ENTREESRAPP
+  entrees_rappels = list(rappel)
+  CONTROLESRAPP
+  erreurs_attendues_rappels = list(error_code)
+  RESULTATSRAPP
+  resultats_attendus_rappels = list(variable_and_value) 
+  { Some (entrees_rappels, erreurs_attendues_rappels, resultats_attendus_rappels) }
+| ENTREESCORR CONTROLESCORR RESULTATSCORR { None }
 
 name:
 | n = NAME { n }
@@ -73,3 +76,24 @@ fip:
 variable_and_value:
 | var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value), mk_position $sloc) }
 | var = SYMBOL SLASH value = FLOAT  { (var, F (float_of_string value), mk_position $sloc) }
+
+error_code:
+  error = SYMBOL { (error, mk_position $sloc) }
+
+rappel:
+  event_nb = INTEGER SLASH
+  rappel_nb = INTEGER SLASH
+  variable_change = variable_and_value SLASH
+  direction = SYMBOL SLASH
+  penalty_code = INTEGER SLASH
+  base_tolerance_legale = INTEGER SLASH
+  month_year = INTEGER SLASH
+  decl_2042_rect = INTEGER
+  { (event_nb, 
+     rappel_nb,
+     variable_change,
+     direction,
+     penalty_code,
+     base_tolerance_legale,
+     month_year,
+     decl_2042_rect) }

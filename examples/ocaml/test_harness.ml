@@ -4,16 +4,17 @@ type test_block = { block_name : string; block_data : Mvalue.revenue_code list }
 
 type test_data = { test_name : string; blocks : test_block list }
 
-let fichier (input_file : string) : Types_module.test_file = Fip.parse_file input_file
+let fichier (input_file : string) : Types_module.irj_file = Fip.parse_file input_file
 
 let revenue_code_list_from_var_values (values : Types_module.var_values) : Mvalue.revenue_code list =
   List.map (fun (var, value, pos) -> match value with
   | Types_module.F value -> Mvalue.{alias=var; value=value }
   | Types_module.I _ -> assert false) values
 
-let entry_list_parsed (fichier : Types_module.test_file) : Mvalue.revenue_code list = revenue_code_list_from_var_values fichier.ep
+(*let entry_list_parsed (fichier : Types_module.irj_file) : Mvalue.revenue_code list = revenue_code_list_from_var_values fichier.ep
 
-let reference_list_parsed (fichier : Types_module.test_file) : Mvalue.revenue_code list = revenue_code_list_from_var_values fichier.rp
+let reference_list_parsed (fichier : Types_module.irj_file) : Mvalue.revenue_code list = revenue_code_list_from_var_values fichier.rp
+*)
 
 let get_file_in_dir (dir_handle : Unix.dir_handle) : string list =
   let rec build_list file_list =
@@ -52,9 +53,10 @@ let print_rev_code (oc : Format.formatter) (rev_code : Mvalue.revenue_code) :
 
 let compute_discrepancies_from_file_2020 (fip_file : string) :
     (Mvalue.revenue_code * Mvalue.revenue_code) list =
-  let tax_result_array, errors = Ir.calculate_tax (entry_list_parsed (fichier fip_file)) in
+  let (entry_list, _, result_list) = (fichier fip_file).prim in
+  let tax_result_array, errors = Ir.calculate_tax (revenue_code_list_from_var_values entry_list) in
   let tax_result = Array.to_list tax_result_array in
-  let ref_list = reference_list_parsed (fichier fip_file) in
+  let ref_list = revenue_code_list_from_var_values result_list in
   let filtered_ref_list = filter_rev_code_list ref_list tax_result in
   let was_erased ref_list code : bool = not (List.mem code ref_list) in
   let erased_codes : revenue_code list =
@@ -133,8 +135,9 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
   Format.printf "Simple test on file %s.@." fip_file;
   let _oc = open_out (output_file_name ^ "_disc.txt") in
   let oc = Format.formatter_of_out_channel _oc in
+  let (entry_list, _, result_list) = (fichier fip_file).prim in
   let tax_result_array, errors =
-    try Ir.calculate_tax (entry_list_parsed (fichier fip_file))
+    try Ir.calculate_tax (revenue_code_list_from_var_values entry_list)
     with M_exn e_list ->
       Format.fprintf oc "TEST CASE %s ends with M Exception:@,@,%a@." fip_file
         print_errors e_list;
@@ -142,7 +145,7 @@ let compute_on_FIP_2020 (fip_file : string) (output_file_name : string) : unit =
       raise (M_exn e_list)
   in
   let tax_result = Array.to_list tax_result_array in
-  let ref_list = reference_list_parsed (fichier fip_file) in
+  let ref_list = revenue_code_list_from_var_values result_list in
   let print_list fmt code_list =
     Format.pp_print_list print_rev_code fmt code_list
   in
