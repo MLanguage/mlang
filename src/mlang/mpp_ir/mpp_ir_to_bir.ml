@@ -401,38 +401,38 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                   real_args ),
             pos );
         ] )
-  | Mpp_ir.Expr (Call (Program chain, _args), _) ->
-      let order, ctx =
-        let order, used_rule_domains, used_chainings =
-          match Mast.DomainIdMap.find_opt chain m_program.domains_orders with
-          | Some order ->
-              ( order,
-                Mast.DomainIdSet.add chain ctx.used_rule_domains,
-                ctx.used_chainings )
-          | None ->
-              if Mast.DomainId.cardinal chain = 1 then
-                let chain_id = Mast.DomainId.min_elt chain in
-                match
-                  Mast.ChainingMap.find_opt chain_id m_program.chainings_orders
-                with
-                | Some order ->
-                    ( order,
-                      ctx.used_rule_domains,
-                      Mast.ChainingSet.add chain_id ctx.used_chainings )
-                | None ->
-                    Errors.raise_error
-                      (Format.asprintf "Unknown chaining: %s" chain_id)
-              else
-                Errors.raise_error
-                  (Format.asprintf "Unknown rule domain: %a"
-                     (Mast.DomainId.pp ()) chain)
-        in
-        (order, { ctx with used_rule_domains; used_chainings })
+  | Mpp_ir.Expr (Call (Rules dom, _args), _) ->
+      let order =
+        match Mast.DomainIdMap.find_opt dom m_program.domains_orders with
+        | Some order -> order
+        | None ->
+            Errors.raise_error
+              (Format.asprintf "Unknown rule domain: %a" (Mast.DomainId.pp ())
+                 dom)
+      in
+      let ctx =
+        {
+          ctx with
+          used_rule_domains = Mast.DomainIdSet.add dom ctx.used_rule_domains;
+        }
       in
       wrap_m_code_call m_program order ctx
-  | Mpp_ir.Expr (Call (Verif (chain, filter), _args), _) ->
-      ( { ctx with verif_seen = true },
-        generate_verif_call m_program chain filter )
+  | Mpp_ir.Expr (Call (Chain chain, _args), _) ->
+      let order =
+        match Mast.ChainingMap.find_opt chain m_program.chainings_orders with
+        | Some order -> order
+        | None ->
+            Errors.raise_error (Format.sprintf "Unknown chaining: %s" chain)
+      in
+      let ctx =
+        {
+          ctx with
+          used_chainings = Mast.ChainingSet.add chain ctx.used_chainings;
+        }
+      in
+      wrap_m_code_call m_program order ctx
+  | Mpp_ir.Expr (Call (Verifs (dom, filter), _args), _) ->
+      ({ ctx with verif_seen = true }, generate_verif_call m_program dom filter)
   | Mpp_ir.Partition (filter, body) ->
       let func_of_filter =
         match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"

@@ -42,6 +42,9 @@ rule next_tokens = parse
     | "else"                    { [ELSE] }
     | "del"                     { [DELETE] }
     | "partition with"          { [PARTITION] }
+    | "call_m_rules"            { [CALL_M_RULES] }
+    | "call_m_chain"            { [CALL_M_CHAIN] }
+    | "call_m_verifs"           { [CALL_M_VERIFS] }
     | ':'                       { [COLON] }
     | integer as i              { [INT (int_of_string i)] }
     | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s

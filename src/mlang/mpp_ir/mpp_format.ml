@@ -32,10 +32,10 @@ let format_var_filter (fmt : formatter) (f : var_filter) : unit =
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
     (match f with
-    | Program chain ->
-        Format.asprintf "evaluate_program(%a)" (Mast.DomainId.pp ()) chain
-    | Verif (chain, filter) ->
-        Format.asprintf "verification(%a%a)" (Mast.DomainId.pp ()) chain
+    | Rules dom -> Format.asprintf "rules(%a)" (Mast.DomainId.pp ()) dom
+    | Chain chain -> Format.asprintf "chain(%s)" chain
+    | Verifs (dom, filter) ->
+        Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
           (pp_print_option format_var_filter)
           filter
     | MppFunction m -> m

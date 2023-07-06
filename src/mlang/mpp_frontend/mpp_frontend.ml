@@ -59,42 +59,6 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
           (Format.sprintf "unknown callable %s" x)
           (Pos.get_position cname)
 
-let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
-    (translated_names : string list) : mpp_callable * string Pos.marked list =
-  let name = Pos.unmark cname in
-  match name with
-  | "call_m" -> begin
-      match args with
-      | [] ->
-          Errors.raise_spanned_error "Expected a chain to call"
-            (Pos.get_position cname)
-      | chain :: args ->
-          let dom_id =
-            let ch = Pos.unmark chain in
-            try Dgfip_m.string_to_rule_domain_id ch
-            with _ -> Mast.DomainId.singleton ch
-          in
-          (Program dom_id, args)
-    end
-  | "call_m_verif" -> begin
-      match args with
-      | [] ->
-          Errors.raise_spanned_error "Expected a chain to call"
-            (Pos.get_position cname)
-      | chain :: args ->
-          let chain = Dgfip_m.string_to_verif_domain_id (Pos.unmark chain) in
-          let filter =
-            match args with
-            | [] -> None
-            | [ filter ] -> Some (filter_of_string filter)
-            | arg :: _ ->
-                Errors.raise_spanned_error "unexpected additional argument"
-                  (Pos.get_position arg)
-          in
-          (Verif (chain, filter), args)
-    end
-  | _ -> (to_mpp_callable cname translated_names, args)
-
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     (scope : mpp_compute_name list) (e : Mpp_ast.expr) :
     mpp_expr * Mpp_ast.var list =
@@ -110,8 +74,43 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     | Unop (Minus, e) ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Unop (Minus, e'), scope)
+    | CallRules (dom, args) ->
+        let c' =
+          let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
+          Rules dom_id
+        in
+        let new_scope = List.map Pos.unmark args in
+        let args' = List.map (to_scoped_var p) args in
+        (Call (c', args'), new_scope)
+    | CallChain args ->
+        let c', args =
+          match args with
+          | [] ->
+              Errors.raise_spanned_error "Expected a chain to call"
+                (Pos.get_position e)
+          | chain :: args -> (Chain (Pos.unmark chain), args)
+        in
+        let new_scope = List.map Pos.unmark args in
+        let args' = List.map (to_scoped_var p) args in
+        (Call (c', args'), new_scope)
+    | CallVerifs (dom, args) ->
+        let c' =
+          let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
+          let filter =
+            match args with
+            | [] -> None
+            | [ filter ] -> Some (filter_of_string filter)
+            | arg :: _ ->
+                Errors.raise_spanned_error "unexpected additional argument"
+                  (Pos.get_position arg)
+          in
+          Verifs (dom_id, filter)
+        in
+        let new_scope = List.map Pos.unmark args in
+        let args' = List.map (to_scoped_var p) args in
+        (Call (c', args'), new_scope)
     | Call (c, args) ->
-        let c', args = to_mpp_callable c args translated_names in
+        let c' = to_mpp_callable c translated_names in
         let new_scope = List.map Pos.unmark args in
         let args' = List.map (to_scoped_var p) args in
         (Call (c', args'), new_scope)

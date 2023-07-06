@@ -16,6 +16,9 @@ and expr_kind =
   | Constant of int
   | Variable of var
   | Unop of unop * expr
+  | CallRules of string Pos.marked list Pos.marked * var Pos.marked list
+  | CallChain of var Pos.marked list
+  | CallVerifs of string Pos.marked list Pos.marked * var Pos.marked list
   | Call of callable Pos.marked * var Pos.marked list
   | Binop of expr * binop * expr
 

@@ -12,6 +12,7 @@
 %token EQUAL NEQ  EQ LPAREN RPAREN LEFTARROW
 %token AND OR
 %token IF ELSE DELETE PARTITION COLON COMMA MINUS
+%token CALL_M_RULES CALL_M_CHAIN CALL_M_VERIFS
 
 %left OR
 %left AND
@@ -35,13 +36,35 @@ ident:
 | i = IDENT { (i, mk_position $sloc) }
 ;
 
+ident_list:
+| l = nonempty_list(ident) { (l, mk_position $sloc) }
+;
+
+%inline domain_args:
+| dom = ident_list { dom, [] }
+| dom = ident_list COMMA args = separated_list(COMMA, ident) { dom, args }
+
 stmt:
-| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN RPAREN NEWLINE { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
-| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN chain = ident RPAREN NEWLINE { Expr(Call(var, chain :: args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW CALL_M_RULES LPAREN dom = ident_list RPAREN NEWLINE
+    { Expr(CallRules(dom, args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW CALL_M_CHAIN LPAREN chain = ident RPAREN NEWLINE
+    { Expr(CallChain(chain :: args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW CALL_M_VERIFS LPAREN dom = ident_list RPAREN NEWLINE
+    { Expr(CallVerifs(dom, args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN RPAREN NEWLINE
+    { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
+| args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN chain = ident RPAREN NEWLINE
+    { Expr(Call(var, chain :: args), mk_position $sloc), mk_position $sloc }
 | var = IDENT EQ e = expr NEWLINE { Assign(var, e), mk_position $sloc }
 | DELETE var = IDENT NEWLINE { Delete var, mk_position $sloc }
+| CALL_M_RULES LPAREN dom_args = domain_args RPAREN NEWLINE
+    { Expr(CallRules(fst dom_args, snd dom_args), mk_position $sloc), mk_position $sloc }
+| CALL_M_CHAIN LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
+    { Expr(CallChain(args), mk_position $sloc), mk_position $sloc }
+| CALL_M_VERIFS LPAREN dom_args = domain_args RPAREN NEWLINE
+    { Expr(CallVerifs(fst dom_args, snd dom_args), mk_position $sloc), mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
-                              { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
+    { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f), mk_position $sloc }
 | IF b = expr COLON t = new_block { Conditional(b, t, []), mk_position $sloc }
 | PARTITION var = IDENT COLON b = new_block { Partition(var, b), mk_position $sloc }
@@ -67,6 +90,6 @@ expr:
 | var = IDENT { Variable var, mk_position $sloc }
 | MINUS e = expr { Unop(Minus, e), mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN
-                              { Call(var, args), mk_position $sloc }
+    { Call(var, args), mk_position $sloc }
 | e1 = expr b = binop e2 = expr { Binop(e1, b, e2), mk_position $sloc }
 ;
