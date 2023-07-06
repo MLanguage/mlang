@@ -28,7 +28,7 @@ some are characters, some are 0/1, etc. */
 %token ENTREESPRIM CONTROLESPRIM RESULTATSPRIM
 %token ENTREESCORR CONTROLESCORR RESULTATSCORR
 %token ENTREESRAPP CONTROLESRAPP RESULTATSRAPP
-/* %token DATES AVISIR AVISCSG*/
+%token DATES AVISIR AVISCSG
 %token ENDSHARP
 
 %token EOF
@@ -64,7 +64,7 @@ rappels:
   RESULTATSRAPP
   resultats_attendus_rappels = list(variable_and_value) 
   { Some (entrees_rappels, erreurs_attendues_rappels, resultats_attendus_rappels) }
-| ENTREESCORR CONTROLESCORR RESULTATSCORR { None }
+| ENTREESCORR CONTROLESCORR RESULTATSCORR DATES? AVISIR? AVISCSG? { None }
 
 name:
 | n = NAME { n }

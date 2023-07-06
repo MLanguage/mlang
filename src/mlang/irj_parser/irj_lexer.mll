@@ -52,12 +52,12 @@ rule token = parse
   { CONTROLESRAPP }
 | "#RESULTATS-RAPPELS"
   { RESULTATSRAPP }
-(*| "#DATES"
+| "#DATES"
   { DATES }
 | "#AVIS_IR"
   { AVISIR }
 | "#AVIS_CSG"
-  { AVISCSG }*)
+  { AVISCSG }
 | "##"
   { ENDSHARP }
 | '-'? ['0' - '9']+ as i
