@@ -24,12 +24,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 some are characters, some are 0/1, etc. */
 
 %token SLASH
+/* Used as field separator */
 %token NOM FIP
+/* Identifiers */
 %token ENTREESPRIM CONTROLESPRIM RESULTATSPRIM
-%token ENTREESCORR CONTROLESCORR RESULTATSCORR
+/* Primary computation data blocks */
 %token ENTREESRAPP CONTROLESRAPP RESULTATSRAPP
+/* Corrective computation data blocks */
+%token ENTREESCORR CONTROLESCORR RESULTATSCORR
+/* Old form of corrective data blocks, always present and empty in primary computation test files */
 %token DATES AVISIR AVISCSG
+/* Old empty data blocks rarely found in primary files from 2019 and older */
 %token ENDSHARP
+/* Mark the end of a record */
 
 %token EOF
 
@@ -57,6 +64,7 @@ primitif:
   { (entrees_primitif, erreurs_attendues_primitif, resultats_attendus_primitif) }
 
 rappels:
+/* The two constructions match respectively corrective test files and primary test files */
 | ENTREESRAPP
   entrees_rappels = list(rappel)
   CONTROLESRAPP
