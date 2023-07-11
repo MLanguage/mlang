@@ -49,7 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
-%token DOMAIN SPECIALIZE COMPUTABLE BY_DEFAULT AUTO_CC NON_AUTO_CC
+%token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT AUTO_CC NON_AUTO_CC
 
 %token EOF
 
@@ -156,23 +156,26 @@ verif_domain_decl:
 | DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, vdom_param_with_pos) SEMICOLON
   {
     let err msg pos = Errors.raise_spanned_error msg pos in
-    let fold (dno, dso, dao, dpdo) = function
-    | Some dn, _, _, _, pos ->
-        if dno = None then Some dn, dso, dao, dpdo
+    let fold (dno, dso, dvo, dao, dpdo) = function
+    | Some dn, _, _, _, _, pos ->
+        if dno = None then Some dn, dso, dvo, dao, dpdo
         else err "verif domain names are already defined" pos
-    | _, Some ds, _, _, pos ->
-        if dso = None then dno, Some ds, dao, dpdo
+    | _, Some ds, _, _, _, pos ->
+        if dso = None then dno, Some ds, dvo, dao, dpdo
         else err "verif domain specialization is already specified" pos
-    | _, _, Some da, _, pos ->
-        if dao = None then dno, dso, Some da, dpdo
+    | _, _, Some dv, _, _, pos ->
+        if dvo = None then dno, dso, Some dv, dao, dpdo
+        else err "verif domain authorization is already specified" pos
+    | _, _, _, Some da, _, pos ->
+        if dao = None then dno, dso, dvo, Some da, dpdo
         else err "verif domain is already auto-consistent" pos
-    | _, _, _, Some dpd, pos ->
-        if dpdo = None then dno, dso, dao, Some dpd
+    | _, _, _, _, Some dpd, pos ->
+        if dpdo = None then dno, dso, dvo, dao, Some dpd
         else err "verif domain is already defined by defaut" pos
-    | _, _, _, _, _ -> assert false
+    | _, _, _, _, _, _ -> assert false
     in
-    let init = None, None, None, None in
-    let dno, dso, dao, dpdo = List.fold_left fold init vdom_params in
+    let init = None, None, None, None, None in
+    let dno, dso, dvo, dao, dpdo = List.fold_left fold init vdom_params in
     let dom_names =
       match dno with
       | None -> err "rule domain names must be defined" (mk_position $sloc)
@@ -182,19 +185,37 @@ verif_domain_decl:
       dom_names;
       dom_parents = (match dso with None -> [] | Some ds -> ds);
       dom_by_default = (match dpdo with None -> false | _ -> true);
-      dom_data = {vdom_auto_cc = (match dao with None -> false | _ -> true);};
+      dom_data = {
+        vdom_auth = (match dvo with None -> [] | Some dv -> dv);
+        vdom_auto_cc = (match dao with None -> false | _ -> true);
+      };
     }
   }
 
+%inline var_computed_category:
+| BASE { ("base", mk_position $sloc) }
+| GIVEN_BACK { ("restituee", mk_position $sloc) }
+| TIMES { ("*", mk_position $sloc) }
+
+%inline var_computed_category_list:
+| l = var_computed_category* { (l, mk_position $sloc) }
+
+var_category_id:
+| INPUT l = symbol_list_with_pos { AuthInput l }
+| COMPUTED l = var_computed_category_list { AuthComputed l }
+| TIMES { AuthAll }
+
 vdom_param_with_pos:
 | vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (Some vdom_names, None, None, None, mk_position $sloc) }
+  { (Some vdom_names, None, None, None, None, mk_position $sloc) }
 | SPECIALIZE vdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (None, Some vdom_parents, None, None, mk_position $sloc) }
+  { (None, Some vdom_parents, None, None, None, mk_position $sloc) }
+| AUTHORIZE vcats = separated_nonempty_list(COMMA, var_category_id)
+  { (None, None, Some vcats, None, None, mk_position $sloc) }
 | AUTO_CC
-  { (None, None, Some (), None, mk_position $sloc) }
+  { (None, None, None, Some (), None, mk_position $sloc) }
 | BY_DEFAULT
-  { (None, None, None, Some (), mk_position $sloc) }
+  { (None, None, None, None, Some (), mk_position $sloc) }
 
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
@@ -241,6 +262,8 @@ computed_variable_descr:
 computed_attr_or_subtyp:
 | attr = variable_attribute { let (x, y) = attr in Attr (x,y) }
 | cat = symbol_with_pos { CompSubTyp cat }
+| BASE { CompSubTyp ("base", mk_position $sloc) }
+| GIVEN_BACK { CompSubTyp ("restituee", mk_position $sloc) }
 
 computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
@@ -269,6 +292,7 @@ descr = STRING { (parse_string descr, mk_position $sloc) }
 input_attr_or_category:
 | attr = variable_attribute { (None, Some attr) }
 | cat = symbol_with_pos { (Some cat, None) }
+| GIVEN_BACK { Some ("restituee", mk_position $sloc), None }
 
 input_variable:
 | name = input_variable_name INPUT

@@ -70,6 +70,10 @@ rule token = parse
   { RBRACKET }
 | "calculee"
   { COMPUTED }
+| "base"
+  { BASE }
+| "restituee"
+  { GIVEN_BACK }
 | "const"
   { CONST }
 | "alias"
@@ -112,6 +116,8 @@ rule token = parse
   { DOMAIN }
 | "specialise"
   { SPECIALIZE }
+| "autorise"
+  { AUTHORIZE }
 | "calculable"
   { COMPUTABLE }
 | "par_defaut"

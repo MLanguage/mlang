@@ -309,8 +309,21 @@ let format_rule_domain fmt (rd : rule_domain_decl) =
   format_domain pp_data fmt rd
 
 let format_verif_domain fmt (vd : verif_domain_decl) =
+  let pp_auth fmt = function
+    | AuthInput l ->
+        Format.fprintf fmt "saisie %a"
+          (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string)))
+          l
+    | AuthComputed l ->
+        Format.fprintf fmt "calculee %a"
+          (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string)))
+          l
+    | AuthAll -> Format.fprintf fmt "*"
+  in
   let pp_data fmt data =
-    Format.fprintf fmt "%a"
+    Format.fprintf fmt "%a%a"
+      (pp_print_list_comma pp_auth)
+      data.vdom_auth
       (format_domain_attribute "auto_cc")
       data.vdom_auto_cc
   in

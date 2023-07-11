@@ -87,6 +87,19 @@ let const_var_set_from_list (p : Bir.program)
         acc)
     Bir.VariableMap.empty names
 
+let simple_variable_categories =
+  let attrs = (StrMap.empty, Pos.no_pos) in
+  Mir.CatVarMap.empty
+  |> Mir.CatVarMap.add (Mir.CatComputed Mir.CatCompSet.empty) attrs
+  |> Mir.CatVarMap.add (Mir.CatComputed (Mir.CatCompSet.singleton Base)) attrs
+  |> Mir.CatVarMap.add
+       (Mir.CatComputed (Mir.CatCompSet.singleton GivenBack))
+       attrs
+  |> Mir.CatVarMap.add
+       (Mir.CatComputed
+          (Mir.CatCompSet.singleton Base |> Mir.CatCompSet.add GivenBack))
+       attrs
+
 let translate_external_conditions idmap
     (conds : Mast.expression Pos.marked list) :
     Bir.condition_data Bir.VariableMap.t =
@@ -150,15 +163,15 @@ let translate_external_conditions idmap
             dom_names = [ ([], Pos.no_pos) ];
             dom_parents = [];
             dom_by_default = true;
-            dom_data = { vdom_auto_cc = false };
+            dom_data = { vdom_auth = [ AuthAll ]; vdom_auto_cc = false };
           };
       ]
   in
   let _, conds =
     (* Leave a constant map empty is risky, it will fail if we allow tests to
        refer to M constants in their expressions *)
-    Mast_to_mir.get_conds [ test_error ] Mast_to_mir.ConstMap.empty idmap
-      [ program ]
+    Mast_to_mir.get_conds simple_variable_categories [ test_error ]
+      Mast_to_mir.ConstMap.empty idmap [ program ]
   in
   Mir.VariableMap.fold
     (fun v data acc ->

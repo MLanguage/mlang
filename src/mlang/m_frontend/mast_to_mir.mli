@@ -74,6 +74,7 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 (** Dummy execution number used for variable declarations *)
 
 val get_conds :
+  'a Mir.CatVarMap.t ->
   Mir.Error.t list ->
   float Pos.marked ConstMap.t ->
   Mir.idmap ->

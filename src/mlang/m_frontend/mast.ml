@@ -291,7 +291,15 @@ type verification = {
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_domain_data = { vdom_auto_cc : bool }
+type verif_auth_decl =
+  | AuthInput of string Pos.marked list Pos.marked
+  | AuthComputed of string Pos.marked list Pos.marked
+  | AuthAll
+
+type verif_domain_data = {
+  vdom_auth : verif_auth_decl list;
+  vdom_auto_cc : bool;
+}
 
 type verif_domain_decl = verif_domain_data domain_decl
 

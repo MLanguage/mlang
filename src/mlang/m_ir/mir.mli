@@ -21,6 +21,18 @@ type execution_number = {
   pos : Pos.t;
 }
 
+type cat_computed = Base | GivenBack
+
+module CatCompSet : SetExt.T with type elt = cat_computed
+
+type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+
+val pp_cat_variable : Format.formatter -> cat_variable -> unit
+
+module CatVarSet : SetExt.T with type elt = cat_variable
+
+module CatVarMap : MapExt.T with type key = cat_variable
+
 type variable_id = int
 (** Each variable has an unique ID *)
 
@@ -176,7 +188,7 @@ type error = {
   typ : Mast.error_typ;
 }
 
-type verif_domain_data = { vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
 
 type verif_domain = verif_domain_data domain
 
@@ -197,6 +209,7 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;

@@ -516,6 +516,56 @@ let get_var_categories (p : Mast.program) =
   in
   categories
 
+let get_var_category_map (p : Mast.program) :
+    Pos.t StrMap.t Pos.marked Mir.CatVarMap.t =
+  List.fold_left
+    (fun cats source_file ->
+      List.fold_left
+        (fun cats source_file_item ->
+          match Pos.unmark source_file_item with
+          | Mast.VarCatDecl (catDecl, posDecl) -> (
+              let attributes =
+                List.fold_left
+                  (fun res (str, pos) ->
+                    match StrMap.find_opt str res with
+                    | None -> StrMap.add str pos res
+                    | Some posAttr ->
+                        Errors.raise_spanned_error
+                          (Format.asprintf
+                             "attribute \"%s\" defined more than once:@;\
+                              Already defined %a" str Pos.format_position
+                             posAttr)
+                          pos)
+                  StrMap.empty catDecl.var_attributes
+              in
+              let add_cat cat cats =
+                match Mir.CatVarMap.find_opt cat cats with
+                | None -> Mir.CatVarMap.add cat (attributes, posDecl) cats
+                | Some (_, pos) ->
+                    Errors.raise_spanned_error
+                      (Format.asprintf
+                         "Category \"%a\" defined more than once:@;\
+                          Already defined %a" Mir.pp_cat_variable cat
+                         Pos.format_position pos)
+                      posDecl
+              in
+              match catDecl.var_type with
+              | Mast.Input ->
+                  let id = StrSet.from_marked_list catDecl.var_category in
+                  add_cat (Mir.CatInput id) cats
+              | Mast.Computed ->
+                  let base = Mir.CatCompSet.singleton Base in
+                  let givenBack = Mir.CatCompSet.singleton GivenBack in
+                  let baseAndGivenBack = base |> Mir.CatCompSet.add GivenBack in
+                  cats
+                  |> add_cat (Mir.CatComputed Mir.CatCompSet.empty)
+                  |> add_cat (Mir.CatComputed base)
+                  |> add_cat (Mir.CatComputed givenBack)
+                  |> add_cat (Mir.CatComputed baseAndGivenBack))
+          | _ -> cats)
+        cats source_file)
+    Mir.CatVarMap.empty p
+
 let check_var_category (categories : Mast.var_category_decl Pos.marked list)
     (var : Mast.variable_decl) =
   let rec category_included_in cbase ctest =
@@ -1494,10 +1544,85 @@ let get_rule_chains (domains : Mir.rule_domain Mast.DomainIdMap.t)
   let fold_sources chains source = List.fold_left fold_rules chains source in
   List.fold_left fold_sources Mast.ChainingMap.empty p
 
-let get_verif_domains (p : Mast.program) : Mir.verif_domain Mast.DomainIdMap.t =
+let cats_variable_from_decl_list cats l =
+  let rec aux res = function
+    | [] -> res
+    | Mast.AuthInput id :: t ->
+        let vcat = Mir.CatInput (StrSet.from_marked_list (Pos.unmark id)) in
+        aux (Mir.CatVarSet.add vcat res) t
+    | Mast.AuthComputed id :: t -> begin
+        match Pos.unmark id with
+        | [ ("base", _) ] ->
+            let base = Mir.CatCompSet.singleton Mir.Base in
+            let res = res |> Mir.CatVarSet.add (Mir.CatComputed base) in
+            aux res t
+        | [ ("base", _); ("*", _) ] ->
+            let base = Mir.CatCompSet.singleton Base in
+            let baseAndGivenBack = base |> Mir.CatCompSet.add GivenBack in
+            let res =
+              res
+              |> Mir.CatVarSet.add (Mir.CatComputed base)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+            in
+            aux res t
+        | [ ("restituee", _) ] ->
+            let givenBack = Mir.CatCompSet.singleton GivenBack in
+            let res = Mir.CatVarSet.add (Mir.CatComputed givenBack) res in
+            aux res t
+        | [ ("restituee", _); ("*", _) ] ->
+            let givenBack = Mir.CatCompSet.singleton GivenBack in
+            let baseAndGivenBack = givenBack |> Mir.CatCompSet.add Base in
+            let res =
+              res
+              |> Mir.CatVarSet.add (Mir.CatComputed givenBack)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+            in
+            aux res t
+        | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ]
+          ->
+            let baseAndGivenBack =
+              Mir.CatCompSet.singleton Base |> Mir.CatCompSet.add GivenBack
+            in
+            let res =
+              res |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+            in
+            aux res t
+        | [ ("*", _) ] ->
+            let base = Mir.CatCompSet.singleton Base in
+            let givenBack = Mir.CatCompSet.singleton GivenBack in
+            let baseAndGivenBack = base |> Mir.CatCompSet.add GivenBack in
+            let res =
+              res
+              |> Mir.CatVarSet.add (Mir.CatComputed base)
+              |> Mir.CatVarSet.add (Mir.CatComputed givenBack)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+            in
+            aux res t
+        | _ ->
+            Errors.raise_spanned_error "unlnown calculated variable category"
+              (Pos.get_position id)
+      end
+    | Mast.AuthAll :: t ->
+        let res =
+          Mir.CatVarMap.fold (fun c _ r -> Mir.CatVarSet.add c r) cats res
+        in
+        aux res t
+  in
+  aux Mir.CatVarSet.empty l
+
+let get_verif_domains (cats : 'a Mir.CatVarMap.t) (p : Mast.program) :
+    Mir.verif_domain Mast.DomainIdMap.t =
   let get_item = function
     | Mast.VerifDomDecl decl ->
-        let dom_data = { Mir.vdom_auto_cc = decl.Mast.dom_data.vdom_auto_cc } in
+        let catSet =
+          cats_variable_from_decl_list cats decl.Mast.dom_data.vdom_auth
+        in
+        let dom_data =
+          {
+            Mir.vdom_auth = catSet;
+            Mir.vdom_auto_cc = decl.Mast.dom_data.vdom_auto_cc;
+          }
+        in
         Some (decl, dom_data)
     | _ -> None
   in
@@ -1649,11 +1774,11 @@ let add_dummy_definitions_for_variable_declarations
         var_data)
     var_decl_data var_data
 
-let get_conds (error_decls : Mir.Error.t list)
+let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
     (const_map : float Pos.marked ConstMap.t) (idmap : Mir.idmap)
     (p : Mast.program) :
     Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.VariableMap.t =
-  let verif_domains = get_verif_domains p in
+  let verif_domains = get_verif_domains cats p in
   let conds =
     List.fold_left
       (fun conds source_file ->
@@ -1778,6 +1903,12 @@ let get_conds (error_decls : Mir.Error.t list)
 let translate (p : Mast.program) : Mir.program =
   let const_map = get_constants p in
   let var_category_decls = get_var_categories p in
+  let var_category_map = get_var_category_map p in
+  let _ =
+    Mir.CatVarMap.pp
+      (fun fmt (attrs, _) -> StrMap.pp (fun _ _ -> ()) fmt attrs)
+      Format.std_formatter var_category_map
+  in
   let var_decl_data, error_decls, idmap =
     get_variables_decl p var_category_decls const_map
   in
@@ -1851,14 +1982,18 @@ let translate (p : Mast.program) : Mir.program =
         }
       rules
   in
-  let verif_domains, conds = get_conds error_decls const_map idmap p in
-  {
-    Mir.program_rule_domains = rule_domains;
-    Mir.program_verif_domains = verif_domains;
-    Mir.program_chainings = rule_chains;
-    Mir.program_vars = var_data;
-    Mir.program_rules = rules;
-    Mir.program_conds = conds;
-    Mir.program_idmap = idmap;
-    Mir.program_exec_passes = [];
-  }
+  let verif_domains, conds =
+    get_conds var_category_map error_decls const_map idmap p
+  in
+  Mir.
+    {
+      program_var_categories = var_category_map;
+      program_rule_domains = rule_domains;
+      program_verif_domains = verif_domains;
+      program_chainings = rule_chains;
+      program_vars = var_data;
+      program_rules = rules;
+      program_conds = conds;
+      program_idmap = idmap;
+      program_exec_passes = [];
+    }

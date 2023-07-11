@@ -135,21 +135,23 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     Cli.debug_print "Reading M files...";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     let m_program =
-      ref
-        (let filebuf = Lexing.from_string Dgfip_m.declarations in
-         current_progress "internal DGFiP M";
-         let filebuf =
-           {
-             filebuf with
-             lex_curr_p =
-               { filebuf.lex_curr_p with pos_fname = "internal DGFiP M" };
-           }
-         in
-         try
-           let commands = Mparser.source_file token filebuf in
-           [ commands ]
-         with Mparser.Error ->
-           Errors.raise_error "M syntax error in internal DGFiP M")
+      if without_dgfip_m then ref []
+      else
+        ref
+          (let filebuf = Lexing.from_string Dgfip_m.declarations in
+           current_progress "internal DGFiP M";
+           let filebuf =
+             {
+               filebuf with
+               lex_curr_p =
+                 { filebuf.lex_curr_p with pos_fname = "internal DGFiP M" };
+             }
+           in
+           try
+             let commands = Mparser.source_file token filebuf in
+             [ commands ]
+           with Mparser.Error ->
+             Errors.raise_error "M\n       syntax error in internal DGFiP M")
     in
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";

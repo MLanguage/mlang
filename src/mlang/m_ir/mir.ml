@@ -58,6 +58,77 @@ let same_execution_number (en1 : execution_number) (en2 : execution_number) :
     bool =
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
+type cat_computed = Base | GivenBack
+
+let pp_cat_computed fmt = function
+  | Base -> Format.fprintf fmt "base"
+  | GivenBack -> Format.fprintf fmt "restituee"
+
+module CatCompSet = struct
+  include SetExt.Make (struct
+    type t = cat_computed
+
+    let compare = compare
+  end)
+
+  let pp ?(sep = " ") ?(pp_elt = pp_cat_computed) (_ : unit)
+      (fmt : Format.formatter) (set : t) : unit =
+    pp ~sep ~pp_elt () fmt set
+end
+
+type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+
+let pp_cat_variable fmt = function
+  | CatInput id ->
+      let pp fmt set =
+        let foldSet elt first =
+          let _ =
+            if first then Format.fprintf fmt "%s" elt
+            else Format.fprintf fmt " %s" elt
+          in
+          false
+        in
+        ignore (StrSet.fold foldSet set true)
+      in
+      Format.fprintf fmt "saisie %a" pp id
+  | CatComputed id ->
+      let pp fmt set =
+        let foldSet elt first =
+          let _ =
+            if first then Format.fprintf fmt "%a" pp_cat_computed elt
+            else Format.fprintf fmt " %a" pp_cat_computed elt
+          in
+          false
+        in
+        ignore (CatCompSet.fold foldSet set true)
+      in
+      Format.fprintf fmt "calculee %a" pp id
+
+module CatVarSet = struct
+  include SetExt.Make (struct
+    type t = cat_variable
+
+    let compare = compare
+  end)
+
+  let pp ?(sep = ", ") ?(pp_elt = pp_cat_variable) (_ : unit)
+      (fmt : Format.formatter) (set : t) : unit =
+    pp ~sep ~pp_elt () fmt set
+end
+
+module CatVarMap = struct
+  include MapExt.Make (struct
+    type t = cat_variable
+
+    let compare = compare
+  end)
+
+  let pp ?(sep = "; ") ?(pp_key = pp_cat_variable) ?(assoc = " => ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
+end
+
 type variable_id = int
 (** Each variable has an unique ID *)
 
@@ -451,7 +522,7 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type verif_domain_data = { vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
 
 type verif_domain = verif_domain_data domain
 
@@ -484,6 +555,7 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;
