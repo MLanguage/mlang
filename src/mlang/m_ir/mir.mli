@@ -29,6 +29,8 @@ type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
 
 val pp_cat_variable : Format.formatter -> cat_variable -> unit
 
+val compare_cat_variable : cat_variable -> cat_variable -> int
+
 module CatVarSet : SetExt.T with type elt = cat_variable
 
 module CatVarMap : MapExt.T with type key = cat_variable
@@ -50,6 +52,7 @@ type variable = {
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
   category : string list;
+  cats : CatVarSet.t;
   is_table : int option;
 }
 
@@ -197,6 +200,7 @@ type 'variable condition_data_ = {
   cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
+  cond_cats : CatVarSet.t;
 }
 
 type condition_data = variable condition_data_
@@ -243,6 +247,7 @@ module Variable : sig
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
     category : string list;
+    cats : CatVarSet.t;
     is_table : int option;
   }
 
@@ -256,6 +261,7 @@ module Variable : sig
     attributes:Mast.variable_attribute list ->
     origin:variable option ->
     category:string list ->
+    cats:CatVarSet.t ->
     is_table:int option ->
     variable
 

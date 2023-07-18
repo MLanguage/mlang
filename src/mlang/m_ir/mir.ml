@@ -90,25 +90,32 @@ let pp_cat_variable fmt = function
         in
         ignore (StrSet.fold foldSet set true)
       in
-      Format.fprintf fmt "saisie %a" pp id
+      Format.fprintf fmt "saisie(%a)" pp id
   | CatComputed id ->
       let pp fmt set =
         let foldSet elt first =
           let _ =
             if first then Format.fprintf fmt "%a" pp_cat_computed elt
-            else Format.fprintf fmt " %a" pp_cat_computed elt
+            else Format.fprintf fmt ", %a" pp_cat_computed elt
           in
           false
         in
         ignore (CatCompSet.fold foldSet set true)
       in
-      Format.fprintf fmt "calculee %a" pp id
+      Format.fprintf fmt "calculee(%a)" pp id
+
+let compare_cat_variable a b =
+  match (a, b) with
+  | CatInput _, CatComputed _ -> 1
+  | CatComputed _, CatInput _ -> -1
+  | CatInput id0, CatInput id1 -> StrSet.compare id0 id1
+  | CatComputed c0, CatComputed c1 -> CatCompSet.compare c0 c1
 
 module CatVarSet = struct
   include SetExt.Make (struct
     type t = cat_variable
 
-    let compare = compare
+    let compare = compare_cat_variable
   end)
 
   let pp ?(sep = ", ") ?(pp_elt = pp_cat_variable) (_ : unit)
@@ -120,7 +127,7 @@ module CatVarMap = struct
   include MapExt.Make (struct
     type t = cat_variable
 
-    let compare = compare
+    let compare = compare_cat_variable
   end)
 
   let pp ?(sep = "; ") ?(pp_key = pp_cat_variable) ?(assoc = " => ")
@@ -146,6 +153,7 @@ type variable = {
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
   category : string list;
+  cats : CatVarSet.t;
   is_table : int option;
 }
 
@@ -166,6 +174,7 @@ module Variable = struct
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
     category : string list;
+    cats : CatVarSet.t;
     is_table : int option;
   }
 
@@ -179,7 +188,8 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(category : string list) ~(is_table : int option) : t =
+      ~(category : string list) ~(cats : CatVarSet.t) ~(is_table : int option) :
+      t =
     {
       name;
       id = fresh_id ();
@@ -189,6 +199,7 @@ module Variable = struct
       attributes;
       origin;
       category;
+      cats;
       is_table;
     }
 
@@ -531,6 +542,7 @@ type 'variable condition_data_ = {
   cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
+  cond_cats : CatVarSet.t;
 }
 
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
@@ -542,6 +554,7 @@ let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     cond_error =
       (let e, v = cond.cond_error in
        (e, Option.map f v));
+    cond_cats = cond.cond_cats;
   }
 
 type condition_data = variable condition_data_

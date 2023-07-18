@@ -149,15 +149,9 @@ let computed_var_subtype cv : var_subtype =
   in
   if is_base then Base else Computed
 
-let computed_var_is_output cv =
-  List.exists
-    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
-    cv.Mast.comp_category
+let computed_var_is_output cv = cv.Mast.comp_is_givenback
 
-let input_var_is_output iv =
-  List.exists
-    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
-    iv.Mast.input_category
+let input_var_is_output iv = iv.Mast.input_is_givenback
 
 let consider_output is_ebcdic attribs =
   is_ebcdic = false

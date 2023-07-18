@@ -219,28 +219,54 @@ let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   (Bir.SVerif data, Pos.get_position data.cond_expr)
 
 let generate_verif_call (m_program : Mir_interface.full_program)
-    (chain : Mast.DomainId.t) (filter : Mpp_ir.var_filter option) :
+    (chain : Mast.DomainId.t)
+    (filter : Mpp_ir.var_filter option * Mir.CatVarSet.t * Mir.CatVarSet.t) :
     Bir.stmt list =
   let is_verif_relevant var cond =
     (* specific restriction *)
-    let test =
-      let verif_domain = cond.Mir.cond_domain in
-      let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
-      let is_eq = verif_domain.dom_id = chain in
-      (is_max || is_eq)
-      &&
-      match filter with
-      | None -> true
-      | Some filter -> var_filter_compatible_subtypes var.Mir.category filter
+    let verif_domain = cond.Mir.cond_domain in
+    let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
+    let is_eq = verif_domain.dom_id = chain in
+    let is_var_compatible =
+      Mir.CatVarSet.subset var.Mir.cats verif_domain.dom_data.vdom_auth
     in
-    if
-      test
-      && (not (Mast.DomainId.mem "horizontale" chain))
-      && List.exists (String.equal Mast.penality_category) var.Mir.category
-    then
-      Errors.raise_spanned_error "Penality variable used in verification"
-        (Pos.get_position cond.Mir.cond_expr)
-    else test
+    (is_max || is_eq) && is_var_compatible
+    &&
+    match filter with
+    | None, _, _ -> true
+    | Some filter, incl, excl ->
+        let t1 = var_filter_compatible_subtypes var.Mir.category filter in
+        let t2 =
+          (not
+             (Mir.CatVarSet.equal Mir.CatVarSet.empty
+                (Mir.CatVarSet.inter var.Mir.cats incl)))
+          && Mir.CatVarSet.equal Mir.CatVarSet.empty
+               (Mir.CatVarSet.inter var.Mir.cats excl)
+        in
+        if t1 <> t2 then
+          let pp_filter fmt = function
+            | Mpp_ir.Saisie None -> Format.fprintf fmt "saisie *"
+            | Mpp_ir.Saisie (Some us) -> Format.fprintf fmt "saisie %s" us
+            | Mpp_ir.Calculee None -> Format.fprintf fmt "calculee *"
+            | Mpp_ir.Calculee (Some us) -> Format.fprintf fmt "calculee %s" us
+          in
+          Errors.raise_error
+            (Format.asprintf
+               "t1 = %b t2 = %b@\n\
+                cat = %a -- filter = %a@\n\
+                cats = %a@\n\
+                -- incl = %a@\n\
+                -- excl = %a@\n"
+               t1 t2
+               (Format_mast.pp_print_list_comma Format.pp_print_string)
+               var.Mir.category pp_filter filter
+               (Mir.CatVarSet.pp ~sep:", " ())
+               var.Mir.cats
+               (Mir.CatVarSet.pp ~sep:", " ())
+               incl
+               (Mir.CatVarSet.pp ~sep:", " ())
+               excl)
+        else t1
   in
   let relevant_verifs =
     Mir.VariableMap.filter is_verif_relevant m_program.program.program_conds
@@ -330,7 +356,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~origin:None ~category:[] ~is_table:None
+                ~attributes:[] ~origin:None ~category:[]
+                ~cats:Mir.CatVarSet.empty ~is_table:None
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =

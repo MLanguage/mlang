@@ -23,21 +23,20 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
     | Local s -> s
     | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
-let format_var_filter (fmt : formatter) (f : var_filter) : unit =
-  match f with
-  | Saisie None -> pp_print_string fmt Mast.input_category
-  | Calculee None -> pp_print_string fmt Mast.computed_category
-  | Calculee (Some st) | Saisie (Some st) -> fprintf fmt "%s" st
-
 let format_callable (fmt : formatter) (f : mpp_callable) =
   fprintf fmt "%s"
     (match f with
     | Rules dom -> Format.asprintf "rules(%a)" (Mast.DomainId.pp ()) dom
     | Chain chain -> Format.asprintf "chain(%s)" chain
     | Verifs (dom, filter) ->
+        let pp_filter fmt = function
+          | None, _, _ -> ()
+          | Some _l, cvsIncl, cvsExcl ->
+              Format.fprintf fmt ",incl: %a,excl:%a" (Mir.CatVarSet.pp ())
+                cvsIncl (Mir.CatVarSet.pp ()) cvsExcl
+        in
         Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
-          (pp_print_option format_var_filter)
-          filter
+          pp_filter filter
     | MppFunction m -> m
     | Present -> "present"
     | Abs -> "abs"

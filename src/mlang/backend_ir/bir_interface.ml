@@ -87,20 +87,7 @@ let const_var_set_from_list (p : Bir.program)
         acc)
     Bir.VariableMap.empty names
 
-let simple_variable_categories =
-  let attrs = (StrMap.empty, Pos.no_pos) in
-  Mir.CatVarMap.empty
-  |> Mir.CatVarMap.add (Mir.CatComputed Mir.CatCompSet.empty) attrs
-  |> Mir.CatVarMap.add (Mir.CatComputed (Mir.CatCompSet.singleton Base)) attrs
-  |> Mir.CatVarMap.add
-       (Mir.CatComputed (Mir.CatCompSet.singleton GivenBack))
-       attrs
-  |> Mir.CatVarMap.add
-       (Mir.CatComputed
-          (Mir.CatCompSet.singleton Base |> Mir.CatCompSet.add GivenBack))
-       attrs
-
-let translate_external_conditions idmap
+let translate_external_conditions var_cats idmap
     (conds : Mast.expression Pos.marked list) :
     Bir.condition_data Bir.VariableMap.t =
   let check_boolean (mexpr : Mast.expression Pos.marked) =
@@ -170,8 +157,8 @@ let translate_external_conditions idmap
   let _, conds =
     (* Leave a constant map empty is risky, it will fail if we allow tests to
        refer to M constants in their expressions *)
-    Mast_to_mir.get_conds simple_variable_categories [ test_error ]
-      Mast_to_mir.ConstMap.empty idmap [ program ]
+    Mast_to_mir.get_conds var_cats [ test_error ] Mast_to_mir.ConstMap.empty
+      idmap [ program ]
   in
   Mir.VariableMap.fold
     (fun v data acc ->
@@ -243,7 +230,8 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) :
       func_outputs =
         var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
       func_conds =
-        translate_external_conditions p.idmap func_spec.Mast.spec_conditions;
+        translate_external_conditions p.mir_program.program_var_categories
+          p.idmap func_spec.Mast.spec_conditions;
     }
   with
   | Errors.StructuredError e ->

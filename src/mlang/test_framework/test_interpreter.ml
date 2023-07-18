@@ -80,7 +80,8 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
   (* some output variables are actually input, so we don't declare any for
      now *)
   let func_conds =
-    Bir_interface.translate_external_conditions program.idmap
+    Bir_interface.translate_external_conditions
+      program.mir_program.program_var_categories program.idmap
       (List.map
          (fun (var, value, pos) ->
            (* sometimes test outputs mention aliases so we have to catch thos

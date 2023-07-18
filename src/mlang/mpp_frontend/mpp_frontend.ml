@@ -35,6 +35,70 @@ let filter_of_string (s : string Pos.marked) : var_filter =
         (Format.sprintf "unknown variable category %s" unknown)
         (Pos.get_position s)
 
+let filter2_of_string (cats : Mir.CatVarSet.t) (s : string Pos.marked) :
+    Mir.CatVarSet.t * Mir.CatVarSet.t =
+  let us = Pos.unmark s in
+  match us with
+  | "saisie" ->
+      let incl =
+        Mir.CatVarSet.fold
+          (fun cv res ->
+            match cv with
+            | Mir.CatInput _ -> Mir.CatVarSet.add cv res
+            | _ -> res)
+          cats Mir.CatVarSet.empty
+      in
+      let excl =
+        Mir.CatVarSet.fold
+          (fun cv res ->
+            match cv with
+            | Mir.CatComputed _ -> Mir.CatVarSet.add cv res
+            | _ -> res)
+          cats Mir.CatVarSet.empty
+      in
+      (incl, excl)
+  | "calculee" ->
+      let incl =
+        Mir.CatVarSet.fold
+          (fun cv res ->
+            match cv with
+            | Mir.CatComputed _ -> Mir.CatVarSet.add cv res
+            | _ -> res)
+          cats Mir.CatVarSet.empty
+      in
+      (incl, Mir.CatVarSet.empty)
+  | "contexte" | "famille" | "revenu" | "penalite" ->
+      let incl = Mir.CatVarSet.singleton (Mir.CatInput (StrSet.singleton us)) in
+      let excl =
+        Mir.CatVarSet.fold
+          (fun cv res ->
+            match cv with
+            | Mir.CatComputed _ -> Mir.CatVarSet.add cv res
+            | _ -> res)
+          cats Mir.CatVarSet.empty
+      in
+      (incl, excl)
+  | "base" ->
+      let base = Mir.CatCompSet.singleton Mir.Base in
+      let baseAndGivenBack = Mir.CatCompSet.add Mir.GivenBack base in
+      let incl =
+        Mir.CatVarSet.singleton (Mir.CatComputed base)
+        |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+      in
+      (incl, Mir.CatVarSet.empty)
+  | "restituee" ->
+      let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
+      let baseAndGivenBack = Mir.CatCompSet.add Mir.Base givenBack in
+      let incl =
+        Mir.CatVarSet.singleton (Mir.CatComputed givenBack)
+        |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+      in
+      (incl, Mir.CatVarSet.empty)
+  | unknown ->
+      Errors.raise_spanned_error
+        (Format.sprintf "unknown variable category %s" unknown)
+        (Pos.get_position s)
+
 let to_scoped_var ?(scope = Input) (p : Mir.program)
     (var : Mpp_ast.var Pos.marked) : scoped_var =
   let var_s = Pos.unmark var in
@@ -97,9 +161,16 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
         let c' =
           let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
           let filter =
+            let cats =
+              Mir.CatVarMap.fold
+                (fun cv _ res -> Mir.CatVarSet.add cv res)
+                p.program_var_categories Mir.CatVarSet.empty
+            in
             match args with
-            | [] -> None
-            | [ filter ] -> Some (filter_of_string filter)
+            | [] -> (None, cats, Mir.CatVarSet.empty)
+            | [ filter ] ->
+                let incl, excl = filter2_of_string cats filter in
+                (Some (filter_of_string filter), incl, excl)
             | arg :: _ ->
                 Errors.raise_spanned_error "unexpected additional argument"
                   (Pos.get_position arg)

@@ -721,12 +721,32 @@ let get_variables_decl (p : Mast.program)
                             Mast.computed_category
                             :: List.map Pos.unmark cvar.comp_category
                           in
+                          let cat =
+                            let comp_set =
+                              List.fold_left
+                                (fun res (str, pos) ->
+                                  let elt =
+                                    match str with
+                                    | "base" -> Mir.Base
+                                    | "restituee" -> Mir.GivenBack
+                                    | _ ->
+                                        Errors.raise_spanned_error
+                                          "unknown computed category (must be \
+                                           \"base\" or \"restituee\")"
+                                          pos
+                                  in
+                                  Mir.CatCompSet.add elt res)
+                                Mir.CatCompSet.empty cvar.comp_category
+                            in
+                            Mir.CatComputed comp_set
+                          in
                           let new_var =
                             Mir.Variable.new_var cvar.Mast.comp_name None
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
                               ~attributes:cvar.comp_attributes ~category
+                              ~cats:(Mir.CatVarSet.singleton cat)
                               ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                           in
@@ -751,13 +771,8 @@ let get_variables_decl (p : Mast.program)
                               [ new_var ] idmap
                           in
                           let new_out_list =
-                            if
-                              List.exists
-                                (fun x ->
-                                  String.equal (Pos.unmark x)
-                                    Mast.givenback_category)
-                                cvar.Mast.comp_category
-                            then cvar.Mast.comp_name :: out_list
+                            if cvar.Mast.comp_is_givenback then
+                              cvar.Mast.comp_name :: out_list
                             else out_list
                           in
                           (new_vars, new_idmap, errors, new_out_list)
@@ -767,6 +782,14 @@ let get_variables_decl (p : Mast.program)
                             Mast.input_category
                             :: List.map Pos.unmark ivar.input_category
                           in
+                          let cat =
+                            let input_set =
+                              List.fold_left
+                                (fun res (str, _pos) -> StrSet.add str res)
+                                StrSet.empty ivar.input_category
+                            in
+                            Mir.CatInput input_set
+                          in
                           let new_var =
                             Mir.Variable.new_var ivar.Mast.input_name
                               (Some (Pos.unmark ivar.Mast.input_alias))
@@ -774,7 +797,9 @@ let get_variables_decl (p : Mast.program)
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
-                              ~category ~is_table:None
+                              ~category
+                              ~cats:(Mir.CatVarSet.singleton cat)
+                              ~is_table:None
                             (* Input variables also have a low order *)
                           in
                           let new_var_data =
@@ -939,7 +964,7 @@ let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
        local variables *)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin ~category:var.category
+    ~attributes:var.attributes ~origin ~category:var.category ~cats:var.cats
     ~is_table:var.is_table
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
@@ -1552,6 +1577,11 @@ let cats_variable_from_decl_list cats l =
         aux (Mir.CatVarSet.add vcat res) t
     | Mast.AuthComputed id :: t -> begin
         match Pos.unmark id with
+        | [] ->
+            let res =
+              res |> Mir.CatVarSet.add (Mir.CatComputed Mir.CatCompSet.empty)
+            in
+            aux res t
         | [ ("base", _) ] ->
             let base = Mir.CatCompSet.singleton Mir.Base in
             let res = res |> Mir.CatVarSet.add (Mir.CatComputed base) in
@@ -1593,6 +1623,7 @@ let cats_variable_from_decl_list cats l =
             let baseAndGivenBack = base |> Mir.CatCompSet.add GivenBack in
             let res =
               res
+              |> Mir.CatVarSet.add (Mir.CatComputed Mir.CatCompSet.empty)
               |> Mir.CatVarSet.add (Mir.CatComputed base)
               |> Mir.CatVarSet.add (Mir.CatComputed givenBack)
               |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
@@ -1835,6 +1866,26 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                               subtypes var.Mir.category)
                           [] (Pos.unmark e)
                       in
+                      let cond_cats =
+                        Mir.fold_expr_var
+                          (fun subtypes (var : Mir.variable) ->
+                            Mir.CatVarSet.fold
+                              (fun c res ->
+                                if
+                                  Mir.CatVarSet.mem c
+                                    cond_domain.dom_data.vdom_auth
+                                then Mir.CatVarSet.add c res
+                                else
+                                  Errors.raise_error
+                                    (Format.asprintf
+                                       "forbidden variable \"%s\" of category \
+                                        \"%a\" in verif %d of domain \"%a\""
+                                       (Pos.unmark var.Mir.name)
+                                       Mir.pp_cat_variable c rule_number
+                                       (Mast.DomainId.pp ()) cond_domain.dom_id))
+                              var.Mir.cats subtypes)
+                          Mir.CatVarSet.empty (Pos.unmark e)
+                      in
                       let err =
                         let err_name, err_var =
                           (Pos.unmark verif_cond).Mast.verif_cond_error
@@ -1877,7 +1928,8 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                             Mir.seq_number = 0;
                             Mir.pos = Pos.get_position verif_cond;
                           }
-                          ~attributes:[] ~origin:None ~category ~is_table:None
+                          ~attributes:[] ~origin:None ~category ~cats:cond_cats
+                          ~is_table:None
                       in
                       ( Mir.VariableMap.add dummy_var
                           Mir.
@@ -1888,6 +1940,7 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                               cond_domain;
                               cond_expr = e;
                               cond_error = err;
+                              cond_cats;
                             }
                           conds,
                         id_offset + 1 ))

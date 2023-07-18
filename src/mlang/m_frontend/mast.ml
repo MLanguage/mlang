@@ -227,6 +227,7 @@ type input_variable = {
   input_category : string Pos.marked list;
   input_attributes : variable_attribute list;
   input_alias : variable_name Pos.marked;  (** Unused for now *)
+  input_is_givenback : bool;
   input_description : string Pos.marked;
   input_typ : value_typ Pos.marked option;
 }
@@ -238,6 +239,7 @@ type computed_variable = {
   comp_attributes : variable_attribute list;
   comp_category : string Pos.marked list;
   comp_typ : value_typ Pos.marked option;
+  comp_is_givenback : bool;
   comp_description : string Pos.marked;
 }
 

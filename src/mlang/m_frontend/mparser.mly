@@ -276,6 +276,7 @@ computed_variable:
         (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
     comp_category = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
+    comp_is_givenback = List.exists (fun x -> match x with CompSubTyp ("restituee", _) -> true | _ -> false) subtyp;
     comp_description = descr;
     comp_typ = typ;
   }, mk_position $sloc) }
@@ -290,30 +291,32 @@ input_descr:
 descr = STRING { (parse_string descr, mk_position $sloc) }
 
 input_attr_or_category:
-| attr = variable_attribute { (None, Some attr) }
-| cat = symbol_with_pos { (Some cat, None) }
-| GIVEN_BACK { Some ("restituee", mk_position $sloc), None }
+| attr = variable_attribute { (None, Some attr, false) }
+| cat = symbol_with_pos { (Some cat, None, false) }
+| GIVEN_BACK { None, None, true }
 
 input_variable:
 | name = input_variable_name INPUT
   category_attrs = input_attr_or_category* alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
   SEMICOLON {
-  let (category, attrs) = List.split category_attrs in
+  let (category, attrs, givenback) =
+    List.fold_left
+      (fun (category, attrs, givenback) (c, a, r) -> 
+        match c, a, r with
+        | Some x, _, _ -> x :: category, attrs, givenback
+        | _, Some x, _ -> category, x :: attrs, givenback
+        | _, _, true -> category, attrs, true
+        | _, _, _ -> category, attrs, givenback)
+      ([], [], false)
+      category_attrs
+  in
   InputVar ({
     input_name = name;
-    input_category =
-      List.map
-        (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-        (List.filter (fun x -> x <> None) category);
-    input_attributes = begin
-        let attrs  =
-          List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-            (List.filter (fun x -> x <> None) attrs)
-        in
-        attrs
-    end;
+    input_category = category;
+    input_attributes = attrs;
     input_alias = alias;
+    input_is_givenback = givenback;
     input_typ = typ;
     input_description = descr;
   }, mk_position $sloc) }
