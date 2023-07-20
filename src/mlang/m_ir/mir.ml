@@ -80,29 +80,13 @@ type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
 
 let pp_cat_variable fmt = function
   | CatInput id ->
-      let pp fmt set =
-        let foldSet elt first =
-          let _ =
-            if first then Format.fprintf fmt "%s" elt
-            else Format.fprintf fmt " %s" elt
-          in
-          false
-        in
-        ignore (StrSet.fold foldSet set true)
-      in
-      Format.fprintf fmt "saisie(%a)" pp id
+      let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
+      Format.fprintf fmt "saisie%a" pp id
   | CatComputed id ->
       let pp fmt set =
-        let foldSet elt first =
-          let _ =
-            if first then Format.fprintf fmt "%a" pp_cat_computed elt
-            else Format.fprintf fmt ", %a" pp_cat_computed elt
-          in
-          false
-        in
-        ignore (CatCompSet.fold foldSet set true)
+        CatCompSet.iter (Format.fprintf fmt " %a" pp_cat_computed) set
       in
-      Format.fprintf fmt "calculee(%a)" pp id
+      Format.fprintf fmt "calculee%a" pp id
 
 let compare_cat_variable a b =
   match (a, b) with

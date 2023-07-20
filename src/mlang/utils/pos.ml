@@ -120,15 +120,45 @@ let retrieve_loc_text (pos : t) : string =
   else
     let sline = get_start_line pos in
     let eline = get_end_line pos in
-    let oc =
-      try open_in filename
+    let oc, input_line_opt =
+      try
+        if filename == Dgfip_m.internal_m then
+          let input_line_opt : unit -> string option =
+            let curr = ref 0 in
+            let src = Dgfip_m.declarations in
+            let lng = String.length src in
+            let rec new_curr () =
+              if !curr < lng then
+                if src.[!curr] = '\n' || src.[!curr] = '\r' || !curr = lng then (
+                  let res = !curr in
+                  while src.[!curr] = '\n' || src.[!curr] = '\r' do
+                    incr curr
+                  done;
+                  Some res)
+                else (
+                  incr curr;
+                  new_curr ())
+              else None
+            in
+            function
+            | () -> (
+                let p0 = !curr in
+                match new_curr () with
+                | None -> None
+                | Some p1 -> Some (String.sub Dgfip_m.declarations p0 (p1 - p0))
+                )
+          in
+          (None, input_line_opt)
+        else
+          let ocf = open_in filename in
+          let input_line_opt () : string option =
+            try Some (input_line ocf) with End_of_file -> None
+          in
+          (Some ocf, input_line_opt)
       with Sys_error _ ->
         Cli.error_print "File not found for displaying position : \"%s\""
           filename;
         exit (-1)
-    in
-    let input_line_opt () : string option =
-      try Some (input_line oc) with End_of_file -> None
     in
     let print_matched_line (line : string) (line_no : int) : string =
       let line_indent = indent_number line in
@@ -169,7 +199,7 @@ let retrieve_loc_text (pos : t) : string =
     in
     let pos_lines = get_lines 1 in
     let spaces = int_of_float (log10 (float_of_int eline)) + 1 in
-    close_in oc;
+    (match oc with Some ocf -> close_in ocf | _ -> ());
     Cli.format_with_style blue_style "%*s--> %s\n%s" spaces "" filename
       (Cli.add_prefix_to_each_line
          (Printf.sprintf "\n%s" (String.concat "\n" pos_lines))

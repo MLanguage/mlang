@@ -139,19 +139,20 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
       else
         ref
           (let filebuf = Lexing.from_string Dgfip_m.declarations in
-           current_progress "internal DGFiP M";
+           current_progress Dgfip_m.internal_m;
            let filebuf =
              {
                filebuf with
                lex_curr_p =
-                 { filebuf.lex_curr_p with pos_fname = "internal DGFiP M" };
+                 { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
              }
            in
            try
              let commands = Mparser.source_file token filebuf in
              [ commands ]
            with Mparser.Error ->
-             Errors.raise_error "M\n       syntax error in internal DGFiP M")
+             Errors.raise_error
+               (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m))
     in
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
@@ -221,7 +222,12 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         in
         let order =
           try
-            let rdom_id = Dgfip_m.string_to_rule_domain_id chain in
+            let rdom_id =
+              try
+                Mast.DomainId.from_list (Dgfip_m.string_to_rule_domain_id chain)
+              with Not_found ->
+                Errors.raise_error (Format.sprintf "Unknown rule tag: %s" chain)
+            in
             match
               Mast.DomainIdMap.find_opt rdom_id full_m_program.domains_orders
             with

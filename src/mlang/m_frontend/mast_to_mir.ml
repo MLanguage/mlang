@@ -491,14 +491,18 @@ let get_var_categories (p : Mast.program) =
                 begin
                   match already_defined with
                   | None -> ()
-                  | Some (_decl, pos) ->
-                      Cli.warning_print
-                        "Category \"%s\" defined more than once:@;\
-                         Already defined %a"
-                        (String.concat " "
-                           (Format_mast.format_var_type normalized_decl.var_type
-                           :: List.map Pos.unmark normalized_decl.var_category))
-                        Pos.format_position pos
+                  | Some (_decl, posDecl) ->
+                      Errors.raise_spanned_error
+                        (Format.asprintf
+                           "Category \"%s\" defined more than once:@;\
+                            Already defined %a"
+                           (String.concat " "
+                              (Format_mast.format_var_type
+                                 normalized_decl.var_type
+                              :: List.map Pos.unmark
+                                   normalized_decl.var_category))
+                           Pos.format_position posDecl)
+                        pos
                 end;
                 (normalized_decl, pos) :: decls
             | _ -> decls)

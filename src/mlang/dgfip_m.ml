@@ -1,3 +1,5 @@
+let internal_m = "internal DGFiP M"
+
 let variable_domains_declaration =
   {|
 variable saisie contexte
@@ -223,60 +225,40 @@ let declarations =
   Format.sprintf "%s%s%s" variable_domains_declaration rule_domains_declaration
     verif_domains_declaration
 
-let string_to_rule_domain_id : string -> Mast.DomainId.t = function
-  | "primitif" -> Mast.DomainId.from_list [ "primitive" ]
-  | "corrective" -> Mast.DomainId.from_list [ "corrective" ]
-  | "isf" -> Mast.DomainId.from_list [ "isf" ]
-  | "taux" -> Mast.DomainId.from_list [ "taux" ]
-  | "irisf" -> Mast.DomainId.from_list [ "irisf" ]
-  | "base_HR" -> Mast.DomainId.from_list [ "corrective"; "base_HR" ]
-  | "base_tl" -> Mast.DomainId.from_list [ "corrective"; "base_tl" ]
-  | "base_tl_init" -> Mast.DomainId.from_list [ "corrective"; "base_tl_init" ]
-  | "base_tl_rect" -> Mast.DomainId.from_list [ "corrective"; "base_tl_rect" ]
-  | "base_INITIAL" -> Mast.DomainId.from_list [ "corrective"; "base_INITIAL" ]
-  | "base_INR" -> Mast.DomainId.from_list [ "corrective"; "base_INR" ]
-  | "base_inr_ref" -> Mast.DomainId.from_list [ "corrective"; "base_inr_ref" ]
-  | "base_inr_tl" -> Mast.DomainId.from_list [ "corrective"; "base_inr_tl" ]
-  | "base_inr_tl22" -> Mast.DomainId.from_list [ "corrective"; "base_inr_tl22" ]
-  | "base_inr_tl24" -> Mast.DomainId.from_list [ "corrective"; "base_inr_tl24" ]
-  | "base_inr_ntl" -> Mast.DomainId.from_list [ "corrective"; "base_inr_ntl" ]
-  | "base_inr_ntl22" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_ntl22" ]
-  | "base_inr_ntl24" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_ntl24" ]
-  | "base_inr_inter22" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_inter22" ]
-  | "base_inr_intertl" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_intertl" ]
-  | "base_inr_r9901" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_r9901" ]
-  | "base_inr_cimr07" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_cimr07" ]
-  | "base_inr_cimr24" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_cimr24" ]
-  | "base_inr_cimr99" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_cimr99" ]
-  | "base_inr_tlcimr07" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_tlcimr07" ]
-  | "base_inr_tlcimr24" ->
-      Mast.DomainId.from_list [ "corrective"; "base_inr_tlcimr24" ]
-  | "base_ABAT98" -> Mast.DomainId.from_list [ "corrective"; "base_ABAT98" ]
-  | "base_ABAT99" -> Mast.DomainId.from_list [ "corrective"; "base_ABAT99" ]
-  | "base_MAJO" -> Mast.DomainId.from_list [ "corrective"; "base_MAJO" ]
-  | "base_premier" -> Mast.DomainId.from_list [ "corrective"; "base_premier" ]
-  | "base_anterieure" ->
-      Mast.DomainId.from_list [ "corrective"; "base_anterieure" ]
-  | "base_anterieure_cor" ->
-      Mast.DomainId.from_list [ "corrective"; "base_anterieure_cor" ]
-  | "base_stratemajo" ->
-      Mast.DomainId.from_list [ "corrective"; "base_stratemajo" ]
-  | "non_auto_cc" -> Mast.DomainId.from_list []
-  | "horizontale" -> Mast.DomainId.from_list [ "horizontale" ]
-  | str -> Errors.raise_error (Format.sprintf "Unknown rule tag: %s" str)
-
-let string_to_verif_domain_id : string -> Mast.DomainId.t = function
-  | "primitif" | "primitive" -> Mast.DomainId.from_list [ "primitive" ]
-  | "corrective" -> Mast.DomainId.from_list [ "corrective" ]
-  | "isf" -> Mast.DomainId.from_list [ "isf" ]
-  | "horizontale" -> Mast.DomainId.from_list [ "corrective"; "horizontale" ]
-  | str -> Errors.raise_error (Format.sprintf "Unknown verif tag: %s" str)
+let string_to_rule_domain_id : string -> string list = function
+  | "primitif" -> [ "primitive" ]
+  | "corrective" -> [ "corrective" ]
+  | "isf" -> [ "isf" ]
+  | "taux" -> [ "taux" ]
+  | "irisf" -> [ "irisf" ]
+  | "base_HR" -> [ "corrective"; "base_HR" ]
+  | "base_tl" -> [ "corrective"; "base_tl" ]
+  | "base_tl_init" -> [ "corrective"; "base_tl_init" ]
+  | "base_tl_rect" -> [ "corrective"; "base_tl_rect" ]
+  | "base_INITIAL" -> [ "corrective"; "base_INITIAL" ]
+  | "base_INR" -> [ "corrective"; "base_INR" ]
+  | "base_inr_ref" -> [ "corrective"; "base_inr_ref" ]
+  | "base_inr_tl" -> [ "corrective"; "base_inr_tl" ]
+  | "base_inr_tl22" -> [ "corrective"; "base_inr_tl22" ]
+  | "base_inr_tl24" -> [ "corrective"; "base_inr_tl24" ]
+  | "base_inr_ntl" -> [ "corrective"; "base_inr_ntl" ]
+  | "base_inr_ntl22" -> [ "corrective"; "base_inr_ntl22" ]
+  | "base_inr_ntl24" -> [ "corrective"; "base_inr_ntl24" ]
+  | "base_inr_inter22" -> [ "corrective"; "base_inr_inter22" ]
+  | "base_inr_intertl" -> [ "corrective"; "base_inr_intertl" ]
+  | "base_inr_r9901" -> [ "corrective"; "base_inr_r9901" ]
+  | "base_inr_cimr07" -> [ "corrective"; "base_inr_cimr07" ]
+  | "base_inr_cimr24" -> [ "corrective"; "base_inr_cimr24" ]
+  | "base_inr_cimr99" -> [ "corrective"; "base_inr_cimr99" ]
+  | "base_inr_tlcimr07" -> [ "corrective"; "base_inr_tlcimr07" ]
+  | "base_inr_tlcimr24" -> [ "corrective"; "base_inr_tlcimr24" ]
+  | "base_ABAT98" -> [ "corrective"; "base_ABAT98" ]
+  | "base_ABAT99" -> [ "corrective"; "base_ABAT99" ]
+  | "base_MAJO" -> [ "corrective"; "base_MAJO" ]
+  | "base_premier" -> [ "corrective"; "base_premier" ]
+  | "base_anterieure" -> [ "corrective"; "base_anterieure" ]
+  | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
+  | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
+  | "non_auto_cc" -> []
+  | "horizontale" -> [ "horizontale" ]
+  | _ -> raise Not_found
