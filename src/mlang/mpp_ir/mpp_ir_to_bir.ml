@@ -87,31 +87,6 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_filter_compatible_subtypes (subtypes : string list)
-    (filter : Mpp_ir.var_filter) : bool =
-  match (filter : Mpp_ir.var_filter) with
-  | Saisie st ->
-      (match st with
-      | None ->
-          List.exists
-            (fun st ->
-              match st with
-              | "contexte" | "famille" | "revenu" | "penalite" | "saisie" ->
-                  true
-              | _ -> false)
-            subtypes
-      | Some st -> List.mem st subtypes)
-      && List.for_all
-           (fun x -> not (String.equal Mast.computed_category x))
-           subtypes
-  | Calculee st -> (
-      match st with
-      | None ->
-          List.exists
-            (fun st -> match st with "base" | "calculee" -> true | _ -> false)
-            subtypes
-      | Some st -> List.mem st subtypes)
-
 let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
   List.exists
     (fun ((attr_name, _), (attr_value, _)) ->
@@ -219,67 +194,35 @@ let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   (Bir.SVerif data, Pos.get_position data.cond_expr)
 
 let generate_verif_call (m_program : Mir_interface.full_program)
-    (chain : Mast.DomainId.t)
-    (filter : Mpp_ir.var_filter option * Mir.CatVarSet.t * Mir.CatVarSet.t) :
-    Bir.stmt list =
-  let is_verif_relevant var cond =
+    (chain : Mast.DomainId.t) ((incl, excl) : Mir.CatVarSet.t * Mir.CatVarSet.t)
+    : Bir.stmt list =
+  let is_verif_relevant _ cond =
     (* specific restriction *)
+    let cats = Mir.cond_cats_to_set cond.Mir.cond_cats in
     let verif_domain = cond.Mir.cond_domain in
     let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
     let is_eq = verif_domain.dom_id = chain in
     let is_var_compatible =
-      Mir.CatVarSet.subset var.Mir.cats verif_domain.dom_data.vdom_auth
+      Mir.CatVarSet.subset cats verif_domain.dom_data.vdom_auth
     in
     (is_max || is_eq) && is_var_compatible
-    &&
-    match filter with
-    | None, _, _ -> true
-    | Some filter, incl, excl ->
-        let t1 = var_filter_compatible_subtypes var.Mir.category filter in
-        let t2 =
-          (not
-             (Mir.CatVarSet.equal Mir.CatVarSet.empty
-                (Mir.CatVarSet.inter var.Mir.cats incl)))
-          && Mir.CatVarSet.equal Mir.CatVarSet.empty
-               (Mir.CatVarSet.inter var.Mir.cats excl)
-        in
-        if t1 <> t2 then
-          let pp_filter fmt = function
-            | Mpp_ir.Saisie None -> Format.fprintf fmt "saisie *"
-            | Mpp_ir.Saisie (Some us) -> Format.fprintf fmt "saisie %s" us
-            | Mpp_ir.Calculee None -> Format.fprintf fmt "calculee *"
-            | Mpp_ir.Calculee (Some us) -> Format.fprintf fmt "calculee %s" us
-          in
-          Errors.raise_error
-            (Format.asprintf
-               "t1 = %b t2 = %b@\n\
-                cat = %a -- filter = %a@\n\
-                cats = %a@\n\
-                -- incl = %a@\n\
-                -- excl = %a@\n"
-               t1 t2
-               (Format_mast.pp_print_list_comma Format.pp_print_string)
-               var.Mir.category pp_filter filter
-               (Mir.CatVarSet.pp ~sep:", " ())
-               var.Mir.cats
-               (Mir.CatVarSet.pp ~sep:", " ())
-               incl
-               (Mir.CatVarSet.pp ~sep:", " ())
-               excl)
-        else t1
+    && (not
+          (Mir.CatVarSet.equal Mir.CatVarSet.empty
+             (Mir.CatVarSet.inter cats incl)))
+    && Mir.CatVarSet.equal Mir.CatVarSet.empty (Mir.CatVarSet.inter cats excl)
   in
   let relevant_verifs =
-    Mir.VariableMap.filter is_verif_relevant m_program.program.program_conds
+    Mir.RuleMap.filter is_verif_relevant m_program.program.program_conds
   in
   let verifs =
-    Mir.VariableMap.bindings relevant_verifs
-    |> List.sort (fun (v1, cond1) (v2, cond2) ->
+    Mir.RuleMap.bindings relevant_verifs
+    |> List.sort (fun (_, cond1) (_, cond2) ->
            let res =
              Mast.compare_error_type (fst cond1.Mir.cond_error).typ
                (fst cond2.Mir.cond_error).typ
            in
            if res <> 0 then res
-           else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
+           else Stdlib.compare cond1.Mir.cond_seq_id cond2.Mir.cond_seq_id)
     |> List.map snd
   in
   List.map
@@ -568,8 +511,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
         m_program.program.program_rules Mir.RuleMap.empty
     in
     let rules_and_verifs =
-      Mir.VariableMap.fold
-        (fun _var cond_data rules ->
+      Mir.RuleMap.fold
+        (fun _ cond_data rules ->
           let rov_id = Pos.unmark cond_data.Mir.cond_number in
           let rov_name =
             Pos.same_pos_as

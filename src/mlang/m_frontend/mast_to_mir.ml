@@ -1812,7 +1812,7 @@ let add_dummy_definitions_for_variable_declarations
 let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
     (const_map : float Pos.marked ConstMap.t) (idmap : Mir.idmap)
     (p : Mast.program) :
-    Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.VariableMap.t =
+    Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.RuleMap.t =
   let verif_domains = get_verif_domains cats p in
   let conds =
     List.fold_left
@@ -1856,20 +1856,6 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                           }
                           (Pos.unmark verif_cond).Mast.verif_cond_expr
                       in
-                      let category =
-                        (* Verifications are maped to a dummy variable, we use
-                           it to store all the subtypes of variables appearing
-                           in its expression to avoid going through it later
-                           when we sort verifications chains out *)
-                        Mir.fold_expr_var
-                          (fun subtypes var ->
-                            List.fold_left
-                              (fun subtypes st ->
-                                if List.mem st subtypes then subtypes
-                                else st :: subtypes)
-                              subtypes var.Mir.category)
-                          [] (Pos.unmark e)
-                      in
                       let cond_cats =
                         Mir.fold_expr_var
                           (fun subtypes (var : Mir.variable) ->
@@ -1878,7 +1864,10 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                                 if
                                   Mir.CatVarSet.mem c
                                     cond_domain.dom_data.vdom_auth
-                                then Mir.CatVarSet.add c res
+                                then
+                                  Mir.CatVarMap.add c
+                                    (1 + Mir.CatVarMap.find c res)
+                                    res
                                 else
                                   Errors.raise_error
                                     (Format.asprintf
@@ -1888,7 +1877,8 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                                        Mir.pp_cat_variable c rule_number
                                        (Mast.DomainId.pp ()) cond_domain.dom_id))
                               var.Mir.cats subtypes)
-                          Mir.CatVarSet.empty (Pos.unmark e)
+                          (Mir.CatVarMap.map (fun _ -> 0) cats)
+                          (Pos.unmark e)
                       in
                       let err =
                         let err_name, err_var =
@@ -1913,47 +1903,36 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                                (Pos.unmark err_name) Pos.format_position
                                (Pos.get_position err_name))
                       in
-                      let dummy_var =
-                        Mir.Variable.new_var
-                          (Pos.same_pos_as
-                             (Format.sprintf "verification_condition_%d"
-                                (Mir.Variable.fresh_id ()))
-                             e)
-                          None
-                          (Pos.same_pos_as
-                             (let () =
-                                Pos.format_position Format.str_formatter
-                                  (Pos.get_position e)
-                              in
-                              Format.flush_str_formatter ())
-                             e)
-                          {
-                            Mir.rule_number;
-                            Mir.seq_number = 0;
-                            Mir.pos = Pos.get_position verif_cond;
-                          }
-                          ~attributes:[] ~origin:None ~category ~cats:cond_cats
-                          ~is_table:None
-                      in
-                      ( Mir.VariableMap.add dummy_var
-                          Mir.
-                            {
-                              cond_number =
-                                Pos.same_pos_as (VerifID rule_number)
-                                  verif.verif_number;
-                              cond_domain;
-                              cond_expr = e;
-                              cond_error = err;
-                              cond_cats;
-                            }
-                          conds,
-                        id_offset + 1 ))
+                      let cond_seq_id = Mir.Variable.fresh_id () in
+                      let rov = Mir.VerifID rule_number in
+                      match Mir.RuleMap.find_opt rov conds with
+                      | Some c ->
+                          Errors.raise_spanned_error
+                            (Format.asprintf
+                               "verif number %d already defined: %a" rule_number
+                               Pos.format_position
+                               (Pos.get_position c.Mir.cond_number))
+                            (Pos.get_position verif.verif_number)
+                      | None ->
+                          ( Mir.RuleMap.add rov
+                              Mir.
+                                {
+                                  cond_seq_id;
+                                  cond_number =
+                                    Pos.same_pos_as rov verif.verif_number;
+                                  cond_domain;
+                                  cond_expr = e;
+                                  cond_error = err;
+                                  cond_cats;
+                                }
+                              conds,
+                            id_offset + 1 ))
                     (conds, 0) verif.Mast.verif_conditions
                 in
                 conds
             | _ -> conds)
           conds (List.rev source_file)) (* Order important for DGFiP *)
-      Mir.VariableMap.empty p
+      Mir.RuleMap.empty p
   in
   (verif_domains, conds)
 

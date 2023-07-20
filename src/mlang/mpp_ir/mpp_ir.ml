@@ -30,13 +30,10 @@ type scoped_var =
 
 type mpp_compute_name = string
 
-type var_filter = Saisie of string option | Calculee of string option
-
 type mpp_callable =
   | Rules of Mast.DomainId.t (* M codebase *)
   | Chain of Mast.chaining (* M codebase *)
-  | Verifs of
-      Mast.DomainId.t * (var_filter option * Mir.CatVarSet.t * Mir.CatVarSet.t)
+  | Verifs of Mast.DomainId.t * (Mir.CatVarSet.t * Mir.CatVarSet.t)
   (* M codebase *)
   | MppFunction of mpp_compute_name
   | Present

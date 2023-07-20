@@ -522,16 +522,18 @@ type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
 type verif_domain = verif_domain_data domain
 
 type 'variable condition_data_ = {
+  cond_seq_id : int;
   cond_number : rov_id Pos.marked;
   cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
-  cond_cats : CatVarSet.t;
+  cond_cats : int CatVarMap.t;
 }
 
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     'v2 condition_data_ =
   {
+    cond_seq_id = cond.cond_seq_id;
     cond_number = cond.cond_number;
     cond_domain = cond.cond_domain;
     cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
@@ -540,6 +542,11 @@ let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
        (e, Option.map f v));
     cond_cats = cond.cond_cats;
   }
+
+let cond_cats_to_set cats =
+  CatVarMap.fold
+    (fun cv nb res -> if nb > 0 then CatVarSet.add cv res else res)
+    cats CatVarSet.empty
 
 type condition_data = variable condition_data_
 
@@ -562,7 +569,7 @@ type program = {
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
-  program_conds : condition_data VariableMap.t;
+  program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;

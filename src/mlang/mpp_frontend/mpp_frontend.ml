@@ -19,23 +19,7 @@
 
 open Mpp_ir
 
-let filter_of_string (s : string Pos.marked) : var_filter =
-  let us = Pos.unmark s in
-  match us with
-  | "saisie" -> Saisie None
-  | "calculee" -> Calculee None
-  | "contexte" -> Saisie (Some us)
-  | "famille" -> Saisie (Some us)
-  | "revenu" -> Saisie (Some us)
-  | "penalite" -> Saisie (Some us)
-  | "base" -> Calculee (Some us)
-  | "restituee" -> Calculee (Some us)
-  | unknown ->
-      Errors.raise_spanned_error
-        (Format.sprintf "unknown variable category %s" unknown)
-        (Pos.get_position s)
-
-let filter2_of_string (cats : Mir.CatVarSet.t) (s : string Pos.marked) :
+let filter_of_string (cats : Mir.CatVarSet.t) (s : string Pos.marked) :
     Mir.CatVarSet.t * Mir.CatVarSet.t =
   let us = Pos.unmark s in
   match us with
@@ -167,10 +151,8 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
                 p.program_var_categories Mir.CatVarSet.empty
             in
             match args with
-            | [] -> (None, cats, Mir.CatVarSet.empty)
-            | [ filter ] ->
-                let incl, excl = filter2_of_string cats filter in
-                (Some (filter_of_string filter), incl, excl)
+            | [] -> (cats, Mir.CatVarSet.empty)
+            | [ filter ] -> filter_of_string cats filter
             | arg :: _ ->
                 Errors.raise_spanned_error "unexpected additional argument"
                   (Pos.get_position arg)

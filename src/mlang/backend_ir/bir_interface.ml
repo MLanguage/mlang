@@ -18,7 +18,7 @@ type bir_function = {
   func_variable_inputs : unit Bir.VariableMap.t;
   func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
   func_outputs : unit Bir.VariableMap.t;
-  func_conds : Bir.condition_data Bir.VariableMap.t;
+  func_conds : Bir.condition_data Mir.RuleMap.t;
 }
 
 let var_set_from_variable_name_list (p : Bir.program)
@@ -88,8 +88,8 @@ let const_var_set_from_list (p : Bir.program)
     Bir.VariableMap.empty names
 
 let translate_external_conditions var_cats idmap
-    (conds : Mast.expression Pos.marked list) :
-    Bir.condition_data Bir.VariableMap.t =
+    (conds : Mast.expression Pos.marked list) : Bir.condition_data Mir.RuleMap.t
+    =
   let check_boolean (mexpr : Mast.expression Pos.marked) =
     match Pos.unmark mexpr with
     | Binop (((And | Or), _), _, _) -> true
@@ -160,13 +160,9 @@ let translate_external_conditions var_cats idmap
     Mast_to_mir.get_conds var_cats [ test_error ] Mast_to_mir.ConstMap.empty
       idmap [ program ]
   in
-  Mir.VariableMap.fold
-    (fun v data acc ->
-      Bir.VariableMap.add
-        Bir.(var_from_mir default_tgv v)
-        (Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
-        acc)
-    conds Bir.VariableMap.empty
+  Mir.RuleMap.map
+    (fun data -> Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
+    conds
 
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let output_vars =
@@ -202,7 +198,7 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
     func_variable_inputs = input_vars;
     func_constant_inputs = Bir.VariableMap.empty;
     func_outputs = output_vars;
-    func_conds = Bir.VariableMap.empty;
+    func_conds = Mir.RuleMap.empty;
   }
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) :
@@ -310,7 +306,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
       p.mir_program []
   in
   let conds_stmts =
-    Bir.VariableMap.fold
+    Mir.RuleMap.fold
       (fun _ cond acc ->
         Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []

@@ -30,8 +30,7 @@ let format_callable (fmt : formatter) (f : mpp_callable) =
     | Chain chain -> Format.asprintf "chain(%s)" chain
     | Verifs (dom, filter) ->
         let pp_filter fmt = function
-          | None, _, _ -> ()
-          | Some _l, cvsIncl, cvsExcl ->
+          | cvsIncl, cvsExcl ->
               Format.fprintf fmt ",incl: %a,excl:%a" (Mir.CatVarSet.pp ())
                 cvsIncl (Mir.CatVarSet.pp ()) cvsExcl
         in

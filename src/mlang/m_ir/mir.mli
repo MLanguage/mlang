@@ -196,11 +196,12 @@ type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
 type verif_domain = verif_domain_data domain
 
 type 'variable condition_data_ = {
+  cond_seq_id : int;
   cond_number : rov_id Pos.marked;
   cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
-  cond_cats : CatVarSet.t;
+  cond_cats : int CatVarMap.t;
 }
 
 type condition_data = variable condition_data_
@@ -223,7 +224,7 @@ type program = {
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
-  program_conds : condition_data VariableMap.t;
+  program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables containing informations
           about actual variables in the conditions *)
   program_idmap : idmap;
@@ -319,6 +320,8 @@ val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v expression_ -> 'a
 val map_var_def_var : ('v -> 'v2) -> 'v variable_def_ -> 'v2 variable_def_
 
 val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
+
+val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
 
 val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
 
