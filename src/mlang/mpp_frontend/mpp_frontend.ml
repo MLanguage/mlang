@@ -119,6 +119,53 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
                ~scope:(if List.mem v scope then Output else Input)
                p (Pos.same_pos_as v e)),
           scope )
+    | NbVarCategory l ->
+        let cats =
+          let filter_cats pred =
+            Mir.CatVarMap.fold
+              (fun cv _ res ->
+                if pred cv then Mir.CatVarSet.add cv res else res)
+              p.program_var_categories Mir.CatVarSet.empty
+          in
+          match Pos.unmark l with
+          | [ "*" ] -> filter_cats (fun _ -> true)
+          | [ "saisie"; "*" ] ->
+              filter_cats (fun cv ->
+                  match cv with Mir.CatInput _ -> true | _ -> false)
+          | "saisie" :: strs ->
+              let cv = Mir.CatInput (StrSet.from_list strs) in
+              if Mir.CatVarMap.mem cv p.program_var_categories then
+                Mir.CatVarSet.singleton cv
+              else
+                Errors.raise_spanned_error "unknown variable category"
+                  (Pos.get_position l)
+          | [ "calculee"; "*" ] ->
+              let base = Mir.CatCompSet.singleton Mir.Base in
+              let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
+              let baseAndGivenBack = Mir.CatCompSet.union base givenBack in
+              Mir.CatVarSet.singleton (Mir.CatComputed Mir.CatCompSet.empty)
+              |> Mir.CatVarSet.add (Mir.CatComputed base)
+              |> Mir.CatVarSet.add (Mir.CatComputed givenBack)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+          | [ "calculee"; "base"; "*" ] ->
+              let base = Mir.CatCompSet.singleton Mir.Base in
+              let baseAndGivenBack = Mir.CatCompSet.add Mir.GivenBack base in
+              Mir.CatVarSet.singleton (Mir.CatComputed base)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+          | [ "calculee"; "restituee"; "*" ] ->
+              let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
+              let baseAndGivenBack = Mir.CatCompSet.add Mir.Base givenBack in
+              Mir.CatVarSet.singleton (Mir.CatComputed givenBack)
+              |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
+          | [ "calculee"; "base"; "restituee" ] ->
+              let baseAndGivenBack =
+                Mir.CatCompSet.singleton Mir.Base
+                |> Mir.CatCompSet.add Mir.GivenBack
+              in
+              Mir.CatVarSet.singleton (Mir.CatComputed baseAndGivenBack)
+          | _ -> assert false
+        in
+        (Call (NbVarCat cats, []), [])
     | Unop (Minus, e) ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Unop (Minus, e'), scope)

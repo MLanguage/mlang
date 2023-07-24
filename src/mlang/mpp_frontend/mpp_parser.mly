@@ -13,6 +13,7 @@
 %token AND OR
 %token IF ELSE DELETE PARTITION COLON COMMA MINUS
 %token CALL_M_RULES CALL_M_CHAIN CALL_M_VERIFS
+%token NB_CATEGORY INPUT COMPUTED BASE GIVEN_BACK STAR
 
 %left OR
 %left AND
@@ -34,6 +35,10 @@ compute_functions:
 
 ident:
 | i = IDENT { (i, mk_position $sloc) }
+| COMPUTED { ("calculee", mk_position $sloc) }
+| INPUT { ("saisie", mk_position $sloc) }
+| BASE { ("base", mk_position $sloc) }
+| GIVEN_BACK { ("restituee", mk_position $sloc) }
 ;
 
 ident_list:
@@ -85,8 +90,21 @@ new_block:
 | OR { Or }
 ;
 
+var_category:
+| STAR { (["*"], mk_position $sloc) }
+| INPUT STAR { (["*"], mk_position $sloc) }
+| INPUT l = nonempty_list(ident) { ("saisie" :: (List.map fst l), mk_position $sloc) }
+| COMPUTED STAR { (["calculee"; "*"], mk_position $sloc) }
+| COMPUTED BASE STAR { (["calulee"; "base"; "*"], mk_position $sloc) }
+| COMPUTED GIVEN_BACK STAR { (["calulee"; "restituee"; "*"], mk_position $sloc) }
+| COMPUTED BASE GIVEN_BACK | COMPUTED GIVEN_BACK BASE
+    { (["calulee"; "base"; "restituee"], mk_position $sloc) }
+;
+
 expr:
 | i = INT { Constant i, mk_position $sloc }
+| NB_CATEGORY LPAREN cat = var_category RPAREN
+    { NbVarCategory(cat), mk_position $sloc }
 | var = IDENT { Variable var, mk_position $sloc }
 | MINUS e = expr { Unop(Minus, e), mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN

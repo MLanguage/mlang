@@ -15,6 +15,7 @@ type expr = expr_kind Pos.marked
 and expr_kind =
   | Constant of int
   | Variable of var
+  | NbVarCategory of string list Pos.marked
   | Unop of unop * expr
   | CallRules of string Pos.marked list Pos.marked * var Pos.marked list
   | CallChain of var Pos.marked list

@@ -34,6 +34,7 @@ type mpp_callable =
   | Rules of Mast.DomainId.t (* M codebase *)
   | Chain of Mast.chaining (* M codebase *)
   | Verifs of Mast.DomainId.t * (Mir.CatVarSet.t * Mir.CatVarSet.t)
+  | NbVarCat of Mir.CatVarSet.t
   (* M codebase *)
   | MppFunction of mpp_compute_name
   | Present

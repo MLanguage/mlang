@@ -36,6 +36,8 @@ let format_callable (fmt : formatter) (f : mpp_callable) =
         in
         Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
           pp_filter filter
+    | NbVarCat cvs ->
+        Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
     | MppFunction m -> m
     | Present -> "present"
     | Abs -> "abs"

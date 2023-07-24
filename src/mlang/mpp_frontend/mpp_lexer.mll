@@ -42,9 +42,15 @@ rule next_tokens = parse
     | "else"                    { [ELSE] }
     | "del"                     { [DELETE] }
     | "partition with"          { [PARTITION] }
+    | "saisie"                  { [INPUT] }
+    | "calculee"                { [COMPUTED] }
+    | "base"                    { [BASE] }
+    | "restituee"               { [GIVEN_BACK] }
+    | "*"                       { [STAR] }
     | "call_m_rules"            { [CALL_M_RULES] }
     | "call_m_chain"            { [CALL_M_CHAIN] }
     | "call_m_verifs"           { [CALL_M_VERIFS] }
+    | "nb_category"             { [NB_CATEGORY] }
     | ':'                       { [COLON] }
     | integer as i              { [INT (int_of_string i)] }
     | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
