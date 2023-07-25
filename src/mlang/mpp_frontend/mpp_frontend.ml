@@ -19,7 +19,7 @@
 
 open Mpp_ir
 
-let filter_of_string (cats : Mir.CatVarSet.t) (s : string Pos.marked) :
+let _filter_of_string (cats : Mir.CatVarSet.t) (s : string Pos.marked) :
     Mir.CatVarSet.t * Mir.CatVarSet.t =
   let us = Pos.unmark s in
   match us with
@@ -188,27 +188,13 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
         let new_scope = List.map Pos.unmark args in
         let args' = List.map (to_scoped_var p) args in
         (Call (c', args'), new_scope)
-    | CallVerifs (dom, args) ->
+    | CallVerifs (dom, expr) ->
         let c' =
           let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
-          let filter =
-            let cats =
-              Mir.CatVarMap.fold
-                (fun cv _ res -> Mir.CatVarSet.add cv res)
-                p.program_var_categories Mir.CatVarSet.empty
-            in
-            match args with
-            | [] -> (cats, Mir.CatVarSet.empty)
-            | [ filter ] -> filter_of_string cats filter
-            | arg :: _ ->
-                Errors.raise_spanned_error "unexpected additional argument"
-                  (Pos.get_position arg)
-          in
+          let filter = fst (to_mpp_expr p translated_names scope expr) in
           Verifs (dom_id, filter)
         in
-        let new_scope = List.map Pos.unmark args in
-        let args' = List.map (to_scoped_var p) args in
-        (Call (c', args'), new_scope)
+        (Call (c', []), scope)
     | Call (c, args) ->
         let c' = to_mpp_callable c translated_names in
         let new_scope = List.map Pos.unmark args in

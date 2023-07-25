@@ -30,20 +30,6 @@ type scoped_var =
 
 type mpp_compute_name = string
 
-type mpp_callable =
-  | Rules of Mast.DomainId.t (* M codebase *)
-  | Chain of Mast.chaining (* M codebase *)
-  | Verifs of Mast.DomainId.t * (Mir.CatVarSet.t * Mir.CatVarSet.t)
-  | NbVarCat of Mir.CatVarSet.t
-  (* M codebase *)
-  | MppFunction of mpp_compute_name
-  | Present
-  | Abs
-  | Cast (* cast undefined to 0, identity function otherwise *)
-  | DepositDefinedVariables
-  | TaxbenefitCeiledVariables
-  | TaxbenefitDefinedVariables
-
 type mpp_filter = VarIsTaxBenefit
 
 type unop = Minus
@@ -58,6 +44,20 @@ and mpp_expr_kind =
   | Unop of unop * mpp_expr
   | Call of mpp_callable * scoped_var list
   | Binop of mpp_expr * binop * mpp_expr
+
+and mpp_callable =
+  | Rules of Mast.DomainId.t (* M codebase *)
+  | Chain of Mast.chaining (* M codebase *)
+  | Verifs of Mast.DomainId.t * mpp_expr
+  | NbVarCat of Mir.CatVarSet.t
+  (* M codebase *)
+  | MppFunction of mpp_compute_name
+  | Present
+  | Abs
+  | Cast (* cast undefined to 0, identity function otherwise *)
+  | DepositDefinedVariables
+  | TaxbenefitCeiledVariables
+  | TaxbenefitDefinedVariables
 
 type mpp_stmt = mpp_stmt_kind Pos.marked
 

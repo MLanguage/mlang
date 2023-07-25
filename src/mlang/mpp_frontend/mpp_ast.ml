@@ -19,7 +19,7 @@ and expr_kind =
   | Unop of unop * expr
   | CallRules of string Pos.marked list Pos.marked * var Pos.marked list
   | CallChain of var Pos.marked list
-  | CallVerifs of string Pos.marked list Pos.marked * var Pos.marked list
+  | CallVerifs of string Pos.marked list Pos.marked * expr
   | Call of callable Pos.marked * var Pos.marked list
   | Binop of expr * binop * expr
 

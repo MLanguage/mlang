@@ -23,29 +23,6 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
     | Local s -> s
     | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
-let format_callable (fmt : formatter) (f : mpp_callable) =
-  fprintf fmt "%s"
-    (match f with
-    | Rules dom -> Format.asprintf "rules(%a)" (Mast.DomainId.pp ()) dom
-    | Chain chain -> Format.asprintf "chain(%s)" chain
-    | Verifs (dom, filter) ->
-        let pp_filter fmt = function
-          | cvsIncl, cvsExcl ->
-              Format.fprintf fmt ",incl: %a,excl:%a" (Mir.CatVarSet.pp ())
-                cvsIncl (Mir.CatVarSet.pp ()) cvsExcl
-        in
-        Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
-          pp_filter filter
-    | NbVarCat cvs ->
-        Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
-    | MppFunction m -> m
-    | Present -> "present"
-    | Abs -> "abs"
-    | Cast -> "cast"
-    | DepositDefinedVariables -> "DepositDefinedVariables"
-    | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
-    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables")
-
 let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
   fprintf fmt "%s"
     (match b with
@@ -77,6 +54,24 @@ let rec format_expression (fmt : formatter) (expr : mpp_expr_kind Pos.marked) :
   | Binop (e1, b, e2) ->
       fprintf fmt "(%a %a %a)" format_expression e1 format_binop b
         format_expression e2
+
+and format_callable (fmt : formatter) (f : mpp_callable) =
+  fprintf fmt "%s"
+    (match f with
+    | Rules dom -> Format.asprintf "rules(%a)" (Mast.DomainId.pp ()) dom
+    | Chain chain -> Format.asprintf "chain(%s)" chain
+    | Verifs (dom, filter) ->
+        Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
+          format_expression filter
+    | NbVarCat cvs ->
+        Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
+    | MppFunction m -> m
+    | Present -> "present"
+    | Abs -> "abs"
+    | Cast -> "cast"
+    | DepositDefinedVariables -> "DepositDefinedVariables"
+    | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
+    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables")
 
 let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
   match Pos.unmark stmt with

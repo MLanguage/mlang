@@ -193,9 +193,63 @@ let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
   (Bir.SVerif data, Pos.get_position data.cond_expr)
 
+type filter_val = Int of int | Bool of bool
+
 let generate_verif_call (m_program : Mir_interface.full_program)
-    (chain : Mast.DomainId.t) ((incl, excl) : Mir.CatVarSet.t * Mir.CatVarSet.t)
-    : Bir.stmt list =
+    (chain : Mast.DomainId.t) (filter : Mpp_ir.mpp_expr) : Bir.stmt list =
+  let rec to_filter expr cond =
+    match Pos.unmark expr with
+    | Mpp_ir.Constant i -> Int i
+    | Mpp_ir.Variable _ ->
+        Errors.raise_spanned_error "forbidden subexpression"
+          (Pos.get_position expr)
+    | Mpp_ir.Unop (Mpp_ir.Minus, e) -> begin
+        match to_filter e cond with
+        | Int i -> Int (-i)
+        | Bool _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e)
+      end
+    | Mpp_ir.Call (Mpp_ir.NbVarCat cvs, _) ->
+        let i =
+          Mir.CatVarSet.fold
+            (fun cv res ->
+              match Mir.CatVarMap.find_opt cv cond.Mir.cond_cats with
+              | Some i -> i + res
+              | None ->
+                  Errors.raise_spanned_error "unknown variable category"
+                    (Pos.get_position expr))
+            cvs 0
+        in
+        Int i
+    | Mpp_ir.Call (_, _) ->
+        Errors.raise_spanned_error "forbidden function" (Pos.get_position expr)
+    | Mpp_ir.Binop (e1, b, e2) -> begin
+        let r1 = to_filter e1 cond in
+        let r2 = to_filter e2 cond in
+        match (r1, b, r2) with
+        | Bool b1, Mpp_ast.And, Bool b2 -> Bool (b1 && b2)
+        | Bool b1, Mpp_ast.Or, Bool b2 -> Bool (b1 || b2)
+        | Int i1, Mpp_ast.Gt, Int i2 -> Bool (i1 > i2)
+        | Int i1, Mpp_ast.Gte, Int i2 -> Bool (i1 >= i2)
+        | Int i1, Mpp_ast.Lt, Int i2 -> Bool (i1 < i2)
+        | Int i1, Mpp_ast.Lte, Int i2 -> Bool (i1 <= i2)
+        | Int i1, Mpp_ast.Eq, Int i2 -> Bool (i1 = i2)
+        | Int i1, Mpp_ast.Neq, Int i2 -> Bool (i1 <> i2)
+        | Int _, Mpp_ast.(And | Or), _ ->
+            Errors.raise_spanned_error "boolean expression expected"
+              (Pos.get_position e1)
+        | _, Mpp_ast.(And | Or), Int _ ->
+            Errors.raise_spanned_error "boolean expression expected"
+              (Pos.get_position e2)
+        | Bool _, Mpp_ast.(Gt | Gte | Lt | Lte | Eq | Neq), _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e1)
+        | _, Mpp_ast.(Gt | Gte | Lt | Lte | Eq | Neq), Bool _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e2)
+      end
+  in
   let is_verif_relevant _ cond =
     (* specific restriction *)
     let cats = Mir.cond_cats_to_set cond.Mir.cond_cats in
@@ -205,11 +259,8 @@ let generate_verif_call (m_program : Mir_interface.full_program)
     let is_var_compatible =
       Mir.CatVarSet.subset cats verif_domain.dom_data.vdom_auth
     in
-    (is_max || is_eq) && is_var_compatible
-    && (not
-          (Mir.CatVarSet.equal Mir.CatVarSet.empty
-             (Mir.CatVarSet.inter cats incl)))
-    && Mir.CatVarSet.equal Mir.CatVarSet.empty (Mir.CatVarSet.inter cats excl)
+    let is_kept = to_filter filter cond = Bool true in
+    (is_max || is_eq) && is_var_compatible && is_kept
   in
   let relevant_verifs =
     Mir.RuleMap.filter is_verif_relevant m_program.program.program_conds

@@ -48,14 +48,23 @@ ident_list:
 %inline domain_args:
 | dom = ident_list { dom, [] }
 | dom = ident_list COMMA args = separated_list(COMMA, ident) { dom, args }
+;
+
+%inline domain_expr:
+| dom = ident_list
+  {
+    let no_pos e = (e, Pos.no_pos) in
+    let true_expr = no_pos (Binop (no_pos (Constant 0), Eq, no_pos (Constant 0))) in
+    dom, true_expr
+  }
+| dom = ident_list COMMA expr = expr { dom, expr }
+;
 
 stmt:
 | args = separated_list(COMMA, ident) LEFTARROW CALL_M_RULES LPAREN dom = ident_list RPAREN NEWLINE
     { Expr(CallRules(dom, args), mk_position $sloc), mk_position $sloc }
 | args = separated_list(COMMA, ident) LEFTARROW CALL_M_CHAIN LPAREN chain = ident RPAREN NEWLINE
     { Expr(CallChain(chain :: args), mk_position $sloc), mk_position $sloc }
-| args = separated_list(COMMA, ident) LEFTARROW CALL_M_VERIFS LPAREN dom = ident_list RPAREN NEWLINE
-    { Expr(CallVerifs(dom, args), mk_position $sloc), mk_position $sloc }
 | args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN RPAREN NEWLINE
     { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | args = separated_list(COMMA, ident) LEFTARROW var = ident LPAREN chain = ident RPAREN NEWLINE
@@ -66,8 +75,8 @@ stmt:
     { Expr(CallRules(fst dom_args, snd dom_args), mk_position $sloc), mk_position $sloc }
 | CALL_M_CHAIN LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
     { Expr(CallChain(args), mk_position $sloc), mk_position $sloc }
-| CALL_M_VERIFS LPAREN dom_args = domain_args RPAREN NEWLINE
-    { Expr(CallVerifs(fst dom_args, snd dom_args), mk_position $sloc), mk_position $sloc }
+| CALL_M_VERIFS LPAREN dom_expr = domain_expr RPAREN NEWLINE
+    { Expr(CallVerifs(fst dom_expr, snd dom_expr), mk_position $sloc), mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN NEWLINE
     { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f), mk_position $sloc }

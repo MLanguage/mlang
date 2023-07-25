@@ -107,50 +107,50 @@ ENCH_TL():
   outputs <- call_m_chain(ENCH_TL)
 
 verif_calcul_primitive_isf_raw():
-  call_m_verifs(isf,calculee)
+  call_m_verifs(isf, nb_category(calculee *) > 0)
 
 verif_calcul_primitive_raw():
   verif_calcul_primitive_isf_raw()
-  call_m_verifs(primitive,calculee)
+  call_m_verifs(primitive, nb_category(calculee *) > 0)
 
 verif_calcul_corrective_raw():
   outputs <- calcul_primitif_isf()
   verif_calcul_primitive_isf_raw()
-  call_m_verifs(corrective,calculee)
+  call_m_verifs(corrective, nb_category(calculee *) > 0)
 
 verif_saisie_cohe_primitive_isf_raw():
-  call_m_verifs(isf,saisie)
+  call_m_verifs(isf, nb_category(saisie *) > 0 and nb_category(calculee *) == 0)
 
 verif_saisie_cohe_primitive_raw():
   verif_saisie_cohe_primitive_isf_raw()
   outputs <- calcul_primitif_isf()
   verif_calcul_primitive_isf_raw()
-  call_m_verifs(primitive,saisie)
+  call_m_verifs(primitive, nb_category(saisie *) > 0 and nb_category(calculee *) == 0)
 
 verif_saisie_cohe_corrective_raw():
   verif_saisie_cohe_primitive_isf_raw()
-  call_m_verifs(corrective,saisie)
+  call_m_verifs(corrective, nb_category(saisie *) > 0 and nb_category(calculee *) == 0)
 
 verif_cohe_horizontale_raw():
   call_m_verifs(horizontale corrective)
 
 verif_contexte_cohe_primitive_raw():
-  call_m_verifs(primitive,contexte)
+  call_m_verifs(primitive, nb_category(saisie contexte) > 0 and nb_category(calculee *) == 0)
 
 verif_contexte_cohe_corrective_raw():
-  call_m_verifs(corrective,contexte)
+  call_m_verifs(corrective, nb_category(saisie contexte) > 0 and nb_category(calculee *) == 0)
 
 verif_famille_cohe_primitive_raw():
-  call_m_verifs(primitive,famille)
+  call_m_verifs(primitive, nb_category(saisie famille) > 0 and nb_category(calculee *) == 0)
 
 verif_famille_cohe_corrective_raw():
-  call_m_verifs(corrective,famille)
+  call_m_verifs(corrective, nb_category(saisie famille) > 0 and nb_category(calculee *) == 0)
 
 verif_revenu_cohe_primitive_raw():
-  call_m_verifs(primitive,revenu)
+  call_m_verifs(primitive, nb_category(saisie revenu) > 0 and nb_category(calculee *) == 0)
 
 verif_revenu_cohe_corrective_raw():
-  call_m_verifs(corrective,revenu)
+  call_m_verifs(corrective, nb_category(saisie revenu) > 0 and nb_category(calculee *) == 0)
 
 dgfip_calculation():
   APPLI_OCEANS = 0
