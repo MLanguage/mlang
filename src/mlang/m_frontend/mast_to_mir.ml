@@ -1652,12 +1652,7 @@ let get_verif_domains (cats : 'a Mir.CatVarMap.t) (p : Mast.program) :
         let catSet =
           cats_variable_from_decl_list cats decl.Mast.dom_data.vdom_auth
         in
-        let dom_data =
-          {
-            Mir.vdom_auth = catSet;
-            Mir.vdom_auto_cc = decl.Mast.dom_data.vdom_auto_cc;
-          }
-        in
+        let dom_data = { Mir.vdom_auth = catSet } in
         Some (decl, dom_data)
     | _ -> None
   in

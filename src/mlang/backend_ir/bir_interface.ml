@@ -150,7 +150,7 @@ let translate_external_conditions var_cats idmap
             dom_names = [ ([], Pos.no_pos) ];
             dom_parents = [];
             dom_by_default = true;
-            dom_data = { vdom_auth = [ AuthAll ]; vdom_auto_cc = false };
+            dom_data = { vdom_auth = [ AuthAll ] };
           };
       ]
   in

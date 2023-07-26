@@ -321,11 +321,7 @@ let format_verif_domain fmt (vd : verif_domain_decl) =
     | AuthAll -> Format.fprintf fmt "*"
   in
   let pp_data fmt data =
-    Format.fprintf fmt "%a%a"
-      (pp_print_list_comma pp_auth)
-      data.vdom_auth
-      (format_domain_attribute "auto_cc")
-      data.vdom_auto_cc
+    Format.fprintf fmt "%a" (pp_print_list_comma pp_auth) data.vdom_auth
   in
   format_domain pp_data fmt vd
 

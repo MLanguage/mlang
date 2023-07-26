@@ -148,10 +148,6 @@ rule token = parse
   { OUTPUT }
 | "fonction"
   { FONCTION }
-| "auto_cc"
-  { AUTO_CC }
-| "non_auto_cc"
-  { NON_AUTO_CC }
 | '"' [^'"']* '"' as s
   { STRING s }
 | ['a'-'z'] as s

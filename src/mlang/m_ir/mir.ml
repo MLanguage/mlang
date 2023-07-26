@@ -517,7 +517,7 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auth : CatVarSet.t }
 
 type verif_domain = verif_domain_data domain
 

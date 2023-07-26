@@ -184,12 +184,11 @@ domaine regle corrective base_inr_r9901
 
 let verif_domains_declaration =
   {|
-domaine verif primitive corrective, isf corrective
+domaine verif primitive corrective, isf corrective, non_auto_cc
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
     saisie variation
-#: auto_cc contexte, famille, revenu, revenu corrective, variation
 : par_defaut;
 
 domaine verif primitive
@@ -216,9 +215,7 @@ domaine verif corrective horizontale
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation, saisie penalite
-#: auto_cc penalite
-;
+    saisie variation, saisie penalite;
 |}
 
 let declarations =
@@ -259,6 +256,5 @@ let string_to_rule_domain_id : string -> string list = function
   | "base_anterieure" -> [ "corrective"; "base_anterieure" ]
   | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
   | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
-  | "non_auto_cc" -> []
   | "horizontale" -> [ "horizontale" ]
   | _ -> raise Not_found

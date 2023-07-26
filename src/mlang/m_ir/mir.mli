@@ -191,7 +191,7 @@ type error = {
   typ : Mast.error_typ;
 }
 
-type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_auto_cc : bool }
+type verif_domain_data = { vdom_auth : CatVarSet.t }
 
 type verif_domain = verif_domain_data domain
 
