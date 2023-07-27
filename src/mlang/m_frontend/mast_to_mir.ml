@@ -1504,7 +1504,6 @@ let get_domains (cat_str : string)
     in
     Mast.DomainIdMap.fold set_max domains domains
   in
-  let domains =
     match by_default with
     | Some def_id ->
         let fold _ dom doms =
@@ -1517,14 +1516,6 @@ let get_domains (cat_str : string)
     | None ->
         Errors.raise_error
           (Format.sprintf "there are no default %s domain" cat_str)
-  in
-  (* let _ = let iter id dom = let pp_ss fmt ss = let iter s = Format.fprintf
-     fmt "<%s> " s in Mast.DomainId.iter iter ss in let pp_sss fmt sss = let
-     iter ss = Format.fprintf fmt "%a, " pp_ss ss in Mast.DomainIdSet.iter iter
-     sss in Format.printf "XXX %a\n: min: %a\n: max: %a\n" pp_ss id pp_sss
-     dom.Mir.dom_min pp_sss dom.Mir.dom_max in Mast.DomainIdMap.iter iter
-     domains; exit 0 in *)
-  domains
 
 let get_rule_domains (p : Mast.program) : Mir.rule_domain Mast.DomainIdMap.t =
   let get_item = function
