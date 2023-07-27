@@ -1504,18 +1504,18 @@ let get_domains (cat_str : string)
     in
     Mast.DomainIdMap.fold set_max domains domains
   in
-    match by_default with
-    | Some def_id ->
-        let fold _ dom doms =
-          let foldName name doms = Mast.DomainIdMap.add name dom doms in
-          Mast.DomainIdSet.fold foldName dom.Mir.dom_names doms
-        in
-        Mast.DomainIdMap.empty
-        |> Mast.DomainIdMap.fold fold domains
-        |> Mast.DomainIdMap.add Mast.DomainId.empty (get_dom def_id domains)
-    | None ->
-        Errors.raise_error
-          (Format.sprintf "there are no default %s domain" cat_str)
+  match by_default with
+  | Some def_id ->
+      let fold _ dom doms =
+        let foldName name doms = Mast.DomainIdMap.add name dom doms in
+        Mast.DomainIdSet.fold foldName dom.Mir.dom_names doms
+      in
+      Mast.DomainIdMap.empty
+      |> Mast.DomainIdMap.fold fold domains
+      |> Mast.DomainIdMap.add Mast.DomainId.empty (get_dom def_id domains)
+  | None ->
+      Errors.raise_error
+        (Format.sprintf "there are no default %s domain" cat_str)
 
 let get_rule_domains (p : Mast.program) : Mir.rule_domain Mast.DomainIdMap.t =
   let get_item = function
