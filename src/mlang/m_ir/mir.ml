@@ -685,3 +685,76 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
+
+let mast_to_catvars (cats : 'a CatVarMap.t)
+    (l : string Pos.marked list Pos.marked) : CatVarSet.t =
+  let filter_cats pred =
+    CatVarMap.fold
+      (fun cv _ res -> if pred cv then CatVarSet.add cv res else res)
+      cats CatVarSet.empty
+  in
+  match l with
+  | [ ("*", _) ], _ -> filter_cats (fun _ -> true)
+  | [ ("saisie", _); ("*", _) ], _ ->
+      filter_cats (fun cv -> match cv with CatInput _ -> true | _ -> false)
+  | ("saisie", _) :: id, pos ->
+      let vcat = CatInput (StrSet.from_marked_list id) in
+      if CatVarMap.mem vcat cats then CatVarSet.singleton vcat
+      else Errors.raise_spanned_error "unknown variable category" pos
+  | ("calculee", _) :: id, id_pos -> begin
+      match id with
+      | [] -> CatVarSet.singleton (CatComputed CatCompSet.empty)
+      | [ ("base", _) ] ->
+          let base = CatCompSet.singleton Base in
+          CatVarSet.singleton (CatComputed base)
+      | [ ("base", _); ("*", _) ] ->
+          let base = CatCompSet.singleton Base in
+          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
+          CatVarSet.singleton (CatComputed base)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | [ ("restituee", _) ] ->
+          let givenBack = CatCompSet.singleton GivenBack in
+          CatVarSet.singleton (CatComputed givenBack)
+      | [ ("restituee", _); ("*", _) ] ->
+          let givenBack = CatCompSet.singleton GivenBack in
+          let baseAndGivenBack = givenBack |> CatCompSet.add Base in
+          CatVarSet.singleton (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
+          let baseAndGivenBack =
+            CatCompSet.singleton Base |> CatCompSet.add GivenBack
+          in
+          CatVarSet.singleton (CatComputed baseAndGivenBack)
+      | [ ("*", _) ] ->
+          let base = CatCompSet.singleton Base in
+          let givenBack = CatCompSet.singleton GivenBack in
+          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
+          CatVarSet.singleton (CatComputed CatCompSet.empty)
+          |> CatVarSet.add (CatComputed base)
+          |> CatVarSet.add (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | _ ->
+          Errors.raise_spanned_error "unlnown calculated variable category"
+            id_pos
+    end
+  | _ -> assert false
+
+let mast_to_catvar (cats : 'a CatVarMap.t)
+    (l : string Pos.marked list Pos.marked) : cat_variable =
+  match l with
+  | ("saisie", _) :: id, pos ->
+      let vcat = CatInput (StrSet.from_marked_list id) in
+      if CatVarMap.mem vcat cats then vcat
+      else Errors.raise_spanned_error "unknown variable category" pos
+  | ("calculee", _) :: id, id_pos -> begin
+      match id with
+      | [] -> CatComputed CatCompSet.empty
+      | [ ("base", _) ] -> CatComputed (CatCompSet.singleton Base)
+      | [ ("restituee", _) ] -> CatComputed (CatCompSet.singleton GivenBack)
+      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
+          CatComputed (CatCompSet.singleton Base |> CatCompSet.add GivenBack)
+      | _ ->
+          Errors.raise_spanned_error "unlnown calculated variable category"
+            id_pos
+    end
+  | _, pos -> Errors.raise_spanned_error "unknown variable category" pos

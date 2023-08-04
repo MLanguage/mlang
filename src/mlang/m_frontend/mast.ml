@@ -266,14 +266,6 @@ let base_category = "base"
 
 let givenback_category = "restituee"
 
-let family_category = "famille"
-
-let income_category = "revenu"
-
-let context_category = "contexte"
-
-let penality_category = "penalite"
-
 (**{2 Verification clauses}*)
 
 (** These clauses are expression refering to the variables of the program. They
@@ -293,10 +285,7 @@ type verification = {
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_auth_decl =
-  | AuthInput of string Pos.marked list Pos.marked
-  | AuthComputed of string Pos.marked list Pos.marked
-  | AuthAll
+type verif_auth_decl = string Pos.marked list Pos.marked
 
 type verif_domain_data = { vdom_auth : verif_auth_decl list }
 

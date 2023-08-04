@@ -358,3 +358,9 @@ val find_vars_by_io : program -> io -> VariableDict.t
 (** Returns a VariableDict.t containing all the variables that have a given io
     type, only one variable per name is entered in the VariableDict.t, this
     function chooses the one with the highest execution number*)
+
+val mast_to_catvars :
+  'a CatVarMap.t -> string Pos.marked list Pos.marked -> CatVarSet.t
+
+val mast_to_catvar :
+  'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable

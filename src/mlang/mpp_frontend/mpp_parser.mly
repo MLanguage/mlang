@@ -100,14 +100,16 @@ new_block:
 ;
 
 var_category:
-| STAR { (["*"], mk_position $sloc) }
-| INPUT STAR { (["*"], mk_position $sloc) }
-| INPUT l = nonempty_list(ident) { ("saisie" :: (List.map fst l), mk_position $sloc) }
-| COMPUTED STAR { (["calculee"; "*"], mk_position $sloc) }
-| COMPUTED BASE STAR { (["calulee"; "base"; "*"], mk_position $sloc) }
-| COMPUTED GIVEN_BACK STAR { (["calulee"; "restituee"; "*"], mk_position $sloc) }
+| STAR { (["*", Pos.no_pos], mk_position $sloc) }
+| INPUT STAR { (["saisie", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
+| INPUT l = nonempty_list(ident) { (("saisie", Pos.no_pos) :: l, mk_position $sloc) }
+| COMPUTED STAR { (["calculee", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
+| COMPUTED BASE STAR
+    { (["calulee", Pos.no_pos; "base", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
+| COMPUTED GIVEN_BACK STAR
+    { (["calulee", Pos.no_pos; "restituee", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
 | COMPUTED BASE GIVEN_BACK | COMPUTED GIVEN_BACK BASE
-    { (["calulee"; "base"; "restituee"], mk_position $sloc) }
+    { (["calulee", Pos.no_pos; "base", Pos.no_pos; "restituee", Pos.no_pos], mk_position $sloc) }
 ;
 
 expr:

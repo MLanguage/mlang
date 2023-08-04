@@ -191,13 +191,10 @@ verif_domain_decl:
 | GIVEN_BACK { ("restituee", mk_position $sloc) }
 | TIMES { ("*", mk_position $sloc) }
 
-%inline var_computed_category_list:
-| l = var_computed_category* { (l, mk_position $sloc) }
-
 var_category_id:
-| INPUT l = symbol_list_with_pos { AuthInput l }
-| COMPUTED l = var_computed_category_list { AuthComputed l }
-| TIMES { AuthAll }
+| INPUT l = symbol_with_pos+ { (("saisie", Pos.no_pos) :: l, mk_position $sloc) }
+| COMPUTED l = var_computed_category* { (("calculee", Pos.no_pos) :: l, mk_position $sloc) }
+| TIMES { (["*", Pos.no_pos], mk_position $sloc) }
 
 vdom_param_with_pos:
 | vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)

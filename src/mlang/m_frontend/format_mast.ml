@@ -209,7 +209,7 @@ let format_input_attribute fmt ((n, v) : variable_attribute) =
 
 let format_input_variable fmt (v : input_variable) =
   Format.fprintf fmt "%a %s %a %a %a : %s%a;" format_variable_name
-    (Pos.unmark v.input_name) input_category
+    (Pos.unmark v.input_name) Mast.input_category
     (pp_print_list_space Format.pp_print_string)
     (List.map Pos.unmark v.input_category)
     (pp_print_list_space format_input_attribute)
@@ -310,18 +310,21 @@ let format_rule_domain fmt (rd : rule_domain_decl) =
 
 let format_verif_domain fmt (vd : verif_domain_decl) =
   let pp_auth fmt = function
-    | AuthInput l ->
+    | ("saisie", _) :: l ->
         Format.fprintf fmt "saisie %a"
-          (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string)))
+          (pp_print_list_space (pp_unmark Format.pp_print_string))
           l
-    | AuthComputed l ->
+    | ("calculee", _) :: l ->
         Format.fprintf fmt "calculee %a"
-          (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string)))
+          (pp_print_list_space (pp_unmark Format.pp_print_string))
           l
-    | AuthAll -> Format.fprintf fmt "*"
+    | [ ("*", _) ] -> Format.fprintf fmt "*"
+    | _ -> assert false
   in
   let pp_data fmt data =
-    Format.fprintf fmt "%a" (pp_print_list_comma pp_auth) data.vdom_auth
+    Format.fprintf fmt "%a"
+      (pp_print_list_comma (pp_unmark pp_auth))
+      data.vdom_auth
   in
   format_domain pp_data fmt vd
 

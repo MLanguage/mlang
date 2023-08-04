@@ -165,12 +165,12 @@ let consider_output is_ebcdic attribs =
 (* Used to generated the array names *)
 let subtype_name subtyp =
   match subtyp with
-  | Context -> Mast.context_category
-  | Family -> Mast.family_category
-  | Income -> Mast.income_category
+  | Context -> "contexte"
+  | Family -> "famille"
+  | Income -> "revenu"
   | CorrIncome -> "revenu_correc"
   | Variation -> "variation"
-  | Penality -> Mast.penality_category
+  | Penality -> "penalite"
   | Base -> assert false (* never used *)
   | Computed -> assert false
 (* never used *)
