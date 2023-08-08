@@ -51,7 +51,6 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  category : string list;
   cats : CatVarSet.t;
   is_table : int option;
 }
@@ -247,7 +246,6 @@ module Variable : sig
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    category : string list;
     cats : CatVarSet.t;
     is_table : int option;
   }
@@ -261,7 +259,6 @@ module Variable : sig
     execution_number ->
     attributes:Mast.variable_attribute list ->
     origin:variable option ->
-    category:string list ->
     cats:CatVarSet.t ->
     is_table:int option ->
     variable

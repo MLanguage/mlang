@@ -136,7 +136,6 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  category : string list;
   cats : CatVarSet.t;
   is_table : int option;
 }
@@ -157,7 +156,6 @@ module Variable = struct
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    category : string list;
     cats : CatVarSet.t;
     is_table : int option;
   }
@@ -172,8 +170,7 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(category : string list) ~(cats : CatVarSet.t) ~(is_table : int option) :
-      t =
+      ~(cats : CatVarSet.t) ~(is_table : int option) : t =
     {
       name;
       id = fresh_id ();
@@ -182,7 +179,6 @@ module Variable = struct
       execution_number;
       attributes;
       origin;
-      category;
       cats;
       is_table;
     }

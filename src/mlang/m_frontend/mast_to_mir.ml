@@ -721,10 +721,6 @@ let get_variables_decl (p : Mast.program)
                       match var_decl with
                       | Mast.ComputedVar cvar ->
                           let cvar = Pos.unmark cvar in
-                          let category =
-                            Mast.computed_category
-                            :: List.map Pos.unmark cvar.comp_category
-                          in
                           let cat =
                             let comp_set =
                               List.fold_left
@@ -749,7 +745,7 @@ let get_variables_decl (p : Mast.program)
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
-                              ~attributes:cvar.comp_attributes ~category
+                              ~attributes:cvar.comp_attributes
                               ~cats:(Mir.CatVarSet.singleton cat)
                               ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
@@ -782,10 +778,6 @@ let get_variables_decl (p : Mast.program)
                           (new_vars, new_idmap, errors, new_out_list)
                       | Mast.InputVar ivar ->
                           let ivar = Pos.unmark ivar in
-                          let category =
-                            Mast.input_category
-                            :: List.map Pos.unmark ivar.input_category
-                          in
                           let cat =
                             let input_set =
                               List.fold_left
@@ -801,7 +793,6 @@ let get_variables_decl (p : Mast.program)
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
-                              ~category
                               ~cats:(Mir.CatVarSet.singleton cat)
                               ~is_table:None
                             (* Input variables also have a low order *)
@@ -954,8 +945,7 @@ let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
        local variables *)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin ~category:var.category ~cats:var.cats
-    ~is_table:var.is_table
+    ~attributes:var.attributes ~origin ~cats:var.cats ~is_table:var.is_table
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
     their execution number. *)
