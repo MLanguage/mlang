@@ -14,6 +14,7 @@
 %token IF ELSE DELETE PARTITION COLON COMMA MINUS
 %token CALL_M_RULES CALL_M_CHAIN CALL_M_VERIFS
 %token NB_CATEGORY INPUT COMPUTED BASE GIVEN_BACK STAR
+%token EXISTS_ATTRIBUTE_WITH EXISTS_ALIASES
 
 %left OR
 %left AND
@@ -81,7 +82,8 @@ stmt:
     { Expr(Call(var, args), mk_position $sloc), mk_position $sloc }
 | IF b = expr COLON t = new_block ELSE COLON f = new_block { Conditional(b, t, f), mk_position $sloc }
 | IF b = expr COLON t = new_block { Conditional(b, t, []), mk_position $sloc }
-| PARTITION var = IDENT COLON b = new_block { Partition(var, b), mk_position $sloc }
+| PARTITION attr = ident EQUAL value = INT COLON b = new_block
+    { Partition (attr, float value, b), mk_position $sloc }
 ;
 
 new_block:
@@ -115,7 +117,11 @@ var_category:
 expr:
 | i = INT { Constant i, mk_position $sloc }
 | NB_CATEGORY LPAREN cat = var_category RPAREN
-    { NbVarCategory(cat), mk_position $sloc }
+    { NbVarCategory (cat), mk_position $sloc }
+| EXISTS_ATTRIBUTE_WITH LPAREN attr = ident COMMA value = INT RPAREN
+    { ExistsAttrWith (attr, float value), mk_position $sloc }
+| EXISTS_ALIASES LPAREN alias = separated_list(COMMA, ident) RPAREN
+    { ExistsAliases (alias), mk_position $sloc }
 | var = IDENT { Variable var, mk_position $sloc }
 | MINUS e = expr { Unop(Minus, e), mk_position $sloc }
 | var = ident LPAREN args = separated_list(COMMA, ident) RPAREN

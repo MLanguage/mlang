@@ -35,10 +35,6 @@ let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
     | Eq -> "=="
     | Neq -> "!=")
 
-let format_filter (fmt : formatter) (f : mpp_filter) : unit =
-  assert (f = VarIsTaxBenefit);
-  fprintf fmt "VarIsTaxBenefit"
-
 let rec format_expression (fmt : formatter) (expr : mpp_expr_kind Pos.marked) :
     unit =
   match Pos.unmark expr with
@@ -65,13 +61,17 @@ and format_callable (fmt : formatter) (f : mpp_callable) =
           format_expression filter
     | NbVarCat cvs ->
         Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
+    | ExistsAttrWithVal ((attr, _), value) ->
+        Format.asprintf "exists_attribute_with(%s, %f)" attr value
+    | ExistsAliases aliases ->
+        let pp_null _ _ = () in
+        Format.asprintf "exists_alias(%a)"
+          (StrMap.pp ~sep:", " ~assoc:"" pp_null)
+          aliases
     | MppFunction m -> m
     | Present -> "present"
     | Abs -> "abs"
-    | Cast -> "cast"
-    | DepositDefinedVariables -> "DepositDefinedVariables"
-    | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
-    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables")
+    | Cast -> "cast")
 
 let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
   match Pos.unmark stmt with
@@ -85,8 +85,8 @@ let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
         format_expression cond format_stmts t format_stmts f
   | Delete sv -> fprintf fmt "del %a" format_scoped_var sv
   | Expr e -> format_expression fmt e
-  | Partition (f, body) ->
-      fprintf fmt "partition with %a:@\n@[<h 2>  %a@]" format_filter f
+  | Partition ((attr, _), value, body) ->
+      fprintf fmt "partition with %s == %f:@\n@[<h 2>  %a@]" attr value
         format_stmts body
 
 and format_stmts (fmt : formatter) (stmts : mpp_stmt list) : unit =

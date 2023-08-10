@@ -87,66 +87,33 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
+let var_is_ (attr : string) (value : float) (v : Mir.Variable.t) : bool =
   List.exists
     (fun ((attr_name, _), (attr_value, _)) ->
-      attr_name = attr && attr_value = Mast.Float 1.)
+      attr_name = attr && attr_value = Mast.Float value)
     v.Mir.Variable.attributes
 
-let cond_DepositDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
-  generate_input_condition (var_is_ "acompte")
+let check_attribute (p : Mir_interface.full_program) (attr : string) : bool =
+  Mir.CatVarMap.exists
+    (fun _ (attrs, _) -> StrMap.exists (fun a _ -> a = attr) attrs)
+    p.Mir_interface.program.Mir.program_var_categories
 
-let cond_TaxbenefitDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
-  generate_input_condition (var_is_ "avfisc")
+let cond_ExistsAttrWithVal (p : Mir_interface.full_program) (pos : Pos.t)
+    ((attr, pos_attr) : string Pos.marked) (value : float) :
+    Bir.expression Pos.marked =
+  if check_attribute p attr then
+    generate_input_condition (var_is_ attr value) p pos
+  else Errors.raise_spanned_error "unknown attribute" pos_attr
 
-let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program)
-    (pos : Pos.t) : Bir.expression Pos.marked =
-  (* commented aliases do not exist in the 2018 version *)
-  (* double-commented aliases do not exist in the 2019 version *)
-  (* triple-commented aliases do not exist in the 2020 version *)
-  let aliases_list =
-    [
-      (*(*(*"7QK";*)*)*)
-      (*(* "7QD"; *)*)
-      (*(* "7QB"; *)*)
-      (*(* "7QC"; *)*)
-      "4BA";
-      "4BY";
-      "4BB";
-      "4BC";
-      "7CL";
-      (*(*(*"7CM";*)*)*)
-      (*(* "7CN"; *)*)
-      (*(* "7QE"; *)*)
-      (*(* "7QF"; *)*)
-      (*(* "7QG"; *)*)
-      (*(* "7QH"; *)*)
-      (*(*(*"7QI";*)*)*)
-      (*(*(*"7QJ";*)*)*)
-      "7LG";
-      (* "7MA"; *)
-      "7QM";
-      "2DC";
-      (* "7KM"; *)
-      (* "7KG"; *)
-      "7QP";
-      "7QS";
-      "7QN";
-      "7QO";
-      (*(*(*"7QL";*)*)*)
-      (*(* "7LS"; *)*)
-    ]
+let cond_ExistsAliases (p : Mir_interface.full_program) (pos : Pos.t)
+    (aliases : Pos.t StrMap.t) : Bir.expression Pos.marked =
+  let vars =
+    StrMap.fold
+      (fun var pos vmap ->
+        Mir.VariableMap.add (Mir.find_var_by_name p.program (var, pos)) () vmap)
+      aliases Mir.VariableMap.empty
   in
-  let supp_avfisc =
-    List.fold_left
-      (fun vmap var ->
-        Mir.VariableMap.add (Mir.find_var_by_name p.program var) () vmap)
-      Mir.VariableMap.empty
-      (List.map (fun x -> (x, Pos.no_pos)) aliases_list)
-  in
-  generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
+  generate_input_condition (fun v -> Mir.VariableMap.mem v vars) p pos
 
 let translate_m_code (m_program : Mir_interface.full_program)
     (vars : (Mir.Variable.id * Mir.variable_data) list) =
@@ -328,12 +295,12 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
         ( (Mast.Add, pos),
           (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos),
           (Mir.Literal (Float 0.), pos) )
-  | Call (DepositDefinedVariables, []) ->
-      Pos.unmark @@ cond_DepositDefinedVariables p pos
-  | Call (TaxbenefitCeiledVariables, []) ->
-      Pos.unmark @@ cond_TaxbenefitCeiledVariables p pos
-  | Call (TaxbenefitDefinedVariables, []) ->
-      Pos.unmark @@ cond_TaxbenefitDefinedVariables p pos
+  | Call (ExistsAttrWithVal (attr, value), []) ->
+      Pos.unmark @@ cond_ExistsAttrWithVal p pos attr value
+  | Call (ExistsAliases aliases, []) ->
+      Pos.unmark @@ cond_ExistsAliases p pos aliases
+  | Call (NbVarCat _, []) ->
+      Errors.raise_spanned_error "forbidden expression" pos
   | _ -> assert false
 
 and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
@@ -454,10 +421,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       wrap_m_code_call m_program order ctx
   | Mpp_ir.Expr (Call (Verifs (dom, filter), _args), _) ->
       ({ ctx with verif_seen = true }, generate_verif_call m_program dom filter)
-  | Mpp_ir.Partition (filter, body) ->
-      let func_of_filter =
-        match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
-      in
+  | Mpp_ir.Partition ((attr, _), value, body) ->
+      let func_of_filter = var_is_ attr value in
       let ctx, partition_pre, partition_post =
         generate_partition mpp_program m_program func_args func_of_filter pos
           ctx

@@ -33,9 +33,6 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | "present" -> Present
   | "abs" -> Abs
   | "cast" -> Cast
-  | "exists_deposit_defined_variables" -> DepositDefinedVariables
-  | "exists_taxbenefit_defined_variables" -> TaxbenefitDefinedVariables
-  | "exists_taxbenefit_ceiled_variables" -> TaxbenefitCeiledVariables
   | x ->
       if List.mem x translated_names then MppFunction x
       else
@@ -58,6 +55,15 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     | NbVarCategory l ->
         let cats = Mir.mast_to_catvars p.program_var_categories l in
         (Call (NbVarCat cats, []), [])
+    | ExistsAttrWith (attr, value) ->
+        (Call (ExistsAttrWithVal (attr, value), []), [])
+    | ExistsAliases aliases ->
+        let aliasMap =
+          List.fold_left
+            (fun res (name, pos) -> StrMap.add name pos res)
+            StrMap.empty aliases
+        in
+        (Call (ExistsAliases aliasMap, []), [])
     | Unop (Minus, e) ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Unop (Minus, e'), scope)
@@ -101,13 +107,6 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
   in
   (Pos.same_pos_as e' e, scope)
 
-let to_mpp_filter (f : string Pos.marked) : mpp_filter =
-  if Pos.unmark f = "var_is_taxbenefit" then VarIsTaxBenefit
-  else
-    Errors.raise_spanned_error
-      (Format.asprintf "unknown filter %s" (Pos.unmark f))
-      (Pos.get_position f)
-
 let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
     (scope : mpp_compute_name list) (stmt : Mpp_ast.stmt) :
     mpp_stmt * Mpp_ast.var list =
@@ -128,10 +127,8 @@ let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
     | Expr e ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Expr e', scope)
-    | Partition (f, body) ->
-        ( Partition
-            ( to_mpp_filter (Pos.same_pos_as f stmt),
-              to_mpp_stmts p translated_names ~scope body ),
+    | Partition (attr, value, body) ->
+        ( Partition (attr, value, to_mpp_stmts p translated_names ~scope body),
           scope )
   in
   (Pos.same_pos_as stmt' stmt, scope)
