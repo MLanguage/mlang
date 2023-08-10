@@ -421,7 +421,9 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
       wrap_m_code_call m_program order ctx
   | Mpp_ir.Expr (Call (Verifs (dom, filter), _args), _) ->
       ({ ctx with verif_seen = true }, generate_verif_call m_program dom filter)
-  | Mpp_ir.Partition ((attr, _), value, body) ->
+  | Mpp_ir.Partition ((attr, pos_attr), value, body) ->
+      if not (check_attribute m_program attr) then
+        Errors.raise_spanned_error "unknown attribute" pos_attr;
       let func_of_filter = var_is_ attr value in
       let ctx, partition_pre, partition_post =
         generate_partition mpp_program m_program func_args func_of_filter pos
