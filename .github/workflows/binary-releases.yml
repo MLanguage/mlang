@@ -101,7 +101,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
-          wget https://gmplib.org/download/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
+          wget https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
           ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
           wget https://www.mpfr.org/mpfr-4.1.0/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
