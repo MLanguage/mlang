@@ -14,9 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module StringSet = Set.Make (String)
-module StringMap = Map.Make (String)
-
 let ascii_to_ebcdic =
   [|
     0;   1;   2;   3;   55;  45;  46;  47;  22;  5;   37;  11;  12;  13;  14;  15;
@@ -130,27 +127,31 @@ let is_input st = match st with Base | Computed -> false | _ -> true
 let is_computed st = match st with Base | Computed -> true | _ -> false
 
 let input_var_subtype iv : var_subtype =
-  match Pos.unmark iv.Mast.input_subtyp with
-  | Mast.Context -> Context
-  | Family -> Family
-  | Penality -> Penality
-  | Income -> Income
+  List.find_map
+    (fun t ->
+      match Pos.unmark t with
+      | "contexte" -> Some Context
+      | "famille" -> Some Family
+      | "penalite" -> Some Penality
+      | "revenu" -> Some Income
+      | _ -> None)
+    iv.Mast.input_category
+  |> function
+  | Some s -> s
+  | None -> assert false
 (* Missing CorrIncome and Variation (actually not used *)
 
 let computed_var_subtype cv : var_subtype =
   let is_base =
     List.exists
-      (fun ct ->
-        match Pos.unmark ct with Mast.Base -> true | GivenBack -> false)
-      cv.Mast.comp_subtyp
+      (fun ct -> String.equal (Pos.unmark ct) Mast.base_category)
+      cv.Mast.comp_category
   in
   if is_base then Base else Computed
 
-let computed_var_is_output cv =
-  List.exists
-    (fun st ->
-      match Pos.unmark st with Mast.GivenBack -> true | Base -> false)
-    cv.Mast.comp_subtyp
+let computed_var_is_output cv = cv.Mast.comp_is_givenback
+
+let input_var_is_output iv = iv.Mast.input_is_givenback
 
 let consider_output is_ebcdic attribs =
   is_ebcdic = false
@@ -178,10 +179,10 @@ let subtype_name subtyp =
 let req_type_name req_type =
   match req_type with
   | Computed (Some typ) -> subtype_name typ
-  | Computed None -> "calculee"
+  | Computed None -> Mast.computed_category
   | Input (Some typ) -> subtype_name typ
-  | Input None -> "saisie"
-  | Output -> "restituee"
+  | Input None -> Mast.input_category
+  | Output -> Mast.givenback_category
   | Debug i when i <= 0 -> "debug"
   | Debug i -> Printf.sprintf "debug%02d" i
 
@@ -299,7 +300,7 @@ let get_vars prog is_ebcdic =
                 let tvar = input_var_subtype iv in
                 let idx1, idx2, idxo_opt =
                   next_idx idx tvar
-                    (iv.input_given_back
+                    (input_var_is_output iv
                     && consider_output is_ebcdic iv.Mast.input_attributes)
                     1
                 in
@@ -510,7 +511,7 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
   if opt.with_libelle then Format.fprintf fmt ", \"%s\"" desc
   else Format.fprintf fmt " /*\"%s\"*/" desc;
   begin
-    match (req_type, tvar) with
+    match ((req_type : gen_type), tvar) with
     | Input _, Income -> Format.fprintf fmt ", \"%s\"" name
     | _ -> ()
   end;
@@ -554,6 +555,7 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
           table_name table_NAME
   end;
 
+  let empty = ref true in
   List.iter
     (fun ( tvar,
            idx1,
@@ -566,7 +568,8 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
            attributes,
            _size ) ->
       let is_output = match idxo_opt with Some _ -> true | _ -> false in
-      if var_matches req_type tvar is_output then
+      if var_matches req_type tvar is_output then begin
+        empty := false;
         match req_type with
         | Debug _i ->
             (* Special case for debug *)
@@ -576,8 +579,13 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
         | _ ->
             (* General case*)
             gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
-              ~attributes ~desc ~alias_opt)
+              ~attributes ~desc ~alias_opt
+      end)
     vars;
+
+  if !empty then
+    gen_var fmt req_type opt ~idx:0 ~name:"" ~tvar:Computed ~is_output:false
+      ~typ_opt:None ~attributes:[] ~desc:"" ~alias_opt:None;
 
   Format.fprintf fmt "};\n"
 
@@ -608,7 +616,7 @@ let gen_desc fmt vars ~alias_only is_ebcdic =
           | Base | Computed -> begin
               (* computed var: only output *)
               match idxo_opt with
-              | Some idx -> Some ("restituee", idx)
+              | Some idx -> Some (Mast.givenback_category, idx)
               | None -> None
             end
           | _ -> Some (subtype_name tvar, idx2)
@@ -856,7 +864,7 @@ let get_rules_verif_etc prog =
                     ( Pos.unmark r.rule_number :: rules,
                       match r.rule_chaining with
                       | None -> chainings
-                      | Some cn -> StringSet.add (Pos.unmark cn) chainings )
+                      | Some cn -> StrSet.add (Pos.unmark cn) chainings )
                   else (rules, chainings)
                 in
                 (rules, verifs, errors, chainings)
@@ -877,8 +885,7 @@ let get_rules_verif_etc prog =
             | _ -> (rules, verifs, errors, chainings))
           (rules, verifs, errors, chainings)
           file)
-      ([], [], [], StringSet.empty)
-      prog
+      ([], [], [], StrSet.empty) prog
   in
 
   let rules = List.fast_sort compare rules in
@@ -913,12 +920,10 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
     Format.fprintf fmt "};\n\n"
   end;
 
-  StringSet.iter
-    (fun cn -> Format.fprintf fmt "extern void %s();\n" cn)
-    chainings;
+  StrSet.iter (fun cn -> Format.fprintf fmt "extern void %s();\n" cn) chainings;
 
   Format.fprintf fmt "T_desc_ench desc_ench[NB_ENCH + 1] = {\n";
-  StringSet.iter
+  StrSet.iter
     (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn)
     chainings;
   Format.fprintf fmt "};\n"
@@ -975,7 +980,7 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
   let nb_variation = count vars (Input (Some Variation)) in
   let nb_penalite = count vars (Input (Some Penality)) in
   let nb_restituee = count vars Output in
-  let nb_ench = StringSet.cardinal chainings in
+  let nb_ench = StrSet.cardinal chainings in
   let nb_err = List.length errors in
   let nb_debug = List.map List.length vars_debug in
   let nb_call = List.length rules in
@@ -1158,11 +1163,11 @@ let extract_var_ids (cprog : Bir.program) vars =
   let pvars = cprog.mir_program.program_vars in
   let add vn v vm =
     let vs =
-      match StringMap.find_opt vn vm with
+      match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
       | Some vs -> vs
     in
-    StringMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
+    StrMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
   in
   (* Build a map from variable names to all their definitions (with different
      ids) *)
@@ -1171,7 +1176,7 @@ let extract_var_ids (cprog : Bir.program) vars =
       (fun v vm ->
         let vm = add (Pos.unmark v.Variable.name) v vm in
         match v.Variable.alias with Some a -> add a v vm | None -> vm)
-      pvars StringMap.empty
+      pvars StrMap.empty
   in
   let process_var ~alias
       ( tvar,
@@ -1202,7 +1207,7 @@ let extract_var_ids (cprog : Bir.program) vars =
     (fun vm vd ->
       let name, vid = process_var ~alias:false vd in
       let vs =
-        try StringMap.find name vars_map
+        try StrMap.find name vars_map
         with Not_found ->
           Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
       in

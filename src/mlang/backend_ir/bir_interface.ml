@@ -18,7 +18,7 @@ type bir_function = {
   func_variable_inputs : unit Bir.VariableMap.t;
   func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
   func_outputs : unit Bir.VariableMap.t;
-  func_conds : Bir.condition_data Bir.VariableMap.t;
+  func_conds : Bir.condition_data Mir.RuleMap.t;
 }
 
 let var_set_from_variable_name_list (p : Bir.program)
@@ -87,9 +87,9 @@ let const_var_set_from_list (p : Bir.program)
         acc)
     Bir.VariableMap.empty names
 
-let translate_external_conditions idmap
-    (conds : Mast.expression Pos.marked list) :
-    Bir.condition_data Bir.VariableMap.t =
+let translate_external_conditions var_cats idmap
+    (conds : Mast.expression Pos.marked list) : Bir.condition_data Mir.RuleMap.t
+    =
   let check_boolean (mexpr : Mast.expression Pos.marked) =
     match Pos.unmark mexpr with
     | Binop (((And | Or), _), _, _) -> true
@@ -135,27 +135,34 @@ let translate_external_conditions idmap
       [] conds
   in
   let program =
-    Mast.Verification
-      {
-        verif_number = (0, Pos.no_pos);
-        verif_tags = [];
-        verif_applications = [ ("iliad", Pos.no_pos) ];
-        verif_conditions = verif_conds;
-      }
+    List.map
+      (fun item -> (item, Pos.no_pos))
+      [
+        Mast.Verification
+          {
+            verif_number = (0, Pos.no_pos);
+            verif_tag_names = ([], Pos.no_pos);
+            verif_applications = [ ("iliad", Pos.no_pos) ];
+            verif_conditions = verif_conds;
+          };
+        Mast.VerifDomDecl
+          {
+            dom_names = [ ([], Pos.no_pos) ];
+            dom_parents = [];
+            dom_by_default = true;
+            dom_data = { vdom_auth = [ ([ ("*", Pos.no_pos) ], Pos.no_pos) ] };
+          };
+      ]
   in
-  let conds =
+  let _, conds =
     (* Leave a constant map empty is risky, it will fail if we allow tests to
        refer to M constants in their expressions *)
-    Mast_to_mir.get_conds [ test_error ] Mast_to_mir.ConstMap.empty idmap
-      [ [ (program, Pos.no_pos) ] ]
+    Mast_to_mir.get_conds var_cats [ test_error ] Mast_to_mir.ConstMap.empty
+      idmap [ program ]
   in
-  Mir.VariableMap.fold
-    (fun v data acc ->
-      Bir.VariableMap.add
-        Bir.(var_from_mir default_tgv v)
-        (Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
-        acc)
-    conds Bir.VariableMap.empty
+  Mir.RuleMap.map
+    (fun data -> Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
+    conds
 
 let generate_function_all_vars (p : Bir.program) : bir_function =
   let output_vars =
@@ -191,7 +198,7 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
     func_variable_inputs = input_vars;
     func_constant_inputs = Bir.VariableMap.empty;
     func_outputs = output_vars;
-    func_conds = Bir.VariableMap.empty;
+    func_conds = Mir.RuleMap.empty;
   }
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) :
@@ -219,7 +226,8 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) :
       func_outputs =
         var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
       func_conds =
-        translate_external_conditions p.idmap func_spec.Mast.spec_conditions;
+        translate_external_conditions p.mir_program.program_var_categories
+          p.idmap func_spec.Mast.spec_conditions;
     }
   with
   | Errors.StructuredError e ->
@@ -253,28 +261,13 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")
     f.func_variable_inputs
 
-let context_function = "contextualize"
-
-let context_agnostic_mpp_functions (p : Bir.program) :
-    Bir.mpp_function Bir.FunctionMap.t =
-  Bir.FunctionMap.remove context_function p.Bir.mpp_functions
-
 (** Add varibles, constants, conditions and outputs from [f] to [p] *)
 let adapt_program_to_function (p : Bir.program) (f : bir_function) :
     Bir.program * int =
   let const_input_stmts =
     Bir.VariableMap.fold
       (fun var e acc ->
-        Pos.same_pos_as
-          (Bir.SAssign
-             ( var,
-               {
-                 Mir.var_typ = None;
-                 Mir.var_io = Regular;
-                 Mir.var_definition = Mir.SimpleVar e;
-               } ))
-          e
-        :: acc)
+        Pos.same_pos_as (Bir.SAssign (var, Mir.SimpleVar e)) e :: acc)
       f.func_constant_inputs []
   in
   let unused_input_stmts =
@@ -291,58 +284,43 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
               let pos = Pos.no_pos in
               ( Bir.SAssign
                   ( Bir.(var_from_mir default_tgv) var,
-                    {
-                      Mir.var_typ = None;
-                      Mir.var_io = Regular;
-                      Mir.var_definition =
-                        begin
-                          match var.Mir.Variable.is_table with
-                          | None ->
-                              Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
-                          | Some size ->
-                              let idxmap =
-                                let rec loop i acc =
-                                  if i < 0 then acc
-                                  else
-                                    loop (i - 1)
-                                      (Mir.IndexMap.add i
-                                         (Pos.same_pos_as
-                                            (Mir.Literal Mir.Undefined)
-                                            var.Mir.Variable.name)
-                                         acc)
-                                in
-                                loop (size - 1) Mir.IndexMap.empty
-                              in
-                              Mir.TableVar (size, Mir.IndexTable idxmap)
-                        end;
-                    } ),
+                    match var.Mir.Variable.is_table with
+                    | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
+                    | Some size ->
+                        let idxmap =
+                          let rec loop i acc =
+                            if i < 0 then acc
+                            else
+                              loop (i - 1)
+                                (Mir.IndexMap.add i
+                                   (Pos.same_pos_as (Mir.Literal Mir.Undefined)
+                                      var.Mir.Variable.name)
+                                   acc)
+                          in
+                          loop (size - 1) Mir.IndexMap.empty
+                        in
+                        Mir.TableVar (size, Mir.IndexTable idxmap) ),
                 pos )
               :: acc
         | _ -> acc)
       p.mir_program []
   in
   let conds_stmts =
-    Bir.VariableMap.fold
+    Mir.RuleMap.fold
       (fun _ cond acc ->
         Pos.same_pos_as (Bir.SVerif cond) cond.cond_expr :: acc)
       f.func_conds []
   in
-  let mpp_functions =
-    Bir.FunctionMap.add context_function
-      Bir.
-        {
-          mppf_stmts =
-            unused_input_stmts @ const_input_stmts
-            @ Bir.[ (SFunctionCall (p.main_function, []), Pos.no_pos) ]
-            @ conds_stmts;
-          mppf_is_verif = false;
-        }
-      p.mpp_functions
-  in
   ( {
       p with
-      mpp_functions;
-      main_function = context_function;
+      context =
+        Some
+          Bir.
+            {
+              constant_inputs_init_stmts = const_input_stmts;
+              adhoc_specs_conds_stmts = conds_stmts;
+              unused_inputs_init_stmts = unused_input_stmts;
+            };
       outputs = f.func_outputs;
     },
     List.length unused_input_stmts + List.length const_input_stmts )

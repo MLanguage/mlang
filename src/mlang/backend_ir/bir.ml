@@ -31,19 +31,19 @@ let compare_variable v1 v2 =
     let c = Stdlib.compare v1.offset v2.offset in
     if c <> 0 then c else Mir.Variable.compare v1.mir_var v2.mir_var
 
-module VariableMap = Map.Make (struct
+module VariableMap = MapExt.Make (struct
   type t = variable
 
   let compare = compare_variable
 end)
 
-module VariableSet = Set.Make (struct
+module VariableSet = SetExt.Make (struct
   type t = variable
 
   let compare = compare_variable
 end)
 
-module NameMap = Map.Make (String)
+module NameMap = StrMap
 
 type offset_alloc = { mutable name_map : int NameMap.t; mutable size : int }
 
@@ -91,8 +91,6 @@ type condition_data = variable Mir.condition_data_
 
 type variable_def = variable Mir.variable_def_
 
-type variable_data = variable Mir.variable_data_
-
 type function_name = string
 
 type rule_or_verif_code = Rule of stmt list | Verif of stmt
@@ -106,7 +104,7 @@ and rule_or_verif = {
 and stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of variable * variable_data
+  | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
   | SRovCall of rov_id
@@ -117,16 +115,23 @@ let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
-module FunctionMap = Map.Make (struct
+module FunctionMap = MapExt.Make (struct
   type t = function_name
 
   let compare = String.compare
 end)
 
+type program_context = {
+  constant_inputs_init_stmts : stmt list;
+  adhoc_specs_conds_stmts : stmt list;
+  unused_inputs_init_stmts : stmt list;
+}
+
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
+  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
   outputs : unit VariableMap.t;
@@ -136,6 +141,23 @@ let main_statements (p : program) : stmt list =
   try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
+
+let main_statements_with_context (p : program) : stmt list =
+  match p.context with
+  | Some context ->
+      context.constant_inputs_init_stmts @ main_statements p
+      @ context.adhoc_specs_conds_stmts
+  | None ->
+      Errors.raise_error
+        "This Bir program has no context constants and conditions stored"
+
+let main_statements_with_context_and_tgv_init (p : program) : stmt list =
+  match p.context with
+  | Some context ->
+      context.unused_inputs_init_stmts @ main_statements_with_context p
+  | None ->
+      Errors.raise_error
+        "This Bir program has no context input reset statements stored"
 
 let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
@@ -267,8 +289,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
       (fun acc stmt ->
         match Pos.unmark stmt with
         | SVerif cond -> get_local_vars_expr acc cond.Mir.cond_expr
-        | SAssign (_, data) -> (
-            match data.Mir.var_definition with
+        | SAssign (_, def) -> (
+            match def with
             | Mir.SimpleVar e -> get_local_vars_expr acc e
             | Mir.TableVar (_, defs) -> (
                 match defs with

@@ -1,4 +1,9 @@
-# Copy this file as Makefile.config and change some of these variables
+# Copy this file as Makefile.config
+# and change some of these variables to overwrite the default values.
+
+##################################################
+# Tax computation configuration
+##################################################
 
 # YEAR=2018
 
@@ -8,14 +13,58 @@
 
 # TESTS_DIR=$(SELF_DIR)/tests/2018/fuzzing/
 
+# Enable filter on tests filename (Keep only if name begins by an uppercase ASCII character)
+# TEST_FILTER=1
+
 # M_SPEC_FILE=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
 
-# CC:=gcc
+# MPP_FUNCTION=compute_double_liquidation_pvro
 
-# TEST_ERROR_MARGIN=0.
+##################################################
+# Mlang configuration
+##################################################
+
+# General parameters
+# ---------------------------
 
 # PRECISION=double
 
+# OPTIMIZE=0
+
+# Interpreter instrumentation
+# ---------------------------
+
+# TEST_ERROR_MARGIN=0.
+
+# CODE_COVERAGE=1
+
+##################################################
+# Build configuration
+##################################################
+
 # DUNE_OPTIONS=
 
-# C_COMPILER=clang
+##################################################
+# C backend configuration
+##################################################
+# CC=clang
+
+# Optimization level is selected based on compiler. Other flags may be set here.
+# COMMON_CFLAGS=-std=c89 -pedantic
+
+# Mlang includes a light C interface and a light Ocaml driver to build an autotest application.
+# "Autotest" is a standalone CLI tax calculator using FIP files as its data format and limited to
+# initial tax computation.
+# STATIC_DIR?=static/
+# DRIVER_DIR?=ml_driver/
+# DRIVER_FILES?=stubs.c common.ml m.ml read_test.ml main.ml
+
+# C backend test harness features a binary comparison between the dumped computed raw data structure
+# and a reference dump. This flag disables it, falling back to the FIP specified test results only.
+# Useful when you don't have reference dumps.
+# NO_BINARY_COMPARE=1
+
+##################################################
+# Exports 
+##################################################
+# Export here variables you need in recursive make calls

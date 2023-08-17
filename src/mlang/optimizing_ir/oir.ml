@@ -16,12 +16,12 @@
 
 type block_id = int
 
-module BlockMap = Map.Make (Int)
+module BlockMap = IntMap
 
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Bir.variable * Bir.variable_data
+  | SAssign of Bir.variable * Bir.variable_def
   | SConditional of Bir.expression * block_id * block_id * block_id
       (** The first two block ids are the true and false branch, the third is
           the join point after *)
@@ -51,6 +51,7 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
+  context : Bir.program_context option;
 }
 
 let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
@@ -78,6 +79,7 @@ let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
     mir_program = p.mir_program;
     outputs = p.outputs;
     main_function = p.main_function;
+    context = p.context;
   }
 
 let count_instr (p : program) : int =

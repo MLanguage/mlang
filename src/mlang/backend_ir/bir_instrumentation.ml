@@ -14,7 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module CodeLocationMap = Map.Make (struct
+module CodeLocationMap = MapExt.Make (struct
   type t = Bir_interpreter.code_location
 
   let compare x y = compare x y
@@ -46,7 +46,7 @@ let code_coverage_init () : unit =
 
 let code_coverage_result () : code_coverage_result = !code_coverage_acc
 
-module VarLiteralSet = Set.Make (struct
+module VarLiteralSet = SetExt.Make (struct
   type t = Bir_interpreter.var_literal
 
   let compare x y =
@@ -144,4 +144,4 @@ and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
   locs
 
 let get_code_locs (p : Bir.program) : code_locs =
-  get_code_locs_stmts p (Bir.main_statements p) []
+  get_code_locs_stmts p (Bir.main_statements_with_context_and_tgv_init p) []

@@ -16,12 +16,12 @@
 
 type block_id = int
 
-module BlockMap : Map.S with type key = block_id
+module BlockMap : MapExt.T with type key = block_id
 
 type stmt = stmt_kind Pos.marked
 
 and stmt_kind =
-  | SAssign of Bir.variable * Bir.variable_data
+  | SAssign of Bir.variable * Bir.variable_def
   | SConditional of Bir.expression * block_id * block_id * block_id
   | SVerif of Bir.condition_data
   | SGoto of block_id
@@ -49,6 +49,7 @@ type program = {
   mir_program : Mir.program;
   outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
+  context : Bir.program_context option;
 }
 
 val map_program_cfgs : (cfg -> cfg) -> program -> program

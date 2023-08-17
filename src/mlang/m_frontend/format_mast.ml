@@ -39,47 +39,6 @@ let format_application fmt (app : application) = Format.fprintf fmt "%s" app
 
 let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
-let format_chain_tag fmt (t : chain_tag) =
-  Format.pp_print_string fmt
-    (match t with
-    | Custom name -> "\"" ^ name ^ "\""
-    | PrimCorr -> ""
-    | Primitif -> "primitif"
-    | Corrective -> "corrective"
-    | Isf -> "isf"
-    | Taux -> "taux"
-    | Irisf -> "irisf"
-    | Base_hr -> "base_HR"
-    | Base_tl -> "base_tl"
-    | Base_tl_init -> "base_tl_init"
-    | Base_tl_rect -> "base_tl_rect"
-    | Base_inr -> "base_INR"
-    | Base_inr_ref -> "base_inr_ref"
-    | Base_inr_tl -> "base_inr_tl"
-    | Base_inr_tl22 -> "base_inr_tl22"
-    | Base_inr_tl24 -> "base_inr_tl24"
-    | Base_inr_ntl -> "base_inr_ntl"
-    | Base_inr_ntl22 -> "base_inr_ntl22"
-    | Base_inr_ntl24 -> "base_inr_ntl24"
-    | Base_inr_inter22 -> "base_inr_inter22"
-    | Base_inr_intertl -> "base_inr_intertl"
-    | Base_inr_r9901 -> "base_inr_r9901"
-    | Base_inr_cimr07 -> "base_inr_cimr07"
-    | Base_inr_cimr24 -> "base_inr_cimr24"
-    | Base_inr_cimr99 -> "base_inr_cimr99"
-    | Base_inr_tlcimr07 -> "base_inr_tlcimr07"
-    | Base_inr_tlcimr24 -> "base_inr_tlcimr24"
-    | Base_abat98 -> "base_ABAT98"
-    | Base_abat99 -> "base_ABAT99"
-    | Base_initial -> "base_INITIAL"
-    | Base_premier -> "base_premier"
-    | Base_anterieure -> "base_anterieure"
-    | Base_anterieure_cor -> "base_anterieure_cor"
-    | Base_majo -> "base_MAJO"
-    | Base_stratemajo -> "base_stratemajo"
-    | Non_auto_cc -> "non_auto_cc"
-    | Horizontale -> "horizontale")
-
 let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
 
 let format_func_name fmt (f : func_name) = Format.fprintf fmt "%s" f
@@ -235,19 +194,6 @@ let format_rule fmt (r : rule) =
        (pp_unmark format_formula))
     r.rule_formulaes
 
-let format_computed_typ fmt (t : computed_typ) =
-  match t with
-  | Base -> Format.fprintf fmt "base"
-  | GivenBack -> Format.fprintf fmt "restituee"
-
-let format_input_variable_subtype fmt (t : input_variable_subtype) =
-  Format.pp_print_string fmt
-    (match t with
-    | Context -> "contexte"
-    | Family -> "famille"
-    | Penality -> "penalite"
-    | Income -> "revenu")
-
 let format_value_typ fmt (t : value_typ) =
   Format.pp_print_string fmt
     (match t with
@@ -258,28 +204,27 @@ let format_value_typ fmt (t : value_typ) =
     | Integer -> "ENTIER"
     | Real -> "REEL")
 
-let format_input_attribute fmt
-    ((n, v) : input_variable_attribute Pos.marked * literal Pos.marked) =
+let format_input_attribute fmt ((n, v) : variable_attribute) =
   Format.fprintf fmt "%s = %a" (Pos.unmark n) format_literal (Pos.unmark v)
 
 let format_input_variable fmt (v : input_variable) =
-  Format.fprintf fmt "%a saisie %a %a%s %a : %s%a;" format_variable_name
-    (Pos.unmark v.input_name) format_input_variable_subtype
-    (Pos.unmark v.input_subtyp)
+  Format.fprintf fmt "%a %s %a %a %a : %s%a;" format_variable_name
+    (Pos.unmark v.input_name) Mast.input_category
+    (pp_print_list_space Format.pp_print_string)
+    (List.map Pos.unmark v.input_category)
     (pp_print_list_space format_input_attribute)
-    v.input_attributes
-    (if v.input_given_back then " restituee" else "")
-    format_variable_name (Pos.unmark v.input_alias)
+    v.input_attributes format_variable_name (Pos.unmark v.input_alias)
     (Pos.unmark v.input_description)
     (option_print format_value_typ)
     (option_bind Pos.unmark v.input_typ)
 
 let format_computed_variable fmt (v : computed_variable) =
-  Format.fprintf fmt "%s%a calculee %a : %a%s;" (Pos.unmark v.comp_name)
+  Format.fprintf fmt "%s%a %s %a : %a%s;" (Pos.unmark v.comp_name)
     (option_print Format.pp_print_int)
     (option_bind Pos.unmark v.comp_table)
-    (pp_print_list_space (pp_unmark format_computed_typ))
-    v.comp_subtyp
+    computed_category
+    (pp_print_list_space (pp_unmark Format.pp_print_string))
+    v.comp_category
     (option_print format_value_typ)
     (option_bind Pos.unmark v.comp_typ)
     (Pos.unmark v.comp_description)
@@ -323,6 +268,66 @@ let format_error_ fmt (e : error_) =
        (pp_unmark Format.pp_print_string))
     e.error_descr
 
+let format_var_type (t : var_type) =
+  match t with Input -> input_category | Computed -> computed_category
+
+let format_var_category fmt (c : var_category_decl) =
+  Format.fprintf fmt "%s %a :@ attributs %a"
+    (format_var_type c.var_type)
+    (pp_print_list_space (pp_unmark Format.pp_print_string))
+    c.var_category
+    (pp_print_list_comma (pp_unmark Format.pp_print_string))
+    c.var_attributes
+
+let format_specialize_domain fmt (dl : string Pos.marked list Pos.marked list) =
+  match dl with
+  | [] -> ()
+  | _ ->
+      Format.fprintf fmt " :@ specialise %a"
+        (pp_print_list_comma
+           (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string))))
+        dl
+
+let format_domain_attribute attr fmt b =
+  if b then Format.fprintf fmt " :@ %s" attr
+
+let format_domain (pp_data : Format.formatter -> 'a -> unit) fmt
+    (d : 'a domain_decl) =
+  Format.fprintf fmt "%a%a%a%a"
+    (pp_print_list_comma
+       (pp_unmark (pp_print_list_space (pp_unmark Format.pp_print_string))))
+    d.dom_names format_specialize_domain d.dom_parents
+    (format_domain_attribute "par_defaut")
+    d.dom_by_default pp_data d.dom_data
+
+let format_rule_domain fmt (rd : rule_domain_decl) =
+  let pp_data fmt data =
+    Format.fprintf fmt "%a"
+      (format_domain_attribute "calculable")
+      data.rdom_computable
+  in
+  format_domain pp_data fmt rd
+
+let format_verif_domain fmt (vd : verif_domain_decl) =
+  let pp_auth fmt = function
+    | ("saisie", _) :: l ->
+        Format.fprintf fmt "saisie %a"
+          (pp_print_list_space (pp_unmark Format.pp_print_string))
+          l
+    | ("calculee", _) :: l ->
+        Format.fprintf fmt "calculee %a"
+          (pp_print_list_space (pp_unmark Format.pp_print_string))
+          l
+    | [ ("*", _) ] -> Format.fprintf fmt "*"
+    | _ -> assert false
+  in
+  let pp_data fmt data =
+    Format.fprintf fmt "%a"
+      (pp_print_list_comma (pp_unmark pp_auth))
+      data.vdom_auth
+  in
+  format_domain pp_data fmt vd
+
 let format_source_file_item fmt (i : source_file_item) =
   match i with
   | Application app ->
@@ -338,6 +343,12 @@ let format_source_file_item fmt (i : source_file_item) =
   | Error e -> format_error_ fmt e
   | Output o ->
       Format.fprintf fmt "sortie(%a);" format_variable_name (Pos.unmark o)
+  | VarCatDecl c ->
+      Format.fprintf fmt "variable category %a;" format_var_category
+        (Pos.unmark c)
+  | RuleDomDecl rd -> Format.fprintf fmt "rule domain %a;" format_rule_domain rd
+  | VerifDomDecl vd ->
+      Format.fprintf fmt "verif domain %a;" format_verif_domain vd
 
 let format_source_file fmt (f : source_file) =
   pp_print_list_endline (pp_unmark format_source_file_item) fmt f

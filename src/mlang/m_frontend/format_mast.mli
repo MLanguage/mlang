@@ -22,7 +22,13 @@ val format_unop : Format.formatter -> Mast.unop -> unit
 
 val format_value_typ : Format.formatter -> Mast.value_typ -> unit
 
+val format_var_type : Mast.var_type -> string
+
 val format_variable : Format.formatter -> Mast.variable -> unit
+
+val format_rule_domain : Format.formatter -> Mast.rule_domain_decl -> unit
+
+val format_verif_domain : Format.formatter -> Mast.verif_domain_decl -> unit
 
 val format_source_file : Format.formatter -> Mast.source_file -> unit
 
@@ -32,6 +38,7 @@ val pp_print_list_endline :
 val pp_print_list_comma :
   (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit
 
-val pp_unmark : ('a -> 'b -> 'c) -> 'a -> 'b Pos.marked -> 'c
+val pp_print_list_space :
+  (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit
 
-val format_chain_tag : Format.formatter -> Mast.chain_tag -> unit
+val pp_unmark : ('a -> 'b -> 'c) -> 'a -> 'b Pos.marked -> 'c

@@ -188,6 +188,13 @@ public class MValue {
     return new MValue(Math.floor(valueToFloor));
   }
 
+  static MValue m_abs(MValue x) {
+    if (x.isUndefined()) {
+      return mUndefined;
+    }
+    return new MValue(Math.abs(x.getValue()));
+  }
+
   static MValue m_cond(MValue cond, MValue trueVal, MValue falseVal) {
     if (cond.isUndefined()) {
       return mUndefined;
@@ -276,7 +283,7 @@ public class MValue {
     
     if (indexInteger < 0) {
       return zero;
-    } else if (indexInteger > size) {
+    } else if (indexInteger >= size) {
       return mUndefined;
     } else {
       return array[tableStart + indexInteger];

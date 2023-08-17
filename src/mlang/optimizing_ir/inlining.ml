@@ -251,19 +251,15 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
 let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
     (current_stmt_pos : int) : stmt * ctx * int =
   match Pos.unmark stmt with
-  | SAssign (var, data) -> (
-      match data.var_definition with
+  | SAssign (var, def) -> (
+      match def with
       | InputVar -> (stmt, ctx, current_stmt_pos)
       | SimpleVar def ->
           let new_def =
             inline_in_expr (Pos.unmark def) ctx current_block current_stmt_pos
           in
           let new_def = Mir.SimpleVar (Pos.same_pos_as new_def def) in
-          let new_stmt =
-            Pos.same_pos_as
-              (SAssign (var, { data with var_definition = new_def }))
-              stmt
-          in
+          let new_stmt = Pos.same_pos_as (SAssign (var, new_def)) stmt in
           let new_ctx =
             add_var_def_to_ctx var new_def current_block current_stmt_pos ctx
           in
@@ -279,11 +275,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
                 Mir.TableVar
                   (size, IndexGeneric (v, Pos.same_pos_as new_def def))
               in
-              let new_stmt =
-                Pos.same_pos_as
-                  (SAssign (var, { data with var_definition = new_def }))
-                  stmt
-              in
+              let new_stmt = Pos.same_pos_as (SAssign (var, new_def)) stmt in
               let new_ctx =
                 add_var_def_to_ctx var new_def current_block current_stmt_pos
                   ctx
@@ -300,11 +292,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
                   defs
               in
               let new_defs = Mir.TableVar (size, IndexTable new_defs) in
-              let new_stmt =
-                Pos.same_pos_as
-                  (SAssign (var, { data with var_definition = new_defs }))
-                  stmt
-              in
+              let new_stmt = Pos.same_pos_as (SAssign (var, new_defs)) stmt in
               let new_ctx =
                 add_var_def_to_ctx var new_defs current_block current_stmt_pos
                   ctx

@@ -21,22 +21,22 @@ type execution_number = {
   pos : Pos.t;
 }
 
-type max_result =
-  | Left
-  | Right  (** Operator used to select the most preferable variable to choose *)
+type cat_computed = Base | GivenBack
+
+module CatCompSet : SetExt.T with type elt = cat_computed
+
+type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+
+val pp_cat_variable : Format.formatter -> cat_variable -> unit
+
+val compare_cat_variable : cat_variable -> cat_variable -> int
+
+module CatVarSet : SetExt.T with type elt = cat_variable
+
+module CatVarMap : MapExt.T with type key = cat_variable
 
 type variable_id = int
 (** Each variable has an unique ID *)
-
-type variable_subtype =
-  | Context
-  | Family
-  | Penality
-  | Income
-  | Base
-  | GivenBack
-  | Computed
-  | Input
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
@@ -47,12 +47,11 @@ type variable = {
   id : variable_id;
   descr : string Pos.marked;
       (** Description taken from the variable declaration *)
-  attributes :
-    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  attributes : Mast.variable_attribute list;
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  subtypes : variable_subtype list;
+  cats : CatVarSet.t;
   is_table : int option;
 }
 
@@ -113,36 +112,19 @@ type 'variable expression_ =
 
 type expression = variable expression_
 
+module VariableMap : MapExt.T with type key = variable
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
-module VariableMap : sig
-  include Map.S with type key = variable
-
-  val map_printer :
-    (Format.formatter -> variable -> unit) ->
-    (Format.formatter -> 'a -> unit) ->
-    Format.formatter ->
-    'a t ->
-    unit
-end
 
 module VariableDict : Dict.S with type key = variable_id and type elt = variable
 
-module VariableSet : Set.S with type elt = variable
+module VariableSet : SetExt.T with type elt = variable
 
 module LocalVariableMap : sig
-  include Map.S with type key = local_variable
-
-  val map_printer :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  include MapExt.T with type key = local_variable
 end
 
-module IndexMap : sig
-  include Map.S with type key = int
-
-  val map_printer :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-end
+module IndexMap : IntMap.T
 
 type 'variable index_def =
   | IndexTable of
@@ -170,15 +152,27 @@ type variable_data = variable variable_data_
 
 type rov_id = RuleID of int | VerifID of int
 
-module RuleMap : Map.S with type key = rov_id
+module RuleMap : MapExt.T with type key = rov_id
 
-type rule_data = {
-  rule_vars : (variable_id * variable_data) list;
-  rule_number : rov_id Pos.marked;
-  rule_tags : Mast.chain_tag list;
+type 'a domain = {
+  dom_id : Mast.DomainId.t;
+  dom_names : Mast.DomainIdSet.t;
+  dom_by_default : bool;
+  dom_min : Mast.DomainIdSet.t;
+  dom_max : Mast.DomainIdSet.t;
+  dom_data : 'a;
 }
 
-module TagMap : Map.S with type key = Mast.chain_tag
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
+
+type rule_data = {
+  rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
+  rule_vars : (variable_id * variable_data) list;
+  rule_number : rov_id Pos.marked;
+}
 
 type error_descr = {
   kind : string Pos.marked;
@@ -196,11 +190,17 @@ type error = {
   typ : Mast.error_typ;
 }
 
+type verif_domain_data = { vdom_auth : CatVarSet.t }
+
+type verif_domain = verif_domain_data domain
+
 type 'variable condition_data_ = {
+  cond_seq_id : int;
   cond_number : rov_id Pos.marked;
+  cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : error * 'variable option;
-  cond_tags : Mast.chain_tag Pos.marked list;
+  cond_cats : int CatVarMap.t;
 }
 
 type condition_data = variable condition_data_
@@ -213,13 +213,17 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
+  program_rule_domains : rule_domain Mast.DomainIdMap.t;
+  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
-  program_conds : condition_data VariableMap.t;
+  program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables containing informations
           about actual variables in the conditions *)
   program_idmap : idmap;
@@ -238,12 +242,11 @@ module Variable : sig
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
-    attributes :
-      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    attributes : Mast.variable_attribute list;
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    subtypes : variable_subtype list;
+    cats : CatVarSet.t;
     is_table : int option;
   }
 
@@ -254,9 +257,9 @@ module Variable : sig
     string option ->
     string Pos.marked ->
     execution_number ->
-    attributes:(string Pos.marked * Mast.literal Pos.marked) list ->
+    attributes:Mast.variable_attribute list ->
     origin:variable option ->
-    subtypes:variable_subtype list ->
+    cats:CatVarSet.t ->
     is_table:int option ->
     variable
 
@@ -315,6 +318,8 @@ val map_var_def_var : ('v -> 'v2) -> 'v variable_def_ -> 'v2 variable_def_
 
 val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
+val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
+
 val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
 
 val map_vars :
@@ -324,15 +329,19 @@ val compare_execution_number : execution_number -> execution_number -> int
 
 val find_var_definition : program -> variable -> rule_data * variable_data
 
-val max_exec_number : execution_number -> execution_number -> max_result
-
 val is_candidate_valid : execution_number -> execution_number -> bool -> bool
+
+val sort_by_lowest_exec_number : Variable.t -> Variable.t -> int
+
+val get_max_var_sorted_by_execution_number :
+  (Variable.t -> Variable.t -> int) ->
+  string ->
+  Variable.t list Pos.VarNameToID.t ->
+  Variable.t
 
 val fresh_rule_num : unit -> int
 
 val initial_undef_rule_id : rov_id
-
-val subtypes_of_decl : Mast.variable_decl -> variable_subtype list
 
 val find_var_by_name : program -> string Pos.marked -> variable
 (** Get a variable for a given name or alias, because of SSA multiple variables
@@ -346,3 +355,9 @@ val find_vars_by_io : program -> io -> VariableDict.t
 (** Returns a VariableDict.t containing all the variables that have a given io
     type, only one variable per name is entered in the VariableDict.t, this
     function chooses the one with the highest execution number*)
+
+val mast_to_catvars :
+  'a CatVarMap.t -> string Pos.marked list Pos.marked -> CatVarSet.t
+
+val mast_to_catvar :
+  'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable

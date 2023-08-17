@@ -29,6 +29,12 @@ let files =
     non_empty & pos_all file []
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
+let without_dgfip_m =
+  Arg.(
+    value & flag
+    & info [ "without_dfgip_m" ]
+        ~doc:"Don't parse M definitions of DGFiP idiosyncratic datas")
+
 let debug =
   Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
@@ -117,6 +123,13 @@ let run_all_tests =
     & info [ "run_all_tests"; "R" ] ~docv:"TESTS"
         ~doc:"Run all tests in folder specified folder")
 
+let dgfip_test_filter =
+  let doc =
+    "Filter test files on filename: keep only tests beginning by an uppercase \
+     character (use with --run-al-tests)"
+  in
+  Arg.(value & flag & info [ "dgfip_test_filter" ] ~doc)
+
 let run_test =
   Arg.(
     value
@@ -143,6 +156,20 @@ let precision =
            the fixpoint precision), interval (64-bits IEEE754 floats, with up \
            and down rounding mode), mpq (multi-precision rationals) . Default \
            is double")
+
+let roundops =
+  Arg.(
+    value
+    & opt (some string) (Some "default")
+    & info [ "roundops" ] ~docv:"ROUNDOPS"
+        ~doc:
+          "Rounding operations to use in the interpreter: default, multi, \
+           mainframe<n> (where n is the size in bits of the long type to \
+           simulate). Each corresponds to the behavior of the legacy DGFiP \
+           code in different environments: default when running on a regular \
+           PC, multi when running in a multithread context, and mainframe when \
+           running on a mainframe. In this case, the size of the long type has \
+           to be specified; it can be either 32 or 64.")
 
 let test_error_margin =
   Arg.(
@@ -180,11 +207,11 @@ let var_dependencies =
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file
-    $ no_print_cycles $ backend $ function_spec $ mpp_file $ output
-    $ run_all_tests $ run_test $ mpp_function $ optimize $ optimize_unsafe_float
-    $ code_coverage $ precision $ test_error_margin $ m_clean_calls
-    $ dgfip_options $ var_dependencies)
+    const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
+    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ mpp_file
+    $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
+    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ roundops
+    $ test_error_margin $ m_clean_calls $ dgfip_options $ var_dependencies)
 
 let info =
   let doc =
@@ -228,7 +255,19 @@ let info =
       | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
 
+type value_sort =
+  | RegularFloat
+  | MPFR of int (* bitsize of the floats *)
+  | BigInt of int (* precision of the fixed point *)
+  | Interval
+  | Rational
+
+type round_ops = RODefault | ROMulti | ROMainframe of int
+(* size of type long, either 32 or 64 *)
+
 let source_files : string list ref = ref []
+
+let without_dgfip_m = ref false
 
 let dep_graph_file : string ref = ref "dep_graph.dot"
 
@@ -252,12 +291,18 @@ let optimize_unsafe_float = ref false
 
 let m_clean_calls = ref false
 
-let set_all_arg_refs (files_ : string list) (debug_ : bool)
-    (var_info_debug_ : string list) (display_time_ : bool)
+let value_sort = ref RegularFloat
+
+let round_ops = ref RODefault
+
+let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
+    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
-    (m_clean_calls_ : bool) =
+    (m_clean_calls_ : bool) (value_sort_ : value_sort) (round_ops_ : round_ops)
+    =
   source_files := files_;
+  without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
   var_info_flag := !var_info_debug <> [];
@@ -266,6 +311,8 @@ let set_all_arg_refs (files_ : string list) (debug_ : bool)
   no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
+  value_sort := value_sort_;
+  round_ops := round_ops_;
   match output_file_ with None -> () | Some o -> output_file := o
 
 (**{1 Terminal formatting}*)

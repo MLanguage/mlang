@@ -62,10 +62,6 @@ rule token = parse
   { INTEGER }
 | "REEL"
   { REAL }
-| "base"
-  { BASE }
-| "restituee"
-  { GIVEN_BACK }
 | "tableau"
   { TABLE }
 | '['
@@ -74,20 +70,20 @@ rule token = parse
   { RBRACKET }
 | "calculee"
   { COMPUTED }
+| "base"
+  { BASE }
+| "restituee"
+  { GIVEN_BACK }
 | "const"
   { CONST }
 | "alias"
   { ALIAS }
-| "contexte"
-  { CONTEXT }
-| "famille"
-  { FAMILY }
-| "penalite"
-  { PENALITY }
-| "revenu"
-  { INCOME }
 | "saisie"
   { INPUT }
+| "variable"
+  { VARIABLE }
+| "attribut"
+  { ATTRIBUT }
 | '('
   { LPAREN }
 | ')'
@@ -116,6 +112,16 @@ rule token = parse
   { NOTIN }
 | "non"
   { NOT }
+| "domaine"
+  { DOMAIN }
+| "specialise"
+  { SPECIALIZE }
+| "autorise"
+  { AUTHORIZE }
+| "calculable"
+  { COMPUTABLE }
+| "par_defaut"
+  { BY_DEFAULT }
 | "regle"
   { RULE }
 | "si"

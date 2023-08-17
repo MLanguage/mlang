@@ -24,10 +24,10 @@ let format_variable_def fmt (vdef : variable_def) =
 
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
-  | SAssign (v, vdata) ->
+  | SAssign (v, vdef) ->
       Format.fprintf fmt "%s = %a"
         (Pos.unmark (var_to_mir v).Mir.Variable.name)
-        format_variable_def vdata.var_definition
+        format_variable_def vdef
   | SConditional (cond, t, []) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" format_expression cond
         format_stmts t
@@ -74,4 +74,4 @@ let format_rules fmt rules =
 
 let format_program fmt (p : program) =
   Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
-    (Bir.main_statements p)
+    (Bir.main_statements_with_context_and_tgv_init p)

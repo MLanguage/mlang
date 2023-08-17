@@ -128,6 +128,10 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
       (se2, s2)
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      let se, s = generate_java_expr arg in
+      let se2, s2 = (Format.asprintf "m_abs(%s)" se, s) in
+      (se2, s2)
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
@@ -169,9 +173,9 @@ let format_local_vars_defs (oc : Format.formatter)
       Format.fprintf fmt "localVariables[%d] = %s;" lvar.Mir.LocalVariable.id se)
     oc defs
 
-let generate_var_def (var : variable) (data : variable_data)
+let generate_var_def (var : variable) (def : variable_def)
     (oc : Format.formatter) =
-  match data.var_definition with
+  match def with
   | SimpleVar e ->
       let se, defs = generate_java_expr e in
       Format.fprintf oc "%a%s = %s;" format_local_vars_defs defs
@@ -406,7 +410,7 @@ let generate_calculateTax_method (calculation_vars_len : int)
      @,"
     print_double_cut () calculation_vars_len locals_size print_double_cut ()
     print_double_cut () print_double_cut () (generate_stmts program)
-    (Bir.main_statements program)
+    (Bir.main_statements_with_context program)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =
@@ -424,9 +428,7 @@ let generate_mpp_function (program : program) (oc : Format.formatter)
     f (generate_stmts program) mppf_stmts
 
 let generate_mpp_functions (oc : Format.formatter) (program : program) =
-  let functions =
-    FunctionMap.bindings (Bir_interface.context_agnostic_mpp_functions program)
-  in
+  let functions = FunctionMap.bindings program.Bir.mpp_functions in
   let function_names, _ = List.split functions in
   Format.pp_print_list ~pp_sep:print_double_cut
     (generate_mpp_function program)

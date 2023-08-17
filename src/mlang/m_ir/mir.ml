@@ -34,18 +34,6 @@ let compare_execution_number (n1 : execution_number) (n2 : execution_number) :
   if n1.rule_number = n2.rule_number then compare n1.seq_number n2.seq_number
   else compare n1.rule_number n2.rule_number
 
-type max_result =
-  | Left
-  | Right  (** Operator used to select the most preferable variable to choose *)
-
-let max_exec_number (left : execution_number) (right : execution_number) :
-    max_result =
-  if left.rule_number > right.rule_number then Left
-  else if left.rule_number < right.rule_number then Right
-  else if left.seq_number > right.seq_number then Left
-  else if left.seq_number < right.seq_number then Right
-  else Left
-
 (** This is the operator used to determine the if a candidate definition is
     valid at a given point *)
 let is_candidate_valid (candidate : execution_number)
@@ -70,45 +58,70 @@ let same_execution_number (en1 : execution_number) (en2 : execution_number) :
     bool =
   en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
 
+type cat_computed = Base | GivenBack
+
+let pp_cat_computed fmt = function
+  | Base -> Format.fprintf fmt "base"
+  | GivenBack -> Format.fprintf fmt "restituee"
+
+module CatCompSet = struct
+  include SetExt.Make (struct
+    type t = cat_computed
+
+    let compare = compare
+  end)
+
+  let pp ?(sep = " ") ?(pp_elt = pp_cat_computed) (_ : unit)
+      (fmt : Format.formatter) (set : t) : unit =
+    pp ~sep ~pp_elt () fmt set
+end
+
+type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+
+let pp_cat_variable fmt = function
+  | CatInput id ->
+      let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
+      Format.fprintf fmt "saisie%a" pp id
+  | CatComputed id ->
+      let pp fmt set =
+        CatCompSet.iter (Format.fprintf fmt " %a" pp_cat_computed) set
+      in
+      Format.fprintf fmt "calculee%a" pp id
+
+let compare_cat_variable a b =
+  match (a, b) with
+  | CatInput _, CatComputed _ -> 1
+  | CatComputed _, CatInput _ -> -1
+  | CatInput id0, CatInput id1 -> StrSet.compare id0 id1
+  | CatComputed c0, CatComputed c1 -> CatCompSet.compare c0 c1
+
+module CatVarSet = struct
+  include SetExt.Make (struct
+    type t = cat_variable
+
+    let compare = compare_cat_variable
+  end)
+
+  let pp ?(sep = ", ") ?(pp_elt = pp_cat_variable) (_ : unit)
+      (fmt : Format.formatter) (set : t) : unit =
+    pp ~sep ~pp_elt () fmt set
+end
+
+module CatVarMap = struct
+  include MapExt.Make (struct
+    type t = cat_variable
+
+    let compare = compare_cat_variable
+  end)
+
+  let pp ?(sep = "; ") ?(pp_key = pp_cat_variable) ?(assoc = " => ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
+end
+
 type variable_id = int
 (** Each variable has an unique ID *)
-
-type variable_subtype =
-  | Context
-  | Family
-  | Penality
-  | Income
-  | Base
-  | GivenBack
-  | Computed
-  | Input
-
-let subtypes_of_decl (var_decl : Mast.variable_decl) : variable_subtype list =
-  match var_decl with
-  | ConstVar _ -> []
-  | ComputedVar cv ->
-      let subtypes =
-        List.map
-          (fun subtyp ->
-            match (Pos.unmark subtyp : Mast.computed_typ) with
-            | Base -> Base
-            | GivenBack -> GivenBack)
-          (Pos.unmark cv).comp_subtyp
-      in
-      Computed :: subtypes
-  | InputVar iv ->
-      let iv = Pos.unmark iv in
-      let subtypes =
-        match (Pos.unmark iv.input_subtyp : Mast.input_variable_subtype) with
-        | Context -> [ Context ]
-        | Family -> [ Family ]
-        | Penality -> [ Penality ]
-        | Income -> [ Income ]
-      in
-      let subtypes =
-        if iv.input_given_back then GivenBack :: subtypes else subtypes
-      in
-      Input :: subtypes
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
@@ -119,12 +132,11 @@ type variable = {
   id : variable_id;
   descr : string Pos.marked;
       (** Description taken from the variable declaration *)
-  attributes :
-    (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+  attributes : Mast.variable_attribute list;
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  subtypes : variable_subtype list;
+  cats : CatVarSet.t;
   is_table : int option;
 }
 
@@ -140,12 +152,11 @@ module Variable = struct
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
-    attributes :
-      (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked) list;
+    attributes : Mast.variable_attribute list;
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    subtypes : variable_subtype list;
+    cats : CatVarSet.t;
     is_table : int option;
   }
 
@@ -158,10 +169,8 @@ module Variable = struct
 
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
-      ~(attributes :
-         (Mast.input_variable_attribute Pos.marked * Mast.literal Pos.marked)
-         list) ~(origin : t option) ~(subtypes : variable_subtype list)
-      ~(is_table : int option) : t =
+      ~(attributes : Mast.variable_attribute list) ~(origin : t option)
+      ~(cats : CatVarSet.t) ~(is_table : int option) : t =
     {
       name;
       id = fresh_id ();
@@ -170,7 +179,7 @@ module Variable = struct
       execution_number;
       attributes;
       origin;
-      subtypes;
+      cats;
       is_table;
     }
 
@@ -288,17 +297,22 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
 module VariableMap = struct
-  include Map.Make (Variable)
+  include MapExt.Make (Variable)
 
-  let map_printer key_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun k v ->
-            Format.fprintf fmt "%a ~> %a, " key_printer k value_printer v))
-      map
+  let pp_key fmt key =
+    Format.fprintf fmt "Variable %s%s"
+      (Pos.unmark key.Variable.name)
+      (match key.Variable.alias with
+      | Some x -> " (alias " ^ x ^ ")"
+      | None -> "")
+
+  let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
-(* module VariableDictMap = Map.Make (struct
+(* module VariableDictMap = MapExt.Make (struct
  *   type t = Variable.id
  * 
  *   let compare = compare
@@ -317,33 +331,28 @@ module VariableDict = Dict.Make (struct
   let compare = compare
 end)
 
-module VariableSet = Set.Make (Variable)
+module VariableSet = SetExt.Make (Variable)
 
 module LocalVariableMap = struct
-  include Map.Make (LocalVariable)
+  include MapExt.Make (LocalVariable)
 
-  let map_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun var v ->
-            Format.fprintf fmt "%d ~> %a, " var.id value_printer v))
-      map
+  let pp_key fmt key = Format.fprintf fmt "%d" key.id
+
+  let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
 (** This map is used to store the definitions of all the cells of a table
     variable that is not not defined generically *)
 module IndexMap = struct
-  include Map.Make (struct
-    type t = int
+  include IntMap
 
-    let compare = compare
-  end)
-
-  let map_printer value_printer fmt map =
-    Format.fprintf fmt "{ %a }"
-      (fun fmt ->
-        iter (fun k v -> Format.fprintf fmt "%d ~> %a, " k value_printer v))
-      map
+  let pp ?(sep = ", ") ?(pp_key = Format.pp_print_int) ?(assoc = " -> ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
 type 'variable index_def =
@@ -401,25 +410,30 @@ let fresh_rule_num =
 (** Special rule id for initial definition of variables *)
 let initial_undef_rule_id = RuleID (-1)
 
-type rule_data = {
-  rule_vars : (Variable.id * variable_data) list;
-  rule_number : rov_id Pos.marked;
-  rule_tags : Mast.chain_tag list;
+type 'a domain = {
+  dom_id : Mast.DomainId.t;
+  dom_names : Mast.DomainIdSet.t;
+  dom_by_default : bool;
+  dom_min : Mast.DomainIdSet.t;
+  dom_max : Mast.DomainIdSet.t;
+  dom_data : 'a;
 }
 
-module RuleMap = Map.Make (struct
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
+
+type rule_data = {
+  rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
+  rule_vars : (Variable.id * variable_data) list;
+  rule_number : rov_id Pos.marked;
+}
+
+module RuleMap = MapExt.Make (struct
   type t = rov_id
 
   let compare = compare
-end)
-
-module TagMap = Map.Make (struct
-  type t = Mast.chain_tag
-
-  let compare t1 t2 =
-    match (t1, t2) with
-    | Mast.Custom s1, Mast.Custom s2 -> String.compare s1 s2
-    | _ -> Stdlib.compare t1 t2
 end)
 
 (**{1 Verification conditions}*)
@@ -499,23 +513,36 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
+type verif_domain_data = { vdom_auth : CatVarSet.t }
+
+type verif_domain = verif_domain_data domain
+
 type 'variable condition_data_ = {
+  cond_seq_id : int;
   cond_number : rov_id Pos.marked;
+  cond_domain : verif_domain;
   cond_expr : 'variable expression_ Pos.marked;
   cond_error : (Error.t[@opaque]) * 'variable option;
-  cond_tags : Mast.chain_tag Pos.marked list;
+  cond_cats : int CatVarMap.t;
 }
 
 let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
     'v2 condition_data_ =
   {
+    cond_seq_id = cond.cond_seq_id;
     cond_number = cond.cond_number;
+    cond_domain = cond.cond_domain;
     cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
     cond_error =
       (let e, v = cond.cond_error in
        (e, Option.map f v));
-    cond_tags = cond.cond_tags;
+    cond_cats = cond.cond_cats;
   }
+
+let cond_cats_to_set cats =
+  CatVarMap.fold
+    (fun cv nb res -> if nb > 0 then CatVarSet.add cv res else res)
+    cats CatVarSet.empty
 
 type condition_data = variable condition_data_
 
@@ -528,13 +555,17 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
+  program_rule_domains : rule_domain Mast.DomainIdMap.t;
+  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
-  program_conds : condition_data VariableMap.t;
+  program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
@@ -570,10 +601,14 @@ let sort_by_lowest_exec_number v1 v2 =
 let sort_by_highest_exec_number v1 v2 =
   compare v1.Variable.execution_number v2.Variable.execution_number
 
+let get_max_var_sorted_by_execution_number compare (name : string)
+    (idmap : _ Pos.VarNameToID.t) : Variable.t =
+  let vars = Pos.VarNameToID.find name idmap |> List.sort compare in
+  match vars with [] -> raise Not_found | hd :: _ -> hd
+
 let get_var_sorted_by_execution_number (p : program) (name : string) sort :
     Variable.t =
-  let vars = Pos.VarNameToID.find name p.program_idmap |> List.sort sort in
-  match vars with [] -> raise Not_found | hd :: _ -> hd
+  get_max_var_sorted_by_execution_number sort name p.program_idmap
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
   try
@@ -646,3 +681,76 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
+
+let mast_to_catvars (cats : 'a CatVarMap.t)
+    (l : string Pos.marked list Pos.marked) : CatVarSet.t =
+  let filter_cats pred =
+    CatVarMap.fold
+      (fun cv _ res -> if pred cv then CatVarSet.add cv res else res)
+      cats CatVarSet.empty
+  in
+  match l with
+  | [ ("*", _) ], _ -> filter_cats (fun _ -> true)
+  | [ ("saisie", _); ("*", _) ], _ ->
+      filter_cats (fun cv -> match cv with CatInput _ -> true | _ -> false)
+  | ("saisie", _) :: id, pos ->
+      let vcat = CatInput (StrSet.from_marked_list id) in
+      if CatVarMap.mem vcat cats then CatVarSet.singleton vcat
+      else Errors.raise_spanned_error "unknown variable category" pos
+  | ("calculee", _) :: id, id_pos -> begin
+      match id with
+      | [] -> CatVarSet.singleton (CatComputed CatCompSet.empty)
+      | [ ("base", _) ] ->
+          let base = CatCompSet.singleton Base in
+          CatVarSet.singleton (CatComputed base)
+      | [ ("base", _); ("*", _) ] ->
+          let base = CatCompSet.singleton Base in
+          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
+          CatVarSet.singleton (CatComputed base)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | [ ("restituee", _) ] ->
+          let givenBack = CatCompSet.singleton GivenBack in
+          CatVarSet.singleton (CatComputed givenBack)
+      | [ ("restituee", _); ("*", _) ] ->
+          let givenBack = CatCompSet.singleton GivenBack in
+          let baseAndGivenBack = givenBack |> CatCompSet.add Base in
+          CatVarSet.singleton (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
+          let baseAndGivenBack =
+            CatCompSet.singleton Base |> CatCompSet.add GivenBack
+          in
+          CatVarSet.singleton (CatComputed baseAndGivenBack)
+      | [ ("*", _) ] ->
+          let base = CatCompSet.singleton Base in
+          let givenBack = CatCompSet.singleton GivenBack in
+          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
+          CatVarSet.singleton (CatComputed CatCompSet.empty)
+          |> CatVarSet.add (CatComputed base)
+          |> CatVarSet.add (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+      | _ ->
+          Errors.raise_spanned_error "unlnown calculated variable category"
+            id_pos
+    end
+  | _ -> assert false
+
+let mast_to_catvar (cats : 'a CatVarMap.t)
+    (l : string Pos.marked list Pos.marked) : cat_variable =
+  match l with
+  | ("saisie", _) :: id, pos ->
+      let vcat = CatInput (StrSet.from_marked_list id) in
+      if CatVarMap.mem vcat cats then vcat
+      else Errors.raise_spanned_error "unknown variable category" pos
+  | ("calculee", _) :: id, id_pos -> begin
+      match id with
+      | [] -> CatComputed CatCompSet.empty
+      | [ ("base", _) ] -> CatComputed (CatCompSet.singleton Base)
+      | [ ("restituee", _) ] -> CatComputed (CatCompSet.singleton GivenBack)
+      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
+          CatComputed (CatCompSet.singleton Base |> CatCompSet.add GivenBack)
+      | _ ->
+          Errors.raise_spanned_error "unlnown calculated variable category"
+            id_pos
+    end
+  | _, pos -> Errors.raise_spanned_error "unknown variable category" pos

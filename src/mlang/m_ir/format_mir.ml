@@ -30,18 +30,6 @@ let format_execution_number_short fmt (exec_number : execution_number) =
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
-let format_subtype fmt (st : variable_subtype) =
-  Format.pp_print_string fmt
-    (match st with
-    | Context -> "contexte"
-    | Family -> "famille"
-    | Income -> "revenu"
-    | Penality -> "penalite"
-    | Base -> "base"
-    | GivenBack -> "restituee"
-    | Computed -> "calculee"
-    | Input -> "saisie")
-
 let format_io fmt (io : io) =
   Format.pp_print_string fmt
     (match io with
@@ -111,7 +99,7 @@ let format_variable_def fmt (def : variable_def) =
         (Pos.unmark v.Variable.name)
         format_expression (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
-      IndexMap.map_printer (Format_mast.pp_unmark format_expression) fmt defs
+      IndexMap.pp (Format_mast.pp_unmark format_expression) fmt defs
 
 let format_variable_data fmt (def : variable_data) =
   Format.fprintf fmt "type %a, io %a:\n%a"
@@ -122,14 +110,7 @@ let format_variable_data fmt (def : variable_data) =
     () format_io def.var_io format_variable_def def.var_definition
 
 let format_variables fmt (p : variable_data VariableMap.t) =
-  VariableMap.map_printer
-    (fun fmt var ->
-      Format.fprintf fmt "Variable %s%s"
-        (Pos.unmark var.Variable.name)
-        (match var.Variable.alias with
-        | Some x -> " (alias " ^ x ^ ")"
-        | None -> ""))
-    format_variable_data fmt p
+  VariableMap.pp format_variable_data fmt p
 
 let format_error fmt (e : Error.t) =
   Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)
@@ -159,11 +140,11 @@ let format_program_rules fmt (vars : VariableDict.t)
         format_variables var_defs)
     rules
 
-let format_program_conds fmt (conds : condition_data VariableMap.t) =
+let format_program_conds fmt (conds : condition_data Mir.RuleMap.t) =
   Format_mast.pp_print_list_endline
     (fun fmt (_, cond) -> format_precondition fmt cond)
     fmt
-    (VariableMap.bindings conds)
+    (Mir.RuleMap.bindings conds)
 
 let format_program fmt (p : program) =
   Format.fprintf fmt "%a\n\n%a"

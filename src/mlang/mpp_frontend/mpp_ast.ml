@@ -4,8 +4,6 @@ type compute_name = string
 
 type callable = string
 
-type filter = string
-
 type unop = Minus
 
 type binop = And | Or | Gt | Gte | Lt | Lte | Eq | Neq
@@ -15,7 +13,13 @@ type expr = expr_kind Pos.marked
 and expr_kind =
   | Constant of int
   | Variable of var
+  | NbVarCategory of string Pos.marked list Pos.marked
+  | ExistsAttrWith of (string Pos.marked * float)
+  | ExistsAliases of string Pos.marked list
   | Unop of unop * expr
+  | CallRules of string Pos.marked list Pos.marked * var Pos.marked list
+  | CallChain of var Pos.marked list
+  | CallVerifs of string Pos.marked list Pos.marked * expr
   | Call of callable Pos.marked * var Pos.marked list
   | Binop of expr * binop * expr
 
@@ -29,7 +33,7 @@ and stmt_kind =
   (* | MultiAssign of var list * expr *)
   (* no multiassign: all assignments performed to input scope. Multiassign-ed
      variables would have output scope *)
-  | Partition of filter * stmt list
+  | Partition of string Pos.marked * float * stmt list
 
 type compute = { name : compute_name; args : var list; body : stmt list }
 

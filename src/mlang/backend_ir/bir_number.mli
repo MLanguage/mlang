@@ -19,7 +19,11 @@ module type NumberInterface = sig
 
   val format_t : Format.formatter -> t -> unit
 
+  val abs : t -> t
+
   val floor : t -> t
+
+  val ceil : t -> t
 
   val of_int : Int64.t -> t
 
@@ -64,7 +68,7 @@ end
 
 module RegularFloatNumber : NumberInterface
 
-val mpfr_float : Mpfrf.t -> Mpfrf.t
+val mpfr_floor : Mpfrf.t -> Mpfrf.t
 
 module MPFRNumber : NumberInterface
 

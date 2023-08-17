@@ -5,11 +5,14 @@ compute_article1731bis():
     PREM8_11 = 1
 
 compute_benefits():
- if exists_deposit_defined_variables() or exists_taxbenefit_ceiled_variables():
-    partition with var_is_taxbenefit:
+# do not exist in the 2018 version: 7MA,7KM,7KG
+# do not exist in the 2019 version: 7QD,7QB,7QC,7CN,7QE,7QF,7QG,7QH,7LS
+# do not exist in the 2020 version: 7QK,7CM,7QI,7QJ,7QL
+ if exists_attribute_with(acompte, 1) or exists_aliases(4BA,4BY,4BB,4BC,7CL,7LG,7QM,2DC,7QP,7QS,7QN,7QO):
+    partition with avfisc == 1:
       V_INDTEO = 1
       V_CALCUL_NAPS = 1
-      IAD11, INE, IRE <- call_m(primitif)
+      IAD11, INE, IRE <- call_m_rules(primitive)
       V_CALCUL_NAPS = 0
       iad11 = cast(IAD11)
       ire = cast(IRE)
@@ -26,7 +29,7 @@ compute_double_liquidation3(outputs):
   V_DIFTEOREEL = 0
   PREM8_11 = 0
   compute_article1731bis()
-  calcul_avfisc = exists_taxbenefit_defined_variables()
+  calcul_avfisc = exists_attribute_with(avfisc, 1)
   v_8ZG = 8ZG
   if present(8ZG) and calcul_avfisc:
     del 8ZG
@@ -41,9 +44,9 @@ compute_double_liquidation3(outputs):
   8ZG = v_8ZG
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  outputs <- call_m(isf)
-  outputs <- call_m(primitif)
-  outputs <- call_m(taux)
+  outputs <- call_m_rules(isf)
+  outputs <- call_m_rules(primitive)
+  outputs <- call_m_rules(taux)
 
 compute_double_liquidation_exit_taxe(outputs):
   annee = 2018 # FIXME

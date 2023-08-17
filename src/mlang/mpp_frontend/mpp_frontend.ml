@@ -19,21 +19,6 @@
 
 open Mpp_ir
 
-let filter_of_string (s : string Pos.marked) : var_filter =
-  match Pos.unmark s with
-  | "saisie" -> Saisie None
-  | "calculee" -> Calculee None
-  | "contexte" -> Saisie (Some Context)
-  | "famille" -> Saisie (Some Family)
-  | "revenu" -> Saisie (Some Income)
-  | "penalite" -> Saisie (Some Penality)
-  | "base" -> Calculee (Some Base)
-  | "restituee" -> Calculee (Some GivenBack)
-  | unknown ->
-      Errors.raise_spanned_error
-        (Format.sprintf "unknown variable category %s" unknown)
-        (Pos.get_position s)
-
 let to_scoped_var ?(scope = Input) (p : Mir.program)
     (var : Mpp_ast.var Pos.marked) : scoped_var =
   let var_s = Pos.unmark var in
@@ -48,46 +33,12 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | "present" -> Present
   | "abs" -> Abs
   | "cast" -> Cast
-  | "exists_deposit_defined_variables" -> DepositDefinedVariables
-  | "exists_taxbenefit_defined_variables" -> TaxbenefitDefinedVariables
-  | "exists_taxbenefit_ceiled_variables" -> TaxbenefitCeiledVariables
   | x ->
       if List.mem x translated_names then MppFunction x
       else
         Errors.raise_spanned_error
           (Format.sprintf "unknown callable %s" x)
           (Pos.get_position cname)
-
-let to_mpp_callable (cname : string Pos.marked) (args : string Pos.marked list)
-    (translated_names : string list) : mpp_callable * string Pos.marked list =
-  let name = Pos.unmark cname in
-  match name with
-  | "call_m" -> begin
-      match args with
-      | [] ->
-          Errors.raise_spanned_error "Expected a chain to call"
-            (Pos.get_position cname)
-      | chain :: args ->
-          (Program (Mast.chain_tag_of_string (Pos.unmark chain)), args)
-    end
-  | "call_m_verif" -> begin
-      match args with
-      | [] ->
-          Errors.raise_spanned_error "Expected a chain to call"
-            (Pos.get_position cname)
-      | chain :: args ->
-          let chain = Mast.chain_tag_of_string (Pos.unmark chain) in
-          let filter =
-            match args with
-            | [] -> None
-            | [ filter ] -> Some (filter_of_string filter)
-            | arg :: _ ->
-                Errors.raise_spanned_error "unexpected additional argument"
-                  (Pos.get_position arg)
-          in
-          (Verif (chain, filter), args)
-    end
-  | _ -> (to_mpp_callable cname translated_names, args)
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     (scope : mpp_compute_name list) (e : Mpp_ast.expr) :
@@ -101,11 +52,49 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
                ~scope:(if List.mem v scope then Output else Input)
                p (Pos.same_pos_as v e)),
           scope )
+    | NbVarCategory l ->
+        let cats = Mir.mast_to_catvars p.program_var_categories l in
+        (Call (NbVarCat cats, []), [])
+    | ExistsAttrWith (attr, value) ->
+        (Call (ExistsAttrWithVal (attr, value), []), [])
+    | ExistsAliases aliases ->
+        let aliasMap =
+          List.fold_left
+            (fun res (name, pos) -> StrMap.add name pos res)
+            StrMap.empty aliases
+        in
+        (Call (ExistsAliases aliasMap, []), [])
     | Unop (Minus, e) ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Unop (Minus, e'), scope)
+    | CallRules (dom, args) ->
+        let c' =
+          let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
+          Rules dom_id
+        in
+        let new_scope = List.map Pos.unmark args in
+        let args' = List.map (to_scoped_var p) args in
+        (Call (c', args'), new_scope)
+    | CallChain args ->
+        let c', args =
+          match args with
+          | [] ->
+              Errors.raise_spanned_error "Expected a chain to call"
+                (Pos.get_position e)
+          | chain :: args -> (Chain (Pos.unmark chain), args)
+        in
+        let new_scope = List.map Pos.unmark args in
+        let args' = List.map (to_scoped_var p) args in
+        (Call (c', args'), new_scope)
+    | CallVerifs (dom, expr) ->
+        let c' =
+          let dom_id = Mast.DomainId.from_marked_list (Pos.unmark dom) in
+          let filter = fst (to_mpp_expr p translated_names scope expr) in
+          Verifs (dom_id, filter)
+        in
+        (Call (c', []), scope)
     | Call (c, args) ->
-        let c', args = to_mpp_callable c args translated_names in
+        let c' = to_mpp_callable c translated_names in
         let new_scope = List.map Pos.unmark args in
         let args' = List.map (to_scoped_var p) args in
         (Call (c', args'), new_scope)
@@ -117,13 +106,6 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
           scope )
   in
   (Pos.same_pos_as e' e, scope)
-
-let to_mpp_filter (f : string Pos.marked) : mpp_filter =
-  if Pos.unmark f = "var_is_taxbenefit" then VarIsTaxBenefit
-  else
-    Errors.raise_spanned_error
-      (Format.asprintf "unknown filter %s" (Pos.unmark f))
-      (Pos.get_position f)
 
 let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
     (scope : mpp_compute_name list) (stmt : Mpp_ast.stmt) :
@@ -145,10 +127,8 @@ let rec to_mpp_stmt (p : Mir.program) (translated_names : string list)
     | Expr e ->
         let e', scope = to_mpp_expr p translated_names scope e in
         (Expr e', scope)
-    | Partition (f, body) ->
-        ( Partition
-            ( to_mpp_filter (Pos.same_pos_as f stmt),
-              to_mpp_stmts p translated_names ~scope body ),
+    | Partition (attr, value, body) ->
+        ( Partition (attr, value, to_mpp_stmts p translated_names ~scope body),
           scope )
   in
   (Pos.same_pos_as stmt' stmt, scope)
