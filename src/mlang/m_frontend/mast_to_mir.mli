@@ -27,9 +27,9 @@
 (** The values of the map can be either strings of integers *)
 type loop_param_value = VarName of Mast.variable_name | RangeInt of int
 
-module ConstMap : Map.S with type key = Mast.variable_name
+module ConstMap : StrMap.T
 
-module ParamsMap : Map.S with type key = Char.t
+module ParamsMap : CharMap.T
 (** Map whose keys are loop parameters *)
 
 type loop_context = (loop_param_value * int) ParamsMap.t
@@ -74,11 +74,12 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 (** Dummy execution number used for variable declarations *)
 
 val get_conds :
+  'a Mir.CatVarMap.t ->
   Mir.Error.t list ->
   float Pos.marked ConstMap.t ->
   Mir.idmap ->
   Mast.program ->
-  Mir.condition_data Mir.VariableMap.t
+  Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.RuleMap.t
 (** Returns a map whose keys are dummy variables and whose values are the
     verification conditions. *)
 

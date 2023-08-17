@@ -38,7 +38,7 @@ module Make (I : sig
   val compare : t -> t -> int
 end) =
 struct
-  module DictMap = Map.Make (I)
+  module DictMap = MapExt.Make (I)
 
   type key = I.t
 

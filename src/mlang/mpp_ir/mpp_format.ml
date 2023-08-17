@@ -23,30 +23,6 @@ let format_scoped_var (fmt : formatter) (sv : scoped_var) : unit =
     | Local s -> s
     | Mbased (v, _) -> Pos.unmark v.Mir.Variable.name)
 
-let format_var_filter (fmt : formatter) (f : var_filter) : unit =
-  match f with
-  | Saisie None -> pp_print_string fmt Mast.input_category
-  | Calculee None -> pp_print_string fmt Mast.computed_category
-  | Calculee (Some st) | Saisie (Some st) -> fprintf fmt "%s" st
-
-let format_callable (fmt : formatter) (f : mpp_callable) =
-  fprintf fmt "%s"
-    (match f with
-    | Program chain ->
-        Format.asprintf "evaluate_program(%a)" Format_mast.format_chain_tag
-          chain
-    | Verif (chain, filter) ->
-        Format.asprintf "verification(%a%a)" Format_mast.format_chain_tag chain
-          (pp_print_option format_var_filter)
-          filter
-    | MppFunction m -> m
-    | Present -> "present"
-    | Abs -> "abs"
-    | Cast -> "cast"
-    | DepositDefinedVariables -> "DepositDefinedVariables"
-    | TaxbenefitCeiledVariables -> "TaxbenefitCeiledVariables"
-    | TaxbenefitDefinedVariables -> "TaxbenefitDefinedVariables")
-
 let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
   fprintf fmt "%s"
     (match b with
@@ -58,10 +34,6 @@ let format_binop (fmt : formatter) (b : Mpp_ast.binop) : unit =
     | Lte -> "<="
     | Eq -> "=="
     | Neq -> "!=")
-
-let format_filter (fmt : formatter) (f : mpp_filter) : unit =
-  assert (f = VarIsTaxBenefit);
-  fprintf fmt "VarIsTaxBenefit"
 
 let rec format_expression (fmt : formatter) (expr : mpp_expr_kind Pos.marked) :
     unit =
@@ -79,6 +51,28 @@ let rec format_expression (fmt : formatter) (expr : mpp_expr_kind Pos.marked) :
       fprintf fmt "(%a %a %a)" format_expression e1 format_binop b
         format_expression e2
 
+and format_callable (fmt : formatter) (f : mpp_callable) =
+  fprintf fmt "%s"
+    (match f with
+    | Rules dom -> Format.asprintf "rules(%a)" (Mast.DomainId.pp ()) dom
+    | Chain chain -> Format.asprintf "chain(%s)" chain
+    | Verifs (dom, filter) ->
+        Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
+          format_expression filter
+    | NbVarCat cvs ->
+        Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
+    | ExistsAttrWithVal ((attr, _), value) ->
+        Format.asprintf "exists_attribute_with(%s, %f)" attr value
+    | ExistsAliases aliases ->
+        let pp_null _ _ = () in
+        Format.asprintf "exists_alias(%a)"
+          (StrMap.pp ~sep:", " ~assoc:"" pp_null)
+          aliases
+    | MppFunction m -> m
+    | Present -> "present"
+    | Abs -> "abs"
+    | Cast -> "cast")
+
 let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
   match Pos.unmark stmt with
   | Assign (sv, e) ->
@@ -91,8 +85,8 @@ let rec format_stmt (fmt : formatter) (stmt : mpp_stmt) : unit =
         format_expression cond format_stmts t format_stmts f
   | Delete sv -> fprintf fmt "del %a" format_scoped_var sv
   | Expr e -> format_expression fmt e
-  | Partition (f, body) ->
-      fprintf fmt "partition with %a:@\n@[<h 2>  %a@]" format_filter f
+  | Partition ((attr, _), value, body) ->
+      fprintf fmt "partition with %s == %f:@\n@[<h 2>  %a@]" attr value
         format_stmts body
 
 and format_stmts (fmt : formatter) (stmts : mpp_stmt list) : unit =

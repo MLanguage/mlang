@@ -49,6 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
+%token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 
 %token EOF
 
@@ -82,6 +83,14 @@ source_file_item:
 | o = output { (Output o, mk_position $sloc) }
 | fonction { (Function, mk_position $sloc) }
 | c = var_category_decl { (VarCatDecl c, mk_position $sloc) }
+| cr = rule_domain_decl { (RuleDomDecl cr, mk_position $sloc) }
+| cv = verif_domain_decl { (VerifDomDecl cv, mk_position $sloc) }
+
+%inline symbol_with_pos:
+| s = SYMBOL { (s, mk_position $sloc) }
+
+%inline symbol_list_with_pos:
+| sl = nonempty_list(symbol_with_pos) { (sl, mk_position $sloc) }
 
 var_category_decl:
 | VARIABLE var_type = var_typ c = symbol_with_pos* COLON ATTRIBUT
@@ -99,8 +108,103 @@ var_typ:
 | INPUT { Input }
 | COMPUTED { Computed }
 
-%inline symbol_with_pos:
-| s = SYMBOL { (s, mk_position $sloc) }
+rule_domain_decl:
+| DOMAIN RULE rdom_params = separated_nonempty_list(COLON, rdom_param_with_pos) SEMICOLON
+  {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (dno, dso, dco, dpdo) = function
+    | Some dn, _, _, _, pos ->
+        if dno = None then Some dn, dso, dco, dpdo
+        else err "rule domain names are already defined" pos
+    | _, Some ds, _, _, pos ->
+        if dso = None then dno, Some ds, dco, dpdo
+        else err "rule domain specialization is already specified" pos
+    | _, _, Some dc, _, pos ->
+        if dco = None then dno, dso, Some dc, dpdo
+        else err "rule domain is already calculated" pos
+    | _, _, _, Some dpd, pos ->
+        if dpdo = None then dno, dso, dco, Some dpd
+        else err "rule domain is already defined by defaut" pos
+    | _, _, _, _, _ -> assert false
+    in
+    let init = None, None, None, None in
+    let dno, dso, dco, dpdo = List.fold_left fold init rdom_params in
+    let dom_names =
+      match dno with
+      | None -> err "rule domain names must be defined" (mk_position $sloc)
+      | Some dn -> dn
+    in
+    {
+      dom_names;
+      dom_parents = (match dso with None -> [] | Some ds -> ds);
+      dom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_data = {rdom_computable = (match dco with None -> false | _ -> true)};
+    }
+  }
+
+rdom_param_with_pos:
+| rdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (Some rdom_names, None, None, None, mk_position $sloc) }
+| SPECIALIZE rdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (None, Some rdom_parents, None, None, mk_position $sloc) }
+| COMPUTABLE
+  { (None, None, Some (), None, mk_position $sloc) }
+| BY_DEFAULT
+  { (None, None, None, Some (), mk_position $sloc) }
+
+verif_domain_decl:
+| DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, vdom_param_with_pos) SEMICOLON
+  {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (dno, dso, dvo, dpdo) = function
+    | Some dn, _, _, _, pos ->
+        if dno = None then Some dn, dso, dvo, dpdo
+        else err "verif domain names are already defined" pos
+    | _, Some ds, _, _, pos ->
+        if dso = None then dno, Some ds, dvo, dpdo
+        else err "verif domain specialization is already specified" pos
+    | _, _, Some dv, _, pos ->
+        if dvo = None then dno, dso, Some dv, dpdo
+        else err "verif domain authorization is already specified" pos
+    | _, _, _, Some dpd, pos ->
+        if dpdo = None then dno, dso, dvo, Some dpd
+        else err "verif domain is already defined by defaut" pos
+    | _, _, _, _, _ -> assert false
+    in
+    let init = None, None, None, None in
+    let dno, dso, dvo, dpdo = List.fold_left fold init vdom_params in
+    let dom_names =
+      match dno with
+      | None -> err "rule domain names must be defined" (mk_position $sloc)
+      | Some dn -> dn
+    in
+    {
+      dom_names;
+      dom_parents = (match dso with None -> [] | Some ds -> ds);
+      dom_by_default = (match dpdo with None -> false | _ -> true);
+      dom_data = { vdom_auth = (match dvo with None -> [] | Some dv -> dv) };
+    }
+  }
+
+%inline var_computed_category:
+| BASE { ("base", mk_position $sloc) }
+| GIVEN_BACK { ("restituee", mk_position $sloc) }
+| TIMES { ("*", mk_position $sloc) }
+
+var_category_id:
+| INPUT l = symbol_with_pos+ { (("saisie", Pos.no_pos) :: l, mk_position $sloc) }
+| COMPUTED l = var_computed_category* { (("calculee", Pos.no_pos) :: l, mk_position $sloc) }
+| TIMES { (["*", Pos.no_pos], mk_position $sloc) }
+
+vdom_param_with_pos:
+| vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (Some vdom_names, None, None, None, mk_position $sloc) }
+| SPECIALIZE vdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
+  { (None, Some vdom_parents, None, None, mk_position $sloc) }
+| AUTHORIZE vcats = separated_nonempty_list(COMMA, var_category_id)
+  { (None, None, Some vcats, None, mk_position $sloc) }
+| BY_DEFAULT
+  { (None, None, None, Some (), mk_position $sloc) }
 
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
@@ -147,6 +251,8 @@ computed_variable_descr:
 computed_attr_or_subtyp:
 | attr = variable_attribute { let (x, y) = attr in Attr (x,y) }
 | cat = symbol_with_pos { CompSubTyp cat }
+| BASE { CompSubTyp ("base", mk_position $sloc) }
+| GIVEN_BACK { CompSubTyp ("restituee", mk_position $sloc) }
 
 computed_variable:
 | name = computed_variable_name size = computed_variable_table? COMPUTED
@@ -159,6 +265,7 @@ computed_variable:
         (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
     comp_category = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
         (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
+    comp_is_givenback = List.exists (fun x -> match x with CompSubTyp ("restituee", _) -> true | _ -> false) subtyp;
     comp_description = descr;
     comp_typ = typ;
   }, mk_position $sloc) }
@@ -173,29 +280,32 @@ input_descr:
 descr = STRING { (parse_string descr, mk_position $sloc) }
 
 input_attr_or_category:
-| attr = variable_attribute { (None, Some attr) }
-| cat = symbol_with_pos { (Some cat, None) }
+| attr = variable_attribute { (None, Some attr, false) }
+| cat = symbol_with_pos { (Some cat, None, false) }
+| GIVEN_BACK { None, None, true }
 
 input_variable:
 | name = input_variable_name INPUT
   category_attrs = input_attr_or_category* alias = input_variable_alias COLON descr = input_descr
   typ = value_type?
   SEMICOLON {
-  let (category, attrs) = List.split category_attrs in
+  let (category, attrs, givenback) =
+    List.fold_left
+      (fun (category, attrs, givenback) (c, a, r) -> 
+        match c, a, r with
+        | Some x, _, _ -> x :: category, attrs, givenback
+        | _, Some x, _ -> category, x :: attrs, givenback
+        | _, _, true -> category, attrs, true
+        | _, _, _ -> category, attrs, givenback)
+      ([], [], false)
+      category_attrs
+  in
   InputVar ({
     input_name = name;
-    input_category =
-      List.map
-        (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-        (List.filter (fun x -> x <> None) category);
-    input_attributes = begin
-        let attrs  =
-          List.map (fun x -> match x with None -> assert false (* should not happen *) | Some x -> x)
-            (List.filter (fun x -> x <> None) attrs)
-        in
-        attrs
-    end;
+    input_category = category;
+    input_attributes = attrs;
     input_alias = alias;
+    input_is_givenback = givenback;
     input_typ = typ;
     input_description = descr;
   }, mk_position $sloc) }
@@ -225,18 +335,37 @@ value_type_prim:
 | INTEGER { (Integer, mk_position $sloc) }
 | REAL { (Real, mk_position $sloc) }
 
-rule_name_symbol:
-name = SYMBOL { (name, mk_position $sloc) }
-
 rule:
-| RULE name = rule_name_symbol+ COLON apps = application_reference
+| RULE name = symbol_list_with_pos COLON apps = application_reference
   SEMICOLON c = chaining_reference?
   formulaes = formula_list
   {
-    let rule_number, rule_tags = Mast.number_and_tags_of_name name in
+    let num, rule_tag_names =
+      let uname = Pos.unmark name in
+      let begPos =
+        match uname with
+        | h :: _ -> Pos.get_position h
+        | [] -> assert false
+      in
+      let rec aux tags endPos = function
+      | [num] ->
+           let pos = Pos.make_position_between begPos endPos in
+           num, (tags, pos)
+      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | [] -> assert false
+      in
+      aux [] begPos uname
+    in
+    let rule_number =
+      try Pos.map_under_mark int_of_string num
+      with _ ->
+        Errors.raise_spanned_error
+          "this rule doesn't have an execution number"
+          (Pos.get_position num)
+    in
     {
       rule_number;
-      rule_tags;
+      rule_tag_names;
       rule_applications = apps;
       rule_chaining = c;
       rule_formulaes = formulaes;
@@ -272,12 +401,34 @@ verification_name:
 | name = SYMBOL { (name, mk_position $sloc) }
 
 verification:
-| VERIFICATION name = verification_name+ COLON apps = application_reference
+| VERIFICATION name = symbol_list_with_pos COLON apps = application_reference
   SEMICOLON conds = verification_condition* {
-    let verif_number, verif_tags = Mast.number_and_tags_of_name name in
+    let num, verif_tag_names =
+      let uname = Pos.unmark name in
+      let begPos =
+        match uname with
+        | h :: _ -> Pos.get_position h
+        | [] -> assert false
+      in
+      let rec aux tags endPos = function
+      | [num] ->
+           let pos = Pos.make_position_between begPos endPos in
+           num, (tags, pos)
+      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | [] -> assert false
+      in
+      aux [] begPos uname
+    in
+    let verif_number =
+      try Pos.map_under_mark int_of_string num
+      with _ ->
+        Errors.raise_spanned_error
+          "this verification doesn't have an execution number"
+          (Pos.get_position num)
+    in
     {
       verif_number;
-      verif_tags;
+      verif_tag_names;
       verif_applications = apps;
       verif_conditions = conds;
     } }

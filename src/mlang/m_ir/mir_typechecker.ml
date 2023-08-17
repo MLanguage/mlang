@@ -127,8 +127,8 @@ let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     defs_array;
   List.sort compare !undefined
 
-let typecheck_program_conds (conds : condition_data VariableMap.t) =
-  VariableMap.iter
+let typecheck_program_conds (conds : condition_data Mir.RuleMap.t) =
+  Mir.RuleMap.iter
     (fun _ cond -> typecheck_top_down ~in_generic_table:false cond.cond_expr)
     conds
 
@@ -351,7 +351,7 @@ let expand_functions (p : Mir_interface.full_program) :
        {
          program with
          program_conds =
-           VariableMap.map
+           Mir.RuleMap.map
              (fun cond ->
                { cond with cond_expr = expand_functions_expr cond.cond_expr })
              p.program.program_conds;

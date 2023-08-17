@@ -15,7 +15,7 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 open Oir
-module PosSet = Set.Make (Int)
+module PosSet = IntSet
 
 type pos_map = PosSet.t BlockMap.t Bir.VariableMap.t
 

@@ -14,9 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module StringSet = Set.Make (String)
-module StringMap = Map.Make (String)
-
 let ascii_to_ebcdic =
   [|
     0;   1;   2;   3;   55;  45;  46;  47;  22;  5;   37;  11;  12;  13;  14;  15;
@@ -152,15 +149,9 @@ let computed_var_subtype cv : var_subtype =
   in
   if is_base then Base else Computed
 
-let computed_var_is_output cv =
-  List.exists
-    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
-    cv.Mast.comp_category
+let computed_var_is_output cv = cv.Mast.comp_is_givenback
 
-let input_var_is_output iv =
-  List.exists
-    (fun st -> String.equal (Pos.unmark st) Mast.givenback_category)
-    iv.Mast.input_category
+let input_var_is_output iv = iv.Mast.input_is_givenback
 
 let consider_output is_ebcdic attribs =
   is_ebcdic = false
@@ -174,12 +165,12 @@ let consider_output is_ebcdic attribs =
 (* Used to generated the array names *)
 let subtype_name subtyp =
   match subtyp with
-  | Context -> Mast.context_category
-  | Family -> Mast.family_category
-  | Income -> Mast.income_category
+  | Context -> "contexte"
+  | Family -> "famille"
+  | Income -> "revenu"
   | CorrIncome -> "revenu_correc"
   | Variation -> "variation"
-  | Penality -> Mast.penality_category
+  | Penality -> "penalite"
   | Base -> assert false (* never used *)
   | Computed -> assert false
 (* never used *)
@@ -873,7 +864,7 @@ let get_rules_verif_etc prog =
                     ( Pos.unmark r.rule_number :: rules,
                       match r.rule_chaining with
                       | None -> chainings
-                      | Some cn -> StringSet.add (Pos.unmark cn) chainings )
+                      | Some cn -> StrSet.add (Pos.unmark cn) chainings )
                   else (rules, chainings)
                 in
                 (rules, verifs, errors, chainings)
@@ -894,8 +885,7 @@ let get_rules_verif_etc prog =
             | _ -> (rules, verifs, errors, chainings))
           (rules, verifs, errors, chainings)
           file)
-      ([], [], [], StringSet.empty)
-      prog
+      ([], [], [], StrSet.empty) prog
   in
 
   let rules = List.fast_sort compare rules in
@@ -930,12 +920,10 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
     Format.fprintf fmt "};\n\n"
   end;
 
-  StringSet.iter
-    (fun cn -> Format.fprintf fmt "extern void %s();\n" cn)
-    chainings;
+  StrSet.iter (fun cn -> Format.fprintf fmt "extern void %s();\n" cn) chainings;
 
   Format.fprintf fmt "T_desc_ench desc_ench[NB_ENCH + 1] = {\n";
-  StringSet.iter
+  StrSet.iter
     (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn)
     chainings;
   Format.fprintf fmt "};\n"
@@ -992,7 +980,7 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
   let nb_variation = count vars (Input (Some Variation)) in
   let nb_penalite = count vars (Input (Some Penality)) in
   let nb_restituee = count vars Output in
-  let nb_ench = StringSet.cardinal chainings in
+  let nb_ench = StrSet.cardinal chainings in
   let nb_err = List.length errors in
   let nb_debug = List.map List.length vars_debug in
   let nb_call = List.length rules in
@@ -1175,11 +1163,11 @@ let extract_var_ids (cprog : Bir.program) vars =
   let pvars = cprog.mir_program.program_vars in
   let add vn v vm =
     let vs =
-      match StringMap.find_opt vn vm with
+      match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
       | Some vs -> vs
     in
-    StringMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
+    StrMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
   in
   (* Build a map from variable names to all their definitions (with different
      ids) *)
@@ -1188,7 +1176,7 @@ let extract_var_ids (cprog : Bir.program) vars =
       (fun v vm ->
         let vm = add (Pos.unmark v.Variable.name) v vm in
         match v.Variable.alias with Some a -> add a v vm | None -> vm)
-      pvars StringMap.empty
+      pvars StrMap.empty
   in
   let process_var ~alias
       ( tvar,
@@ -1219,7 +1207,7 @@ let extract_var_ids (cprog : Bir.program) vars =
     (fun vm vd ->
       let name, vid = process_var ~alias:false vd in
       let vs =
-        try StringMap.find name vars_map
+        try StrMap.find name vars_map
         with Not_found ->
           Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
       in

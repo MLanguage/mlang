@@ -14,31 +14,27 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module StringMap = Map.Make (struct
-  type t = string
-
-  let compare = compare
-end)
-
 type translation_ctx = {
-  new_variables : Bir.variable StringMap.t;
+  new_variables : Bir.variable StrMap.t;
   variables_used_as_inputs : Mir.VariableDict.t;
-  used_chains : unit Mir.TagMap.t;
+  used_rule_domains : Mast.DomainIdSet.t;
+  used_chainings : Mast.ChainingSet.t;
   verif_seen : bool;
 }
 
 let empty_translation_ctx : translation_ctx =
   {
-    new_variables = StringMap.empty;
+    new_variables = StrMap.empty;
     variables_used_as_inputs = Mir.VariableDict.empty;
-    used_chains = Mir.TagMap.empty;
+    used_rule_domains = Mast.DomainIdSet.empty;
+    used_chainings = Mast.ChainingSet.empty;
     verif_seen = false;
   }
 
 let ctx_join ctx1 ctx2 =
   {
     new_variables =
-      StringMap.union
+      StrMap.union
         (fun _ v1 v2 ->
           assert (Bir.compare_variable v1 v2 = 0);
           Some v2)
@@ -46,8 +42,10 @@ let ctx_join ctx1 ctx2 =
     variables_used_as_inputs =
       Mir.VariableDict.union ctx1.variables_used_as_inputs
         ctx2.variables_used_as_inputs;
-    used_chains =
-      Mir.TagMap.union (fun _ _ () -> Some ()) ctx1.used_chains ctx2.used_chains;
+    used_rule_domains =
+      Mast.DomainIdSet.union ctx1.used_rule_domains ctx2.used_rule_domains;
+    used_chainings =
+      Mast.ChainingSet.union ctx1.used_chainings ctx2.used_chainings;
     verif_seen = ctx1.verif_seen || ctx2.verif_seen;
   }
 
@@ -89,91 +87,33 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
     (fun var acc -> mk_or (mk_call_present var) acc)
     variables_to_check mk_false
 
-let var_filter_compatible_subtypes (subtypes : string list)
-    (filter : Mpp_ir.var_filter) : bool =
-  match (filter : Mpp_ir.var_filter) with
-  | Saisie st ->
-      (match st with
-      | None ->
-          List.exists
-            (fun st ->
-              match st with
-              | "contexte" | "famille" | "revenu" | "penalite" | "saisie" ->
-                  true
-              | _ -> false)
-            subtypes
-      | Some st -> List.mem st subtypes)
-      && List.for_all
-           (fun x -> not (String.equal Mast.computed_category x))
-           subtypes
-  | Calculee st -> (
-      match st with
-      | None ->
-          List.exists
-            (fun st -> match st with "base" | "calculee" -> true | _ -> false)
-            subtypes
-      | Some st -> List.mem st subtypes)
-
-let var_is_ (attr : string) (v : Mir.Variable.t) : bool =
+let var_is_ (attr : string) (value : float) (v : Mir.Variable.t) : bool =
   List.exists
     (fun ((attr_name, _), (attr_value, _)) ->
-      attr_name = attr && attr_value = Mast.Float 1.)
+      attr_name = attr && attr_value = Mast.Float value)
     v.Mir.Variable.attributes
 
-let cond_DepositDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
-  generate_input_condition (var_is_ "acompte")
+let check_attribute (p : Mir_interface.full_program) (attr : string) : bool =
+  Mir.CatVarMap.exists
+    (fun _ (attrs, _) -> StrMap.exists (fun a _ -> a = attr) attrs)
+    p.Mir_interface.program.Mir.program_var_categories
 
-let cond_TaxbenefitDefinedVariables :
-    Mir_interface.full_program -> Pos.t -> Bir.expression Pos.marked =
-  generate_input_condition (var_is_ "avfisc")
+let cond_ExistsAttrWithVal (p : Mir_interface.full_program) (pos : Pos.t)
+    ((attr, pos_attr) : string Pos.marked) (value : float) :
+    Bir.expression Pos.marked =
+  if check_attribute p attr then
+    generate_input_condition (var_is_ attr value) p pos
+  else Errors.raise_spanned_error "unknown attribute" pos_attr
 
-let cond_TaxbenefitCeiledVariables (p : Mir_interface.full_program)
-    (pos : Pos.t) : Bir.expression Pos.marked =
-  (* commented aliases do not exist in the 2018 version *)
-  (* double-commented aliases do not exist in the 2019 version *)
-  (* triple-commented aliases do not exist in the 2020 version *)
-  let aliases_list =
-    [
-      (*(*(*"7QK";*)*)*)
-      (*(* "7QD"; *)*)
-      (*(* "7QB"; *)*)
-      (*(* "7QC"; *)*)
-      "4BA";
-      "4BY";
-      "4BB";
-      "4BC";
-      "7CL";
-      (*(*(*"7CM";*)*)*)
-      (*(* "7CN"; *)*)
-      (*(* "7QE"; *)*)
-      (*(* "7QF"; *)*)
-      (*(* "7QG"; *)*)
-      (*(* "7QH"; *)*)
-      (*(*(*"7QI";*)*)*)
-      (*(*(*"7QJ";*)*)*)
-      "7LG";
-      (* "7MA"; *)
-      "7QM";
-      "2DC";
-      (* "7KM"; *)
-      (* "7KG"; *)
-      "7QP";
-      "7QS";
-      "7QN";
-      "7QO";
-      (*(*(*"7QL";*)*)*)
-      (*(* "7LS"; *)*)
-    ]
+let cond_ExistsAliases (p : Mir_interface.full_program) (pos : Pos.t)
+    (aliases : Pos.t StrMap.t) : Bir.expression Pos.marked =
+  let vars =
+    StrMap.fold
+      (fun var pos vmap ->
+        Mir.VariableMap.add (Mir.find_var_by_name p.program (var, pos)) () vmap)
+      aliases Mir.VariableMap.empty
   in
-  let supp_avfisc =
-    List.fold_left
-      (fun vmap var ->
-        Mir.VariableMap.add (Mir.find_var_by_name p.program var) () vmap)
-      Mir.VariableMap.empty
-      (List.map (fun x -> (x, Pos.no_pos)) aliases_list)
-  in
-  generate_input_condition (fun v -> Mir.VariableMap.mem v supp_avfisc) p pos
+  generate_input_condition (fun v -> Mir.VariableMap.mem v vars) p pos
 
 let translate_m_code (m_program : Mir_interface.full_program)
     (vars : (Mir.Variable.id * Mir.variable_data) list) =
@@ -196,7 +136,7 @@ let translate_m_code (m_program : Mir_interface.full_program)
     vars
 
 let wrap_m_code_call (m_program : Mir_interface.full_program)
-    (chain_tag : Mast.chain_tag) (ctx : translation_ctx) :
+    (order : Mir_interface.chain_order) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
   let m_program =
     {
@@ -206,15 +146,12 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
           m_program.program ctx.variables_used_as_inputs;
     }
   in
-  let execution_order =
-    (Mir.TagMap.find chain_tag m_program.chains_orders).execution_order
-  in
   let program_stmts =
     List.fold_left
       (fun stmts rov_id ->
         let rule = Mir.RuleMap.find rov_id m_program.program.program_rules in
         Pos.same_pos_as (Bir.SRovCall rov_id) rule.Mir.rule_number :: stmts)
-      [] execution_order
+      [] order.execution_order
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
@@ -223,42 +160,87 @@ let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
   (Bir.SVerif data, Pos.get_position data.cond_expr)
 
+type filter_val = Int of int | Bool of bool
+
 let generate_verif_call (m_program : Mir_interface.full_program)
-    (chain_tag : Mast.chain_tag) (filter : Mpp_ir.var_filter option) :
-    Bir.stmt list =
-  let is_verif_relevant var cond =
+    (chain : Mast.DomainId.t) (filter : Mpp_ir.mpp_expr) : Bir.stmt list =
+  let rec to_filter expr cond =
+    match Pos.unmark expr with
+    | Mpp_ir.Constant i -> Int i
+    | Mpp_ir.Variable _ ->
+        Errors.raise_spanned_error "forbidden subexpression"
+          (Pos.get_position expr)
+    | Mpp_ir.Unop (Mpp_ir.Minus, e) -> begin
+        match to_filter e cond with
+        | Int i -> Int (-i)
+        | Bool _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e)
+      end
+    | Mpp_ir.Call (Mpp_ir.NbVarCat cvs, _) ->
+        let i =
+          Mir.CatVarSet.fold
+            (fun cv res ->
+              match Mir.CatVarMap.find_opt cv cond.Mir.cond_cats with
+              | Some i -> i + res
+              | None ->
+                  Errors.raise_spanned_error "unknown variable category"
+                    (Pos.get_position expr))
+            cvs 0
+        in
+        Int i
+    | Mpp_ir.Call (_, _) ->
+        Errors.raise_spanned_error "forbidden function" (Pos.get_position expr)
+    | Mpp_ir.Binop (e1, b, e2) -> begin
+        let r1 = to_filter e1 cond in
+        let r2 = to_filter e2 cond in
+        match (r1, b, r2) with
+        | Bool b1, Mpp_ast.And, Bool b2 -> Bool (b1 && b2)
+        | Bool b1, Mpp_ast.Or, Bool b2 -> Bool (b1 || b2)
+        | Int i1, Mpp_ast.Gt, Int i2 -> Bool (i1 > i2)
+        | Int i1, Mpp_ast.Gte, Int i2 -> Bool (i1 >= i2)
+        | Int i1, Mpp_ast.Lt, Int i2 -> Bool (i1 < i2)
+        | Int i1, Mpp_ast.Lte, Int i2 -> Bool (i1 <= i2)
+        | Int i1, Mpp_ast.Eq, Int i2 -> Bool (i1 = i2)
+        | Int i1, Mpp_ast.Neq, Int i2 -> Bool (i1 <> i2)
+        | Int _, Mpp_ast.(And | Or), _ ->
+            Errors.raise_spanned_error "boolean expression expected"
+              (Pos.get_position e1)
+        | _, Mpp_ast.(And | Or), Int _ ->
+            Errors.raise_spanned_error "boolean expression expected"
+              (Pos.get_position e2)
+        | Bool _, Mpp_ast.(Gt | Gte | Lt | Lte | Eq | Neq), _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e1)
+        | _, Mpp_ast.(Gt | Gte | Lt | Lte | Eq | Neq), Bool _ ->
+            Errors.raise_spanned_error "integer expression expected"
+              (Pos.get_position e2)
+      end
+  in
+  let is_verif_relevant _ cond =
     (* specific restriction *)
-    let test =
-      Mast.are_tags_part_of_verif_chain
-        (List.map Pos.unmark cond.Mir.cond_tags)
-        chain_tag
-      (* We use the constructed subtypes of the dummy variable built in
-         [Mast_to_mir] *)
-      &&
-      match filter with
-      | None -> true
-      | Some filter -> var_filter_compatible_subtypes var.Mir.category filter
+    let cats = Mir.cond_cats_to_set cond.Mir.cond_cats in
+    let verif_domain = cond.Mir.cond_domain in
+    let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
+    let is_eq = verif_domain.dom_id = chain in
+    let is_var_compatible =
+      Mir.CatVarSet.subset cats verif_domain.dom_data.vdom_auth
     in
-    if
-      test && chain_tag <> Horizontale
-      && List.exists (String.equal Mast.penality_category) var.Mir.category
-    then
-      Errors.raise_spanned_error "Penality variable used in verification"
-        (Pos.get_position cond.Mir.cond_expr)
-    else test
+    let is_kept = to_filter filter cond = Bool true in
+    (is_max || is_eq) && is_var_compatible && is_kept
   in
   let relevant_verifs =
-    Mir.VariableMap.filter is_verif_relevant m_program.program.program_conds
+    Mir.RuleMap.filter is_verif_relevant m_program.program.program_conds
   in
   let verifs =
-    Mir.VariableMap.bindings relevant_verifs
-    |> List.sort (fun (v1, cond1) (v2, cond2) ->
+    Mir.RuleMap.bindings relevant_verifs
+    |> List.sort (fun (_, cond1) (_, cond2) ->
            let res =
              Mast.compare_error_type (fst cond1.Mir.cond_error).typ
                (fst cond2.Mir.cond_error).typ
            in
            if res <> 0 then res
-           else Stdlib.compare v1.Mir.Variable.id v2.Mir.Variable.id)
+           else Stdlib.compare cond1.Mir.cond_seq_id cond2.Mir.cond_seq_id)
     |> List.map snd
   in
   List.map
@@ -281,7 +263,7 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
   | Mpp_ir.Constant i -> Mir.Literal (Float (float_of_int i))
   | Variable (Mbased (var, _)) -> Var Bir.(var_from_mir default_tgv var)
   | Variable (Local l) -> (
-      try Var (StringMap.find l ctx.new_variables)
+      try Var (StrMap.find l ctx.new_variables)
       with Not_found ->
         Cli.error_print "Local Variable %s not found in ctx" l;
         assert false)
@@ -313,12 +295,12 @@ and translate_mpp_expr (p : Mir_interface.full_program) (ctx : translation_ctx)
         ( (Mast.Add, pos),
           (translate_mpp_expr p ctx (Mpp_ir.Variable l, pos), pos),
           (Mir.Literal (Float 0.), pos) )
-  | Call (DepositDefinedVariables, []) ->
-      Pos.unmark @@ cond_DepositDefinedVariables p pos
-  | Call (TaxbenefitCeiledVariables, []) ->
-      Pos.unmark @@ cond_TaxbenefitCeiledVariables p pos
-  | Call (TaxbenefitDefinedVariables, []) ->
-      Pos.unmark @@ cond_TaxbenefitDefinedVariables p pos
+  | Call (ExistsAttrWithVal (attr, value), []) ->
+      Pos.unmark @@ cond_ExistsAttrWithVal p pos attr value
+  | Call (ExistsAliases aliases, []) ->
+      Pos.unmark @@ cond_ExistsAliases p pos aliases
+  | Call (NbVarCat _, []) ->
+      Errors.raise_spanned_error "forbidden expression" pos
   | _ -> assert false
 
 and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
@@ -328,21 +310,19 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
   match Pos.unmark stmt with
   | Mpp_ir.Assign (Local l, expr) ->
       let ctx, new_l =
-        match StringMap.find_opt l ctx.new_variables with
+        match StrMap.find_opt l ctx.new_variables with
         | None ->
             let new_l =
               Mir.Variable.new_var
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~origin:None ~category:[] ~is_table:None
+                ~attributes:[] ~origin:None ~cats:Mir.CatVarSet.empty
+                ~is_table:None
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =
-              {
-                ctx with
-                new_variables = StringMap.add l new_l ctx.new_variables;
-              }
+              { ctx with new_variables = StrMap.add l new_l ctx.new_variables }
             in
             (ctx, new_l)
         | Some new_l -> (ctx, new_l)
@@ -387,7 +367,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
             stmt;
         ] )
   | Mpp_ir.Delete (Local l) ->
-      let var = StringMap.find l ctx.new_variables in
+      let var = StrMap.find l ctx.new_variables in
       ( ctx,
         [
           Pos.same_pos_as
@@ -409,18 +389,42 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                   real_args ),
             pos );
         ] )
-  | Mpp_ir.Expr (Call (Program chain_tag, _args), _) ->
+  | Mpp_ir.Expr (Call (Rules dom, _args), _) ->
+      let order =
+        match Mast.DomainIdMap.find_opt dom m_program.domains_orders with
+        | Some order -> order
+        | None ->
+            Errors.raise_error
+              (Format.asprintf "Unknown rule domain: %a" (Mast.DomainId.pp ())
+                 dom)
+      in
       let ctx =
-        { ctx with used_chains = Mir.TagMap.add chain_tag () ctx.used_chains }
+        {
+          ctx with
+          used_rule_domains = Mast.DomainIdSet.add dom ctx.used_rule_domains;
+        }
       in
-      wrap_m_code_call m_program chain_tag ctx
-  | Mpp_ir.Expr (Call (Verif (chain_tag, filter), _args), _) ->
-      ( { ctx with verif_seen = true },
-        generate_verif_call m_program chain_tag filter )
-  | Mpp_ir.Partition (filter, body) ->
-      let func_of_filter =
-        match filter with Mpp_ir.VarIsTaxBenefit -> var_is_ "avfisc"
+      wrap_m_code_call m_program order ctx
+  | Mpp_ir.Expr (Call (Chain chain, _args), _) ->
+      let order =
+        match Mast.ChainingMap.find_opt chain m_program.chainings_orders with
+        | Some order -> order
+        | None ->
+            Errors.raise_error (Format.sprintf "Unknown chaining: %s" chain)
       in
+      let ctx =
+        {
+          ctx with
+          used_chainings = Mast.ChainingSet.add chain ctx.used_chainings;
+        }
+      in
+      wrap_m_code_call m_program order ctx
+  | Mpp_ir.Expr (Call (Verifs (dom, filter), _args), _) ->
+      ({ ctx with verif_seen = true }, generate_verif_call m_program dom filter)
+  | Mpp_ir.Partition ((attr, pos_attr), value, body) ->
+      if not (check_attribute m_program attr) then
+        Errors.raise_spanned_error "unknown attribute" pos_attr;
+      let func_of_filter = var_is_ attr value in
       let ctx, partition_pre, partition_post =
         generate_partition mpp_program m_program func_args func_of_filter pos
           ctx
@@ -493,10 +497,24 @@ let create_combined_program (m_program : Mir_interface.full_program)
       Mir.RuleMap.fold
         (fun rov_id rule_data rules ->
           if
-            Mir.TagMap.exists
-              (fun chain () ->
-                Mast.are_tags_part_of_chain rule_data.Mir.rule_tags chain)
-              ctx.used_chains
+            let rule_domain = rule_data.Mir.rule_domain in
+            let has_max =
+              not
+                (Mast.DomainIdSet.disjoint ctx.used_rule_domains
+                   rule_domain.dom_max)
+            in
+            let has_used_domain =
+              Mast.DomainIdSet.mem rule_domain.dom_id ctx.used_rule_domains
+            in
+            let has_used_chaining =
+              match rule_data.Mir.rule_chain with
+              | None -> false
+              | Some (ch, _) -> Mast.ChainingSet.mem ch ctx.used_chainings
+            in
+            let is_not_rule_0 =
+              Pos.unmark rule_data.Mir.rule_number <> RuleID 0
+            in
+            is_not_rule_0 && (has_max || has_used_domain || has_used_chaining)
           then
             let rov_name =
               Pos.map_under_mark
@@ -511,8 +529,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
         m_program.program.program_rules Mir.RuleMap.empty
     in
     let rules_and_verifs =
-      Mir.VariableMap.fold
-        (fun _var cond_data rules ->
+      Mir.RuleMap.fold
+        (fun _ cond_data rules ->
           let rov_id = Pos.unmark cond_data.Mir.cond_number in
           let rov_name =
             Pos.same_pos_as

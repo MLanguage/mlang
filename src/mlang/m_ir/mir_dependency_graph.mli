@@ -16,7 +16,7 @@
 
 (** Defines the dependency graph of an M program *)
 
-module RG : Graph.Sig.G
+module RG : Graph.Sig.P
 (** Dependency graph for the rules of the M program. Each node corresponds to a
     rule, each edge to variables use. The edges in the graph go from input to
     outputs. *)

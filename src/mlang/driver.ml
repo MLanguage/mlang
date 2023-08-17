@@ -73,15 +73,16 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
-let driver (files : string list) (debug : bool) (var_info_debug : string list)
-    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
-    (backend : string option) (function_spec : string option)
-    (mpp_file : string) (output : string option) (run_all_tests : string option)
-    (dgfip_test_filter : bool) (run_test : string option)
-    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
-    (code_coverage : bool) (precision : string option)
-    (roundops : string option) (test_error_margin : float option)
-    (m_clean_calls : bool) (dgfip_options : string list option)
+let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
+    (var_info_debug : string list) (display_time : bool)
+    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
+    (function_spec : string option) (mpp_file : string) (output : string option)
+    (run_all_tests : string option) (dgfip_test_filter : bool)
+    (run_test : string option) (mpp_function : string) (optimize : bool)
+    (optimize_unsafe_float : bool) (code_coverage : bool)
+    (precision : string option) (roundops : string option)
+    (test_error_margin : float option) (m_clean_calls : bool)
+    (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
   let value_sort =
     let precision = Option.get precision in
@@ -126,15 +127,35 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
         Errors.raise_error
           (Format.asprintf "Unkown roundops option: %s" roundops)
   in
-  Cli.set_all_arg_refs files debug var_info_debug display_time dep_graph_file
-    print_cycles output optimize_unsafe_float m_clean_calls value_sort round_ops;
+  Cli.set_all_arg_refs files without_dgfip_m debug var_info_debug display_time
+    dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
+    value_sort round_ops;
   try
     let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
-    let m_program = ref [] in
+    let current_progress, finish = Cli.create_progress_bar "Parsing" in
+    let m_program =
+      if without_dgfip_m then ref []
+      else
+        ref
+          (let filebuf = Lexing.from_string Dgfip_m.declarations in
+           current_progress Dgfip_m.internal_m;
+           let filebuf =
+             {
+               filebuf with
+               lex_curr_p =
+                 { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
+             }
+           in
+           try
+             let commands = Mparser.source_file token filebuf in
+             [ commands ]
+           with Mparser.Error ->
+             Errors.raise_error
+               (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m))
+    in
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
-    let current_progress, finish = Cli.create_progress_bar "Parsing" in
     List.iter
       (fun source_file ->
         let filebuf, input =
@@ -163,37 +184,63 @@ let driver (files : string list) (debug : bool) (var_info_debug : string list)
     Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
     let m_program = Mast_to_mir.translate !m_program in
-    let full_m_program =
-      Mir_interface.to_full_program m_program Mast.all_tags
-    in
+    let full_m_program = Mir_interface.to_full_program m_program in
     let full_m_program = Mir_typechecker.expand_functions full_m_program in
     Cli.debug_print "Typechecking...";
     let full_m_program = Mir_typechecker.typecheck full_m_program in
-    Mir.TagMap.iter
-      (fun tag Mir_interface.{ dep_graph; _ } ->
+    Mast.DomainIdMap.iter
+      (fun rdom_id Mir_interface.{ dep_graph; _ } ->
         Cli.debug_print
-          "Checking for circular variable definitions for chain %a..."
-          Format_mast.format_chain_tag tag;
+          "Checking for circular variable definitions for rule domain %a..."
+          (Mast.DomainId.pp ()) rdom_id;
         if
           Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
             true
         then Errors.raise_error "Cycles between rules.")
-      full_m_program.chains_orders;
+      full_m_program.domains_orders;
+    Mast.ChainingMap.iter
+      (fun chaining_id Mir_interface.{ dep_graph; _ } ->
+        Cli.debug_print
+          "Checking for circular variable definitions for chaining %s..."
+          chaining_id;
+        if
+          Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
+            true
+        then Errors.raise_error "Cycles between rules.")
+      full_m_program.chainings_orders;
     let mpp = Mpp_frontend.process mpp_file full_m_program in
     let full_m_program =
       Mir_interface.to_full_program
         (match function_spec with
         | Some _ -> Mir_interface.reset_all_outputs full_m_program.program
         | None -> full_m_program.program)
-        Mast.all_tags
     in
     (match var_dependencies with
     | Some (var, chain) ->
         let var =
           Mir.find_var_by_name full_m_program.program (var, Pos.no_pos)
         in
-        let chain = Mast.chain_tag_of_string chain in
-        Mir_interface.output_var_dependencies full_m_program chain var;
+        let order =
+          try
+            let rdom_id =
+              try
+                Mast.DomainId.from_list (Dgfip_m.string_to_rule_domain_id chain)
+              with Not_found ->
+                Errors.raise_error (Format.sprintf "Unknown rule tag: %s" chain)
+            in
+            match
+              Mast.DomainIdMap.find_opt rdom_id full_m_program.domains_orders
+            with
+            | Some order -> order
+            | None -> Errors.raise_error ("unknown rule domain: " ^ chain)
+          with Not_found -> (
+            match
+              Mast.ChainingMap.find_opt chain full_m_program.chainings_orders
+            with
+            | Some order -> order
+            | None -> Errors.raise_error ("unknown chaining: " ^ chain))
+        in
+        Mir_interface.output_var_dependencies full_m_program order var;
         exit 0
     | None -> ());
     Cli.debug_print "Creating combined program suitable for execution...";

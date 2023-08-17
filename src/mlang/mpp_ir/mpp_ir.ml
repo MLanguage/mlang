@@ -30,21 +30,6 @@ type scoped_var =
 
 type mpp_compute_name = string
 
-type var_filter = Saisie of string option | Calculee of string option
-
-type mpp_callable =
-  | Program of Mast.chain_tag (* M codebase *)
-  | Verif of Mast.chain_tag * var_filter option (* M codebase *)
-  | MppFunction of mpp_compute_name
-  | Present
-  | Abs
-  | Cast (* cast undefined to 0, identity function otherwise *)
-  | DepositDefinedVariables
-  | TaxbenefitCeiledVariables
-  | TaxbenefitDefinedVariables
-
-type mpp_filter = VarIsTaxBenefit
-
 type unop = Minus
 
 type binop = Mpp_ast.binop
@@ -58,6 +43,20 @@ and mpp_expr_kind =
   | Call of mpp_callable * scoped_var list
   | Binop of mpp_expr * binop * mpp_expr
 
+and mpp_callable =
+  | Rules of Mast.DomainId.t (* M codebase *)
+  | Chain of Mast.chaining (* M codebase *)
+  | Verifs of Mast.DomainId.t * mpp_expr
+  | NbVarCat of Mir.CatVarSet.t
+  | ExistsAttrWithVal of string Pos.marked * float
+  | ExistsAliases of Pos.t StrMap.t
+  (* M codebase *)
+  | MppFunction of mpp_compute_name
+  | Present
+  | Abs
+  | Cast
+(* cast undefined to 0, identity function otherwise *)
+
 type mpp_stmt = mpp_stmt_kind Pos.marked
 
 and mpp_stmt_kind =
@@ -65,7 +64,7 @@ and mpp_stmt_kind =
   | Conditional of mpp_expr * mpp_stmt list * mpp_stmt list
   | Delete of scoped_var
   | Expr of mpp_expr
-  | Partition of mpp_filter * mpp_stmt list
+  | Partition of string Pos.marked * float * mpp_stmt list
 
 type mpp_compute = {
   name : mpp_compute_name;

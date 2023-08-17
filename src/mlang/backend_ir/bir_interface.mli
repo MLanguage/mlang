@@ -20,14 +20,15 @@ type bir_function = {
   func_variable_inputs : unit Bir.VariableMap.t;
   func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
   func_outputs : unit Bir.VariableMap.t;
-  func_conds : Bir.condition_data Bir.VariableMap.t;
+  func_conds : Bir.condition_data Mir.RuleMap.t;
 }
 (** Input-output data necessary to interpret a BIR program*)
 
 val translate_external_conditions :
+  Pos.t StrMap.t Pos.marked Mir.CatVarMap.t ->
   Mir.idmap ->
   Mast.expression Pos.marked list ->
-  Bir.condition_data Bir.VariableMap.t
+  Bir.condition_data Mir.RuleMap.t
 (** [translate_external_conditions idmap conditions] translates a series of
     boolean expressions [conditions] into M verification conditions ready to be
     added to a BIR program *)

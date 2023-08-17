@@ -55,18 +55,22 @@ type chain_order = {
 
 type full_program = {
   program : Mir.program;
-  chains_orders : chain_order Mir.TagMap.t;
+  domains_orders : chain_order Mast.DomainIdMap.t;
+  chainings_orders : chain_order Mast.ChainingMap.t;
 }
 
-let to_full_program (program : program) (chains : Mast.chain_tag list) :
-    full_program =
-  let chains_orders, _ =
-    List.fold_left
-      (fun (chains, seen_customs) tag ->
+let to_full_program (program : program) : full_program =
+  let domains_orders =
+    Mast.DomainIdMap.fold
+      (fun dom_id _ domains_orders ->
         let vars_to_rules, chain_rules =
           Mir.RuleMap.fold
             (fun rov_id rule (vars, rules) ->
-              if Mast.are_tags_part_of_chain rule.rule_tags tag then
+              let rule_domain = rule.rule_domain in
+              let is_max = Mast.DomainIdSet.mem dom_id rule_domain.dom_max in
+              let is_eq = rule_domain.dom_id = dom_id in
+              let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
+              if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
                     (fun vars (vid, _def) ->
                       let var = VariableDict.find vid program.program_vars in
@@ -84,82 +88,47 @@ let to_full_program (program : program) (chains : Mast.chain_tag list) :
         let execution_order =
           Mir_dependency_graph.get_rules_execution_order dep_graph
         in
-        let customs, _ =
-          RuleMap.fold
-            (fun rov_id rule (customs, in_primcorr) ->
-              List.fold_left
-                (fun (customs, in_primcorr) tag ->
-                  match tag with
-                  | Mast.Custom _ -> (
-                      let ipc =
-                        Mast.are_tags_part_of_chain rule.rule_tags Mast.PrimCorr
-                      in
-                      if in_primcorr && not ipc then
-                        Errors.raise_error
-                          "Custom chain must be attributed to rules with all \
-                           the exact same tagging."
-                      else
-                        match TagMap.find_opt tag customs with
-                        | Some rs ->
-                            ( TagMap.add tag (rov_id :: rs) customs,
-                              ipc || in_primcorr )
-                        | None ->
-                            ( TagMap.add tag [ rov_id ] customs,
-                              ipc || in_primcorr ))
-                  | _ -> (customs, in_primcorr))
-                (customs, in_primcorr) rule.rule_tags)
-            chain_rules (TagMap.empty, false)
-        in
-        let customs =
-          TagMap.map
-            (fun rules ->
-              Mir_dependency_graph.pull_rules_dependencies dep_graph rules)
-            customs
-        in
-        let seen_customs =
-          TagMap.merge
-            (fun custom_tag seen curr ->
-              match (seen, curr) with
-              | None, None -> None
-              | Some _, None -> seen
-              | None, Some _ -> Some tag
-              | Some s, Some _ -> (
-                  match (s, tag) with
-                  | Mast.Primitif, Mast.Corrective
-                  | Mast.Corrective, Mast.Primitif ->
-                      (* ignore this case *) seen
-                  | _ ->
-                      let custom_tag =
-                        match custom_tag with
-                        | Mast.Custom s -> s
-                        | _ -> assert false
-                      in
-                      Errors.raise_error
-                        (Format.asprintf
-                           "Rules with custom chain %s found with incompatible \
-                            tags %a and %a."
-                           custom_tag Format_mast.format_chain_tag s
-                           Format_mast.format_chain_tag tag)))
-            seen_customs customs
-        in
-        let chains =
-          TagMap.fold
-            (fun tag (dep_graph, execution_order) chains ->
-              TagMap.add tag { dep_graph; execution_order } chains)
-            customs
-            (Mir.TagMap.add tag { dep_graph; execution_order } chains)
-        in
-        (chains, seen_customs))
-      (Mir.TagMap.empty, Mir.TagMap.empty)
-      chains
+        Mast.DomainIdMap.add dom_id
+          { dep_graph; execution_order }
+          domains_orders)
+      program.program_rule_domains Mast.DomainIdMap.empty
   in
-  { program; chains_orders }
+  let chainings_orders =
+    let chainings_roots =
+      Mast.ChainingMap.map
+        (fun chain_dom ->
+          let dep_graph =
+            (Mast.DomainIdMap.find chain_dom.dom_id domains_orders).dep_graph
+          in
+          (dep_graph, []))
+        program.program_chainings
+    in
+    let chainings_roots =
+      RuleMap.fold
+        (fun rov_id rule chainings_roots ->
+          match rule.rule_chain with
+          | Some (chain_id, _) ->
+              let g, rs = Mast.ChainingMap.find chain_id chainings_roots in
+              Mast.ChainingMap.add chain_id (g, rov_id :: rs) chainings_roots
+          | None -> chainings_roots)
+        program.program_rules chainings_roots
+    in
+    Mast.ChainingMap.fold
+      (fun chain_id (dep_graph, chain_roots) chainings_orders ->
+        let dep_graph, execution_order =
+          Mir_dependency_graph.pull_rules_dependencies dep_graph chain_roots
+        in
+        Mast.ChainingMap.add chain_id
+          { dep_graph; execution_order }
+          chainings_orders)
+      chainings_roots Mast.ChainingMap.empty
+  in
+  { program; domains_orders; chainings_orders }
 
-let output_var_dependencies (p : full_program) (chain : Mast.chain_tag)
+let output_var_dependencies (p : full_program) (order : chain_order)
     (var : Mir.variable) =
-  let chain = TagMap.find chain p.chains_orders in
   let deps =
-    Mir_dependency_graph.get_var_dependencies p.program chain.execution_order
+    Mir_dependency_graph.get_var_dependencies p.program order.execution_order
       var
   in
   List.iter

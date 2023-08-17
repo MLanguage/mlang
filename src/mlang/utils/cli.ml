@@ -29,6 +29,12 @@ let files =
     non_empty & pos_all file []
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
+let without_dgfip_m =
+  Arg.(
+    value & flag
+    & info [ "without_dfgip_m" ]
+        ~doc:"Don't parse M definitions of DGFiP idiosyncratic datas")
+
 let debug =
   Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
@@ -201,10 +207,10 @@ let var_dependencies =
 
 let mlang_t f =
   Term.(
-    const f $ files $ debug $ var_info_debug $ display_time $ dep_graph_file
-    $ no_print_cycles $ backend $ function_spec $ mpp_file $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function $ optimize
-    $ optimize_unsafe_float $ code_coverage $ precision $ roundops
+    const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
+    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ mpp_file
+    $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
+    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ roundops
     $ test_error_margin $ m_clean_calls $ dgfip_options $ var_dependencies)
 
 let info =
@@ -261,6 +267,8 @@ type round_ops = RODefault | ROMulti | ROMainframe of int
 
 let source_files : string list ref = ref []
 
+let without_dgfip_m = ref false
+
 let dep_graph_file : string ref = ref "dep_graph.dot"
 
 let verify_flag = ref false
@@ -287,13 +295,14 @@ let value_sort = ref RegularFloat
 
 let round_ops = ref RODefault
 
-let set_all_arg_refs (files_ : string list) (debug_ : bool)
-    (var_info_debug_ : string list) (display_time_ : bool)
+let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
+    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (value_sort_ : value_sort) (round_ops_ : round_ops)
     =
   source_files := files_;
+  without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
   var_info_flag := !var_info_debug <> [];
