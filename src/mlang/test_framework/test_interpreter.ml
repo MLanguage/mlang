@@ -37,8 +37,10 @@ let parse_file (test_name : string) : test_file =
   close_in input;
   f
 
-let to_ast_literal (value : Test_ast.literal) : Mast.literal =
-  match value with I i -> Float (float_of_int i) | F f -> Float f
+let to_ast_literal (value : Test_ast.value) : Mast.literal =
+  match value with
+  | Int i -> Float (float_of_int i)
+  | Float f -> Float f
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     Mir.Variable.t =
@@ -69,7 +71,9 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
           |> Bir.(var_from_mir default_tgv)
         in
         let lit =
-          match value with I i -> Mir.Float (float_of_int i) | F f -> Float f
+          match value with
+            | Int i -> Mir.Float (float_of_int i)
+            | Float f -> Float f
         in
         (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
       (Bir.VariableMap.empty, Bir.VariableMap.empty)

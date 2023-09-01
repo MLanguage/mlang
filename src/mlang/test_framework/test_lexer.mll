@@ -19,50 +19,90 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 {
 open Lexing
 open Test_parser
+
+module StrMap = Map.Make (String)
+
+let keywords =
+  List.fold_left (fun map (kw, tok) ->
+    StrMap.add kw tok map
+  ) StrMap.empty [
+    "#NOM",                 NOM;
+    "#FIP",                 FIP;
+    "#ENTREES-PRIMITIF",    ENTREESP;
+    "#CONTROLES-PRIMITIF",  CONTROLESP;
+    "#RESULTATS-PRIMITIF",  RESULTATSP;
+    "#ENTREES-CORRECTIF",   ENTREESC;
+    "#CONTROLES-CORRECTIF", CONTROLESC;
+    "#RESULTATS-CORRECTIF", RESULTATSC;
+    "#ENTREES-RAPPELS",     ENTREESR;
+    "#CONTROLES-RAPPELS",   CONTROLESR;
+    "#RESULTATS-RAPPELS",   RESULTATSR;
+    "#DATES",               DATES;
+    "#AVIS_IR",             AVISIR;
+    "#AVIS_CSG",            AVISCSG;
+  ]
+
+let error lb msg =
+  Errors.raise_spanned_error ("Lexing error : " ^ msg)
+    (Parse_utils.mk_position (Lexing.lexeme_start_p lb,
+                              Lexing.lexeme_end_p lb))
+
+let is_bol lb =
+  lb.lex_start_p.pos_cnum - lb.lex_start_p.pos_bol = 0
+
+let check_cr lb =
+  if String.contains (lexeme lb) '\r' then
+    error lb ("Carriage return detected")
+
 }
 
+let blank = [' ' '\t']
+let any =   [^ '\n']
+let nl =    ['\n']
+
 rule token = parse
-| [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)
-  { token lexbuf }
-| '*' [^ '\n']* '\n' (* ignore comments *)
-  { new_line lexbuf; token lexbuf }
+
 | '\n' | "\r\n"
-  { new_line lexbuf; token lexbuf}
-| "/"
-  { SLASH }
-| "#NOM"
-  { NOM }
-| "#FIP"
-  { FIP }
-| "#ENTREES-PRIMITIF"
-  { ENTREESP }
-| "#CONTROLES-PRIMITIF"
-  { CONTROLESP }
-| "#RESULTATS-PRIMITIF"
-  { RESULTATSP }
-| "#ENTREES-CORRECTIF"
-  { ENTREESC }
-| "#CONTROLES-CORRECTIF"
-  { CONTROLESC }
-| "#RESULTATS-CORRECTIF"
-  { RESULTATSC }
-| "#DATES"
-  { DATES }
-| "#AVIS_IR"
-  { AVISIR }
-| "#AVIS_CSG"
-  { AVISCSG }
-| "##"
-  { ENDSHARP }
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then token lexbuf
+    else NL }
+
+| '*' any* nl
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then token lexbuf
+    else error lexbuf "Comment with * must start in the first column" }
+
+| blank any* nl
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then error lexbuf "Line can not start with a blank"
+    else NL }
+
 | '-'? ['0' - '9']+ as i
-  { INTEGER i }
+  { INTEGER (int_of_string i) }
+
 | '-'? ['0' - '9']+ '.' ['0' - '9']* as f
-  { FLOAT f }
+  { FLOAT (float_of_string f) } (* DONT KEEP THAT *)
+
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
-| ['a'-'z' 'A'-'Z' ' ' '0'-'9' ';' '-']+ as s
+
+| ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' ';' (*' '*)]+ as s
   { NAME s }
+
+| "/"
+  { SLASH }
+
+| "##"
+  { ENDSHARP }
+
+| "#" ['a'-'z' 'A'-'Z' '0'-'9' '_' '-']+ as s
+  { match StrMap.find_opt s keywords with
+    | None -> error lexbuf (Printf.sprintf "Unknown section name: '#%s'" s)
+    | Some t -> t }
+
 | eof
   { EOF }
-| _
-  {  Errors.raise_spanned_error "Test file lexer error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
+
+| _ as c
+  { error lexbuf (Printf.sprintf
+                  "Unexpected character '%c' (%d)" c (Char.code c)) }

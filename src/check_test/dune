@@ -1,0 +1,12 @@
+(env
+ (static
+  (ocamlopt_flags
+   (-O3 -ccopt -static))))
+
+(include_subdirs unqualified)
+
+(executable
+ (name check_test)
+ (package mlang)
+ (public_name check_test)
+ (libraries mlang))

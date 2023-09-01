@@ -13,14 +13,32 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type literal = I of int | F of float
+type value =
+  | Int of int
+  | Float of float
 
-type var_values = (string * literal * Pos.t) list
+type discord = (string * Pos.t)
+
+type input = (string * value * Pos.t)
+
+type rappel = {
+  num_evt: int;
+  num_rap: int;
+  variable: string;
+  value: int;
+  sens: string; (* R, C, M, P *)
+  penalite: int option; (* 0 - 99 *)
+  base_tl: int option;
+  date_inr: int; (* MMYYYY *)
+  ind20: int option; (* 0 or 1 *)
+  pos: Pos.t
+}
 
 type test_file = {
   nom : string;
-  ep : var_values;
-  cp : var_values;
-  rp : var_values;
-  corr : (var_values * var_values * var_values) option;
+  ep : input list;
+  cp : discord list;
+  rp : input list;
+  corr : (input list * discord list * input list) option;
+  rapp : (rappel list * discord list * input list) option;
 }

@@ -1,4 +1,6 @@
+
 (ocamllex test_lexer)
 
 (menhir
- (modules test_parser))
+ (modules test_parser)
+ (flags --strict --explain))

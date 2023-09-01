@@ -17,16 +17,26 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
 %{ open Test_ast
-   open Parse_utils %}
+   open Parse_utils
 
-%token<string> SYMBOL NAME INTEGER FLOAT
+let error (sp, ep) msg =
+  Errors.raise_spanned_error ("Parse error : " ^ msg)
+    (Parse_utils.mk_position (sp, ep))
+
+%}
+
+%token<string> SYMBOL NAME
+%token<int> INTEGER
+%token<float> FLOAT
 
 %token SLASH
 %token NOM FIP
 %token ENTREESP CONTROLESP RESULTATSP
 %token ENTREESC CONTROLESC RESULTATSC
+%token ENTREESR CONTROLESR RESULTATSR
 %token DATES AVISIR AVISCSG
 %token ENDSHARP
+%token NL
 
 %token EOF
 
@@ -39,37 +49,97 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 test_file:
-| NOM nom = name
+| NOM NL
+  nom = name*
   fip?
-  ENTREESP
-  ep = list(variable_and_value)
-  CONTROLESP
-  cp = list(variable_and_value)
-  RESULTATSP
-  rp = list(variable_and_value)
+  prim = primitif
   corr = correctif?
+  rapp = rappels?
   DATES?
   AVISIR?
   AVISCSG?
-  ENDSHARP { { nom; ep; cp; rp; corr } }
-| EOF { assert false }
-
-correctif:
-  ENTREESC
-  ec = list(variable_and_value)
-  CONTROLESC
-  cc = list(variable_and_value)
-  RESULTATSC
-  rc = list(variable_and_value) { (ec, cc, rc) }
-
+  endsharp NL? (* newline at end-of-file is optional *)
+  EOF {
+    let nom =
+      match nom with
+      | [n] -> n
+      | [] -> error $loc(nom) "Missing name in section #NOM"
+      | _ -> error $loc(nom) "Extra line(s) in section #NOM"
+    in
+    let ep, cp, rp = prim in
+    { nom; ep; cp; rp; corr; rapp }
+  }
+| EOF { error $loc "Empty test file" }
 
 name:
-| n = NAME { n }
-| n = SYMBOL { n }
+| n = name_or_symbol NL { n }
 
 fip:
-  FIP SLASH option(SYMBOL) { }
+| FIP SLASH SYMBOL? NL { } (* it is actually allowed to leave it blank *)
 
-variable_and_value:
-| var = SYMBOL SLASH value = INTEGER  { (var, I (int_of_string value), mk_position $sloc) }
-| var = SYMBOL SLASH value = FLOAT  { (var, F (float_of_string value), mk_position $sloc) }
+primitif:
+| ENTREESP NL
+  ep = input*
+  CONTROLESP NL
+  cp = discord*
+  RESULTATSP NL
+  rp = input* { (ep, cp, rp) }
+
+correctif:
+| ENTREESC NL
+  ec = input*
+  CONTROLESC NL
+  cc = discord*
+  RESULTATSC NL
+  rc = input* { (ec, cc, rc) }
+
+rappels:
+| ENTREESR NL
+  ec = rappel*
+  CONTROLESR NL
+  cc = discord*
+  RESULTATSR NL
+  rc = input* { (ec, cc, rc) }
+
+discord:
+| d = SYMBOL NL { (d, mk_position $sloc) }
+
+input:
+| var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
+| SYMBOL error                        { error $loc "Missing slash" }
+
+rappel:
+| num_evt = integer SLASH
+  num_rap = integer SLASH
+  variable = SYMBOL SLASH
+  value = integer SLASH
+  sens = SYMBOL SLASH
+  penalite = INTEGER? SLASH
+  base_tl = INTEGER? SLASH
+  date_inr = INTEGER SLASH
+  ind20 = INTEGER? NL {
+    if sens <> "R" && sens <> "C" && sens <> "M" && sens <> "P" then
+      error $loc(sens) ("Unknown value for 'sens' : " ^ sens);
+    let p = match penalite with Some p -> p | _ -> 0 in
+    if p < 0 || p > 99 then
+      error $loc(sens) ("Invalid value for 'penalite' : " ^ (string_of_int p));
+    { num_evt; num_rap; variable; value; sens; penalite;
+      base_tl; date_inr; ind20; pos = mk_position $sloc }
+  }
+
+integer:
+| i = INTEGER { i }
+| error       { error $loc "Missing integer" }
+
+value:
+| i = INTEGER { Int (i) }
+| f = FLOAT   { Float (f) }
+| error       { error $loc "Missing value" }
+
+name_or_symbol:
+| n = NAME    { n }
+| n = SYMBOL  { n }
+
+endsharp:
+| ENDSHARP    { () }
+| error       { error $loc "Missing ## at end of file" }
