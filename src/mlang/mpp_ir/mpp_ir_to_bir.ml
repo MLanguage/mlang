@@ -318,7 +318,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
                 ~attributes:[] ~origin:None ~cats:Mir.CatVarSet.empty
-                ~is_table:None
+                ~is_table:None ~is_temp:false
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =

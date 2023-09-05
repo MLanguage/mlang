@@ -138,6 +138,7 @@ type variable = {
           (declared) variable *)
   cats : CatVarSet.t;
   is_table : int option;
+  is_temp : bool;
 }
 
 module Variable = struct
@@ -158,6 +159,7 @@ module Variable = struct
             (declared) variable *)
     cats : CatVarSet.t;
     is_table : int option;
+    is_temp : bool;
   }
 
   let fresh_id : unit -> id =
@@ -170,7 +172,7 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(cats : CatVarSet.t) ~(is_table : int option) : t =
+      ~(cats : CatVarSet.t) ~(is_table : int option) ~(is_temp : bool) : t =
     {
       name;
       id = fresh_id ();
@@ -181,6 +183,7 @@ module Variable = struct
       origin;
       cats;
       is_table;
+      is_temp;
     }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
@@ -436,6 +439,15 @@ module RuleMap = MapExt.Make (struct
   let compare = compare
 end)
 
+module TargetMap = StrMap
+
+type target_data = {
+  target_name : string Pos.marked;
+  target_apps : string Pos.marked list;
+  target_tmp_vars : Pos.t StrMap.t;
+  target_affs : (variable_id * variable_data) list;
+}
+
 (**{1 Verification conditions}*)
 
 type error_descr = {
@@ -555,6 +567,7 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_applications : Pos.t StrMap.t;
   program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
@@ -565,6 +578,7 @@ type program = {
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
+  program_targets : target_data TargetMap.t;
   program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables *)
   program_idmap : idmap;

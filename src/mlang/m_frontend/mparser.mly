@@ -47,9 +47,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE IF THEN ELSE ENDIF ERROR VERIFICATION ANOMALY DISCORDANCE CONDITION
+%token RULE VERIFICATION TARGET TEMPORARY
+%token IF THEN ELSE ENDIF ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
+
 
 %token EOF
 
@@ -78,6 +80,7 @@ source_file_item:
 | c = chaining { let (s, aps) = c in (Chaining (s, aps), mk_position $sloc) }
 | v = variable_decl { (VariableDecl v, mk_position $sloc) }
 | r = rule { (Rule r, mk_position $sloc) }
+| t = target { (Target t, mk_position $sloc) }
 | ver = verification { (Verification ver, mk_position $sloc) }
 | e = error_ { (Error e, mk_position $sloc) }
 | o = output { (Output o, mk_position $sloc) }
@@ -372,6 +375,28 @@ rule:
     }
   }
 
+target:
+| TARGET name = symbol_with_pos COLON
+  apps = application_reference SEMICOLON
+  tmp_vars = temporary_variables_decl?
+  formulaes = formula_list
+  {
+    {
+      target_name = name;
+      target_applications = apps;
+      target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
+      target_formulaes = formulaes;
+    }
+  }
+
+temporary_variable_name:
+| name = SYMBOL { (parse_variable_name $sloc name, mk_position $sloc) }
+
+temporary_variables_decl:
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+    { tmp_vars }
+
 formula_list:
 | f = formula_kind SEMICOLON { [f] }
 | f = formula_kind SEMICOLON fs = formula_list { f::fs }
@@ -498,14 +523,14 @@ loop_variables_range:
    let (s, loc) = s in ((s, loc), e)
  }
 
- enumeration_loop:
- | i = enumeration_loop_item { [i] }
- | i = enumeration_loop_item COMMA is = enumeration_loop { i::is }
+enumeration_loop:
+| i = enumeration_loop_item { [i] }
+| i = enumeration_loop_item COMMA is = enumeration_loop { i::is }
 
- enumeration_loop_item:
- | bounds = interval_loop { bounds  }
- | s = SYMBOL { Single (parse_to_literal (parse_variable_or_int $sloc s),
-                        mk_position $sloc) }
+enumeration_loop_item:
+| bounds = interval_loop { bounds  }
+| s = SYMBOL { Single (parse_to_literal (parse_variable_or_int $sloc s),
+                      mk_position $sloc) }
 
 range_or_minus:
 | RANGE { `Range }
@@ -614,7 +639,6 @@ function_arguments:
 | e = sum_expression { [e] }
 | e = sum_expression COMMA es = function_arguments { e::es }
 
-
 comparison_op:
 | GTE  { (Gte, mk_position $sloc) }
 | LTE  { (Lte,  mk_position $sloc) }
@@ -651,7 +675,6 @@ spec_const_list:
 | NOT SEMICOLON { [] }
 | const = const_input { [const] }
 | const = const_input rest = spec_const_list { const::rest }
-
 
 spec_conds_list:
 | NOT SEMICOLON { [] }
