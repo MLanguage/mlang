@@ -129,6 +129,7 @@ type program_context = {
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
+  targets : stmt list Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   context : program_context option;

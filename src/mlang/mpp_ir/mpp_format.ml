@@ -59,6 +59,7 @@ and format_callable (fmt : formatter) (f : mpp_callable) =
     | Verifs (dom, filter) ->
         Format.asprintf "verifications(%a%a)" (Mast.DomainId.pp ()) dom
           format_expression filter
+    | Target t -> t
     | NbVarCat cvs ->
         Format.asprintf "nb_var_category(%a)" (Mir.CatVarSet.pp ()) cvs
     | ExistsAttrWithVal ((attr, _), value) ->

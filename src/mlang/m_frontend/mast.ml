@@ -180,6 +180,13 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of loop_variables Pos.marked * formula_decl
 
+type instruction =
+  | Formula of formula Pos.marked
+  | IfThenElse of
+      expression Pos.marked
+      * instruction Pos.marked list
+      * instruction Pos.marked list
+
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
@@ -193,7 +200,7 @@ type target = {
   target_name : string Pos.marked;
   target_applications : application Pos.marked list;
   target_tmp_vars : string Pos.marked list;
-  target_formulaes : formula Pos.marked list;
+  target_prog : instruction Pos.marked list;
 }
 
 type 'a domain_decl = {

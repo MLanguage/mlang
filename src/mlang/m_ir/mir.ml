@@ -426,10 +426,15 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+
 type rule_data = {
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
-  rule_vars : (Variable.id * variable_data) list;
+  rule_vars : instruction Pos.marked list;
   rule_number : rov_id Pos.marked;
 }
 
@@ -445,7 +450,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_apps : string Pos.marked list;
   target_tmp_vars : Pos.t StrMap.t;
-  target_affs : (variable_id * variable_data) list;
+  target_prog : instruction Pos.marked list;
 }
 
 (**{1 Verification conditions}*)
@@ -646,7 +651,12 @@ let find_var_definition (p : program) (var : Variable.t) :
       (fun _ rule_data ->
         try
           List.iter
-            (fun (vid, def) -> if var.id = vid then raise (Found_var def))
+            (fun instr ->
+              match Pos.unmark instr with
+              | Affectation (vid, def) ->
+                  if var.id = vid then raise (Found_var def)
+              | _ -> assert false
+              (* never used *))
             rule_data.rule_vars
         with Found_var def -> raise (Found_rule (rule_data, def)))
       p.program_rules;
@@ -660,9 +670,13 @@ let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) :
       (fun rule_data ->
         let rule_vars =
           List.map
-            (fun (vid, def) ->
-              let var = VariableDict.find vid p.program_vars in
-              (vid, f var def))
+            (fun instr ->
+              match Pos.unmark instr with
+              | Affectation (vid, def) ->
+                  let var = VariableDict.find vid p.program_vars in
+                  (Affectation (vid, f var def), Pos.get_position instr)
+              | _ -> assert false
+              (* never used *))
             rule_data.rule_vars
         in
         { rule_data with rule_vars })
@@ -675,9 +689,13 @@ let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program)
   RuleMap.fold
     (fun _ rule_data acc ->
       List.fold_left
-        (fun acc (vid, def) ->
-          let var = VariableDict.find vid p.program_vars in
-          f var def acc)
+        (fun acc instr ->
+          match Pos.unmark instr with
+          | Affectation (vid, def) ->
+              let var = VariableDict.find vid p.program_vars in
+              f var def acc
+          | _ -> assert false
+          (* never used *))
         acc rule_data.rule_vars)
     p.program_rules acc
 

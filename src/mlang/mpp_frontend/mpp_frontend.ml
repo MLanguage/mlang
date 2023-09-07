@@ -33,12 +33,7 @@ let to_mpp_callable (cname : string Pos.marked) (translated_names : string list)
   | "present" -> Present
   | "abs" -> Abs
   | "cast" -> Cast
-  | x ->
-      if List.mem x translated_names then MppFunction x
-      else
-        Errors.raise_spanned_error
-          (Format.sprintf "unknown callable %s" x)
-          (Pos.get_position cname)
+  | x -> if List.mem x translated_names then MppFunction x else Target x
 
 let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
     (scope : mpp_compute_name list) (e : Mpp_ast.expr) :

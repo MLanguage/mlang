@@ -741,9 +741,12 @@ struct
         evaluate_stmts p ctx
           (Bir.rule_or_verif_as_statements rule)
           (InsideRule r :: loc) 0
-    | Bir.SFunctionCall (f, _args) ->
-        evaluate_stmts p ctx (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
-          loc 0
+    | Bir.SFunctionCall (f, _args) -> (
+        match Mir.TargetMap.find_opt f p.targets with
+        | Some stmts -> evaluate_stmts p ctx stmts loc 0
+        | None ->
+            evaluate_stmts p ctx
+              (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
   (* Mpp_function arguments seem to be used only to determine which variables
      are actually output. Does this actually make sense ? *)
 

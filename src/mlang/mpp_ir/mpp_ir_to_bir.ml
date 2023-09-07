@@ -115,25 +115,37 @@ let cond_ExistsAliases (p : Mir_interface.full_program) (pos : Pos.t)
   in
   generate_input_condition (fun v -> Mir.VariableMap.mem v vars) p pos
 
-let translate_m_code (m_program : Mir_interface.full_program)
-    (vars : (Mir.Variable.id * Mir.variable_data) list) =
+let rec translate_m_code (m_program : Mir_interface.full_program)
+    (instrs : Mir.instruction Pos.marked list) =
   list_map_opt
-    (fun (vid, (vdef : Mir.variable_data)) ->
-      try
-        let var = Mir.VariableDict.find vid m_program.program.program_vars in
-        let var_definition =
-          Mir.map_var_def_var
-            Bir.(var_from_mir default_tgv)
-            vdef.Mir.var_definition
-        in
-        match var_definition with
-        | InputVar -> None
-        | TableVar _ | SimpleVar _ ->
-            Some
-              ( Bir.SAssign (Bir.(var_from_mir default_tgv) var, var_definition),
-                var.Mir.Variable.execution_number.pos )
-      with Not_found -> None)
-    vars
+    (function
+      | Mir.Affectation (vid, vdef), pos -> (
+          try
+            let var =
+              Mir.VariableDict.find vid m_program.program.program_vars
+            in
+            let var_definition =
+              Mir.map_var_def_var
+                Bir.(var_from_mir default_tgv)
+                vdef.Mir.var_definition
+            in
+            match var_definition with
+            | InputVar -> None
+            | TableVar _ | SimpleVar _ ->
+                Some
+                  ( Bir.SAssign
+                      (Bir.(var_from_mir default_tgv) var, var_definition),
+                    var.Mir.Variable.execution_number.pos )
+          with Not_found ->
+            Errors.raise_spanned_error
+              (Format.sprintf "unknown variable id %d" vid)
+              pos)
+      | Mir.IfThenElse (e, ilt, ile), pos ->
+          let expr = Mir.map_expr_var Bir.(var_from_mir default_tgv) e in
+          let stmts_then = translate_m_code m_program ilt in
+          let stmts_else = translate_m_code m_program ile in
+          Some (Bir.SConditional (expr, stmts_then, stmts_else), pos))
+    instrs
 
 let wrap_m_code_call (m_program : Mir_interface.full_program)
     (order : Mir_interface.chain_order) (ctx : translation_ctx) :
@@ -389,6 +401,14 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                   real_args ),
             pos );
         ] )
+  | Mpp_ir.Expr (Call (Target t, _args), pos) -> begin
+      match Mir.TargetMap.find_opt t m_program.program.program_targets with
+      | Some _ -> (ctx, [ (Bir.SFunctionCall (t, []), pos) ])
+      | None ->
+          Errors.raise_spanned_error
+            (Format.asprintf "Unknown target: %s" t)
+            pos
+    end
   | Mpp_ir.Expr (Call (Rules dom, _args), _) ->
       let order =
         match Mast.DomainIdMap.find_opt dom m_program.domains_orders with
@@ -541,11 +561,17 @@ let create_combined_program (m_program : Mir_interface.full_program)
           Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules)
         m_program.program.program_conds rules
     in
+    let targets =
+      Mir.TargetMap.map
+        (fun t -> translate_m_code m_program t.Mir.target_prog)
+        m_program.program.program_targets
+    in
     if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
       Errors.raise_error
         (Format.asprintf "M++ function %s not found in M++ file!"
            mpp_function_to_extract);
     {
+      targets;
       rules_and_verifs;
       mpp_functions;
       main_function = mpp_function_to_extract;

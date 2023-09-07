@@ -170,10 +170,15 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+
 type rule_data = {
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
-  rule_vars : (variable_id * variable_data) list;
+  rule_vars : instruction Pos.marked list;
   rule_number : rov_id Pos.marked;
 }
 
@@ -181,7 +186,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_apps : string Pos.marked list;
   target_tmp_vars : Pos.t StrMap.t;
-  target_affs : (variable_id * variable_data) list;
+  target_prog : instruction Pos.marked list;
 }
 
 type error_descr = {

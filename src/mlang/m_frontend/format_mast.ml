@@ -184,6 +184,28 @@ let format_formula fmt (f : formula) =
       Format.fprintf fmt "pour %a\n%a" format_loop_variables (Pos.unmark lvs)
         format_formula_decl f
 
+let rec format_instruction fmt (i : instruction) =
+  match i with
+  | Formula f -> pp_unmark format_formula fmt f
+  | IfThenElse (e, il, []) ->
+      Format.fprintf fmt "si %a alors %a finsi"
+        (pp_unmark format_expression)
+        e
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "")
+           (pp_unmark format_instruction))
+        il
+  | IfThenElse (e, ilt, ile) ->
+      Format.fprintf fmt "si %a alors %a sinon %a finsi"
+        (pp_unmark format_expression)
+        e format_instruction_list ilt format_instruction_list ile
+
+and format_instruction_list fmt (il : instruction Pos.marked list) =
+  (Format.pp_print_list
+     ~pp_sep:(fun fmt () -> Format.fprintf fmt "")
+     (pp_unmark format_instruction))
+    fmt il
+
 let format_rule fmt (r : rule) =
   Format.fprintf fmt "regle %d:\napplication %a;\n%a;\n"
     (Pos.unmark r.rule_number)
@@ -201,11 +223,7 @@ let format_target fmt (t : target) =
     (pp_print_list_comma (pp_unmark Format.pp_print_string))
     t.target_applications
     (pp_print_list_comma (pp_unmark Format.pp_print_string))
-    t.target_tmp_vars
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt ";\n")
-       (pp_unmark format_formula))
-    t.target_formulaes
+    t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_value_typ fmt (t : value_typ) =
   Format.pp_print_string fmt
