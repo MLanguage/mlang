@@ -46,7 +46,8 @@ src/com/mlang/Ir_%.java: ../../m_specs/%.m_spec
 	$(MLANG) \
 		--backend java --output $@ \
 		--function_spec $^ \
-		$(SOURCE_FILES)
+		$(SOURCE_FILES) \
+		$(SOURCE_EXT_FILES)
 
 target:
 	mkdir -p $@

@@ -411,6 +411,26 @@ let get_var (d : Mir.Variable.t list Pos.VarNameToID.t)
 
 (**{2 Preliminary passes}*)
 
+let get_applications (p : Mast.program) : Pos.t StrMap.t =
+  List.fold_left
+    (fun apps source_file ->
+      List.fold_left
+        (fun apps (item, pos_item) ->
+          match item with
+          | Mast.Application (name, _pos) -> begin
+              match StrMap.find_opt name apps with
+              | Some old_pos ->
+                  let msg =
+                    Format.asprintf "application %s already defined %a" name
+                      Pos.format_position old_pos
+                  in
+                  Errors.raise_spanned_error msg pos_item
+              | None -> StrMap.add name pos_item apps
+            end
+          | _ -> apps)
+        apps source_file)
+    StrMap.empty p
+
 (** Gets constant values. Done in a separate pass because constant variables are
     substituted everywhere by their defined value. *)
 let get_constants (p : Mast.program) : float Pos.marked ConstMap.t =
@@ -749,6 +769,7 @@ let get_variables_decl (p : Mast.program)
                               ~cats:(Mir.CatVarSet.singleton cat)
                               ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
+                              ~is_temp:false
                           in
                           let new_var_data =
                             {
@@ -794,7 +815,7 @@ let get_variables_decl (p : Mast.program)
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
                               ~cats:(Mir.CatVarSet.singleton cat)
-                              ~is_table:None
+                              ~is_table:None ~is_temp:false
                             (* Input variables also have a low order *)
                           in
                           let new_var_data =
@@ -946,6 +967,7 @@ let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
   in
   Mir.Variable.new_var var.name None var.descr exec_number
     ~attributes:var.attributes ~origin ~cats:var.cats ~is_table:var.is_table
+    ~is_temp:var.is_temp
 
 (** Linear pass that fills [idmap] with all the variable assignments along with
     their execution number. *)
@@ -1302,12 +1324,10 @@ let translate_value_typ (typ : Mast.value_typ Pos.marked option) :
   | Some (_, _) -> Some Mir.Real
   | None -> None
 
-(** Main toplevel declaration translator that adds a variable definition to the
-    MIR program *)
-let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
-    (var_lvalue : Mir.Variable.t) (var_expr : Mir.expression Pos.marked)
-    (def_kind : index_def) (var_decl_data : var_decl_data Mir.VariableMap.t)
-    (idmap : Mir.idmap) : Mir.variable_data Mir.VariableMap.t =
+let create_var_def (var_lvalue : Mir.Variable.t)
+    (var_expr : Mir.expression Pos.marked) (def_kind : index_def)
+    (var_decl_data : var_decl_data Mir.VariableMap.t) (idmap : Mir.idmap) :
+    Mir.variable_data =
   let var_at_declaration =
     List.find
       (fun var ->
@@ -1325,54 +1345,56 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
     translate_value_typ
       (Option.map (fun x -> (x, decl_data.var_pos)) decl_data.var_decl_typ)
   in
-  let vdata =
-    let var_io =
-      match decl_data.var_decl_io with
-      | Input -> Mir.Input
-      | Regular -> Mir.Regular
-      | Output -> Mir.Output
-    in
-    match decl_data.var_decl_is_table with
-    | Some size -> (
-        match def_kind with
-        | NoIndex -> assert false (* should not happen *)
-        | ConstIndex i ->
-            {
-              Mir.var_definition =
-                Mir.TableVar
-                  (size, Mir.IndexTable (Mir.IndexMap.singleton i var_expr));
-              Mir.var_typ;
-              Mir.var_io;
-            }
-        | DynamicIndex v ->
-            {
-              Mir.var_definition =
-                Mir.TableVar (size, Mir.IndexGeneric (v, var_expr));
-              Mir.var_typ;
-              Mir.var_io;
-            })
-    | None ->
-        if def_kind = NoIndex then
+  let var_io =
+    match decl_data.var_decl_io with
+    | Input -> Mir.Input
+    | Regular -> Mir.Regular
+    | Output -> Mir.Output
+  in
+  match decl_data.var_decl_is_table with
+  | Some size -> (
+      match def_kind with
+      | NoIndex -> assert false (* should not happen *)
+      | ConstIndex i ->
           {
-            Mir.var_definition = Mir.SimpleVar var_expr;
+            Mir.var_definition =
+              Mir.TableVar
+                (size, Mir.IndexTable (Mir.IndexMap.singleton i var_expr));
             Mir.var_typ;
             Mir.var_io;
           }
-        else
-          Errors.raise_multispanned_error
-            (Format.asprintf
-               "variable %s is defined as a table but has been declared as a \
-                non-table"
-               (Pos.unmark var_lvalue.Mir.Variable.name))
-            [
-              (Some "variable definition", Pos.get_position var_expr);
-              ( Some "variable declaration",
-                try (Mir.VariableMap.find var_lvalue var_decl_data).var_pos
-                with Not_found -> assert false
-                (* should not happen since we already looked into idmap to get
-                   the var value from its name *) );
-            ]
-  in
+      | DynamicIndex v ->
+          {
+            Mir.var_definition =
+              Mir.TableVar (size, Mir.IndexGeneric (v, var_expr));
+            Mir.var_typ;
+            Mir.var_io;
+          })
+  | None ->
+      if def_kind = NoIndex then
+        { Mir.var_definition = Mir.SimpleVar var_expr; Mir.var_typ; Mir.var_io }
+      else
+        Errors.raise_multispanned_error
+          (Format.asprintf
+             "variable %s is defined as a table but has been declared as a \
+              non-table"
+             (Pos.unmark var_lvalue.Mir.Variable.name))
+          [
+            (Some "variable definition", Pos.get_position var_expr);
+            ( Some "variable declaration",
+              try (Mir.VariableMap.find var_lvalue var_decl_data).var_pos
+              with Not_found -> assert false
+              (* should not happen since we already looked into idmap to get the
+                 var value from its name *) );
+          ]
+
+(** Main toplevel declaration translator that adds a variable definition to the
+    MIR program *)
+let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
+    (var_lvalue : Mir.Variable.t) (var_expr : Mir.expression Pos.marked)
+    (def_kind : index_def) (var_decl_data : var_decl_data Mir.VariableMap.t)
+    (idmap : Mir.idmap) : Mir.variable_data Mir.VariableMap.t =
+  let vdata = create_var_def var_lvalue var_expr def_kind var_decl_data idmap in
   Mir.VariableMap.add var_lvalue vdata var_data
 
 let get_domains (cat_str : string)
@@ -1569,7 +1591,7 @@ let get_verif_domains (cats : 'a Mir.CatVarMap.t) (p : Mast.program) :
 let get_rules_and_var_data (idmap : Mir.idmap)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
-    (Mir.Variable.t list
+    (Mir.Variable.t Pos.marked list
     * Mir.rov_id Pos.marked
     * string Pos.marked list Pos.marked
     * Mast.chaining Pos.marked option)
@@ -1607,7 +1629,9 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                           let ctx, var_lvalue, def_kind =
                             translate_lvalue ctx f.Mast.lvalue
                           in
-                          let rule_vars = var_lvalue :: rule_vars in
+                          let rule_vars =
+                            (var_lvalue, Pos.get_position formula) :: rule_vars
+                          in
                           let var_expr =
                             translate_expression ctx f.Mast.formula
                           in
@@ -1648,7 +1672,10 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                                 add_var_def var_data var_lvalue var_expr
                                   def_kind var_decl_data idmap
                               in
-                              let rule_vars = var_lvalue :: rule_vars in
+                              let rule_vars =
+                                (var_lvalue, Pos.get_position formula)
+                                :: rule_vars
+                              in
                               (rule_vars, var_data, seq_number + 1))
                             (rule_vars, var_data, seq_number)
                             data_to_add)
@@ -1707,6 +1734,154 @@ let add_dummy_definitions_for_variable_declarations
         }
         var_data)
     var_decl_data var_data
+
+let translate_prog const_map idmap var_decl_data prog =
+  let new_ctx pos =
+    {
+      idmap;
+      lc = None;
+      const_map;
+      table_definition = false;
+      exec_number = { Mir.rule_number = -1; Mir.seq_number = max_int; Mir.pos };
+    }
+  in
+  let rec aux res = function
+    | [] -> List.rev res
+    | (Mast.Formula f, pos) :: il -> begin
+        let ctx = new_ctx pos in
+        match f with
+        | Mast.SingleFormula sf, _ ->
+            let ctx, var_lvalue, def_kind =
+              translate_lvalue ctx sf.Mast.lvalue
+            in
+            let var_expr = translate_expression ctx sf.Mast.formula in
+            let var_data =
+              create_var_def var_lvalue var_expr def_kind var_decl_data idmap
+            in
+            aux
+              ((Mir.Affectation (var_lvalue.Mir.Variable.id, var_data), pos)
+              :: res)
+              il
+        | Mast.MultipleFormulaes (lvs, mf), _ ->
+            let loop_context_provider = translate_loop_variables lvs ctx in
+            let translator lc _idx =
+              let new_ctx = { ctx with lc = Some lc } in
+              let new_ctx, var_lvalue, def_kind =
+                translate_lvalue new_ctx mf.Mast.lvalue
+              in
+              let var_expr = translate_expression new_ctx mf.Mast.formula in
+              (var_lvalue, var_expr, def_kind)
+            in
+            let data_to_add = loop_context_provider translator in
+            let res =
+              List.fold_left
+                (fun target_prog (var_lvalue, var_expr, def_kind) ->
+                  let var_data =
+                    create_var_def var_lvalue var_expr def_kind var_decl_data
+                      idmap
+                  in
+                  (Mir.Affectation (var_lvalue.Mir.Variable.id, var_data), pos)
+                  :: target_prog)
+                res data_to_add
+            in
+            aux res il
+      end
+    | (Mast.IfThenElse (e, ilt, ile), pos) :: il ->
+        let ctx = new_ctx pos in
+        let expr, _ = translate_expression ctx e in
+        let prog_then = aux [] ilt in
+        let prog_else = aux [] ile in
+        aux ((Mir.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
+  in
+  aux [] prog
+
+let get_targets (apps : Pos.t StrMap.t) (var_data : Mir.VariableDict.t)
+    (idmap : Mir.variable list Pos.VarNameToID.t)
+    (var_decl_data : var_decl_data Mir.VariableMap.t)
+    (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
+    Mir.target_data Mir.TargetMap.t * Mir.VariableDict.t =
+  List.fold_left
+    (fun (targets, var_data) source_file ->
+      List.fold_left
+        (fun (targets, var_data) (item, pos_item) ->
+          match item with
+          | Mast.Target t ->
+              let target_name = t.Mast.target_name in
+              let name = Pos.unmark target_name in
+              (match Mir.TargetMap.find_opt name targets with
+              | Some data ->
+                  let old_pos = Pos.get_position data.Mir.target_name in
+                  let msg =
+                    Format.asprintf "target %s already defined %a" name
+                      Pos.format_position old_pos
+                  in
+                  Errors.raise_spanned_error msg pos_item
+              | None -> ());
+              let target_apps = t.Mast.target_applications in
+              List.iter
+                (fun (app, pos) ->
+                  if not (StrMap.mem app apps) then
+                    Errors.raise_spanned_error "unknown application" pos)
+                target_apps;
+              let target_tmp_vars =
+                List.fold_left
+                  (fun vars (var, pos) ->
+                    match Pos.VarNameToID.find_opt var idmap with
+                    | Some (v :: _) ->
+                        let msg =
+                          Format.asprintf "variable already declared %a"
+                            Pos.format_position (Pos.get_position v.name)
+                        in
+                        Errors.raise_spanned_error msg pos
+                    | _ -> begin
+                        match StrMap.find_opt var vars with
+                        | Some old_pos ->
+                            let msg =
+                              Format.asprintf "variable already declared %a"
+                                Pos.format_position old_pos
+                            in
+                            Errors.raise_spanned_error msg pos
+                        | None -> StrMap.add var pos vars
+                      end)
+                  StrMap.empty t.Mast.target_tmp_vars
+              in
+              let var_data, tmp_idmap, tmp_var_decl_data =
+                StrMap.fold
+                  (fun name pos (var_data, map, decls) ->
+                    let var =
+                      Mir.Variable.new_var (name, pos) None ("temporary", pos)
+                        (dummy_exec_number pos) ~attributes:[] ~origin:None
+                        ~cats:Mir.CatVarSet.empty ~is_table:None ~is_temp:true
+                    in
+                    let var_data = Mir.VariableDict.add var var_data in
+                    let map = Pos.VarNameToID.add name [ var ] map in
+                    let var_decl =
+                      {
+                        var_decl_typ = None;
+                        var_decl_is_table = None;
+                        var_decl_descr = None;
+                        var_decl_io = Regular;
+                        var_pos = pos;
+                      }
+                    in
+                    let decls = Mir.VariableMap.add var var_decl decls in
+                    (var_data, map, decls))
+                  target_tmp_vars
+                  (var_data, idmap, var_decl_data)
+              in
+              let target_prog =
+                translate_prog const_map tmp_idmap tmp_var_decl_data
+                  t.Mast.target_prog
+              in
+              let target_data =
+                Mir.{ target_name; target_apps; target_tmp_vars; target_prog }
+              in
+              ( Mir.TargetMap.add (Pos.unmark target_name) target_data targets,
+                var_data )
+          | _ -> (targets, var_data))
+        (targets, var_data) source_file)
+    (Mir.TargetMap.empty, var_data)
+    p
 
 let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
     (const_map : float Pos.marked ConstMap.t) (idmap : Mir.idmap)
@@ -1837,6 +2012,7 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
 
 let translate (p : Mast.program) : Mir.program =
   let const_map = get_constants p in
+  let apps = get_applications p in
   let var_category_decls = get_var_categories p in
   let var_category_map = get_var_category_map p in
   let var_decl_data, error_decls, idmap =
@@ -1877,8 +2053,10 @@ let translate (p : Mast.program) : Mir.program =
         in
         let rule_vars, vars =
           List.fold_left
-            (fun (rule_vars, vars) var ->
-              ( (var.Mir.Variable.id, Mir.VariableMap.find var var_data)
+            (fun (rule_vars, vars) (var, pos) ->
+              ( ( Mir.Affectation
+                    (var.Mir.Variable.id, Mir.VariableMap.find var var_data),
+                  pos )
                 :: rule_vars,
                 Mir.VariableDict.add var vars ))
             ([], vars) (List.rev rule_vars)
@@ -1895,7 +2073,8 @@ let translate (p : Mast.program) : Mir.program =
       (fun var data (var_dict, orphans) ->
         let orphans =
           if Mir.VariableDict.mem var rule_vars then orphans
-          else (var.Mir.Variable.id, data) :: orphans
+          else
+            (Mir.Affectation (var.Mir.Variable.id, data), Pos.no_pos) :: orphans
         in
         (Mir.VariableDict.add var var_dict, orphans))
       var_data
@@ -1912,17 +2091,22 @@ let translate (p : Mast.program) : Mir.program =
         }
       rules
   in
+  let targets, var_data =
+    get_targets apps var_data idmap var_decl_data const_map p
+  in
   let verif_domains, conds =
     get_conds var_category_map error_decls const_map idmap p
   in
   Mir.
     {
+      program_applications = apps;
       program_var_categories = var_category_map;
       program_rule_domains = rule_domains;
       program_verif_domains = verif_domains;
       program_chainings = rule_chains;
       program_vars = var_data;
       program_rules = rules;
+      program_targets = targets;
       program_conds = conds;
       program_idmap = idmap;
       program_exec_passes = [];

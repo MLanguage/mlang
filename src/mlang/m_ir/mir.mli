@@ -53,6 +53,7 @@ type variable = {
           (declared) variable *)
   cats : CatVarSet.t;
   is_table : int option;
+  is_temp : bool;
 }
 
 type local_variable = { id : int }
@@ -154,6 +155,8 @@ type rov_id = RuleID of int | VerifID of int
 
 module RuleMap : MapExt.T with type key = rov_id
 
+module TargetMap : StrMap.T
+
 type 'a domain = {
   dom_id : Mast.DomainId.t;
   dom_names : Mast.DomainIdSet.t;
@@ -167,11 +170,23 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+
 type rule_data = {
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
-  rule_vars : (variable_id * variable_data) list;
+  rule_vars : instruction Pos.marked list;
   rule_number : rov_id Pos.marked;
+}
+
+type target_data = {
+  target_name : string Pos.marked;
+  target_apps : string Pos.marked list;
+  target_tmp_vars : Pos.t StrMap.t;
+  target_prog : instruction Pos.marked list;
 }
 
 type error_descr = {
@@ -213,6 +228,7 @@ type idmap = variable list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_applications : Pos.t StrMap.t;
   program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
@@ -223,6 +239,7 @@ type program = {
   program_rules : rule_data RuleMap.t;
       (** Definitions of variables, some may be removed during optimization
           passes *)
+  program_targets : target_data TargetMap.t;
   program_conds : condition_data RuleMap.t;
       (** Conditions are affected to dummy variables containing informations
           about actual variables in the conditions *)
@@ -248,6 +265,7 @@ module Variable : sig
             (declared) variable *)
     cats : CatVarSet.t;
     is_table : int option;
+    is_temp : bool;
   }
 
   val fresh_id : unit -> id
@@ -261,6 +279,7 @@ module Variable : sig
     origin:variable option ->
     cats:CatVarSet.t ->
     is_table:int option ->
+    is_temp:bool ->
     variable
 
   val compare : t -> t -> int

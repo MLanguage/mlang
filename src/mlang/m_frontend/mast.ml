@@ -180,6 +180,13 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of loop_variables Pos.marked * formula_decl
 
+type instruction =
+  | Formula of formula Pos.marked
+  | IfThenElse of
+      expression Pos.marked
+      * instruction Pos.marked list
+      * instruction Pos.marked list
+
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
@@ -187,6 +194,13 @@ type rule = {
   rule_chaining : chaining Pos.marked option;
   rule_formulaes : formula Pos.marked list;
       (** A rule can contain many variable definitions *)
+}
+
+type target = {
+  target_name : string Pos.marked;
+  target_applications : application Pos.marked list;
+  target_tmp_vars : string Pos.marked list;
+  target_prog : instruction Pos.marked list;
 }
 
 type 'a domain_decl = {
@@ -315,6 +329,7 @@ type source_file_item =
       (** Unused, declares an "enchaineur" *)
   | VariableDecl of variable_decl
   | Rule of rule
+  | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)

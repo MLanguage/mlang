@@ -82,6 +82,8 @@ rule token = parse
   { INPUT }
 | "variable"
   { VARIABLE }
+| "temporaire"
+  { TEMPORARY }
 | "attribut"
   { ATTRIBUT }
 | '('
@@ -124,6 +126,8 @@ rule token = parse
   { BY_DEFAULT }
 | "regle"
   { RULE }
+| "cible"
+  { TARGET }
 | "si"
   { IF }
 | "alors"

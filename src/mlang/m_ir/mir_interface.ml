@@ -72,9 +72,15 @@ let to_full_program (program : program) : full_program =
               let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
               if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
-                    (fun vars (vid, _def) ->
-                      let var = VariableDict.find vid program.program_vars in
-                      VariableMap.add var rov_id vars)
+                    (fun vars instr ->
+                      match Pos.unmark instr with
+                      | Mir.Affectation (vid, _def) ->
+                          let var =
+                            VariableDict.find vid program.program_vars
+                          in
+                          VariableMap.add var rov_id vars
+                      | _ -> assert false
+                      (* never used *))
                     vars rule.rule_vars,
                   RuleMap.add rov_id rule rules )
               else (vars, rules))

@@ -110,22 +110,13 @@ let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
 let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
   match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
 
-let rec expr_position (expr : expr) (st : local_stacks) =
+let expr_position (expr : expr) (st : local_stacks) =
   match expr with
   | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
       else Must_be_pushed
-  | Dbinop ("/", e1, e2) -> begin
-      (* avoid storage of division by zero. It assumes all division are
-         guarded *)
-      match (expr_position e1 st, expr_position e2 st) with
-      | On_top s, _ | _, On_top s ->
-          On_top s
-          (* Needed to bumb the stack to avoid erasing subexpressions *)
-      | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
-    end
   | _ -> Must_be_pushed
 
 (* allocate to local variable if necessary *)

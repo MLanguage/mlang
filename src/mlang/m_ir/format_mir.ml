@@ -130,9 +130,13 @@ let format_program_rules fmt (vars : VariableDict.t)
     (fun _ { rule_vars; rule_number; _ } ->
       let var_defs =
         List.fold_left
-          (fun var_defs (vid, def) ->
-            let var = VariableDict.find vid vars in
-            VariableMap.add var def var_defs)
+          (fun var_defs instr ->
+            match Pos.unmark instr with
+            | Mir.Affectation (vid, def) ->
+                let var = VariableDict.find vid vars in
+                VariableMap.add var def var_defs
+            | _ -> assert false
+            (* never used *))
           VariableMap.empty rule_vars
       in
       Format.fprintf fmt "Regle %d\n%a\n"

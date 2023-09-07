@@ -117,8 +117,10 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
           })
       p.rules_and_verifs
   in
+  let targets = Mir.TargetMap.map bir_stmts_to_cfg p.targets in
   {
     mpp_functions;
+    targets;
     rules_and_verifs;
     idmap = p.idmap;
     mir_program = p.mir_program;
@@ -202,7 +204,9 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
           })
       p.rules_and_verifs
   in
+  let targets = Mir.TargetMap.map (fun cfg -> cfg_to_bir_stmts cfg) p.targets in
   {
+    targets;
     mpp_functions;
     rules_and_verifs;
     idmap = p.idmap;
