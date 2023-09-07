@@ -63,13 +63,13 @@ calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/cons
 	@echo "Copie des fichiers C statiques depuis $(STATIC_DIR)"
 	cp $(STATIC_DIR)* calc/
 
-calc/enchain.c: $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+calc/enchain.c: $(SOURCE_FILES)
 	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS), DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS))"
 	@$(MLANG) \
 		--dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS)\
 		--backend dgfip_c --output $@ \
-		$(SOURCE_FILES) $(SOURCE_EXT_FILES) $(QUIET)
+		$(SOURCE_FILES) $(QUIET)
 	@echo "Compilation terminée"
 
 #################################################

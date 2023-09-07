@@ -67,11 +67,11 @@ build-static: build
 
 # use: TEST_FILE=bla make test
 test: build
-	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES)
 
 # use: TESTS_DIR=bla make test
 tests: build
-	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES)
 
 test_java_backend: build
 ifeq ($(OPTIMIZE), 0)
@@ -84,7 +84,7 @@ test_dgfip_c_backend: build
 	$(MAKE) -C examples/dgfip_c/ml_primitif backend_tests
 
 quick_test: build
-	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES)
 
 all: tests test_java_backend test_dgfip_c_backend quick_test
 

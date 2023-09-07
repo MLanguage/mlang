@@ -78,44 +78,40 @@ let create_rules_dependency_graph (chain_rules : Mir.rule_data Mir.RuleMap.t)
     (fun rule_id { Mir.rule_vars; _ } g ->
       let g = RG.add_vertex g rule_id in
       List.fold_left
-        (fun g instr ->
-          match Pos.unmark instr with
-          | Mir.Affectation (_vid, def) ->
-              let succs = get_def_used_variables def.Mir.var_definition in
-              let var_deps =
-                Mir.VariableDict.fold
-                  (fun succ var_deps ->
-                    try
-                      let rsucc = Mir.VariableMap.find succ vars_to_rules in
-                      let vsuccs =
-                        try Mir.RuleMap.find rsucc var_deps
-                        with Not_found -> Mir.VariableDict.empty
-                      in
-                      Mir.RuleMap.add rsucc
-                        (Mir.VariableDict.add succ vsuccs)
-                        var_deps
-                    with Not_found -> var_deps)
-                  succs Mir.RuleMap.empty
-              in
-              Mir.RuleMap.fold
-                (fun succ vsuccs g ->
-                  try
-                    if rule_id = succ then g
-                    else
-                      let label =
-                        Format.fprintf Format.str_formatter "  %a"
-                          (Format.pp_print_list
-                             ~pp_sep:(fun fmt () -> Format.fprintf fmt "\n  ")
-                             Format_mir.format_variable)
-                          (Mir.VariableDict.bindings vsuccs |> List.map snd);
-                        Format.flush_str_formatter ()
-                      in
-                      let edge = RG.E.create rule_id label succ in
-                      RG.add_edge_e g edge
-                  with Not_found -> g)
-                var_deps g
-          | _ -> assert false
-          (* never used *))
+        (fun g (_vid, def) ->
+          let succs = get_def_used_variables def.Mir.var_definition in
+          let var_deps =
+            Mir.VariableDict.fold
+              (fun succ var_deps ->
+                try
+                  let rsucc = Mir.VariableMap.find succ vars_to_rules in
+                  let vsuccs =
+                    try Mir.RuleMap.find rsucc var_deps
+                    with Not_found -> Mir.VariableDict.empty
+                  in
+                  Mir.RuleMap.add rsucc
+                    (Mir.VariableDict.add succ vsuccs)
+                    var_deps
+                with Not_found -> var_deps)
+              succs Mir.RuleMap.empty
+          in
+          Mir.RuleMap.fold
+            (fun succ vsuccs g ->
+              try
+                if rule_id = succ then g
+                else
+                  let label =
+                    Format.fprintf Format.str_formatter "  %a"
+                      (Format.pp_print_list
+                         ~pp_sep:(fun fmt () -> Format.fprintf fmt "\n  ")
+                         Format_mir.format_variable)
+                      (Mir.VariableDict.bindings vsuccs |> List.map snd);
+                    Format.flush_str_formatter ()
+                  in
+                  let edge = RG.E.create rule_id label succ in
+                  RG.add_edge_e g edge
+              with Not_found -> g)
+            var_deps g)
         g rule_vars)
     chain_rules RG.empty
 
@@ -245,15 +241,11 @@ let create_vars_dependency_graph (p : Mir.program)
     (fun g rule_id ->
       let rule = Mir.RuleMap.find rule_id p.program_rules in
       List.fold_left
-        (fun g instr ->
-          match Pos.unmark instr with
-          | Mir.Affectation (vid, vdef) ->
-              let deps = get_def_used_variables vdef.Mir.var_definition in
-              Mir.VariableDict.fold
-                (fun var g -> VG.add_edge g vid var.Mir.id)
-                deps g
-          | _ -> assert false
-          (* never used *))
+        (fun g (vid, vdef) ->
+          let deps = get_def_used_variables vdef.Mir.var_definition in
+          Mir.VariableDict.fold
+            (fun var g -> VG.add_edge g vid var.Mir.id)
+            deps g)
         g rule.rule_vars)
     VG.empty chain_rules
 

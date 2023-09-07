@@ -47,7 +47,6 @@ and mpp_callable =
   | Rules of Mast.DomainId.t (* M codebase *)
   | Chain of Mast.chaining (* M codebase *)
   | Verifs of Mast.DomainId.t * mpp_expr
-  | Target of string
   | NbVarCat of Mir.CatVarSet.t
   | ExistsAttrWithVal of string Pos.marked * float
   | ExistsAliases of Pos.t StrMap.t

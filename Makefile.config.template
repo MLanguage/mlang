@@ -9,8 +9,6 @@
 
 # SOURCE_FILES=$(SOURCE_DIR_2018)
 
-# SOURCE_EXT_FILES=$(SOURCE_EXT_DIR_2018)
-
 # MPP_FILE=$(SELF_DIR)/mpp_specs/2018_6_7.mpp
 
 # TESTS_DIR=$(SELF_DIR)/tests/2018/fuzzing/

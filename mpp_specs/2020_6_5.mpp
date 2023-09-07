@@ -1,8 +1,8 @@
-# compute_article1731bis():
-#   ART1731BIS = 0
-#   if CMAJ == 8 or CMAJ == 11:
-#     ART1731BIS = 1
-#     PREM8_11 = 1
+compute_article1731bis():
+  ART1731BIS = 0
+  if CMAJ == 8 or CMAJ == 11:
+    ART1731BIS = 1
+    PREM8_11 = 1
 
 calcul_primitif_isf(outputs):
   outputs <- call_m_rules(isf)

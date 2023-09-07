@@ -371,7 +371,7 @@ rule:
       rule_tag_names;
       rule_applications = apps;
       rule_chaining = c;
-      rule_formulaes =  formulaes;
+      rule_formulaes = formulaes;
     }
   }
 
@@ -379,13 +379,13 @@ target:
 | TARGET name = symbol_with_pos COLON
   apps = application_reference SEMICOLON
   tmp_vars = temporary_variables_decl?
-  prog = instruction_list_rev
+  formulaes = formula_list
   {
     {
       target_name = name;
       target_applications = apps;
       target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
-      target_prog = List.rev prog;
+      target_formulaes = formulaes;
     }
   }
 
@@ -396,21 +396,6 @@ temporary_variables_decl:
 | VARIABLE TEMPORARY COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
     { tmp_vars }
-
-instruction_list_rev:
-| i = instruction { [i] }
-| il = instruction_list_rev i = instruction  { i :: il }
-
-instruction:
-| f = formula_kind SEMICOLON { (Formula f, mk_position $sloc)  }
-| IF e = expression THEN ilt = instruction_list_rev ilo = instruction_else_branch? ENDIF
-    {
-      let ile = match ilo with Some ile -> ile | None -> [] in
-      (IfThenElse (e, List.rev ilt, ile), mk_position $sloc)
-    }
-
-instruction_else_branch:
-| ELSE il = instruction_list_rev { List.rev il }
 
 formula_list:
 | f = formula_kind SEMICOLON { [f] }
@@ -423,6 +408,7 @@ formula_kind:
 
 for_formula:
 | FOR lv = loop_variables COLON ft = formula { (lv, ft) }
+
 
 lvalue_name:
 | s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
