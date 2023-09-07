@@ -189,13 +189,6 @@ type rule = {
       (** A rule can contain many variable definitions *)
 }
 
-type target = {
-  target_name : string Pos.marked;
-  target_applications : application Pos.marked list;
-  target_tmp_vars : string Pos.marked list;
-  target_formulaes : formula Pos.marked list;
-}
-
 type 'a domain_decl = {
   dom_names : string Pos.marked list Pos.marked list;
   dom_parents : string Pos.marked list Pos.marked list;
@@ -322,7 +315,6 @@ type source_file_item =
       (** Unused, declares an "enchaineur" *)
   | VariableDecl of variable_decl
   | Rule of rule
-  | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)

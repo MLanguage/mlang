@@ -194,19 +194,6 @@ let format_rule fmt (r : rule) =
        (pp_unmark format_formula))
     r.rule_formulaes
 
-let format_target fmt (t : target) =
-  Format.fprintf fmt
-    "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
-    (Pos.unmark t.target_name)
-    (pp_print_list_comma (pp_unmark Format.pp_print_string))
-    t.target_applications
-    (pp_print_list_comma (pp_unmark Format.pp_print_string))
-    t.target_tmp_vars
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt ";\n")
-       (pp_unmark format_formula))
-    t.target_formulaes
-
 let format_value_typ fmt (t : value_typ) =
   Format.pp_print_string fmt
     (match t with
@@ -351,7 +338,6 @@ let format_source_file_item fmt (i : source_file_item) =
         apps
   | VariableDecl vd -> format_variable_decl fmt vd
   | Rule r -> format_rule fmt r
-  | Target t -> format_target fmt t
   | Verification v -> format_verification fmt v
   | Function -> ()
   | Error e -> format_error_ fmt e
