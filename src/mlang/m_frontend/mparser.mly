@@ -48,10 +48,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF ERROR ANOMALY DISCORDANCE CONDITION
+%token IF THEN ELSE ENDIF COMPUTE
+%token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
-
 
 %token EOF
 
@@ -408,6 +408,8 @@ instruction:
       let ile = match ilo with Some ile -> ile | None -> [] in
       (IfThenElse (e, List.rev ilt, ile), mk_position $sloc)
     }
+| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON
+    { ComputeDomain dom, mk_position $sloc }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }

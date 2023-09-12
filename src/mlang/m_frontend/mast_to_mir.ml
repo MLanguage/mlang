@@ -1792,6 +1792,8 @@ let translate_prog const_map idmap var_decl_data prog =
         let prog_then = aux [] ilt in
         let prog_else = aux [] ile in
         aux ((Mir.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
+    | (Mast.ComputeDomain l, pos) :: il ->
+        aux ((Mir.ComputeDomain l, pos) :: res) il
   in
   aux [] prog
 

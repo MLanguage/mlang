@@ -430,6 +430,7 @@ type instruction =
   | Affectation of variable_id * variable_data
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
+  | ComputeDomain of string Pos.marked list Pos.marked
 
 type rule_data = {
   rule_domain : rule_domain;

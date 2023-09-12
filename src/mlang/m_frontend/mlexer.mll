@@ -136,6 +136,8 @@ rule token = parse
   { ELSE }
 | "finsi"
   { ENDIF }
+| "calculer"
+  { COMPUTE }
 | "erreur"
   { ERROR }
 | "verif"

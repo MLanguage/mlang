@@ -62,14 +62,6 @@ let translate_to_compop (b : Mpp_ast.binop) : Mast.comp_op =
   | Neq -> Neq
   | _ -> assert false
 
-let rec list_map_opt (f : 'a -> 'b option) (l : 'a list) : 'b list =
-  match l with
-  | [] -> []
-  | hd :: tl -> (
-      match f hd with
-      | None -> list_map_opt f tl
-      | Some fhd -> fhd :: list_map_opt f tl)
-
 let generate_input_condition (crit : Mir.Variable.t -> bool)
     (p : Mir_interface.full_program) (pos : Pos.t) =
   (* this might do wierd thing iif all variables to check are not "saisie" since
@@ -115,38 +107,6 @@ let cond_ExistsAliases (p : Mir_interface.full_program) (pos : Pos.t)
   in
   generate_input_condition (fun v -> Mir.VariableMap.mem v vars) p pos
 
-let rec translate_m_code (m_program : Mir_interface.full_program)
-    (instrs : Mir.instruction Pos.marked list) =
-  list_map_opt
-    (function
-      | Mir.Affectation (vid, vdef), pos -> (
-          try
-            let var =
-              Mir.VariableDict.find vid m_program.program.program_vars
-            in
-            let var_definition =
-              Mir.map_var_def_var
-                Bir.(var_from_mir default_tgv)
-                vdef.Mir.var_definition
-            in
-            match var_definition with
-            | InputVar -> None
-            | TableVar _ | SimpleVar _ ->
-                Some
-                  ( Bir.SAssign
-                      (Bir.(var_from_mir default_tgv) var, var_definition),
-                    var.Mir.Variable.execution_number.pos )
-          with Not_found ->
-            Errors.raise_spanned_error
-              (Format.sprintf "unknown variable id %d" vid)
-              pos)
-      | Mir.IfThenElse (e, ilt, ile), pos ->
-          let expr = Mir.map_expr_var Bir.(var_from_mir default_tgv) e in
-          let stmts_then = translate_m_code m_program ilt in
-          let stmts_else = translate_m_code m_program ile in
-          Some (Bir.SConditional (expr, stmts_then, stmts_else), pos))
-    instrs
-
 let wrap_m_code_call (m_program : Mir_interface.full_program)
     (order : Mir_interface.chain_order) (ctx : translation_ctx) :
     translation_ctx * Bir.stmt list =
@@ -167,6 +127,60 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
   in
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
+
+let rec translate_m_code (m_program : Mir_interface.full_program)
+    (ctx : translation_ctx) (instrs : Mir.instruction Pos.marked list) =
+  let rec aux ctx res = function
+    | [] -> (ctx, List.rev res)
+    | (Mir.Affectation (vid, vdef), pos) :: instrs -> (
+        try
+          let var = Mir.VariableDict.find vid m_program.program.program_vars in
+          let var_definition =
+            Mir.map_var_def_var
+              Bir.(var_from_mir default_tgv)
+              vdef.Mir.var_definition
+          in
+          match var_definition with
+          | InputVar -> aux ctx res instrs
+          | TableVar _ | SimpleVar _ ->
+              aux ctx
+                (( Bir.SAssign
+                     (Bir.(var_from_mir default_tgv) var, var_definition),
+                   var.Mir.Variable.execution_number.pos )
+                :: res)
+                instrs
+        with Not_found ->
+          Errors.raise_spanned_error
+            (Format.sprintf "unknown variable id %d" vid)
+            pos)
+    | (Mir.IfThenElse (e, ilt, ile), pos) :: instrs ->
+        let expr = Mir.map_expr_var Bir.(var_from_mir default_tgv) e in
+        let ctx, stmts_then = translate_m_code m_program ctx ilt in
+        let ctx, stmts_else = translate_m_code m_program ctx ile in
+        aux ctx
+          ((Bir.SConditional (expr, stmts_then, stmts_else), pos) :: res)
+          instrs
+    | (Mir.ComputeDomain l, _pos) :: instrs ->
+        let dom = Mast.DomainId.from_marked_list (Pos.unmark l) in
+        let order =
+          match Mast.DomainIdMap.find_opt dom m_program.domains_orders with
+          | Some order -> order
+          | None ->
+              Errors.raise_spanned_error
+                (Format.asprintf "Unknown rule domain: %a" (Mast.DomainId.pp ())
+                   dom)
+                (Pos.get_position l)
+        in
+        let ctx =
+          {
+            ctx with
+            used_rule_domains = Mast.DomainIdSet.add dom ctx.used_rule_domains;
+          }
+        in
+        let ctx, stmts = wrap_m_code_call m_program order ctx in
+        aux ctx (List.rev stmts @ res) instrs
+  in
+  aux ctx [] instrs
 
 let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
   let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
@@ -513,6 +527,13 @@ let create_combined_program (m_program : Mir_interface.full_program)
         (empty_translation_ctx, Bir.FunctionMap.empty)
         mpp_program
     in
+    let ctx, targets =
+      Mir.TargetMap.fold
+        (fun n t (ctx, targets) ->
+          let ctx, code = translate_m_code m_program ctx t.Mir.target_prog in
+          (ctx, Mir.TargetMap.add n (t.Mir.target_tmp_vars, code) targets))
+        m_program.program.program_targets (ctx, Mir.TargetMap.empty)
+    in
     let rules =
       Mir.RuleMap.fold
         (fun rov_id rule_data rules ->
@@ -542,7 +563,8 @@ let create_combined_program (m_program : Mir_interface.full_program)
                 rule_data.Mir.rule_number
             in
             let rov_code =
-              Bir.Rule (translate_m_code m_program rule_data.Mir.rule_vars)
+              Bir.Rule
+                (snd (translate_m_code m_program ctx rule_data.Mir.rule_vars))
             in
             Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules
           else rules)
@@ -560,11 +582,6 @@ let create_combined_program (m_program : Mir_interface.full_program)
           let rov_code = Bir.Verif (generate_verif_cond cond_data) in
           Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules)
         m_program.program.program_conds rules
-    in
-    let targets =
-      Mir.TargetMap.map
-        (fun t -> translate_m_code m_program t.Mir.target_prog)
-        m_program.program.program_targets
     in
     if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
       Errors.raise_error

@@ -199,6 +199,10 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt "si %a alors %a sinon %a finsi"
         (pp_unmark format_expression)
         e format_instruction_list ilt format_instruction_list ile
+  | ComputeDomain l ->
+      Format.fprintf fmt "calculer domaine %a;"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

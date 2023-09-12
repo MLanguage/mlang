@@ -22,34 +22,44 @@ type var_id_map = var_id Mir.VariableMap.t
 
 let gen_access_def vm v offset =
   let vn = Pos.unmark v.Mir.Variable.name in
-  match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "DS_[%d/*%s*/%s]" i vn offset
-  | VarBase i -> Printf.sprintf "DB_[%d/*%s*/%s]" i vn offset
-  | VarComputed i -> Printf.sprintf "DC_[%d/*%s*/%s]" i vn offset
+  if v.Mir.Variable.is_temp then Printf.sprintf "%s_def[0%s]" vn offset
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "DS_[%d/*%s*/%s]" i vn offset
+    | VarBase i -> Printf.sprintf "DB_[%d/*%s*/%s]" i vn offset
+    | VarComputed i -> Printf.sprintf "DC_[%d/*%s*/%s]" i vn offset
 
 let gen_access_val vm v offset =
   let vn = Pos.unmark v.Mir.Variable.name in
-  match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "S_[%d/*%s*/%s]" i vn offset
-  | VarBase i -> Printf.sprintf "B_[%d/*%s*/%s]" i vn offset
-  | VarComputed i -> Printf.sprintf "C_[%d/*%s*/%s]" i vn offset
+  if v.Mir.Variable.is_temp then Printf.sprintf "%s_val[0%s]" vn offset
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "S_[%d/*%s*/%s]" i vn offset
+    | VarBase i -> Printf.sprintf "B_[%d/*%s*/%s]" i vn offset
+    | VarComputed i -> Printf.sprintf "C_[%d/*%s*/%s]" i vn offset
 
 let gen_access_pointer vm v =
   let vn = Pos.unmark v.Mir.Variable.name in
-  match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
-  | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
-  | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn
+  if v.Mir.Variable.is_temp then Printf.sprintf "(%s_val)" vn
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
+    | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
+    | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn
 
 let gen_access_def_pointer vm v =
   let vn = Pos.unmark v.Mir.Variable.name in
-  match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "(DS_ + %d/*%s*/)" i vn
-  | VarBase i -> Printf.sprintf "(DB_ + %d/*%s*/)" i vn
-  | VarComputed i -> Printf.sprintf "(DC_ + %d/*%s*/)" i vn
+  if v.Mir.Variable.is_temp then Printf.sprintf "(%s_def)" vn
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "(DS_ + %d/*%s*/)" i vn
+    | VarBase i -> Printf.sprintf "(DB_ + %d/*%s*/)" i vn
+    | VarComputed i -> Printf.sprintf "(DC_ + %d/*%s*/)" i vn
 
 let gen_access_pos_from_start vm v =
-  match Mir.VariableMap.find v vm with
-  | VarInput i -> Printf.sprintf "EST_SAISIE | %d" i
-  | VarBase i -> Printf.sprintf "EST_BASE | %d" i
-  | VarComputed i -> Printf.sprintf "EST_CALCULEE | %d" i
+  if v.Mir.Variable.is_temp then assert false
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "EST_SAISIE | %d" i
+    | VarBase i -> Printf.sprintf "EST_BASE | %d" i
+    | VarComputed i -> Printf.sprintf "EST_CALCULEE | %d" i

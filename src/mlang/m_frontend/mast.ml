@@ -186,6 +186,7 @@ type instruction =
       expression Pos.marked
       * instruction Pos.marked list
       * instruction Pos.marked list
+  | ComputeDomain of string Pos.marked list Pos.marked
 
 type rule = {
   rule_number : int Pos.marked;

@@ -1,6 +1,5 @@
-
-calcul_primitif():
-  outputs <- call_m_rules(primitive)
+# calcul_primitif():
+#   outputs <- call_m_rules(primitive)
 
 calcul_primitif_isf():
   outputs <- call_m_rules(isf)

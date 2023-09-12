@@ -743,7 +743,7 @@ struct
           (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) -> (
         match Mir.TargetMap.find_opt f p.targets with
-        | Some stmts -> evaluate_stmts p ctx stmts loc 0
+        | Some (_, stmts) -> evaluate_stmts p ctx stmts loc 0
         | None ->
             evaluate_stmts p ctx
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)

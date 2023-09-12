@@ -1,3 +1,7 @@
+cible calcul_primitif:
+application: iliad;
+calculer domaine primitive;
+
 cible compute_article1731bis:
 application: iliad;
 variable temporaire: TOTO;

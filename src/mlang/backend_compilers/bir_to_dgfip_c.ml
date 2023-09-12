@@ -286,7 +286,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         D.build_expression
         @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
       in
-      Format.fprintf oc "%a%a@;%a" D.format_local_declarations locals
+      Format.fprintf oc "int %s;@;double %s;@;%a%a@;%a" cond_def cond_val
+        D.format_local_declarations locals
         (D.format_assign dgfip_flags var_indexes cond_def)
         def
         (D.format_assign dgfip_flags var_indexes cond_val)
@@ -376,6 +377,62 @@ let generate_header (oc : Format.formatter) () : unit =
 
 let generate_footer (oc : Format.formatter) () : unit =
   Format.fprintf oc "\n#endif /* IR_HEADER_ */"
+
+let generate_target_protoype (add_semicolon : bool) (return_type : bool)
+    (oc : Format.formatter) (function_name : string) =
+  let ret_type = if return_type then "struct S_discord *" else "void" in
+  Format.fprintf oc "%s %s(T_irdata* irdata)%s" ret_type function_name
+    (if add_semicolon then ";" else "")
+
+let generate_var_tmp_decls (oc : Format.formatter) (var_tmps : Pos.t StrMap.t) =
+  StrMap.iter
+    (fun vn _ -> Format.fprintf oc "int %s_def[1];@,double %s_val[1];@," vn vn)
+    var_tmps;
+  if not (StrMap.is_empty var_tmps) then Format.fprintf oc "@,";
+  StrMap.iter
+    (fun vn _ -> Format.fprintf oc "%s_def[0] = 0;@,%s_val[0] = 0.0;@," vn vn)
+    var_tmps;
+  if not (StrMap.is_empty var_tmps) then Format.fprintf oc "@,"
+
+let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
+    ((f, ret_type) : Bir.function_name * bool) =
+  let var_tmps, code = Mir.TargetMap.find f program.targets in
+  let mppf_is_verif = false in
+  Format.fprintf oc "@[<v 2>%a{@,%a%a%s@]@,}@,"
+    (generate_target_protoype false mppf_is_verif)
+    f generate_var_tmp_decls var_tmps
+    (generate_stmts dgfip_flags program var_indexes)
+    code
+    (if ret_type then
+     {|
+#ifdef FLG_MULTITHREAD
+      return irdata->discords;
+#else
+      return discords;
+#endif
+|}
+    else "")
+
+let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
+    (oc : Format.formatter) (var_indexes : Dgfip_varid.var_id_map) =
+  let targets = Mir.TargetMap.bindings program.Bir.targets in
+  let mppf_is_verif = false in
+  List.iter
+    (fun (name, _) ->
+      generate_target
+        (dgfip_flags : Dgfip_options.flags)
+        program var_indexes oc (name, mppf_is_verif))
+    targets
+
+let generate_targets_signatures (oc : Format.formatter) (program : Bir.program)
+    =
+  let targets = Mir.TargetMap.bindings program.Bir.targets in
+  let mppf_is_verif = false in
+  Format.fprintf oc "@[<v 0>%a@]@,"
+    (Format.pp_print_list (fun ppf (name, _) ->
+         generate_target_protoype true mppf_is_verif ppf name))
+    targets
 
 let generate_mpp_function_protoype (add_semicolon : bool) (return_type : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
@@ -491,15 +548,17 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a@\n@."
+  Format.fprintf oc "%a%a%a%a@\n@."
     generate_header ()
+    generate_targets_signatures program
     generate_mpp_functions_signatures program
     generate_footer ();
   close_out _oc;
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a@\n@."
+  Format.fprintf oc "%a%a%a%a@\n@."
     generate_implem_header (Filename.basename header_filename)
     (generate_rov_functions dgfip_flags program vm) orphan_rovs
+    (generate_targets dgfip_flags program) vm
     (generate_mpp_functions dgfip_flags program) vm;
   close_out _oc[@@ocamlformat "disable"]

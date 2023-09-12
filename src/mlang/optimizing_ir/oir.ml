@@ -46,7 +46,7 @@ type rov = { id : Bir.rov_id; name : string Pos.marked; code : rov_code }
 
 type program = {
   mpp_functions : mpp_function Bir.FunctionMap.t;
-  targets : cfg Mir.TargetMap.t;
+  targets : (Pos.t StrMap.t * cfg) Mir.TargetMap.t;
   rules_and_verifs : rov Bir.ROVMap.t;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -73,7 +73,7 @@ let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
         })
       p.rules_and_verifs
   in
-  let targets = Mir.TargetMap.map f p.targets in
+  let targets = Mir.TargetMap.map (fun (vts, cfg) -> (vts, f cfg)) p.targets in
   {
     mpp_functions;
     targets;
