@@ -40,13 +40,15 @@ type cfg = {
 
 type mpp_function = { cfg : cfg; is_verif : bool }
 
+type target_function = { tmp_vars : Pos.t StrMap.t; cfg : cfg; is_verif : bool }
+
 type rov_code = Rule of cfg | Verif of cfg
 
 type rov = { id : Bir.rov_id; name : string Pos.marked; code : rov_code }
 
 type program = {
   mpp_functions : mpp_function Bir.FunctionMap.t;
-  targets : (Pos.t StrMap.t * cfg) Mir.TargetMap.t;
+  targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rov Bir.ROVMap.t;
   idmap : Mir.idmap;
   mir_program : Mir.program;
@@ -58,7 +60,7 @@ type program = {
 let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
   let mpp_functions =
     Bir.FunctionMap.map
-      (fun func -> { func with cfg = f func.cfg })
+      (fun (func : mpp_function) -> { func with cfg = f func.cfg })
       p.mpp_functions
   in
   let rules_and_verifs =
@@ -73,7 +75,9 @@ let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
         })
       p.rules_and_verifs
   in
-  let targets = Mir.TargetMap.map (fun (vts, cfg) -> (vts, f cfg)) p.targets in
+  let targets =
+    Mir.TargetMap.map (fun tf -> { tf with cfg = f tf.cfg }) p.targets
+  in
   {
     mpp_functions;
     targets;
@@ -98,7 +102,7 @@ let count_instr (p : program) : int =
   in
   let count =
     Bir.FunctionMap.fold
-      (fun _ { cfg; _ } acc ->
+      (fun _ ({ cfg; _ } : mpp_function) acc ->
         BlockMap.fold (fun _ block acc -> aux acc block) cfg.blocks acc)
       p.mpp_functions 0
   in

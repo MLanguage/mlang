@@ -597,6 +597,7 @@ struct
                          Format_mir.format_func func,
                        Pos.get_position e ),
                    ctx ))
+        | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e ctx p
@@ -743,7 +744,7 @@ struct
           (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) -> (
         match Mir.TargetMap.find_opt f p.targets with
-        | Some (_, stmts) -> evaluate_stmts p ctx stmts loc 0
+        | Some tf -> evaluate_stmts p ctx tf.stmts loc 0
         | None ->
             evaluate_stmts p ctx
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)

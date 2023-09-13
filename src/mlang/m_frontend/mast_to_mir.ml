@@ -1106,17 +1106,20 @@ let translate_function_name (f_name : string Pos.marked) =
   | "present" -> Mir.PresentFunc
   | "multimax" -> Mir.Multimax
   | "supzero" -> Mir.Supzero
+  | "numero_verif" -> Mir.VerifNumber
+  | "numero_compl" -> Mir.ComplNumber
   | x ->
       Errors.raise_spanned_error
         (Format.asprintf "unknown function %s" x)
         (Pos.get_position f_name)
 
-let rec translate_expression (ctx : translating_context)
-    (f : Mast.expression Pos.marked) : Mir.expression Pos.marked =
+let rec translate_expression (cats : 'a Mir.CatVarMap.t)
+    (ctx : translating_context) (f : Mast.expression Pos.marked) :
+    Mir.expression Pos.marked =
   let expr =
     match Pos.unmark f with
     | Mast.TestInSet (positive, e, values) ->
-        let new_e = translate_expression ctx e in
+        let new_e = translate_expression cats ctx e in
         let local_var = Mir.LocalVariable.new_var () in
         let local_var_expr = Mir.LocalVar local_var in
         let or_chain =
@@ -1179,8 +1182,8 @@ let rec translate_expression (ctx : translating_context)
         in
         Mir.LocalLet (local_var, new_e, or_chain)
     | Mast.Comparison (op, e1, e2) ->
-        let new_e1 = translate_expression ctx e1 in
-        let new_e2 = translate_expression ctx e2 in
+        let new_e1 = translate_expression cats ctx e1 in
+        let new_e2 = translate_expression cats ctx e2 in
         Mir.Comparison (op, new_e1, new_e2)
     | Mast.Binop (op, e1, e2) ->
         if
@@ -1192,11 +1195,11 @@ let rec translate_expression (ctx : translating_context)
              constant substitutions that could wrongly trigger the warning *)
           Errors.print_spanned_warning
             "Nullifying constant multiplication found." (Pos.get_position f);
-        let new_e1 = translate_expression ctx e1 in
-        let new_e2 = translate_expression ctx e2 in
+        let new_e1 = translate_expression cats ctx e1 in
+        let new_e2 = translate_expression cats ctx e2 in
         Mir.Binop (op, new_e1, new_e2)
     | Mast.Unop (op, e) ->
-        let new_e = translate_expression ctx e in
+        let new_e = translate_expression cats ctx e in
         Mir.Unop (op, new_e)
     | Mast.Index (t, i) ->
         let t_var = translate_variable ctx t ~is_lvalue:false ~lax:false in
@@ -1207,11 +1210,11 @@ let rec translate_expression (ctx : translating_context)
             | _ -> assert false (* should not happen *)),
             new_i )
     | Mast.Conditional (e1, e2, e3) ->
-        let new_e1 = translate_expression ctx e1 in
-        let new_e2 = translate_expression ctx e2 in
+        let new_e1 = translate_expression cats ctx e1 in
+        let new_e2 = translate_expression cats ctx e2 in
         let new_e3 =
           match e3 with
-          | Some e3 -> translate_expression ctx e3
+          | Some e3 -> translate_expression cats ctx e3
           | None -> Pos.same_pos_as (Mir.Literal Mir.Undefined) e2
           (* the absence of a else branch for a ternary operators can yield an
              undefined term *)
@@ -1219,7 +1222,7 @@ let rec translate_expression (ctx : translating_context)
         Mir.Conditional (new_e1, new_e2, new_e3)
     | Mast.FunctionCall (f_name, args) ->
         let f_correct = translate_function_name f_name in
-        let new_args = translate_func_args ctx args in
+        let new_args = translate_func_args cats ctx args in
         Mir.FunctionCall (f_correct, new_args)
     | Mast.Literal l -> (
         match l with
@@ -1235,7 +1238,7 @@ let rec translate_expression (ctx : translating_context)
         let loop_context_provider = translate_loop_variables lvs ctx in
         let translator lc _ =
           let new_ctx = merge_loop_ctx ctx lc (Pos.get_position lvs) in
-          translate_expression new_ctx e
+          translate_expression cats new_ctx e
         in
         let loop_exprs = loop_context_provider translator in
         List.fold_left
@@ -1243,19 +1246,21 @@ let rec translate_expression (ctx : translating_context)
             Mir.Binop
               (Pos.same_pos_as Mast.Or e, Pos.same_pos_as acc e, loop_expr))
           (Mir.Literal Mir.false_literal) loop_exprs
+    | Mast.NbCategory l -> Mir.NbCategory (Mir.mast_to_catvars cats l)
   in
   Pos.same_pos_as expr f
 
 (** Mutually recursive with {!val: translate_expression} *)
-and translate_func_args (ctx : translating_context) (args : Mast.func_args) :
-    Mir.expression Pos.marked list =
+and translate_func_args (cats : 'a Mir.CatVarMap.t) (ctx : translating_context)
+    (args : Mast.func_args) : Mir.expression Pos.marked list =
   match args with
-  | Mast.ArgList args -> List.map (fun arg -> translate_expression ctx arg) args
+  | Mast.ArgList args ->
+      List.map (fun arg -> translate_expression cats ctx arg) args
   | Mast.LoopList (lvs, e) ->
       let loop_context_provider = translate_loop_variables lvs ctx in
       let translator lc _ =
         let new_ctx = merge_loop_ctx ctx lc (Pos.get_position lvs) in
-        translate_expression new_ctx e
+        translate_expression cats new_ctx e
       in
       loop_context_provider translator
 
@@ -1588,7 +1593,7 @@ let get_verif_domains (cats : 'a Mir.CatVarMap.t) (p : Mast.program) :
     map whose keys are the variables being defined (with the execution number
     corresponding to the place where it is defined) and whose values are the
     expressions corresponding to the definitions. *)
-let get_rules_and_var_data (idmap : Mir.idmap)
+let get_rules_and_var_data (cats : 'a Mir.CatVarMap.t) (idmap : Mir.idmap)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
     (Mir.Variable.t Pos.marked list
@@ -1633,7 +1638,7 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                             (var_lvalue, Pos.get_position formula) :: rule_vars
                           in
                           let var_expr =
-                            translate_expression ctx f.Mast.formula
+                            translate_expression cats ctx f.Mast.formula
                           in
                           let var_data =
                             add_var_def var_data var_lvalue var_expr def_kind
@@ -1660,7 +1665,7 @@ let get_rules_and_var_data (idmap : Mir.idmap)
                               translate_lvalue new_ctx f.Mast.lvalue
                             in
                             let var_expr =
-                              translate_expression new_ctx f.Mast.formula
+                              translate_expression cats new_ctx f.Mast.formula
                             in
                             (var_lvalue, var_expr, def_kind)
                           in
@@ -1735,7 +1740,8 @@ let add_dummy_definitions_for_variable_declarations
         var_data)
     var_decl_data var_data
 
-let translate_prog const_map idmap var_decl_data prog =
+let translate_prog (cats : 'a Mir.CatVarMap.t) const_map idmap var_decl_data
+    prog =
   let new_ctx pos =
     {
       idmap;
@@ -1754,7 +1760,7 @@ let translate_prog const_map idmap var_decl_data prog =
             let ctx, var_lvalue, def_kind =
               translate_lvalue ctx sf.Mast.lvalue
             in
-            let var_expr = translate_expression ctx sf.Mast.formula in
+            let var_expr = translate_expression cats ctx sf.Mast.formula in
             let var_data =
               create_var_def var_lvalue var_expr def_kind var_decl_data idmap
             in
@@ -1769,7 +1775,9 @@ let translate_prog const_map idmap var_decl_data prog =
               let new_ctx, var_lvalue, def_kind =
                 translate_lvalue new_ctx mf.Mast.lvalue
               in
-              let var_expr = translate_expression new_ctx mf.Mast.formula in
+              let var_expr =
+                translate_expression cats new_ctx mf.Mast.formula
+              in
               (var_lvalue, var_expr, def_kind)
             in
             let data_to_add = loop_context_provider translator in
@@ -1788,16 +1796,23 @@ let translate_prog const_map idmap var_decl_data prog =
       end
     | (Mast.IfThenElse (e, ilt, ile), pos) :: il ->
         let ctx = new_ctx pos in
-        let expr, _ = translate_expression ctx e in
+        let expr, _ = translate_expression cats ctx e in
         let prog_then = aux [] ilt in
         let prog_else = aux [] ile in
         aux ((Mir.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
     | (Mast.ComputeDomain l, pos) :: il ->
         aux ((Mir.ComputeDomain l, pos) :: res) il
+    | (Mast.ComputeChaining ch, pos) :: il ->
+        aux ((Mir.ComputeChaining ch, pos) :: res) il
+    | (Mast.ComputeVerifs (l, expr), pos) :: il ->
+        let ctx = new_ctx pos in
+        let mir_expr = translate_expression cats ctx expr in
+        aux ((Mir.ComputeVerifs (l, mir_expr), pos) :: res) il
   in
   aux [] prog
 
-let get_targets (apps : Pos.t StrMap.t) (var_data : Mir.VariableDict.t)
+let get_targets (cats : 'a Mir.CatVarMap.t) (apps : Pos.t StrMap.t)
+    (var_data : Mir.VariableDict.t)
     (idmap : Mir.variable list Pos.VarNameToID.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t)
     (const_map : float Pos.marked ConstMap.t) (p : Mast.program) :
@@ -1872,7 +1887,7 @@ let get_targets (apps : Pos.t StrMap.t) (var_data : Mir.VariableDict.t)
                   (var_data, idmap, var_decl_data)
               in
               let target_prog =
-                translate_prog const_map tmp_idmap tmp_var_decl_data
+                translate_prog cats const_map tmp_idmap tmp_var_decl_data
                   t.Mast.target_prog
               in
               let target_data =
@@ -1917,7 +1932,7 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                               (Pos.get_position verif.verif_tag_names)
                       in
                       let e =
-                        translate_expression
+                        translate_expression cats
                           {
                             idmap;
                             lc = None;
@@ -2027,7 +2042,7 @@ let translate (p : Mast.program) : Mir.program =
   in
   let rule_chains = get_rule_chains rule_domains p in
   let rule_data, var_data =
-    get_rules_and_var_data idmap var_decl_data const_map p
+    get_rules_and_var_data var_category_map idmap var_decl_data const_map p
   in
   let var_data =
     add_dummy_definitions_for_variable_declarations var_data var_decl_data idmap
@@ -2094,7 +2109,7 @@ let translate (p : Mast.program) : Mir.program =
       rules
   in
   let targets, var_data =
-    get_targets apps var_data idmap var_decl_data const_map p
+    get_targets var_category_map apps var_data idmap var_decl_data const_map p
   in
   let verif_domains, conds =
     get_conds var_category_map error_decls const_map idmap p

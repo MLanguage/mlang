@@ -77,6 +77,8 @@ type func =
   | PresentFunc  (** Different than zero ? *)
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
+  | VerifNumber
+  | ComplNumber
 
 (** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
     Because M lets you define conditional without an else branch although it is
@@ -110,6 +112,7 @@ type 'variable expression_ =
       local_variable
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
+  | NbCategory of CatVarSet.t
 
 type expression = variable expression_
 
@@ -175,6 +178,8 @@ type instruction =
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
 
 type rule_data = {
   rule_domain : rule_domain;

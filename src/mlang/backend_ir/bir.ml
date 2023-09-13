@@ -115,6 +115,12 @@ let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
+type target_function = {
+  tmp_vars : Pos.t StrMap.t;
+  stmts : stmt list;
+  is_verif : bool;
+}
+
 module FunctionMap = MapExt.Make (struct
   type t = function_name
 
@@ -129,7 +135,7 @@ type program_context = {
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  targets : (Pos.t StrMap.t * stmt list) Mir.TargetMap.t;
+  targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   context : program_context option;
@@ -277,7 +283,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
           (fun (acc : unit Mir.LocalVariableMap.t) arg ->
             get_local_vars_expr acc arg)
           acc args
-    | Mir.Literal _ | Mir.Var _ | Mir.Error -> acc
+    | Mir.Literal _ | Mir.Var _ | Mir.Error | NbCategory _ -> acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
         let acc = get_local_vars_expr acc e1 in

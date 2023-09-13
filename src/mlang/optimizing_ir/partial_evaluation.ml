@@ -609,6 +609,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
+    | NbCategory _ -> assert false
   in
   if not @@ check new_e d then
     Cli.debug_print "imprecise definedness inference @@%a: %a %a"

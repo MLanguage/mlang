@@ -53,6 +53,12 @@ and stmt_kind =
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
+type target_function = {
+  tmp_vars : Pos.t StrMap.t;
+  stmts : stmt list;
+  is_verif : bool;
+}
+
 module FunctionMap : MapExt.T with type key = function_name
 
 type program_context = {
@@ -80,7 +86,7 @@ type program_context = {
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
-  targets : (Pos.t StrMap.t * stmt list) Mir.TargetMap.t;
+  targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
   context : program_context option;

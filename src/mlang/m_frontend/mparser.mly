@@ -48,7 +48,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF COMPUTE
+%token IF THEN ELSE ENDIF COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
@@ -195,6 +195,7 @@ verif_domain_decl:
 | TIMES { ("*", mk_position $sloc) }
 
 var_category_id:
+| INPUT TIMES { (["saisie", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
 | INPUT l = symbol_with_pos+ { (("saisie", Pos.no_pos) :: l, mk_position $sloc) }
 | COMPUTED l = var_computed_category* { (("calculee", Pos.no_pos) :: l, mk_position $sloc) }
 | TIMES { (["*", Pos.no_pos], mk_position $sloc) }
@@ -410,6 +411,15 @@ instruction:
     }
 | COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON
     { ComputeDomain dom, mk_position $sloc }
+| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON
+    { ComputeChaining chain, mk_position $sloc }
+| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
+    {
+      let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in
+      ComputeVerifs (dom, expr), mk_position $sloc
+    }
+| VERIFY DOMAIN dom = symbol_list_with_pos COLON WITH expr = expression SEMICOLON
+    { ComputeVerifs (dom, expr), mk_position $sloc }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }
@@ -641,9 +651,15 @@ factor_literal:
   *)
 
 function_name:
-s = SYMBOL { (parse_func_name $sloc s, mk_position $sloc) }
+| VERIF_NUMBER { ("numero_verif", mk_position $sloc) }
+| COMPL_NUMBER { ("numero_compl", mk_position $sloc) }
+| s = SYMBOL { (parse_func_name $sloc s, mk_position $sloc) }
 
 function_call:
+| NB_CATEGORY LPAREN cats = var_category_id RPAREN
+  { (NbCategory cats, mk_position $sloc) }
+| s = function_name LPAREN RPAREN
+  { (FunctionCall (s, Mast.ArgList []), mk_position $sloc) }
 | s = function_name LPAREN args = function_call_args RPAREN
   { (FunctionCall (s, args), mk_position $sloc) }
 

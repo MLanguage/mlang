@@ -59,6 +59,7 @@ let rec no_local_vars (e : Bir.expression Pos.marked) : bool =
       List.for_all (fun arg -> no_local_vars arg) args
   | Mir.Conditional (e1, e2, e3) ->
       no_local_vars e1 && no_local_vars e2 && no_local_vars e3
+  | Mir.NbCategory _ -> assert false
 
 let rec has_this_local_var (e : Bir.expression Pos.marked)
     (l : Mir.LocalVariable.t) : bool =
@@ -75,6 +76,7 @@ let rec has_this_local_var (e : Bir.expression Pos.marked)
   | Mir.Conditional (e1, e2, e3) ->
       has_this_local_var e1 l || has_this_local_var e2 l
       || has_this_local_var e3 l
+  | Mir.NbCategory _ -> assert false
 
 let rec expr_size (e : Bir.expression Pos.marked) : int =
   match Pos.unmark e with
@@ -85,6 +87,7 @@ let rec expr_size (e : Bir.expression Pos.marked) : int =
   | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
   | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
+  | Mir.NbCategory _ -> assert false
 
 let is_inlining_worthy (e : Bir.expression Pos.marked) : bool =
   (* we forbid inlining expressions with local variables to prevent conflicts of
@@ -247,6 +250,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
           args
       in
       Mir.FunctionCall (f, new_args)
+  | Mir.NbCategory _ -> assert false
 
 let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
     (current_stmt_pos : int) : stmt * ctx * int =

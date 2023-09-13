@@ -165,6 +165,10 @@ let rec format_expression fmt (e : expression) =
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a" format_loop_variables (Pos.unmark lvs)
         format_expression (Pos.unmark e)
+  | NbCategory l ->
+      Format.fprintf fmt "nb_categorie(%a)"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
 
 and format_func_args fmt (args : func_args) =
   match args with
@@ -203,6 +207,14 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt "calculer domaine %a;"
         (pp_print_list_space (pp_unmark Format.pp_print_string))
         (Pos.unmark l)
+  | ComputeChaining ch ->
+      Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
+  | ComputeVerifs (l, expr) ->
+      Format.fprintf fmt "verifier %a : avec %a;"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
+        (pp_unmark format_expression)
+        expr
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

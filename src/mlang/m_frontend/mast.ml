@@ -147,6 +147,7 @@ type expression =
   | Literal of literal
   | Loop of loop_variables Pos.marked * expression Pos.marked
       (** The loop is prefixed with the loop variables declarations *)
+  | NbCategory of string Pos.marked list Pos.marked
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
@@ -187,6 +188,8 @@ type instruction =
       * instruction Pos.marked list
       * instruction Pos.marked list
   | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
 
 type rule = {
   rule_number : int Pos.marked;

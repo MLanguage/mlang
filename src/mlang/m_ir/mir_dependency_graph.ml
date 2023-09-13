@@ -54,7 +54,7 @@ let rec get_used_variables_ (e : Mir.expression Pos.marked)
       acc
   | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> get_used_variables_ arg acc) acc args
-  | Mir.LocalVar _ | Mir.Literal _ | Mir.Error -> acc
+  | Mir.LocalVar _ | Mir.Literal _ | Mir.Error | Mir.NbCategory _ -> acc
   | Mir.Var var -> Mir.VariableDict.add var acc
 
 let get_used_variables (e : Mir.expression Pos.marked) : Mir.VariableDict.t =

@@ -138,6 +138,16 @@ rule token = parse
   { ENDIF }
 | "calculer"
   { COMPUTE }
+| "verifier"
+  { VERIFY }
+| "avec"
+  { WITH }
+| "numero_verif"
+  { VERIF_NUMBER }
+| "numero_compl"
+  { COMPL_NUMBER }
+| "nb_categorie"
+  { NB_CATEGORY }
 | "erreur"
   { ERROR }
 | "verif"

@@ -51,7 +51,9 @@ let format_func fmt (f : func) =
     | InfFunc -> "inf"
     | PresentFunc -> "present"
     | Multimax -> "multimax"
-    | Supzero -> "supzero")
+    | Supzero -> "supzero"
+    | VerifNumber -> "numero_verif"
+    | ComplNumber -> "numero_compl")
 
 let format_literal fmt (l : literal) =
   Format.pp_print_string fmt
@@ -89,6 +91,8 @@ let rec format_expression fmt (e : expression) =
       Format.fprintf fmt "%s[%a]"
         (Pos.unmark (Pos.unmark var).Variable.name)
         format_expression (Pos.unmark i)
+  | NbCategory cats ->
+      Format.fprintf fmt "nb_categorie(%a)" (Mir.CatVarSet.pp ()) cats
 
 let format_variable_def fmt (def : variable_def) =
   match def with

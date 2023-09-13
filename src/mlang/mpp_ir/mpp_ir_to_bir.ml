@@ -128,6 +128,227 @@ let wrap_m_code_call (m_program : Mir_interface.full_program)
   let program_stmts = List.rev program_stmts in
   (ctx, program_stmts)
 
+let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
+  let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
+  (Bir.SVerif data, Pos.get_position data.cond_expr)
+
+let generate_verifs_prog (m_program : Mir_interface.full_program)
+    (dom : Mast.DomainId.t) (expr : Mir.expression Pos.marked) =
+  Mir_typechecker.typecheck_top_down ~in_generic_table:false expr;
+  let my_floor a = floor (a +. 0.000001) in
+  let _my_ceil a = ceil (a -. 0.000001) in
+  let my_arr a =
+    let my_var1 = floor a in
+    let my_var2 = ((a -. my_var1) *. 100000.0) +. 0.5 in
+    let my_var2 = floor my_var2 /. 100000.0 in
+    let my_var2 = my_var1 +. my_var2 +. 0.5 in
+    floor my_var2
+  in
+  let to_filter (expr : Mir.expression Pos.marked) cond =
+    let rec aux env (expr : Mir.expression Pos.marked) =
+      match Pos.unmark expr with
+      | Mir.Literal l -> l
+      | Mir.Unop (op, e0) -> begin
+          match aux env e0 with
+          | Mir.Undefined -> Mir.Undefined
+          | Mir.Float f -> begin
+              match op with
+              | Mast.Not -> Mir.Float (1.0 -. f)
+              | Mast.Minus -> Mir.Float ~-.f
+            end
+        end
+      | Mir.FunctionCall (func, args) -> begin
+          let rl = List.map (aux env) args in
+          match func with
+          | Mir.VerifNumber -> begin
+              match Pos.unmark cond.Mir.cond_number with
+              | Mir.VerifID id -> Mir.Float (float_of_int id)
+              | _ -> assert false
+            end
+          | Mir.ComplNumber -> assert false
+          | Mir.SumFunc ->
+              List.fold_left
+                (fun res r ->
+                  match r with
+                  | Mir.Undefined -> res
+                  | Mir.Float f -> begin
+                      match res with
+                      | Mir.Undefined -> r
+                      | Mir.Float fr -> Mir.Float (f +. fr)
+                    end)
+                Mir.Undefined rl
+          | Mir.AbsFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (abs_float f)
+              | _ -> assert false
+            end
+          | Mir.MinFunc -> begin
+              match rl with
+              | [ Mir.Undefined; Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Undefined; r ] | [ r; Mir.Undefined ] -> r
+              | [ Mir.Float f0; Mir.Float f1 ] -> Mir.Float (min f0 f1)
+              | _ -> assert false
+            end
+          | Mir.MaxFunc -> begin
+              match rl with
+              | [ Mir.Undefined; Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Undefined; r ] | [ r; Mir.Undefined ] -> r
+              | [ Mir.Float f0; Mir.Float f1 ] -> Mir.Float (max f0 f1)
+              | _ -> assert false
+            end
+          | Mir.GtzFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (if f > 0.0 then 1.0 else 0.0)
+              | _ -> assert false
+            end
+          | Mir.GtezFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (if f >= 0.0 then 1.0 else 0.0)
+              | _ -> assert false
+            end
+          | Mir.NullFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (if f = 0.0 then 1.0 else 0.0)
+              | _ -> assert false
+            end
+          | Mir.ArrFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (my_arr f)
+              | _ -> assert false
+            end
+          | Mir.InfFunc -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] -> Mir.Float (my_floor f)
+              | _ -> assert false
+            end
+          | Mir.PresentFunc ->
+              Errors.raise_spanned_error
+                "function present is forbidden in verification filter"
+                (Pos.get_position expr)
+          | Mir.Multimax ->
+              Errors.raise_spanned_error
+                "function multimax is forbidden in verification filter"
+                (Pos.get_position expr)
+          | Mir.Supzero -> begin
+              match rl with
+              | [ Mir.Undefined ] -> Mir.Undefined
+              | [ Mir.Float f ] when f = 0.0 -> Mir.Undefined
+              | [ r ] -> r
+              | _ -> assert false
+            end
+        end
+      | Mir.Comparison (op, e0, e1) -> begin
+          match (aux env e0, aux env e1) with
+          | Mir.Undefined, _ | _, Mir.Undefined -> Mir.Undefined
+          | Mir.Float f0, Mir.Float f1 -> begin
+              match Pos.unmark op with
+              | Mast.Gt -> Mir.Float (if f0 > f1 then 1.0 else 0.0)
+              | Mast.Gte -> Mir.Float (if f0 >= f1 then 1.0 else 0.0)
+              | Mast.Lt -> Mir.Float (if f0 < f1 then 1.0 else 0.0)
+              | Mast.Lte -> Mir.Float (if f0 <= f1 then 1.0 else 0.0)
+              | Mast.Eq -> Mir.Float (if f0 = f1 then 1.0 else 0.0)
+              | Mast.Neq -> Mir.Float (if f0 <> f1 then 1.0 else 0.0)
+            end
+        end
+      | Mir.Binop (op, e0, e1) -> begin
+          let r0 = aux env e0 in
+          let r1 = aux env e1 in
+          match Pos.unmark op with
+          | And -> begin
+              match r0 with
+              | Mir.Undefined -> Mir.Undefined
+              | Mir.Float f0 -> if f0 = 0.0 then r0 else r1
+            end
+          | Or -> begin
+              match r0 with
+              | Mir.Undefined -> r1
+              | Mir.Float f0 -> if f0 = 0.0 then r1 else r0
+            end
+          | Add -> begin
+              match (r0, r1) with
+              | Mir.Undefined, Mir.Undefined -> Mir.Undefined
+              | Mir.Undefined, Mir.Float _ -> r1
+              | Mir.Float _, Mir.Undefined -> r0
+              | Mir.Float f0, Mir.Float f1 -> Mir.Float (f0 +. f1)
+            end
+          | Sub -> begin
+              match (r0, r1) with
+              | Mir.Undefined, Mir.Undefined -> Mir.Undefined
+              | Mir.Undefined, Mir.Float _ -> r1
+              | Mir.Float _, Mir.Undefined -> r0
+              | Mir.Float f0, Mir.Float f1 -> Mir.Float (f0 +. f1)
+            end
+          | Mul -> begin
+              match (r0, r1) with
+              | Mir.Undefined, _ | _, Mir.Undefined -> Mir.Undefined
+              | Mir.Float f0, Mir.Float f1 -> Mir.Float (f0 *. f1)
+            end
+          | Div -> begin
+              match (r0, r1) with
+              | Mir.Undefined, _ | _, Mir.Undefined -> Mir.Undefined
+              | Mir.Float f0, Mir.Float f1 ->
+                  if f1 = 0.0 then r1 else Mir.Float (f0 /. f1)
+            end
+        end
+      | Mir.Conditional (e0, e1, e2) -> begin
+          let r0 = aux env e0 in
+          let r1 = aux env e1 in
+          let r2 = aux env e2 in
+          match r0 with
+          | Mir.Undefined -> Mir.Undefined
+          | Mir.Float f -> if f = 1.0 then r1 else r2
+        end
+      | Mir.Var v | Mir.Index ((v, _), _) ->
+          Errors.raise_spanned_error
+            "variables are forbidden in verification filter"
+            (Pos.get_position v.Mir.name)
+      | Mir.LocalVar lv -> begin
+          match IntMap.find_opt lv.Mir.id env with
+          | Some r -> r
+          | None -> assert false
+        end
+      | Mir.LocalLet (lv, e0, e1) ->
+          let r0 = aux env e0 in
+          let env0 = IntMap.add lv.Mir.id r0 env in
+          aux env0 e1
+      | Mir.Error ->
+          Errors.raise_spanned_error
+            "errors are forbidden in verification filter"
+            (Pos.get_position expr)
+      | Mir.NbCategory cats ->
+          let nb =
+            Mir.fold_expr_var
+              (fun res v ->
+                if
+                  Mir.CatVarSet.cardinal (Mir.CatVarSet.inter cats v.Mir.cats)
+                  > 0
+                then res +. 1.0
+                else res)
+              0.0
+              (Pos.unmark cond.Mir.cond_expr)
+          in
+          Mir.Float nb
+    in
+    aux IntMap.empty expr
+  in
+  List.rev
+    (Mir.RuleMap.fold
+       (fun rov_id cond stmts ->
+         if
+           (match rov_id with Mir.VerifID _ -> true | _ -> false)
+           && Mast.DomainId.equal dom cond.Mir.cond_domain.dom_id
+           && to_filter expr cond = Mir.Float 1.0
+         then
+           (Bir.SRovCall rov_id, Pos.get_position cond.Mir.cond_number) :: stmts
+         else stmts)
+       m_program.program.program_conds [])
+
 let rec translate_m_code (m_program : Mir_interface.full_program)
     (ctx : translation_ctx) (instrs : Mir.instruction Pos.marked list) =
   let rec aux ctx res = function
@@ -179,12 +400,29 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         in
         let ctx, stmts = wrap_m_code_call m_program order ctx in
         aux ctx (List.rev stmts @ res) instrs
+    | (Mir.ComputeChaining ch, _pos) :: instrs ->
+        let chain = Pos.unmark ch in
+        let order =
+          match Mast.ChainingMap.find_opt chain m_program.chainings_orders with
+          | Some order -> order
+          | None ->
+              Errors.raise_error (Format.sprintf "Unknown chaining: %s" chain)
+        in
+        let ctx =
+          {
+            ctx with
+            used_chainings = Mast.ChainingSet.add chain ctx.used_chainings;
+          }
+        in
+        let ctx, stmts = wrap_m_code_call m_program order ctx in
+        aux ctx (List.rev stmts @ res) instrs
+    | (Mir.ComputeVerifs (l, expr), _pos) :: instrs ->
+        let dom = Mast.DomainId.from_marked_list (Pos.unmark l) in
+        let ctx = { ctx with verif_seen = true } in
+        let stmts = generate_verifs_prog m_program dom expr in
+        aux ctx (List.rev stmts @ res) instrs
   in
   aux ctx [] instrs
-
-let generate_verif_cond (cond : Mir.condition_data) : Bir.stmt =
-  let data = Mir.map_cond_data_var Bir.(var_from_mir default_tgv) cond in
-  (Bir.SVerif data, Pos.get_position data.cond_expr)
 
 type filter_val = Int of int | Bool of bool
 
@@ -531,7 +769,15 @@ let create_combined_program (m_program : Mir_interface.full_program)
       Mir.TargetMap.fold
         (fun n t (ctx, targets) ->
           let ctx, code = translate_m_code m_program ctx t.Mir.target_prog in
-          (ctx, Mir.TargetMap.add n (t.Mir.target_tmp_vars, code) targets))
+          ( ctx,
+            Mir.TargetMap.add n
+              Bir.
+                {
+                  tmp_vars = t.Mir.target_tmp_vars;
+                  stmts = code;
+                  is_verif = ctx.verif_seen;
+                }
+              targets ))
         m_program.program.program_targets (ctx, Mir.TargetMap.empty)
     in
     let rules =

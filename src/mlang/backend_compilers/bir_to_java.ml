@@ -164,6 +164,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
       (se3, s3)
+  | NbCategory _ -> assert false
 
 let format_local_vars_defs (oc : Format.formatter)
     (defs : (Mir.LocalVariable.t * expression Pos.marked) list) =

@@ -69,7 +69,7 @@ let const_var_set_from_list (p : Bir.program)
               (Pos.get_position e))
       in
       let new_e =
-        Mast_to_mir.translate_expression
+        Mast_to_mir.translate_expression p.mir_program.program_var_categories
           {
             table_definition = false;
             idmap = p.idmap;

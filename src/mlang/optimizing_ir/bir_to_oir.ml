@@ -119,7 +119,13 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
   in
   let targets =
     Mir.TargetMap.map
-      (fun (vts, stmts) -> (vts, bir_stmts_to_cfg stmts))
+      (fun tf ->
+        Oir.
+          {
+            tmp_vars = tf.Bir.tmp_vars;
+            cfg = bir_stmts_to_cfg tf.Bir.stmts;
+            is_verif = tf.Bir.is_verif;
+          })
       p.targets
   in
   {
@@ -187,7 +193,7 @@ let cfg_to_bir_stmts (cfg : Oir.cfg) : Bir.stmt list =
 let oir_program_to_bir (p : Oir.program) : Bir.program =
   let mpp_functions =
     Bir.FunctionMap.map
-      (fun Oir.{ cfg; is_verif } ->
+      (fun (Oir.{ cfg; is_verif } : Oir.mpp_function) ->
         Bir.{ mppf_stmts = cfg_to_bir_stmts cfg; mppf_is_verif = is_verif })
       p.mpp_functions
   in
@@ -209,7 +215,15 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
       p.rules_and_verifs
   in
   let targets =
-    Mir.TargetMap.map (fun (vts, cfg) -> (vts, cfg_to_bir_stmts cfg)) p.targets
+    Mir.TargetMap.map
+      (fun tf ->
+        Bir.
+          {
+            tmp_vars = tf.Oir.tmp_vars;
+            stmts = cfg_to_bir_stmts tf.Oir.cfg;
+            is_verif = tf.Oir.is_verif;
+          })
+      p.targets
   in
   {
     targets;

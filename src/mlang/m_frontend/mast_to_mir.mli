@@ -67,7 +67,10 @@ val list_max_execution_number : Mir.Variable.t list -> Mir.Variable.t
 (** Helper to compute the max SSA candidate in a list *)
 
 val translate_expression :
-  translating_context -> Mast.expression Pos.marked -> Mir.expression Pos.marked
+  'a Mir.CatVarMap.t ->
+  translating_context ->
+  Mast.expression Pos.marked ->
+  Mir.expression Pos.marked
 (** Main translation function for expressions *)
 
 val dummy_exec_number : Pos.t -> Mir.execution_number

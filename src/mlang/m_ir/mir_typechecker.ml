@@ -46,7 +46,7 @@ let rec typecheck_top_down ~(in_generic_table : bool)
   | LocalLet (_local_var, e1, e2) ->
       typecheck_top_down ~in_generic_table e1;
       typecheck_top_down ~in_generic_table e2
-  | Error | LocalVar _ -> ()
+  | Error | LocalVar _ | NbCategory _ -> ()
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
       typecheck_top_down ~in_generic_table e';
@@ -99,6 +99,12 @@ and typecheck_func_args (f : func) (pos : Pos.t) (in_generic_table : bool)
       | _ ->
           Errors.raise_spanned_error "function %a should have two arguments" pos
       )
+  | Mir.VerifNumber ->
+      if List.length args <> 0 then
+        Errors.raise_spanned_error "numero_verif function takes no argument" pos
+  | Mir.ComplNumber ->
+      if List.length args <> 0 then
+        Errors.raise_spanned_error "numero_compl function takes no argument" pos
 
 let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     (defs : (int * Pos.t) list) : int list =
@@ -151,7 +157,7 @@ let rec check_non_recursivity_expr (e : expression Pos.marked)
       check_non_recursivity_expr e3 lvar
   | FunctionCall (_, args) ->
       List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
-  | Literal _ | LocalVar _ | Error -> ()
+  | Literal _ | LocalVar _ | Error | NbCategory _ -> ()
   | Var var ->
       if var = lvar then
         Errors.raise_spanned_error

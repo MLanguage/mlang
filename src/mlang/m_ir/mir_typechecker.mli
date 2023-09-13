@@ -21,6 +21,9 @@
    entries as "undefined" *)
 val typecheck : Mir_interface.full_program -> Mir_interface.full_program
 
+val typecheck_top_down :
+  in_generic_table:bool -> Mir.expression Pos.marked -> unit
+
 val expand_functions_expr :
   'var Mir.expression_ Pos.marked -> 'var Mir.expression_ Pos.marked
 (** Most functions are just syntactic sugar for operations expressible with the

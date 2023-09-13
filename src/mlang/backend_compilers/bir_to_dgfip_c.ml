@@ -186,6 +186,7 @@ let rec generate_c_expr (e : expression Pos.marked)
         def_test = declare_local se2.def_test;
         value_comp = declare_local se2.value_comp;
       }
+  | NbCategory _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : variable) (offset : D.offset)
@@ -384,26 +385,25 @@ let generate_target_protoype (add_semicolon : bool) (return_type : bool)
   Format.fprintf oc "%s %s(T_irdata* irdata)%s" ret_type function_name
     (if add_semicolon then ";" else "")
 
-let generate_var_tmp_decls (oc : Format.formatter) (var_tmps : Pos.t StrMap.t) =
+let generate_var_tmp_decls (oc : Format.formatter) (tmp_vars : Pos.t StrMap.t) =
   StrMap.iter
     (fun vn _ -> Format.fprintf oc "int %s_def[1];@,double %s_val[1];@," vn vn)
-    var_tmps;
-  if not (StrMap.is_empty var_tmps) then Format.fprintf oc "@,";
+    tmp_vars;
+  if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,";
   StrMap.iter
     (fun vn _ -> Format.fprintf oc "%s_def[0] = 0;@,%s_val[0] = 0.0;@," vn vn)
-    var_tmps;
-  if not (StrMap.is_empty var_tmps) then Format.fprintf oc "@,"
+    tmp_vars;
+  if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,"
 
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     ((f, ret_type) : Bir.function_name * bool) =
-  let var_tmps, code = Mir.TargetMap.find f program.targets in
-  let mppf_is_verif = false in
+  let { tmp_vars; stmts; is_verif } = Mir.TargetMap.find f program.targets in
   Format.fprintf oc "@[<v 2>%a{@,%a%a%s@]@,}@,"
-    (generate_target_protoype false mppf_is_verif)
-    f generate_var_tmp_decls var_tmps
+    (generate_target_protoype false is_verif)
+    f generate_var_tmp_decls tmp_vars
     (generate_stmts dgfip_flags program var_indexes)
-    code
+    stmts
     (if ret_type then
      {|
 #ifdef FLG_MULTITHREAD
@@ -417,21 +417,19 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (oc : Format.formatter) (var_indexes : Dgfip_varid.var_id_map) =
   let targets = Mir.TargetMap.bindings program.Bir.targets in
-  let mppf_is_verif = false in
   List.iter
-    (fun (name, _) ->
+    (fun (name, { is_verif; _ }) ->
       generate_target
         (dgfip_flags : Dgfip_options.flags)
-        program var_indexes oc (name, mppf_is_verif))
+        program var_indexes oc (name, is_verif))
     targets
 
 let generate_targets_signatures (oc : Format.formatter) (program : Bir.program)
     =
   let targets = Mir.TargetMap.bindings program.Bir.targets in
-  let mppf_is_verif = false in
   Format.fprintf oc "@[<v 0>%a@]@,"
-    (Format.pp_print_list (fun ppf (name, _) ->
-         generate_target_protoype true mppf_is_verif ppf name))
+    (Format.pp_print_list (fun ppf (name, { is_verif; _ }) ->
+         generate_target_protoype true is_verif ppf name))
     targets
 
 let generate_mpp_function_protoype (add_semicolon : bool) (return_type : bool)

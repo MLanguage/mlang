@@ -233,6 +233,8 @@ type func =
   | PresentFunc  (** Different than zero ? *)
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
+  | VerifNumber
+  | ComplNumber
 
 (** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
     Because M lets you define conditional without an else branch although it is
@@ -266,6 +268,7 @@ type 'variable expression_ =
       (LocalVariable.t[@opaque])
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
+  | NbCategory of CatVarSet.t
 
 type expression = variable expression_
 
@@ -283,6 +286,7 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | Literal l -> Literal l
   | LocalVar v -> LocalVar v
   | Error -> Error
+  | NbCategory l -> NbCategory l
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
@@ -295,7 +299,7 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | Error -> acc
+  | Literal _ | LocalVar _ | Error | NbCategory _ -> acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -431,6 +435,8 @@ type instruction =
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
 
 type rule_data = {
   rule_domain : rule_domain;
