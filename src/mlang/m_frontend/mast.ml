@@ -189,6 +189,7 @@ type instruction =
       * instruction Pos.marked list
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
+  | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
 
 type rule = {

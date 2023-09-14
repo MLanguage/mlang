@@ -337,17 +337,32 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
     in
     aux IntMap.empty expr
   in
-  List.rev
-    (Mir.RuleMap.fold
-       (fun rov_id cond stmts ->
-         if
-           (match rov_id with Mir.VerifID _ -> true | _ -> false)
-           && Mast.DomainId.equal dom cond.Mir.cond_domain.dom_id
-           && to_filter expr cond = Mir.Float 1.0
-         then
-           (Bir.SRovCall rov_id, Pos.get_position cond.Mir.cond_number) :: stmts
-         else stmts)
-       m_program.program.program_conds [])
+  let is_verif_relevant rov_id cond =
+    let is_verif = match rov_id with Mir.VerifID _ -> true | _ -> false in
+    let verif_domain = cond.Mir.cond_domain in
+    let is_max = Mast.DomainIdSet.mem dom verif_domain.dom_max in
+    let is_eq = verif_domain.dom_id = dom in
+    let is_var_compatible =
+      (* !!! à valider en amont *)
+      Mir.CatVarSet.subset
+        (Mir.cond_cats_to_set cond.Mir.cond_cats)
+        verif_domain.dom_data.vdom_auth
+    in
+    let is_kept = to_filter expr cond = Mir.Float 1.0 in
+    is_verif && (is_max || is_eq) && is_var_compatible && is_kept
+  in
+  m_program.program.program_conds
+  |> Mir.RuleMap.filter is_verif_relevant
+  |> Mir.RuleMap.bindings
+  |> List.sort (fun (_, cond1) (_, cond2) ->
+         let res =
+           Mast.compare_error_type (fst cond1.Mir.cond_error).typ
+             (fst cond2.Mir.cond_error).typ
+         in
+         if res <> 0 then res
+         else Stdlib.compare cond1.Mir.cond_seq_id cond2.Mir.cond_seq_id)
+  |> List.map (fun (rov_id, cond) ->
+         (Bir.SRovCall rov_id, Pos.get_position cond.Mir.cond_number))
 
 let rec translate_m_code (m_program : Mir_interface.full_program)
     (ctx : translation_ctx) (instrs : Mir.instruction Pos.marked list) =
@@ -406,7 +421,9 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
           match Mast.ChainingMap.find_opt chain m_program.chainings_orders with
           | Some order -> order
           | None ->
-              Errors.raise_error (Format.sprintf "Unknown chaining: %s" chain)
+              Errors.raise_spanned_error
+                (Format.sprintf "Unknown chaining: %s" chain)
+                (Pos.get_position ch)
         in
         let ctx =
           {
@@ -416,6 +433,19 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         in
         let ctx, stmts = wrap_m_code_call m_program order ctx in
         aux ctx (List.rev stmts @ res) instrs
+    | (Mir.ComputeTarget tn, pos) :: instrs ->
+        let name = Pos.unmark tn in
+        let ctx, stmt =
+          match
+            Mir.TargetMap.find_opt name m_program.program.program_targets
+          with
+          | Some _ -> (ctx, (Bir.SFunctionCall (name, []), pos))
+          | None ->
+              Errors.raise_spanned_error
+                (Format.asprintf "Unknown target: %s" name)
+                (Pos.get_position tn)
+        in
+        aux ctx (stmt :: res) instrs
     | (Mir.ComputeVerifs (l, expr), _pos) :: instrs ->
         let dom = Mast.DomainId.from_marked_list (Pos.unmark l) in
         let ctx = { ctx with verif_seen = true } in
@@ -829,7 +859,10 @@ let create_combined_program (m_program : Mir_interface.full_program)
           Mir.RuleMap.add rov_id Bir.{ rov_id; rov_name; rov_code } rules)
         m_program.program.program_conds rules
     in
-    if not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions) then
+    if
+      (not (Bir.FunctionMap.mem mpp_function_to_extract mpp_functions))
+      && not (Mir.TargetMap.mem mpp_function_to_extract targets)
+    then
       Errors.raise_error
         (Format.asprintf "M++ function %s not found in M++ file!"
            mpp_function_to_extract);

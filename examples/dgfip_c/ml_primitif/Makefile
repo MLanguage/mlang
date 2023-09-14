@@ -9,11 +9,9 @@ else
 endif
 
 # DGFiP C backend works only with these specifications at the moment.
-MPP_FILE=../../../mpp_specs/dgfip_base.mpp
 MPP_FUNCTION=dgfip_calculation
 
 MLANG_DGFIP_C_OPTS=\
-	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 
 # Options supplémentaires pour le backend Mlang/DGFiP spécifiques à la cible

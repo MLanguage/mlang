@@ -1804,6 +1804,8 @@ let translate_prog (cats : 'a Mir.CatVarMap.t) const_map idmap var_decl_data
         aux ((Mir.ComputeDomain l, pos) :: res) il
     | (Mast.ComputeChaining ch, pos) :: il ->
         aux ((Mir.ComputeChaining ch, pos) :: res) il
+    | (Mast.ComputeTarget tn, pos) :: il ->
+        aux ((Mir.ComputeTarget tn, pos) :: res) il
     | (Mast.ComputeVerifs (l, expr), pos) :: il ->
         let ctx = new_ctx pos in
         let mir_expr = translate_expression cats ctx expr in

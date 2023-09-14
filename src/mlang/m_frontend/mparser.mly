@@ -413,6 +413,8 @@ instruction:
     { ComputeDomain dom, mk_position $sloc }
 | COMPUTE CHAINING chain = symbol_with_pos SEMICOLON
     { ComputeChaining chain, mk_position $sloc }
+| COMPUTE TARGET target = symbol_with_pos SEMICOLON
+    { ComputeTarget target, mk_position $sloc }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
     {
       let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in

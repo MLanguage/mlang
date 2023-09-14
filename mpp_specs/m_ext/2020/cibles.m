@@ -1,16 +1,3 @@
-# 2020
-cible compute_article1731bis:
-application: iliad;
-variable temporaire: TOTO;
-TOTO = 0;
-ART1731BIS = 0;
-si
-  CMAJ = 8 ou CMAJ = 11
-alors
-  ART1731BIS = 1;
-  PREM8_11 = 1;
-finsi
-
 cible calcul_primitif:
 application: iliad;
 calculer domaine primitive;
@@ -29,7 +16,6 @@ calculer domaine corrective;
 
 cible sauve_base_1728:
 application: iliad;
-# X = X;
 calculer domaine base_1728 corrective;
 
 cible sauve_base_premier:
@@ -110,7 +96,6 @@ calculer domaine base_inr_tlcimr24 corrective;
 
 cible sauve_base_tlnunv:
 application: iliad;
-# X = X;
 calculer domaine base_TLNUNV corrective;
 
 cible sauve_base_tl:
@@ -153,7 +138,91 @@ cible ENCH_TL:
 application: iliad;
 calculer enchaineur ENCH_TL;
 
-cible verif_calcul_primitive_isf_raw_bis:
+cible verif_calcul_primitive_isf_raw:
 application: iliad;
 verifier domaine isf : avec nb_categorie(calculee *) > 0;
+
+cible verif_calcul_primitive_raw:
+application: iliad;
+calculer cible verif_calcul_primitive_isf_raw;
+verifier domaine primitive : avec nb_categorie(calculee *) > 0;
+
+cible verif_calcul_corrective_raw:
+application: iliad;
+calculer cible calcul_primitif_isf;
+calculer cible verif_calcul_primitive_isf_raw;
+verifier domaine corrective : avec nb_categorie(calculee *) > 0;
+
+
+cible verif_saisie_cohe_primitive_isf_raw:
+application: iliad;
+verifier domaine isf
+: avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_saisie_cohe_primitive_raw:
+application: iliad;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
+calculer cible calcul_primitif_isf;
+calculer cible verif_calcul_primitive_isf_raw;
+verifier domaine primitive
+: avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_saisie_cohe_corrective_raw:
+application: iliad;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
+verifier domaine corrective
+: avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_cohe_horizontale_raw:
+application: iliad;
+verifier domaine horizontale corrective;
+
+cible verif_contexte_cohe_primitive_raw:
+application: iliad;
+verifier domaine primitive
+: avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_contexte_cohe_corrective_raw:
+application: iliad;
+verifier domaine corrective
+: avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_famille_cohe_primitive_raw:
+application: iliad;
+verifier domaine primitive
+: avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_famille_cohe_corrective_raw:
+application: iliad;
+verifier domaine corrective
+: avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_revenu_cohe_primitive_raw:
+application: iliad;
+verifier domaine primitive
+: avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
+
+cible verif_revenu_cohe_corrective_raw:
+application: iliad;
+verifier domaine corrective
+: avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
+
+cible dgfip_calculation:
+application: iliad;
+APPLI_OCEANS = 0;
+V_IND_TRAIT = 4;  # 4 = PRIMITIF, 5 = CORRECTIF
+FLAG_PVRO = 0;
+FLAG_EXIT = 0;
+FLAG_BAREM = 0;
+FLAG_ACO = 0;
+V_NEGACO = 0;
+V_AVFISCOPBIS = 0;
+V_DIFTEOREEL = 0;
+PREM8_11 = 0;
+ART1731BIS = 0;
+V_ACO_MTAP = 0;
+V_NEGACO = 0;
+calculer cible calcul_primitif_isf;
+calculer cible calcul_primitif;
+calculer cible calcul_primitif_taux;
 

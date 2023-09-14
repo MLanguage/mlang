@@ -76,13 +76,13 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (var_info_debug : string list) (display_time : bool)
     (dep_graph_file : string) (print_cycles : bool) (backend : string option)
-    (function_spec : string option) (mpp_file : string) (output : string option)
-    (run_all_tests : string option) (dgfip_test_filter : bool)
-    (run_test : string option) (mpp_function : string) (optimize : bool)
-    (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (roundops : string option)
-    (test_error_margin : float option) (m_clean_calls : bool)
-    (dgfip_options : string list option)
+    (function_spec : string option) (mpp_file : string option)
+    (output : string option) (run_all_tests : string option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
+    (code_coverage : bool) (precision : string option)
+    (roundops : string option) (test_error_margin : float option)
+    (m_clean_calls : bool) (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
   let value_sort =
     let precision = Option.get precision in
@@ -208,7 +208,11 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
             true
         then Errors.raise_error "Cycles between rules.")
       full_m_program.chainings_orders;
-    let mpp = Mpp_frontend.process mpp_file full_m_program in
+    let mpp =
+      match mpp_file with
+      | Some file -> Mpp_frontend.process file full_m_program
+      | None -> []
+    in
     let full_m_program =
       Mir_interface.to_full_program
         (match function_spec with

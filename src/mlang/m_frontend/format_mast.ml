@@ -209,6 +209,7 @@ let rec format_instruction fmt (i : instruction) =
         (Pos.unmark l)
   | ComputeChaining ch ->
       Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
+  | ComputeTarget tn -> Format.fprintf fmt "calculer cible %s;" (Pos.unmark tn)
   | ComputeVerifs (l, expr) ->
       Format.fprintf fmt "verifier %a : avec %a;"
         (pp_print_list_space (pp_unmark Format.pp_print_string))

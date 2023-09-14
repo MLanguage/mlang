@@ -96,7 +96,7 @@ let function_spec =
 
 let mpp_file =
   Arg.(
-    required
+    value
     & opt (some file) None
     & info [ "mpp_file" ] ~docv:"MPP_FILE"
         ~doc:"M++ preprocessor file (extension .mpp)")
