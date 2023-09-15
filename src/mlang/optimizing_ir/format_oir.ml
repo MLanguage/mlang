@@ -44,6 +44,13 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format.pp_print_list (fun fmt arg ->
              Format.fprintf fmt "%s" (arg.Mir.Variable.name |> Pos.unmark)))
         args
+  | SPrint (std, args) ->
+      let print_cmd =
+        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
+      in
+      Format.fprintf fmt "%s %a;" print_cmd
+        (Format_mast.pp_print_list_space Format_bir.format_print_arg)
+        args
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

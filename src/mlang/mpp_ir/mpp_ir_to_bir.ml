@@ -451,6 +451,29 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         let ctx = { ctx with verif_seen = true } in
         let stmts = generate_verifs_prog m_program dom expr in
         aux ctx (List.rev stmts @ res) instrs
+    | (Mir.Print (std, args), pos) :: instrs ->
+        let bir_args =
+          List.rev
+            (List.fold_left
+               (fun res arg ->
+                 let bir_arg =
+                   match Pos.unmark arg with
+                   | Mir.PrintString s -> Mir.PrintString s
+                   | Mir.PrintExpr (e, min, max) ->
+                       Mir.PrintExpr
+                         ( Pos.same_pos_as
+                             (Mir.map_expr_var
+                                Bir.(var_from_mir default_tgv)
+                                (Pos.unmark e))
+                             e,
+                           min,
+                           max )
+                 in
+                 bir_arg :: res)
+               [] args)
+        in
+
+        aux ctx ((Bir.SPrint (std, bir_args), pos) :: res) instrs
   in
   aux ctx [] instrs
 

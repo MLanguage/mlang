@@ -22,6 +22,20 @@ let format_expression fmt (e : expression) =
 let format_variable_def fmt (vdef : variable_def) =
   Format_mir.format_variable_def fmt (Mir.map_var_def_var Bir.var_to_mir vdef)
 
+let format_print_arg fmt = function
+  | Mir.PrintString s -> Format.fprintf fmt "%s" s
+  | PrintExpr (e, min, max) ->
+      if min = max_int then
+        Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e
+      else if max = max_int then
+        Format.fprintf fmt "(%a):%d"
+          (Format_mast.pp_unmark format_expression)
+          e min
+      else
+        Format.fprintf fmt "(%a):%d..%d"
+          (Format_mast.pp_unmark format_expression)
+          e min max
+
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdef) ->
@@ -50,6 +64,13 @@ let rec format_stmt fmt (stmt : stmt) =
       Format.fprintf fmt "call_function: %s with args %a@," func
         (Format.pp_print_list (fun fmt arg ->
              Format.fprintf fmt "%s" (arg.Mir.Variable.name |> Pos.unmark)))
+        args
+  | SPrint (std, args) ->
+      let print_cmd =
+        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
+      in
+      Format.fprintf fmt "%s %a;" print_cmd
+        (Format_mast.pp_print_list_space format_print_arg)
         args
 
 and format_stmts fmt (stmts : stmt list) =

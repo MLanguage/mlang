@@ -207,6 +207,24 @@ application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
+cible article_1731_bis:
+application : iliad;
+# calculer cible toto;
+si (V_IND_TRAIT = 4) alors # PRIMITIF
+  si (CMAJ dans (8, 11)) alors
+    ART1731BIS = 1;
+    PREM8_11 = 1;
+  sinon
+    ART1731BIS = 0;
+  finsi
+finsi
+
+cible toto:
+application: iliad;
+afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
+afficher_erreur "toto " "FLAG_PVRO+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
+afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
+
 cible dgfip_calculation:
 application: iliad;
 APPLI_OCEANS = 0;

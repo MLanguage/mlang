@@ -57,6 +57,7 @@ let format_literal fmt (l : literal) =
   match l with
   | Variable v -> format_variable fmt v
   | Float f -> Format.fprintf fmt "%f" f
+  | Undefined -> Format.fprintf fmt "indefini"
 
 let format_table_index fmt (i : table_index) =
   match i with
@@ -188,6 +189,16 @@ let format_formula fmt (f : formula) =
       Format.fprintf fmt "pour %a\n%a" format_loop_variables (Pos.unmark lvs)
         format_formula_decl f
 
+let format_print_arg fmt = function
+  | PrintString s -> Format.fprintf fmt "%s" s
+  | PrintExpr (e, min, max) ->
+      if min = max_int then
+        Format.fprintf fmt "(%a)" (pp_unmark format_expression) e
+      else if max = max_int then
+        Format.fprintf fmt "(%a):%d" (pp_unmark format_expression) e min
+      else
+        Format.fprintf fmt "(%a):%d..%d" (pp_unmark format_expression) e min max
+
 let rec format_instruction fmt (i : instruction) =
   match i with
   | Formula f -> pp_unmark format_formula fmt f
@@ -216,6 +227,13 @@ let rec format_instruction fmt (i : instruction) =
         (Pos.unmark l)
         (pp_unmark format_expression)
         expr
+  | Print (std, args) ->
+      let print_cmd =
+        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
+      in
+      Format.fprintf fmt "%s %a;" print_cmd
+        (pp_print_list_space (pp_unmark format_print_arg))
+        args
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

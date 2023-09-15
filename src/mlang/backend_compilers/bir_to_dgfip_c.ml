@@ -17,6 +17,30 @@
 open Bir
 module D = DecoupledExpr
 
+let str_escape str =
+  let l = String.length str in
+  let buf = Buffer.create l in
+  let rec aux = function
+    | i when i >= l -> Buffer.contents buf
+    | i -> begin
+        let c = str.[i] in
+        let ic = Char.code c in
+        match c with
+        | '"' | '%' ->
+            let cc = Format.sprintf "\\%03o" (Char.code c) in
+            Buffer.add_string buf cc;
+            aux (i + 1)
+        | c when ic <= 31 || ic >= 127 ->
+            let cc = Format.sprintf "\\%03o" (Char.code c) in
+            Buffer.add_string buf cc;
+            aux (i + 1)
+        | c ->
+            Buffer.add_char buf c;
+            aux (i + 1)
+      end
+  in
+  aux 0
+
 let rec generate_c_expr (e : expression Pos.marked)
     (var_indexes : Dgfip_varid.var_id_map) : D.expression_composition =
   match Pos.unmark e with
@@ -306,6 +330,34 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_function_header ~definition:false oc rov
   | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);" f
+  | SPrint (std, args) ->
+      let print_std =
+        match std with Mast.StdOut -> "stdout" | Mast.StdErr -> "stderr"
+      in
+      let print_val = fresh_c_local "mpp_print" in
+      let print_def = print_val ^ "_d" in
+      Format.fprintf oc "@[<v 2>{@,int %s;@;double %s;@;" print_def print_val;
+      List.iter
+        (function
+          | Mir.PrintString s ->
+              Format.fprintf oc "fprintf(%s, \"%s\");@;" print_std
+                (str_escape s)
+          | Mir.PrintExpr (e, min, max) ->
+              let locals, def, value =
+                D.build_expression @@ generate_c_expr e var_indexes
+              in
+              Format.fprintf oc "%a%a@;%a@;" D.format_local_declarations locals
+                (D.format_assign dgfip_flags var_indexes print_def)
+                def
+                (D.format_assign dgfip_flags var_indexes print_val)
+                value;
+              Format.fprintf oc "@[<v 2>if(%s){@;" print_def;
+              Format.fprintf oc "print_double(%s, %s, %d, %d);@]@;" print_std
+                print_val min max;
+              Format.fprintf oc "@[<v 2>} else {@;";
+              Format.fprintf oc "fprintf(%s, \"indefini\");@]@;}@;" print_std)
+        args;
+      Format.fprintf oc "@]@;}@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

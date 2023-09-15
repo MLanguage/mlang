@@ -58,7 +58,7 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Variable of variable | Float of float
+type literal = Variable of variable | Float of float | Undefined
 
 (** A table index is used in expressions like [TABLE\[X\]], and can be
     variables, integer or the special [X] variable that stands for a "generic"
@@ -181,6 +181,12 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of loop_variables Pos.marked * formula_decl
 
+type print_std = StdOut | StdErr
+
+type print_arg =
+  | PrintString of string
+  | PrintExpr of expression Pos.marked * int * int
+
 type instruction =
   | Formula of formula Pos.marked
   | IfThenElse of
@@ -191,6 +197,7 @@ type instruction =
   | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | Print of print_std * print_arg Pos.marked list
 
 type rule = {
   rule_number : int Pos.marked;

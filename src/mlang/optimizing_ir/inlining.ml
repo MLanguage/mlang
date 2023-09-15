@@ -320,7 +320,8 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
         Pos.same_pos_as (SConditional (new_cond, b1, b2, join)) stmt
       in
       (new_stmt, ctx, current_stmt_pos)
-  | SGoto _ | SRovCall _ | SFunctionCall _ -> (stmt, ctx, current_stmt_pos)
+  | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
+      (stmt, ctx, current_stmt_pos)
 
 let inlining0 (cfg : cfg) : cfg =
   let g = get_cfg cfg in

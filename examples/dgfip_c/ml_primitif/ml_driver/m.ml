@@ -60,7 +60,7 @@ let verif_saisie_cohe_primitive_isf tgv = exec_verif "verif_saisie_cohe_primitiv
 let verif_saisie_cohe_corrective tgv = exec_verif "verif_saisie_cohe_corrective" tgv
 let verif_cohe_horizontale tgv = exec_verif "verif_cohe_horizontale" tgv
 
-
+let article_1731_bis tgv = exec_ench "article_1731_bis" tgv
 
 type traitement =
   | Primitif
@@ -119,7 +119,7 @@ and traite_double_liquidation3 tgv traitement p_is_calcul_acomptes =
   if traitement = Primitif then
     begin
       TGV.set_bool tgv "PREM8_11" false;
-      article_1731_bis tgv traitement
+      article_1731_bis tgv
     end;
   let calcul_acomptes = is_calcul_acomptes tgv in
   let calcul_avfisc = is_calcul_avfisc tgv in
@@ -163,14 +163,6 @@ and traite_double_liquidation3 tgv traitement p_is_calcul_acomptes =
 and calcul_prim_corr tgv traitement =
   if traitement = Primitif then calcul_primitif tgv
   else calcul_correctif tgv
-
-and article_1731_bis tgv traitement =
-  if traitement = Primitif then
-    match TGV.get_int_opt tgv "CMAJ" with
-    | Some (8 | 11) ->
-        TGV.set_bool_list tgv [ "ART1731BIS", true; "PREM8_11", true ]
-    | _ ->
-        TGV.set_bool tgv "ART1731BIS" false
 
 and is_calcul_acomptes tgv =
   let vars_ac = VarDict.filter (fun code var ->

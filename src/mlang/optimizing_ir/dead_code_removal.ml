@@ -141,6 +141,17 @@ let remove_dead_statements (stmts : block) (id : block_id)
               used_defs,
               stmt :: acc,
               pos - 1 )
+        | SPrint (_, args) ->
+            let used_vars =
+              List.fold_left
+                (fun used_vars arg ->
+                  match arg with
+                  | Mir.PrintString _ -> used_vars
+                  | Mir.PrintExpr (e, _, _) ->
+                      update_used_vars (Bir.get_used_variables e) pos used_vars)
+                used_vars args
+            in
+            (used_vars, used_defs, stmt :: acc, pos - 1)
         | SGoto _ | SRovCall _ | SFunctionCall _ ->
             (used_vars, used_defs, stmt :: acc, pos - 1))
       (used_vars, used_defs, [], pos)

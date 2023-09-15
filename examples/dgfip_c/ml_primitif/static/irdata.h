@@ -3,6 +3,7 @@
 #define _IRDATA_H_
 
 #include "conf.h"
+#include <stdio.h>
 
 #define _PROTS(X) X
 
@@ -55,5 +56,7 @@ double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata desc, int ind);
 extern T_var_irdata IRDATA_cherche_desc_var(const char *nom);
 
 extern T_discord * err_NEGATIF(T_irdata *irdata);
+
+extern void print_double(FILE *std, double f, int pmin, int pmax);
 
 #endif /* _IRDATA_H_ */

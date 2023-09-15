@@ -114,6 +114,8 @@ rule token = parse
   { NOTIN }
 | "non"
   { NOT }
+| "indefini"
+  { UNDEFINED }
 | "domaine"
   { DOMAIN }
 | "specialise"
@@ -148,6 +150,10 @@ rule token = parse
   { COMPL_NUMBER }
 | "nb_categorie"
   { NB_CATEGORY }
+| "afficher"
+  { PRINT }
+| "afficher_erreur"
+  { PRINT_ERR }
 | "erreur"
   { ERROR }
 | "verif"

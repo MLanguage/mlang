@@ -268,6 +268,7 @@ let var_or_int_value (ctx : translating_context) (l : Mast.literal Pos.marked) :
         IntIndex (ConstMap.find name ctx.const_map |> Pos.unmark |> int_of_float)
       with Not_found -> VarIndex v)
   | Mast.Float f -> IntIndex (int_of_float f)
+  | Mast.Undefined -> assert false
 
 let loop_variables_size (lpvl : loop_param_value list) (pos : Pos.t) =
   let size_err p =
@@ -298,6 +299,7 @@ let var_or_int (l : Mast.literal Pos.marked) =
       Errors.raise_spanned_error
         "generic variables not allowed in left part of loop"
         (Pos.get_position l)
+  | Mast.Undefined -> assert false
 
 let make_var_range_list (v1 : string) (v2 : string) : loop_param_value list =
   let rec aux c1 c2 =
@@ -1232,7 +1234,8 @@ let rec translate_expression (cats : 'a Mir.CatVarMap.t)
                 ~lax:false
             in
             Pos.unmark new_var
-        | Mast.Float f -> Mir.Literal (Mir.Float f))
+        | Mast.Float f -> Mir.Literal (Mir.Float f)
+        | Mast.Undefined -> Mir.Literal Mir.Undefined)
     (* These loops correspond to "pour un i dans ...: ... so it's OR "*)
     | Mast.Loop (lvs, e) ->
         let loop_context_provider = translate_loop_variables lvs ctx in
@@ -1810,6 +1813,22 @@ let translate_prog (cats : 'a Mir.CatVarMap.t) const_map idmap var_decl_data
         let ctx = new_ctx pos in
         let mir_expr = translate_expression cats ctx expr in
         aux ((Mir.ComputeVerifs (l, mir_expr), pos) :: res) il
+    | (Mast.Print (std, args), pos) :: il ->
+        let ctx = new_ctx pos in
+        let mir_args =
+          List.rev
+            (List.fold_left
+               (fun res arg ->
+                 let mir_arg =
+                   match Pos.unmark arg with
+                   | Mast.PrintString s -> Mir.PrintString s
+                   | Mast.PrintExpr (e, min, max) ->
+                       Mir.PrintExpr (translate_expression cats ctx e, min, max)
+                 in
+                 Pos.same_pos_as mir_arg arg :: res)
+               [] args)
+        in
+        aux ((Mir.Print (std, mir_args), pos) :: res) il
   in
   aux [] prog
 

@@ -173,6 +173,10 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
+type 'variable print_arg =
+  | PrintString of string
+  | PrintExpr of 'variable expression_ Pos.marked * int * int
+
 type instruction =
   | Affectation of variable_id * variable_data
   | IfThenElse of
@@ -181,6 +185,7 @@ type instruction =
   | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | Print of Mast.print_std * variable print_arg Pos.marked list
 
 type rule_data = {
   rule_domain : rule_domain;

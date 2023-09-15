@@ -88,6 +88,11 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
           curr_block_id blocks
       in
       (curr_block_id, blocks)
+  | Bir.SPrint (std, args) ->
+      ( curr_block_id,
+        append_to_block
+          (Pos.same_pos_as (Oir.SPrint (std, args)) s)
+          curr_block_id blocks )
 
 let bir_stmts_to_cfg (stmts : Bir.stmt list) : Oir.cfg =
   let entry_block = fresh_block_id () in
@@ -154,6 +159,8 @@ let rec re_translate_statement (s : Oir.stmt)
   | Oir.SRovCall rov_id -> (None, Some (Pos.same_pos_as (Bir.SRovCall rov_id) s))
   | Oir.SFunctionCall (f, args) ->
       (None, Some (Pos.same_pos_as (Bir.SFunctionCall (f, args)) s))
+  | Oir.SPrint (std, args) ->
+      (None, Some (Pos.same_pos_as (Bir.SPrint (std, args)) s))
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (blocks : Oir.block Oir.BlockMap.t) : int option * Bir.stmt list =

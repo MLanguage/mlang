@@ -256,6 +256,7 @@ let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
         in
         match value_ast with
         | Mast.Float f -> Mir.Float f
+        | Mast.Undefined -> Mir.Undefined
         | Mast.Variable _ ->
             Errors.raise_error "input must be a numeric constant"
       with Mparser.Error -> Errors.raise_error "Lexer error in input!")

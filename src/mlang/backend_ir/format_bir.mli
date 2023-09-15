@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+val format_print_arg : Format.formatter -> Bir.variable Mir.print_arg -> unit
+
 val format_expression : Format.formatter -> Bir.expression -> unit
 
 val format_variable_def : Format.formatter -> Bir.variable_def -> unit

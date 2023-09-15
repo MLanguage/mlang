@@ -29,6 +29,7 @@ and stmt_kind =
   | SGoto of block_id
   | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.variable list
+  | SPrint of Mast.print_std * Bir.variable Mir.print_arg list
 
 type block = stmt list
 
@@ -95,7 +96,7 @@ let count_instr (p : program) : int =
       (fun acc s ->
         match Pos.unmark s with
         | SConditional _ | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _
-          ->
+        | SPrint _ ->
             acc + 1
         | SGoto _ -> acc)
       acc stmts

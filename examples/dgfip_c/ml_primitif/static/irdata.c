@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <math.h>
 #include "var.h"
 
 #define FALSE 0
@@ -380,3 +382,69 @@ T_var_irdata IRDATA_cherche_desc_var(const char *nom)
   }
   return NULL;
 }
+
+void pr(int i) {
+  fprintf(stderr, "toto %d\n", i);
+}
+
+void print_double(FILE *std, double f, int pmin, int pmax) {
+  if (pmin < 0) {
+    pmin = 0;
+  }
+  if (pmax < 0) {
+    pmax = 0;
+  }
+  if (pmax < pmin) {
+    pmax = pmin;
+  }
+  if (20 < pmin) {
+    pmin = 20;
+  }
+  if (20 < pmax) {
+    pmax = 20;
+  }
+  if (isnan(f)) {
+    fprintf(std, "incorrect");
+  } else if (isinf(f)) {
+    if (f >= 0.0) {
+      fprintf(std, "+infini");
+    } else {
+      fprintf(std, "-infini");
+    }
+  } else {
+    size_t sz;
+    char *buf;
+    char *ptr_dot;
+    char *ptr;
+    int p;
+
+    sz = (size_t)ceil(log10(fabs(f) + 1)) + 21;
+    buf = malloc(sz + 1);
+    sz = sprintf(buf, "%.*f", pmax, f);
+    ptr_dot = &buf[sz - 1];
+    while (ptr_dot != buf && *ptr_dot != '.') ptr_dot--;
+    if (*ptr_dot == '.') {
+      *ptr_dot = ',';
+      p = 0;
+      while (p < pmin && *ptr_dot != 0) {
+        ptr_dot++;
+        p++;
+      }
+      ptr = ptr_dot;
+      while (p < pmax && *ptr != 0) {
+        ptr++;
+        p++;
+      }
+      if (*ptr == 0) ptr--;
+      while (*ptr == '0' && pmin <= p) {
+        *ptr = 0;
+        ptr--;
+        p--;
+      }
+      if (*ptr == ',') *ptr = 0;
+    }
+    fprintf(std, "%s", buf);
+    free(buf);
+  }
+}
+

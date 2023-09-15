@@ -50,6 +50,7 @@ and stmt_kind =
   | SVerif of condition_data
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
+  | SPrint of Mast.print_std * variable Mir.print_arg list
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 

@@ -109,6 +109,7 @@ and stmt_kind =
   | SVerif of condition_data
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
+  | SPrint of Mast.print_std * variable Mir.print_arg list
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
   match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
@@ -197,7 +198,8 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
   List.fold_left
     (fun acc stmt ->
       match Pos.unmark stmt with
-      | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ -> acc + 1
+      | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
+          acc + 1
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
@@ -261,6 +263,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
+        | SPrint _ -> acc
         | SRovCall _ | SFunctionCall _ -> assert false
         (* Cannot happen get_all_statements inlines all rule and mpp_function
            calls *))
@@ -313,6 +316,13 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
+        | SPrint (_, args) ->
+            List.fold_left
+              (fun acc arg ->
+                match arg with
+                | Mir.PrintString _ -> acc
+                | Mir.PrintExpr (e, _, _) -> get_local_vars_expr acc e)
+              acc args
         | SFunctionCall _ | SRovCall _ -> assert false
         (* Can't happen because SFunctionCall and SRovCall are eliminated by
            get_all_statements below*))

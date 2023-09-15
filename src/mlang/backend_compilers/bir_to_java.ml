@@ -327,6 +327,21 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
   | SVerif v -> generate_var_cond oc v
   | SFunctionCall (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
+  | SPrint (std, args) ->
+      let print_std =
+        match std with
+        | Mast.StdOut -> "System.out"
+        | Mast.StdErr -> "System.err"
+      in
+      List.iter
+        (function
+          | Mir.PrintString s ->
+              Format.fprintf oc "%s(\"%%s\", %s);@," print_std s
+          | Mir.PrintExpr (e, _, _) ->
+              Format.fprintf oc "cond = %s;@,%s(\"%%s\", cond.toString());@,"
+                (fst (generate_java_expr e))
+                print_std)
+        args
 
 let generate_return (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =

@@ -112,7 +112,9 @@ static ench_t enchaineurs[] = {
   { "sauve_base_anterieure", sauve_base_anterieure },
   { "sauve_base_stratemajo", sauve_base_stratemajo },
 
-  { "ENCH_TL", ENCH_TL }
+  { "ENCH_TL", ENCH_TL },
+
+  { "article_1731_bis", article_1731_bis }
 };
 
 extern struct S_discord * verif_calcul_primitive(T_irdata *irdata);

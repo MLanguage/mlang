@@ -748,8 +748,24 @@ struct
         | None ->
             evaluate_stmts p ctx
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
-  (* Mpp_function arguments seem to be used only to determine which variables
-     are actually output. Does this actually make sense ? *)
+    (* Mpp_function arguments seem to be used only to determine which variables
+       are actually output. Does this actually make sense ? *)
+    | Bir.SPrint (std, args) ->
+        let std_fmt =
+          match std with
+          | Mast.StdOut -> Format.std_formatter
+          | Mast.StdErr -> Format.err_formatter
+        in
+        List.iter
+          (function
+            | Mir.PrintString s -> Format.pp_print_string std_fmt s
+            | Mir.PrintExpr (e, _, _) ->
+                let var_value =
+                  evaluate_variable p ctx (SimpleVar Undefined) (SimpleVar e)
+                in
+                format_var_value std_fmt var_value)
+          args;
+        ctx
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =

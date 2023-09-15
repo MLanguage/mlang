@@ -38,7 +38,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token PLUS MINUS TIMES DIV
 %token GTE LTE GT LT NEQ EQUALS
 %token SEMICOLON COLON COMMA
-%token AND OR NOTIN NOT
+%token AND OR NOTIN NOT UNDEFINED
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
@@ -48,7 +48,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
+%token IF THEN ELSE ENDIF PRINT PRINT_ERR
+%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
@@ -422,9 +423,57 @@ instruction:
     }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON WITH expr = expression SEMICOLON
     { ComputeVerifs (dom, expr), mk_position $sloc }
+| PRINT args = print_argument* SEMICOLON
+    { Print (StdOut, args), mk_position $sloc }
+| PRINT_ERR args = print_argument* SEMICOLON
+    { Print (StdErr, args), mk_position $sloc }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }
+
+print_argument:
+| s = STRING { (PrintString (parse_string s), mk_position $sloc) }
+| LPAREN e = expression RPAREN prec = print_precision?
+    {
+      match prec with
+      | Some (min, max) ->  (PrintExpr (e, min, max), mk_position $sloc)
+      | None ->  (PrintExpr (e, 0, 20), mk_position $sloc)
+    }
+
+print_precision:
+| COLON min = symbol_with_pos
+    {
+      let min_str, min_pos = min in
+      let min_val =
+        try int_of_string min_str with
+        | Failure _ -> Errors.raise_spanned_error "should be an integer" min_pos
+      in
+      (if min_val < 0 then
+        Errors.raise_spanned_error "precision must be positive" min_pos);
+      (min_val, min_val)
+    }
+| COLON min = symbol_with_pos RANGE max = symbol_with_pos
+    {
+      let min_str, min_pos = min in
+      let min_val =
+        try int_of_string min_str with
+        | Failure _ -> Errors.raise_spanned_error "should be an integer" min_pos
+      in
+      (if min_val < 0 then
+        Errors.raise_spanned_error "precision must be positive" min_pos);
+      let max_str, max_pos = max in
+      let max_val =
+        try int_of_string max_str with
+        | Failure _ -> Errors.raise_spanned_error "should be an integer" max_pos
+      in
+      (if max_val < 0 then
+        Errors.raise_spanned_error "precision must be positive" max_pos);
+      (if max_val < min_val then
+        Errors.raise_spanned_error
+          "maximum precision must be smaller than minimum precision"
+          max_pos);
+      (min_val, max_val)
+    }
 
 formula_list:
 | f = formula_kind SEMICOLON { [f] }
@@ -648,6 +697,7 @@ else_branch:
 | ELSE e = expression { e }
 
 factor_literal:
+| UNDEFINED { Mast.Undefined }
 | s = SYMBOL { parse_literal $sloc s }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)

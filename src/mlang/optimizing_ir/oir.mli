@@ -27,6 +27,7 @@ and stmt_kind =
   | SGoto of block_id
   | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.Variable.t list
+  | SPrint of Mast.print_std * Bir.variable Mir.print_arg list
 
 type block = stmt list
 
