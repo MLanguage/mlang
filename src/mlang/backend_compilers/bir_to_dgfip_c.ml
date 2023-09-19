@@ -342,6 +342,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           | Mir.PrintString s ->
               Format.fprintf oc "fprintf(%s, \"%s\");@;" print_std
                 (str_escape s)
+          | Mir.PrintName (_, pos) | Mir.PrintAlias (_, pos) ->
+              Errors.raise_spanned_error "not implemented yet !!!" pos
           | Mir.PrintExpr (e, min, max) ->
               let locals, def, value =
                 D.build_expression @@ generate_c_expr e var_indexes

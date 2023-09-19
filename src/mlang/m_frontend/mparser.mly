@@ -433,12 +433,23 @@ instruction_else_branch:
 
 print_argument:
 | s = STRING { (PrintString (parse_string s), mk_position $sloc) }
+| f = print_function LPAREN v = symbol_with_pos RPAREN
+    {
+      match Pos.unmark f with
+      | "nom" -> (PrintName v, mk_position $sloc)
+      | "alias" -> (PrintAlias v, mk_position $sloc)
+      | _ -> Errors.raise_spanned_error "unknown print function" (Pos.get_position f)
+    }
 | LPAREN e = expression RPAREN prec = print_precision?
     {
       match prec with
-      | Some (min, max) ->  (PrintExpr (e, min, max), mk_position $sloc)
+      | Some (min, max) -> (PrintExpr (e, min, max), mk_position $sloc)
       | None ->  (PrintExpr (e, 0, 20), mk_position $sloc)
     }
+
+print_function:
+| ALIAS { "alias", mk_position $sloc }
+| s = SYMBOL { s, mk_position $sloc }
 
 print_precision:
 | COLON min = symbol_with_pos

@@ -767,8 +767,7 @@ let get_variables_decl (p : Mast.program)
                               cvar.Mast.comp_description
                               (dummy_exec_number
                                  (Pos.get_position cvar.Mast.comp_name))
-                              ~attributes:cvar.comp_attributes
-                              ~cats:(Mir.CatVarSet.singleton cat)
+                              ~attributes:cvar.comp_attributes ~cats:(Some cat)
                               ~origin:None
                               ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
                               ~is_temp:false
@@ -816,8 +815,7 @@ let get_variables_decl (p : Mast.program)
                               (dummy_exec_number
                                  (Pos.get_position ivar.Mast.input_name))
                               ~attributes:ivar.input_attributes ~origin:None
-                              ~cats:(Mir.CatVarSet.singleton cat)
-                              ~is_table:None ~is_temp:false
+                              ~cats:(Some cat) ~is_table:None ~is_temp:false
                             (* Input variables also have a low order *)
                           in
                           let new_var_data =
@@ -1822,6 +1820,8 @@ let translate_prog (cats : 'a Mir.CatVarMap.t) const_map idmap var_decl_data
                  let mir_arg =
                    match Pos.unmark arg with
                    | Mast.PrintString s -> Mir.PrintString s
+                   | Mast.PrintName v -> Mir.PrintName v
+                   | Mast.PrintAlias v -> Mir.PrintAlias v
                    | Mast.PrintExpr (e, min, max) ->
                        Mir.PrintExpr (translate_expression cats ctx e, min, max)
                  in
@@ -1889,7 +1889,7 @@ let get_targets (cats : 'a Mir.CatVarMap.t) (apps : Pos.t StrMap.t)
                     let var =
                       Mir.Variable.new_var (name, pos) None ("temporary", pos)
                         (dummy_exec_number pos) ~attributes:[] ~origin:None
-                        ~cats:Mir.CatVarSet.empty ~is_table:None ~is_temp:true
+                        ~cats:None ~is_table:None ~is_temp:true
                     in
                     let var_data = Mir.VariableDict.add var var_data in
                     let map = Pos.VarNameToID.add name [ var ] map in
@@ -1971,15 +1971,16 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                       let cond_cats =
                         Mir.fold_expr_var
                           (fun subtypes (var : Mir.variable) ->
-                            Mir.CatVarSet.fold
-                              (fun c res ->
+                            match var.Mir.cats with
+                            | None -> subtypes
+                            | Some c ->
                                 if
                                   Mir.CatVarSet.mem c
                                     cond_domain.dom_data.vdom_auth
                                 then
                                   Mir.CatVarMap.add c
-                                    (1 + Mir.CatVarMap.find c res)
-                                    res
+                                    (1 + Mir.CatVarMap.find c subtypes)
+                                    subtypes
                                 else
                                   Errors.raise_error
                                     (Format.asprintf
@@ -1988,7 +1989,6 @@ let get_conds (cats : 'a Mir.CatVarMap.t) (error_decls : Mir.Error.t list)
                                        (Pos.unmark var.Mir.name)
                                        Mir.pp_cat_variable c rule_number
                                        (Mast.DomainId.pp ()) cond_domain.dom_id))
-                              var.Mir.cats subtypes)
                           (Mir.CatVarMap.map (fun _ -> 0) cats)
                           (Pos.unmark e)
                       in

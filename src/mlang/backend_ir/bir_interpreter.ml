@@ -54,9 +54,14 @@ module type S = sig
 
   val format_value : Format.formatter -> value -> unit
 
+  val format_value_prec : int -> int -> Format.formatter -> value -> unit
+
   type var_value = SimpleVar of value | TableVar of int * value array
 
   val format_var_value : Format.formatter -> var_value -> unit
+
+  val format_var_value_prec :
+    int -> int -> Format.formatter -> var_value -> unit
 
   val format_var_value_with_var :
     Format.formatter -> Bir.variable * var_value -> unit
@@ -130,6 +135,12 @@ struct
     | Undefined -> Format_mir.format_literal fmt Mir.Undefined
     | Number x -> N.format_t fmt x
 
+  let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
+      (x : value) =
+    match x with
+    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Number x -> N.format_prec_t mi ma fmt x
+
   type var_value = SimpleVar of value | TableVar of int * value array
 
   let format_var_value (fmt : Format.formatter) (var_lit : var_value) : unit =
@@ -140,6 +151,17 @@ struct
           (Format.pp_print_list
              ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
              (fun fmt e -> Format.fprintf fmt "%a" format_value e))
+          (Array.to_list es)
+
+  let format_var_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
+      (var_lit : var_value) : unit =
+    match var_lit with
+    | SimpleVar e -> Format.fprintf fmt "%a" (format_value_prec mi ma) e
+    | TableVar (_, es) ->
+        Format.fprintf fmt "[%a]"
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+             (fun fmt e -> Format.fprintf fmt "%a" (format_value_prec mi ma) e))
           (Array.to_list es)
 
   let format_var_value_with_var (fmt : Format.formatter)
@@ -759,11 +781,13 @@ struct
         List.iter
           (function
             | Mir.PrintString s -> Format.pp_print_string std_fmt s
-            | Mir.PrintExpr (e, _, _) ->
+            | Mir.PrintName (_, pos) | Mir.PrintAlias (_, pos) ->
+                Errors.raise_spanned_error "not implemented yet !!!" pos
+            | Mir.PrintExpr (e, mi, ma) ->
                 let var_value =
                   evaluate_variable p ctx (SimpleVar Undefined) (SimpleVar e)
                 in
-                format_var_value std_fmt var_value)
+                format_var_value_prec mi ma std_fmt var_value)
           args;
         ctx
 

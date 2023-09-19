@@ -72,10 +72,15 @@ module type S = sig
 
   val format_value : Format.formatter -> value -> unit
 
+  val format_value_prec : int -> int -> Format.formatter -> value -> unit
+
   (** Functor-specific variable values *)
   type var_value = SimpleVar of value | TableVar of int * value array
 
   val format_var_value : Format.formatter -> var_value -> unit
+
+  val format_var_value_prec :
+    int -> int -> Format.formatter -> var_value -> unit
 
   val format_var_value_with_var :
     Format.formatter -> Bir.variable * var_value -> unit

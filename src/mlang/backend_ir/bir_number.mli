@@ -19,6 +19,8 @@ module type NumberInterface = sig
 
   val format_t : Format.formatter -> t -> unit
 
+  val format_prec_t : int -> int -> Format.formatter -> t -> unit
+
   val abs : t -> t
 
   val floor : t -> t

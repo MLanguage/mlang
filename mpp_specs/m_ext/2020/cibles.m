@@ -222,7 +222,7 @@ finsi
 cible toto:
 application: iliad;
 afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
-afficher_erreur "toto " "FLAG_PVRO+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
+afficher_erreur "toto " nom(FLAG_PVRO) " " alias(FLAG_PVRO) "+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
 afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
 
 cible dgfip_calculation:

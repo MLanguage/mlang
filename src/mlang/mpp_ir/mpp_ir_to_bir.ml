@@ -325,11 +325,9 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
           let nb =
             Mir.fold_expr_var
               (fun res v ->
-                if
-                  Mir.CatVarSet.cardinal (Mir.CatVarSet.inter cats v.Mir.cats)
-                  > 0
-                then res +. 1.0
-                else res)
+                match v.Mir.cats with
+                | Some c when Mir.CatVarSet.mem c cats -> res +. 1.0
+                | _ -> res)
               0.0
               (Pos.unmark cond.Mir.cond_expr)
           in
@@ -459,6 +457,32 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
                  let bir_arg =
                    match Pos.unmark arg with
                    | Mir.PrintString s -> Mir.PrintString s
+                   | Mir.PrintName v -> begin
+                       let nv = Pos.unmark v in
+                       match
+                         Pos.VarNameToID.find_opt nv
+                           m_program.program.program_idmap
+                       with
+                       | None | Some [] ->
+                           Errors.raise_spanned_error "unknown variable"
+                             (Pos.get_position v)
+                       | _ -> Mir.PrintString nv
+                     end
+                   | Mir.PrintAlias v -> begin
+                       let nv = Pos.unmark v in
+                       match
+                         Pos.VarNameToID.find_opt nv
+                           m_program.program.program_idmap
+                       with
+                       | Some (var :: _) -> begin
+                           match var.Mir.alias with
+                           | Some a -> Mir.PrintString a
+                           | None -> Mir.PrintString ""
+                         end
+                       | _ ->
+                           Errors.raise_spanned_error "unknown variable"
+                             (Pos.get_position v)
+                     end
                    | Mir.PrintExpr (e, min, max) ->
                        Mir.PrintExpr
                          ( Pos.same_pos_as
@@ -634,8 +658,8 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 ("mpp_" ^ l, pos)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
-                ~attributes:[] ~origin:None ~cats:Mir.CatVarSet.empty
-                ~is_table:None ~is_temp:false
+                ~attributes:[] ~origin:None ~cats:None ~is_table:None
+                ~is_temp:false
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =

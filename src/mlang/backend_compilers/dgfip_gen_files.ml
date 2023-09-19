@@ -817,7 +817,6 @@ let gen_table_penality fmt flags vars =
       with_primrest = false;
     }
   in
-
   gen_table fmt flags vars (Input (Some Penality)) opt
 
 let gen_table_debug fmt flags vars i =
@@ -843,8 +842,134 @@ let gen_table_debug fmt flags vars i =
       with_primrest = false;
     }
   in
-
   gen_table fmt flags vars (Debug i) opt
+
+let gen_table_varinfo fmt var_dict domv attrs stats =
+  let cname =
+    let buf = Buffer.create 100 in
+    (match domv with
+    | Mir.CatComputed ccs ->
+        Buffer.add_string buf "calculee";
+        Mir.CatCompSet.iter
+          (function
+            | Mir.Base -> Buffer.add_string buf "_base"
+            | Mir.GivenBack -> Buffer.add_string buf "_restituee")
+          ccs
+    | Mir.CatInput ss ->
+        Buffer.add_string buf "saisie";
+        let add buf s =
+          String.iter
+            (function
+              | '_' -> Buffer.add_string buf "__" | c -> Buffer.add_char buf c)
+            s
+        in
+        StrSet.iter
+          (function
+            | s ->
+                Buffer.add_char buf '_';
+                add buf s)
+          ss);
+    Buffer.contents buf
+  in
+  Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" cname cname
+    cname;
+  let nb =
+    StrMap.fold
+      (fun _ (var, idx, size) nb ->
+        if var.Mir.cats = Some domv then (
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d"
+            (Pos.unmark var.Mir.name)
+            (match var.Mir.alias with Some s -> s | None -> "")
+            idx size;
+          let attr_map =
+            List.fold_left
+              (fun res (an, al) ->
+                let vn = Pos.unmark an in
+                let vl =
+                  match Pos.unmark al with
+                  | Mast.Float f -> int_of_float f
+                  | _ -> 0
+                in
+                StrMap.add vn vl res)
+              StrMap.empty var.Mir.attributes
+          in
+          StrMap.iter (fun _ av -> Format.fprintf fmt ", %d" av) attr_map;
+          Format.fprintf fmt " },\n";
+          nb + 1)
+        else nb)
+      var_dict 0
+  in
+  Format.fprintf fmt "  NULL\n};\n\n";
+  let attr_set =
+    StrMap.fold
+      (fun an _ res -> StrSet.add an res)
+      (Pos.unmark attrs) StrSet.empty
+  in
+  Mir.CatVarMap.add domv (cname, nb, attr_set) stats
+
+let gen_table_varinfos fmt cprog vars =
+  gen_header fmt;
+  let var_dict =
+    Mir.VariableDict.fold
+      (fun var dict ->
+        match var.Mir.cats with
+        | Some _ -> StrMap.add (Pos.unmark var.Mir.name) (var, -1, -1) dict
+        | None -> dict)
+      cprog.Bir.mir_program.program_vars StrMap.empty
+  in
+  let var_dict =
+    List.fold_left
+      (fun dict
+           ( _tvar,
+             idx1,
+             _idx2,
+             _idxo_opt,
+             name,
+             _alias_opt,
+             _desc,
+             _typ_opt,
+             _attributes,
+             size ) ->
+        StrMap.update name
+          (function Some (var, _, _) -> Some (var, idx1, size) | None -> None)
+          dict)
+      var_dict vars
+  in
+  Mir.CatVarMap.fold
+    (gen_table_varinfo fmt var_dict)
+    cprog.Bir.mir_program.program_var_categories Mir.CatVarMap.empty
+
+let gen_decl_varinfos fmt stats =
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
+
+#ifndef _VARINFOS_
+#define _VARINFOS_
+
+|};
+  Mir.CatVarMap.iter
+    (fun _ (cname, _, attr_set) ->
+      Format.fprintf fmt
+        {|typedef struct S_varinfo_%s {
+  char *name;
+  char *alias;
+  int idx;
+  int size;
+|}
+        cname;
+      StrSet.iter (fun an -> Format.fprintf fmt "  int %s;\n" an) attr_set;
+      Format.fprintf fmt "} T_varinfo_%s;\n\n" cname)
+    stats;
+  Format.fprintf fmt "\n";
+  Mir.CatVarMap.iter
+    (fun _ (cname, _, _) ->
+      Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" cname cname)
+    stats;
+  Format.fprintf fmt "\n";
+  Mir.CatVarMap.iter
+    (fun _ (cname, nb, _) -> Format.fprintf fmt "#define NB_%s %d\n" cname nb)
+    stats;
+  Format.fprintf fmt "\n#endif /* _VARINFOS_ */\n\n"
 
 let is_valid_app al =
   List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al
@@ -967,6 +1092,7 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
 #include "const.h"
 #include "dbg.h"
 #include "annee.h"
+#include "varinfos.h"
 |};
 
   let taille_saisie = count vars (Input None) in
@@ -1252,6 +1378,14 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let oc, fmt = open_file (Filename.concat folder "penalite.c") in
   gen_table_penality fmt flags vars;
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "varinfos.c") in
+  let stats_varinfos = gen_table_varinfos fmt cprog vars in
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "varinfos.h") in
+  gen_decl_varinfos fmt stats_varinfos;
   close_out oc;
 
   let vars_debug = get_vars_debug vars Dgfip_options.(flags.flg_tri_ebcdic) in

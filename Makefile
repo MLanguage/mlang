@@ -61,6 +61,9 @@ dune:
 build-static: DUNE_OPTIONS+=--profile=static 
 build-static: build
 
+dgfip_c_backend: build
+	$(MAKE) -C examples/dgfip_c/ml_primitif calc/enchain.c
+
 ##################################################
 # Testing the compiler
 ##################################################

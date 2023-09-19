@@ -185,6 +185,8 @@ type print_std = StdOut | StdErr
 
 type print_arg =
   | PrintString of string
+  | PrintName of string Pos.marked
+  | PrintAlias of string Pos.marked
   | PrintExpr of expression Pos.marked * int * int
 
 type instruction =

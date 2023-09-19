@@ -19,6 +19,8 @@ module type NumberInterface = sig
 
   val format_t : Format.formatter -> t -> unit
 
+  val format_prec_t : int -> int -> Format.formatter -> t -> unit
+
   val abs : t -> t
 
   val floor : t -> t
@@ -72,6 +74,20 @@ module RegularFloatNumber : NumberInterface = struct
   type t = float
 
   let format_t fmt f = Format.fprintf fmt "%f" f
+
+  let format_prec_t mi ma fmt f =
+    let s = Format.sprintf "%.*f" ma f in
+    try
+      let v = String.index_from s 0 '.' in
+      let b = Bytes.of_string s in
+      Bytes.set b v ',';
+      let rec aux i =
+        let c = Bytes.get b i in
+        if (i - v > mi && c = '0') || c = ',' then aux (i - 1)
+        else Bytes.to_string (Bytes.sub b 0 (i + 1))
+      in
+      Format.fprintf fmt "%s" (aux (Bytes.length b - 1))
+    with _ -> Format.fprintf fmt "%s" s
 
   let abs x = Float.abs x
 
@@ -142,6 +158,8 @@ module MPFRNumber : NumberInterface = struct
 
   let format_t fmt f = Format.fprintf fmt "%a" Mpfrf.print f
 
+  let format_prec_t _mi _ma fmt f = format_t fmt f
+
   let abs (x : t) : t = mpfr_abs x
 
   let floor (x : t) : t = mpfr_floor x
@@ -196,6 +214,8 @@ module IntervalNumber : NumberInterface = struct
 
   let format_t fmt f =
     Format.fprintf fmt "[%a;%a]" Mpfrf.print f.down Mpfrf.print f.up
+
+  let format_prec_t _mi _ma fmt f = format_t fmt f
 
   let abs x =
     let id = mpfr_abs x.down in
@@ -308,6 +328,8 @@ module RationalNumber : NumberInterface = struct
 
   let format_t fmt f = Mpqf.print fmt f
 
+  let format_prec_t _mi _ma fmt f = format_t fmt f
+
   let abs x = Mpqf.abs x
 
   let floor x =
@@ -385,6 +407,8 @@ end) : NumberInterface = struct
          (Mpfrf.div (Mpfrf.of_mpz f Near)
             (Mpfrf.of_mpz (precision_modulo ()) Near)
             Near))
+
+  let format_prec_t _mi _ma fmt (f : t) = format_t fmt f
 
   let modf x =
     let int_part, frac_part = Mpzf.tdiv_qr x (precision_modulo ()) in

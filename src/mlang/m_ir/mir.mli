@@ -51,7 +51,7 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  cats : CatVarSet.t;
+  cats : cat_variable option;
   is_table : int option;
   is_temp : bool;
 }
@@ -175,6 +175,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
+  | PrintName of string Pos.marked
+  | PrintAlias of string Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type instruction =
@@ -275,7 +277,7 @@ module Variable : sig
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    cats : CatVarSet.t;
+    cats : cat_variable option;
     is_table : int option;
     is_temp : bool;
   }
@@ -289,7 +291,7 @@ module Variable : sig
     execution_number ->
     attributes:Mast.variable_attribute list ->
     origin:variable option ->
-    cats:CatVarSet.t ->
+    cats:cat_variable option ->
     is_table:int option ->
     is_temp:bool ->
     variable

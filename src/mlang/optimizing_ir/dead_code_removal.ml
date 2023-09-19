@@ -146,7 +146,8 @@ let remove_dead_statements (stmts : block) (id : block_id)
               List.fold_left
                 (fun used_vars arg ->
                   match arg with
-                  | Mir.PrintString _ -> used_vars
+                  | Mir.PrintString _ | Mir.PrintName _ | Mir.PrintAlias _ ->
+                      used_vars
                   | Mir.PrintExpr (e, _, _) ->
                       update_used_vars (Bir.get_used_variables e) pos used_vars)
                 used_vars args

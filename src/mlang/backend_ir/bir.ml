@@ -320,7 +320,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             List.fold_left
               (fun acc arg ->
                 match arg with
-                | Mir.PrintString _ -> acc
+                | Mir.PrintString _ | Mir.PrintName _ | Mir.PrintAlias _ -> acc
                 | Mir.PrintExpr (e, _, _) -> get_local_vars_expr acc e)
               acc args
         | SFunctionCall _ | SRovCall _ -> assert false

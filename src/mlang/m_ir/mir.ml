@@ -136,7 +136,7 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  cats : CatVarSet.t;
+  cats : cat_variable option;
   is_table : int option;
   is_temp : bool;
 }
@@ -157,7 +157,7 @@ module Variable = struct
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    cats : CatVarSet.t;
+    cats : cat_variable option;
     is_table : int option;
     is_temp : bool;
   }
@@ -172,7 +172,8 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(cats : CatVarSet.t) ~(is_table : int option) ~(is_temp : bool) : t =
+      ~(cats : cat_variable option) ~(is_table : int option) ~(is_temp : bool) :
+      t =
     {
       name;
       id = fresh_id ();
@@ -432,6 +433,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
+  | PrintName of string Pos.marked
+  | PrintAlias of string Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type instruction =

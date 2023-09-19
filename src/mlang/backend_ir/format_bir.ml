@@ -23,7 +23,9 @@ let format_variable_def fmt (vdef : variable_def) =
   Format_mir.format_variable_def fmt (Mir.map_var_def_var Bir.var_to_mir vdef)
 
 let format_print_arg fmt = function
-  | Mir.PrintString s -> Format.fprintf fmt "%s" s
+  | Mir.PrintString s -> Format.fprintf fmt "\"%s\"" s
+  | Mir.PrintName v -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
+  | Mir.PrintAlias v -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
   | PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e

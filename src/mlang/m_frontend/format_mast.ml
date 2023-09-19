@@ -190,7 +190,9 @@ let format_formula fmt (f : formula) =
         format_formula_decl f
 
 let format_print_arg fmt = function
-  | PrintString s -> Format.fprintf fmt "%s" s
+  | PrintString s -> Format.fprintf fmt "\"%s\"" s
+  | PrintName v -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
+  | PrintAlias v -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
   | PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (pp_unmark format_expression) e
