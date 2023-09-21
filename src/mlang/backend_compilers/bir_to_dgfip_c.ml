@@ -27,11 +27,11 @@ let str_escape str =
         let ic = Char.code c in
         match c with
         | '"' | '%' ->
-            let cc = Format.sprintf "\\%03o" (Char.code c) in
+            let cc = Format.sprintf "\\%03o" ic in
             Buffer.add_string buf cc;
             aux (i + 1)
-        | c when ic <= 31 || ic >= 127 ->
-            let cc = Format.sprintf "\\%03o" (Char.code c) in
+        | _c when ic <= 31 || ic >= 127 ->
+            let cc = Format.sprintf "\\%03o" ic in
             Buffer.add_string buf cc;
             aux (i + 1)
         | c ->
@@ -210,6 +210,8 @@ let rec generate_c_expr (e : expression Pos.marked)
         def_test = declare_local se2.def_test;
         value_comp = declare_local se2.value_comp;
       }
+  | Attribut (_v, _var, _a) ->
+      Errors.raise_spanned_error "not implemented yet !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
@@ -342,7 +344,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           | Mir.PrintString s ->
               Format.fprintf oc "fprintf(%s, \"%s\");@;" print_std
                 (str_escape s)
-          | Mir.PrintName (_, pos) | Mir.PrintAlias (_, pos) ->
+          | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
               Errors.raise_spanned_error "not implemented yet !!!" pos
           | Mir.PrintExpr (e, min, max) ->
               let locals, def, value =
@@ -360,6 +362,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
               Format.fprintf oc "fprintf(%s, \"indefini\");@]@;}@;" print_std)
         args;
       Format.fprintf oc "@]@;}@;"
+  | SIterate (_var, _vcs, _expr, _stmts) -> ()
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

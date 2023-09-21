@@ -51,6 +51,11 @@ let rec format_stmt fmt (stmt : stmt) =
       Format.fprintf fmt "%s %a;" print_cmd
         (Format_mast.pp_print_list_space Format_bir.format_print_arg)
         args
+  | SIterate (var, vcs, expr, b, _) ->
+      Format.fprintf fmt
+        "iterate variable %s : categorie %a : avec %a : dans ( %d )@,"
+        (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
+        (Mir.CatVarSet.pp ()) vcs Format_bir.format_expression expr b
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

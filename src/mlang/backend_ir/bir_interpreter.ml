@@ -23,6 +23,7 @@ type code_location_segment =
   | ConditionalBranch of bool
   | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
+  | InsideIterate of Bir.variable
 
 let format_code_location_segment (fmt : Format.formatter)
     (s : code_location_segment) =
@@ -31,6 +32,8 @@ let format_code_location_segment (fmt : Format.formatter)
   | ConditionalBranch b -> Format.fprintf fmt "?%b" b
   | InsideRule r -> Format.fprintf fmt "R_%d" (Mir.num_of_rule_or_verif_id r)
   | InsideFunction f -> Format.fprintf fmt "%s" f
+  | InsideIterate v ->
+      Format.fprintf fmt "IT_%s" (Pos.unmark v.Bir.mir_var.name)
 
 type code_location = code_location_segment list
 
@@ -69,6 +72,7 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
+    ctx_it : Mir.variable IntMap.t;
   }
 
   val empty_ctx : ctx
@@ -186,12 +190,14 @@ struct
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
+    ctx_it : Mir.variable IntMap.t;
   }
 
   let empty_ctx : ctx =
     {
       ctx_local_vars = Mir.LocalVariableMap.empty;
       ctx_vars = Bir.VariableMap.empty;
+      ctx_it = IntMap.empty;
     }
 
   let literal_to_value (l : Mir.literal) : value =
@@ -486,10 +492,16 @@ struct
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
         | Index (var, e1) -> (
+            let var = Pos.unmark var in
+            let var =
+              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+              | Some mvar -> Bir.(var_from_mir default_tgv) mvar
+              | None -> var
+            in
             let new_e1 = evaluate_expr ctx p e1 in
             if new_e1 = Undefined then Undefined
             else
-              match Bir.VariableMap.find (Pos.unmark var) ctx.ctx_vars with
+              match Bir.VariableMap.find var ctx.ctx_vars with
               | SimpleVar _ -> assert false (* should not happen *)
               | TableVar (size, values) ->
                   evaluate_array_index new_e1 size values)
@@ -497,6 +509,11 @@ struct
             try Pos.unmark (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars)
             with Not_found -> assert false (* should not happen*))
         | Var var ->
+            let var =
+              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+              | Some mvar -> Bir.(var_from_mir default_tgv) mvar
+              | None -> var
+            in
             let r =
               try
                 match Bir.VariableMap.find var ctx.ctx_vars with
@@ -619,6 +636,20 @@ struct
                          Format_mir.format_func func,
                        Pos.get_position e ),
                    ctx ))
+        | Attribut (_v, var, a) -> (
+            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
+            | Some mvar -> (
+                match
+                  List.find_opt
+                    (fun (attr, _) -> Pos.unmark a = Pos.unmark attr)
+                    mvar.attributes
+                with
+                | Some (_, l) -> (
+                    match Pos.unmark l with
+                    | Mast.Float f -> Number (N.of_float f)
+                    | _ -> assert false)
+                | None -> Undefined)
+            | None -> assert false)
         | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
@@ -734,6 +765,11 @@ struct
       (loc : code_location) =
     match Pos.unmark stmt with
     | Bir.SAssign (var, vdef) ->
+        let var =
+          match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+          | Some mvar -> Bir.(var_from_mir default_tgv) mvar
+          | None -> var
+        in
         let value =
           try Bir.VariableMap.find var ctx.ctx_vars
           with Not_found -> (
@@ -781,8 +817,17 @@ struct
         List.iter
           (function
             | Mir.PrintString s -> Format.pp_print_string std_fmt s
-            | Mir.PrintName (_, pos) | Mir.PrintAlias (_, pos) ->
-                Errors.raise_spanned_error "not implemented yet !!!" pos
+            | Mir.PrintName (_, vid) -> (
+                match IntMap.find_opt vid ctx.ctx_it with
+                | Some mvar ->
+                    Format.pp_print_string std_fmt (Pos.unmark mvar.Mir.name)
+                | None -> assert false)
+            | Mir.PrintAlias (_, vid) -> (
+                match IntMap.find_opt vid ctx.ctx_it with
+                | Some mvar ->
+                    Format.pp_print_string std_fmt
+                      (match mvar.Mir.alias with Some a -> a | None -> "")
+                | None -> assert false)
             | Mir.PrintExpr (e, mi, ma) ->
                 let var_value =
                   evaluate_variable p ctx (SimpleVar Undefined) (SimpleVar e)
@@ -790,6 +835,29 @@ struct
                 format_var_value_prec mi ma std_fmt var_value)
           args;
         ctx
+    | Bir.SIterate (var, vcs, expr, stmts) ->
+        let eval vc ctx =
+          Mir.VariableDict.fold
+            (fun v ctx ->
+              if v.Mir.cats = Some vc then
+                let ctx =
+                  {
+                    ctx with
+                    ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
+                  }
+                in
+                match
+                  evaluate_variable p ctx (SimpleVar Undefined)
+                    (SimpleVar (expr, Pos.no_pos))
+                with
+                | SimpleVar (Number z) when N.(z =. one ()) ->
+                    evaluate_stmts p ctx stmts (ConditionalBranch true :: loc) 0
+                | SimpleVar _ -> ctx
+                | _ -> assert false
+              else ctx)
+            p.Bir.mir_program.program_vars ctx
+        in
+        Mir.CatVarSet.fold eval vcs ctx
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =

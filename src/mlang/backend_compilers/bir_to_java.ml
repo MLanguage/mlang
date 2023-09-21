@@ -164,6 +164,8 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
       (se3, s3)
+  | Attribut _ ->
+      Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
 
 let format_local_vars_defs (oc : Format.formatter)
@@ -337,13 +339,16 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
         (function
           | Mir.PrintString s ->
               Format.fprintf oc "%s(\"%%s\", %s);@," print_std s
-          | Mir.PrintName (_, pos) | Mir.PrintAlias (_, pos) ->
+          | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
               Errors.raise_spanned_error "not implemented yet !!!" pos
           | Mir.PrintExpr (e, _, _) ->
               Format.fprintf oc "cond = %s;@,%s(\"%%s\", cond.toString());@,"
                 (fst (generate_java_expr e))
                 print_std)
         args
+  | SIterate _ ->
+      Errors.raise_spanned_error "iterators not implemented in Java"
+        (Pos.get_position stmt)
 
 let generate_return (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =

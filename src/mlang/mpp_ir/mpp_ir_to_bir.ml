@@ -332,6 +332,7 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
               (Pos.unmark cond.Mir.cond_expr)
           in
           Mir.Float nb
+      | Mir.Attribut _ -> assert false
     in
     aux IntMap.empty expr
   in
@@ -457,32 +458,8 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
                  let bir_arg =
                    match Pos.unmark arg with
                    | Mir.PrintString s -> Mir.PrintString s
-                   | Mir.PrintName v -> begin
-                       let nv = Pos.unmark v in
-                       match
-                         Pos.VarNameToID.find_opt nv
-                           m_program.program.program_idmap
-                       with
-                       | None | Some [] ->
-                           Errors.raise_spanned_error "unknown variable"
-                             (Pos.get_position v)
-                       | _ -> Mir.PrintString nv
-                     end
-                   | Mir.PrintAlias v -> begin
-                       let nv = Pos.unmark v in
-                       match
-                         Pos.VarNameToID.find_opt nv
-                           m_program.program.program_idmap
-                       with
-                       | Some (var :: _) -> begin
-                           match var.Mir.alias with
-                           | Some a -> Mir.PrintString a
-                           | None -> Mir.PrintString ""
-                         end
-                       | _ ->
-                           Errors.raise_spanned_error "unknown variable"
-                             (Pos.get_position v)
-                     end
+                   | Mir.PrintName (v, vid) -> Mir.PrintName (v, vid)
+                   | Mir.PrintAlias (v, vid) -> Mir.PrintAlias (v, vid)
                    | Mir.PrintExpr (e, min, max) ->
                        Mir.PrintExpr
                          ( Pos.same_pos_as
@@ -496,8 +473,17 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
                  bir_arg :: res)
                [] args)
         in
-
         aux ctx ((Bir.SPrint (std, bir_args), pos) :: res) instrs
+    | (Mir.Iterate (v, vcs, e, iit), pos) :: instrs ->
+        let var =
+          Bir.(var_from_mir default_tgv)
+            (Mir.VariableDict.find v m_program.program.program_vars)
+        in
+        let expr =
+          Mir.map_expr_var Bir.(var_from_mir default_tgv) (Pos.unmark e)
+        in
+        let ctx, stmts = translate_m_code m_program ctx iit in
+        aux ctx ((Bir.SIterate (var, vcs, expr, stmts), pos) :: res) instrs
   in
   aux ctx [] instrs
 
@@ -659,7 +645,7 @@ and translate_mpp_stmt (mpp_program : Mpp_ir.mpp_compute list)
                 None ("", pos)
                 (Mast_to_mir.dummy_exec_number pos)
                 ~attributes:[] ~origin:None ~cats:None ~is_table:None
-                ~is_temp:false
+                ~is_temp:false ~is_it:false
               |> Bir.(var_from_mir default_tgv)
             in
             let ctx =

@@ -153,6 +153,12 @@ let remove_dead_statements (stmts : block) (id : block_id)
                 used_vars args
             in
             (used_vars, used_defs, stmt :: acc, pos - 1)
+        | SIterate (_, _, expr, _, _) ->
+            let stmt_used_vars = Bir.get_used_variables (expr, Pos.no_pos) in
+            ( update_used_vars stmt_used_vars pos used_vars,
+              used_defs,
+              stmt :: acc,
+              pos - 1 )
         | SGoto _ | SRovCall _ | SFunctionCall _ ->
             (used_vars, used_defs, stmt :: acc, pos - 1))
       (used_vars, used_defs, [], pos)

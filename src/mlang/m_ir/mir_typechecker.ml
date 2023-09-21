@@ -46,7 +46,7 @@ let rec typecheck_top_down ~(in_generic_table : bool)
   | LocalLet (_local_var, e1, e2) ->
       typecheck_top_down ~in_generic_table e1;
       typecheck_top_down ~in_generic_table e2
-  | Error | LocalVar _ | NbCategory _ -> ()
+  | Error | LocalVar _ | NbCategory _ | Attribut _ -> ()
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
       typecheck_top_down ~in_generic_table e';
@@ -157,7 +157,7 @@ let rec check_non_recursivity_expr (e : expression Pos.marked)
       check_non_recursivity_expr e3 lvar
   | FunctionCall (_, args) ->
       List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
-  | Literal _ | LocalVar _ | Error | NbCategory _ -> ()
+  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ -> ()
   | Var var ->
       if var = lvar then
         Errors.raise_spanned_error

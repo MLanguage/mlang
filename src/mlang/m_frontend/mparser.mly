@@ -49,7 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
 %token IF THEN ELSE ENDIF PRINT PRINT_ERR
-%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
+%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY ITERATE CATEGORY 
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
@@ -427,6 +427,41 @@ instruction:
     { Print (StdOut, args), mk_position $sloc }
 | PRINT_ERR args = print_argument* SEMICOLON
     { Print (StdErr, args), mk_position $sloc }
+| ITERATE COLON it_params = nonempty_list(it_param_with_pos)
+  IN LPAREN instrs = instruction_list_rev RPAREN
+    {
+      let err msg pos = Errors.raise_spanned_error msg pos in
+      let fold (vno, vco, exo) = function
+      | Some vn, _, _, pos ->
+          if vno = None then Some vn, vco, exo
+          else err "iterator variable is already defined" pos
+      | _, Some vc, _, pos ->
+          if vco = None then vno, Some vc, exo
+          else err "variable category is already specified" pos
+      | _, _, Some ex, pos ->
+          if exo = None then vno, vco, Some ex
+          else err "iterator filter is already defined" pos
+      | _, _, _, _ -> assert false
+      in
+      let init = None, None, None in
+      let vno, vco, exo = List.fold_left fold init it_params in
+      let var =
+        match vno with
+        | Some var -> var
+        | None -> err "iterator variable must be defined" (mk_position $sloc)
+      in
+      let vcats =
+        match vco with
+        | Some vcats -> vcats
+        | None -> err "variable category must be defined" (mk_position $sloc)
+      in
+      let expr =
+        match exo with
+        | Some expr -> expr
+        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+      in
+      Iterate (var, vcats, expr, List.rev instrs), mk_position $sloc
+    }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }
@@ -485,6 +520,14 @@ print_precision:
           max_pos);
       (min_val, max_val)
     }
+
+it_param_with_pos:
+| VARIABLE var = symbol_with_pos COLON
+    { (Some var, None, None, mk_position $sloc) }
+| CATEGORY vcats = separated_nonempty_list(COMMA, var_category_id) COLON
+    { (None, Some vcats, None, mk_position $sloc) }
+| WITH expr = expression COLON
+    { (None, None, Some expr, mk_position $sloc) }
 
 formula_list:
 | f = formula_kind SEMICOLON { [f] }
@@ -721,6 +764,8 @@ function_name:
 function_call:
 | NB_CATEGORY LPAREN cats = var_category_id RPAREN
   { (NbCategory cats, mk_position $sloc) }
+| ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN
+  { (Attribut (var, attr), mk_position $sloc) }
 | s = function_name LPAREN RPAREN
   { (FunctionCall (s, Mast.ArgList []), mk_position $sloc) }
 | s = function_name LPAREN args = function_call_args RPAREN

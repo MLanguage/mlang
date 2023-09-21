@@ -70,6 +70,7 @@ let const_var_set_from_list (p : Bir.program)
       in
       let new_e =
         Mast_to_mir.translate_expression p.mir_program.program_var_categories
+          p.mir_program.program_idmap
           {
             table_definition = false;
             idmap = p.idmap;

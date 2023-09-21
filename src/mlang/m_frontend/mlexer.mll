@@ -154,6 +154,10 @@ rule token = parse
   { PRINT }
 | "afficher_erreur"
   { PRINT_ERR }
+| "iterer"
+  { ITERATE }
+| "categorie"
+  { CATEGORY }
 | "erreur"
   { ERROR }
 | "verif"

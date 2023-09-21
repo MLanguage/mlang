@@ -170,6 +170,8 @@ let rec format_expression fmt (e : expression) =
       Format.fprintf fmt "nb_categorie(%a)"
         (pp_print_list_space (pp_unmark Format.pp_print_string))
         (Pos.unmark l)
+  | Attribut (v, a) ->
+      Format.fprintf fmt "attribut(%s, %s)" (Pos.unmark v) (Pos.unmark a)
 
 and format_func_args fmt (args : func_args) =
   match args with
@@ -201,17 +203,26 @@ let format_print_arg fmt = function
       else
         Format.fprintf fmt "(%a):%d..%d" (pp_unmark format_expression) e min max
 
+let format_var_category_id fmt (vd : var_category_id) =
+  match Pos.unmark vd with
+  | ("saisie", _) :: l ->
+      Format.fprintf fmt "saisie %a"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        l
+  | ("calculee", _) :: l ->
+      Format.fprintf fmt "calculee %a"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        l
+  | [ ("*", _) ] -> Format.fprintf fmt "*"
+  | _ -> assert false
+
 let rec format_instruction fmt (i : instruction) =
   match i with
   | Formula f -> pp_unmark format_formula fmt f
   | IfThenElse (e, il, []) ->
       Format.fprintf fmt "si %a alors %a finsi"
         (pp_unmark format_expression)
-        e
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt "")
-           (pp_unmark format_instruction))
-        il
+        e format_instruction_list il
   | IfThenElse (e, ilt, ile) ->
       Format.fprintf fmt "si %a alors %a sinon %a finsi"
         (pp_unmark format_expression)
@@ -236,6 +247,14 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt "%s %a;" print_cmd
         (pp_print_list_space (pp_unmark format_print_arg))
         args
+  | Iterate (var, vcats, expr, instrs) ->
+      Format.fprintf fmt
+        "iterer : variable %s : categorie %a : avec %a : dans ( %a )"
+        (Pos.unmark var)
+        (pp_print_list_comma format_var_category_id)
+        vcats
+        (pp_unmark format_expression)
+        expr format_instruction_list instrs
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list
@@ -377,21 +396,9 @@ let format_rule_domain fmt (rd : rule_domain_decl) =
   format_domain pp_data fmt rd
 
 let format_verif_domain fmt (vd : verif_domain_decl) =
-  let pp_auth fmt = function
-    | ("saisie", _) :: l ->
-        Format.fprintf fmt "saisie %a"
-          (pp_print_list_space (pp_unmark Format.pp_print_string))
-          l
-    | ("calculee", _) :: l ->
-        Format.fprintf fmt "calculee %a"
-          (pp_print_list_space (pp_unmark Format.pp_print_string))
-          l
-    | [ ("*", _) ] -> Format.fprintf fmt "*"
-    | _ -> assert false
-  in
   let pp_data fmt data =
     Format.fprintf fmt "%a"
-      (pp_print_list_comma (pp_unmark pp_auth))
+      (pp_print_list_comma format_var_category_id)
       data.vdom_auth
   in
   format_domain pp_data fmt vd

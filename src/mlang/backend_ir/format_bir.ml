@@ -24,8 +24,8 @@ let format_variable_def fmt (vdef : variable_def) =
 
 let format_print_arg fmt = function
   | Mir.PrintString s -> Format.fprintf fmt "\"%s\"" s
-  | Mir.PrintName v -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
-  | Mir.PrintAlias v -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
+  | Mir.PrintName (v, _) -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
+  | Mir.PrintAlias (v, _) -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
   | PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e
@@ -74,6 +74,12 @@ let rec format_stmt fmt (stmt : stmt) =
       Format.fprintf fmt "%s %a;" print_cmd
         (Format_mast.pp_print_list_space format_print_arg)
         args
+  | SIterate (var, vcs, expr, stmts) ->
+      Format.fprintf fmt
+        "iterate variable %s@\n: categorie %a@\n: avec %a@\n: dans ("
+        (Pos.unmark (var_to_mir var).Mir.Variable.name)
+        (Mir.CatVarSet.pp ()) vcs format_expression expr;
+      Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

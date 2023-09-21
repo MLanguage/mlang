@@ -609,6 +609,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
+    | Attribut _ -> (e, Top)
     | NbCategory _ -> assert false
   in
   if not @@ check new_e d then
@@ -734,6 +735,19 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
           else raise (Bir_interpreter.FloatDefInterp.RuntimeError (err, ctx))
       | _ ->
           ( Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt
+            :: new_block,
+            ctx ))
+  | SIterate (var, vcs, expr, b, b_end) -> (
+      let new_expr, d =
+        partially_evaluate_expr ctx p.mir_program (expr, Pos.no_pos)
+      in
+      match expr_to_partial (Pos.unmark new_expr) d with
+      | Some (PartialLiteral (Float 0.0)) ->
+          (Pos.same_pos_as (SGoto b_end) stmt :: new_block, ctx)
+      | _ ->
+          ( Pos.same_pos_as
+              (SIterate (var, vcs, Pos.unmark new_expr, b, b_end))
+              stmt
             :: new_block,
             ctx ))
   | SGoto _ -> (stmt :: new_block, ctx)

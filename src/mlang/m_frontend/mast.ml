@@ -148,6 +148,7 @@ type expression =
   | Loop of loop_variables Pos.marked * expression Pos.marked
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of string Pos.marked list Pos.marked
+  | Attribut of string Pos.marked * string Pos.marked
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
@@ -189,6 +190,8 @@ type print_arg =
   | PrintAlias of string Pos.marked
   | PrintExpr of expression Pos.marked * int * int
 
+type var_category_id = string Pos.marked list Pos.marked
+
 type instruction =
   | Formula of formula Pos.marked
   | IfThenElse of
@@ -200,6 +203,11 @@ type instruction =
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | Print of print_std * print_arg Pos.marked list
+  | Iterate of
+      string Pos.marked
+      * var_category_id list
+      * expression Pos.marked
+      * instruction Pos.marked list
 
 type rule = {
   rule_number : int Pos.marked;
@@ -313,9 +321,7 @@ type verification = {
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_auth_decl = string Pos.marked list Pos.marked
-
-type verif_domain_data = { vdom_auth : verif_auth_decl list }
+type verif_domain_data = { vdom_auth : var_category_id list }
 
 type verif_domain_decl = verif_domain_data domain_decl
 

@@ -139,6 +139,7 @@ type variable = {
   cats : cat_variable option;
   is_table : int option;
   is_temp : bool;
+  is_it : bool;
 }
 
 module Variable = struct
@@ -160,6 +161,7 @@ module Variable = struct
     cats : cat_variable option;
     is_table : int option;
     is_temp : bool;
+    is_it : bool;
   }
 
   let fresh_id : unit -> id =
@@ -172,8 +174,8 @@ module Variable = struct
   let new_var (name : string Pos.marked) (alias : string option)
       (descr : string Pos.marked) (execution_number : execution_number)
       ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(cats : cat_variable option) ~(is_table : int option) ~(is_temp : bool) :
-      t =
+      ~(cats : cat_variable option) ~(is_table : int option) ~(is_temp : bool)
+      ~(is_it : bool) : t =
     {
       name;
       id = fresh_id ();
@@ -185,6 +187,7 @@ module Variable = struct
       cats;
       is_table;
       is_temp;
+      is_it;
     }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
@@ -270,6 +273,7 @@ type 'variable expression_ =
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
   | NbCategory of CatVarSet.t
+  | Attribut of string Pos.marked * 'variable * string Pos.marked
 
 type expression = variable expression_
 
@@ -288,6 +292,7 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | LocalVar v -> LocalVar v
   | Error -> Error
   | NbCategory l -> NbCategory l
+  | Attribut (v, var, a) -> Attribut (v, f var, a)
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
@@ -300,7 +305,7 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | Error | NbCategory _ -> acc
+  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ -> acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -433,8 +438,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked
-  | PrintAlias of string Pos.marked
+  | PrintName of string Pos.marked * variable_id
+  | PrintAlias of string Pos.marked * variable_id
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type instruction =
@@ -446,6 +451,11 @@ type instruction =
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Iterate of
+      variable_id
+      * CatVarSet.t
+      * expression Pos.marked
+      * instruction Pos.marked list
 
 type rule_data = {
   rule_domain : rule_domain;

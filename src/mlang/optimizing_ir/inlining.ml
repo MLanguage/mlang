@@ -59,6 +59,7 @@ let rec no_local_vars (e : Bir.expression Pos.marked) : bool =
       List.for_all (fun arg -> no_local_vars arg) args
   | Mir.Conditional (e1, e2, e3) ->
       no_local_vars e1 && no_local_vars e2 && no_local_vars e3
+  | Mir.Attribut _ -> false
   | Mir.NbCategory _ -> assert false
 
 let rec has_this_local_var (e : Bir.expression Pos.marked)
@@ -76,6 +77,7 @@ let rec has_this_local_var (e : Bir.expression Pos.marked)
   | Mir.Conditional (e1, e2, e3) ->
       has_this_local_var e1 l || has_this_local_var e2 l
       || has_this_local_var e3 l
+  | Mir.Attribut _ -> false
   | Mir.NbCategory _ -> assert false
 
 let rec expr_size (e : Bir.expression Pos.marked) : int =
@@ -87,6 +89,7 @@ let rec expr_size (e : Bir.expression Pos.marked) : int =
   | Mir.FunctionCall (_, args) ->
       List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
   | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
+  | Mir.Attribut _ -> 1
   | Mir.NbCategory _ -> assert false
 
 let is_inlining_worthy (e : Bir.expression Pos.marked) : bool =
@@ -250,6 +253,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
           args
       in
       Mir.FunctionCall (f, new_args)
+  | Mir.Attribut (v, var, a) -> Mir.Attribut (v, var, a)
   | Mir.NbCategory _ -> assert false
 
 let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
@@ -318,6 +322,12 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
       let new_cond = inline_in_expr cond ctx current_block current_stmt_pos in
       let new_stmt =
         Pos.same_pos_as (SConditional (new_cond, b1, b2, join)) stmt
+      in
+      (new_stmt, ctx, current_stmt_pos)
+  | SIterate (var, vcs, expr, b, b_end) ->
+      let new_expr = inline_in_expr expr ctx current_block current_stmt_pos in
+      let new_stmt =
+        Pos.same_pos_as (SIterate (var, vcs, new_expr, b, b_end)) stmt
       in
       (new_stmt, ctx, current_stmt_pos)
   | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ ->

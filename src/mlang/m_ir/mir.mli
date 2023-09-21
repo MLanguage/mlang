@@ -54,6 +54,7 @@ type variable = {
   cats : cat_variable option;
   is_table : int option;
   is_temp : bool;
+  is_it : bool;
 }
 
 type local_variable = { id : int }
@@ -113,6 +114,7 @@ type 'variable expression_ =
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
   | NbCategory of CatVarSet.t
+  | Attribut of string Pos.marked * 'variable * string Pos.marked
 
 type expression = variable expression_
 
@@ -175,8 +177,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked
-  | PrintAlias of string Pos.marked
+  | PrintName of string Pos.marked * variable_id
+  | PrintAlias of string Pos.marked * variable_id
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type instruction =
@@ -188,6 +190,11 @@ type instruction =
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Iterate of
+      variable_id
+      * CatVarSet.t
+      * expression Pos.marked
+      * instruction Pos.marked list
 
 type rule_data = {
   rule_domain : rule_domain;
@@ -280,6 +287,7 @@ module Variable : sig
     cats : cat_variable option;
     is_table : int option;
     is_temp : bool;
+    is_it : bool;
   }
 
   val fresh_id : unit -> id
@@ -294,6 +302,7 @@ module Variable : sig
     cats:cat_variable option ->
     is_table:int option ->
     is_temp:bool ->
+    is_it:bool ->
     variable
 
   val compare : t -> t -> int

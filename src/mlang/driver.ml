@@ -316,6 +316,8 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
               Bir_interpreter.evaluate_program function_spec combined_program
                 inputs 0 value_sort round_ops
             in
+            Format.pp_print_flush Format.err_formatter ();
+            Format.pp_print_flush Format.std_formatter ();
             print_output ()
           end
           else if String.lowercase_ascii backend = "java" then begin

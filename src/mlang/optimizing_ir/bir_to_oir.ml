@@ -93,6 +93,21 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
         append_to_block
           (Pos.same_pos_as (Oir.SPrint (std, args)) s)
           curr_block_id blocks )
+  | Bir.SIterate (v, vcs, expr, stmts) ->
+      let bid = fresh_block_id () in
+      let blocks = initialize_block bid blocks in
+      let end_block = fresh_block_id () in
+      let blocks = initialize_block end_block blocks in
+      let blocks =
+        append_to_block
+          (Pos.same_pos_as (Oir.SIterate (v, vcs, expr, bid, end_block)) s)
+          curr_block_id blocks
+      in
+      let last_bid, blocks = translate_statement_list stmts bid blocks in
+      let blocks =
+        append_to_block (Oir.SGoto end_block, Pos.no_pos) last_bid blocks
+      in
+      (end_block, blocks)
 
 let bir_stmts_to_cfg (stmts : Bir.stmt list) : Oir.cfg =
   let entry_block = fresh_block_id () in
@@ -161,6 +176,10 @@ let rec re_translate_statement (s : Oir.stmt)
       (None, Some (Pos.same_pos_as (Bir.SFunctionCall (f, args)) s))
   | Oir.SPrint (std, args) ->
       (None, Some (Pos.same_pos_as (Bir.SPrint (std, args)) s))
+  | Oir.SIterate (var, vcs, expr, b, b_end) ->
+      let stmts = re_translate_blocks_until b blocks (Some b_end) in
+      ( Some b_end,
+        Some (Pos.same_pos_as (Bir.SIterate (var, vcs, expr, stmts)) s) )
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (blocks : Oir.block Oir.BlockMap.t) : int option * Bir.stmt list =

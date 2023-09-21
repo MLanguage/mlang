@@ -28,6 +28,8 @@ and stmt_kind =
   | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.Variable.t list
   | SPrint of Mast.print_std * Bir.variable Mir.print_arg list
+  | SIterate of
+      Bir.variable * Mir.CatVarSet.t * Bir.expression * block_id * block_id
 
 type block = stmt list
 

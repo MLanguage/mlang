@@ -34,6 +34,7 @@ type code_location_segment =
   | ConditionalBranch of bool
   | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
+  | InsideIterate of Bir.variable
 
 val format_code_location_segment :
   Format.formatter -> code_location_segment -> unit
@@ -88,6 +89,7 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
+    ctx_it : Mir.variable IntMap.t;
   }
   (** Interpretation context *)
 
