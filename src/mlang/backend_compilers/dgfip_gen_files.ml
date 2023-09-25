@@ -844,43 +844,18 @@ let gen_table_debug fmt flags vars i =
   in
   gen_table fmt flags vars (Debug i) opt
 
-let gen_table_varinfo fmt var_dict domv attrs stats =
-  let cname =
-    let buf = Buffer.create 100 in
-    (match domv with
-    | Mir.CatComputed ccs ->
-        Buffer.add_string buf "calculee";
-        Mir.CatCompSet.iter
-          (function
-            | Mir.Base -> Buffer.add_string buf "_base"
-            | Mir.GivenBack -> Buffer.add_string buf "_restituee")
-          ccs
-    | Mir.CatInput ss ->
-        Buffer.add_string buf "saisie";
-        let add buf s =
-          String.iter
-            (function
-              | '_' -> Buffer.add_string buf "__" | c -> Buffer.add_char buf c)
-            s
-        in
-        StrSet.iter
-          (function
-            | s ->
-                Buffer.add_char buf '_';
-                add buf s)
-          ss);
-    Buffer.contents buf
-  in
-  Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" cname cname
-    cname;
+let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
+    stats =
+  Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
+    id_str;
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        if var.Mir.cats = Some domv then (
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d"
+        if var.Mir.cats = Some cat then (
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
             (Pos.unmark var.Mir.name)
             (match var.Mir.alias with Some s -> s | None -> "")
-            idx size;
+            idx size id_int;
           let attr_map =
             List.fold_left
               (fun res (an, al) ->
@@ -901,14 +876,32 @@ let gen_table_varinfo fmt var_dict domv attrs stats =
   in
   Format.fprintf fmt "  NULL\n};\n\n";
   let attr_set =
-    StrMap.fold
-      (fun an _ res -> StrSet.add an res)
-      (Pos.unmark attrs) StrSet.empty
+    StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Mir.CatVarMap.add domv (cname, nb, attr_set) stats
+  Mir.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
 
 let gen_table_varinfos fmt cprog vars =
   gen_header fmt;
+  Mir.CatVarMap.iter
+    (fun _ Mir.{ id_str; attributs; _ } ->
+      Format.fprintf fmt
+        "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
+      StrMap.iter
+        (fun attr _ ->
+          Format.fprintf fmt "  if (strcmp(attr, \"%s\")) return 1;\n" attr)
+        attributs;
+      Format.fprintf fmt "  return 0;\n";
+      Format.fprintf fmt "}\n\n";
+      Format.fprintf fmt "double attribut_%s(T_varinfo_%s *vi, char *attr) {\n"
+        id_str id_str;
+      StrMap.iter
+        (fun attr _ ->
+          Format.fprintf fmt "  if (strcmp(attr, \"%s\")) return vi->%s;\n" attr
+            attr)
+        attributs;
+      Format.fprintf fmt "  return 0.0;\n";
+      Format.fprintf fmt "}\n\n")
+    cprog.Bir.mir_program.program_var_categories;
   let var_dict =
     Mir.VariableDict.fold
       (fun var dict ->
@@ -946,28 +939,47 @@ let gen_decl_varinfos fmt stats =
 #ifndef _VARINFOS_
 #define _VARINFOS_
 
+#include <string.h>
+
 |};
   Mir.CatVarMap.iter
-    (fun _ (cname, _, attr_set) ->
+    (fun _ (id_str, _, _, attr_set) ->
       Format.fprintf fmt
         {|typedef struct S_varinfo_%s {
   char *name;
   char *alias;
   int idx;
   int size;
+  int cat;
 |}
-        cname;
+        id_str;
       StrSet.iter (fun an -> Format.fprintf fmt "  int %s;\n" an) attr_set;
-      Format.fprintf fmt "} T_varinfo_%s;\n\n" cname)
+      Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
   Format.fprintf fmt "\n";
   Mir.CatVarMap.iter
-    (fun _ (cname, _, _) ->
-      Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" cname cname)
+    (fun _ (id_str, _, _, _) ->
+      Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
   Format.fprintf fmt "\n";
   Mir.CatVarMap.iter
-    (fun _ (cname, nb, _) -> Format.fprintf fmt "#define NB_%s %d\n" cname nb)
+    (fun _ (id_str, _, nb, _) ->
+      Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
+    stats;
+  Format.fprintf fmt "\n";
+  Mir.CatVarMap.iter
+    (fun _ (id_str, id_int, _, _) ->
+      Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
+    stats;
+  Format.fprintf fmt "\n";
+  Mir.CatVarMap.iter
+    (fun _ (id_str, _, _, _) ->
+      Format.fprintf fmt
+        "extern char attribut_%s_def(T_varinfo_%s *vi, char *attr);\n" id_str
+        id_str;
+      Format.fprintf fmt
+        "extern double attribut_%s(T_varinfo_%s *vi, char *attr);\n" id_str
+        id_str)
     stats;
   Format.fprintf fmt "\n#endif /* _VARINFOS_ */\n\n"
 

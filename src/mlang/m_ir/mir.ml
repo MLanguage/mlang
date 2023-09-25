@@ -120,6 +120,17 @@ module CatVarMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
+type cat_variable_loc = LocCalculated | LocBase | LocInput
+
+type cat_variable_data = {
+  id : cat_variable;
+  id_str : string;
+  id_int : int;
+  loc : cat_variable_loc;
+  pos : Pos.t;
+  attributs : Pos.t StrMap.t;
+}
+
 type variable_id = int
 (** Each variable has an unique ID *)
 
@@ -438,8 +449,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked * variable_id
-  | PrintAlias of string Pos.marked * variable_id
+  | PrintName of string Pos.marked * variable
+  | PrintAlias of string Pos.marked * variable
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type instruction =
@@ -599,7 +610,7 @@ type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
   program_applications : Pos.t StrMap.t;
-  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
+  program_var_categories : cat_variable_data CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;

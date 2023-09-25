@@ -1,6 +1,6 @@
-RESULTAT_CALCUL : calculee primrest = 0 : "Résultat d'un calcul";
-RESULTAT_CALCUL2 : calculee primrest = 0 : "Résultat d'un calcul";
-V_8GZ : calculee primrest = 0 : "Sauvegarde 8GZ";
+# RESULTAT_CALCUL : calculee primrest = 0 : "Résultat d'un calcul";
+# RESULTAT_CALCUL2 : calculee primrest = 0 : "Résultat d'un calcul";
+# V_8GZ : calculee primrest = 0 : "Sauvegarde 8GZ";
 
 cible calcul_primitif:
 application: iliad;
@@ -221,61 +221,61 @@ si (V_IND_TRAIT = 4) alors # PRIMITIF
   finsi
 finsi
 
-cible existe_var_acompte:
-application: iliad;
-RESULTAT_CALCUL2 = 0;
-iterer
-: variable ITC
-: categorie saisie *
-: avec attribut(ITC, acompte) = 1
-: dans (
-  RESULTAT_CALCUL2 = 1;
-)
-
-cible existe_var_avfisc:
-application: iliad;
-RESULTAT_CALCUL = 0;
-iterer
-: variable ITC
-: categorie saisie *
-: avec attribut(ITC, avfisc) = 1
-: dans (
-  RESULTAT_CALCUL = 1;
-)
-
-cible compute_double_liquidation3_bis:
-application: iliad;
-variable temporaire: CALCUL_AVFISC, V_8ZG;
-FLAG_ACO = 0;
-V_NEGACO = 0;
-V_AVFISCOPBIS = 0;
-V_DIFTEOREEL = 0;
-PREM8_11 = 0;
-calculer cible article_1731_bis;
-calculer cible existe_var_avfisc;
-V_8GZ = IRANT;
-si (present(IRANT) et RESULTAT_CALCUL = 1) alors
-  IRANT = indefini;
-finsi
-si (RESULTAT_CALCUL = 1) alors
-  V_AVFISCOPBIS = 0;
-  V_DIFTEOREEL = 0;
-  V_INDTEO = 1;
-finsi
-
-cible compute_double_liquidation3_ter:
-application: iliad;
-si (RESULTAT_CALCUL = 1) alors
-  V_INDTEO = 0;
-  V_NEGREEL = 1;
-  V_NAPREEL = 0;
-finsi
-IRANT = V_8GZ;
-V_ACO_MTAP = 0;
-V_NEGACO = 0;
-calculer cible calcul_primitif_isf;
-calculer cible calcul_primitif;
-calculer cible calcul_primitif_taux;
+# cible existe_var_acompte:
+# application: iliad;
+# RESULTAT_CALCUL2 = 0;
+# iterer
+# : variable ITC
+# : categorie saisie *
+# : avec attribut(ITC, acompte) = 1
+# : dans (
+#   RESULTAT_CALCUL2 = 1;
+# )
+# 
+# cible existe_var_avfisc:
+# application: iliad;
+# RESULTAT_CALCUL = 0;
+# iterer
+# : variable ITC
+# : categorie saisie *
+# : avec attribut(ITC, avfisc) = 1
+# : dans (
+#   RESULTAT_CALCUL = 1;
+# )
+# 
+# cible compute_double_liquidation3_bis:
+# application: iliad;
+# variable temporaire: CALCUL_AVFISC, V_8ZG;
+# FLAG_ACO = 0;
+# V_NEGACO = 0;
+# V_AVFISCOPBIS = 0;
+# V_DIFTEOREEL = 0;
+# PREM8_11 = 0;
+# calculer cible article_1731_bis;
+# calculer cible existe_var_avfisc;
+# V_8GZ = IRANT;
+# si (present(IRANT) et RESULTAT_CALCUL = 1) alors
+#   IRANT = indefini;
+# finsi
+# si (RESULTAT_CALCUL = 1) alors
+#   V_AVFISCOPBIS = 0;
+#   V_DIFTEOREEL = 0;
+#   V_INDTEO = 1;
+# finsi
+# 
+# cible compute_double_liquidation3_ter:
+# application: iliad;
+# si (RESULTAT_CALCUL = 1) alors
+#   V_INDTEO = 0;
+#   V_NEGREEL = 1;
+#   V_NAPREEL = 0;
+# finsi
+# IRANT = V_8GZ;
+# V_ACO_MTAP = 0;
+# V_NEGACO = 0;
+# calculer cible calcul_primitif_isf;
+# calculer cible calcul_primitif;
+# calculer cible calcul_primitif_taux;
 
 cible dgfip_calculation:
 application: iliad;

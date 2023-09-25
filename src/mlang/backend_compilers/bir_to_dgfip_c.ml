@@ -41,12 +41,12 @@ let str_escape str =
   in
   aux 0
 
-let rec generate_c_expr (e : expression Pos.marked)
+let rec generate_c_expr (program : program) (e : expression Pos.marked)
     (var_indexes : Dgfip_varid.var_id_map) : D.expression_composition =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let safe_def =
         match (Pos.unmark op, Pos.unmark e2) with
         | Mast.Gt, Mir.(Literal (Undefined | Float 0.)) ->
@@ -68,16 +68,16 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Binop ((Mast.Div, _), e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let def_test = D.dand se1.def_test se2.def_test in
       let value_comp =
         D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Binop (op, e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let def_test =
         match Pos.unmark op with
         | Mast.And | Mast.Mul -> D.dand se1.def_test se2.def_test
@@ -98,7 +98,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let value_comp = op se1.value_comp se2.value_comp in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | Unop (op, e) ->
-      let se = generate_c_expr e var_indexes in
+      let se = generate_c_expr program e var_indexes in
       let def_test = se.def_test in
       let op, safe_def =
         match op with
@@ -108,7 +108,7 @@ let rec generate_c_expr (e : expression Pos.marked)
       let value_comp = op se.value_comp in
       D.build_transitive_composition ~safe_def { def_test; value_comp }
   | Index (var, e) ->
-      let idx = generate_c_expr e var_indexes in
+      let idx = generate_c_expr program e var_indexes in
       let size =
         Option.get (Bir.var_to_mir (Pos.unmark var)).Mir.Variable.is_table
       in
@@ -129,9 +129,9 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       D.build_transitive_composition { def_test; value_comp }
   | Conditional (c, t, f) ->
-      let cond = generate_c_expr c var_indexes in
-      let thenval = generate_c_expr t var_indexes in
-      let elseval = generate_c_expr f var_indexes in
+      let cond = generate_c_expr program c var_indexes in
+      let thenval = generate_c_expr program t var_indexes in
+      let elseval = generate_c_expr program f var_indexes in
       let def_test =
         D.dand cond.def_test
           (D.ite cond.value_comp thenval.def_test elseval.def_test)
@@ -141,17 +141,17 @@ let rec generate_c_expr (e : expression Pos.marked)
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall (PresentFunc, [ arg ]) ->
-      let se = generate_c_expr arg var_indexes in
+      let se = generate_c_expr program arg var_indexes in
       let def_test = D.dtrue in
       let value_comp = se.def_test in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (NullFunc, [ arg ]) ->
-      let se = generate_c_expr arg var_indexes in
+      let se = generate_c_expr program arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dand def_test (D.comp "==" se.value_comp (D.lit 0.)) in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (ArrFunc, [ arg ]) ->
-      let se = generate_c_expr arg var_indexes in
+      let se = generate_c_expr program arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_arr" [ se.value_comp ] in
       (* Here we boldly assume that rounding value of `undef` will give zero,
@@ -159,30 +159,30 @@ let rec generate_c_expr (e : expression Pos.marked)
          `safe_def` to false *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (InfFunc, [ arg ]) ->
-      let se = generate_c_expr arg var_indexes in
+      let se = generate_c_expr program arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       (* same as above *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (AbsFunc, [ arg ]) ->
-      let se = generate_c_expr arg var_indexes in
+      let se = generate_c_expr program arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "fabs" [ se.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (MaxFunc, [ e1; e2 ]) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (MinFunc, [ e1; e2 ]) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
-      let bound = generate_c_expr e1 var_indexes in
+      let bound = generate_c_expr program e1 var_indexes in
       let def_test =
         D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
       in
@@ -200,8 +200,8 @@ let rec generate_c_expr (e : expression Pos.marked)
       { def_test = D.local_var ldef; value_comp = D.local_var lval }
   | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
+      let se1 = generate_c_expr program e1 var_indexes in
+      let se2 = generate_c_expr program e2 var_indexes in
       let ldef, lval = D.locals_from_m lvar in
       let declare_local constr =
         D.let_local ldef se1.def_test (D.let_local lval se1.value_comp constr)
@@ -210,8 +210,27 @@ let rec generate_c_expr (e : expression Pos.marked)
         def_test = declare_local se2.def_test;
         value_comp = declare_local se2.value_comp;
       }
-  | Attribut (_v, _var, _a) ->
-      Errors.raise_spanned_error "not implemented yet !!!" (Pos.get_position e)
+  | Attribut (_v, var, a) ->
+      let ptr, var_cat =
+        match Mir.VariableMap.find var.mir_var var_indexes with
+        | Dgfip_varid.VarIterate (t, _, vc) -> (t, vc)
+        | _ -> assert false
+      in
+      let var_cat_data =
+        Mir.CatVarMap.find var_cat
+          program.mir_program.Mir.program_var_categories
+      in
+      let id_str = var_cat_data.Mir.id_str in
+      let def_test =
+        D.dinstr
+          (Format.sprintf "attribut_%s_def(%s, \"%s\")" id_str ptr
+             (Pos.unmark a))
+      in
+      let value_comp =
+        D.dinstr
+          (Format.sprintf "attribut_%s(%s, \"%s\")" id_str ptr (Pos.unmark a))
+      in
+      D.build_transitive_composition { def_test; value_comp }
   | NbCategory _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
@@ -240,34 +259,34 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
       (Pos.unmark var.Mir.Variable.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
-let generate_var_def (dgfip_flags : Dgfip_options.flags)
+let generate_var_def (program : program) (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : variable) (def : variable_def)
     (fmt : Format.formatter) : unit =
   match def with
   | SimpleVar e ->
-      let se = generate_c_expr e var_indexes in
+      let se = generate_c_expr program e var_indexes in
       generate_m_assign dgfip_flags var_indexes var None fmt se
   | TableVar (_, IndexTable es) ->
       Mir.IndexMap.iter
         (fun i v ->
-          let sv = generate_c_expr v var_indexes in
+          let sv = generate_c_expr program v var_indexes in
           Format.fprintf fmt "@[<hov 2>{@,%a@]}@,"
             (generate_m_assign dgfip_flags var_indexes var (GetValueConst i))
             sv)
         es
   | TableVar (_size, IndexGeneric (v, e)) ->
       (* TODO: boundary checks *)
-      let sv = generate_c_expr e var_indexes in
+      let sv = generate_c_expr program e var_indexes in
       Format.fprintf fmt "if(%s)@[<hov 2>{%a@]@;}"
         (D.generate_variable var_indexes None ~def_flag:true v)
         (generate_m_assign dgfip_flags var_indexes var (GetValueVar v))
         sv
   | InputVar -> assert false
 
-let generate_var_cond (dgfip_flags : Dgfip_options.flags)
+let generate_var_cond (program : program) (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (cond : condition_data)
     (oc : Format.formatter) =
-  let econd = generate_c_expr cond.cond_expr var_indexes in
+  let econd = generate_c_expr program cond.cond_expr var_indexes in
   let locals, _def, value =
     D.build_expression
     @@ D.build_transitive_composition ~safe_def:true
@@ -303,7 +322,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
   match Pos.unmark stmt with
   | SAssign (var, vdata) ->
       Format.fprintf oc "@[<v 2>{@,";
-      generate_var_def dgfip_flags var_indexes var vdata oc;
+      generate_var_def program dgfip_flags var_indexes var vdata oc;
       Format.fprintf oc "@]@,}"
   | SConditional (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
@@ -311,7 +330,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       let cond_def = cond_val ^ "_d" in
       let locals, def, value =
         D.build_expression
-        @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
+        @@ generate_c_expr program (Pos.same_pos_as cond stmt) var_indexes
       in
       Format.fprintf oc "int %s;@;double %s;@;%a%a@;%a" cond_def cond_val
         D.format_local_declarations locals
@@ -327,7 +346,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           (generate_stmts dgfip_flags program var_indexes)
           iffalse;
       Format.fprintf oc "@]@,}"
-  | SVerif v -> generate_var_cond dgfip_flags var_indexes v oc
+  | SVerif v -> generate_var_cond program dgfip_flags var_indexes v oc
   | SRovCall r ->
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_function_header ~definition:false oc rov
@@ -344,13 +363,26 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           | Mir.PrintString s ->
               Format.fprintf oc "fprintf(%s, \"%s\");@;" print_std
                 (str_escape s)
-          | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
-              Errors.raise_spanned_error "not implemented yet !!!" pos
+          | Mir.PrintName (_, var) -> begin
+              match Mir.VariableMap.find var var_indexes with
+              | Dgfip_varid.VarIterate (t, _, _) ->
+                  Format.fprintf oc "fprintf(%s, \"%%s\", %s->name);@;"
+                    print_std t
+              | _ -> assert false
+            end
+          | Mir.PrintAlias (_, var) -> begin
+              match Mir.VariableMap.find var var_indexes with
+              | Dgfip_varid.VarIterate (t, _, _) ->
+                  Format.fprintf oc "fprintf(%s, \"%%s\", %s->alias);@;"
+                    print_std t
+              | _ -> assert false
+            end
           | Mir.PrintExpr (e, min, max) ->
               let locals, def, value =
-                D.build_expression @@ generate_c_expr e var_indexes
+                D.build_expression @@ generate_c_expr program e var_indexes
               in
-              Format.fprintf oc "%a%a@;%a@;" D.format_local_declarations locals
+              Format.fprintf oc "@[<v 2>{%a%a@;%a@;@]}@;"
+                D.format_local_declarations locals
                 (D.format_assign dgfip_flags var_indexes print_def)
                 def
                 (D.format_assign dgfip_flags var_indexes print_val)
@@ -362,7 +394,44 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
               Format.fprintf oc "fprintf(%s, \"indefini\");@]@;}@;" print_std)
         args;
       Format.fprintf oc "@]@;}@;"
-  | SIterate (_var, _vcs, _expr, _stmts) -> ()
+  | SIterate (var, vcs, expr, stmts) ->
+      let it_name = fresh_c_local "iterate" in
+      Mir.CatVarSet.iter
+        (fun vc ->
+          let vcd =
+            Mir.CatVarMap.find vc program.mir_program.Mir.program_var_categories
+          in
+          let var_indexes =
+            Mir.VariableMap.add var.mir_var
+              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vc))
+              var_indexes
+          in
+          Format.fprintf oc "@[<v 2>{@;";
+          Format.fprintf oc
+            "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
+            vcd.Mir.id_str it_name vcd.Mir.id_str it_name;
+          Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
+            vcd.Mir.id_str;
+          let cond_val = "cond_" ^ it_name in
+          let cond_def = cond_val ^ "_d" in
+          let locals, def, value =
+            D.build_expression
+            @@ generate_c_expr program (Pos.same_pos_as expr stmt) var_indexes
+          in
+          Format.fprintf oc "char %s;@;double %s;@;@[<v 2>{@;%a%a@;%a@]@;}@;"
+            cond_def cond_val D.format_local_declarations locals
+            (D.format_assign dgfip_flags var_indexes cond_def)
+            def
+            (D.format_assign dgfip_flags var_indexes cond_val)
+            value;
+          Format.fprintf oc "@[<hov 2>if(%s && %s){@;%a@]@;}@;" cond_def
+            cond_val
+            (generate_stmts dgfip_flags program var_indexes)
+            stmts;
+          Format.fprintf oc "tab_%s++;@;nb_%s++;@;" it_name it_name;
+          Format.fprintf oc "@]}@;";
+          Format.fprintf oc "@]}@;")
+        vcs
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

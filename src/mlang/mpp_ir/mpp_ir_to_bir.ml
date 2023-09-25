@@ -87,7 +87,8 @@ let var_is_ (attr : string) (value : float) (v : Mir.Variable.t) : bool =
 
 let check_attribute (p : Mir_interface.full_program) (attr : string) : bool =
   Mir.CatVarMap.exists
-    (fun _ (attrs, _) -> StrMap.exists (fun a _ -> a = attr) attrs)
+    (fun _ Mir.{ attributs; _ } ->
+      StrMap.exists (fun a _ -> a = attr) attributs)
     p.Mir_interface.program.Mir.program_var_categories
 
 let cond_ExistsAttrWithVal (p : Mir_interface.full_program) (pos : Pos.t)

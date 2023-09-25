@@ -67,7 +67,7 @@ val list_max_execution_number : Mir.Variable.t list -> Mir.Variable.t
 (** Helper to compute the max SSA candidate in a list *)
 
 val translate_expression :
-  Pos.t StrMap.t Pos.marked Mir.CatVarMap.t ->
+  Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.idmap ->
   translating_context ->
   Mast.expression Pos.marked ->
@@ -78,7 +78,7 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 (** Dummy execution number used for variable declarations *)
 
 val get_conds :
-  Pos.t StrMap.t Pos.marked Mir.CatVarMap.t ->
+  Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.Error.t list ->
   float Pos.marked ConstMap.t ->
   Mir.idmap ->

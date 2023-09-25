@@ -817,13 +817,13 @@ struct
         List.iter
           (function
             | Mir.PrintString s -> Format.pp_print_string std_fmt s
-            | Mir.PrintName (_, vid) -> (
-                match IntMap.find_opt vid ctx.ctx_it with
+            | Mir.PrintName (_, var) -> (
+                match IntMap.find_opt var.Mir.id ctx.ctx_it with
                 | Some mvar ->
                     Format.pp_print_string std_fmt (Pos.unmark mvar.Mir.name)
                 | None -> assert false)
-            | Mir.PrintAlias (_, vid) -> (
-                match IntMap.find_opt vid ctx.ctx_it with
+            | Mir.PrintAlias (_, var) -> (
+                match IntMap.find_opt var.Mir.id ctx.ctx_it with
                 | Some mvar ->
                     Format.pp_print_string std_fmt
                       (match mvar.Mir.alias with Some a -> a | None -> "")

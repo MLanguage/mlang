@@ -25,7 +25,7 @@ type bir_function = {
 (** Input-output data necessary to interpret a BIR program*)
 
 val translate_external_conditions :
-  Pos.t StrMap.t Pos.marked Mir.CatVarMap.t ->
+  Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.idmap ->
   Mast.expression Pos.marked list ->
   Bir.condition_data Mir.RuleMap.t
