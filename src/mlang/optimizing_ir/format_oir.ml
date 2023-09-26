@@ -56,6 +56,20 @@ let rec format_stmt fmt (stmt : stmt) =
         "iterate variable %s : categorie %a : avec %a : dans ( %d )@,"
         (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
         (Mir.CatVarSet.pp ()) vcs Format_bir.format_expression expr b
+  | SRestore (vars, var_params, b, _) ->
+      let format_var_param fmt (var, vcs, expr) =
+        Format.fprintf fmt ": variable %s : categorie %a : avec %a@\n"
+          (Pos.unmark var.Bir.mir_var.name)
+          (Mir.CatVarSet.pp ()) vcs Format_bir.format_expression expr
+      in
+      Format.fprintf fmt "restaure@;: %a@\n%a: apres ( %d )"
+        (Bir.VariableSet.pp ~sep:", "
+           ~pp_elt:(fun fmt var ->
+             Format.fprintf fmt "%s" (Pos.unmark var.Bir.mir_var.name))
+           ())
+        vars
+        (Format_mast.pp_print_list_space format_var_param)
+        var_params b
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

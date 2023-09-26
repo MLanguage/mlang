@@ -255,6 +255,23 @@ let rec format_instruction fmt (i : instruction) =
         vcats
         (pp_unmark format_expression)
         expr format_instruction_list instrs
+  | Restore (rest_params, instrs) ->
+      let pp_rest_param fmt = function
+        | VarList l ->
+            Format.fprintf fmt ": %a "
+              (pp_print_list_comma (pp_unmark Format.pp_print_string))
+              l
+        | VarCats (var, vcats, expr) ->
+            Format.fprintf fmt ": variable %s : categorie %a : avec %a "
+              (Pos.unmark var)
+              (pp_print_list_comma format_var_category_id)
+              vcats
+              (pp_unmark format_expression)
+              expr
+      in
+      Format.fprintf fmt "restaurer %a : dans ( %a )"
+        (pp_print_list_space (pp_unmark pp_rest_param))
+        rest_params format_instruction_list instrs
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list
@@ -273,12 +290,18 @@ let format_rule fmt (r : rule) =
     r.rule_formulaes
 
 let format_target fmt (t : target) =
+  let format_tmp_var fmt (name, size) =
+    let name = Pos.unmark name in
+    match size with
+    | Some i -> Format.fprintf fmt "%s[%d]" name i
+    | None -> Format.fprintf fmt "%s" name
+  in
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
     (Pos.unmark t.target_name)
     (pp_print_list_comma (pp_unmark Format.pp_print_string))
     t.target_applications
-    (pp_print_list_comma (pp_unmark Format.pp_print_string))
+    (pp_print_list_comma format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_value_typ fmt (t : value_typ) =

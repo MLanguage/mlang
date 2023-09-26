@@ -211,14 +211,10 @@ let rec generate_c_expr (program : program) (e : expression Pos.marked)
         value_comp = declare_local se2.value_comp;
       }
   | Attribut (_v, var, a) ->
-      let ptr, var_cat =
+      let ptr, var_cat_data =
         match Mir.VariableMap.find var.mir_var var_indexes with
-        | Dgfip_varid.VarIterate (t, _, vc) -> (t, vc)
+        | Dgfip_varid.VarIterate (t, _, vcd) -> (t, vcd)
         | _ -> assert false
-      in
-      let var_cat_data =
-        Mir.CatVarMap.find var_cat
-          program.mir_program.Mir.program_var_categories
       in
       let id_str = var_cat_data.Mir.id_str in
       let def_test =
@@ -332,7 +328,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         D.build_expression
         @@ generate_c_expr program (Pos.same_pos_as cond stmt) var_indexes
       in
-      Format.fprintf oc "int %s;@;double %s;@;%a%a@;%a" cond_def cond_val
+      Format.fprintf oc "char %s;@;double %s;@;%a%a@;%a" cond_def cond_val
         D.format_local_declarations locals
         (D.format_assign dgfip_flags var_indexes cond_def)
         def
@@ -357,7 +353,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       in
       let print_val = fresh_c_local "mpp_print" in
       let print_def = print_val ^ "_d" in
-      Format.fprintf oc "@[<v 2>{@,int %s;@;double %s;@;" print_def print_val;
+      Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
         (function
           | Mir.PrintString s ->
@@ -403,7 +399,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           in
           let var_indexes =
             Mir.VariableMap.add var.mir_var
-              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vc))
+              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vcd))
               var_indexes
           in
           Format.fprintf oc "@[<v 2>{@;";
@@ -432,6 +428,68 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           Format.fprintf oc "@]}@;";
           Format.fprintf oc "@]}@;")
         vcs
+  | SRestore (vars, var_params, stmts) ->
+      Format.fprintf oc "@[<v 2>{@;";
+      let rest_name = fresh_c_local "restore" in
+      Format.fprintf oc "T_env_sauvegarde %s = NULL;@;" rest_name;
+      Bir.VariableSet.iter
+        (fun v ->
+          Format.fprintf oc "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name
+            (Dgfip_varid.gen_access_def_pointer var_indexes v.mir_var)
+            (Dgfip_varid.gen_access_pointer var_indexes v.mir_var)
+            (Dgfip_varid.gen_size var_indexes v.mir_var))
+        vars;
+      List.iter
+        (fun (var, vcs, expr) ->
+          let it_name = fresh_c_local "iterate" in
+          Mir.CatVarSet.iter
+            (fun vc ->
+              let vcd =
+                Mir.CatVarMap.find vc
+                  program.mir_program.Mir.program_var_categories
+              in
+              let var_indexes =
+                Mir.VariableMap.add var.mir_var
+                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vcd))
+                  var_indexes
+              in
+              Format.fprintf oc "@[<v 2>{@;";
+              Format.fprintf oc
+                "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
+                vcd.Mir.id_str it_name vcd.Mir.id_str it_name;
+              Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
+                vcd.Mir.id_str;
+              let cond_val = "cond_" ^ it_name in
+              let cond_def = cond_val ^ "_d" in
+              let locals, def, value =
+                D.build_expression
+                @@ generate_c_expr program
+                     (Pos.same_pos_as expr stmt)
+                     var_indexes
+              in
+              Format.fprintf oc
+                "char %s;@;double %s;@;@[<v 2>{@;%a%a@;%a@]@;}@;" cond_def
+                cond_val D.format_local_declarations locals
+                (D.format_assign dgfip_flags var_indexes cond_def)
+                def
+                (D.format_assign dgfip_flags var_indexes cond_val)
+                value;
+              Format.fprintf oc "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
+              Format.fprintf oc "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name
+                (Dgfip_varid.gen_access_def_pointer var_indexes var.mir_var)
+                (Dgfip_varid.gen_access_pointer var_indexes var.mir_var)
+                (Dgfip_varid.gen_size var_indexes var.mir_var);
+              Format.fprintf oc "@]@;}@;";
+              Format.fprintf oc "tab_%s++;@;nb_%s++;@;" it_name it_name;
+              Format.fprintf oc "@]}@;";
+              Format.fprintf oc "@]}@;")
+            vcs)
+        var_params;
+      Format.fprintf oc "%a@;"
+        (generate_stmts dgfip_flags program var_indexes)
+        stmts;
+      Format.fprintf oc "env_restaurer(&%s);@;" rest_name;
+      Format.fprintf oc "@]}@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
@@ -461,7 +519,7 @@ let generate_rov_function (dgfip_flags : Dgfip_options.flags)
     match rov.rov_code with
     | Rule _ -> (noprint, fun fmt () -> Format.fprintf fmt "@,return 0;")
     | Verif _ ->
-        ((fun fmt () -> Format.fprintf fmt "register int cond;@;"), noprint)
+        ((fun fmt () -> Format.fprintf fmt "register char cond;@;"), noprint)
   in
   Format.fprintf oc "@[<v 2>%a{@,%a%a%a@]@,}"
     (generate_rov_function_header ~definition:true)
@@ -511,13 +569,26 @@ let generate_target_protoype (add_semicolon : bool) (return_type : bool)
   Format.fprintf oc "%s %s(T_irdata* irdata)%s" ret_type function_name
     (if add_semicolon then ";" else "")
 
-let generate_var_tmp_decls (oc : Format.formatter) (tmp_vars : Pos.t StrMap.t) =
+let generate_var_tmp_decls (oc : Format.formatter)
+    (tmp_vars : (Bir.variable * Pos.t * int option) StrMap.t) =
   StrMap.iter
-    (fun vn _ -> Format.fprintf oc "int %s_def[1];@,double %s_val[1];@," vn vn)
+    (fun vn (_, _, size) ->
+      let sz = match size with Some i -> i | None -> 1 in
+      Format.fprintf oc "char %s_def[%d];@,double %s_val[%d];@," vn sz vn sz)
     tmp_vars;
   if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,";
   StrMap.iter
-    (fun vn _ -> Format.fprintf oc "%s_def[0] = 0;@,%s_val[0] = 0.0;@," vn vn)
+    (fun vn (_, _, size) ->
+      match size with
+      | Some 1 | None ->
+          Format.fprintf oc "%s_def[0] = 0;@,%s_val[0] = 0.0;@," vn vn
+      | Some i ->
+          Format.fprintf oc "@[<v 2>{@;";
+          Format.fprintf oc "int i;@;";
+          Format.fprintf oc "for (i = 0; i < %d; i++) {@;" i;
+          Format.fprintf oc "%s_def[i] = 0;@,%s_val[i] = 0.0;@," vn vn;
+          Format.fprintf oc "@]@;}@;";
+          Format.fprintf oc "@]@;}@;")
     tmp_vars;
   if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,"
 

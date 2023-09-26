@@ -30,6 +30,11 @@ and stmt_kind =
   | SPrint of Mast.print_std * Bir.variable Mir.print_arg list
   | SIterate of
       Bir.variable * Mir.CatVarSet.t * Bir.expression * block_id * block_id
+  | SRestore of
+      Bir.VariableSet.t
+      * (Bir.variable * Mir.CatVarSet.t * Bir.expression) list
+      * block_id
+      * block_id
 
 type block = stmt list
 
@@ -41,7 +46,11 @@ type cfg = {
 
 type mpp_function = { cfg : cfg; is_verif : bool }
 
-type target_function = { tmp_vars : Pos.t StrMap.t; cfg : cfg; is_verif : bool }
+type target_function = {
+  tmp_vars : (Bir.variable * Pos.t * int option) StrMap.t;
+  cfg : cfg;
+  is_verif : bool;
+}
 
 type rov_code = Rule of cfg | Verif of cfg
 

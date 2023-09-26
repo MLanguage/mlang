@@ -330,6 +330,20 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
         Pos.same_pos_as (SIterate (var, vcs, new_expr, b, b_end)) stmt
       in
       (new_stmt, ctx, current_stmt_pos)
+  | SRestore (vars, var_params, b, b_end) ->
+      let var_params =
+        List.map
+          (fun (var, vcs, expr) ->
+            let new_expr =
+              inline_in_expr expr ctx current_block current_stmt_pos
+            in
+            (var, vcs, new_expr))
+          var_params
+      in
+      let new_stmt =
+        Pos.same_pos_as (SRestore (vars, var_params, b, b_end)) stmt
+      in
+      (new_stmt, ctx, current_stmt_pos)
   | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
       (stmt, ctx, current_stmt_pos)
 

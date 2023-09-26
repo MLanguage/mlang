@@ -158,6 +158,10 @@ rule token = parse
   { ITERATE }
 | "categorie"
   { CATEGORY }
+| "restaurer"
+  { RESTORE }
+| "apres"
+  { AFTER }
 | "erreur"
   { ERROR }
 | "verif"

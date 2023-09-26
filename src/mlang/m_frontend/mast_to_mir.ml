@@ -1969,6 +1969,68 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
           ( (Mir.Iterate (var.Mir.id, catSet, mir_expr, prog_it), pos) :: res,
             var_data )
           il
+    | (Mast.Restore (rest_params, instrs), pos) :: il ->
+        let vars, var_params, var_data =
+          List.fold_left
+            (fun (vars, var_params, var_data) rest_param ->
+              match Pos.unmark rest_param with
+              | Mast.VarList vl ->
+                  let vars =
+                    List.fold_left
+                      (fun vars vn ->
+                        let var_name = Pos.unmark vn in
+                        let var_pos = Pos.get_position vn in
+                        match Pos.VarNameToID.find_opt var_name idmap with
+                        | Some (v :: _) -> begin
+                            match Mir.VariableMap.find_opt v vars with
+                            | None -> Mir.VariableMap.add v var_pos vars
+                            | Some old_pos ->
+                                Errors.raise_spanned_error
+                                  (Format.asprintf
+                                     "variable already specified %a"
+                                     Pos.format_position old_pos)
+                                  var_pos
+                          end
+                        | Some [] | None ->
+                            Errors.raise_spanned_error "unknown variable"
+                              var_pos)
+                      vars vl
+                  in
+                  (vars, var_params, var_data)
+              | Mast.VarCats (vn, vcats, expr) ->
+                  let var_name = Pos.unmark vn in
+                  let var_pos = Pos.get_position vn in
+                  (match Pos.VarNameToID.find_opt var_name idmap with
+                  | Some (v :: _) ->
+                      let msg =
+                        Format.asprintf "variable already declared %a"
+                          Pos.format_position (Pos.get_position v.name)
+                      in
+                      Errors.raise_spanned_error msg pos
+                  | _ -> ());
+                  let var =
+                    Mir.Variable.new_var (var_name, var_pos) None
+                      ("iterator", var_pos) (dummy_exec_number pos)
+                      ~attributes:[] ~origin:None ~cats:None ~is_table:None
+                      ~is_temp:false ~is_it:true
+                  in
+                  let var_data = Mir.VariableDict.add var var_data in
+                  let idmap = Pos.VarNameToID.add var_name [ var ] idmap in
+                  let catSet = cats_variable_from_decl_list cats vcats in
+                  let ctx = new_ctx pos in
+                  let ctx = { ctx with idmap } in
+                  let mir_expr = translate_expression cats idmap ctx expr in
+                  let var_params = (var, catSet, mir_expr) :: var_params in
+                  (vars, var_params, var_data))
+            (Mir.VariableMap.empty, [], var_data)
+            rest_params
+        in
+        let prog_rest, var_data =
+          translate_prog cats var_data const_map idmap var_decl_data instrs
+        in
+        aux
+          ((Mir.Restore (vars, var_params, prog_rest), pos) :: res, var_data)
+          il
   in
   aux ([], var_data) prog
 
@@ -2003,7 +2065,7 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                 target_apps;
               let target_tmp_vars =
                 List.fold_left
-                  (fun vars (var, pos) ->
+                  (fun vars ((var, pos), size) ->
                     match Pos.VarNameToID.find_opt var idmap with
                     | Some (v :: _) ->
                         let msg =
@@ -2013,30 +2075,30 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                         Errors.raise_spanned_error msg pos
                     | _ -> begin
                         match StrMap.find_opt var vars with
-                        | Some old_pos ->
+                        | Some (old_pos, _) ->
                             let msg =
                               Format.asprintf "variable already declared %a"
                                 Pos.format_position old_pos
                             in
                             Errors.raise_spanned_error msg pos
-                        | None -> StrMap.add var pos vars
+                        | None -> StrMap.add var (pos, size) vars
                       end)
                   StrMap.empty t.Mast.target_tmp_vars
               in
               let var_data, tmp_idmap, tmp_var_decl_data =
                 StrMap.fold
-                  (fun name pos (var_data, map, decls) ->
+                  (fun name (pos, size) (var_data, map, decls) ->
                     let var =
                       Mir.Variable.new_var (name, pos) None ("temporary", pos)
                         (dummy_exec_number pos) ~attributes:[] ~origin:None
-                        ~cats:None ~is_table:None ~is_temp:true ~is_it:false
+                        ~cats:None ~is_table:size ~is_temp:true ~is_it:false
                     in
                     let var_data = Mir.VariableDict.add var var_data in
                     let map = Pos.VarNameToID.add name [ var ] map in
                     let var_decl =
                       {
                         var_decl_typ = None;
-                        var_decl_is_table = None;
+                        var_decl_is_table = size;
                         var_decl_descr = None;
                         var_decl_io = Regular;
                         var_pos = pos;
@@ -2046,6 +2108,13 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                     (var_data, map, decls))
                   target_tmp_vars
                   (var_data, idmap, var_decl_data)
+              in
+              let target_tmp_vars =
+                StrMap.mapi
+                  (fun vn (pos, size) ->
+                    let var = List.hd (Pos.VarNameToID.find vn tmp_idmap) in
+                    (var, pos, size))
+                  target_tmp_vars
               in
               let target_prog, var_data =
                 translate_prog cats var_data const_map tmp_idmap

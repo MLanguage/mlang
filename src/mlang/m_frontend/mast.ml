@@ -192,6 +192,10 @@ type print_arg =
 
 type var_category_id = string Pos.marked list Pos.marked
 
+type restore_vars =
+  | VarList of string Pos.marked list
+  | VarCats of string Pos.marked * var_category_id list * expression Pos.marked
+
 type instruction =
   | Formula of formula Pos.marked
   | IfThenElse of
@@ -208,6 +212,7 @@ type instruction =
       * var_category_id list
       * expression Pos.marked
       * instruction Pos.marked list
+  | Restore of restore_vars Pos.marked list * instruction Pos.marked list
 
 type rule = {
   rule_number : int Pos.marked;
@@ -221,7 +226,7 @@ type rule = {
 type target = {
   target_name : string Pos.marked;
   target_applications : application Pos.marked list;
-  target_tmp_vars : string Pos.marked list;
+  target_tmp_vars : (string Pos.marked * int option) list;
   target_prog : instruction Pos.marked list;
 }
 

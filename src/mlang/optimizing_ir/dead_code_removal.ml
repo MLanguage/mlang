@@ -159,6 +159,17 @@ let remove_dead_statements (stmts : block) (id : block_id)
               used_defs,
               stmt :: acc,
               pos - 1 )
+        | SRestore (_, var_params, _, _) ->
+            let used_vars =
+              List.fold_left
+                (fun used_vars (_, _, expr) ->
+                  let stmt_used_vars =
+                    Bir.get_used_variables (expr, Pos.no_pos)
+                  in
+                  update_used_vars stmt_used_vars pos used_vars)
+                used_vars var_params
+            in
+            (used_vars, used_defs, stmt :: acc, pos - 1)
         | SGoto _ | SRovCall _ | SFunctionCall _ ->
             (used_vars, used_defs, stmt :: acc, pos - 1))
       (used_vars, used_defs, [], pos)

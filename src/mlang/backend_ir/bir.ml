@@ -111,6 +111,8 @@ and stmt_kind =
   | SFunctionCall of function_name * Mir.Variable.t list
   | SPrint of Mast.print_std * variable Mir.print_arg list
   | SIterate of variable * Mir.CatVarSet.t * expression * stmt list
+  | SRestore of
+      VariableSet.t * (variable * Mir.CatVarSet.t * expression) list * stmt list
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
   match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
@@ -118,7 +120,7 @@ let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 type target_function = {
-  tmp_vars : Pos.t StrMap.t;
+  tmp_vars : (variable * Pos.t * int option) StrMap.t;
   stmts : stmt list;
   is_verif : bool;
 }
@@ -202,6 +204,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
       | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
           acc + 1
       | SIterate (_, _, _, s) -> acc + 1 + count_instr_blocks p s
+      | SRestore (_, _, s) -> acc + 1 + count_instr_blocks p s
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
@@ -263,6 +266,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
         | SVerif _ -> acc
         | SAssign (var, _) -> VariableSet.add var acc
         | SIterate (_, _, _, s) -> get_assigned_variables_block acc s
+        | SRestore (_, _, s) -> get_assigned_variables_block acc s
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
@@ -317,7 +321,17 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                       es acc
                 | Mir.IndexGeneric (_v, e) -> get_local_vars_expr acc e)
             | _ -> acc)
-        | SIterate (_, _, _, s) -> get_local_vars_block acc s
+        | SIterate (_, _, expr, s) ->
+            let acc = get_local_vars_expr acc (expr, Pos.no_pos) in
+            get_local_vars_block acc s
+        | SRestore (_, vpl, s) ->
+            let acc =
+              List.fold_left
+                (fun acc (_, _, expr) ->
+                  get_local_vars_expr acc (expr, Pos.no_pos))
+                acc vpl
+            in
+            get_local_vars_block acc s
         | SConditional (cond, s1, s2) ->
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in

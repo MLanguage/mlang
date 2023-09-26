@@ -49,7 +49,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
 %token IF THEN ELSE ENDIF PRINT PRINT_ERR
-%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY ITERATE CATEGORY 
+%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
+%token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
@@ -392,7 +393,19 @@ target:
   }
 
 temporary_variable_name:
-| name = SYMBOL { (parse_variable_name $sloc name, mk_position $sloc) }
+| name = symbol_with_pos size = computed_variable_table?
+    { 
+      let is_table = match size with
+      | Some i ->
+          if Pos.unmark i < 1 then
+            Errors.raise_spanned_error "size must be > 0" (Pos.get_position i)
+          else
+            Some (Pos.unmark i)
+      | None -> None
+      in
+      let name_pos = parse_variable_name $sloc (Pos.unmark name), Pos.get_position name in
+      (name_pos, is_table)
+    }
 
 temporary_variables_decl:
 | VARIABLE TEMPORARY COLON
@@ -462,6 +475,9 @@ instruction:
       in
       Iterate (var, vcats, expr, List.rev instrs), mk_position $sloc
     }
+| RESTORE COLON rest_params = rest_param_with_pos*
+  AFTER LPAREN instrs = instruction_list_rev RPAREN
+    { Restore (rest_params, List.rev instrs), mk_position $sloc }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }
@@ -528,6 +544,24 @@ it_param_with_pos:
     { (None, Some vcats, None, mk_position $sloc) }
 | WITH expr = expression COLON
     { (None, None, Some expr, mk_position $sloc) }
+
+rest_param_with_pos:
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON
+    { VarList vars, mk_position $sloc }
+| VARIABLE var = symbol_with_pos COLON
+  CATEGORY vcats = separated_nonempty_list(COMMA, var_category_id) COLON
+  expr_opt = rest_param_with_expr?
+    { 
+      let expr =
+        match expr_opt with
+        | Some expr -> expr
+        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+      in
+      VarCats (var, vcats, expr), mk_position $sloc
+    }
+
+rest_param_with_expr:
+| WITH expr = expression COLON { expr }
 
 formula_list:
 | f = formula_kind SEMICOLON { [f] }

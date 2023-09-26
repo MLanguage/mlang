@@ -682,10 +682,11 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
                 in
                 let new_ctx =
                   if
-                    Mir.IndexMap.for_all
-                      (fun _ (e, d) ->
-                        Option.is_some (expr_to_partial (Pos.unmark e) d))
-                      es'
+                    Mir.IndexMap.cardinal es' = size
+                    && Mir.IndexMap.for_all
+                         (fun _ (e, d) ->
+                           Option.is_some (expr_to_partial (Pos.unmark e) d))
+                         es'
                   then
                     add_var_def_to_ctx ctx block_id var
                       (Some
@@ -750,6 +751,18 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
               stmt
             :: new_block,
             ctx ))
+  | SRestore (vars, var_params, b, b_end) ->
+      let var_params =
+        List.map
+          (fun (var, vcs, expr) ->
+            let new_expr, _ =
+              partially_evaluate_expr ctx p.mir_program (expr, Pos.no_pos)
+            in
+            (var, vcs, Pos.unmark new_expr))
+          var_params
+      in
+      ( Pos.same_pos_as (SRestore (vars, var_params, b, b_end)) stmt :: new_block,
+        ctx )
   | SGoto _ -> (stmt :: new_block, ctx)
   | SRovCall _ | SFunctionCall _ | SPrint _ ->
       (stmt :: new_block, all_top_ctx ctx block_id)

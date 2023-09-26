@@ -20,6 +20,35 @@ struct S_desc_var
 
 typedef struct S_desc_var T_desc_var;
 
+void env_sauvegarder_un(T_env_sauvegarde *liste, char *oDef, double *oVal) {
+  T_env_sauvegarde nouveau = (T_env_sauvegarde)malloc(sizeof (struct S_env_sauvegarde));
+  nouveau->sauv_def = *oDef;
+  nouveau->sauv_val = *oVal;
+  nouveau->orig_def = oDef;
+  nouveau->orig_val = oVal;
+  nouveau->suite = *liste;
+  *liste = nouveau;
+}
+
+void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz) {
+  int i;
+  for (i = 0; i < sz; i++) {
+    env_sauvegarder_un(liste, oDef + i, oVal + i);
+  }
+}
+
+void env_restaurer(T_env_sauvegarde *liste) {
+  T_env_sauvegarde courant;
+
+  while (*liste != NULL) {
+    courant = *liste;
+    *liste = courant-> suite;
+    *(courant->orig_def) = courant->sauv_def;
+    *(courant->orig_val) = courant->sauv_val;
+    free(courant);
+  }
+}
+
 static int alloc_tab(double **tab, char **def_tab, int taille)
 {
   if ((tab == NULL) || (def_tab == NULL)) {

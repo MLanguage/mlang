@@ -757,8 +757,13 @@ struct
                     | Number _ | Undefined -> tval.(idx))
             | IndexTable es ->
                 Array.init size (fun idx ->
-                    let e = Mir.IndexMap.find idx es in
-                    evaluate_expr ctx p.mir_program e) )
+                    match Mir.IndexMap.find_opt idx es with
+                    | Some e -> evaluate_expr ctx p.mir_program e
+                    | None -> begin
+                        match curr_value with
+                        | SimpleVar _ -> assert false
+                        | TableVar (_, values) -> values.(idx)
+                      end) )
     | Mir.InputVar -> assert false
 
   let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt)
@@ -802,7 +807,7 @@ struct
           (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) -> (
         match Mir.TargetMap.find_opt f p.targets with
-        | Some tf -> evaluate_stmts p ctx tf.stmts loc 0
+        | Some tf -> evaluate_target p ctx loc tf
         | None ->
             evaluate_stmts p ctx
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
@@ -858,6 +863,56 @@ struct
             p.Bir.mir_program.program_vars ctx
         in
         Mir.CatVarSet.fold eval vcs ctx
+    | SRestore (vars, var_params, stmts) ->
+        let backup =
+          Bir.VariableSet.fold
+            (fun v backup ->
+              let v =
+                match IntMap.find_opt v.mir_var.id ctx.ctx_it with
+                | None -> v
+                | Some v -> Bir.(var_from_mir default_tgv) v
+              in
+              let value = Bir.VariableMap.find v ctx.ctx_vars in
+              (v, value) :: backup)
+            vars []
+        in
+        let backup =
+          List.fold_left
+            (fun backup (var, vcs, expr) ->
+              Mir.CatVarSet.fold
+                (fun vc backup ->
+                  Mir.VariableDict.fold
+                    (fun v backup ->
+                      if v.Mir.cats = Some vc then
+                        let ctx =
+                          {
+                            ctx with
+                            ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
+                          }
+                        in
+                        match
+                          evaluate_variable p ctx (SimpleVar Undefined)
+                            (SimpleVar (expr, Pos.no_pos))
+                        with
+                        | SimpleVar (Number z) when N.(z =. one ()) ->
+                            let v = Bir.(var_from_mir default_tgv) v in
+                            let value = Bir.VariableMap.find v ctx.ctx_vars in
+                            (v, value) :: backup
+                        | SimpleVar _ -> backup
+                        | _ -> assert false
+                      else backup)
+                    p.Bir.mir_program.program_vars backup)
+                vcs backup)
+            backup var_params
+        in
+        let ctx = evaluate_stmts p ctx stmts (InsideBlock 0 :: loc) 0 in
+        let ctx_vars =
+          List.fold_left
+            (fun ctx_vars (v, value) ->
+              Bir.VariableMap.update v (fun _ -> Some value) ctx_vars)
+            ctx.ctx_vars backup
+        in
+        { ctx with ctx_vars }
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =
@@ -868,6 +923,23 @@ struct
         (ctx, start_value) stmts
     in
     ctx
+
+  and evaluate_target (p : Bir.program) (ctx : ctx) (loc : code_location)
+      (tf : Bir.target_function) =
+    let ctx =
+      let ctx_vars =
+        StrMap.fold
+          (fun _ (var, _, size) ctx_vars ->
+            match size with
+            | None -> Bir.VariableMap.add var (SimpleVar Undefined) ctx_vars
+            | Some sz ->
+                let values = Array.init sz (fun _ -> Undefined) in
+                Bir.VariableMap.add var (TableVar (sz, values)) ctx_vars)
+          tf.tmp_vars ctx.ctx_vars
+      in
+      { ctx with ctx_vars }
+    in
+    evaluate_stmts p ctx tf.stmts loc 0
 
   let evaluate_program (p : Bir.program) (ctx : ctx)
       (code_loc_start_value : int) : ctx =

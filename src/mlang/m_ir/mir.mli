@@ -206,6 +206,10 @@ type instruction =
       * CatVarSet.t
       * expression Pos.marked
       * instruction Pos.marked list
+  | Restore of
+      Pos.t VariableMap.t
+      * (variable * CatVarSet.t * expression Pos.marked) list
+      * instruction Pos.marked list
 
 type rule_data = {
   rule_domain : rule_domain;
@@ -217,7 +221,7 @@ type rule_data = {
 type target_data = {
   target_name : string Pos.marked;
   target_apps : string Pos.marked list;
-  target_tmp_vars : Pos.t StrMap.t;
+  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 

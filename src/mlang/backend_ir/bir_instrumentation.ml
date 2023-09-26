@@ -131,6 +131,8 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
   | Bir.SPrint _ -> CodeLocationMap.empty
   | Bir.SIterate (var, _, _, s) ->
       get_code_locs_stmts p s (Bir_interpreter.InsideIterate var :: loc)
+  | Bir.SRestore (_, _, s) ->
+      get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
 
 and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
     (loc : Bir_interpreter.code_location) : code_locs =

@@ -59,4 +59,15 @@ extern T_discord * err_NEGATIF(T_irdata *irdata);
 
 extern void print_double(FILE *std, double f, int pmin, int pmax);
 
+typedef struct S_env_sauvegarde {
+  char sauv_def;
+  double sauv_val;
+  char *orig_def;
+  double *orig_val;
+  struct S_env_sauvegarde *suite;
+} *T_env_sauvegarde;
+
+extern void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz);
+extern void env_restaurer(T_env_sauvegarde *liste);
+
 #endif /* _IRDATA_H_ */

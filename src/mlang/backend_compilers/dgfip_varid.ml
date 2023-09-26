@@ -19,7 +19,7 @@ type var_id =
   | VarInput of int
   | VarBase of int
   | VarComputed of int
-  | VarIterate of string * Mir.cat_variable_loc * Mir.cat_variable
+  | VarIterate of string * Mir.cat_variable_loc * Mir.cat_variable_data
 
 (* Map from variables to their TGV ID *)
 type var_id_map = var_id Mir.VariableMap.t
@@ -86,3 +86,15 @@ let gen_access_pos_from_start vm v =
     | VarBase i -> Printf.sprintf "EST_BASE | %d" i
     | VarComputed i -> Printf.sprintf "EST_CALCULEE | %d" i
     | VarIterate (t, l, _) -> Printf.sprintf "%s | %s->idx" (gen_loc_type l) t
+
+let gen_size vm v =
+  let get_size v =
+    match v.Mir.Variable.is_table with
+    | Some i -> Format.sprintf "%d" i
+    | None -> "1"
+  in
+  if v.Mir.Variable.is_temp then get_size v
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput _ | VarBase _ | VarComputed _ -> get_size v
+    | VarIterate (t, _, _) -> Format.sprintf "(%s->size)" t

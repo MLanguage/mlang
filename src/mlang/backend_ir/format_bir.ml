@@ -80,6 +80,22 @@ let rec format_stmt fmt (stmt : stmt) =
         (Pos.unmark (var_to_mir var).Mir.Variable.name)
         (Mir.CatVarSet.pp ()) vcs format_expression expr;
       Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
+  | SRestore (vars, var_params, stmts) ->
+      let format_var_param fmt (var, vcs, expr) =
+        Format.fprintf fmt ": variable %s : categorie %a : avec %a@\n"
+          (Pos.unmark (var_to_mir var).Mir.Variable.name)
+          (Mir.CatVarSet.pp ()) vcs format_expression expr
+      in
+      Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
+        (VariableSet.pp ~sep:", "
+           ~pp_elt:(fun fmt var ->
+             Format.fprintf fmt "%s"
+               (Pos.unmark (var_to_mir var).Mir.Variable.name))
+           ())
+        vars
+        (Format_mast.pp_print_list_space format_var_param)
+        var_params;
+      Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

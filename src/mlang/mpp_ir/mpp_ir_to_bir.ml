@@ -485,6 +485,34 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         in
         let ctx, stmts = translate_m_code m_program ctx iit in
         aux ctx ((Bir.SIterate (var, vcs, expr, stmts), pos) :: res) instrs
+    | (Mir.Restore (vars, var_params, irest), pos) :: instrs ->
+        let vars =
+          Mir.VariableMap.fold
+            (fun v _ vars ->
+              let var =
+                Bir.(var_from_mir default_tgv)
+                  (Mir.VariableDict.find v.Mir.id m_program.program.program_vars)
+              in
+              Bir.VariableSet.add var vars)
+            vars Bir.VariableSet.empty
+        in
+        let var_params =
+          List.fold_left
+            (fun var_params ((v : Mir.variable), vcs, expr) ->
+              let var =
+                Bir.(var_from_mir default_tgv)
+                  (Mir.VariableDict.find v.Mir.id m_program.program.program_vars)
+              in
+              let expr =
+                Mir.map_expr_var
+                  Bir.(var_from_mir default_tgv)
+                  (Pos.unmark expr)
+              in
+              (var, vcs, expr) :: var_params)
+            [] var_params
+        in
+        let ctx, stmts = translate_m_code m_program ctx irest in
+        aux ctx ((Bir.SRestore (vars, var_params, stmts), pos) :: res) instrs
   in
   aux ctx [] instrs
 
@@ -837,7 +865,11 @@ let create_combined_program (m_program : Mir_interface.full_program)
             Mir.TargetMap.add n
               Bir.
                 {
-                  tmp_vars = t.Mir.target_tmp_vars;
+                  tmp_vars =
+                    StrMap.map
+                      (fun (var, pos, size) ->
+                        (Bir.(var_from_mir default_tgv) var, pos, size))
+                      t.Mir.target_tmp_vars;
                   stmts = code;
                   is_verif = ctx.verif_seen;
                 }
