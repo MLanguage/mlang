@@ -150,6 +150,8 @@ rule token = parse
   { COMPL_NUMBER }
 | "nb_categorie"
   { NB_CATEGORY }
+| "nb_erreur"
+  { NB_ERROR }
 | "afficher"
   { PRINT }
 | "afficher_erreur"
@@ -162,6 +164,8 @@ rule token = parse
   { RESTORE }
 | "apres"
   { AFTER }
+| "taille"
+  { SIZE }
 | "erreur"
   { ERROR }
 | "verif"

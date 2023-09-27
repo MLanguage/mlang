@@ -149,6 +149,8 @@ type expression =
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of string Pos.marked list Pos.marked
   | Attribut of string Pos.marked * string Pos.marked
+  | Size of string Pos.marked
+  | NbError
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)

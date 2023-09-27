@@ -333,7 +333,11 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
               (Pos.unmark cond.Mir.cond_expr)
           in
           Mir.Float nb
-      | Mir.Attribut _ -> assert false
+      | Mir.NbError ->
+          Errors.raise_spanned_error
+            "nb_erreur is forbidden in verification filter"
+            (Pos.get_position expr)
+      | Mir.Attribut _ | Mir.Size _ -> assert false
     in
     aux IntMap.empty expr
   in
@@ -446,11 +450,12 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
                 (Pos.get_position tn)
         in
         aux ctx (stmt :: res) instrs
-    | (Mir.ComputeVerifs (l, expr), _pos) :: instrs ->
+    | (Mir.ComputeVerifs (l, expr), pos) :: instrs ->
         let dom = Mast.DomainId.from_marked_list (Pos.unmark l) in
         let ctx = { ctx with verif_seen = true } in
         let stmts = generate_verifs_prog m_program dom expr in
-        aux ctx (List.rev stmts @ res) instrs
+        let stmt = (Bir.SVerifBlock stmts, pos) in
+        aux ctx (stmt :: res) instrs
     | (Mir.Print (std, args), pos) :: instrs ->
         let bir_args =
           List.rev
@@ -871,7 +876,7 @@ let create_combined_program (m_program : Mir_interface.full_program)
                         (Bir.(var_from_mir default_tgv) var, pos, size))
                       t.Mir.target_tmp_vars;
                   stmts = code;
-                  is_verif = ctx.verif_seen;
+                  is_verif = true || ctx.verif_seen;
                 }
               targets ))
         m_program.program.program_targets (ctx, Mir.TargetMap.empty)

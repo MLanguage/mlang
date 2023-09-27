@@ -95,6 +95,8 @@ let rec format_expression fmt (e : expression) =
       Format.fprintf fmt "nb_categorie(%a)" (Mir.CatVarSet.pp ()) cats
   | Attribut (v, _, a) ->
       Format.fprintf fmt "attribut(%s, %s)" (Pos.unmark v) (Pos.unmark a)
+  | Size var -> Format.fprintf fmt "taille(%s)" (Pos.unmark var.name)
+  | NbError -> Format.fprintf fmt "nb_erreur()"
 
 let format_variable_def fmt (def : variable_def) =
   match def with

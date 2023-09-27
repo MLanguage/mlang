@@ -138,70 +138,80 @@ cible ENCH_TL:
 application: iliad;
 calculer enchaineur ENCH_TL;
 
-cible verif_calcul_primitive_isf_raw:
+cible verif_calcul_primitive_isf:
 application: iliad;
 verifier domaine isf : avec nb_categorie(calculee *) > 0;
 
-cible verif_calcul_primitive_raw:
+cible verif_calcul_primitive:
 application: iliad;
-calculer cible verif_calcul_primitive_isf_raw;
-verifier domaine primitive : avec nb_categorie(calculee *) > 0;
+calculer cible verif_calcul_primitive_isf;
+si nb_erreur() = 0 alors
+  verifier domaine primitive : avec nb_categorie(calculee *) > 0;
+finsi
 
-cible verif_calcul_corrective_raw:
+cible verif_calcul_corrective:
 application: iliad;
 calculer cible calcul_primitif_isf;
-calculer cible verif_calcul_primitive_isf_raw;
-verifier domaine corrective : avec nb_categorie(calculee *) > 0;
+calculer cible verif_calcul_primitive_isf;
+si nb_erreur() = 0 alors
+  verifier domaine corrective : avec nb_categorie(calculee *) > 0;
+finsi
 
-cible verif_saisie_cohe_primitive_isf_raw:
+cible verif_saisie_cohe_primitive_isf:
 application: iliad;
 verifier domaine isf
 : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_saisie_cohe_primitive_raw:
+cible verif_saisie_cohe_primitive:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf_raw;
-calculer cible calcul_primitif_isf;
-calculer cible verif_calcul_primitive_isf_raw;
-verifier domaine primitive
-: avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+calculer cible verif_saisie_cohe_primitive_isf;
+si nb_erreur() = 0 alors
+  calculer cible calcul_primitif_isf;
+  calculer cible verif_calcul_primitive_isf;
+  si nb_erreur() = 0 alors
+    verifier domaine primitive
+    : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+  finsi
+finsi
 
-cible verif_saisie_cohe_corrective_raw:
+cible verif_saisie_cohe_corrective:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf_raw;
-verifier domaine corrective
-: avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+calculer cible verif_saisie_cohe_primitive_isf;
+si nb_erreur() = 0 alors
+  verifier domaine corrective
+  : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+finsi
 
-cible verif_cohe_horizontale_raw:
+cible verif_cohe_horizontale:
 application: iliad;
 verifier domaine horizontale corrective;
 
-cible verif_contexte_cohe_primitive_raw:
+cible verif_contexte_cohe_primitive:
 application: iliad;
 verifier domaine primitive
 : avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_contexte_cohe_corrective_raw:
+cible verif_contexte_cohe_corrective:
 application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_famille_cohe_primitive_raw:
+cible verif_famille_cohe_primitive:
 application: iliad;
 verifier domaine primitive
 : avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_famille_cohe_corrective_raw:
+cible verif_famille_cohe_corrective:
 application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_revenu_cohe_primitive_raw:
+cible verif_revenu_cohe_primitive:
 application: iliad;
 verifier domaine primitive
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
-cible verif_revenu_cohe_corrective_raw:
+cible verif_revenu_cohe_corrective:
 application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
@@ -227,8 +237,8 @@ calculer cible calcul_primitif_taux;
 
 cible article_1731_bis:
 application : iliad;
-si (V_IND_TRAIT = 4) alors # PRIMITIF
-  si (CMAJ dans (8, 11)) alors
+si V_IND_TRAIT = 4 alors # PRIMITIF
+  si CMAJ dans (8, 11) alors
     ART1731BIS = 1;
     PREM8_11 = 1;
   sinon
@@ -245,7 +255,7 @@ iterer
 : dans (
   EXISTE_VAR_ACOMPTE = 1;
 )
-si (EXISTE_VAR_ACOMPTE = 1) alors
+si EXISTE_VAR_ACOMPTE = 1 alors
   restaurer
   : variable RESTREV
   : categorie saisie revenu
@@ -290,10 +300,10 @@ iterer
   EXISTE_VAR_AVFISC = 1;
 )
 V_8GZ = IRANT;
-si (present(IRANT) et EXISTE_VAR_AVFISC = 1) alors
+si present(IRANT) et EXISTE_VAR_AVFISC = 1 alors
   IRANT = indefini;
 finsi
-si (EXISTE_VAR_AVFISC = 1) alors
+si EXISTE_VAR_AVFISC = 1 alors
   V_AVFISCOPBIS = 0;
   V_DIFTEOREEL = 0;
   V_INDTEO = 1;
@@ -313,65 +323,65 @@ cible compute_double_liquidation_exit_taxe:
 application: iliad;
 variable temporaire: ANNEE_FIXME;
 ANNEE_FIXME = 2018;
-si (present(PVIMPOS) ou present(CODRWB)) alors
+si present(PVIMPOS) ou present(CODRWB) alors
   FLAG_EXIT = 1;
   FLAG_3WBNEG = 0;
   calculer cible compute_double_liquidation3;
-  si (present(NAPTIR)) alors
-    si (NAPTIR < 0) alors
+  si present(NAPTIR) alors
+    si NAPTIR < 0 alors
       FLAG_3WBNEG = 1;
     finsi
     V_NAPTIR3WB = abs(NAPTIR);
   finsi
-  si (ANNEE_FIXME >= 2017 et present(IHAUTREVT)) alors
+  si ANNEE_FIXME >= 2017 et present(IHAUTREVT) alors
     V_CHR3WB = IHAUTREVT;
   finsi
-  si (ANNEE_FIXME >= 2018 et present(ID11)) alors
+  si ANNEE_FIXME >= 2018 et present(ID11) alors
     V_ID113WB = ID11;
   finsi
   FLAG_EXIT = 0;
 finsi
-si (present(PVSURSI) ou present(CODRWA)) alors
+si present(PVSURSI) ou present(CODRWA) alors
   FLAG_3WANEG = 0;
   FLAG_EXIT = 2;
   calculer cible compute_double_liquidation3;
-  si (present(NAPTIR)) alors
-    si (NAPTIR < 0) alors
+  si present(NAPTIR) alors
+    si NAPTIR < 0 alors
       FLAG_3WANEG = 1;
     finsi
     V_NAPTIR3WA = abs(NAPTIR);
   finsi
-  si (ANNEE_FIXME >= 2017 et present(IHAUTREVT)) alors
+  si ANNEE_FIXME >= 2017 et present(IHAUTREVT) alors
     V_CHR3WA = IHAUTREVT;
   finsi
-  si (ANNEE_FIXME >= 2018 et present(ID11)) alors
+  si ANNEE_FIXME >= 2018 et present(ID11) alors
     V_ID113WA = ID11;
   finsi
   FLAG_EXIT = 0;
 finsi
-si (ANNEE_FIXME >= 2018) alors
+si ANNEE_FIXME >= 2018 alors
   FLAG_BAREM = 1;
   calculer cible compute_double_liquidation3;
-  si (present(RASTXFOYER)) alors
+  si present(RASTXFOYER) alors
     V_BARTXFOYER = RASTXFOYER;
   finsi
-  si (present(RASTXDEC1)) alors
+  si present(RASTXDEC1) alors
     V_BARTXDEC1 = RASTXDEC1;
   finsi
-  si (present(RASTXDEC2)) alors
+  si present(RASTXDEC2) alors
     V_BARTXDEC2 = RASTXDEC2;
   finsi
-  si (present(INDTAZ)) alors
+  si present(INDTAZ) alors
     V_BARINDTAZ = INDTAZ;
   finsi
-  si (IITAZIR >= 0) alors
+  si IITAZIR >= 0 alors
     FLAG_BARIITANEG = 0;
     V_BARIITAZIR = IITAZIR;
   sinon
     FLAG_BARIITANEG = 1;
     V_BARIITAZIR = - IITAZIR;
   finsi
-  si (present(IRTOTAL)) alors
+  si present(IRTOTAL) alors
     V_BARIRTOTAL = IRTOTAL;
   finsi
   FLAG_BAREM = 0;
@@ -382,10 +392,10 @@ cible compute_double_liquidation_pvro:
 application: iliad;
 APPLI_OCEANS = 0;
 V_IND_TRAIT = 4;
-si (present(COD3WG)) alors
+si present(COD3WG) alors
   FLAG_PVRO = 1;
   calculer cible compute_double_liquidation_exit_taxe;
-  si (present(IAD11)) alors
+  si present(IAD11) alors
     V_IPVRO = IAD11;
   finsi
 finsi
@@ -393,6 +403,14 @@ FLAG_PVRO = 0;
 calculer cible compute_double_liquidation_exit_taxe;
 
 # primitif ml
+
+cible calcul_prim_corr:
+application: iliad;
+si V_IND_TRAIT = 4 alors # PRIMITIF
+  calculer cible calcul_primitif;
+sinon
+  calculer cible calcul_correctif;
+finsi
 
 cible effacer_base_etc:
 application : iliad;
@@ -412,37 +430,54 @@ iterer
   ITCAL = indefini;
 )
 
+cible calcule_acomptes:
+application: iliad;
+variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+FLAG_ACO = 1;
+V_CALCUL_ACO = 1;
+calculer cible calcul_prim_corr;
+V_CALCUL_ACO = 0;
+FLAG_ACO = 2;
+SAUV_ART1731BIS = ART1731BIS + 0;
+SAUV_PREM8_11 = PREM8_11 + 0;
+calculer cible effacer_calculee_etc;
+si V_IND_TRAIT = 4 alors # PRIMITIF
+  calculer cible effacer_base_etc;
+  ART1731BIS = SAUV_ART1731BIS;
+  PREM8_11 = SAUV_PREM8_11;
+finsi
+
+cible effacer_avfisc_1:
+application: iliad;
+iterer
+: variable REV_AV
+: categorie saisie revenu, saisie revenu corrective
+: avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)
+: dans (
+  REV_AV = indefini;
+)
+
 cible calcule_avfiscal:
 application: iliad;
 variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 EXISTE_AVFISC = 0;
 iterer
-: variable ITREV
+: variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(ITREV, avfisc) = 1 et present(ITREV)  
+  : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)  
 : dans (
   EXISTE_AVFISC = 1;
 )
-si (EXISTE_AVFISC = 1) alors
+si EXISTE_AVFISC = 1 alors
   restaurer
-  : variable RESTREV
+  : variable REV_AV
   : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(RESTREV, avfisc) = 1 et present(RESTREV)
+  : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)
   : apres (
-    iterer
-    : variable ITREV
-    : categorie saisie revenu, saisie revenu corrective
-    : avec attribut(ITREV, avfisc) = 1 et present(ITREV)
-    : dans (
-      ITREV = indefini;
-    )
+    calculer cible effacer_avfisc_1;
     V_INDTEO = 1;
     V_CALCUL_NAPS = 1;
-    si (V_IND_TRAIT = 4) alors # PRIMITIF
-      calculer cible calcul_primitif;
-    sinon
-      calculer cible calcul_correctif;
-    finsi
+    calculer cible calcul_prim_corr;
     V_CALCUL_NAPS = 0;
     SAUV_ART1731BIS = ART1731BIS + 0;
     SAUV_PREM8_11 = PREM8_11 + 0;
@@ -450,7 +485,7 @@ si (EXISTE_AVFISC = 1) alors
     SAUV_INE = INE;
     SAUV_IRE = IRE;
     calculer cible effacer_calculee_etc;
-    si (V_IND_TRAIT = 4) alors # PRIMITIF
+    si V_IND_TRAIT = 4 alors # PRIMITIF
       calculer cible effacer_base_etc;
       ART1731BIS = SAUV_ART1731BIS;
       PREM8_11 = SAUV_PREM8_11;
@@ -460,14 +495,204 @@ si (EXISTE_AVFISC = 1) alors
   V_IRETEO = SAUV_IRE;
   V_INETEO = SAUV_INE;
 sinon
+  calculer cible effacer_avfisc_1;
+finsi
+
+cible calcule_acomptes_avfisc:
+application: iliad;
+variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+NAP_SANS_PENA_REEL = 0; # toujours 0 ?
+FLAG_ACO = 1;
+calculer cible calcule_avfiscal;
+V_INDTEO = 0;
+V_NEGREEL = si (NAP_SANS_PENA_REEL <= 0.0) alors (1) sinon (0) finsi;
+V_NAPREEL = abs(NAP_SANS_PENA_REEL);
+V_CALCUL_ACO = 1;
+calculer cible calcul_prim_corr;
+SAUV_ART1731BIS = ART1731BIS + 0;
+SAUV_PREM8_11 = PREM8_11 + 0;
+calculer cible effacer_calculee_etc;
+si V_IND_TRAIT = 4 alors # PRIMITIF
+  ART1731BIS = SAUV_ART1731BIS;
+  PREM8_11 = SAUV_PREM8_11;
+finsi
+
+cible est_calcul_acomptes:
+application: iliad;
+VARTMP1 = 0;
+iterer
+: variable REV_AC
+: categorie saisie revenu, saisie revenu corrective
+: avec attribut(REV_AC, acompte) = 0 et present(REV_AC)
+: dans (
+  VARTMP1 = 1;
+)
+
+cible est_code_supp_avfisc:
+application: iliad;
+VARTMP1 = 0;
+si
+     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
+  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
+  ou present(RFDHIS)  ou present(REPSNO3) ou present(COD7CN)
+  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG)
+  ou present(PINELQM) ou present(RCMABD)  ou present(COD7KM)
+  ou present(PINELQP) ou present(COD7QS)  ou present(PINELQN)
+  ou present(PINELQO) ou present(COD7LS)
+alors
+  VARTMP1 = 1;
+sinon
   iterer
-  : variable ITREV
+  : variable REV_AV
   : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(ITREV, avfisc) = 1 et present(ITREV)
+  : avec attribut(REV_AV, avfisc) = 2 et present(REV_AV)
   : dans (
-    ITREV = indefini;
+    VARTMP1 = 1;
   )
 finsi
+
+cible est_calcul_avfisc:
+application: iliad;
+calculer cible est_code_supp_avfisc;
+si VARTMP1 = 0 alors
+  iterer
+  : variable REV_AV
+  : categorie saisie revenu, saisie revenu corrective
+  : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)
+  : dans (
+    VARTMP1 = 1;
+  )
+finsi
+
+cible traite_double_liquidation3:
+application: iliad;
+variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+P_EST_CALCUL_ACOMPTES = VARTMP1;
+FLAG_ACO = 0;
+V_NEGACO = 0;
+V_AVFISCOPBIS = 0;
+V_DIFTEOREEL = 0;
+si V_IND_TRAIT = 4 alors # primitif
+  PREM8_11 = 0;
+  calculer cible article_1731_bis;
+finsi
+calculer cible est_calcul_acomptes;
+CALCUL_ACOMPTES = VARTMP1;
+calculer cible est_calcul_avfisc;
+CALCUL_AVFISC = VARTMP1;
+si CALCUL_AVFISC = 1 alors
+  SAUV_IRANT = IRANT + 0 ;
+  IRANT = indefini;
+sinon
+  SAUV_IRANT = 0;
+finsi
+si CALCUL_ACOMPTES  = 1 et P_EST_CALCUL_ACOMPTES alors
+  restaurer
+  : variable REV_AC
+  : categorie saisie revenu, saisie revenu corrective
+  : avec attribut(REV_AC, acompte) = 0
+  : apres (
+    iterer
+    : variable REV_AC
+    : categorie saisie revenu, saisie revenu corrective
+    : avec attribut(REV_AC, acompte) = 0
+    : dans (
+      REV_AC = indefini;
+    )
+    si CALCUL_AVFISC = 1 alors
+      calculer cible calcule_acomptes_avfisc;
+    sinon
+      calculer cible calcule_acomptes;
+    finsi
+  )
+finsi
+si CALCUL_AVFISC = 1 alors
+  V_AVFISCOPBIS = 0;
+  V_DIFTEOREEL = 0;
+  V_INDTEO = 1;
+  calculer cible calcule_avfiscal;
+  V_INDTEO = 0;
+  V_NEGREEL = 1;
+  V_NAPREEL = 0;
+finsi
+si CALCUL_AVFISC = 1 et SAUV_IRANT != 0.0 alors
+  IRANT = SAUV_IRANT;
+finsi
+V_ACO_MTAP = 0;
+V_NEGACO = 0;
+calculer cible calcul_primitif_isf;
+calculer cible calcul_prim_corr;
+calculer cible calcul_primitif_taux;
+si V_IND_TRAIT = 4 alors # primitif
+  calculer cible verif_calcul_primitive;
+finsi
+
+cible traite_double_liquidation_exit_taxe_bis:
+application: iliad;
+si present(PVIMPOS) ou present(CODRWB) alors
+  FLAG_3WBNEG = 0;
+  FLAG_EXIT = 1;
+  VARTMP1 = 0;
+  calculer cible traite_double_liquidation3;
+  si present(NAPTIR) alors
+    FLAG_3WBNEG = (NAPTIR < 0);
+    NAPTIR = abs(NAPTIR);
+    V_NAPTIR3WB = NAPTIR;
+  finsi
+  si present(IHAUTREVT) alors
+    V_CHR3WB = IHAUTREVT;
+  finsi
+  si present(ID11) alors
+    V_ID113WB = ID11;
+  finsi
+  FLAG_EXIT = 0;
+finsi
+si present(PVSURSI) ou present(CODRWA) alors
+  FLAG_3WANEG = 0;
+  FLAG_EXIT = 2;
+  VARTMP1 = 0;
+  calculer cible traite_double_liquidation3;
+  si present(NAPTIR) alors
+    FLAG_3WANEG = (NAPTIR < 0);
+    NAPTIR = abs(NAPTIR);
+    V_NAPTIR3WA = NAPTIR;
+  finsi
+  si present(IHAUTREVT) alors
+    V_CHR3WA = IHAUTREVT;
+  finsi
+  si present(ID11) alors
+    V_ID113WA = ID11;
+  finsi
+  FLAG_EXIT = 0;
+finsi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # debug
 

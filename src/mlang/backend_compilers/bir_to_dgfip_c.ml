@@ -227,6 +227,19 @@ let rec generate_c_expr (program : program) (e : expression Pos.marked)
           (Format.sprintf "attribut_%s(%s, \"%s\")" id_str ptr (Pos.unmark a))
       in
       D.build_transitive_composition { def_test; value_comp }
+  | Size var ->
+      let ptr =
+        match Mir.VariableMap.find var.mir_var var_indexes with
+        | Dgfip_varid.VarIterate (t, _, _) -> t
+        | _ -> assert false
+      in
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
+      D.build_transitive_composition { def_test; value_comp }
+  | NbError ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_erreurs_bloquantes(irdata)" in
+      D.build_transitive_composition { def_test; value_comp }
   | NbCategory _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
@@ -343,6 +356,23 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           iffalse;
       Format.fprintf oc "@]@,}"
   | SVerif v -> generate_var_cond program dgfip_flags var_indexes v oc
+  | SVerifBlock stmts ->
+      let goto_label = fresh_c_local "verif_block" in
+      let pr fmt = Format.fprintf oc fmt in
+      pr "@[<v 2>{@\n";
+      pr "#ifdef FLG_MULTITHREAD@\n";
+      pr "  init_erreur(irdata);@\n";
+      pr "  if (setjmp(irdata->jmp_bloq) != 0) {@\n";
+      pr "    goto %s;@\n" goto_label;
+      pr "  }@\n";
+      pr "#else@\n";
+      pr "  init_erreur();@\n";
+      pr "  if (setjmp(jmp_bloq) != 0) {@\n";
+      pr "    goto %s;@\n" goto_label;
+      pr "  }@\n";
+      pr "#endif@\n";
+      pr "%a@\n" (generate_stmts dgfip_flags program var_indexes) stmts;
+      pr "%s:;@]@\n}@\n" goto_label
   | SRovCall r ->
       let rov = ROVMap.find r program.rules_and_verifs in
       generate_rov_function_header ~definition:false oc rov

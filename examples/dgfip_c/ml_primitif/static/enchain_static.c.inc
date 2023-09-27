@@ -91,6 +91,11 @@ void free_erreur()
 {
 }
 
+int nb_erreurs_bloquantes(T_irdata *irdata) {
+  return irdata->nb_bloquantes;
+}
+
+
 #else
 
 static T_discord *discords = 0;
@@ -149,6 +154,18 @@ void free_erreur()
       dd->erreur->message = NULL;
     }
   }
+}
+
+int nb_erreurs_bloquantes(T_irdata *irdata) {
+  T_discord *temp_discords = discords;
+  int nb = 0;
+  while (temp_discords != NULL) {
+    if (temp_discords->erreur->type == ANOMALIE) {
+      nb++;
+    }
+    temp_discords = temp_discords->suivant;
+  }
+  return nb;
 }
 
 #endif /* FLG_MULTITHREAD */
@@ -356,7 +373,7 @@ double modulo(double a, double b)
 
 
 /* Temporary wrapper functions for verifications */
-
+/*
 struct S_discord * verif_saisie_cohe_primitive_raw(T_irdata *irdata);
 struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata)
 {
@@ -374,7 +391,7 @@ struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata)
   }
   verif_saisie_cohe_primitive_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_saisie_cohe_primitive_isf_raw(T_irdata *irdata);
@@ -394,7 +411,7 @@ struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel)
   }
   verif_saisie_cohe_primitive_isf_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_saisie_cohe_corrective_raw(T_irdata *irdata);
@@ -414,7 +431,7 @@ struct S_discord * verif_saisie_cohe_corrective(T_irdata *irdata)
   }
   verif_saisie_cohe_corrective_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_cohe_horizontale_raw(T_irdata *irdata);
@@ -434,7 +451,7 @@ struct S_discord * verif_cohe_horizontale(T_irdata *irdata)
   }
   verif_cohe_horizontale_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_contexte_cohe_primitive_raw(T_irdata *irdata);
@@ -454,7 +471,7 @@ struct S_discord * verif_contexte_cohe_primitive(T_irdata *irdata)
   }
   verif_contexte_cohe_primitive_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_contexte_cohe_corrective_raw(T_irdata *irdata);
@@ -474,7 +491,7 @@ struct S_discord * verif_contexte_cohe_corrective(T_irdata *irdata)
   }
   verif_contexte_cohe_corrective_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_famille_cohe_primitive_raw(T_irdata *irdata);
@@ -494,7 +511,7 @@ struct S_discord * verif_famille_cohe_primitive(T_irdata *irdata)
   }
   verif_famille_cohe_primitive_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_famille_cohe_corrective_raw(T_irdata *irdata);
@@ -514,7 +531,7 @@ struct S_discord * verif_famille_cohe_corrective(T_irdata *irdata)
   }
   verif_famille_cohe_corrective_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_revenu_cohe_primitive_raw(T_irdata *irdata);
@@ -534,7 +551,7 @@ struct S_discord * verif_revenu_cohe_primitive(T_irdata *irdata)
   }
   verif_revenu_cohe_primitive_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_revenu_cohe_corrective_raw(T_irdata *irdata);
@@ -554,7 +571,7 @@ struct S_discord * verif_revenu_cohe_corrective(T_irdata *irdata)
   }
   verif_revenu_cohe_corrective_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_calcul_primitive_raw(T_irdata *irdata);
@@ -574,7 +591,7 @@ struct S_discord * verif_calcul_primitive(T_irdata *irdata)
   }
   verif_calcul_primitive_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
 
 struct S_discord * verif_calcul_primitive_isf_raw(T_irdata *irdata);
@@ -584,7 +601,7 @@ struct S_discord * verif_calcul_primitive_isf(T_irdata *irdata)
   init_erreur(irdata);
 #else
   init_erreur();
-#endif /* FLG_MULTITHREAD */
+#endif
   return verif_calcul_primitive_isf_raw(irdata);
 }
 
@@ -605,5 +622,6 @@ struct S_discord * verif_calcul_corrective(T_irdata *irdata)
   }
   verif_calcul_corrective_raw(irdata);
   return discords;
-#endif /* FLG_MULTITHREAD */
+#endif
 }
+*/

@@ -135,6 +135,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
               used_defs,
               stmt :: acc,
               pos - 1 )
+        | SVerifBlock _ -> (used_vars, used_defs, stmt :: acc, pos - 1)
         | SConditional (cond, _, _, _) ->
             let stmt_used_vars = Bir.get_used_variables (cond, Pos.no_pos) in
             ( update_used_vars stmt_used_vars pos used_vars,

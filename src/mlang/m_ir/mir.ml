@@ -285,6 +285,8 @@ type 'variable expression_ =
       * 'variable expression_ Pos.marked
   | NbCategory of CatVarSet.t
   | Attribut of string Pos.marked * 'variable * string Pos.marked
+  | Size of 'variable
+  | NbError
 
 type expression = variable expression_
 
@@ -304,6 +306,8 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | Error -> Error
   | NbCategory l -> NbCategory l
   | Attribut (v, var, a) -> Attribut (v, f var, a)
+  | Size var -> Size (f var)
+  | NbError -> NbError
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
@@ -316,7 +320,9 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ -> acc
+  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ | Size _
+  | NbError ->
+      acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)

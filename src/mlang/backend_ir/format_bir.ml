@@ -60,6 +60,10 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format.pp_print_option (fun fmt v ->
              Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
         cond_error_opt_var
+  | SVerifBlock stmts ->
+      Format.fprintf fmt
+        "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" format_stmts
+        stmts
   | SRovCall r ->
       Format.fprintf fmt "call_rule(%d)@\n" (Mir.num_of_rule_or_verif_id r)
   | SFunctionCall (func, args) ->

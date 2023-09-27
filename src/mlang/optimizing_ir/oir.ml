@@ -26,6 +26,7 @@ and stmt_kind =
       (** The first two block ids are the true and false branch, the third is
           the join point after *)
   | SVerif of Bir.condition_data
+  | SVerifBlock of block_id * block_id
   | SGoto of block_id
   | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.variable list
@@ -106,8 +107,8 @@ let count_instr (p : program) : int =
     List.fold_left
       (fun acc s ->
         match Pos.unmark s with
-        | SConditional _ | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _
-        | SPrint _ | SIterate _ | SRestore _ ->
+        | SConditional _ | SAssign _ | SVerif _ | SVerifBlock _ | SRovCall _
+        | SFunctionCall _ | SPrint _ | SIterate _ | SRestore _ ->
             acc + 1
         | SGoto _ -> acc)
       acc stmts

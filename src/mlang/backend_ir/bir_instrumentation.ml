@@ -120,6 +120,8 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
         (get_code_locs_stmts p f
            (Bir_interpreter.ConditionalBranch false :: loc))
   | Bir.SVerif _ -> CodeLocationMap.empty
+  | Bir.SVerifBlock s ->
+      get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
   | Bir.SRovCall r ->
       get_code_locs_stmts p

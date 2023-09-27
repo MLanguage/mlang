@@ -126,6 +126,8 @@ type 'variable expression_ =
       * 'variable expression_ Pos.marked
   | NbCategory of CatVarSet.t
   | Attribut of string Pos.marked * 'variable * string Pos.marked
+  | Size of 'variable
+  | NbError
 
 type expression = variable expression_
 

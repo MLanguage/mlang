@@ -53,6 +53,21 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
         append_to_block
           (Pos.same_pos_as (Oir.SVerif cond) s)
           curr_block_id blocks )
+  | Bir.SVerifBlock stmts ->
+      let bid = fresh_block_id () in
+      let blocks = initialize_block bid blocks in
+      let end_block = fresh_block_id () in
+      let blocks = initialize_block end_block blocks in
+      let blocks =
+        append_to_block
+          (Pos.same_pos_as (Oir.SVerifBlock (bid, end_block)) s)
+          curr_block_id blocks
+      in
+      let last_bid, blocks = translate_statement_list stmts bid blocks in
+      let blocks =
+        append_to_block (Oir.SGoto end_block, Pos.no_pos) last_bid blocks
+      in
+      (end_block, blocks)
   | Bir.SConditional (e, l1, l2) ->
       let b1id = fresh_block_id () in
       let blocks = initialize_block b1id blocks in
@@ -181,6 +196,9 @@ let rec re_translate_statement (s : Oir.stmt)
   | Oir.SAssign (var, data) ->
       (None, Some (Pos.same_pos_as (Bir.SAssign (var, data)) s))
   | Oir.SVerif cond -> (None, Some (Pos.same_pos_as (Bir.SVerif cond) s))
+  | Oir.SVerifBlock (b, b_end) ->
+      let stmts = re_translate_blocks_until b blocks (Some b_end) in
+      (Some b_end, Some (Pos.same_pos_as (Bir.SVerifBlock stmts) s))
   | Oir.SConditional (e, b1, b2, join_block) ->
       let b1 = re_translate_blocks_until b1 blocks (Some join_block) in
       let b2 = re_translate_blocks_until b2 blocks (Some join_block) in

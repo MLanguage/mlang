@@ -49,7 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
 %token IF THEN ELSE ENDIF PRINT PRINT_ERR
-%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
+%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY SIZE NB_ERROR
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
@@ -800,6 +800,10 @@ function_call:
   { (NbCategory cats, mk_position $sloc) }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN
   { (Attribut (var, attr), mk_position $sloc) }
+| SIZE LPAREN var = symbol_with_pos RPAREN
+  { (Size var, mk_position $sloc) }
+| NB_ERROR LPAREN RPAREN
+  { (NbError, mk_position $sloc) }
 | s = function_name LPAREN RPAREN
   { (FunctionCall (s, Mast.ArgList []), mk_position $sloc) }
 | s = function_name LPAREN args = function_call_args RPAREN

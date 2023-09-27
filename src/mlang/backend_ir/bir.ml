@@ -107,6 +107,7 @@ and stmt_kind =
   | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
   | SVerif of condition_data
+  | SVerifBlock of stmt list
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
   | SPrint of Mast.print_std * variable Mir.print_arg list
@@ -203,6 +204,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
       match Pos.unmark stmt with
       | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
           acc + 1
+      | SVerifBlock s -> acc + 1 + count_instr_blocks p s
       | SIterate (_, _, _, s) -> acc + 1 + count_instr_blocks p s
       | SRestore (_, _, s) -> acc + 1 + count_instr_blocks p s
       | SConditional (_, s1, s2) ->
@@ -265,6 +267,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
         match Pos.unmark stmt with
         | SVerif _ -> acc
         | SAssign (var, _) -> VariableSet.add var acc
+        | SVerifBlock s -> get_assigned_variables_block acc s
         | SIterate (_, _, _, s) -> get_assigned_variables_block acc s
         | SRestore (_, _, s) -> get_assigned_variables_block acc s
         | SConditional (_, s1, s2) ->
@@ -296,7 +299,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             get_local_vars_expr acc arg)
           acc args
     | Mir.Literal _ | Mir.Var _ | Mir.Error | Mir.NbCategory _ | Mir.Attribut _
-      ->
+    | Mir.Size _ | Mir.NbError ->
         acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
@@ -321,6 +324,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                       es acc
                 | Mir.IndexGeneric (_v, e) -> get_local_vars_expr acc e)
             | _ -> acc)
+        | SVerifBlock s -> get_local_vars_block acc s
         | SIterate (_, _, expr, s) ->
             let acc = get_local_vars_expr acc (expr, Pos.no_pos) in
             get_local_vars_block acc s

@@ -24,6 +24,7 @@ and stmt_kind =
   | SAssign of Bir.variable * Bir.variable_def
   | SConditional of Bir.expression * block_id * block_id * block_id
   | SVerif of Bir.condition_data
+  | SVerifBlock of block_id * block_id
   | SGoto of block_id
   | SRovCall of Bir.rov_id
   | SFunctionCall of Bir.function_name * Mir.Variable.t list

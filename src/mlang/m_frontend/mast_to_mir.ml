@@ -1323,8 +1323,19 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         | _ ->
             let msg = Format.sprintf "unknown variable %s" (Pos.unmark v) in
             Errors.raise_spanned_error msg (Pos.get_position v))
+    | Mast.Size v -> (
+        match Pos.VarNameToID.find_opt (Pos.unmark v) idmap with
+        | Some (var :: _) -> (
+            if var.is_it then Mir.Size var
+            else
+              match var.is_table with
+              | Some i -> Mir.Literal (Mir.Float (float_of_int i))
+              | None -> Mir.Literal (Mir.Float 1.0))
+        | _ ->
+            let msg = Format.sprintf "unknown variable %s" (Pos.unmark v) in
+            Errors.raise_spanned_error msg (Pos.get_position v))
+    | Mast.NbError -> Mir.NbError
   in
-
   Pos.same_pos_as expr f
 
 (** Mutually recursive with {!val: translate_expression} *)

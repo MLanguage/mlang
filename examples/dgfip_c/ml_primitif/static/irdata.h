@@ -69,5 +69,6 @@ typedef struct S_env_sauvegarde {
 
 extern void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz);
 extern void env_restaurer(T_env_sauvegarde *liste);
+extern int nb_erreurs_bloquantes(T_irdata *irdata);
 
 #endif /* _IRDATA_H_ */

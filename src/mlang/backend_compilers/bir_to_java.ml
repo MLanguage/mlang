@@ -164,7 +164,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
       (se3, s3)
-  | Attribut _ ->
+  | Attribut _ | Size _ | NbError ->
       Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
 
@@ -327,6 +327,7 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
   | SVerif v -> generate_var_cond oc v
+  | SVerifBlock s -> generate_stmts program oc s
   | SFunctionCall (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
   | SPrint (std, args) ->

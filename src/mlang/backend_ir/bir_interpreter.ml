@@ -650,6 +650,14 @@ struct
                     | _ -> assert false)
                 | None -> Undefined)
             | None -> assert false)
+        | Size var -> (
+            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
+            | Some mvar -> (
+                match mvar.is_table with
+                | Some i -> Number (N.of_float (float_of_int i))
+                | None -> Number (N.of_float 1.0))
+            | None -> assert false)
+        | NbError -> Number (N.of_float 0.0) (* à faire *)
         | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
@@ -800,6 +808,8 @@ struct
         match evaluate_expr ctx p.mir_program data.cond_expr with
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
+    | Bir.SVerifBlock stmts ->
+        evaluate_stmts p ctx stmts (InsideBlock 0 :: loc) 0
     | Bir.SRovCall r ->
         let rule = Bir.ROVMap.find r p.rules_and_verifs in
         evaluate_stmts p ctx
@@ -863,7 +873,7 @@ struct
             p.Bir.mir_program.program_vars ctx
         in
         Mir.CatVarSet.fold eval vcs ctx
-    | SRestore (vars, var_params, stmts) ->
+    | Bir.SRestore (vars, var_params, stmts) ->
         let backup =
           Bir.VariableSet.fold
             (fun v backup ->

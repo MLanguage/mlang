@@ -609,7 +609,7 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
-    | Attribut _ -> (e, Top)
+    | Attribut _ | Size _ | NbError -> (e, Top)
     | NbCategory _ -> assert false
   in
   if not @@ check new_e d then
@@ -738,6 +738,8 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
           ( Pos.same_pos_as (SVerif { cond with cond_expr = new_e }) stmt
             :: new_block,
             ctx ))
+  | SVerifBlock (b, b_end) ->
+      (Pos.same_pos_as (SVerifBlock (b, b_end)) stmt :: new_block, ctx)
   | SIterate (var, vcs, expr, b, b_end) -> (
       let new_expr, d =
         partially_evaluate_expr ctx p.mir_program (expr, Pos.no_pos)

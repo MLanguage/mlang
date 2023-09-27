@@ -888,7 +888,7 @@ let gen_table_varinfos fmt cprog vars =
         "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
       StrMap.iter
         (fun attr _ ->
-          Format.fprintf fmt "  if (strcmp(attr, \"%s\")) return 1;\n" attr)
+          Format.fprintf fmt "  if (strcmp(attr, \"%s\") == 0) return 1;\n" attr)
         attributs;
       Format.fprintf fmt "  return 0;\n";
       Format.fprintf fmt "}\n\n";
@@ -896,8 +896,8 @@ let gen_table_varinfos fmt cprog vars =
         id_str id_str;
       StrMap.iter
         (fun attr _ ->
-          Format.fprintf fmt "  if (strcmp(attr, \"%s\")) return vi->%s;\n" attr
-            attr)
+          Format.fprintf fmt "  if (strcmp(attr, \"%s\") == 0) return vi->%s;\n"
+            attr attr)
         attributs;
       Format.fprintf fmt "  return 0.0;\n";
       Format.fprintf fmt "}\n\n")
