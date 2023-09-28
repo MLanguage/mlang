@@ -60,51 +60,5 @@ let verif_saisie_cohe_primitive_isf tgv = exec_verif "verif_saisie_cohe_primitiv
 let verif_saisie_cohe_corrective tgv = exec_verif "verif_saisie_cohe_corrective" tgv
 let verif_cohe_horizontale tgv = exec_verif "verif_cohe_horizontale" tgv
 
-let article_1731_bis tgv = exec_ench "article_1731_bis" tgv
-let calcul_prim_corr tgv = exec_ench "calcul_prim_corr" tgv
-let effacer_base_etc tgv = exec_ench "effacer_base_etc" tgv
-let effacer_calculee_etc tgv = exec_ench "effacer_calculee_etc" tgv
-let calcule_acomptes tgv = exec_ench "calcule_acomptes" tgv
-let calcule_avfiscal tgv = exec_ench "calcule_avfiscal" tgv
-let calcule_acomptes_avfisc tgv = exec_ench "calcule_acomptes_avfisc" tgv
-let est_calcul_acomptes tgv = exec_ench "est_calcul_acomptes" tgv
-let est_code_supp_avfisc tgv = exec_ench "est_code_supp_avfisc" tgv
-let est_calcul_avfisc tgv = exec_ench "est_calcul_avfisc" tgv
-let traite_double_liquidation3 tgv = exec_verif "traite_double_liquidation3" tgv
-let traite_double_liquidation_exit_taxe_bis tgv = exec_ench "traite_double_liquidation_exit_taxe_bis" tgv
-
-type traitement =
-  | Primitif
-  | Correctif
-
-let rec traite_double_liquidation_2 tgv traitement =
-  (* modcat is always 1, so this function does nothing *)
-  (* let tgv = modulation_taxation tgv in *)
-  traite_double_liquidation_pvro tgv
-
-and traite_double_liquidation_pvro tgv =
-  if TGV.defined tgv "3WG" then
-    begin
-      TGV.set_bool tgv "FLAG_PVRO" true;
-      let _err = traite_double_liquidation_exit_taxe tgv in
-      TGV.internal_copy ~undef:UDIgnore tgv [ "IAD11", "IPVRO" ]
-    end;
-  TGV.set_bool tgv "FLAG_PVRO" false;
-  traite_double_liquidation_exit_taxe tgv
-
-and traite_double_liquidation_exit_taxe tgv =
-traite_double_liquidation_exit_taxe_bis tgv;
-  TGV.set_bool tgv "FLAG_BAREM" true;
-  TGV.set_bool tgv "VARTMP1" true;
-  let _err = traite_double_liquidation3 tgv in
-  TGV.internal_copy ~undef:UDIgnore tgv
-    [ "RASTXFOYER", "BARTXFOYER";
-      "RASTXDEC1", "BARTXDEC1";
-      "RASTXDEC2", "BARTXDEC2";
-      "INDTAZ", "BARINDTAZ";
-      "IRTOTAL", "BARIRTOTAL" ];
-  TGV.copy_abs tgv "IITAZIR" "BARIITAZIR" "FLAG_BARIITANEG";
-  TGV.set_bool tgv "FLAG_BAREM" false;
-  TGV.set_bool tgv "VARTMP1" true;
-  traite_double_liquidation3 tgv
+let traite_double_liquidation_2 tgv = exec_verif "traite_double_liquidation_2" tgv
 

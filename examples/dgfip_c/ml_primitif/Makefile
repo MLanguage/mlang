@@ -9,7 +9,7 @@ else
 endif
 
 # DGFiP C backend works only with these specifications at the moment.
-MPP_FUNCTION=dgfip_calculation
+MPP_FUNCTION=traite_double_liquidation_2
 
 MLANG_DGFIP_C_OPTS=\
 	--mpp_function=$(MPP_FUNCTION)

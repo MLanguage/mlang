@@ -112,34 +112,9 @@ static ench_t enchaineurs[] = {
   { "sauve_base_anterieure", sauve_base_anterieure },
   { "sauve_base_stratemajo", sauve_base_stratemajo },
 
-  { "ENCH_TL", ENCH_TL },
-
-  { "article_1731_bis", article_1731_bis },
-  { "calcul_prim_corr", calcul_prim_corr },
-  { "effacer_base_etc", effacer_base_etc },
-  { "effacer_calculee_etc", effacer_calculee_etc },
-  { "calcule_acomptes", calcule_acomptes },
-  { "calcule_avfiscal", calcule_avfiscal },
-  { "calcule_acomptes_avfisc", calcule_acomptes_avfisc },
-  { "est_calcul_acomptes", est_calcul_acomptes },
-  { "est_code_supp_avfisc", est_code_supp_avfisc },
-  { "est_calcul_avfisc", est_calcul_avfisc },
-  { "traite_double_liquidation_exit_taxe_bis", traite_double_liquidation_exit_taxe_bis }
+  { "ENCH_TL", ENCH_TL }
 };
-/*
-extern struct S_discord * verif_calcul_primitive(T_irdata *irdata);
-extern struct S_discord * verif_calcul_primitive_isf(T_irdata *irdata);
-extern struct S_discord * verif_calcul_corrective(T_irdata *irdata);
-extern struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata);
-extern struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel);
-extern struct S_discord * verif_saisie_cohe_corrective(T_irdata *irdata);
-extern struct S_discord * verif_cohe_horizontale(T_irdata *irdata);
 
-struct S_discord * verif_saisie_cohe_primitive_isf_stub(T_irdata *irdata)
-{
-  return verif_saisie_cohe_primitive_isf(irdata, 0);
-}
-*/
 typedef struct S_discord * (*verif_fun)(T_irdata *);
 
 typedef struct verif_t {
@@ -155,7 +130,7 @@ static verif_t verifications[] = {
   { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf },
   { "verif_saisie_cohe_corrective", verif_saisie_cohe_corrective },
   { "verif_cohe_horizontale", verif_cohe_horizontale },
-  { "traite_double_liquidation3", traite_double_liquidation3 }  
+  { "traite_double_liquidation_2", traite_double_liquidation_2 }
 };
 
 typedef enum genre_t {

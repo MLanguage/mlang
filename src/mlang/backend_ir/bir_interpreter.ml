@@ -502,7 +502,15 @@ struct
             if new_e1 = Undefined then Undefined
             else
               match Bir.VariableMap.find var ctx.ctx_vars with
-              | SimpleVar _ -> assert false (* should not happen *)
+              | SimpleVar e ->
+                  let idx =
+                    match new_e1 with
+                    | Undefined -> assert false (* should not happen *)
+                    | Number f -> roundf f
+                  in
+                  if N.(idx >=. N.of_int (Int64.of_int 1)) then Undefined
+                  else if N.(idx <. N.zero ()) then Number (N.zero ())
+                  else e
               | TableVar (size, values) ->
                   evaluate_array_index new_e1 size values)
         | LocalVar lvar -> (
@@ -743,7 +751,7 @@ struct
                 in
                 let tval =
                   match curr_value with
-                  | SimpleVar _ -> assert false (* should not happen *)
+                  | SimpleVar e -> Array.make size e
                   | TableVar (s, vals) ->
                       assert (s = size);
                       vals

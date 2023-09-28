@@ -137,7 +137,6 @@ let run_test test_file flag_no_bin_compare =
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
   TGV.set_int tgv "ANCSDED" (annee_calc + 1); (* instead of execution date *)
-
   let err1 = M.verif_saisie_cohe_primitive tgv in
   let err2 =
     if List.exists (fun e -> e.[0] = 'A') err1 then
@@ -150,7 +149,7 @@ let run_test test_file flag_no_bin_compare =
       begin
         let _err = M.calcul_primitif_isf tgv in
         let _err = M.verif_calcul_primitive_isf tgv in
-        M.traite_double_liquidation_2 tgv M.Primitif
+        M.traite_double_liquidation_2 tgv
       end
   in
 
