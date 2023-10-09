@@ -291,12 +291,15 @@ let format_rule fmt (r : rule) =
        (pp_unmark format_formula))
     r.rule_formulaes
 
+let format_table_size fmt = function
+  | Some (Mast.LiteralSize i, _) -> Format.fprintf fmt "[%d]" i
+  | Some (Mast.SymbolSize s, _) -> Format.fprintf fmt "[%s]" s
+  | None -> ()
+
 let format_target fmt (t : target) =
   let format_tmp_var fmt (name, size) =
     let name = Pos.unmark name in
-    match size with
-    | Some i -> Format.fprintf fmt "%s[%d]" name i
-    | None -> Format.fprintf fmt "%s" name
+    Format.fprintf fmt "%s%a" name format_table_size size
   in
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
@@ -332,9 +335,7 @@ let format_input_variable fmt (v : input_variable) =
 
 let format_computed_variable fmt (v : computed_variable) =
   Format.fprintf fmt "%s%a %s %a : %a%s;" (Pos.unmark v.comp_name)
-    (option_print Format.pp_print_int)
-    (option_bind Pos.unmark v.comp_table)
-    computed_category
+    format_table_size v.comp_table computed_category
     (pp_print_list_space (pp_unmark Format.pp_print_string))
     v.comp_category
     (option_print format_value_typ)

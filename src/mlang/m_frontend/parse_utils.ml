@@ -77,11 +77,18 @@ let parse_table_index sloc (s : string) : Mast.table_index =
       E.raise_spanned_error "table index should be an integer"
         (mk_position sloc))
 
+let parse_table_size (s : string) : Mast.table_size =
+  try Mast.LiteralSize (int_of_string s) with Failure _ -> Mast.SymbolSize s
+
 (**{1 Literal parsing}*)
 
 let parse_literal sloc (s : string) : Mast.literal =
   try Mast.Float (float_of_string s)
   with Failure _ -> Mast.Variable (parse_variable sloc s)
+
+let parse_const_value (s : string) : Mast.literal =
+  try Mast.Float (float_of_string s)
+  with Failure _ -> Mast.Variable (Mast.Normal s)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 

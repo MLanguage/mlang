@@ -15,7 +15,7 @@ SELF_DIR:=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 ##################################################
 
 define source_dir
-	$(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort) $(1)errI.m $(1)tgvI.m
+	$(1)tgvI.m $(1)errI.m $(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort)
 endef
 
 define source_dir_ext

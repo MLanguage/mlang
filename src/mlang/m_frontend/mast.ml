@@ -66,6 +66,17 @@ type literal = Variable of variable | Float of float | Undefined
     here in [SymbolIndex] because there can also be a variable named ["X"]... *)
 type table_index = LiteralIndex of int | SymbolIndex of variable
 
+type table_size = LiteralSize of int | SymbolSize of string
+
+let get_table_size = function
+  | LiteralSize i -> i
+  | SymbolSize _ -> assert false
+
+let get_table_size_opt = function
+  | Some (LiteralSize i, pos) -> Some (i, pos)
+  | None -> None
+  | Some (SymbolSize _, _) -> assert false
+
 type set_value =
   | FloatValue of float Pos.marked
   | VarValue of variable Pos.marked
@@ -228,7 +239,7 @@ type rule = {
 type target = {
   target_name : string Pos.marked;
   target_applications : application Pos.marked list;
-  target_tmp_vars : (string Pos.marked * int option) list;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
   target_prog : instruction Pos.marked list;
 }
 
@@ -277,7 +288,7 @@ type input_variable = {
 
 type computed_variable = {
   comp_name : variable_name Pos.marked;
-  comp_table : int Pos.marked option;
+  comp_table : table_size Pos.marked option;
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
   comp_category : string Pos.marked list;

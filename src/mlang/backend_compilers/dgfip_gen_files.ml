@@ -274,7 +274,10 @@ let get_vars prog is_ebcdic =
                 let tvar = computed_var_subtype cv in
                 (* Base or Computed *)
                 let size =
-                  match cv.comp_table with Some i -> Pos.unmark i | None -> 1
+                  match cv.comp_table with
+                  | Some (Mast.LiteralSize i, _) -> i
+                  | None -> 1
+                  | Some (Mast.SymbolSize _, _) -> assert false
                 in
                 let idx1, idx2, idxo_opt =
                   next_idx idx tvar

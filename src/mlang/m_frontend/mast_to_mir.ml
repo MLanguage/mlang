@@ -328,9 +328,9 @@ let make_range_list (l1 : Mast.literal Pos.marked)
 
 (** This function is the workhorse of loop unrolling : it takes a loop prefix
     containing the set of variables over which to iterate, and fabricates a
-    combinator. This combinator takes auser-provided way of translating the loop
-    body generically over the values of the iterated variables, and produce a
-    list corresponding of the unrolled loop bodies expressions containing the
+    combinator. This combinator takes a user-provided way of translating the
+    loop body generically over the values of the iterated variables, and produce
+    a list corresponding of the unrolled loop bodies expressions containing the
     iterated values.
 
     In OCaml terms, if you want [translate_loop_variables lvs f ctx], then you
@@ -432,40 +432,6 @@ let get_applications (p : Mast.program) : Pos.t StrMap.t =
           | _ -> apps)
         apps source_file)
     StrMap.empty p
-
-(** Gets constant values. Done in a separate pass because constant variables are
-    substituted everywhere by their defined value. *)
-let get_constants (p : Mast.program) : float Pos.marked ConstMap.t =
-  List.fold_left
-    (fun const_map source_file ->
-      List.fold_left
-        (fun const_map source_file_item ->
-          match Pos.unmark source_file_item with
-          | Mast.VariableDecl var_decl -> (
-              match var_decl with
-              | Mast.ConstVar (marked_name, cval) -> (
-                  try
-                    let _old_const, old_pos =
-                      ConstMap.find (Pos.unmark marked_name) const_map
-                    in
-                    Cli.var_info_print
-                      "Dropping declaration of constant variable %s %a because \
-                       constant was previously defined %a"
-                      (Pos.unmark marked_name) Pos.format_position
-                      (Pos.get_position marked_name)
-                      Pos.format_position old_pos;
-                    const_map
-                  with Not_found -> (
-                    match Pos.unmark cval with
-                    | Mast.Float f ->
-                        ConstMap.add (Pos.unmark marked_name)
-                          (f, Pos.get_position marked_name)
-                          const_map
-                    | _ -> const_map))
-              | _ -> const_map)
-          | _ -> const_map)
-        const_map source_file)
-    ConstMap.empty p
 
 (* hackish way to ignore M rules bound to out-of-scope applications *)
 let belongs_to_iliad_app (r : Mast.application Pos.marked list) : bool =
@@ -816,7 +782,9 @@ let get_variables_decl (p : Mast.program)
                                  (Pos.get_position cvar.Mast.comp_name))
                               ~attributes:cvar.comp_attributes ~cats:(Some cat)
                               ~origin:None
-                              ~is_table:(Pos.unmark_option cvar.Mast.comp_table)
+                              ~is_table:
+                                (Pos.unmark_option
+                                   (Mast.get_table_size_opt cvar.Mast.comp_table))
                               ~is_temp:false ~is_it:false
                           in
                           let new_var_data =
@@ -824,7 +792,8 @@ let get_variables_decl (p : Mast.program)
                               var_decl_typ =
                                 Pos.unmark_option cvar.Mast.comp_typ;
                               var_decl_is_table =
-                                Pos.unmark_option cvar.Mast.comp_table;
+                                Pos.unmark_option
+                                  (Mast.get_table_size_opt cvar.Mast.comp_table);
                               var_decl_descr =
                                 Some (Pos.unmark cvar.Mast.comp_description);
                               var_decl_io = Regular;
@@ -2099,17 +2068,20 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
               let var_data, tmp_idmap, tmp_var_decl_data =
                 StrMap.fold
                   (fun name (pos, size) (var_data, map, decls) ->
+                    let size' =
+                      Pos.unmark_option (Mast.get_table_size_opt size)
+                    in
                     let var =
                       Mir.Variable.new_var (name, pos) None ("temporary", pos)
                         (dummy_exec_number pos) ~attributes:[] ~origin:None
-                        ~cats:None ~is_table:size ~is_temp:true ~is_it:false
+                        ~cats:None ~is_table:size' ~is_temp:true ~is_it:false
                     in
                     let var_data = Mir.VariableDict.add var var_data in
                     let map = Pos.VarNameToID.add name [ var ] map in
                     let var_decl =
                       {
                         var_decl_typ = None;
-                        var_decl_is_table = size;
+                        var_decl_is_table = size';
                         var_decl_descr = None;
                         var_decl_io = Regular;
                         var_pos = pos;
@@ -2124,7 +2096,10 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                 StrMap.mapi
                   (fun vn (pos, size) ->
                     let var = List.hd (Pos.VarNameToID.find vn tmp_idmap) in
-                    (var, pos, size))
+                    let size' =
+                      Pos.unmark_option (Mast.get_table_size_opt size)
+                    in
+                    (var, pos, size'))
                   target_tmp_vars
               in
               let target_prog, var_data =
@@ -2269,7 +2244,8 @@ let get_conds (cats : Mir.cat_variable_data Mir.CatVarMap.t)
   (verif_domains, conds)
 
 let translate (p : Mast.program) : Mir.program =
-  let const_map = get_constants p in
+  let const_map = Expand_macros.get_constants p in
+  let p = Expand_macros.proceed p in
   let apps = get_applications p in
   let var_category_decls = get_var_categories p in
   let var_category_map = get_var_category_map p in

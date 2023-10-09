@@ -242,7 +242,7 @@ const_variable_name:
 | name = SYMBOL COLON CONST { (parse_variable_name $sloc name, mk_position $sloc)}
 
 const_variable_value:
-| value = SYMBOL { (parse_literal $sloc value, mk_position $sloc) }
+| value = SYMBOL { (parse_const_value value, mk_position $sloc) }
 
 const_variable:
 | name = const_variable_name EQUALS value = const_variable_value SEMICOLON
@@ -277,7 +277,7 @@ computed_variable:
   }, mk_position $sloc) }
 
 computed_variable_table:
-| TABLE LBRACKET size = SYMBOL RBRACKET { (int_of_string size, mk_position $sloc) }
+| TABLE LBRACKET size = SYMBOL RBRACKET { (parse_table_size size, mk_position $sloc) }
 
 input_variable_name:
 | name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
@@ -395,16 +395,8 @@ target:
 temporary_variable_name:
 | name = symbol_with_pos size = computed_variable_table?
     { 
-      let is_table = match size with
-      | Some i ->
-          if Pos.unmark i < 1 then
-            Errors.raise_spanned_error "size must be > 0" (Pos.get_position i)
-          else
-            Some (Pos.unmark i)
-      | None -> None
-      in
       let name_pos = parse_variable_name $sloc (Pos.unmark name), Pos.get_position name in
-      (name_pos, is_table)
+      (name_pos, size)
     }
 
 temporary_variables_decl:
