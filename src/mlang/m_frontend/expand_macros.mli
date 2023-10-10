@@ -11,8 +11,4 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module ConstMap = StrMap
-
-val get_constants : Mast.program -> float Pos.marked ConstMap.t
-
 val proceed : Mast.program -> Mast.program

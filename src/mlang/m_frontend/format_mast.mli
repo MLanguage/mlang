@@ -26,6 +26,10 @@ val format_var_type : Mast.var_type -> string
 
 val format_variable : Format.formatter -> Mast.variable -> unit
 
+val format_loop_variables : Format.formatter -> Mast.loop_variables -> unit
+
+val format_formula : Format.formatter -> Mast.formula -> unit
+
 val format_rule_domain : Format.formatter -> Mast.rule_domain_decl -> unit
 
 val format_verif_domain : Format.formatter -> Mast.verif_domain_decl -> unit

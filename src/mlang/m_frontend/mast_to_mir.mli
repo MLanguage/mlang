@@ -18,24 +18,6 @@
 
 (** {1 Translation context}*)
 
-(** {2 Loop translation context} *)
-
-(** The M language has a strange way of doing loops. We translate them by
-    unrolling; but for that we need a context to hold the loop parameters, which
-    consists of a mapping from characters to integers or other characters. *)
-
-(** The values of the map can be either strings of integers *)
-type loop_param_value = VarName of Mast.variable_name | RangeInt of int
-
-module ConstMap : StrMap.T
-
-module ParamsMap : CharMap.T
-(** Map whose keys are loop parameters *)
-
-type loop_context = (loop_param_value * int) ParamsMap.t
-(** This is the context when iterating a loop : for each loop parameter, we have
-    access to the current value of this loop parameter in this iteration. *)
-
 (** {2 General translation context} *)
 
 type translating_context = {
@@ -43,9 +25,6 @@ type translating_context = {
       (** [true] if translating an expression susceptible to contain a generic
           table index *)
   idmap : Mir.idmap;  (** Current string-to-{!type: Mir.Variable.t} mapping *)
-  lc : loop_context option;  (** Current loop translation context *)
-  const_map : float Pos.marked ConstMap.t;
-      (** Mapping from constant variables to their value *)
   exec_number : Mir.execution_number;
       (** Number of the rule of verification condition being translated *)
 }
@@ -80,7 +59,6 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 val get_conds :
   Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.Error.t list ->
-  float Pos.marked ConstMap.t ->
   Mir.idmap ->
   Mast.program ->
   Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.RuleMap.t

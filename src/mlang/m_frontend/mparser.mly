@@ -791,9 +791,9 @@ function_call:
 | NB_CATEGORY LPAREN cats = var_category_id RPAREN
   { (NbCategory cats, mk_position $sloc) }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN
-  { (Attribut (var, attr), mk_position $sloc) }
+  { (Attribut ((parse_variable $sloc (fst var), snd var), attr), mk_position $sloc) }
 | SIZE LPAREN var = symbol_with_pos RPAREN
-  { (Size var, mk_position $sloc) }
+  { (Size (parse_variable $sloc (fst var), snd var), mk_position $sloc) }
 | NB_ERROR LPAREN RPAREN
   { (NbError, mk_position $sloc) }
 | s = function_name LPAREN RPAREN

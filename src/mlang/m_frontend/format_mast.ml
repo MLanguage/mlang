@@ -171,8 +171,9 @@ let rec format_expression fmt (e : expression) =
         (pp_print_list_space (pp_unmark Format.pp_print_string))
         (Pos.unmark l)
   | Attribut (v, a) ->
-      Format.fprintf fmt "attribut(%s, %s)" (Pos.unmark v) (Pos.unmark a)
-  | Size v -> Format.fprintf fmt "taille(%s)" (Pos.unmark v)
+      Format.fprintf fmt "attribut(%a, %s)" format_variable (Pos.unmark v)
+        (Pos.unmark a)
+  | Size v -> Format.fprintf fmt "taille(%a)" format_variable (Pos.unmark v)
   | NbError -> Format.fprintf fmt "nb_erreur()"
 
 and format_func_args fmt (args : func_args) =

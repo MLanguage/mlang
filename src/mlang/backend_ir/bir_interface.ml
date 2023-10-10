@@ -74,8 +74,6 @@ let const_var_set_from_list (p : Bir.program)
           {
             table_definition = false;
             idmap = p.idmap;
-            lc = None;
-            const_map = Mast_to_mir.ConstMap.empty;
             exec_number = Mast_to_mir.dummy_exec_number Pos.no_pos;
           }
           e
@@ -158,8 +156,7 @@ let translate_external_conditions var_cats idmap
   let _, conds =
     (* Leave a constant map empty is risky, it will fail if we allow tests to
        refer to M constants in their expressions *)
-    Mast_to_mir.get_conds var_cats [ test_error ] Mast_to_mir.ConstMap.empty
-      idmap [ program ]
+    Mast_to_mir.get_conds var_cats [ test_error ] idmap [ program ]
   in
   Mir.RuleMap.map
     (fun data -> Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
