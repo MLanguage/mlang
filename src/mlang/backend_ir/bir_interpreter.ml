@@ -727,31 +727,45 @@ struct
           (Pos.unmark (Mir.Error.err_descr_string err));
         ctx
 
-  let evaluate_variable (p : Bir.program) (ctx : ctx) (curr_value : var_value)
-      (vdef : Bir.variable Mir.variable_def_) : var_value =
+  let evaluate_simple_variable (p : Bir.program) (ctx : ctx)
+      (expr : Bir.expression) : var_value =
+    SimpleVar (evaluate_expr ctx p.mir_program (expr, Pos.no_pos))
+
+  let evaluate_variable (p : Bir.program) (ctx : ctx) (var : Bir.variable)
+      (curr_value : var_value) (vdef : Bir.variable Mir.variable_def_) :
+      var_value =
     match vdef with
-    | Mir.SimpleVar e -> SimpleVar (evaluate_expr ctx p.mir_program e)
-    | Mir.TableVar (size, es) ->
-        TableVar
-          ( size,
-            match es with
-            | IndexGeneric (v, e) ->
-                let i =
-                  match Bir.VariableMap.find v ctx.ctx_vars with
-                  | SimpleVar n -> n
-                  | TableVar _ -> assert false
-                  (* should not happen *)
-                  | exception Not_found ->
-                      raise
-                        (RuntimeError
-                           ( ErrorValue
-                               ( "no value found for dynamic index",
-                                 Pos.get_position e ),
-                             ctx ))
-                in
-                let tval =
+    | Mir.SimpleVar e -> (
+        match var.Bir.mir_var.Mir.is_table with
+        | Some sz ->
+            let value = evaluate_expr ctx p.mir_program e in
+            let tab =
+              match curr_value with
+              | SimpleVar _ -> Array.make sz value
+              | TableVar (size, tab) ->
+                  assert (size = sz);
+                  for i = 0 to size - 1 do
+                    tab.(i) <- value
+                  done;
+                  tab
+            in
+            TableVar (sz, tab)
+        | None -> SimpleVar (evaluate_expr ctx p.mir_program e))
+    | Mir.TableVar (size, es) -> (
+        match es with
+        | IndexGeneric (v, e) -> (
+            let i =
+              match Bir.VariableMap.find_opt v ctx.ctx_vars with
+              | Some (SimpleVar n) -> n
+              | Some (TableVar (s, t)) -> if s > 0 then t.(0) else Undefined
+              | None -> assert false
+            in
+            match var.Bir.mir_var.Mir.is_table with
+            | Some sz ->
+                assert (size = sz);
+                let tab =
                   match curr_value with
-                  | SimpleVar e -> Array.make size e
+                  | SimpleVar e -> Array.make sz e
                   | TableVar (s, vals) ->
                       assert (s = size);
                       vals
@@ -759,27 +773,38 @@ struct
                 (match i with
                 | Undefined -> ()
                 | Number f ->
-                    let i = int_of_float (N.to_float f) in
-                    if i < 0 || i >= size then
-                      raise
-                        (RuntimeError
-                           ( IndexOutOfBounds
-                               ("dynamic index out of bound", Pos.get_position e),
-                             ctx )));
-                Array.init size (fun idx ->
-                    match i with
-                    | Number f when int_of_float (N.to_float f) = idx ->
-                        evaluate_expr ctx p.mir_program e
-                    | Number _ | Undefined -> tval.(idx))
-            | IndexTable es ->
-                Array.init size (fun idx ->
-                    match Mir.IndexMap.find_opt idx es with
-                    | Some e -> evaluate_expr ctx p.mir_program e
-                    | None -> begin
-                        match curr_value with
-                        | SimpleVar _ -> assert false
-                        | TableVar (_, values) -> values.(idx)
-                      end) )
+                    let i' = int_of_float (N.to_float f) in
+                    if 0 <= i' && i' < size then
+                      tab.(i') <- evaluate_expr ctx p.mir_program e);
+                TableVar (size, tab)
+            | None -> (
+                match i with
+                | Undefined -> curr_value
+                | Number f ->
+                    let i' = int_of_float (N.to_float f) in
+                    if i' = 0 then SimpleVar (evaluate_expr ctx p.mir_program e)
+                    else curr_value))
+        | IndexTable it -> (
+            match var.Bir.mir_var.Mir.is_table with
+            | Some sz ->
+                assert (size = sz);
+                let tab =
+                  match curr_value with
+                  | SimpleVar e -> Array.make sz e
+                  | TableVar (s, vals) ->
+                      assert (s = size);
+                      vals
+                in
+                Mir.IndexMap.iter
+                  (fun i e ->
+                    if 0 <= i && i < sz then
+                      tab.(i) <- evaluate_expr ctx p.mir_program e)
+                  it;
+                TableVar (size, tab)
+            | None -> (
+                match Mir.IndexMap.find_opt 0 it with
+                | Some e -> SimpleVar (evaluate_expr ctx p.mir_program e)
+                | None -> curr_value)))
     | Mir.InputVar -> assert false
 
   let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt)
@@ -798,14 +823,11 @@ struct
             | Some size -> TableVar (size, Array.make size Undefined)
             | None -> SimpleVar Undefined)
         in
-        let res = evaluate_variable p ctx value vdef in
+        let res = evaluate_variable p ctx var value vdef in
         !assign_hook var (fun _ -> var_value_to_var_literal res) loc;
         { ctx with ctx_vars = Bir.VariableMap.add var res ctx.ctx_vars }
     | Bir.SConditional (b, t, f) -> (
-        match
-          evaluate_variable p ctx (SimpleVar Undefined)
-            (SimpleVar (b, Pos.no_pos))
-        with
+        match evaluate_simple_variable p ctx b with
         | SimpleVar (Number z) when N.(z =. zero ()) ->
             evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
         | SimpleVar (Number _) ->
@@ -852,9 +874,7 @@ struct
                       (match mvar.Mir.alias with Some a -> a | None -> "")
                 | None -> assert false)
             | Mir.PrintExpr (e, mi, ma) ->
-                let var_value =
-                  evaluate_variable p ctx (SimpleVar Undefined) (SimpleVar e)
-                in
+                let var_value = evaluate_simple_variable p ctx (Pos.unmark e) in
                 format_var_value_prec mi ma std_fmt var_value)
           args;
         ctx
@@ -869,10 +889,7 @@ struct
                     ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
                   }
                 in
-                match
-                  evaluate_variable p ctx (SimpleVar Undefined)
-                    (SimpleVar (expr, Pos.no_pos))
-                with
+                match evaluate_simple_variable p ctx expr with
                 | SimpleVar (Number z) when N.(z =. one ()) ->
                     evaluate_stmts p ctx stmts (ConditionalBranch true :: loc) 0
                 | SimpleVar _ -> ctx
@@ -908,10 +925,7 @@ struct
                             ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
                           }
                         in
-                        match
-                          evaluate_variable p ctx (SimpleVar Undefined)
-                            (SimpleVar (expr, Pos.no_pos))
-                        with
+                        match evaluate_simple_variable p ctx expr with
                         | SimpleVar (Number z) when N.(z =. one ()) ->
                             let v = Bir.(var_from_mir default_tgv) v in
                             let value = Bir.VariableMap.find v ctx.ctx_vars in
