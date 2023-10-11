@@ -51,7 +51,7 @@ else ifeq ($(YEAR), 2019)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2019/fuzzing/
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
-	MPP_FUNCTION?=compute_double_liquidation_pvro
+	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
 else ifeq ($(YEAR), 2020)
 	SOURCE_FILES?=$(SOURCE_DIR_2020)
 	SOURCE_EXT_FILES?=$(SOURCE_EXT_DIR_2020)

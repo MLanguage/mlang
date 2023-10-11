@@ -562,8 +562,26 @@ V_IND_TRAIT = 4;
 calculer cible traite_double_liquidation_2;
 
 
+# obsolète
 
-
+cible dgfip_calculation:
+application: iliad;
+APPLI_OCEANS = 0;
+V_IND_TRAIT = 4;  # 4 = PRIMITIF, 5 = CORRECTIF
+FLAG_PVRO = 0;
+FLAG_EXIT = 0;
+FLAG_BAREM = 0;
+FLAG_ACO = 0;
+V_NEGACO = 0;
+V_AVFISCOPBIS = 0;
+V_DIFTEOREEL = 0;
+PREM8_11 = 0;
+ART1731BIS = 0;
+V_ACO_MTAP = 0;
+V_NEGACO = 0;
+calculer cible calcul_primitif_isf;
+calculer cible calcul_primitif;
+calculer cible calcul_primitif_taux;
 
 
 

@@ -4,6 +4,15 @@ compute_article1731bis():
     ART1731BIS = 1
     PREM8_11 = 1
 
+calcul_primitif_isf(outputs):
+  outputs <- call_m_rules(isf)
+
+calcul_primitif(outputs):
+  outputs <- call_m_rules(primitive)
+
+calcul_primitif_taux(outputs):
+  outputs <- call_m_rules(taux)
+
 compute_benefits():
 # do not exist in the 2018 version: 7MA,7KM,7KG
 # do not exist in the 2019 version: 7QD,7QB,7QC,7CN,7QE,7QF,7QG,7QH,7LS
@@ -12,7 +21,7 @@ compute_benefits():
     partition with avfisc == 1:
       V_INDTEO = 1
       V_CALCUL_NAPS = 1
-      IAD11, INE, IRE <- call_m_rules(primitive)
+      IAD11, INE, IRE <- calcul_primitif()
       V_CALCUL_NAPS = 0
       iad11 = cast(IAD11)
       ire = cast(IRE)
@@ -44,9 +53,9 @@ compute_double_liquidation3(outputs):
   8ZG = v_8ZG
   V_ACO_MTAP = 0
   V_NEGACO = 0
-  outputs <- call_m_rules(isf)
-  outputs <- call_m_rules(primitive)
-  outputs <- call_m_rules(taux)
+  outputs <- calcul_primitif_isf()
+  outputs <- calcul_primitif()
+  outputs <- calcul_primitif_taux()
 
 compute_double_liquidation_exit_taxe(outputs):
   annee = 2018 # FIXME
@@ -108,4 +117,3 @@ compute_double_liquidation_pvro():
      V_IPVRO = IAD11
   FLAG_PVRO = 0
   compute_double_liquidation_exit_taxe()
-
