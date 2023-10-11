@@ -1,5 +1,6 @@
 type offset =
   | GetValueConst of int
+  | GetValueExpr of string
   | GetValueVar of Bir.variable
   | PassPointer
   | None
@@ -18,6 +19,7 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           | None -> ""
           | GetValueVar offset -> " + (int)" ^ generate_variable vm None offset
           | GetValueConst offset -> " + " ^ string_of_int offset
+          | GetValueExpr offset -> Format.sprintf " + (%s)" offset
           | PassPointer -> assert false
         in
         if def_flag then Dgfip_varid.gen_access_def vm mvar offset

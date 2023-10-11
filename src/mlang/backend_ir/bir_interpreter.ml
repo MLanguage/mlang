@@ -87,6 +87,8 @@ module type S = sig
 
   val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
 
+  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+
   type run_error =
     | ErrorValue of string * Pos.t
     | FloatIndex of string * Pos.t
@@ -240,6 +242,25 @@ struct
                | Mir.Float f -> Number (N.of_float_input (Bir.var_to_mir v) f))
              inputs)
           ctx.ctx_vars;
+    }
+
+  let complete_ctx (ctx : ctx) (vars : Mir.VariableDict.t) : ctx =
+    {
+      ctx with
+      ctx_vars =
+        Mir.VariableDict.fold
+          (fun mvar ctx_vars ->
+            let var = Bir.(var_from_mir default_tgv) mvar in
+            match Bir.VariableMap.find_opt var ctx.ctx_vars with
+            | Some _ -> ctx_vars
+            | None ->
+                let value =
+                  match (Bir.var_to_mir var).is_table with
+                  | Some size -> TableVar (size, Array.make size Undefined)
+                  | None -> SimpleVar Undefined
+                in
+                Bir.VariableMap.add var value ctx_vars)
+          vars ctx.ctx_vars;
     }
 
   type run_error =
@@ -526,8 +547,8 @@ struct
               try
                 match Bir.VariableMap.find var ctx.ctx_vars with
                 | SimpleVar l -> l
-                | TableVar _ -> assert false
-                (* should not happen *)
+                | TableVar (size, tab) ->
+                    if size > 0 then tab.(0) else Undefined
               with Not_found ->
                 Errors.raise_spanned_error
                   ("Var not found (should not happen): "
@@ -1097,6 +1118,7 @@ let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.update_ctx_with_inputs Interp.empty_ctx inputs in
+  let ctx = Interp.complete_ctx ctx p.Bir.mir_program.Mir.program_vars in
   let ctx = Interp.evaluate_program p ctx code_loc_start_value in
   fun () -> Interp.print_output bir_func ctx
 

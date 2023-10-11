@@ -41,6 +41,13 @@ let str_escape str =
   in
   aux 0
 
+let fresh_c_local =
+  let c = ref 0 in
+  fun name ->
+    let s = name ^ string_of_int !c in
+    incr c;
+    s
+
 let rec generate_c_expr (program : program) (e : expression Pos.marked)
     (var_indexes : Dgfip_varid.var_id_map) : D.expression_composition =
   match Pos.unmark e with
@@ -274,7 +281,20 @@ let generate_var_def (program : program) (dgfip_flags : Dgfip_options.flags)
   match def with
   | SimpleVar e ->
       let se = generate_c_expr program e var_indexes in
-      generate_m_assign dgfip_flags var_indexes var None fmt se
+      if var.Bir.mir_var.Mir.is_it then (
+        let pr form = Format.fprintf fmt form in
+        pr "@[<v 2>{";
+        let idx = fresh_c_local "idxPROUT" in
+        pr "@;int %s;" idx;
+        pr "@;@[<v 2>for(%s = 0; %s < %s; %s++) {" idx idx
+          (Dgfip_varid.gen_size var_indexes var.Bir.mir_var)
+          idx;
+        pr "@;%a"
+          (generate_m_assign dgfip_flags var_indexes var (GetValueExpr idx))
+          se;
+        pr "@]@;}";
+        pr "@]@;}@;")
+      else generate_m_assign dgfip_flags var_indexes var None fmt se
   | TableVar (_, IndexTable es) ->
       Mir.IndexMap.iter
         (fun i v ->
@@ -317,13 +337,6 @@ let generate_var_cond (program : program) (dgfip_flags : Dgfip_options.flags)
     (D.format_assign dgfip_flags var_indexes "cond")
     value;
   Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" erreur code
-
-let fresh_c_local =
-  let c = ref 0 in
-  fun name ->
-    let s = name ^ string_of_int !c in
-    incr c;
-    s
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)

@@ -44,8 +44,8 @@ let check_result tgv err expected_tgv expected_err =
           if montant <> montant' then
             begin
               result := false;
-              Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
-               code montant montant'
+             (* Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
+               code montant montant'*)
             end
     ) expected_tgv;
   !result
@@ -111,11 +111,11 @@ let compare_dump out outexp =
     if Int64.equal i64 undef then "undef"
     else string_of_float(Int64.float_of_bits i64)
   in
-  List.iter (fun (var, res, exp) ->
+(*  List.iter (fun (var, res, exp) ->
       Printf.eprintf "%s: %s found, expected %s\n"
         var (hex2floatstr res) (hex2floatstr exp)
     )
-    diffs;
+    diffs;*)
   flush stderr;
   close_in out;
   close_in outexp

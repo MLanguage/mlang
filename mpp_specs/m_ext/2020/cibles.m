@@ -531,8 +531,27 @@ finsi
 FLAG_PVRO = 0;
 calculer cible traite_double_liquidation_exit_taxe;
 
+cible teste_tableaux:
+application: iliad;
+VARTMP1 = 0;
+afficher "0) VARTMP1 = " (VARTMP1) : 0..2 "\n";
+VARTMPTAB1[0] = 0;
+VARTMPTAB1[1] = 1;
+VARTMPTAB1[2] = indefini;
+iterer
+: variable V
+: categorie calculee *
+: dans (
+  V = 1;
+)
+afficher "1) VARTMP1 = " (VARTMP1) : 0..2 "\n";
+afficher "2) VARTMPTAB1[0] = " (VARTMPTAB1[0]) : 0..2 "\n";
+afficher "2) VARTMPTAB1[1] = " (VARTMPTAB1[1]) : 0..2 "\n";
+afficher "2) VARTMPTAB1[2] = " (VARTMPTAB1[2]) : 0..2 "\n";
+
 cible traite_double_liquidation_2:
 application: iliad;
+# calculer cible teste_tableaux;
 calculer cible traite_double_liquidation_pvro;
 
 # primitif iterpréteur

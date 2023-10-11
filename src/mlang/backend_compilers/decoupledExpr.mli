@@ -1,5 +1,6 @@
 type offset =
   | GetValueConst of int
+  | GetValueExpr of string
   | GetValueVar of Bir.variable
   | PassPointer
   | None

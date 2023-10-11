@@ -105,6 +105,8 @@ module type S = sig
 
   val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
 
+  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+
   (** Interpreter runtime errors *)
   type run_error =
     | ErrorValue of string * Pos.t
