@@ -225,7 +225,7 @@ application_reference:
 | APPLICATION COLON ss = symbol_enumeration { ss }
 
 chaining:
-| CHAINING s = SYMBOL aps = application_reference SEMICOLON { (s, aps) }
+| CHAINING s = symbol_with_pos aps = application_reference SEMICOLON { (s, aps) }
 
 chaining_reference_name:
 | c = SYMBOL { (c, mk_position $sloc) }
@@ -256,7 +256,6 @@ computed_variable_descr:
 
 computed_attr_or_subtyp:
 | attr = variable_attribute { let (x, y) = attr in Attr (x,y) }
-| cat = symbol_with_pos { CompSubTyp cat }
 | BASE { CompSubTyp ("base", mk_position $sloc) }
 | GIVEN_BACK { CompSubTyp ("restituee", mk_position $sloc) }
 
@@ -323,7 +322,7 @@ variable_attribute_name:
 | attr = SYMBOL { (attr, mk_position $sloc) }
 
 variable_attribute_value:
- lit = SYMBOL { (parse_literal $sloc lit, mk_position $sloc) }
+ value = SYMBOL { (parse_int $sloc value, mk_position $sloc) }
 
 variable_attribute:
 | attr = variable_attribute_name EQUALS

@@ -82,7 +82,7 @@ let generate_input_condition (crit : Mir.Variable.t -> bool)
 let var_is_ (attr : string) (value : float) (v : Mir.Variable.t) : bool =
   List.exists
     (fun ((attr_name, _), (attr_value, _)) ->
-      attr_name = attr && attr_value = Mast.Float value)
+      attr_name = attr && float attr_value = value)
     v.Mir.Variable.attributes
 
 let check_attribute (p : Mir_interface.full_program) (attr : string) : bool =
@@ -345,7 +345,7 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
     let is_verif = match rov_id with Mir.VerifID _ -> true | _ -> false in
     let verif_domain = cond.Mir.cond_domain in
     let is_max = Mast.DomainIdSet.mem dom verif_domain.dom_max in
-    let is_eq = verif_domain.dom_id = dom in
+    let is_eq = Pos.unmark verif_domain.dom_id = dom in
     let is_var_compatible =
       (* !!! à valider en amont *)
       Mir.CatVarSet.subset
@@ -583,7 +583,7 @@ let generate_verif_call (m_program : Mir_interface.full_program)
     let cats = Mir.cond_cats_to_set cond.Mir.cond_cats in
     let verif_domain = cond.Mir.cond_domain in
     let is_max = Mast.DomainIdSet.mem chain verif_domain.dom_max in
-    let is_eq = verif_domain.dom_id = chain in
+    let is_eq = Pos.unmark verif_domain.dom_id = chain in
     let is_var_compatible =
       Mir.CatVarSet.subset cats verif_domain.dom_data.vdom_auth
     in
@@ -892,7 +892,9 @@ let create_combined_program (m_program : Mir_interface.full_program)
                    rule_domain.dom_max)
             in
             let has_used_domain =
-              Mast.DomainIdSet.mem rule_domain.dom_id ctx.used_rule_domains
+              Mast.DomainIdSet.mem
+                (Pos.unmark rule_domain.dom_id)
+                ctx.used_rule_domains
             in
             let has_used_chaining =
               match rule_data.Mir.rule_chain with

@@ -321,7 +321,7 @@ let format_value_typ fmt (t : value_typ) =
     | Real -> "REEL")
 
 let format_input_attribute fmt ((n, v) : variable_attribute) =
-  Format.fprintf fmt "%s = %a" (Pos.unmark n) format_literal (Pos.unmark v)
+  Format.fprintf fmt "%s = %d" (Pos.unmark n) (Pos.unmark v)
 
 let format_input_variable fmt (v : input_variable) =
   Format.fprintf fmt "%a %s %a %a %a : %s%a;" format_variable_name
@@ -435,7 +435,7 @@ let format_source_file_item fmt (i : source_file_item) =
   | Application app ->
       Format.fprintf fmt "application %a;" format_application (Pos.unmark app)
   | Chaining (c, apps) ->
-      Format.fprintf fmt "enchaineur %a %a;" format_chaining c
+      Format.fprintf fmt "enchaineur %a %a;" format_chaining (Pos.unmark c)
         (pp_print_list_space (pp_unmark format_application))
         apps
   | VariableDecl vd -> format_variable_decl fmt vd

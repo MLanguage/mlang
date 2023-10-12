@@ -176,8 +176,8 @@ module RuleMap : MapExt.T with type key = rov_id
 module TargetMap : StrMap.T
 
 type 'a domain = {
-  dom_id : Mast.DomainId.t;
-  dom_names : Mast.DomainIdSet.t;
+  dom_id : Mast.DomainId.t Pos.marked;
+  dom_names : Pos.t Mast.DomainIdMap.t;
   dom_by_default : bool;
   dom_min : Mast.DomainIdSet.t;
   dom_max : Mast.DomainIdSet.t;

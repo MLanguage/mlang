@@ -673,10 +673,7 @@ struct
                     (fun (attr, _) -> Pos.unmark a = Pos.unmark attr)
                     mvar.attributes
                 with
-                | Some (_, l) -> (
-                    match Pos.unmark l with
-                    | Mast.Float f -> Number (N.of_float f)
-                    | _ -> assert false)
+                | Some (_, l) -> Number (N.of_float (float (Pos.unmark l)))
                 | None -> Undefined)
             | None -> assert false)
         | Size var -> (

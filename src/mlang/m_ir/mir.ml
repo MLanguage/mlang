@@ -441,8 +441,8 @@ let fresh_rule_num =
 let initial_undef_rule_id = RuleID (-1)
 
 type 'a domain = {
-  dom_id : Mast.DomainId.t;
-  dom_names : Mast.DomainIdSet.t;
+  dom_id : Mast.DomainId.t Pos.marked;
+  dom_names : Pos.t Mast.DomainIdMap.t;
   dom_by_default : bool;
   dom_min : Mast.DomainIdSet.t;
   dom_max : Mast.DomainIdSet.t;

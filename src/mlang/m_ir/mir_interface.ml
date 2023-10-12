@@ -68,7 +68,7 @@ let to_full_program (program : program) : full_program =
             (fun rov_id rule (vars, rules) ->
               let rule_domain = rule.rule_domain in
               let is_max = Mast.DomainIdSet.mem dom_id rule_domain.dom_max in
-              let is_eq = rule_domain.dom_id = dom_id in
+              let is_eq = Pos.unmark rule_domain.dom_id = dom_id in
               let is_not_rule_0 = Pos.unmark rule.rule_number <> RuleID 0 in
               if is_not_rule_0 && (is_max || is_eq) then
                 ( List.fold_left
@@ -104,7 +104,8 @@ let to_full_program (program : program) : full_program =
       Mast.ChainingMap.map
         (fun chain_dom ->
           let dep_graph =
-            (Mast.DomainIdMap.find chain_dom.dom_id domains_orders).dep_graph
+            (Mast.DomainIdMap.find (Pos.unmark chain_dom.dom_id) domains_orders)
+              .dep_graph
           in
           (dep_graph, []))
         program.program_chainings

@@ -158,7 +158,7 @@ let consider_output is_ebcdic attribs =
   || List.exists
        (fun (an, av) ->
          match (Pos.unmark an, Pos.unmark av) with
-         | "primrest", Mast.Float v -> v <> 0.0
+         | "primrest", v -> v <> 0
          | _ -> false)
        attribs
 
@@ -234,8 +234,7 @@ let get_attr a attributes =
   in
   match attr_opt with
   | None -> if a = "primrest" then 1 else -1
-  | Some (_an, al) -> (
-      match Pos.unmark al with Mast.Float f -> int_of_float f | _ -> 0)
+  | Some (_an, al) -> Pos.unmark al
 
 let get_name name alias_opt =
   match alias_opt with Some alias -> alias | _ -> name
@@ -863,11 +862,7 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
             List.fold_left
               (fun res (an, al) ->
                 let vn = Pos.unmark an in
-                let vl =
-                  match Pos.unmark al with
-                  | Mast.Float f -> int_of_float f
-                  | _ -> 0
-                in
+                let vl = Pos.unmark al in
                 StrMap.add vn vl res)
               StrMap.empty var.Mir.attributes
           in

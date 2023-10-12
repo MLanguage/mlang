@@ -264,7 +264,7 @@ type rule_domain_decl = rule_domain_data domain_decl
 
 (**{3 Input variables}*)
 
-type variable_attribute = string Pos.marked * literal Pos.marked
+type variable_attribute = string Pos.marked * int Pos.marked
 
 (** Here are all the types a value can have. Date types don't seem to be used at
     all though. *)
@@ -363,8 +363,7 @@ type error_ = {
 
 type source_file_item =
   | Application of application Pos.marked  (** Declares an application *)
-  | Chaining of chaining * application Pos.marked list
-      (** Unused, declares an "enchaineur" *)
+  | Chaining of chaining Pos.marked * application Pos.marked list
   | VariableDecl of variable_decl
   | Rule of rule
   | Target of target

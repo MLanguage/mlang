@@ -57,11 +57,12 @@ val dummy_exec_number : Pos.t -> Mir.execution_number
 (** Dummy execution number used for variable declarations *)
 
 val get_conds :
+  Mir.verif_domain Mast.DomainIdMap.t ->
   Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.Error.t list ->
   Mir.idmap ->
   Mast.program ->
-  Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.RuleMap.t
+  Mir.condition_data Mir.RuleMap.t
 (** Returns a map whose keys are dummy variables and whose values are the
     verification conditions. *)
 
