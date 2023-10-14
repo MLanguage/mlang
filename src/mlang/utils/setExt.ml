@@ -33,15 +33,12 @@ functor
 
     let pp ?(sep = " ") ?(pp_elt = pp_nil) (_ : unit) (fmt : Format.formatter)
         (set : t) : unit =
-      let pp_content fmt set =
-        let foldSet elt first =
-          let _ =
-            if first then Format.fprintf fmt "%a" pp_elt elt
-            else Format.fprintf fmt "%s%a" sep pp_elt elt
-          in
-          false
+      let foldSet elt first =
+        let _ =
+          if first then Format.fprintf fmt "%a" pp_elt elt
+          else Format.fprintf fmt "%s%a" sep pp_elt elt
         in
-        ignore (fold foldSet set true)
+        false
       in
-      Format.fprintf fmt "{ %a }" pp_content set
+      ignore (fold foldSet set true)
   end

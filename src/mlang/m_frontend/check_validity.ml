@@ -121,12 +121,27 @@ module Err = struct
     in
     Errors.raise_error msg
 
-  let loop_in_domains rov =
+  let loop_in_domains rov cycle =
+    let pp_cycle fmt cycle =
+      let foldCycle first id =
+        if first then Format.fprintf fmt "%a@;" (Mast.DomainId.pp ()) id
+        else Format.fprintf fmt "-> %a@;" (Mast.DomainId.pp ()) id;
+        false
+      in
+      ignore (List.fold_left foldCycle true cycle)
+    in
     let msg =
-      Format.sprintf "there is a loop in the %s domain hierarchy"
-        (rov_to_str rov)
+      Format.asprintf "there is a loop in the %s domain hierarchy@;@[<v 2>%a@]"
+        (rov_to_str rov) pp_cycle cycle
     in
     Errors.raise_error msg
+
+  let domain_specialize_itself rov dom_id pos =
+    let msg =
+      Format.asprintf "%s domain \"%a\" specialize itself" (rov_to_str rov)
+        (Mast.DomainId.pp ()) dom_id
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type global_variable = {
@@ -151,6 +166,10 @@ type error = {
   description : string;
 }
 
+type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
+
+type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
+
 type program = {
   prog_apps : Pos.t StrMap.t;
   prog_chainings : Pos.t StrMap.t Pos.marked StrMap.t;
@@ -158,10 +177,10 @@ type program = {
   prog_vars : global_variable StrMap.t;
   prog_alias : global_variable StrMap.t;
   prog_errors : error StrMap.t;
-  prog_rdoms : Mir.rule_domain Mast.DomainIdMap.t;
-  prog_rdom_syms : Mast.DomainId.t Pos.marked Mast.DomainIdMap.t;
-  prog_vdoms : Mir.verif_domain Mast.DomainIdMap.t;
-  prog_vdom_syms : Mast.DomainId.t Pos.marked Mast.DomainIdMap.t;
+  prog_rdoms : Mir.rule_domain_data doms;
+  prog_rdom_syms : syms;
+  prog_vdoms : Mir.verif_domain_data doms;
+  prog_vdom_syms : syms;
 }
 
 let empty_program =
@@ -466,11 +485,7 @@ let check_error (error : Mast.error_) (prog : program) : program =
       { prog with prog_errors }
 
 let check_domain (rov : Err.rov) (decl : 'a Mast.domain_decl) (dom_data : 'b)
-    ((doms, syms) :
-      'c Mir.domain Mast.DomainIdMap.t
-      * Mast.DomainId.t Pos.marked Mast.DomainIdMap.t) :
-    'c Mir.domain Mast.DomainIdMap.t
-    * Mast.DomainId.t Pos.marked Mast.DomainIdMap.t =
+    ((doms, syms) : 'c doms * syms) : 'c doms * syms =
   let dom_names =
     List.fold_left
       (fun dom_names (sl, sl_pos) ->
@@ -537,70 +552,90 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let doms, syms = check_domain Err.Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
 
-let complete_dom_decls (rov : Err.rov)
-    ((doms, syms) :
-      'c Mir.domain Mast.DomainIdMap.t
-      * Mast.DomainId.t Pos.marked Mast.DomainIdMap.t) :
-    'c Mir.domain Mast.DomainIdMap.t =
-  let get_dom id dom =
-    Mast.DomainIdMap.find (Pos.unmark (Mast.DomainIdMap.find id syms)) dom
+let complete_dom_decls (rov : Err.rov) ((doms, syms) : 'a doms * syms) : 'a doms
+    =
+  let get_id id = Pos.unmark (Mast.DomainIdMap.find id syms) in
+  let get_dom id doms = Mast.DomainIdMap.find (get_id id) doms in
+  let module DomGraph :
+    TopologicalSorting.GRAPH
+      with type 'a t = 'a doms
+       and type vertex = Mast.DomainId.t = struct
+    type 'a t = 'a doms
+
+    type vertex = Mast.DomainId.t
+
+    type vertexSet = Mast.DomainIdSet.t
+
+    let vertexSetFold fold set res =
+      Mast.DomainIdSet.fold (fun id res -> fold (get_id id) res) set res
+
+    let vertexSetMem id set = Mast.DomainIdSet.mem (get_id id) set
+
+    let vertexSetRemove id set = Mast.DomainIdSet.remove (get_id id) set
+
+    type 'a vertexMap = 'a Mast.DomainIdMap.t
+
+    let vertexMapEmpty = Mast.DomainIdMap.empty
+
+    let vertexMapAdd id value map = Mast.DomainIdMap.add (get_id id) value map
+
+    let vertexMapFind id map = Mast.DomainIdMap.find (get_id id) map
+
+    let vertices doms =
+      let get_vertex id _ nds = Mast.DomainIdSet.add id nds in
+      Mast.DomainIdMap.fold get_vertex doms Mast.DomainIdSet.empty
+
+    let edges doms id = (get_dom id doms).Mir.dom_min
+  end in
+  let module DomSorting = TopologicalSorting.Make (DomGraph) in
+  let sorted_doms =
+    try DomSorting.sort doms with
+    | DomSorting.Cycle cycle -> Err.loop_in_domains rov cycle
+    | DomSorting.AutoCycle id ->
+        let dom = get_dom id doms in
+        let dom_id, dom_id_pos = dom.Mir.dom_id in
+        Err.domain_specialize_itself rov dom_id dom_id_pos
   in
   let doms =
-    let rec set_min id dom (visiting, visited, doms) =
-      if Mast.DomainIdSet.mem id visited then (visiting, visited, doms)
-      else if Mast.DomainIdSet.mem id visiting then Err.loop_in_domains rov
-      else
-        let visiting = Mast.DomainIdSet.add id visiting in
-        let visiting, visited, doms =
-          let parentMap =
-            let fold parentId map =
-              let parentDom = get_dom parentId doms in
-              let parentId = Pos.unmark parentDom.Mir.dom_id in
-              Mast.DomainIdMap.add parentId parentDom map
-            in
-            Mast.DomainIdSet.fold fold dom.Mir.dom_min Mast.DomainIdMap.empty
-          in
-          Mast.DomainIdMap.fold set_min parentMap (visiting, visited, doms)
+    let set_min doms id =
+      let dom = get_dom id doms in
+      let dom_min =
+        let fold parent_id res =
+          let parent_dom = get_dom parent_id doms in
+          let parent_id = Pos.unmark parent_dom.Mir.dom_id in
+          let dom_min = Mast.DomainIdSet.map get_id parent_dom.Mir.dom_min in
+          Mast.DomainIdSet.singleton parent_id
+          |> Mast.DomainIdSet.union dom_min
+          |> Mast.DomainIdSet.union res
         in
-        let dom_min =
-          let fold parentId res =
-            let parentDom = get_dom parentId doms in
-            let parentId = Pos.unmark parentDom.Mir.dom_id in
-            Mast.DomainIdSet.singleton parentId
-            |> Mast.DomainIdSet.union parentDom.Mir.dom_min
-            |> Mast.DomainIdSet.union res
-          in
-          Mast.DomainIdSet.fold fold dom.Mir.dom_min Mast.DomainIdSet.empty
-        in
-        let dom = Mir.{ dom with dom_min } in
-        let doms = Mast.DomainIdMap.add id dom doms in
-        let visiting = Mast.DomainIdSet.remove id visiting in
-        let visited = Mast.DomainIdSet.add id visited in
-        (visiting, visited, doms)
+        Mast.DomainIdSet.fold fold dom.Mir.dom_min Mast.DomainIdSet.empty
+      in
+      let dom = Mir.{ dom with dom_min } in
+      Mast.DomainIdMap.add id dom doms
     in
-    let init = (Mast.DomainIdSet.empty, Mast.DomainIdSet.empty, doms) in
-    let _, _, doms = Mast.DomainIdMap.fold set_min doms init in
-    doms
+    List.fold_left set_min doms sorted_doms
   in
   let doms =
     let set_max id dom doms =
-      let fold minId doms =
-        let minDom = Mast.DomainIdMap.find minId doms in
-        let dom_max = Mast.DomainIdSet.add id minDom.Mir.dom_max in
-        let minDom = Mir.{ minDom with dom_max } in
-        Mast.DomainIdMap.add minId minDom doms
+      let fold min_id doms =
+        let min_dom = Mast.DomainIdMap.find min_id doms in
+        let dom_max = Mast.DomainIdSet.add id min_dom.Mir.dom_max in
+        let min_dom = Mir.{ min_dom with dom_max } in
+        Mast.DomainIdMap.add min_id min_dom doms
       in
       Mast.DomainIdSet.fold fold dom.Mir.dom_min doms
     in
     Mast.DomainIdMap.fold set_max doms doms
   in
-  match Mast.DomainIdMap.find_opt Mast.DomainId.empty syms with
+  let doms =
+    let add_sym name (id, _) doms =
+      Mast.DomainIdMap.add name (get_dom id doms) doms
+    in
+    Mast.DomainIdMap.fold add_sym syms doms
+  in
+  match Mast.DomainIdMap.find_opt Mast.DomainId.empty doms with
   | None -> Err.no_default_domain rov
-  | Some _ ->
-      Mast.DomainIdMap.fold
-        (fun name (id, _) doms ->
-          Mast.DomainIdMap.add name (get_dom id doms) doms)
-        syms doms
+  | Some _ -> doms
 
 let proceed (p : Mast.program) : program =
   let prog =
