@@ -196,26 +196,30 @@ domaine verif primitive
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
     saisie variation
-: specialise primitive corrective;
+: specialise primitive corrective
+: verifiable;
 
 domaine verif isf
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation;
+    saisie variation
+: verifiable;
 
 domaine verif corrective
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
     saisie variation
-: specialise primitive corrective;
+: specialise primitive corrective
+: verifiable;
 
 domaine verif corrective horizontale
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation, saisie penalite;
+    saisie variation, saisie penalite
+: verifiable;
 |}
 
 let declarations =

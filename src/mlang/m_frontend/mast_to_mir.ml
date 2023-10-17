@@ -777,7 +777,8 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
             Pos.unmark new_var
         | Mast.Float f -> Mir.Literal (Mir.Float f)
         | Mast.Undefined -> Mir.Literal Mir.Undefined)
-    | Mast.NbCategory l -> Mir.NbCategory (Mir.mast_to_catvars cats l)
+    | Mast.NbCategory l ->
+        Mir.NbCategory (Check_validity.mast_to_catvars l cats)
     | Mast.Attribut (v, a) -> (
         if
           Mir.CatVarMap.fold
@@ -1065,15 +1066,6 @@ let get_rules_and_var_data (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     (Mir.RuleMap.empty, Mir.VariableMap.empty)
     (List.rev p)
 
-let cats_variable_from_decl_list cats l =
-  let rec aux res = function
-    | [] -> res
-    | l :: t ->
-        let vcats = Mir.mast_to_catvars cats l in
-        aux (Mir.CatVarSet.union vcats res) t
-  in
-  aux Mir.CatVarSet.empty l
-
 (** At this point [var_data] contains the definition data for all the times a
     variable is defined. However the M language deals with undefined variable,
     so for each variable we have to insert a dummy definition corresponding to
@@ -1168,25 +1160,37 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                    match Pos.unmark arg with
                    | Mast.PrintString s -> Mir.PrintString s
                    | Mast.PrintName v -> (
-                       match Pos.VarNameToID.find_opt (Pos.unmark v) idmap with
+                       let name =
+                         match Pos.unmark v with
+                         | Mast.Normal name -> name
+                         | Mast.Generic _ -> assert false
+                       in
+                       match Pos.VarNameToID.find_opt name idmap with
                        | Some (var :: _) ->
-                           if var.is_it then Mir.PrintName (v, var)
+                           if var.is_it then
+                             Mir.PrintName (Pos.same_pos_as name v, var)
                            else Mir.PrintString (Pos.unmark var.name)
                        | _ ->
                            let msg =
-                             Format.sprintf "unknown variable %s" (Pos.unmark v)
+                             Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
                    | Mast.PrintAlias v -> (
-                       match Pos.VarNameToID.find_opt (Pos.unmark v) idmap with
+                       let name =
+                         match Pos.unmark v with
+                         | Mast.Normal name -> name
+                         | Mast.Generic _ -> assert false
+                       in
+                       match Pos.VarNameToID.find_opt name idmap with
                        | Some (var :: _) ->
-                           if var.is_it then Mir.PrintAlias (v, var)
+                           if var.is_it then
+                             Mir.PrintAlias (Pos.same_pos_as name v, var)
                            else
                              Mir.PrintString
                                (match var.alias with Some a -> a | None -> "")
                        | _ ->
                            let msg =
-                             Format.sprintf "unknown variable %s" (Pos.unmark v)
+                             Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
                    | Mast.PrintExpr (e, min, max) ->
@@ -1225,7 +1229,7 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
           }
         in
         let var_decl_data = Mir.VariableMap.add var var_decl var_decl_data in
-        let catSet = cats_variable_from_decl_list cats vcats in
+        let catSet = Check_validity.cats_variable_from_decl_list vcats cats in
         let ctx = new_ctx pos in
         let ctx = { ctx with idmap } in
         let mir_expr = translate_expression cats idmap ctx expr in
@@ -1283,7 +1287,9 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                   in
                   let var_data = Mir.VariableDict.add var var_data in
                   let idmap = Pos.VarNameToID.add var_name [ var ] idmap in
-                  let catSet = cats_variable_from_decl_list cats vcats in
+                  let catSet =
+                    Check_validity.cats_variable_from_decl_list vcats cats
+                  in
                   let ctx = new_ctx pos in
                   let ctx = { ctx with idmap } in
                   let mir_expr = translate_expression cats idmap ctx expr in
@@ -1573,8 +1579,9 @@ let translate (p : Mast.program) : Mir.program =
                 Mir.VariableDict.add var vars ))
             ([], vars) (List.rev rule_vars)
         in
+        let rule_apps = StrMap.empty in
         let rule_data =
-          Mir.{ rule_domain; rule_chain; rule_vars; rule_number }
+          Mir.{ rule_domain; rule_chain; rule_vars; rule_number; rule_apps }
         in
         (Mir.RuleMap.add rule_id rule_data rules, vars))
       rule_data
@@ -1600,6 +1607,7 @@ let translate (p : Mast.program) : Mir.program =
           rule_chain = None;
           rule_vars = orphans;
           rule_number = (RuleID 0, Pos.no_pos);
+          rule_apps = StrMap.empty;
         }
       rules
   in

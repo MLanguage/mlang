@@ -48,7 +48,7 @@ let rec to_mpp_expr (p : Mir.program) (translated_names : mpp_compute_name list)
                p (Pos.same_pos_as v e)),
           scope )
     | NbVarCategory l ->
-        let cats = Mir.mast_to_catvars p.program_var_categories l in
+        let cats = Check_validity.mast_to_catvars l p.program_var_categories in
         (Call (NbVarCat cats, []), [])
     | ExistsAttrWith (attr, value) ->
         (Call (ExistsAttrWithVal (attr, value), []), [])

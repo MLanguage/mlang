@@ -124,6 +124,8 @@ rule token = parse
   { AUTHORIZE }
 | "calculable"
   { COMPUTABLE }
+| "verifiable"
+  { VERIFIABLE }
 | "par_defaut"
   { BY_DEFAULT }
 | "regle"

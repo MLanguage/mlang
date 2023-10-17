@@ -53,7 +53,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
-%token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
+%token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT VERIFIABLE
 
 %token EOF
 
@@ -161,33 +161,40 @@ verif_domain_decl:
 | DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, vdom_param_with_pos) SEMICOLON
   {
     let err msg pos = Errors.raise_spanned_error msg pos in
-    let fold (dno, dso, dvo, dpdo) = function
-    | Some dn, _, _, _, pos ->
-        if dno = None then Some dn, dso, dvo, dpdo
+    let fold (dno, dso, dvo, dpdo, dco) = function
+    | Some dn, _, _, _, _, pos ->
+        if dno = None then Some dn, dso, dvo, dpdo, dco
         else err "verif domain names are already defined" pos
-    | _, Some ds, _, _, pos ->
-        if dso = None then dno, Some ds, dvo, dpdo
+    | _, Some ds, _, _, _, pos ->
+        if dso = None then dno, Some ds, dvo, dpdo, dco
         else err "verif domain specialization is already specified" pos
-    | _, _, Some dv, _, pos ->
-        if dvo = None then dno, dso, Some dv, dpdo
+    | _, _, Some dv, _, _, pos ->
+        if dvo = None then dno, dso, Some dv, dpdo, dco
         else err "verif domain authorization is already specified" pos
-    | _, _, _, Some dpd, pos ->
-        if dpdo = None then dno, dso, dvo, Some dpd
+    | _, _, _, Some dpd, _, pos ->
+        if dpdo = None then dno, dso, dvo, Some dpd, dco
         else err "verif domain is already defined by defaut" pos
-    | _, _, _, _, _ -> assert false
+    | _, _, _, _, Some dcd, pos ->
+        if dco = None then dno, dso, dvo, dpdo, Some dcd
+        else err "verif domain is already verifiable" pos
+    | _, _, _, _, _, _ -> assert false
     in
-    let init = None, None, None, None in
-    let dno, dso, dvo, dpdo = List.fold_left fold init vdom_params in
+    let init = None, None, None, None, None in
+    let dno, dso, dvo, dpdo, dco = List.fold_left fold init vdom_params in
     let dom_names =
       match dno with
       | None -> err "rule domain names must be defined" (mk_position $sloc)
       | Some dn -> dn
     in
+    let dom_data = {
+      vdom_auth = (match dvo with None -> [] | Some dv -> dv);
+      vdom_verifiable = (match dco with None -> false | _ -> true); 
+    } in
     {
       dom_names;
       dom_parents = (match dso with None -> [] | Some ds -> ds);
       dom_by_default = (match dpdo with None -> false | _ -> true);
-      dom_data = { vdom_auth = (match dvo with None -> [] | Some dv -> dv) };
+      dom_data;
     }
   }
 
@@ -204,13 +211,15 @@ var_category_id:
 
 vdom_param_with_pos:
 | vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (Some vdom_names, None, None, None, mk_position $sloc) }
+  { (Some vdom_names, None, None, None, None, mk_position $sloc) }
 | SPECIALIZE vdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (None, Some vdom_parents, None, None, mk_position $sloc) }
+  { (None, Some vdom_parents, None, None, None, mk_position $sloc) }
 | AUTHORIZE vcats = separated_nonempty_list(COMMA, var_category_id)
-  { (None, None, Some vcats, None, mk_position $sloc) }
+  { (None, None, Some vcats, None, None, mk_position $sloc) }
 | BY_DEFAULT
-  { (None, None, None, Some (), mk_position $sloc) }
+  { (None, None, None, Some (), None, mk_position $sloc) }
+| VERIFIABLE
+  { (None, None, None, None, Some (), mk_position $sloc) }
 
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
@@ -477,9 +486,10 @@ print_argument:
 | s = STRING { (PrintString (parse_string s), mk_position $sloc) }
 | f = print_function LPAREN v = symbol_with_pos RPAREN
     {
+      let m_var = (parse_variable $sloc (fst v), snd v) in
       match Pos.unmark f with
-      | "nom" -> (PrintName v, mk_position $sloc)
-      | "alias" -> (PrintAlias v, mk_position $sloc)
+      | "nom" -> (PrintName m_var, mk_position $sloc)
+      | "alias" -> (PrintAlias m_var, mk_position $sloc)
       | _ -> Errors.raise_spanned_error "unknown print function" (Pos.get_position f)
     }
 | LPAREN e = expression RPAREN prec = print_precision?

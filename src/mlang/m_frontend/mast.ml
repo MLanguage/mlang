@@ -199,8 +199,8 @@ type print_std = StdOut | StdErr
 
 type print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked
-  | PrintAlias of string Pos.marked
+  | PrintName of variable Pos.marked
+  | PrintAlias of variable Pos.marked
   | PrintExpr of expression Pos.marked * int * int
 
 type var_category_id = string Pos.marked list Pos.marked
@@ -339,7 +339,10 @@ type verification = {
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_domain_data = { vdom_auth : var_category_id list }
+type verif_domain_data = {
+  vdom_auth : var_category_id list;
+  vdom_verifiable : bool;
+}
 
 type verif_domain_decl = verif_domain_data domain_decl
 

@@ -135,6 +135,22 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     Cli.debug_print "Reading M files...";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     let m_program = ref [] in
+    if not without_dgfip_m then (
+      let filebuf = Lexing.from_string Dgfip_m.declarations in
+      current_progress Dgfip_m.internal_m;
+      let filebuf =
+        {
+          filebuf with
+          lex_curr_p =
+            { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
+        }
+      in
+      try
+        let commands = Mparser.source_file token filebuf in
+        m_program := commands :: !m_program
+      with Mparser.Error ->
+        Errors.raise_error
+          (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m));
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
     List.iter
@@ -161,22 +177,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
           Errors.raise_spanned_error "M syntax error"
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
-    if not without_dgfip_m then (
-      let filebuf = Lexing.from_string Dgfip_m.declarations in
-      current_progress Dgfip_m.internal_m;
-      let filebuf =
-        {
-          filebuf with
-          lex_curr_p =
-            { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
-        }
-      in
-      try
-        let commands = Mparser.source_file token filebuf in
-        m_program := commands :: !m_program
-      with Mparser.Error ->
-        Errors.raise_error
-          (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m));
+    m_program := List.rev !m_program;
     finish "completed!";
     Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in

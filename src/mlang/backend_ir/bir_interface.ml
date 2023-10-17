@@ -139,7 +139,11 @@ let translate_external_conditions var_cats idmap
         dom_names = [ ([ ("toto", Pos.no_pos) ], Pos.no_pos) ];
         dom_parents = [];
         dom_by_default = true;
-        dom_data = { vdom_auth = [ ([ ("*", Pos.no_pos) ], Pos.no_pos) ] };
+        dom_data =
+          {
+            vdom_auth = [ ([ ("*", Pos.no_pos) ], Pos.no_pos) ];
+            vdom_verifiable = true;
+          };
       }
   in
   let program =
@@ -168,11 +172,11 @@ let translate_external_conditions var_cats idmap
       |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
       |> Mir.CatVarSet.add (Mir.CatInput (StrSet.singleton "revenu"))
     in
-    let dom_data = Mir.{ vdom_auth } in
+    let dom_data = Mir.{ vdom_auth; vdom_verifiable = true } in
     let doms_syms = (Mast.DomainIdMap.empty, Mast.DomainIdMap.empty) in
     let doms, _ =
-      Check_validity.check_domain Check_validity.Err.Verif verif_dom_decl
-        dom_data doms_syms
+      Check_validity.check_domain Check_validity.Verif verif_dom_decl dom_data
+        doms_syms
     in
     doms
   in

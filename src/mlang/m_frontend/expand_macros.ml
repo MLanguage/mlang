@@ -628,12 +628,12 @@ let proceed (p : Mast.program) : Mast.program =
                   in
                   (const_map, prog_file)
               | _ -> (const_map, source_item :: prog_file))
-            (const_map, []) (List.rev source_file)
+            (const_map, []) source_file
         in
-        (const_map, prog_file :: prog))
-      (ConstMap.empty, []) (List.rev p)
+        (const_map, List.rev prog_file :: prog))
+      (ConstMap.empty, []) p
   in
-  expanded_prog
+  List.rev expanded_prog
 
 (** Screugneugneuh ! *)
 let _ = ignore (format_loop_context, format_loop_domain)

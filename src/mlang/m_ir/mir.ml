@@ -446,6 +446,7 @@ type 'a domain = {
   dom_by_default : bool;
   dom_min : Mast.DomainIdSet.t;
   dom_max : Mast.DomainIdSet.t;
+  dom_rov : IntSet.t;
   dom_data : 'a;
 }
 
@@ -479,6 +480,7 @@ type instruction =
       * instruction Pos.marked list
 
 type rule_data = {
+  rule_apps : Pos.t StrMap.t;
   rule_domain : rule_domain;
   rule_chain : (string * rule_domain) option;
   rule_vars : instruction Pos.marked list;
@@ -577,7 +579,7 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type verif_domain_data = { vdom_auth : CatVarSet.t }
+type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
@@ -760,59 +762,6 @@ let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
       then VariableDict.add var acc
       else acc)
     p VariableDict.empty
-
-let mast_to_catvars (cats : 'a CatVarMap.t)
-    (l : string Pos.marked list Pos.marked) : CatVarSet.t =
-  let filter_cats pred =
-    CatVarMap.fold
-      (fun cv _ res -> if pred cv then CatVarSet.add cv res else res)
-      cats CatVarSet.empty
-  in
-  match l with
-  | [ ("*", _) ], _ -> filter_cats (fun _ -> true)
-  | [ ("saisie", _); ("*", _) ], _ ->
-      filter_cats (fun cv -> match cv with CatInput _ -> true | _ -> false)
-  | ("saisie", _) :: id, pos ->
-      let vcat = CatInput (StrSet.from_marked_list id) in
-      if CatVarMap.mem vcat cats then CatVarSet.singleton vcat
-      else Errors.raise_spanned_error "unknown variable category" pos
-  | ("calculee", _) :: id, id_pos -> begin
-      match id with
-      | [] -> CatVarSet.singleton (CatComputed CatCompSet.empty)
-      | [ ("base", _) ] ->
-          let base = CatCompSet.singleton Base in
-          CatVarSet.singleton (CatComputed base)
-      | [ ("base", _); ("*", _) ] ->
-          let base = CatCompSet.singleton Base in
-          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
-          CatVarSet.singleton (CatComputed base)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | [ ("restituee", _) ] ->
-          let givenBack = CatCompSet.singleton GivenBack in
-          CatVarSet.singleton (CatComputed givenBack)
-      | [ ("restituee", _); ("*", _) ] ->
-          let givenBack = CatCompSet.singleton GivenBack in
-          let baseAndGivenBack = givenBack |> CatCompSet.add Base in
-          CatVarSet.singleton (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          let baseAndGivenBack =
-            CatCompSet.singleton Base |> CatCompSet.add GivenBack
-          in
-          CatVarSet.singleton (CatComputed baseAndGivenBack)
-      | [ ("*", _) ] ->
-          let base = CatCompSet.singleton Base in
-          let givenBack = CatCompSet.singleton GivenBack in
-          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
-          CatVarSet.singleton (CatComputed CatCompSet.empty)
-          |> CatVarSet.add (CatComputed base)
-          |> CatVarSet.add (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | _ ->
-          Errors.raise_spanned_error "unlnown calculated variable category"
-            id_pos
-    end
-  | _ -> assert false
 
 let mast_to_catvar (cats : 'a CatVarMap.t)
     (l : string Pos.marked list Pos.marked) : cat_variable =
