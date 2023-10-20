@@ -180,6 +180,9 @@ domaine regle corrective base_inr_inter22
 
 domaine regle corrective base_inr_r9901
 : calculable;
+
+domaine regle corrective base_primitive_penalisee
+: calculable;
 |}
 
 let verif_domains_declaration =
@@ -261,4 +264,5 @@ let string_to_rule_domain_id : string -> string list = function
   | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
   | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
   | "horizontale" -> [ "horizontale" ]
+  | "base_primitive_penalisee" -> [ "corrective"; "base_primitive_penalisee" ]
   | _ -> raise Not_found
