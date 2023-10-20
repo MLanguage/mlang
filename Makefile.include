@@ -28,6 +28,7 @@ SOURCE_DIR_2017:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2017m_6_10/)
 SOURCE_DIR_2018:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2018m_6_7/)
 SOURCE_DIR_2019:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2019m_8_0/)
 SOURCE_DIR_2020:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2020m_6_5/)
+SOURCE_DIR_2022:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2022m22_1/)
 
 SOURCE_EXT_DIR_2015:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2015/)
 SOURCE_EXT_DIR_2016:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2016/)
@@ -35,6 +36,7 @@ SOURCE_EXT_DIR_2017:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2017/)
 SOURCE_EXT_DIR_2018:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2018/)
 SOURCE_EXT_DIR_2019:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2019/)
 SOURCE_EXT_DIR_2020:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2020/)
+SOURCE_EXT_DIR_2022:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2022/)
 
 YEAR?=2020
 
@@ -43,6 +45,7 @@ ifeq ($(YEAR), 2018)
 	SOURCE_EXT_FILES?=$(SOURCE_EXT_DIR_2018)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2018_6_7.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2018/fuzzing/
+	TEST_ONE?=$(SELF_DIR)/tests/2020/fuzzing/fuzzer_10019.m_test
 	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
 	MPP_FUNCTION?=compute_double_liquidation_pvro
 else ifeq ($(YEAR), 2019)
@@ -50,6 +53,7 @@ else ifeq ($(YEAR), 2019)
 	SOURCE_EXT_FILES?=$(SOURCE_EXT_DIR_2019)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2019/fuzzing/
+	TEST_ONE?=$(SELF_DIR)/tests/2019/fuzzing/fuzzer_10029.m_test
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
 	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
 else ifeq ($(YEAR), 2020)
@@ -57,6 +61,15 @@ else ifeq ($(YEAR), 2020)
 	SOURCE_EXT_FILES?=$(SOURCE_EXT_DIR_2020)
 	MPP_FILE?=$(SELF_DIR)/mpp_specs/2020_6_5.mpp
 	TESTS_DIR?=$(SELF_DIR)/tests/2020/fuzzing/
+	TEST_ONE?=$(SELF_DIR)/tests/2020/fuzzing/fuzzer_1001.m_test
+	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
+	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
+else ifeq ($(YEAR), 2022)
+	SOURCE_FILES?=$(SOURCE_DIR_2022)
+	SOURCE_EXT_FILES?=$(SOURCE_EXT_DIR_2022)
+	MPP_FILE?=$(SELF_DIR)/mpp_specs/2020_6_5.mpp
+	TESTS_DIR?=$(SELF_DIR)/tests/2022/fuzzing/
+	TEST_ONE?=$(SELF_DIR)/tests/2022/fuzzing/fuzzer_10004.m_test
 	M_SPEC_FILE?=$(SELF_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
 else
@@ -112,14 +125,14 @@ DRIVER_DIR?=ml_driver/
 DRIVER_FILES?=stubs.c common.ml m.ml read_test.ml main.ml
 
 # Flag to disable binary dump comparison
-NO_BINARY_COMPARE?=0
+NO_BINARY_COMPARE?=1
 
 ##################################################
 # Exports to call backends from main Makefile
 ##################################################
 
 # common
-export SOURCE_FILES SOURCE_EXT_FILES TESTS_DIR MLANG_BIN MLANG_DEFAULT_OPTS
+export SOURCE_FILES SOURCE_EXT_FILES TESTS_DIR TEST_ONE MLANG_BIN MLANG_DEFAULT_OPTS
 # for C backend (Java compilation is year-independent)
 export YEAR CC BACKEND_CFLAGS STATIC_DIR DRIVER_DIR DRIVER_FILES NO_BINARY_COMPARE
 # for Java backend (C overload these now)

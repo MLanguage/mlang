@@ -88,6 +88,9 @@ test_dgfip_c_backend: build
 quick_test: build
 	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 
+test_one: build
+	$(MLANG) --backend interpreter --run_test=$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+
 all: tests test_java_backend test_dgfip_c_backend quick_test
 
 ##################################################
