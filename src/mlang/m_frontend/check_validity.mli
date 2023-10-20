@@ -45,8 +45,19 @@ type target = {
   target_prog : Mast.instruction Pos.marked list;
 }
 
+type rule = {
+  rule_id : int Pos.marked;
+  rule_apps : Pos.t StrMap.t;
+  rule_domain : Mir.rule_domain;
+  rule_chain : string option;
+  rule_instrs : Mast.instruction Pos.marked list;
+  rule_in_vars : StrSet.t;
+  rule_out_vars : StrSet.t;
+}
+
 type program = {
   prog_prefix : string;
+  prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : Pos.t StrMap.t Pos.marked StrMap.t;
   prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
@@ -57,7 +68,7 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
-  prog_rules : Mir.rule_data IntMap.t;
+  prog_rules : rule IntMap.t;
   prog_verifs : unit IntMap.t;
   prog_targets : target StrMap.t;
 }

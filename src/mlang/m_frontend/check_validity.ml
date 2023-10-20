@@ -197,6 +197,20 @@ module Err = struct
 
   let chaining_without_app pos =
     Errors.raise_spanned_error "chaining without compatible application" pos
+
+  let rule_already_defined rule_id old_pos pos =
+    let msg =
+      Format.asprintf "rule %d defined more than once: already defined %a"
+        rule_id Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let multimax_require_two_args pos =
+    Errors.raise_spanned_error "function multimax require two arguments" pos
+
+  let second_arg_of_multimax pos =
+    Errors.raise_spanned_error
+      "second argument of functionn multimax must be a variable name" pos
 end
 
 type global_variable = {
@@ -232,8 +246,19 @@ type target = {
   target_prog : Mast.instruction Pos.marked list;
 }
 
+type rule = {
+  rule_id : int Pos.marked;
+  rule_apps : Pos.t StrMap.t;
+  rule_domain : Mir.rule_domain;
+  rule_chain : string option;
+  rule_instrs : Mast.instruction Pos.marked list;
+  rule_in_vars : StrSet.t;
+  rule_out_vars : StrSet.t;
+}
+
 type program = {
   prog_prefix : string;
+  prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : Pos.t StrMap.t Pos.marked StrMap.t;
   prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
@@ -244,7 +269,7 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
-  prog_rules : Mir.rule_data IntMap.t;
+  prog_rules : rule IntMap.t;
   prog_verifs : unit IntMap.t;
   prog_targets : target StrMap.t;
 }
@@ -288,9 +313,10 @@ let safe_prefix (p : Mast.program) : string =
   in
   make_prefix sorted_names
 
-let empty_program (p : Mast.program) =
+let empty_program (p : Mast.program) prog_app =
   {
     prog_prefix = safe_prefix p;
+    prog_app;
     prog_apps = StrMap.empty;
     prog_chainings = StrMap.empty;
     prog_var_cats = Mir.CatVarMap.empty;
@@ -827,14 +853,30 @@ let rec check_expression (m_expr : Mast.expression Pos.marked)
       | Some e3 ->
           StrSet.union in_vars (check_expression e3 tmp_vars it_vars prog)
       | None -> in_vars)
-  | Mast.FunctionCall (_, args) -> (
-      match args with
-      | Mast.ArgList args ->
-          List.fold_left
-            (fun in_vars e ->
-              check_expression e tmp_vars it_vars prog |> StrSet.union in_vars)
-            StrSet.empty args
-      | Mast.LoopList _ -> assert false)
+  | Mast.FunctionCall ((func_name, _), args) -> (
+      match func_name with
+      | "multimax" -> (
+          match args with
+          | Mast.ArgList [ expr; var_expr ] -> (
+              match var_expr with
+              | Mast.Literal (Mast.Variable var), var_pos ->
+                  let var_name =
+                    check_variable (var, var_pos) Both tmp_vars it_vars prog
+                  in
+                  StrSet.singleton var_name
+                  |> StrSet.union (check_expression expr tmp_vars it_vars prog)
+              | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
+          | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
+          | Mast.LoopList _ -> assert false)
+      | _ -> (
+          match args with
+          | Mast.ArgList args ->
+              List.fold_left
+                (fun in_vars e ->
+                  check_expression e tmp_vars it_vars prog
+                  |> StrSet.union in_vars)
+                StrSet.empty args
+          | Mast.LoopList _ -> assert false))
   | Mast.Literal l -> (
       match l with
       | Mast.Variable var ->
@@ -1073,51 +1115,47 @@ let check_target (t : Mast.target) (prog : program) : program =
         StrMap.add app app_pos target_apps)
       StrMap.empty t.Mast.target_applications
   in
-  let target_tmp_vars =
-    let check_tmp_var (vn, vpos) tmp_vars =
-      (match StrMap.find_opt vn prog.prog_vars with
-      | Some { global_name = _, old_pos; _ } ->
-          Err.variable_already_declared vn old_pos vpos
-      | None -> ());
-      match StrMap.find_opt vn tmp_vars with
-      | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
-      | None -> ()
+  if StrMap.mem prog.prog_app target_apps then
+    let target_tmp_vars =
+      let check_tmp_var (vn, vpos) tmp_vars =
+        (match StrMap.find_opt vn prog.prog_vars with
+        | Some { global_name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ());
+        match StrMap.find_opt vn tmp_vars with
+        | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
+        | None -> ()
+      in
+      List.fold_left
+        (fun target_tmp_vars (var, size) ->
+          check_tmp_var var target_tmp_vars;
+          let vn, vpos = var in
+          let sz =
+            match size with
+            | None -> None
+            | Some (Mast.LiteralSize i, _) -> Some i
+            | Some (Mast.SymbolSize _, _) -> assert false
+          in
+          StrMap.add vn (sz, vpos) target_tmp_vars)
+        StrMap.empty t.Mast.target_tmp_vars
     in
-    List.fold_left
-      (fun target_tmp_vars (var, size) ->
-        check_tmp_var var target_tmp_vars;
-        let vn, vpos = var in
-        let sz =
-          match size with
-          | None -> None
-          | Some (Mast.LiteralSize i, _) -> Some i
-          | Some (Mast.SymbolSize _, _) -> assert false
-        in
-        StrMap.add vn (sz, vpos) target_tmp_vars)
-      StrMap.empty t.Mast.target_tmp_vars
-  in
-  let target_prog, _, _ =
-    check_instructions t.Mast.target_prog false target_tmp_vars StrMap.empty
-      prog
-  in
-  let target = { target_name; target_apps; target_tmp_vars; target_prog } in
-  let prog_targets = StrMap.add tname target prog.prog_targets in
-  { prog with prog_targets }
+    let target_prog, _, _ =
+      check_instructions t.Mast.target_prog false target_tmp_vars StrMap.empty
+        prog
+    in
+    let target = { target_name; target_apps; target_tmp_vars; target_prog } in
+    let prog_targets = StrMap.add tname target prog.prog_targets in
+    { prog with prog_targets }
+  else
+    let target_tmp_vars = StrMap.empty in
+    let target_prog = [] in
+    let target = { target_name; target_apps; target_tmp_vars; target_prog } in
+    let prog_targets = StrMap.add tname target prog.prog_targets in
+    { prog with prog_targets }
 
 let check_rule (r : Mast.rule) (prog : program) : program =
-  let rule_id, id_pos = r.Mast.rule_number in
-  let _rule_number = (Mir.RuleID rule_id, id_pos) in
-  let rdom_id =
-    Mast.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
-  in
-  let _rule_domain =
-    let id =
-      match Mast.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
-      | Some (id, _) -> id
-      | None -> Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
-    in
-    Mast.DomainIdMap.find id prog.prog_rdoms
-  in
+  let id, id_pos = r.Mast.rule_number in
+  let rule_id = (id, id_pos) in
   let rule_apps =
     List.fold_left
       (fun rule_apps (app, app_pos) ->
@@ -1126,26 +1164,66 @@ let check_rule (r : Mast.rule) (prog : program) : program =
         | Some _ -> StrMap.add app app_pos rule_apps)
       StrMap.empty r.Mast.rule_applications
   in
-  let rule_app_set =
-    StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
-  in
-  let _rule_chain =
-    match r.Mast.rule_chaining with
-    | None -> None
-    | Some (ch_name, ch_pos) -> (
-        match StrMap.find_opt ch_name prog.prog_chainings with
-        | None -> Err.unknown_chaining ch_pos
-        | Some (apps, _) ->
-            let app_set =
-              StrMap.fold (fun a _ set -> StrSet.add a set) apps StrSet.empty
-            in
-            if StrSet.cardinal (StrSet.inter app_set rule_app_set) = 0 then
-              Err.chaining_without_app ch_pos;
-            Some (ch_name, Mast.DomainId.empty))
-  in
-  prog
+  if StrMap.mem prog.prog_app rule_apps then (
+    let rdom_id =
+      Mast.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
+    in
+    let rule_domain =
+      let rid =
+        match Mast.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
+        | Some (rid, _) -> rid
+        | None ->
+            Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
+      in
+      Mast.DomainIdMap.find rid prog.prog_rdoms
+    in
+    let rule_app_set =
+      StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
+    in
+    let rule_chain =
+      match r.Mast.rule_chaining with
+      | None -> None
+      | Some (ch_name, ch_pos) -> (
+          match StrMap.find_opt ch_name prog.prog_chainings with
+          | None -> Err.unknown_chaining ch_pos
+          | Some (apps, _) ->
+              let app_set =
+                StrMap.fold (fun a _ set -> StrSet.add a set) apps StrSet.empty
+              in
+              if StrSet.cardinal (StrSet.inter app_set rule_app_set) = 0 then
+                Err.chaining_without_app ch_pos
+              else if StrSet.mem prog.prog_app app_set then Some ch_name
+              else None)
+    in
+    let rule_instrs =
+      List.map
+        (fun f -> Pos.same_pos_as (Mast.Formula f) f)
+        r.Mast.rule_formulaes
+    in
+    let rule_instrs, rule_in_vars, rule_out_vars =
+      check_instructions rule_instrs true StrMap.empty StrMap.empty prog
+    in
+    let rule =
+      {
+        rule_id;
+        rule_apps;
+        rule_domain;
+        rule_chain;
+        rule_instrs;
+        rule_in_vars;
+        rule_out_vars;
+      }
+    in
+    (match IntMap.find_opt id prog.prog_rules with
+    | Some r -> Err.rule_already_defined id (Pos.get_position r.rule_id) id_pos
+    | None -> ());
+    let prog_rules = IntMap.add id rule prog.prog_rules in
+    { prog with prog_rules })
+  else prog
 
 let proceed (p : Mast.program) : program =
+  let app = "iliad" in
+  (* à paramétrer *)
   let prog =
     List.fold_left
       (fun prog source_file ->
@@ -1166,7 +1244,7 @@ let proceed (p : Mast.program) : program =
             | Mast.Rule r -> check_rule r prog
             | _ -> prog)
           prog source_file)
-      (empty_program p) p
+      (empty_program p app) p
   in
   let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
   let prog_rdoms = complete_dom_decls Rule doms_syms in
