@@ -3,13 +3,7 @@ module type GRAPH = sig
 
   type vertex
 
-  type vertexSet
-
-  val vertexSetFold : (vertex -> 'a -> 'a) -> vertexSet -> 'a -> 'a
-
-  val vertexSetMem : vertex -> vertexSet -> bool
-
-  val vertexSetRemove : vertex -> vertexSet -> vertexSet
+  type edge
 
   type 'a vertexMap
 
@@ -17,11 +11,15 @@ module type GRAPH = sig
 
   val vertexMapAdd : vertex -> 'a -> 'a vertexMap -> 'a vertexMap
 
-  val vertexMapFind : vertex -> 'a vertexMap -> 'a
+  val vertexMapRemove : vertex -> 'a vertexMap -> 'a vertexMap
 
-  val vertices : 'a t -> vertexSet
+  val vertexMapFindOpt : vertex -> 'a vertexMap -> 'a option
 
-  val edges : 'a t -> vertex -> vertexSet
+  val vertexMapFold : (vertex -> 'a -> 'b -> 'b) -> 'a vertexMap -> 'b -> 'b
+
+  val vertices : 'a t -> edge option vertexMap
+
+  val edges : 'a t -> vertex -> edge option vertexMap
 end
 
 module type T = sig
@@ -29,12 +27,18 @@ module type T = sig
 
   type vertex
 
-  exception Cycle of vertex list
+  type edge
 
-  exception AutoCycle of vertex
+  exception Cycle of (vertex * edge option) list
 
-  val sort : ?auto_cycle:(vertex -> unit) option -> 'a graph -> vertex list
+  exception AutoCycle of (vertex * edge)
+
+  val sort :
+    ?auto_cycle:(vertex * edge -> unit) option -> 'a graph -> vertex list
 end
 
 module Make : functor (G : GRAPH) ->
-  T with type 'a graph = 'a G.t and type vertex = G.vertex
+  T
+    with type 'a graph = 'a G.t
+     and type vertex = G.vertex
+     and type edge = G.edge

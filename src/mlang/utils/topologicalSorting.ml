@@ -3,13 +3,7 @@ module type GRAPH = sig
 
   type vertex
 
-  type vertexSet
-
-  val vertexSetFold : (vertex -> 'a -> 'a) -> vertexSet -> 'a -> 'a
-
-  val vertexSetMem : vertex -> vertexSet -> bool
-
-  val vertexSetRemove : vertex -> vertexSet -> vertexSet
+  type edge
 
   type 'a vertexMap
 
@@ -17,11 +11,15 @@ module type GRAPH = sig
 
   val vertexMapAdd : vertex -> 'a -> 'a vertexMap -> 'a vertexMap
 
-  val vertexMapFind : vertex -> 'a vertexMap -> 'a
+  val vertexMapRemove : vertex -> 'a vertexMap -> 'a vertexMap
 
-  val vertices : 'a t -> vertexSet
+  val vertexMapFindOpt : vertex -> 'a vertexMap -> 'a option
 
-  val edges : 'a t -> vertex -> vertexSet
+  val vertexMapFold : (vertex -> 'a -> 'b -> 'b) -> 'a vertexMap -> 'b -> 'b
+
+  val vertices : 'a t -> edge option vertexMap
+
+  val edges : 'a t -> vertex -> edge option vertexMap
 end
 
 module type T = sig
@@ -29,49 +27,67 @@ module type T = sig
 
   type vertex
 
-  exception Cycle of vertex list
+  type edge
 
-  exception AutoCycle of vertex
+  exception Cycle of (vertex * edge option) list
 
-  val sort : ?auto_cycle:(vertex -> unit) option -> 'a graph -> vertex list
+  exception AutoCycle of (vertex * edge)
+
+  val sort :
+    ?auto_cycle:(vertex * edge -> unit) option -> 'a graph -> vertex list
 end
 
 module Make (G : GRAPH) :
-  T with type 'a graph = 'a G.t and type vertex = G.vertex = struct
+  T
+    with type 'a graph = 'a G.t
+     and type vertex = G.vertex
+     and type edge = G.edge = struct
   type 'a graph = 'a G.t
 
   type vertex = G.vertex
 
+  type edge = G.edge
+
   type couleur = White | Grey | Black
 
-  exception Cycle of vertex list
+  exception Cycle of (vertex * edge option) list
 
-  exception AutoCycle of vertex
+  exception AutoCycle of (vertex * edge)
 
   let sort ?(auto_cycle = None) (g : 'a graph) =
     let couls =
-      let fold nd couls = G.vertexMapAdd nd White couls in
-      G.vertexSetFold fold (G.vertices g) G.vertexMapEmpty
+      let fold nd _ couls = G.vertexMapAdd nd White couls in
+      G.vertexMapFold fold (G.vertices g) G.vertexMapEmpty
     in
-    let rec parcours nd (couls, ord) =
-      match G.vertexMapFind nd couls with
-      | Grey -> raise (Cycle (nd :: ord))
-      | Black -> (couls, ord)
+    let rec parcours nd orig_opt (couls, ord, tmp) =
+      match Option.get (G.vertexMapFindOpt nd couls) with
+      | Grey ->
+          let rec get_cycle res = function
+            | (nd', edge) :: _ when nd' = nd -> (nd', edge) :: res
+            | nde :: tl -> get_cycle (nde :: res) tl
+            | [] -> res
+          in
+          raise (Cycle (get_cycle [ (nd, orig_opt) ] tmp))
+      | Black -> (couls, ord, tmp)
       | White ->
           let couls = G.vertexMapAdd nd Grey couls in
           let ndfs =
             let ndfs = G.edges g nd in
-            if G.vertexSetMem nd ndfs then (
-              match auto_cycle with
-              | None -> raise (AutoCycle nd)
-              | Some f ->
-                  f nd;
-                  G.vertexSetRemove nd ndfs)
-            else ndfs
+            match G.vertexMapFindOpt nd ndfs with
+            | Some edge_opt -> (
+                match auto_cycle with
+                | None -> raise (AutoCycle (nd, Option.get edge_opt))
+                | Some f ->
+                    f (nd, Option.get edge_opt);
+                    G.vertexMapRemove nd ndfs)
+            | None -> ndfs
           in
-          let couls, ord = G.vertexSetFold parcours ndfs (couls, ord) in
+          let couls, ord, _ =
+            G.vertexMapFold parcours ndfs (couls, ord, (nd, orig_opt) :: tmp)
+          in
           let couls = G.vertexMapAdd nd Black couls in
-          (couls, nd :: ord)
+          (couls, (nd, orig_opt) :: ord, tmp)
     in
-    snd (G.vertexSetFold parcours (G.vertices g) (couls, []))
+    let _, ord, _ = G.vertexMapFold parcours (G.vertices g) (couls, [], []) in
+    List.map fst ord
 end

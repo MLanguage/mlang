@@ -211,6 +211,27 @@ module Err = struct
   let second_arg_of_multimax pos =
     Errors.raise_spanned_error
       "second argument of functionn multimax must be a variable name" pos
+
+  let loop_in_rules rdom_id cycle =
+    let pp_cycle fmt cycle =
+      let rec aux first = function
+        | [] -> ()
+        | (v, Some e) :: tl ->
+            if first then Format.fprintf fmt "rule %d\n" v
+            else Format.fprintf fmt " -(%s)-> rule %d\n" e v;
+            aux false tl
+        | (v, None) :: tl ->
+            if first then Format.fprintf fmt "rule %d\n" v
+            else Format.fprintf fmt " -()-> rule %d\n" v;
+            aux false tl
+      in
+      aux true cycle
+    in
+    let msg =
+      Format.asprintf "there is a loop in rules of rule domain \"%a\":\n%a"
+        (Mast.DomainId.pp ()) rdom_id pp_cycle cycle
+    in
+    Errors.raise_error msg
 end
 
 type global_variable = {
@@ -707,19 +728,13 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
   let module DomGraph :
     TopologicalSorting.GRAPH
       with type 'a t = 'a doms
-       and type vertex = Mast.DomainId.t = struct
+       and type vertex = Mast.DomainId.t
+       and type edge = unit = struct
     type 'a t = 'a doms
 
     type vertex = Mast.DomainId.t
 
-    type vertexSet = Mast.DomainIdSet.t
-
-    let vertexSetFold fold set res =
-      Mast.DomainIdSet.fold (fun id res -> fold (get_id id) res) set res
-
-    let vertexSetMem id set = Mast.DomainIdSet.mem (get_id id) set
-
-    let vertexSetRemove id set = Mast.DomainIdSet.remove (get_id id) set
+    type edge = unit
 
     type 'a vertexMap = 'a Mast.DomainIdMap.t
 
@@ -727,19 +742,29 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
 
     let vertexMapAdd id value map = Mast.DomainIdMap.add (get_id id) value map
 
-    let vertexMapFind id map = Mast.DomainIdMap.find (get_id id) map
+    let vertexMapRemove id map = Mast.DomainIdMap.remove (get_id id) map
+
+    let vertexMapFindOpt id map = Mast.DomainIdMap.find_opt (get_id id) map
+
+    let vertexMapFold fold map res =
+      Mast.DomainIdMap.fold
+        (fun id edge res -> fold (get_id id) edge res)
+        map res
 
     let vertices doms =
-      let get_vertex id _ nds = Mast.DomainIdSet.add id nds in
-      Mast.DomainIdMap.fold get_vertex doms Mast.DomainIdSet.empty
+      let get_vertex id _ nds = Mast.DomainIdMap.add id None nds in
+      Mast.DomainIdMap.fold get_vertex doms Mast.DomainIdMap.empty
 
-    let edges doms id = (get_dom id doms).Mir.dom_min
+    let edges doms id =
+      Mast.DomainIdSet.fold
+        (fun id res -> Mast.DomainIdMap.add id None res)
+        (get_dom id doms).Mir.dom_min Mast.DomainIdMap.empty
   end in
   let module DomSorting = TopologicalSorting.Make (DomGraph) in
   let sorted_doms =
     try DomSorting.sort doms with
-    | DomSorting.Cycle cycle -> Err.loop_in_domains rov cycle
-    | DomSorting.AutoCycle id ->
+    | DomSorting.Cycle cycle -> Err.loop_in_domains rov (List.map fst cycle)
+    | DomSorting.AutoCycle (id, _) ->
         let dom = get_dom id doms in
         let dom_id, dom_id_pos = dom.Mir.dom_id in
         Err.domain_specialize_itself rov dom_id dom_id_pos
@@ -1221,6 +1246,144 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     { prog with prog_rules })
   else prog
 
+let convert_rules (prog : program) : program =
+  let prog_targets =
+    Mast.DomainIdMap.fold
+      (fun rdom_id rdom prog_targets ->
+        if rdom.Mir.dom_data.Mir.rdom_computable then
+          let rdom_rules =
+            IntMap.filter
+              (fun _ rule ->
+                let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
+                Mast.DomainId.equal rdom_id rule_rdom_id
+                || Mast.DomainIdSet.mem rule_rdom_id rdom.Mir.dom_min)
+              prog.prog_rules
+          in
+          let is_vartmp var =
+            String.length var >= 6 && String.sub var 0 6 = "VARTMP"
+          in
+          let in_vars_of_rules =
+            IntMap.fold
+              (fun id rule var_map ->
+                StrSet.fold
+                  (fun var var_map ->
+                    if is_vartmp var then var_map
+                    else
+                      StrMap.update var
+                        (function
+                          | None -> Some (IntSet.singleton id)
+                          | Some set -> Some (IntSet.add id set))
+                        var_map)
+                  rule.rule_in_vars var_map)
+              rdom_rules StrMap.empty
+          in
+          let rule_graph =
+            IntMap.map
+              (fun rule ->
+                let edges =
+                  StrSet.fold
+                    (fun out_var edges ->
+                      if is_vartmp out_var then edges
+                      else
+                        match StrMap.find_opt out_var in_vars_of_rules with
+                        | Some out_rules ->
+                            IntSet.fold
+                              (fun out_id edges ->
+                                IntMap.add out_id out_var edges)
+                              out_rules edges
+                        | None -> edges)
+                    rule.rule_out_vars IntMap.empty
+                in
+                Some edges)
+              rdom_rules
+          in
+          let module RuleGraph :
+            TopologicalSorting.GRAPH
+              with type 'a t = string IntMap.t option IntMap.t
+               and type vertex = int
+               and type edge = string = struct
+            type 'a t = string IntMap.t option IntMap.t
+
+            type vertex = int
+
+            type edge = string
+
+            type 'a vertexMap = 'a IntMap.t
+
+            let vertexMapEmpty = IntMap.empty
+
+            let vertexMapAdd id value map = IntMap.add id value map
+
+            let vertexMapRemove id map = IntMap.remove id map
+
+            let vertexMapFindOpt id map = IntMap.find_opt id map
+
+            let vertexMapFold fold map res = IntMap.fold fold map res
+
+            let vertices rules =
+              IntMap.fold
+                (fun id _ res -> IntMap.add id None res)
+                rules IntMap.empty
+
+            let edges rules id =
+              let es = Option.get (IntMap.find id rules) in
+              IntMap.map (fun var -> Some var) es
+          end in
+          let module RulesSorting = TopologicalSorting.Make (RuleGraph) in
+          let auto_cycle =
+            Some
+              (function
+              | id, var ->
+                  Cli.debug_print
+                    "warning: auto-cycle in rule %d with variable %s" id var)
+          in
+          let sorted_rules =
+            try RulesSorting.sort ~auto_cycle rule_graph with
+            | RulesSorting.Cycle cycle -> Err.loop_in_rules rdom_id cycle
+            | RulesSorting.AutoCycle _ -> assert false
+          in
+          let target_prog =
+            List.map
+              (fun id ->
+                let name = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+                (Mast.ComputeTarget (name, Pos.no_pos), Pos.no_pos))
+              sorted_rules
+          in
+          let prog_targets =
+            IntMap.fold
+              (fun id rule prog_targets ->
+                let tname = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+                let target =
+                  {
+                    target_name = (tname, Pos.no_pos);
+                    target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+                    target_tmp_vars = StrMap.empty;
+                    target_prog = rule.rule_instrs;
+                  }
+                in
+                StrMap.add tname target prog_targets)
+              prog.prog_rules prog_targets
+          in
+          let tname =
+            let spl =
+              Mast.DomainId.fold (fun s l -> (s, Pos.no_pos) :: l) rdom_id []
+            in
+            get_compute_id_str (Mast.ComputeDomain (spl, Pos.no_pos)) prog
+          in
+          let target =
+            {
+              target_name = (tname, Pos.no_pos);
+              target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+              target_tmp_vars = StrMap.empty;
+              target_prog;
+            }
+          in
+          StrMap.add tname target prog_targets
+        else prog.prog_targets)
+      prog.prog_rdoms prog.prog_targets
+  in
+  { prog with prog_targets }
+
 let proceed (p : Mast.program) : program =
   let app = "iliad" in
   (* à paramétrer *)
@@ -1250,4 +1413,5 @@ let proceed (p : Mast.program) : program =
   let prog_rdoms = complete_dom_decls Rule doms_syms in
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let prog_vdoms = complete_dom_decls Verif doms_syms in
-  { prog with prog_rdoms; prog_vdoms }
+  let prog = convert_rules { prog with prog_rdoms; prog_vdoms } in
+  prog
