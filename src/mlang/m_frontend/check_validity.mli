@@ -38,6 +38,12 @@ type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
 
 type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
 
+type chaining = {
+  chain_name : string Pos.marked;
+  chain_apps : Pos.t StrMap.t;
+  chain_rules : Mir.rule_domain Pos.marked IntMap.t;
+}
+
 type target = {
   target_name : string Pos.marked;
   target_apps : Pos.t StrMap.t;
@@ -59,7 +65,7 @@ type program = {
   prog_prefix : string;
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
-  prog_chainings : Pos.t StrMap.t Pos.marked StrMap.t;
+  prog_chainings : chaining StrMap.t;
   prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
   prog_vars : global_variable StrMap.t;
   prog_alias : global_variable StrMap.t;

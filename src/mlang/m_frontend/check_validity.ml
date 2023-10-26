@@ -12,6 +12,8 @@
 
 type rule_or_verif = Rule | Verif
 
+type rdom_or_chain = RuleDomain of Mast.DomainId.t | Chaining of string
+
 module Err = struct
   let rov_to_str rov = match rov with Rule -> "rule" | Verif -> "verif"
 
@@ -212,7 +214,13 @@ module Err = struct
     Errors.raise_spanned_error
       "second argument of functionn multimax must be a variable name" pos
 
-  let loop_in_rules rdom_id cycle =
+  let loop_in_rules rdom_chain cycle =
+    let rdom_chain_str =
+      match rdom_chain with
+      | RuleDomain rdom_id ->
+          Format.asprintf "rule domain \"%a\"" (Mast.DomainId.pp ()) rdom_id
+      | Chaining ch -> Format.sprintf "chaining \"%s\"" ch
+    in
     let pp_cycle fmt cycle =
       let rec aux first = function
         | [] -> ()
@@ -228,10 +236,16 @@ module Err = struct
       aux true cycle
     in
     let msg =
-      Format.asprintf "there is a loop in rules of rule domain \"%a\":\n%a"
-        (Mast.DomainId.pp ()) rdom_id pp_cycle cycle
+      Format.asprintf "there is a loop in rules of %s:\n%a" rdom_chain_str
+        pp_cycle cycle
     in
     Errors.raise_error msg
+
+  let rule_domain_incompatible_with_chaining ch_name pos =
+    let msg =
+      Format.asprintf "rule domain incompatible with chaining \"%s\"" ch_name
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type global_variable = {
@@ -260,6 +274,12 @@ type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
 
 type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
 
+type chaining = {
+  chain_name : string Pos.marked;
+  chain_apps : Pos.t StrMap.t;
+  chain_rules : Mir.rule_domain Pos.marked IntMap.t;
+}
+
 type target = {
   target_name : string Pos.marked;
   target_apps : Pos.t StrMap.t;
@@ -281,7 +301,7 @@ type program = {
   prog_prefix : string;
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
-  prog_chainings : Pos.t StrMap.t Pos.marked StrMap.t;
+  prog_chainings : chaining StrMap.t;
   prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
   prog_vars : global_variable StrMap.t;
   prog_alias : global_variable StrMap.t;
@@ -363,9 +383,11 @@ let check_application (name : string) (pos : Pos.t) (prog : program) : program =
 let check_chaining (name : string) (pos : Pos.t)
     (m_apps : string Pos.marked list) (prog : program) : program =
   (match StrMap.find_opt name prog.prog_chainings with
-  | Some (_, old_pos) -> Err.chaining_already_defined name old_pos pos
+  | Some { chain_name = _, old_pos; _ } ->
+      Err.chaining_already_defined name old_pos pos
   | None -> ());
-  let apps =
+  let chain_name = (name, pos) in
+  let chain_apps =
     List.fold_left
       (fun apps (app, app_pos) ->
         (match StrMap.find_opt app prog.prog_apps with
@@ -377,7 +399,9 @@ let check_chaining (name : string) (pos : Pos.t)
         StrMap.add app app_pos apps)
       StrMap.empty m_apps
   in
-  let prog_chainings = StrMap.add name (apps, pos) prog.prog_chainings in
+  let chain_rules = IntMap.empty in
+  let chaining = { chain_name; chain_apps; chain_rules } in
+  let prog_chainings = StrMap.add name chaining prog.prog_chainings in
   { prog with prog_chainings }
 
 let get_var_cat_id_str (var_cat : Mir.cat_variable) : string =
@@ -1193,32 +1217,42 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     let rdom_id =
       Mast.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
     in
-    let rule_domain =
-      let rid =
+    let rule_domain, rule_domain_pos =
+      let rid, rid_pos =
         match Mast.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
-        | Some (rid, _) -> rid
+        | Some m_rid -> m_rid
         | None ->
             Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
       in
-      Mast.DomainIdMap.find rid prog.prog_rdoms
+      (Mast.DomainIdMap.find rid prog.prog_rdoms, rid_pos)
     in
     let rule_app_set =
       StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
     in
-    let rule_chain =
+    let rule_chain, prog_chainings =
       match r.Mast.rule_chaining with
-      | None -> None
+      | None -> (None, prog.prog_chainings)
       | Some (ch_name, ch_pos) -> (
           match StrMap.find_opt ch_name prog.prog_chainings with
           | None -> Err.unknown_chaining ch_pos
-          | Some (apps, _) ->
+          | Some chain ->
               let app_set =
-                StrMap.fold (fun a _ set -> StrSet.add a set) apps StrSet.empty
+                StrMap.fold
+                  (fun a _ set -> StrSet.add a set)
+                  chain.chain_apps StrSet.empty
               in
               if StrSet.cardinal (StrSet.inter app_set rule_app_set) = 0 then
                 Err.chaining_without_app ch_pos
-              else if StrSet.mem prog.prog_app app_set then Some ch_name
-              else None)
+              else if StrSet.mem prog.prog_app app_set then
+                let chain_rules =
+                  IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
+                in
+                let chain = { chain with chain_rules } in
+                let prog_chainings =
+                  StrMap.add ch_name chain prog.prog_chainings
+                in
+                (Some ch_name, prog_chainings)
+              else (None, prog.prog_chainings))
     in
     let rule_instrs =
       List.map
@@ -1243,126 +1277,143 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     | Some r -> Err.rule_already_defined id (Pos.get_position r.rule_id) id_pos
     | None -> ());
     let prog_rules = IntMap.add id rule prog.prog_rules in
-    { prog with prog_rules })
+    { prog with prog_rules; prog_chainings })
   else prog
 
 let convert_rules (prog : program) : program =
+  let prog_targets =
+    IntMap.fold
+      (fun id rule prog_targets ->
+        let tname = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+        let target =
+          {
+            target_name = (tname, Pos.no_pos);
+            target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+            target_tmp_vars = StrMap.empty;
+            target_prog = rule.rule_instrs;
+          }
+        in
+        StrMap.add tname target prog_targets)
+      prog.prog_rules prog.prog_targets
+  in
+  { prog with prog_targets }
+
+let is_vartmp (var : string) =
+  String.length var >= 6 && String.sub var 0 6 = "VARTMP"
+
+let create_rule_graph (in_vars_from : rule -> StrSet.t)
+    (out_vars_from : rule -> StrSet.t) (rules : 'a IntMap.t) :
+    string IntMap.t option IntMap.t =
+  let in_vars_of_rules =
+    IntMap.fold
+      (fun id rule var_map ->
+        StrSet.fold
+          (fun var var_map ->
+            if is_vartmp var then var_map
+            else
+              StrMap.update var
+                (function
+                  | None -> Some (IntSet.singleton id)
+                  | Some set -> Some (IntSet.add id set))
+                var_map)
+          (in_vars_from rule) var_map)
+      rules StrMap.empty
+  in
+  IntMap.map
+    (fun rule ->
+      let edges =
+        StrSet.fold
+          (fun out_var edges ->
+            if is_vartmp out_var then edges
+            else
+              match StrMap.find_opt out_var in_vars_of_rules with
+              | Some out_rules ->
+                  IntSet.fold
+                    (fun out_id edges -> IntMap.add out_id out_var edges)
+                    out_rules edges
+              | None -> edges)
+          (out_vars_from rule) IntMap.empty
+      in
+      Some edges)
+    rules
+
+let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
+    (rule_graph : string IntMap.t option IntMap.t) :
+    Mast.instruction Pos.marked list =
+  let module RuleGraph :
+    TopologicalSorting.GRAPH
+      with type 'a t = string IntMap.t option IntMap.t
+       and type vertex = int
+       and type edge = string = struct
+    type 'a t = string IntMap.t option IntMap.t
+
+    type vertex = int
+
+    type edge = string
+
+    type 'a vertexMap = 'a IntMap.t
+
+    let vertexMapEmpty = IntMap.empty
+
+    let vertexMapAdd id value map = IntMap.add id value map
+
+    let vertexMapRemove id map = IntMap.remove id map
+
+    let vertexMapFindOpt id map = IntMap.find_opt id map
+
+    let vertexMapFold fold map res = IntMap.fold fold map res
+
+    let vertices rules =
+      IntMap.fold (fun id _ res -> IntMap.add id None res) rules IntMap.empty
+
+    let edges rules id =
+      let es = Option.get (IntMap.find id rules) in
+      IntMap.map (fun var -> Some var) es
+  end in
+  let module RulesSorting = TopologicalSorting.Make (RuleGraph) in
+  let auto_cycle =
+    Some
+      (function
+      | id, var ->
+          Cli.debug_print "warning: auto-cycle in rule %d with variable %s" id
+            var)
+  in
+  let sorted_rules =
+    try RulesSorting.sort ~auto_cycle rule_graph with
+    | RulesSorting.Cycle cycle -> Err.loop_in_rules rdom_chain cycle
+    | RulesSorting.AutoCycle _ -> assert false
+  in
+  List.map
+    (fun id ->
+      let name = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+      (Mast.ComputeTarget (name, Pos.no_pos), Pos.no_pos))
+    sorted_rules
+
+let rdom_rule_filter (rdom : Mir.rule_domain_data Mir.domain) (rule : rule) :
+    bool =
+  let rdom_id = Pos.unmark rdom.dom_id in
+  let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
+  Mast.DomainId.equal rdom_id rule_rdom_id
+  || Mast.DomainIdSet.mem rule_rdom_id rdom.Mir.dom_min
+
+let complete_rule_domains (prog : program) : program =
   let prog_targets =
     Mast.DomainIdMap.fold
       (fun rdom_id rdom prog_targets ->
         if rdom.Mir.dom_data.Mir.rdom_computable then
           let rdom_rules =
             IntMap.filter
-              (fun _ rule ->
-                let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
-                Mast.DomainId.equal rdom_id rule_rdom_id
-                || Mast.DomainIdSet.mem rule_rdom_id rdom.Mir.dom_min)
+              (fun _ rule -> rdom_rule_filter rdom rule)
               prog.prog_rules
           in
-          let is_vartmp var =
-            String.length var >= 6 && String.sub var 0 6 = "VARTMP"
-          in
-          let in_vars_of_rules =
-            IntMap.fold
-              (fun id rule var_map ->
-                StrSet.fold
-                  (fun var var_map ->
-                    if is_vartmp var then var_map
-                    else
-                      StrMap.update var
-                        (function
-                          | None -> Some (IntSet.singleton id)
-                          | Some set -> Some (IntSet.add id set))
-                        var_map)
-                  rule.rule_in_vars var_map)
-              rdom_rules StrMap.empty
-          in
           let rule_graph =
-            IntMap.map
-              (fun rule ->
-                let edges =
-                  StrSet.fold
-                    (fun out_var edges ->
-                      if is_vartmp out_var then edges
-                      else
-                        match StrMap.find_opt out_var in_vars_of_rules with
-                        | Some out_rules ->
-                            IntSet.fold
-                              (fun out_id edges ->
-                                IntMap.add out_id out_var edges)
-                              out_rules edges
-                        | None -> edges)
-                    rule.rule_out_vars IntMap.empty
-                in
-                Some edges)
+            create_rule_graph
+              (fun r -> r.rule_in_vars)
+              (fun r -> r.rule_out_vars)
               rdom_rules
           in
-          let module RuleGraph :
-            TopologicalSorting.GRAPH
-              with type 'a t = string IntMap.t option IntMap.t
-               and type vertex = int
-               and type edge = string = struct
-            type 'a t = string IntMap.t option IntMap.t
-
-            type vertex = int
-
-            type edge = string
-
-            type 'a vertexMap = 'a IntMap.t
-
-            let vertexMapEmpty = IntMap.empty
-
-            let vertexMapAdd id value map = IntMap.add id value map
-
-            let vertexMapRemove id map = IntMap.remove id map
-
-            let vertexMapFindOpt id map = IntMap.find_opt id map
-
-            let vertexMapFold fold map res = IntMap.fold fold map res
-
-            let vertices rules =
-              IntMap.fold
-                (fun id _ res -> IntMap.add id None res)
-                rules IntMap.empty
-
-            let edges rules id =
-              let es = Option.get (IntMap.find id rules) in
-              IntMap.map (fun var -> Some var) es
-          end in
-          let module RulesSorting = TopologicalSorting.Make (RuleGraph) in
-          let auto_cycle =
-            Some
-              (function
-              | id, var ->
-                  Cli.debug_print
-                    "warning: auto-cycle in rule %d with variable %s" id var)
-          in
-          let sorted_rules =
-            try RulesSorting.sort ~auto_cycle rule_graph with
-            | RulesSorting.Cycle cycle -> Err.loop_in_rules rdom_id cycle
-            | RulesSorting.AutoCycle _ -> assert false
-          in
           let target_prog =
-            List.map
-              (fun id ->
-                let name = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
-                (Mast.ComputeTarget (name, Pos.no_pos), Pos.no_pos))
-              sorted_rules
-          in
-          let prog_targets =
-            IntMap.fold
-              (fun id rule prog_targets ->
-                let tname = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
-                let target =
-                  {
-                    target_name = (tname, Pos.no_pos);
-                    target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
-                    target_tmp_vars = StrMap.empty;
-                    target_prog = rule.rule_instrs;
-                  }
-                in
-                StrMap.add tname target prog_targets)
-              prog.prog_rules prog_targets
+            rule_graph_to_instrs (RuleDomain rdom_id) prog rule_graph
           in
           let tname =
             let spl =
@@ -1379,8 +1430,99 @@ let convert_rules (prog : program) : program =
             }
           in
           StrMap.add tname target prog_targets
-        else prog.prog_targets)
+        else prog_targets)
       prog.prog_rdoms prog.prog_targets
+  in
+  { prog with prog_targets }
+
+let rdom_id_rule_filter (prog : program) (rdom_id : Mast.DomainId.t)
+    (rule : rule) : bool =
+  let rdom = Mast.DomainIdMap.find rdom_id prog.prog_rdoms in
+  rdom_rule_filter rdom rule
+
+let rdom_ids_rule_filter (prog : program) (rdom_ids : Mast.DomainIdSet.t)
+    (rule : rule) : bool =
+  Mast.DomainIdSet.exists
+    (fun rdom_id -> rdom_id_rule_filter prog rdom_id rule)
+    rdom_ids
+
+let complete_chainings (prog : program) : program =
+  let prog_targets =
+    StrMap.fold
+      (fun ch_name chain prog_targets ->
+        let all_ids =
+          Mast.DomainIdMap.fold
+            (fun _ rdom ids ->
+              let uid = Pos.unmark rdom.Mir.dom_id in
+              Mast.DomainIdSet.add uid ids)
+            prog.prog_rdoms Mast.DomainIdSet.empty
+        in
+        let sup_ids =
+          IntMap.fold
+            (fun _ (rdom, id_pos) sup_ids ->
+              let uid = Pos.unmark rdom.Mir.dom_id in
+              let rdom_supeq = Mast.DomainIdSet.add uid rdom.Mir.dom_max in
+              let sup_ids = Mast.DomainIdSet.inter sup_ids rdom_supeq in
+              if Mast.DomainIdSet.cardinal sup_ids = 0 then
+                Err.rule_domain_incompatible_with_chaining ch_name id_pos
+              else sup_ids)
+            chain.chain_rules all_ids
+        in
+        let min_ids =
+          Mast.DomainIdSet.filter
+            (fun id ->
+              let rdom = Mast.DomainIdMap.find id prog.prog_rdoms in
+              let min_sups = Mast.DomainIdSet.inter sup_ids rdom.Mir.dom_min in
+              Mast.DomainIdSet.is_empty min_sups)
+            sup_ids
+        in
+        let rdom_rules =
+          IntMap.filter
+            (fun _ rule -> rdom_ids_rule_filter prog min_ids rule)
+            prog.prog_rules
+        in
+        let inverted_rule_graph =
+          create_rule_graph
+            (fun r -> r.rule_out_vars)
+            (fun r -> r.rule_in_vars)
+            rdom_rules
+        in
+        let rules =
+          let rec add_connected_rules rid rules =
+            if IntMap.mem rid rules then rules
+            else
+              let edges = Option.get (IntMap.find rid inverted_rule_graph) in
+              let rules = IntMap.add rid (IntMap.find rid rdom_rules) rules in
+              IntMap.fold
+                (fun rid _ rules -> add_connected_rules rid rules)
+                edges rules
+          in
+          IntMap.fold
+            (fun rid _ rules -> add_connected_rules rid rules)
+            chain.chain_rules IntMap.empty
+        in
+        let rule_graph =
+          create_rule_graph
+            (fun r -> r.rule_in_vars)
+            (fun r -> r.rule_out_vars)
+            rules
+        in
+        let target_prog =
+          rule_graph_to_instrs (Chaining ch_name) prog rule_graph
+        in
+        let tname =
+          get_compute_id_str (Mast.ComputeChaining (ch_name, Pos.no_pos)) prog
+        in
+        let target =
+          {
+            target_name = (tname, Pos.no_pos);
+            target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+            target_tmp_vars = StrMap.empty;
+            target_prog;
+          }
+        in
+        StrMap.add tname target prog_targets)
+      prog.prog_chainings prog.prog_targets
   in
   { prog with prog_targets }
 
@@ -1414,4 +1556,6 @@ let proceed (p : Mast.program) : program =
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let prog_vdoms = complete_dom_decls Verif doms_syms in
   let prog = convert_rules { prog with prog_rdoms; prog_vdoms } in
+  let prog = complete_rule_domains prog in
+  let prog = complete_chainings prog in
   prog
