@@ -59,10 +59,24 @@ type rule = {
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : StrSet.t;
+  rule_seq : int;
+}
+
+type verif = {
+  verif_id : int Pos.marked;
+  verif_apps : Pos.t StrMap.t;
+  verif_domain : Mir.verif_domain;
+  verif_expr : Mast.expression Pos.marked;
+  verif_error : Mast.error_name Pos.marked;
+  verif_var : Mast.variable_name Pos.marked option;
+  verif_vdom_stats : int Mir.CatVarMap.t;
+  verif_var_stats : int StrMap.t;
+  verif_seq : int;
 }
 
 type program = {
   prog_prefix : string;
+  prog_seq : int;
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
@@ -75,7 +89,10 @@ type program = {
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
   prog_rules : rule IntMap.t;
-  prog_verifs : unit IntMap.t;
+  prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
+  prog_verifs : verif IntMap.t;
+  prog_vdom_calls :
+    (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
 }
 

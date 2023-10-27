@@ -448,6 +448,7 @@ type 'a domain = {
   dom_max : Mast.DomainIdSet.t;
   dom_rov : IntSet.t;
   dom_data : 'a;
+  dom_used : int Pos.marked option;
 }
 
 type rule_domain_data = { rdom_computable : bool }

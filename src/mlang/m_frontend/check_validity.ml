@@ -200,10 +200,10 @@ module Err = struct
   let chaining_without_app pos =
     Errors.raise_spanned_error "chaining without compatible application" pos
 
-  let rule_already_defined rule_id old_pos pos =
+  let rov_already_defined rov rov_id old_pos pos =
     let msg =
-      Format.asprintf "rule %d defined more than once: already defined %a"
-        rule_id Pos.format_position old_pos
+      Format.asprintf "%s %d defined more than once: already defined %a"
+        (rov_to_str rov) rov_id Pos.format_position old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -244,6 +244,13 @@ module Err = struct
   let rule_domain_incompatible_with_chaining ch_name pos =
     let msg =
       Format.asprintf "rule domain incompatible with chaining \"%s\"" ch_name
+    in
+    Errors.raise_spanned_error msg pos
+
+  let domain_already_used rov dom_pos pos =
+    let msg =
+      Format.asprintf "domain of this %s already used %a" (rov_to_str rov)
+        Pos.format_position dom_pos
     in
     Errors.raise_spanned_error msg pos
 end
@@ -295,10 +302,24 @@ type rule = {
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : StrSet.t;
+  rule_seq : int;
+}
+
+type verif = {
+  verif_id : int Pos.marked;
+  verif_apps : Pos.t StrMap.t;
+  verif_domain : Mir.verif_domain;
+  verif_expr : Mast.expression Pos.marked;
+  verif_error : Mast.error_name Pos.marked;
+  verif_var : Mast.variable_name Pos.marked option;
+  verif_vdom_stats : int Mir.CatVarMap.t;
+  verif_var_stats : int StrMap.t;
+  verif_seq : int;
 }
 
 type program = {
   prog_prefix : string;
+  prog_seq : int;
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
@@ -311,7 +332,10 @@ type program = {
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
   prog_rules : rule IntMap.t;
-  prog_verifs : unit IntMap.t;
+  prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
+  prog_verifs : verif IntMap.t;
+  prog_vdom_calls :
+    (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
 }
 
@@ -357,6 +381,7 @@ let safe_prefix (p : Mast.program) : string =
 let empty_program (p : Mast.program) prog_app =
   {
     prog_prefix = safe_prefix p;
+    prog_seq = 0;
     prog_app;
     prog_apps = StrMap.empty;
     prog_chainings = StrMap.empty;
@@ -369,9 +394,16 @@ let empty_program (p : Mast.program) prog_app =
     prog_vdoms = Mast.DomainIdMap.empty;
     prog_vdom_syms = Mast.DomainIdMap.empty;
     prog_rules = IntMap.empty;
+    prog_rdom_calls = StrMap.empty;
     prog_verifs = IntMap.empty;
+    prog_vdom_calls = StrMap.empty;
     prog_targets = StrMap.empty;
   }
+
+let get_seq (prog : program) : int * program =
+  let seq = prog.prog_seq in
+  let prog = { prog with prog_seq = seq + 1 } in
+  (seq, prog)
 
 let check_application (name : string) (pos : Pos.t) (prog : program) : program =
   match StrMap.find_opt name prog.prog_apps with
@@ -643,6 +675,7 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
         dom_max = Mast.DomainIdSet.empty;
         dom_rov = IntSet.empty;
         dom_data;
+        dom_used = None;
       }
   in
   let dom_id_name, dom_id_pos = dom_id in
@@ -836,22 +869,103 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
 
 type 'a var_mem_type = Both | OneOf of 'a option
 
+type var_env = {
+  prog : program;
+  tmp_vars : int option Pos.marked StrMap.t;
+  it_vars : Pos.t StrMap.t;
+}
+
+let rec fold_var_expr
+    (fold_var :
+      Mast.variable Pos.marked -> unit var_mem_type -> var_env -> 'a -> 'a)
+    (acc : 'a) (m_expr : Mast.expression Pos.marked) (env : var_env) : 'a =
+  let expr, expr_pos = m_expr in
+  match expr with
+  | Mast.TestInSet (_positive, e, values) ->
+      let res = fold_var_expr fold_var acc e env in
+      List.fold_left
+        (fun res set_value ->
+          match set_value with
+          | Mast.VarValue v -> fold_var v (OneOf None) env res
+          | Mast.FloatValue _ | Mast.Interval _ -> res)
+        res values
+  | Mast.Comparison (_op, e1, e2) ->
+      let acc = fold_var_expr fold_var acc e1 env in
+      fold_var_expr fold_var acc e2 env
+  | Mast.Binop (_op, e1, e2) ->
+      let acc = fold_var_expr fold_var acc e1 env in
+      fold_var_expr fold_var acc e2 env
+  | Mast.Unop (_op, e) -> fold_var_expr fold_var acc e env
+  | Mast.Index (t, (i, i_pos)) ->
+      let acc =
+        match i with
+        | Mast.LiteralIndex _ -> acc
+        | Mast.SymbolIndex v -> fold_var (v, i_pos) (OneOf None) env acc
+      in
+      fold_var t (OneOf (Some ())) env acc
+  | Mast.Conditional (e1, e2, e3_opt) -> (
+      let acc = fold_var_expr fold_var acc e1 env in
+      let acc = fold_var_expr fold_var acc e2 env in
+      match e3_opt with
+      | Some e3 -> fold_var_expr fold_var acc e3 env
+      | None -> acc)
+  | Mast.FunctionCall ((func_name, _), args) -> (
+      match func_name with
+      | "multimax" -> (
+          match args with
+          | Mast.ArgList [ expr; var_expr ] -> (
+              match var_expr with
+              | Mast.Literal (Mast.Variable var), var_pos ->
+                  let acc = fold_var_expr fold_var acc expr env in
+                  fold_var (var, var_pos) Both env acc
+              | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
+          | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
+          | Mast.LoopList _ -> assert false)
+      | _ -> (
+          match args with
+          | Mast.ArgList args ->
+              List.fold_left
+                (fun acc e -> fold_var_expr fold_var acc e env)
+                acc args
+          | Mast.LoopList _ -> assert false))
+  | Mast.Literal l -> (
+      match l with
+      | Mast.Variable var -> fold_var (var, expr_pos) (OneOf None) env acc
+      | Mast.Float _ | Mast.Undefined -> acc)
+  | Mast.NbCategory _ -> acc
+  | Mast.Attribut (v, a) ->
+      let name, var_pos =
+        match v with
+        | Mast.Normal name, var_pos -> (name, var_pos)
+        | Mast.Generic _, _ -> assert false
+      in
+      (match StrMap.find_opt name env.prog.prog_vars with
+      | Some { global_attrs; global_category; _ } ->
+          if not (StrMap.mem (Pos.unmark a) global_attrs) then
+            Err.unknown_attribut_for_var global_category (Pos.get_position a)
+      | None -> (
+          match StrMap.find_opt name env.tmp_vars with
+          | Some _ -> Err.tmp_vars_have_no_attrs var_pos
+          | None -> ()));
+      fold_var v Both env acc
+  | Mast.Size v -> fold_var v Both env acc
+  | Mast.NbError -> acc
+  | Mast.Loop _ -> assert false
+
 let check_variable (var : Mast.variable Pos.marked)
-    (idx_mem : Mast.table_index Pos.marked var_mem_type)
-    (tmp_vars : int option Pos.marked StrMap.t) (it_vars : Pos.t StrMap.t)
-    (prog : program) : string =
+    (idx_mem : unit var_mem_type) (env : var_env) : string =
   let var_data, var_pos = var in
   let name, decl_mem, decl_pos =
     match var_data with
     | Normal vn -> (
-        match StrMap.find_opt vn prog.prog_vars with
+        match StrMap.find_opt vn env.prog.prog_vars with
         | Some { global_name = _, decl_pos; global_table; _ } ->
             (vn, OneOf global_table, decl_pos)
         | None -> (
-            match StrMap.find_opt vn tmp_vars with
+            match StrMap.find_opt vn env.tmp_vars with
             | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
             | None -> (
-                match StrMap.find_opt vn it_vars with
+                match StrMap.find_opt vn env.it_vars with
                 | Some decl_pos -> (vn, Both, decl_pos)
                 | None -> Err.unknown_variable var_pos)))
     | Generic _ -> assert false
@@ -865,92 +979,13 @@ let check_variable (var : Mast.variable Pos.marked)
       | Some _, Some _ -> name
       | Some _, None -> Err.table_used_as_variable decl_pos var_pos)
 
-let rec check_expression (m_expr : Mast.expression Pos.marked)
-    (tmp_vars : int option Pos.marked StrMap.t) (it_vars : Pos.t StrMap.t)
-    (prog : program) : StrSet.t =
-  ignore (tmp_vars, prog);
-  let expr, expr_pos = m_expr in
-  match expr with
-  | Mast.TestInSet (_positive, e, values) ->
-      let in_vars = check_expression e tmp_vars it_vars prog in
-      List.fold_left
-        (fun in_vars set_value ->
-          match set_value with
-          | Mast.VarValue m_var ->
-              let name =
-                check_variable m_var (OneOf None) tmp_vars it_vars prog
-              in
-              StrSet.add name in_vars
-          | Mast.FloatValue _ | Mast.Interval _ -> in_vars)
-        in_vars values
-  | Mast.Comparison (_op, e1, e2) ->
-      check_expression e1 tmp_vars it_vars prog
-      |> StrSet.union (check_expression e2 tmp_vars it_vars prog)
-  | Mast.Binop (_op, e1, e2) ->
-      check_expression e1 tmp_vars it_vars prog
-      |> StrSet.union (check_expression e2 tmp_vars it_vars prog)
-  | Mast.Unop (_op, e) -> check_expression e tmp_vars it_vars prog
-  | Mast.Index (t, i) ->
-      let name = check_variable t (OneOf (Some i)) tmp_vars it_vars prog in
-      StrSet.singleton name
-  | Mast.Conditional (e1, e2, e3_opt) -> (
-      let in_vars =
-        check_expression e1 tmp_vars it_vars prog
-        |> StrSet.union (check_expression e2 tmp_vars it_vars prog)
-      in
-      match e3_opt with
-      | Some e3 ->
-          StrSet.union in_vars (check_expression e3 tmp_vars it_vars prog)
-      | None -> in_vars)
-  | Mast.FunctionCall ((func_name, _), args) -> (
-      match func_name with
-      | "multimax" -> (
-          match args with
-          | Mast.ArgList [ expr; var_expr ] -> (
-              match var_expr with
-              | Mast.Literal (Mast.Variable var), var_pos ->
-                  let var_name =
-                    check_variable (var, var_pos) Both tmp_vars it_vars prog
-                  in
-                  StrSet.singleton var_name
-                  |> StrSet.union (check_expression expr tmp_vars it_vars prog)
-              | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
-          | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
-          | Mast.LoopList _ -> assert false)
-      | _ -> (
-          match args with
-          | Mast.ArgList args ->
-              List.fold_left
-                (fun in_vars e ->
-                  check_expression e tmp_vars it_vars prog
-                  |> StrSet.union in_vars)
-                StrSet.empty args
-          | Mast.LoopList _ -> assert false))
-  | Mast.Literal l -> (
-      match l with
-      | Mast.Variable var ->
-          let name =
-            check_variable (var, expr_pos) (OneOf None) tmp_vars it_vars prog
-          in
-          StrSet.singleton name
-      | Mast.Float _ | Mast.Undefined -> StrSet.empty)
-  | Mast.NbCategory _ -> StrSet.empty
-  | Mast.Attribut (v, a) ->
-      let name = check_variable v Both tmp_vars it_vars prog in
-      (match StrMap.find_opt name prog.prog_vars with
-      | Some { global_attrs; global_category; _ } ->
-          if not (StrMap.mem (Pos.unmark a) global_attrs) then
-            Err.unknown_attribut_for_var global_category (Pos.get_position a)
-      | None -> (
-          match StrMap.find_opt name tmp_vars with
-          | Some _ -> Err.tmp_vars_have_no_attrs (Pos.get_position v)
-          | None -> ()));
-      StrSet.singleton name
-  | Mast.Size v ->
-      let name = check_variable v Both tmp_vars it_vars prog in
-      StrSet.singleton name
-  | Mast.NbError -> StrSet.empty
-  | Mast.Loop _ -> assert false
+let check_expression (m_expr : Mast.expression Pos.marked) (env : var_env) :
+    StrSet.t =
+  let fold_var var idx_mem env acc =
+    let name = check_variable var idx_mem env in
+    StrSet.add name acc
+  in
+  fold_var_expr fold_var StrSet.empty m_expr env
 
 let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   let buf = Buffer.create 100 in
@@ -990,7 +1025,7 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       Buffer.add_string buf "_verifs";
       let id = add_sml buf l in
       Buffer.add_char buf '_';
-      let cpt = IntMap.cardinal prog.prog_verifs in
+      let cpt = StrMap.cardinal prog.prog_vdom_calls in
       Buffer.add_string buf (Format.sprintf "%d" cpt);
       match Mast.DomainIdMap.find_opt id prog.prog_vdom_syms with
       | Some (dom_id, _) ->
@@ -1012,11 +1047,10 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
   aux Mir.CatVarSet.empty l
 
 let rec check_instructions (instrs : Mast.instruction Pos.marked list)
-    (is_rule : bool) (tmp_vars : int option Pos.marked StrMap.t)
-    (it_vars : Pos.t StrMap.t) (prog : program) :
-    Mast.instruction Pos.marked list * StrSet.t * StrSet.t =
-  let rec aux (res, in_vars, out_vars) = function
-    | [] -> (List.rev res, in_vars, out_vars)
+    (is_rule : bool) (env : var_env) :
+    program * Mast.instruction Pos.marked list * StrSet.t * StrSet.t =
+  let rec aux (env, res, in_vars, out_vars) = function
+    | [] -> (env.prog, List.rev res, in_vars, out_vars)
     | m_instr :: il -> (
         let instr, instr_pos = m_instr in
         match instr with
@@ -1025,85 +1059,113 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Mast.SingleFormula sf ->
                 let lval = Pos.unmark sf.lvalue in
                 let out_var =
-                  check_variable lval.var (OneOf lval.index) tmp_vars it_vars
-                    prog
+                  let idx_mem = OneOf (Option.map (fun _ -> ()) lval.index) in
+                  check_variable lval.var idx_mem env
                 in
                 let in_vars_index =
                   match lval.index with
                   | Some (Mast.SymbolIndex vn, vpos) ->
                       let var = (vn, vpos) in
-                      let name =
-                        check_variable var (OneOf None) tmp_vars it_vars prog
-                      in
+                      let name = check_variable var (OneOf None) env in
                       StrSet.singleton name
                   | Some (Mast.LiteralIndex _, _) | None -> StrSet.empty
                 in
-                let in_vars_expr =
-                  check_expression sf.formula tmp_vars it_vars prog
-                in
+                let in_vars_expr = check_expression sf.formula env in
                 if is_rule then
                   let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
                   let in_vars =
                     StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
                   in
                   let out_vars = StrSet.add out_var out_vars in
-                  aux (m_instr :: res, in_vars, out_vars) il
-                else aux (m_instr :: res, in_vars, out_vars) il
+                  aux (env, m_instr :: res, in_vars, out_vars) il
+                else aux (env, m_instr :: res, in_vars, out_vars) il
             | Mast.MultipleFormulaes _ -> assert false)
         | Mast.IfThenElse (expr, i_then, i_else) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            let _ = check_expression expr tmp_vars it_vars prog in
-            let res_then, _, _ =
-              check_instructions i_then is_rule tmp_vars it_vars prog
-            in
-            let res_else, _, _ =
-              check_instructions i_else is_rule tmp_vars it_vars prog
-            in
+            let _ = check_expression expr env in
+            let prog, res_then, _, _ = check_instructions i_then is_rule env in
+            let env = { env with prog } in
+            let prog, res_else, _, _ = check_instructions i_else is_rule env in
+            let env = { env with prog } in
             let res_instr = Mast.IfThenElse (expr, res_then, res_else) in
-            aux ((res_instr, instr_pos) :: res, in_vars, out_vars) il
-        | Mast.ComputeDomain _ | Mast.ComputeChaining _ | Mast.ComputeVerifs _
-          ->
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Mast.ComputeDomain (rdom_list, rdom_pos) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            let tname = get_compute_id_str instr prog in
+            let tname = get_compute_id_str instr env.prog in
+            let rdom_id =
+              let id = Mast.DomainId.from_marked_list rdom_list in
+              Pos.unmark (Mast.DomainIdMap.find id env.prog.prog_rdom_syms)
+            in
+            let seq, prog = get_seq env.prog in
+            let prog_rdom_calls =
+              let used_data = ((seq, rdom_pos), rdom_id) in
+              StrMap.add tname used_data prog.prog_rdom_calls
+            in
+            let prog = { prog with prog_rdom_calls } in
+            let env = { env with prog } in
             let res_instr = Mast.ComputeTarget (tname, Pos.no_pos) in
-            aux ((res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Mast.ComputeChaining _ ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            let tname = get_compute_id_str instr env.prog in
+            let res_instr = Mast.ComputeTarget (tname, Pos.no_pos) in
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Mast.ComputeVerifs ((vdom_list, vdom_pos), expr) ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            let tname = get_compute_id_str instr env.prog in
+            let vdom_id =
+              let id = Mast.DomainId.from_marked_list vdom_list in
+              Pos.unmark (Mast.DomainIdMap.find id env.prog.prog_vdom_syms)
+            in
+            let seq, prog = get_seq env.prog in
+            let prog_vdom_calls =
+              let used_data = ((seq, vdom_pos), vdom_id, expr) in
+              StrMap.add tname used_data prog.prog_vdom_calls
+            in
+            let prog = { prog with prog_vdom_calls } in
+            let env = { env with prog } in
+            let res_instr = Mast.ComputeTarget (tname, Pos.no_pos) in
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Mast.ComputeTarget _tn ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            aux (m_instr :: res, in_vars, out_vars) il
+            aux (env, m_instr :: res, in_vars, out_vars) il
         | Mast.Print (_std, args) ->
             List.iter
               (fun arg ->
                 match Pos.unmark arg with
                 | Mast.PrintString _ -> ()
                 | Mast.PrintName v | Mast.PrintAlias v ->
-                    ignore (check_variable v Both tmp_vars it_vars prog)
+                    ignore (check_variable v Both env)
                 | Mast.PrintExpr (e, _min, _max) ->
-                    ignore (check_expression e tmp_vars it_vars prog))
+                    ignore (check_expression e env))
               args;
-            aux (m_instr :: res, in_vars, out_vars) il
+            aux (env, m_instr :: res, in_vars, out_vars) il
         | Mast.Iterate (var, vcats, expr, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let var_name, var_pos = var in
-            (match StrMap.find_opt var_name prog.prog_vars with
+            (match StrMap.find_opt var_name env.prog.prog_vars with
             | Some { global_name = _, old_pos; _ } ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            (match StrMap.find_opt var_name tmp_vars with
+            (match StrMap.find_opt var_name env.tmp_vars with
             | Some (_, old_pos) ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            (match StrMap.find_opt var_name it_vars with
+            (match StrMap.find_opt var_name env.it_vars with
             | Some old_pos ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            ignore (cats_variable_from_decl_list vcats prog.prog_var_cats);
-            let it_vars = StrMap.add var_name var_pos it_vars in
-            ignore (check_expression expr tmp_vars it_vars prog);
-            let res_instrs, _, _ =
-              check_instructions instrs is_rule tmp_vars it_vars prog
+            ignore (cats_variable_from_decl_list vcats env.prog.prog_var_cats);
+            let env' =
+              { env with it_vars = StrMap.add var_name var_pos env.it_vars }
             in
+            ignore (check_expression expr env');
+            let prog, res_instrs, _, _ =
+              check_instructions instrs is_rule env'
+            in
+            let env = { env with prog } in
             let res_instr = Mast.Iterate (var, vcats, expr, res_instrs) in
-            aux ((res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Mast.Restore (rest_params, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             List.iter
@@ -1113,35 +1175,40 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     List.iter
                       (fun (vn, vpos) ->
                         let var = (Mast.Normal vn, vpos) in
-                        ignore (check_variable var Both tmp_vars it_vars prog))
+                        ignore (check_variable var Both env))
                       vl
                 | Mast.VarCats (vn, vcats, expr) ->
                     let var_name, var_pos = vn in
-                    (match StrMap.find_opt var_name prog.prog_vars with
+                    (match StrMap.find_opt var_name env.prog.prog_vars with
                     | Some { global_name = _, old_pos; _ } ->
                         Err.variable_already_declared var_name old_pos var_pos
                     | None -> ());
-                    (match StrMap.find_opt var_name tmp_vars with
+                    (match StrMap.find_opt var_name env.tmp_vars with
                     | Some (_, old_pos) ->
                         Err.variable_already_declared var_name old_pos var_pos
                     | None -> ());
-                    (match StrMap.find_opt var_name it_vars with
+                    (match StrMap.find_opt var_name env.it_vars with
                     | Some old_pos ->
                         Err.variable_already_declared var_name old_pos var_pos
                     | None -> ());
                     ignore
-                      (cats_variable_from_decl_list vcats prog.prog_var_cats);
-                    let it_vars = StrMap.add var_name var_pos it_vars in
-                    ignore (check_expression expr tmp_vars it_vars prog))
+                      (cats_variable_from_decl_list vcats env.prog.prog_var_cats);
+                    let env =
+                      {
+                        env with
+                        it_vars = StrMap.add var_name var_pos env.it_vars;
+                      }
+                    in
+                    ignore (check_expression expr env))
               rest_params;
-
-            let res_instrs, _, _ =
-              check_instructions instrs is_rule tmp_vars it_vars prog
+            let prog, res_instrs, _, _ =
+              check_instructions instrs is_rule env
             in
+            let env = { env with prog } in
             let res_instr = Mast.Restore (rest_params, res_instrs) in
-            aux ((res_instr, instr_pos) :: res, in_vars, out_vars) il)
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il)
   in
-  aux ([], StrSet.empty, StrSet.empty) instrs
+  aux (env, [], StrSet.empty, StrSet.empty) instrs
 
 let check_target (t : Mast.target) (prog : program) : program =
   let tname, tpos = t.Mast.target_name in
@@ -1188,9 +1255,12 @@ let check_target (t : Mast.target) (prog : program) : program =
           StrMap.add vn (sz, vpos) target_tmp_vars)
         StrMap.empty t.Mast.target_tmp_vars
     in
-    let target_prog, _, _ =
-      check_instructions t.Mast.target_prog false target_tmp_vars StrMap.empty
-        prog
+    let prog, target_prog =
+      let env = { prog; tmp_vars = target_tmp_vars; it_vars = StrMap.empty } in
+      let prog, target_prog, _, _ =
+        check_instructions t.Mast.target_prog false env
+      in
+      (prog, target_prog)
     in
     let target = { target_name; target_apps; target_tmp_vars; target_prog } in
     let prog_targets = StrMap.add tname target prog.prog_targets in
@@ -1224,7 +1294,8 @@ let check_rule (r : Mast.rule) (prog : program) : program =
         | None ->
             Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
       in
-      (Mast.DomainIdMap.find rid prog.prog_rdoms, rid_pos)
+      let rule_domain = Mast.DomainIdMap.find rid prog.prog_rdoms in
+      (rule_domain, rid_pos)
     in
     let rule_app_set =
       StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
@@ -1259,9 +1330,11 @@ let check_rule (r : Mast.rule) (prog : program) : program =
         (fun f -> Pos.same_pos_as (Mast.Formula f) f)
         r.Mast.rule_formulaes
     in
-    let rule_instrs, rule_in_vars, rule_out_vars =
-      check_instructions rule_instrs true StrMap.empty StrMap.empty prog
+    let prog, rule_instrs, rule_in_vars, rule_out_vars =
+      let env = { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty } in
+      check_instructions rule_instrs true env
     in
+    let rule_seq, prog = get_seq prog in
     let rule =
       {
         rule_id;
@@ -1271,10 +1344,13 @@ let check_rule (r : Mast.rule) (prog : program) : program =
         rule_instrs;
         rule_in_vars;
         rule_out_vars;
+        rule_seq;
       }
     in
     (match IntMap.find_opt id prog.prog_rules with
-    | Some r -> Err.rule_already_defined id (Pos.get_position r.rule_id) id_pos
+    | Some r ->
+        let rule_pos = Pos.get_position r.rule_id in
+        Err.rov_already_defined Rule id rule_pos id_pos
     | None -> ());
     let prog_rules = IntMap.add id rule prog.prog_rules in
     { prog with prog_rules; prog_chainings })
@@ -1391,6 +1467,11 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
 
 let rdom_rule_filter (rdom : Mir.rule_domain_data Mir.domain) (rule : rule) :
     bool =
+  (match rdom.Mir.dom_used with
+  | Some (rdom_seq, seq_pos) ->
+      if rdom_seq <= rule.rule_seq then
+        Err.domain_already_used Rule seq_pos (Pos.get_position rule.rule_id)
+  | None -> ());
   let rdom_id = Pos.unmark rdom.dom_id in
   let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
   Mast.DomainId.equal rdom_id rule_rdom_id
@@ -1526,6 +1607,82 @@ let complete_chainings (prog : program) : program =
   in
   { prog with prog_targets }
 
+let check_verif (v : Mast.verification) (prog : program) : program =
+  let verif_apps =
+    List.fold_left
+      (fun verif_apps (app, app_pos) ->
+        match StrMap.find_opt app prog.prog_apps with
+        | None -> Err.unknown_application app_pos
+        | Some _ -> StrMap.add app app_pos verif_apps)
+      StrMap.empty v.Mast.verif_applications
+  in
+  if StrMap.mem prog.prog_app verif_apps then
+    let vdom_id =
+      Mast.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
+    in
+    let verif_domain =
+      let vid =
+        match Mast.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
+        | Some (vid, _) -> vid
+        | None ->
+            Err.unknown_domain Verif (Pos.get_position v.Mast.verif_tag_names)
+      in
+      Mast.DomainIdMap.find vid prog.prog_vdoms
+    in
+    let prog_verifs, prog, _ =
+      List.fold_left
+        (fun (prog_verifs, prog, num) (cond, cond_pos) ->
+          let id, id_pos = v.Mast.verif_number in
+          let id = id + num in
+          let verif_id = (id, id_pos) in
+          let verif_expr = cond.Mast.verif_cond_expr in
+          let verif_error, verif_var = cond.Mast.verif_cond_error in
+          let verif_vdom_stats, verif_var_stats =
+            let fold_var var idx_mem env (vdom_sts, var_sts) =
+              let name = check_variable var idx_mem env in
+              let var_data = StrMap.find name env.prog.prog_vars in
+              let incr = function None -> Some 1 | Some i -> Some (i + 1) in
+              let vdom_sts =
+                Mir.CatVarMap.update var_data.global_category incr vdom_sts
+              in
+              let var_sts = StrMap.update name incr var_sts in
+              (vdom_sts, var_sts)
+            in
+            let init = (Mir.CatVarMap.empty, StrMap.empty) in
+            let env =
+              { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty }
+            in
+            fold_var_expr fold_var init verif_expr env
+          in
+          let verif_seq, prog = get_seq prog in
+          let verif =
+            {
+              verif_id;
+              verif_apps;
+              verif_domain;
+              verif_expr;
+              verif_error;
+              verif_var;
+              verif_vdom_stats;
+              verif_var_stats;
+              verif_seq;
+            }
+          in
+          (match IntMap.find_opt id prog.prog_verifs with
+          | Some v ->
+              let verif_pos = Pos.get_position v.verif_id in
+              Err.rov_already_defined Verif id verif_pos cond_pos
+          | None -> ());
+          let prog_verifs = IntMap.add id verif prog_verifs in
+          (prog_verifs, prog, num + 1))
+        (prog.prog_verifs, prog, 0)
+        v.Mast.verif_conditions
+    in
+    { prog with prog_verifs }
+  else prog
+
+let complete_verif_calls (prog : program) : program = prog
+
 let proceed (p : Mast.program) : program =
   let app = "iliad" in
   (* à paramétrer *)
@@ -1547,15 +1704,48 @@ let proceed (p : Mast.program) : program =
             | Mast.VerifDomDecl decl -> check_verif_dom_decl decl prog
             | Mast.Target t -> check_target t prog
             | Mast.Rule r -> check_rule r prog
-            | _ -> prog)
+            | Mast.Verification v -> check_verif v prog)
           prog source_file)
       (empty_program p app) p
   in
-  let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
-  let prog_rdoms = complete_dom_decls Rule doms_syms in
-  let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
-  let prog_vdoms = complete_dom_decls Verif doms_syms in
-  let prog = convert_rules { prog with prog_rdoms; prog_vdoms } in
-  let prog = complete_rule_domains prog in
-  let prog = complete_chainings prog in
-  prog
+  let prog_rdoms =
+    let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
+    let prog_rdoms = complete_dom_decls Rule doms_syms in
+    StrMap.fold
+      (fun _ (m_seq, rdom_id) prog_rdoms ->
+        let rdom = Mast.DomainIdMap.find rdom_id prog_rdoms in
+        Mast.DomainIdSet.fold
+          (fun rid prog_rdoms ->
+            let rd = Mast.DomainIdMap.find rid prog_rdoms in
+            let rd =
+              match rd.Mir.dom_used with
+              | Some _ -> rd
+              | None -> { rd with Mir.dom_used = Some m_seq }
+            in
+            Mast.DomainIdMap.add rid rd prog_rdoms)
+          (Mast.DomainIdSet.add rdom_id rdom.Mir.dom_min)
+          prog_rdoms)
+      prog.prog_rdom_calls prog_rdoms
+  in
+  let prog_vdoms =
+    let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
+    let prog_vdoms = complete_dom_decls Verif doms_syms in
+    StrMap.fold
+      (fun _ (m_seq, vdom_id, _) prog_vdoms ->
+        let vdom = Mast.DomainIdMap.find vdom_id prog_vdoms in
+        Mast.DomainIdSet.fold
+          (fun vid prog_vdoms ->
+            let vd = Mast.DomainIdMap.find vid prog_vdoms in
+            let vd =
+              match vd.Mir.dom_used with
+              | Some _ -> vd
+              | None -> { vd with Mir.dom_used = Some m_seq }
+            in
+            Mast.DomainIdMap.add vid vd prog_vdoms)
+          (Mast.DomainIdSet.add vdom_id vdom.Mir.dom_min)
+          prog_vdoms)
+      prog.prog_vdom_calls prog_vdoms
+  in
+  { prog with prog_rdoms; prog_vdoms }
+  |> convert_rules |> complete_rule_domains |> complete_chainings
+  |> complete_verif_calls
