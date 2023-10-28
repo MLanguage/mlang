@@ -121,6 +121,7 @@ module type S = sig
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
+    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 

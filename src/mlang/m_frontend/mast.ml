@@ -226,6 +226,8 @@ type instruction =
       * expression Pos.marked
       * instruction Pos.marked list
   | Restore of restore_vars Pos.marked list * instruction Pos.marked list
+  | RaiseError of error_name Pos.marked * variable_name Pos.marked option
+  | CleanErrors
 
 type rule = {
   rule_number : int Pos.marked;

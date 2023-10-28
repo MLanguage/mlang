@@ -533,6 +533,15 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         stmts;
       Format.fprintf oc "env_restaurer(&%s);@;" rest_name;
       Format.fprintf oc "@]}@;"
+  | SRaiseError (err, var_opt) ->
+      let err_name = Pos.unmark err.Mir.Error.name in
+      let code =
+        match var_opt with
+        | Some var -> Format.sprintf "\"%s\"" var
+        | None -> "NULL"
+      in
+      Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" err_name code
+  | SCleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

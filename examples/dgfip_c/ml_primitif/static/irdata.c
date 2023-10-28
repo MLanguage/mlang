@@ -477,3 +477,15 @@ void print_double(FILE *std, double f, int pmin, int pmax) {
   }
 }
 
+void nettoie_erreur(irdata)
+T_irdata *irdata;
+{
+#ifdef FLG_MULTITHREAD
+  *irdata->p_discord = irdata->tas_discord;
+  irdata->tas_discord = irdata->discords;
+  irdata->discords = 0;
+  irdata->p_discord = &irdata->discords;
+  irdata->nb_bloquantes = 0;
+#endif /* FLG_MULTITHREAD */
+}
+

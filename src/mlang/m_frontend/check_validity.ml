@@ -253,6 +253,8 @@ module Err = struct
         Pos.format_position dom_pos
     in
     Errors.raise_spanned_error msg pos
+
+  let unknown_error pos = Errors.raise_spanned_error "unknown error" pos
 end
 
 type global_variable = {
@@ -867,6 +869,50 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
   | None -> Err.no_default_domain rov
   | Some _ -> doms
 
+let complete_rdom_decls (prog : program) : program =
+  let prog_rdoms =
+    let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
+    let prog_rdoms = complete_dom_decls Rule doms_syms in
+    StrMap.fold
+      (fun _ (m_seq, rdom_id) prog_rdoms ->
+        let rdom = Mast.DomainIdMap.find rdom_id prog_rdoms in
+        Mast.DomainIdSet.fold
+          (fun rid prog_rdoms ->
+            let rd = Mast.DomainIdMap.find rid prog_rdoms in
+            let rd =
+              match rd.Mir.dom_used with
+              | Some _ -> rd
+              | None -> { rd with Mir.dom_used = Some m_seq }
+            in
+            Mast.DomainIdMap.add rid rd prog_rdoms)
+          (Mast.DomainIdSet.add rdom_id rdom.Mir.dom_min)
+          prog_rdoms)
+      prog.prog_rdom_calls prog_rdoms
+  in
+  { prog with prog_rdoms }
+
+let complete_vdom_decls (prog : program) : program =
+  let prog_vdoms =
+    let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
+    let prog_vdoms = complete_dom_decls Verif doms_syms in
+    StrMap.fold
+      (fun _ (m_seq, vdom_id, _) prog_vdoms ->
+        let vdom = Mast.DomainIdMap.find vdom_id prog_vdoms in
+        Mast.DomainIdSet.fold
+          (fun vid prog_vdoms ->
+            let vd = Mast.DomainIdMap.find vid prog_vdoms in
+            let vd =
+              match vd.Mir.dom_used with
+              | Some _ -> vd
+              | None -> { vd with Mir.dom_used = Some m_seq }
+            in
+            Mast.DomainIdMap.add vid vd prog_vdoms)
+          (Mast.DomainIdSet.add vdom_id vdom.Mir.dom_min)
+          prog_vdoms)
+      prog.prog_vdom_calls prog_vdoms
+  in
+  { prog with prog_vdoms }
+
 type 'a var_mem_type = Both | OneOf of 'a option
 
 type var_env = {
@@ -1206,7 +1252,23 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             in
             let env = { env with prog } in
             let res_instr = Mast.Restore (rest_params, res_instrs) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il)
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Mast.RaiseError (m_err, m_var_opt) ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            let err_name, err_pos = m_err in
+            (match StrMap.find_opt err_name env.prog.prog_errors with
+            | None -> Err.unknown_error err_pos
+            | Some _ -> ());
+            (match m_var_opt with
+            | Some (var_name, var_pos) -> (
+                match StrMap.find_opt var_name env.prog.prog_vars with
+                | None -> Err.unknown_variable var_pos
+                | Some _ -> ())
+            | None -> ());
+            aux (env, m_instr :: res, in_vars, out_vars) il
+        | Mast.CleanErrors ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            aux (env, m_instr :: res, in_vars, out_vars) il)
   in
   aux (env, [], StrSet.empty, StrSet.empty) instrs
 
@@ -1637,6 +1699,16 @@ let check_verif (v : Mast.verification) (prog : program) : program =
           let verif_id = (id, id_pos) in
           let verif_expr = cond.Mast.verif_cond_expr in
           let verif_error, verif_var = cond.Mast.verif_cond_error in
+          let err_name, err_pos = verif_error in
+          (match StrMap.find_opt err_name prog.prog_errors with
+          | None -> Err.unknown_error err_pos
+          | Some _ -> ());
+          (match verif_var with
+          | Some (var_name, var_pos) -> (
+              match StrMap.find_opt var_name prog.prog_vars with
+              | None -> Err.unknown_variable var_pos
+              | Some _ -> ())
+          | None -> ());
           let verif_vdom_stats, verif_var_stats =
             let fold_var var idx_mem env (vdom_sts, var_sts) =
               let name = check_variable var idx_mem env in
@@ -1681,6 +1753,36 @@ let check_verif (v : Mast.verification) (prog : program) : program =
     { prog with prog_verifs }
   else prog
 
+let convert_verifs (prog : program) : program =
+  let prog_targets =
+    IntMap.fold
+      (fun id verif prog_targets ->
+        let tname = Format.sprintf "%s_verif_%d" prog.prog_prefix id in
+        let target_prog =
+          [
+            ( Mast.IfThenElse
+                ( verif.verif_expr,
+                  [
+                    ( Mast.RaiseError (verif.verif_error, verif.verif_var),
+                      Pos.no_pos );
+                  ],
+                  [] ),
+              Pos.no_pos );
+          ]
+        in
+        let target =
+          {
+            target_name = (tname, Pos.no_pos);
+            target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+            target_tmp_vars = StrMap.empty;
+            target_prog;
+          }
+        in
+        StrMap.add tname target prog_targets)
+      prog.prog_verifs prog.prog_targets
+  in
+  { prog with prog_targets }
+
 let complete_verif_calls (prog : program) : program = prog
 
 let proceed (p : Mast.program) : program =
@@ -1708,44 +1810,6 @@ let proceed (p : Mast.program) : program =
           prog source_file)
       (empty_program p app) p
   in
-  let prog_rdoms =
-    let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
-    let prog_rdoms = complete_dom_decls Rule doms_syms in
-    StrMap.fold
-      (fun _ (m_seq, rdom_id) prog_rdoms ->
-        let rdom = Mast.DomainIdMap.find rdom_id prog_rdoms in
-        Mast.DomainIdSet.fold
-          (fun rid prog_rdoms ->
-            let rd = Mast.DomainIdMap.find rid prog_rdoms in
-            let rd =
-              match rd.Mir.dom_used with
-              | Some _ -> rd
-              | None -> { rd with Mir.dom_used = Some m_seq }
-            in
-            Mast.DomainIdMap.add rid rd prog_rdoms)
-          (Mast.DomainIdSet.add rdom_id rdom.Mir.dom_min)
-          prog_rdoms)
-      prog.prog_rdom_calls prog_rdoms
-  in
-  let prog_vdoms =
-    let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
-    let prog_vdoms = complete_dom_decls Verif doms_syms in
-    StrMap.fold
-      (fun _ (m_seq, vdom_id, _) prog_vdoms ->
-        let vdom = Mast.DomainIdMap.find vdom_id prog_vdoms in
-        Mast.DomainIdSet.fold
-          (fun vid prog_vdoms ->
-            let vd = Mast.DomainIdMap.find vid prog_vdoms in
-            let vd =
-              match vd.Mir.dom_used with
-              | Some _ -> vd
-              | None -> { vd with Mir.dom_used = Some m_seq }
-            in
-            Mast.DomainIdMap.add vid vd prog_vdoms)
-          (Mast.DomainIdSet.add vdom_id vdom.Mir.dom_min)
-          prog_vdoms)
-      prog.prog_vdom_calls prog_vdoms
-  in
-  { prog with prog_rdoms; prog_vdoms }
-  |> convert_rules |> complete_rule_domains |> complete_chainings
+  prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
+  |> complete_rule_domains |> complete_chainings |> convert_verifs
   |> complete_verif_calls

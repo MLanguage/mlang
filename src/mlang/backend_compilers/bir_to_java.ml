@@ -353,6 +353,9 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
   | SRestore _ ->
       Errors.raise_spanned_error "restorators not implemented in Java"
         (Pos.get_position stmt)
+  | SRaiseError _ | SCleanErrors ->
+      Errors.raise_spanned_error "errors not implemented in Java"
+        (Pos.get_position stmt)
 
 let generate_return (oc : Format.formatter)
     (function_spec : Bir_interface.bir_function) =

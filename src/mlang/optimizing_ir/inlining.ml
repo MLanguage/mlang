@@ -347,7 +347,8 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
         Pos.same_pos_as (SRestore (vars, var_params, b, b_end)) stmt
       in
       (new_stmt, ctx, current_stmt_pos)
-  | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ ->
+  | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _
+  | SCleanErrors ->
       (stmt, ctx, current_stmt_pos)
 
 let inlining0 (cfg : cfg) : cfg =

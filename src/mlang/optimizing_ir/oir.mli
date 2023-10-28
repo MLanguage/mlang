@@ -36,6 +36,8 @@ and stmt_kind =
       * (Bir.variable * Mir.CatVarSet.t * Bir.expression) list
       * block_id
       * block_id
+  | SRaiseError of Mir.error * string option
+  | SCleanErrors
 
 type block = stmt list
 

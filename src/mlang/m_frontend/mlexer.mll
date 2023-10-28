@@ -170,6 +170,10 @@ rule token = parse
   { SIZE }
 | "erreur"
   { ERROR }
+| "leve_erreur"
+  { RAISE_ERROR }
+| "nettoie_erreurs"
+  { CLEAN_ERRORS }
 | "verif"
   { VERIFICATION }
 | "condition"

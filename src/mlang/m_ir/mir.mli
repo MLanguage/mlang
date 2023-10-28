@@ -196,6 +196,46 @@ type 'variable print_arg =
   | PrintAlias of string Pos.marked * variable
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
+type error_descr = {
+  kind : string Pos.marked;
+  major_code : string Pos.marked;
+  minor_code : string Pos.marked;
+  description : string Pos.marked;
+  isisf : string Pos.marked;
+}
+
+(** Errors are first-class objects *)
+
+type error = {
+  name : string Pos.marked;  (** The position is the variable declaration *)
+  id : int;  (** Each variable has an unique ID *)
+  descr : error_descr;  (** Description taken from the variable declaration *)
+  typ : Mast.error_typ;
+}
+
+module Error : sig
+  type descr = error_descr = {
+    kind : string Pos.marked;
+    major_code : string Pos.marked;
+    minor_code : string Pos.marked;
+    description : string Pos.marked;
+    isisf : string Pos.marked;
+  }
+
+  type t = error = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    id : int;  (** Each variable has an unique ID *)
+    descr : error_descr;  (** Description taken from the variable declaration *)
+    typ : Mast.error_typ;
+  }
+
+  val new_error : string Pos.marked -> Mast.error_ -> Mast.error_typ -> error
+
+  val err_descr_string : t -> string Pos.marked
+
+  val compare : t -> t -> int
+end
+
 type instruction =
   | Affectation of variable_id * variable_data
   | IfThenElse of
@@ -214,6 +254,8 @@ type instruction =
       Pos.t VariableMap.t
       * (variable * CatVarSet.t * expression Pos.marked) list
       * instruction Pos.marked list
+  | RaiseError of error * string option
+  | CleanErrors
 
 type rule_data = {
   rule_apps : Pos.t StrMap.t;
@@ -228,22 +270,6 @@ type target_data = {
   target_apps : string Pos.marked list;
   target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
-}
-
-type error_descr = {
-  kind : string Pos.marked;
-  major_code : string Pos.marked;
-  minor_code : string Pos.marked;
-  description : string Pos.marked;
-  isisf : string Pos.marked;
-}
-(** Errors are first-class objects *)
-
-type error = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  id : int;  (** Each variable has an unique ID *)
-  descr : error_descr;  (** Description taken from the variable declaration *)
-  typ : Mast.error_typ;
 }
 
 type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
@@ -335,29 +361,6 @@ module LocalVariable : sig
   type t = local_variable = { id : int }
 
   val new_var : unit -> t
-
-  val compare : t -> t -> int
-end
-
-module Error : sig
-  type descr = error_descr = {
-    kind : string Pos.marked;
-    major_code : string Pos.marked;
-    minor_code : string Pos.marked;
-    description : string Pos.marked;
-    isisf : string Pos.marked;
-  }
-
-  type t = error = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    id : int;  (** Each variable has an unique ID *)
-    descr : error_descr;  (** Description taken from the variable declaration *)
-    typ : Mast.error_typ;
-  }
-
-  val new_error : string Pos.marked -> Mast.error_ -> Mast.error_typ -> error
-
-  val err_descr_string : t -> string Pos.marked
 
   val compare : t -> t -> int
 end

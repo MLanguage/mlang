@@ -461,50 +461,6 @@ type 'variable print_arg =
   | PrintAlias of string Pos.marked * variable
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
-type instruction =
-  | Affectation of variable_id * variable_data
-  | IfThenElse of
-      expression * instruction Pos.marked list * instruction Pos.marked list
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
-  | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
-  | Print of Mast.print_std * variable print_arg Pos.marked list
-  | Iterate of
-      variable_id
-      * CatVarSet.t
-      * expression Pos.marked
-      * instruction Pos.marked list
-  | Restore of
-      Pos.t VariableMap.t
-      * (variable * CatVarSet.t * expression Pos.marked) list
-      * instruction Pos.marked list
-
-type rule_data = {
-  rule_apps : Pos.t StrMap.t;
-  rule_domain : rule_domain;
-  rule_chain : (string * rule_domain) option;
-  rule_vars : instruction Pos.marked list;
-  rule_number : rov_id Pos.marked;
-}
-
-module RuleMap = MapExt.Make (struct
-  type t = rov_id
-
-  let compare = compare
-end)
-
-module TargetMap = StrMap
-
-type target_data = {
-  target_name : string Pos.marked;
-  target_apps : string Pos.marked list;
-  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
-  target_prog : instruction Pos.marked list;
-}
-
-(**{1 Verification conditions}*)
-
 type error_descr = {
   kind : string Pos.marked;
   major_code : string Pos.marked;
@@ -579,6 +535,52 @@ module Error = struct
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
+
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+  | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeTarget of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Iterate of
+      variable_id
+      * CatVarSet.t
+      * expression Pos.marked
+      * instruction Pos.marked list
+  | Restore of
+      Pos.t VariableMap.t
+      * (variable * CatVarSet.t * expression Pos.marked) list
+      * instruction Pos.marked list
+  | RaiseError of error * string option
+  | CleanErrors
+
+type rule_data = {
+  rule_apps : Pos.t StrMap.t;
+  rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
+  rule_vars : instruction Pos.marked list;
+  rule_number : rov_id Pos.marked;
+}
+
+module RuleMap = MapExt.Make (struct
+  type t = rov_id
+
+  let compare = compare
+end)
+
+module TargetMap = StrMap
+
+type target_data = {
+  target_name : string Pos.marked;
+  target_apps : string Pos.marked list;
+  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  target_prog : instruction Pos.marked list;
+}
+
+(**{1 Verification conditions}*)
 
 type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
 

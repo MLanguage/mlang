@@ -1104,7 +1104,8 @@ let add_dummy_definitions_for_variable_declarations
         var_data)
     var_decl_data var_data
 
-let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+let rec translate_prog (error_decls : Mir.Error.t list)
+    (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     (var_data : Mir.VariableDict.t) idmap var_decl_data prog =
   let new_ctx pos =
     {
@@ -1234,7 +1235,7 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         let ctx = { ctx with idmap } in
         let mir_expr = translate_expression cats idmap ctx expr in
         let prog_it, var_data =
-          translate_prog cats var_data idmap var_decl_data instrs
+          translate_prog error_decls cats var_data idmap var_decl_data instrs
         in
         aux
           ( (Mir.Iterate (var.Mir.id, catSet, mir_expr, prog_it), pos) :: res,
@@ -1299,16 +1300,34 @@ let rec translate_prog (cats : Mir.cat_variable_data Mir.CatVarMap.t)
             rest_params
         in
         let prog_rest, var_data =
-          translate_prog cats var_data idmap var_decl_data instrs
+          translate_prog error_decls cats var_data idmap var_decl_data instrs
         in
         aux
           ((Mir.Restore (vars, var_params, prog_rest), pos) :: res, var_data)
           il
+    | (Mast.RaiseError (err_name, var_opt), pos) :: il ->
+        let err_decl =
+          try
+            List.find
+              (fun e ->
+                String.equal (Pos.unmark e.Mir.Error.name) (Pos.unmark err_name))
+              error_decls
+          with Not_found ->
+            Errors.raise_error
+              (Format.asprintf "undeclared error %s %a" (Pos.unmark err_name)
+                 Pos.format_position
+                 (Pos.get_position err_name))
+        in
+        let var_res = Option.map Pos.unmark var_opt in
+        aux ((Mir.RaiseError (err_decl, var_res), pos) :: res, var_data) il
+    | (Mast.CleanErrors, pos) :: il ->
+        aux ((Mir.CleanErrors, pos) :: res, var_data) il
   in
   aux ([], var_data) prog
 
-let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
-    (apps : Pos.t StrMap.t) (var_data : Mir.VariableDict.t)
+let get_targets (error_decls : Mir.Error.t list)
+    (cats : Mir.cat_variable_data Mir.CatVarMap.t) (apps : Pos.t StrMap.t)
+    (var_data : Mir.VariableDict.t)
     (idmap : Mir.variable list Pos.VarNameToID.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (p : Mast.program) :
     Mir.target_data Mir.TargetMap.t * Mir.VariableDict.t =
@@ -1395,8 +1414,8 @@ let get_targets (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                   target_tmp_vars
               in
               let target_prog, var_data =
-                translate_prog cats var_data tmp_idmap tmp_var_decl_data
-                  t.Mast.target_prog
+                translate_prog error_decls cats var_data tmp_idmap
+                  tmp_var_decl_data t.Mast.target_prog
               in
               let target_data =
                 Mir.{ target_name; target_apps; target_tmp_vars; target_prog }
@@ -1612,7 +1631,7 @@ let translate (p : Mast.program) : Mir.program =
       rules
   in
   let targets, var_data =
-    get_targets var_category_map apps var_data idmap var_decl_data p
+    get_targets error_decls var_category_map apps var_data idmap var_decl_data p
   in
   let verif_domains = prog.Check_validity.prog_vdoms in
   let conds = get_conds verif_domains var_category_map error_decls idmap p in

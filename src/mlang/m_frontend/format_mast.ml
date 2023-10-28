@@ -276,6 +276,10 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt "restaurer %a : dans ( %a )"
         (pp_print_list_space (pp_unmark pp_rest_param))
         rest_params format_instruction_list instrs
+  | RaiseError (err, var_opt) ->
+      Format.fprintf fmt "leve_erreur %s%s;" (Pos.unmark err)
+        (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
+  | CleanErrors -> Format.fprintf fmt "nettoie_erreurs;"
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

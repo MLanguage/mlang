@@ -48,7 +48,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF PRINT PRINT_ERR
+%token IF THEN ELSE ENDIF PRINT PRINT_ERR RAISE_ERROR CLEAN_ERRORS
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY SIZE NB_ERROR
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
@@ -478,6 +478,9 @@ instruction:
 | RESTORE COLON rest_params = rest_param_with_pos*
   AFTER LPAREN instrs = instruction_list_rev RPAREN
     { Restore (rest_params, List.rev instrs), mk_position $sloc }
+| RAISE_ERROR e_name = verification_name var = output_name? SEMICOLON
+    { RaiseError (e_name, var), mk_position $sloc }
+| CLEAN_ERRORS SEMICOLON { CleanErrors, mk_position $sloc }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }

@@ -100,6 +100,10 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format_mast.pp_print_list_space format_var_param)
         var_params;
       Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
+  | SRaiseError (err, var_opt) ->
+      Format.fprintf fmt "leve_erreur %s %s\n" (Pos.unmark err.Mir.name)
+        (match var_opt with Some var -> " " ^ var | None -> "")
+  | SCleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

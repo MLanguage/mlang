@@ -518,6 +518,10 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         in
         let ctx, stmts = translate_m_code m_program ctx irest in
         aux ctx ((Bir.SRestore (vars, var_params, stmts), pos) :: res) instrs
+    | (Mir.RaiseError (err, var_opt), pos) :: instrs ->
+        aux ctx ((Bir.SRaiseError (err, var_opt), pos) :: res) instrs
+    | (Mir.CleanErrors, pos) :: instrs ->
+        aux ctx ((Bir.SCleanErrors, pos) :: res) instrs
   in
   aux ctx [] instrs
 

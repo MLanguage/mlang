@@ -38,6 +38,8 @@ and stmt_kind =
       * (Bir.variable * Mir.CatVarSet.t * Bir.expression) list
       * block_id
       * block_id
+  | SRaiseError of Mir.error * string option
+  | SCleanErrors
 
 type block = stmt list
 
@@ -108,7 +110,8 @@ let count_instr (p : program) : int =
       (fun acc s ->
         match Pos.unmark s with
         | SConditional _ | SAssign _ | SVerif _ | SVerifBlock _ | SRovCall _
-        | SFunctionCall _ | SPrint _ | SIterate _ | SRestore _ ->
+        | SFunctionCall _ | SPrint _ | SIterate _ | SRestore _ | SRaiseError _
+        | SCleanErrors ->
             acc + 1
         | SGoto _ -> acc)
       acc stmts

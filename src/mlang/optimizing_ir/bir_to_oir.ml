@@ -138,6 +138,16 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
         append_to_block (Oir.SGoto end_block, Pos.no_pos) last_bid blocks
       in
       (end_block, blocks)
+  | Bir.SRaiseError (err, var_opt) ->
+      ( curr_block_id,
+        append_to_block
+          (Pos.same_pos_as (Oir.SRaiseError (err, var_opt)) s)
+          curr_block_id blocks )
+  | Bir.SCleanErrors ->
+      ( curr_block_id,
+        append_to_block
+          (Pos.same_pos_as Oir.SCleanErrors s)
+          curr_block_id blocks )
 
 let bir_stmts_to_cfg (stmts : Bir.stmt list) : Oir.cfg =
   let entry_block = fresh_block_id () in
@@ -217,6 +227,9 @@ let rec re_translate_statement (s : Oir.stmt)
       let stmts = re_translate_blocks_until b blocks (Some b_end) in
       ( Some b_end,
         Some (Pos.same_pos_as (Bir.SRestore (vars, var_params, stmts)) s) )
+  | Oir.SRaiseError (err, var_opt) ->
+      (None, Some (Pos.same_pos_as (Bir.SRaiseError (err, var_opt)) s))
+  | Oir.SCleanErrors -> (None, Some (Pos.same_pos_as Bir.SCleanErrors s))
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (blocks : Oir.block Oir.BlockMap.t) : int option * Bir.stmt list =

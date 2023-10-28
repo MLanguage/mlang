@@ -55,6 +55,8 @@ and stmt_kind =
   | SIterate of variable * Mir.CatVarSet.t * expression * stmt list
   | SRestore of
       VariableSet.t * (variable * Mir.CatVarSet.t * expression) list * stmt list
+  | SRaiseError of Mir.error * string option
+  | SCleanErrors
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 

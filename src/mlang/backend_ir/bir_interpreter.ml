@@ -102,6 +102,7 @@ module type S = sig
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
+    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 
@@ -276,6 +277,7 @@ struct
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
+    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 
@@ -424,6 +426,16 @@ struct
           (fun _ -> repl_debugguer ctx p)
     | StructuredError (msg, pos, kont) ->
         raise (Errors.StructuredError (msg, pos, kont))
+    | RaisedError (err, var_opt, pos) ->
+        Errors.raise_spanned_error_with_continuation
+          (Format.sprintf "Error %s thrown%s: %s"
+             (Pos.unmark err.Mir.Error.name)
+             (match var_opt with
+             | Some var -> " with variable " ^ var
+             | None -> "")
+             (Pos.unmark @@ Mir.Error.err_descr_string err))
+          pos
+          (fun _ -> repl_debugguer ctx p)
 
   let is_zero (l : value) : bool =
     match l with Number z -> N.is_zero z | _ -> false
@@ -714,6 +726,26 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
+  let report_error (err : Mir.error) (var_opt : string option) (pos : Pos.t)
+      (ctx : ctx) : 'a =
+    match err.Mir.Error.typ with
+    | Mast.Anomaly ->
+        raise (RuntimeError (RaisedError (err, var_opt, pos), ctx))
+    | Mast.Discordance ->
+        Cli.warning_print "Anomaly%s: %s"
+          (match var_opt with
+          | Some var -> Format.sprintf " (%s)" var
+          | None -> "")
+          (Pos.unmark (Mir.Error.err_descr_string err));
+        ctx
+    | Mast.Information ->
+        Cli.debug_print "Information%s: %s"
+          (match var_opt with
+          | Some var -> Format.sprintf " (%s)" var
+          | None -> "")
+          (Pos.unmark (Mir.Error.err_descr_string err));
+        ctx
+
   let report_violatedcondition (cond : Bir.condition_data) (ctx : ctx) : 'a =
     let err = fst cond.cond_error in
     match err.Mir.Error.typ with
@@ -963,6 +995,9 @@ struct
             ctx.ctx_vars backup
         in
         { ctx with ctx_vars }
+    | Bir.SRaiseError (err, var_opt) ->
+        report_error err var_opt (Pos.get_position stmt) ctx
+    | Bir.SCleanErrors -> ctx
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =

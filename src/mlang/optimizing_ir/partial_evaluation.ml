@@ -766,7 +766,7 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
       ( Pos.same_pos_as (SRestore (vars, var_params, b, b_end)) stmt :: new_block,
         ctx )
   | SGoto _ -> (stmt :: new_block, ctx)
-  | SRovCall _ | SFunctionCall _ | SPrint _ ->
+  | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _ | SCleanErrors ->
       (stmt :: new_block, all_top_ctx ctx block_id)
 
 let partial_evaluation0 (p : program) (cfg : cfg) : cfg =
