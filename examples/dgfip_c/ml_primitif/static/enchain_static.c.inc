@@ -96,6 +96,7 @@ void free_erreur()
 static T_discord *discords = 0;
 static T_discord *tas_discord = 0;
 static T_discord **p_discord = &discords;
+static short nb_bloquantes;
 static jmp_buf jmp_bloq;
 
 static void init_erreur(void)
@@ -104,6 +105,7 @@ static void init_erreur(void)
   tas_discord = discords;
   discords = 0;
   p_discord = &discords;
+  nb_bloquantes = 0;
 }
 
 void add_erreur(T_erreur *erreur, char *code)
@@ -125,7 +127,7 @@ void add_erreur(T_erreur *erreur, char *code)
   p_discord = &new_discord->suivant;
 
   if (strcmp(erreur->isisf, "O")) {
-    if (erreur->type == ANOMALIE) {
+    if ((erreur->type == ANOMALIE) && (++nb_bloquantes >= MAX_ANO)) {
       longjmp(jmp_bloq, 1);
     }
   }

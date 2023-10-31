@@ -15,6 +15,9 @@ sauve_base_1728():
   X = X
 #  outputs <- call_m_rules(base_1728 corrective)
 
+sauve_base_primitive_penalisee():
+  outputs <- call_m_rules(base_primitive_penalisee corrective)
+
 sauve_base_premier():
   outputs <- call_m_rules(base_premier corrective)
 
