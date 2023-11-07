@@ -255,6 +255,34 @@ module Err = struct
     Errors.raise_spanned_error msg pos
 
   let unknown_error pos = Errors.raise_spanned_error "unknown error" pos
+
+  let variable_forbidden_in_filter pos =
+    Errors.raise_spanned_error "variables are forbidden in verif filters" pos
+
+  let forbidden_expresion_in_filter pos =
+    Errors.raise_spanned_error "forbidden expression in verif filter" pos
+
+  let expression_only_in_filter pos =
+    Errors.raise_spanned_error "expression authorized only in verif filters" pos
+
+  let wrong_interval_bounds pos =
+    Errors.raise_spanned_error "wrong interval bounds" pos
+
+  let wrong_arity_of_function func_name arity pos =
+    let msg =
+      Format.sprintf "wrong arity: function \"%s\" expect %d argument%s"
+        func_name arity
+        (if arity = 1 then "" else "s")
+    in
+    Errors.raise_spanned_error msg pos
+
+  let unknown_function func_name pos =
+    let msg = Format.sprintf "unknown function \"%s\"" func_name in
+    Errors.raise_spanned_error msg pos
+
+  let variable_with_forbidden_category pos =
+    let msg = Format.sprintf "variable with forbidden category in verif" in
+    Errors.raise_spanned_error msg pos
 end
 
 type global_variable = {
@@ -314,7 +342,7 @@ type verif = {
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
-  verif_vdom_stats : int Mir.CatVarMap.t;
+  verif_cat_var_stats : int Mir.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;
 }
@@ -924,25 +952,34 @@ type var_env = {
 let rec fold_var_expr
     (fold_var :
       Mast.variable Pos.marked -> unit var_mem_type -> var_env -> 'a -> 'a)
-    (acc : 'a) (m_expr : Mast.expression Pos.marked) (env : var_env) : 'a =
+    (is_filter : bool) (acc : 'a) (m_expr : Mast.expression Pos.marked)
+    (env : var_env) : 'a =
   let expr, expr_pos = m_expr in
   match expr with
   | Mast.TestInSet (_positive, e, values) ->
-      let res = fold_var_expr fold_var acc e env in
+      let res = fold_var_expr fold_var is_filter acc e env in
       List.fold_left
         (fun res set_value ->
           match set_value with
-          | Mast.VarValue v -> fold_var v (OneOf None) env res
-          | Mast.FloatValue _ | Mast.Interval _ -> res)
+          | Mast.VarValue v ->
+              if is_filter then
+                Err.forbidden_expresion_in_filter (Pos.get_position v);
+              fold_var v (OneOf None) env res
+          | Mast.FloatValue _ -> res
+          | Mast.Interval (bn, en) ->
+              if Pos.unmark bn > Pos.unmark en then
+                Err.wrong_interval_bounds (Pos.get_position bn);
+              res)
         res values
   | Mast.Comparison (_op, e1, e2) ->
-      let acc = fold_var_expr fold_var acc e1 env in
-      fold_var_expr fold_var acc e2 env
+      let acc = fold_var_expr fold_var is_filter acc e1 env in
+      fold_var_expr fold_var is_filter acc e2 env
   | Mast.Binop (_op, e1, e2) ->
-      let acc = fold_var_expr fold_var acc e1 env in
-      fold_var_expr fold_var acc e2 env
-  | Mast.Unop (_op, e) -> fold_var_expr fold_var acc e env
+      let acc = fold_var_expr fold_var is_filter acc e1 env in
+      fold_var_expr fold_var is_filter acc e2 env
+  | Mast.Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
   | Mast.Index (t, (i, i_pos)) ->
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       let acc =
         match i with
         | Mast.LiteralIndex _ -> acc
@@ -950,35 +987,64 @@ let rec fold_var_expr
       in
       fold_var t (OneOf (Some ())) env acc
   | Mast.Conditional (e1, e2, e3_opt) -> (
-      let acc = fold_var_expr fold_var acc e1 env in
-      let acc = fold_var_expr fold_var acc e2 env in
+      let acc = fold_var_expr fold_var is_filter acc e1 env in
+      let acc = fold_var_expr fold_var is_filter acc e2 env in
       match e3_opt with
-      | Some e3 -> fold_var_expr fold_var acc e3 env
+      | Some e3 -> fold_var_expr fold_var is_filter acc e3 env
       | None -> acc)
   | Mast.FunctionCall ((func_name, _), args) -> (
+      let check_func arity =
+        match args with
+        | Mast.ArgList args ->
+            if arity > -1 && List.length args <> arity then
+              Err.wrong_arity_of_function func_name arity expr_pos;
+            List.fold_left
+              (fun acc e -> fold_var_expr fold_var is_filter acc e env)
+              acc args
+        | Mast.LoopList _ -> assert false
+      in
       match func_name with
       | "multimax" -> (
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           match args with
           | Mast.ArgList [ expr; var_expr ] -> (
               match var_expr with
               | Mast.Literal (Mast.Variable var), var_pos ->
-                  let acc = fold_var_expr fold_var acc expr env in
+                  let acc = fold_var_expr fold_var is_filter acc expr env in
                   fold_var (var, var_pos) Both env acc
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
           | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
           | Mast.LoopList _ -> assert false)
-      | _ -> (
-          match args with
-          | Mast.ArgList args ->
-              List.fold_left
-                (fun acc e -> fold_var_expr fold_var acc e env)
-                acc args
-          | Mast.LoopList _ -> assert false))
+      | "somme" -> check_func (-1)
+      | "numero_verif" -> check_func 0
+      | "abs" -> check_func 1
+      | "min" -> check_func 2
+      | "max" -> check_func 2
+      | "positif" -> check_func 1
+      | "positif_ou_nul" -> check_func 1
+      | "null" -> check_func 1
+      | "arr" -> check_func 1
+      | "inf" -> check_func 1
+      | "supzero" -> check_func 1
+      | "present" ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          check_func 1
+      | _ -> Err.unknown_function func_name expr_pos)
   | Mast.Literal l -> (
       match l with
-      | Mast.Variable var -> fold_var (var, expr_pos) (OneOf None) env acc
+      | Mast.Variable var ->
+          if is_filter then Err.variable_forbidden_in_filter expr_pos;
+          fold_var (var, expr_pos) (OneOf None) env acc
       | Mast.Float _ | Mast.Undefined -> acc)
-  | Mast.NbCategory _ -> acc
+  | Mast.NbCategory l ->
+      if not is_filter then Err.expression_only_in_filter expr_pos;
+      let cats = mast_to_catvars l env.prog.prog_var_cats in
+      Mir.CatVarSet.iter
+        (fun cat ->
+          if not (Mir.CatVarMap.mem cat env.prog.prog_var_cats) then
+            Err.unknown_domain Verif (Pos.get_position l))
+        cats;
+      acc
   | Mast.Attribut (v, a) ->
       let name, var_pos =
         match v with
@@ -995,7 +1061,9 @@ let rec fold_var_expr
           | None -> ()));
       fold_var v Both env acc
   | Mast.Size v -> fold_var v Both env acc
-  | Mast.NbError -> acc
+  | Mast.NbError ->
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      acc
   | Mast.Loop _ -> assert false
 
 let check_variable (var : Mast.variable Pos.marked)
@@ -1025,13 +1093,13 @@ let check_variable (var : Mast.variable Pos.marked)
       | Some _, Some _ -> name
       | Some _, None -> Err.table_used_as_variable decl_pos var_pos)
 
-let check_expression (m_expr : Mast.expression Pos.marked) (env : var_env) :
-    StrSet.t =
+let check_expression (is_filter : bool) (m_expr : Mast.expression Pos.marked)
+    (env : var_env) : StrSet.t =
   let fold_var var idx_mem env acc =
     let name = check_variable var idx_mem env in
     StrSet.add name acc
   in
-  fold_var_expr fold_var StrSet.empty m_expr env
+  fold_var_expr fold_var is_filter StrSet.empty m_expr env
 
 let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   let buf = Buffer.create 100 in
@@ -1116,7 +1184,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                       StrSet.singleton name
                   | Some (Mast.LiteralIndex _, _) | None -> StrSet.empty
                 in
-                let in_vars_expr = check_expression sf.formula env in
+                let in_vars_expr = check_expression false sf.formula env in
                 if is_rule then
                   let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
                   let in_vars =
@@ -1128,7 +1196,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Mast.MultipleFormulaes _ -> assert false)
         | Mast.IfThenElse (expr, i_then, i_else) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            let _ = check_expression expr env in
+            let _ = check_expression false expr env in
             let prog, res_then, _, _ = check_instructions i_then is_rule env in
             let env = { env with prog } in
             let prog, res_else, _, _ = check_instructions i_else is_rule env in
@@ -1164,6 +1232,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
               Pos.unmark (Mast.DomainIdMap.find id env.prog.prog_vdom_syms)
             in
             let seq, prog = get_seq env.prog in
+            ignore (check_expression true expr env);
             let prog_vdom_calls =
               let used_data = ((seq, vdom_pos), vdom_id, expr) in
               StrMap.add tname used_data prog.prog_vdom_calls
@@ -1183,7 +1252,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Mast.PrintName v | Mast.PrintAlias v ->
                     ignore (check_variable v Both env)
                 | Mast.PrintExpr (e, _min, _max) ->
-                    ignore (check_expression e env))
+                    ignore (check_expression false e env))
               args;
             aux (env, m_instr :: res, in_vars, out_vars) il
         | Mast.Iterate (var, vcats, expr, instrs) ->
@@ -1205,7 +1274,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let env' =
               { env with it_vars = StrMap.add var_name var_pos env.it_vars }
             in
-            ignore (check_expression expr env');
+            ignore (check_expression false expr env');
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env'
             in
@@ -1245,7 +1314,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                         it_vars = StrMap.add var_name var_pos env.it_vars;
                       }
                     in
-                    ignore (check_expression expr env))
+                    ignore (check_expression false expr env))
               rest_params;
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env
@@ -1709,10 +1778,15 @@ let check_verif (v : Mast.verification) (prog : program) : program =
               | None -> Err.unknown_variable var_pos
               | Some _ -> ())
           | None -> ());
-          let verif_vdom_stats, verif_var_stats =
+          let verif_cat_var_stats, verif_var_stats =
             let fold_var var idx_mem env (vdom_sts, var_sts) =
               let name = check_variable var idx_mem env in
               let var_data = StrMap.find name env.prog.prog_vars in
+              if
+                not
+                  (Mir.CatVarSet.mem var_data.global_category
+                     verif_domain.dom_data.vdom_auth)
+              then Err.variable_with_forbidden_category (Pos.get_position var);
               let incr = function None -> Some 1 | Some i -> Some (i + 1) in
               let vdom_sts =
                 Mir.CatVarMap.update var_data.global_category incr vdom_sts
@@ -1724,7 +1798,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             let env =
               { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty }
             in
-            fold_var_expr fold_var init verif_expr env
+            fold_var_expr fold_var false init verif_expr env
           in
           let verif_seq, prog = get_seq prog in
           let verif =
@@ -1735,7 +1809,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
               verif_expr;
               verif_error;
               verif_var;
-              verif_vdom_stats;
+              verif_cat_var_stats;
               verif_var_stats;
               verif_seq;
             }
@@ -1783,7 +1857,238 @@ let convert_verifs (prog : program) : program =
   in
   { prog with prog_targets }
 
-let complete_verif_calls (prog : program) : program = prog
+let eval_expr_verif (prog : program) (verif : verif)
+    (expr : Mast.expression Pos.marked) : float option =
+  let my_floor a = floor (a +. 0.000001) in
+  let _my_ceil a = ceil (a -. 0.000001) in
+  let my_arr a =
+    let my_var1 = floor a in
+    let my_var2 = ((a -. my_var1) *. 100000.0) +. 0.5 in
+    let my_var2 = floor my_var2 /. 100000.0 in
+    let my_var2 = my_var1 +. my_var2 +. 0.5 in
+    floor my_var2
+  in
+  let rec aux expr =
+    match Pos.unmark expr with
+    | Mast.Literal (Mast.Float f) -> Some f
+    | Mast.Literal Mast.Undefined -> None
+    | Mast.Literal (Mast.Variable _) ->
+        Err.variable_forbidden_in_filter (Pos.get_position expr)
+    | Mast.Attribut (m_var, m_attr) ->
+        let var =
+          match Pos.unmark m_var with
+          | Mast.Normal var -> var
+          | _ -> assert false
+        in
+        let attrs = (StrMap.find var prog.prog_vars).global_attrs in
+        let m_val = StrMap.find (Pos.unmark m_attr) attrs in
+        Some (float (Pos.unmark m_val))
+    | Mast.Size m_var -> (
+        let var =
+          match Pos.unmark m_var with
+          | Mast.Normal var -> var
+          | _ -> assert false
+        in
+        match (StrMap.find var prog.prog_vars).global_table with
+        | Some sz -> Some (float sz)
+        | None -> Some 1.0)
+    | Mast.NbCategory l ->
+        let cats = mast_to_catvars l prog.prog_var_cats in
+        let sum =
+          Mir.CatVarSet.fold
+            (fun cat sum ->
+              match Mir.CatVarMap.find_opt cat verif.verif_cat_var_stats with
+              | Some i -> sum + i
+              | None -> sum)
+            cats 0
+        in
+        Some (float sum)
+    | Mast.Unop (op, e0) -> (
+        match aux e0 with
+        | None -> None
+        | Some f -> (
+            match op with
+            | Mast.Not -> Some (1.0 -. f)
+            | Mast.Minus -> Some ~-.f))
+    | Mast.FunctionCall (func, Mast.ArgList args) -> (
+        let rl = List.map aux args in
+        let unFunc f =
+          match rl with
+          | [ None ] -> None
+          | [ Some x ] -> Some (f x)
+          | _ -> assert false
+        in
+        let biFunc f =
+          match rl with
+          | [ None; None ] -> None
+          | [ None; r ] | [ r; None ] -> r
+          | [ Some x0; Some x1 ] -> Some (f x0 x1)
+          | _ -> assert false
+        in
+        match Pos.unmark func with
+        | "numero_verif" -> Some (float (Pos.unmark verif.verif_id))
+        | "numero_compl" -> assert false
+        | "somme" ->
+            List.fold_left
+              (fun res r ->
+                match r with
+                | None -> res
+                | Some f -> (
+                    match res with None -> r | Some fr -> Some (f +. fr)))
+              None rl
+        | "abs" -> unFunc abs_float
+        | "min" -> biFunc min
+        | "max" -> biFunc max
+        | "positif" -> unFunc (fun x -> if x > 0.0 then 1.0 else 0.0)
+        | "positif_ou_nul" -> unFunc (fun x -> if x >= 0.0 then 1.0 else 0.0)
+        | "null" -> unFunc (fun x -> if x = 0.0 then 1.0 else 0.0)
+        | "arr" -> unFunc my_arr
+        | "inf" -> unFunc my_floor
+        | "supzero" -> (
+            match rl with
+            | [ None ] -> None
+            | [ Some f ] when f = 0.0 -> None
+            | [ r ] -> r
+            | _ -> assert false)
+        | _ -> assert false)
+    | Mast.FunctionCall (_func, Mast.LoopList _) -> assert false
+    | Mast.Comparison (op, e0, e1) -> (
+        match (aux e0, aux e1) with
+        | None, _ | _, None -> None
+        | Some f0, Some f1 -> (
+            match Pos.unmark op with
+            | Mast.Gt -> Some (if f0 > f1 then 1.0 else 0.0)
+            | Mast.Gte -> Some (if f0 >= f1 then 1.0 else 0.0)
+            | Mast.Lt -> Some (if f0 < f1 then 1.0 else 0.0)
+            | Mast.Lte -> Some (if f0 <= f1 then 1.0 else 0.0)
+            | Mast.Eq -> Some (if f0 = f1 then 1.0 else 0.0)
+            | Mast.Neq -> Some (if f0 <> f1 then 1.0 else 0.0)))
+    | Mast.Binop (op, e0, e1) -> (
+        let r0 = aux e0 in
+        let r1 = aux e1 in
+        match Pos.unmark op with
+        | Mast.And -> (
+            match r0 with
+            | None -> None
+            | Some f0 -> if f0 = 0.0 then r0 else r1)
+        | Mast.Or -> (
+            match r0 with None -> r1 | Some f0 -> if f0 = 0.0 then r1 else r0)
+        | Mast.Add -> (
+            match (r0, r1) with
+            | None, None -> None
+            | None, Some _ -> r1
+            | Some _, None -> r0
+            | Some f0, Some f1 -> Some (f0 +. f1))
+        | Mast.Sub -> (
+            match (r0, r1) with
+            | None, None -> None
+            | None, Some _ -> r1
+            | Some _, None -> r0
+            | Some f0, Some f1 -> Some (f0 +. f1))
+        | Mast.Mul -> (
+            match (r0, r1) with
+            | None, _ | _, None -> None
+            | Some f0, Some f1 -> Some (f0 *. f1))
+        | Mast.Div -> (
+            match (r0, r1) with
+            | None, _ | _, None -> None
+            | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1)))
+    | Mast.Conditional (e0, e1, e2) -> (
+        let r0 = aux e0 in
+        let r1 = aux e1 in
+        let r2 = match e2 with Some e -> aux e | None -> None in
+        match r0 with None -> None | Some f -> if f = 1.0 then r1 else r2)
+    | Mast.TestInSet (positive, e, values) -> (
+        match aux e with
+        | None -> None
+        | Some v ->
+            let res =
+              List.fold_left
+                (fun res set_value ->
+                  match set_value with
+                  | Mast.VarValue _ -> assert false
+                  | Mast.FloatValue (f, _) -> res || f = v
+                  | Mast.Interval ((bn, _), (en, _)) ->
+                      res || (float bn <= v && v <= float en))
+                false values
+            in
+            Some (if res = positive then 1.0 else 0.0))
+    | Mast.NbError | Mast.Index _ | Mast.Loop _ -> assert false
+  in
+  aux expr
+
+let vdom_rule_filter (prog : program) (vdom : Mir.verif_domain_data Mir.domain)
+    (expr : Mast.expression Pos.marked) (verif : verif) : bool =
+  (match vdom.Mir.dom_used with
+  | Some (vdom_seq, seq_pos) ->
+      if vdom_seq <= verif.verif_seq then
+        Err.domain_already_used Verif seq_pos (Pos.get_position verif.verif_id)
+  | None -> ());
+  let filter_expr =
+    match eval_expr_verif prog verif expr with Some 1.0 -> true | _ -> false
+  in
+  let vdom_id = Pos.unmark vdom.dom_id in
+  let verif_vdom_id = Pos.unmark verif.verif_domain.dom_id in
+  filter_expr
+  && (Mast.DomainId.equal vdom_id verif_vdom_id
+     || Mast.DomainIdSet.mem verif_vdom_id vdom.Mir.dom_min)
+
+let complete_verif_calls (prog : program) : program =
+  let prog_targets, _ =
+    StrMap.fold
+      (fun tname (_, vdom_id, expr) (prog_targets, verif_calls) ->
+        let verif_set =
+          IntMap.fold
+            (fun verif_id verif verif_set ->
+              let vdom = Mast.DomainIdMap.find vdom_id prog.prog_vdoms in
+              if vdom_rule_filter prog vdom expr verif then
+                IntSet.add verif_id verif_set
+              else verif_set)
+            prog.prog_verifs IntSet.empty
+        in
+        match IntSetMap.find_opt verif_set verif_calls with
+        | Some tn ->
+            let target_prog =
+              [ (Mast.ComputeTarget (tn, Pos.no_pos), Pos.no_pos) ]
+            in
+            let target =
+              {
+                target_name = (tname, Pos.no_pos);
+                target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+                target_tmp_vars = StrMap.empty;
+                target_prog;
+              }
+            in
+            let prog_targets = StrMap.add tname target prog_targets in
+            (prog_targets, verif_calls)
+        | None ->
+            let target_prog =
+              List.rev
+                (IntSet.fold
+                   (fun verif_id target_prog ->
+                     let verif_tn =
+                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
+                     in
+
+                     (Mast.ComputeTarget (verif_tn, Pos.no_pos), Pos.no_pos)
+                     :: target_prog)
+                   verif_set [])
+            in
+            let target =
+              {
+                target_name = (tname, Pos.no_pos);
+                target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
+                target_tmp_vars = StrMap.empty;
+                target_prog;
+              }
+            in
+            let prog_targets = StrMap.add tname target prog_targets in
+            let verif_calls = IntSetMap.add verif_set tname verif_calls in
+            (prog_targets, verif_calls))
+      prog.prog_vdom_calls
+      (prog.prog_targets, IntSetMap.empty)
+  in
+  { prog with prog_targets }
 
 let proceed (p : Mast.program) : program =
   let app = "iliad" in
