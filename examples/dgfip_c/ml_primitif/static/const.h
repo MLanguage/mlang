@@ -56,6 +56,8 @@ struct S_irdata
 
 #endif /* FLG_COMPACT */
 
+#define MAX_ANO  4
+
 #define RESTITUEE    5
 #define RESTITUEE_P  6
 #define RESTITUEE_C  7
