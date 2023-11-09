@@ -244,6 +244,8 @@ let rec format_instruction fmt (i : instruction) =
         (Pos.unmark l)
         (pp_unmark format_expression)
         expr
+  | VerifBlock instrs ->
+      Format.fprintf fmt "bloc_de_verif ( %a )" format_instruction_list instrs
   | Print (std, args) ->
       let print_cmd =
         match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"

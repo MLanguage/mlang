@@ -456,6 +456,9 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         let stmts = generate_verifs_prog m_program dom expr in
         let stmt = (Bir.SVerifBlock stmts, pos) in
         aux ctx (stmt :: res) instrs
+    | (Mir.VerifBlock stmts, pos) :: instrs ->
+        let ctx, stmts' = translate_m_code m_program ctx stmts in
+        aux ctx ((Bir.SVerifBlock stmts', pos) :: res) instrs
     | (Mir.Print (std, args), pos) :: instrs ->
         let bir_args =
           List.rev

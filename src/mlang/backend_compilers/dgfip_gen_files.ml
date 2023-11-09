@@ -1031,18 +1031,20 @@ let get_rules_verif_etc prog =
   (rules, verifs, errors, chainings)
 
 (* Print the table of rule functions, and then the table of errors (tableg.c) *)
-let gen_table_call fmt flags vars_debug rules chainings errors =
+let gen_table_call fmt flags vars_debug prefix rules chainings errors =
   let open Mast in
   gen_header fmt;
 
   if flags.Dgfip_options.flg_debug then begin
     if flags.nb_debug_c <= 0 then gen_table_debug fmt flags vars_debug 0;
 
-    List.iter (fun rn -> Format.fprintf fmt "extern int regle_%d();\n" rn) rules;
+    List.iter
+      (fun rn -> Format.fprintf fmt "extern int %s_regle_%d();\n" prefix rn)
+      rules;
 
     Format.fprintf fmt "T_desc_call desc_call[NB_CALL + 1] = {\n";
     List.iter
-      (fun rn -> Format.fprintf fmt "    { %d, regle_%d },\n" rn rn)
+      (fun rn -> Format.fprintf fmt "    { %d, %s_regle_%d },\n" rn prefix rn)
       rules;
     Format.fprintf fmt "};\n\n";
 
@@ -1064,18 +1066,18 @@ let gen_table_call fmt flags vars_debug rules chainings errors =
   Format.fprintf fmt "};\n"
 
 (* Print the table of verification functions (tablev.c) *)
-let gen_table_verif fmt flags verifs =
+let gen_table_verif fmt flags prefix verifs =
   gen_header fmt;
 
   if flags.Dgfip_options.flg_debug || flags.flg_controle_immediat then begin
     (* TODO: when control_immediat, don' put everything (but what ?) *)
     List.iter
-      (fun vn -> Format.fprintf fmt "extern void verif_%d();\n" vn)
+      (fun vn -> Format.fprintf fmt "extern void %s_verif_%d();\n" prefix vn)
       verifs;
 
     Format.fprintf fmt "T_desc_verif desc_verif[NB_VERIF + 1] = {\n";
     List.iter
-      (fun vn -> Format.fprintf fmt "    { %d, verif_%d },\n" vn vn)
+      (fun vn -> Format.fprintf fmt "    { %d, %s_verif_%d },\n" vn prefix vn)
       verifs;
     Format.fprintf fmt "};\n\n"
   end
@@ -1423,13 +1425,14 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
   close_out oc;
 
   let rules, verifs, errors, chainings = get_rules_verif_etc prog in
+  let prefix = cprog.Bir.mir_program.Mir.program_safe_prefix in
 
   let oc, fmt = open_file (Filename.concat folder "tableg.c") in
-  gen_table_call fmt flags vars_debug rules chainings errors;
+  gen_table_call fmt flags vars_debug prefix rules chainings errors;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "tablev.c") in
-  gen_table_verif fmt flags verifs;
+  gen_table_verif fmt flags prefix verifs;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "var.h") in

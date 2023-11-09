@@ -1151,6 +1151,9 @@ let rec translate_prog (error_decls : Mir.Error.t list)
         let ctx = new_ctx pos in
         let mir_expr = translate_expression cats idmap ctx expr in
         aux ((Mir.ComputeVerifs (l, mir_expr), pos) :: res, var_data) il
+    | (Mast.VerifBlock instrs, pos) :: il ->
+        let instrs', var_data = aux ([], var_data) instrs in
+        aux ((Mir.VerifBlock instrs', pos) :: res, var_data) il
     | (Mast.Print (std, args), pos) :: il ->
         let ctx = new_ctx pos in
         let mir_args =
@@ -1549,6 +1552,35 @@ let get_conds (verif_domains : Mir.verif_domain Mast.DomainIdMap.t)
 let translate (p : Mast.program) : Mir.program =
   let p = Expand_macros.proceed p in
   let prog = Check_validity.proceed p in
+  let prog_targets =
+    let targets =
+      StrMap.fold
+        (fun tname t prog_targets ->
+          let target_applications = [ (prog.prog_app, Pos.no_pos) ] in
+          let target_tmp_vars =
+            StrMap.fold
+              (fun vn (sz_opt, pos) tmp_vars ->
+                let size =
+                  Option.map (fun i -> (Mast.LiteralSize i, pos)) sz_opt
+                in
+                ((vn, pos), size) :: tmp_vars)
+              t.Check_validity.target_tmp_vars []
+          in
+          let target =
+            Mast.
+              {
+                target_name = (tname, Pos.no_pos);
+                target_applications;
+                target_tmp_vars;
+                target_prog = t.Check_validity.target_prog;
+              }
+          in
+          (Mast.Target target, Pos.no_pos) :: prog_targets)
+        prog.prog_targets []
+    in
+    [ targets ]
+  in
+  ignore prog_targets;
   let apps = prog.Check_validity.prog_apps in
   let var_category_decls = get_var_categories p in
   let var_category_map = prog.Check_validity.prog_var_cats in
@@ -1557,7 +1589,7 @@ let translate (p : Mast.program) : Mir.program =
   in
   let idmap = get_var_redefinitions p idmap in
   let rule_domains = prog.Check_validity.prog_rdoms in
-  let rule_domain_by_default =
+  let _rule_domain_by_default =
     Mast.DomainIdMap.find Mast.DomainId.empty rule_domains
   in
   let rule_chains = get_rule_chains rule_domains p in
@@ -1567,7 +1599,7 @@ let translate (p : Mast.program) : Mir.program =
   let var_data =
     add_dummy_definitions_for_variable_declarations var_data var_decl_data idmap
   in
-  let rules, rule_vars =
+  let _rules, rule_vars =
     Mir.RuleMap.fold
       (fun rule_id (rule_vars, rule_number, rule_tag_names, rule_chaining)
            (rules, vars) ->
@@ -1606,7 +1638,7 @@ let translate (p : Mast.program) : Mir.program =
       rule_data
       (Mir.RuleMap.empty, Mir.VariableDict.empty)
   in
-  let var_data, orphans =
+  let var_data, _orphans =
     Mir.VariableMap.fold
       (fun var data (var_dict, orphans) ->
         let orphans =
@@ -1618,34 +1650,24 @@ let translate (p : Mast.program) : Mir.program =
       var_data
       (Mir.VariableDict.empty, [])
   in
-  let rules =
-    Mir.RuleMap.add Mir.initial_undef_rule_id
-      Mir.
-        {
-          rule_domain = rule_domain_by_default;
-          rule_chain = None;
-          rule_vars = orphans;
-          rule_number = (RuleID 0, Pos.no_pos);
-          rule_apps = StrMap.empty;
-        }
-      rules
-  in
   let targets, var_data =
-    get_targets error_decls var_category_map apps var_data idmap var_decl_data p
+    get_targets error_decls var_category_map apps var_data idmap var_decl_data
+      prog_targets
   in
   let verif_domains = prog.Check_validity.prog_vdoms in
-  let conds = get_conds verif_domains var_category_map error_decls idmap p in
+  let _conds = get_conds verif_domains var_category_map error_decls idmap p in
   Mir.
     {
+      program_safe_prefix = prog.prog_prefix;
       program_applications = apps;
       program_var_categories = var_category_map;
       program_rule_domains = rule_domains;
       program_verif_domains = verif_domains;
       program_chainings = rule_chains;
       program_vars = var_data;
-      program_rules = rules;
+      program_rules = Mir.RuleMap.empty;
       program_targets = targets;
-      program_conds = conds;
+      program_conds = Mir.RuleMap.empty;
       program_idmap = idmap;
       program_exec_passes = [];
     }

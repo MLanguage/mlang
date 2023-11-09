@@ -219,6 +219,7 @@ type instruction =
   | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | VerifBlock of instruction Pos.marked list
   | Print of print_std * print_arg Pos.marked list
   | Iterate of
       string Pos.marked

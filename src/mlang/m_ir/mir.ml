@@ -544,6 +544,7 @@ type instruction =
   | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | VerifBlock of instruction Pos.marked list
   | Print of Mast.print_std * variable print_arg Pos.marked list
   | Iterate of
       variable_id
@@ -624,6 +625,7 @@ type idmap = Variable.t list Pos.VarNameToID.t
 type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
 
 type program = {
+  program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
   program_var_categories : cat_variable_data CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;

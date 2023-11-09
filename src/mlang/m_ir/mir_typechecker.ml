@@ -324,37 +324,80 @@ let expand_functions (p : Mir_interface.full_program) :
     (* this expansion does not modify the dependency graph *)
     p with
     program =
-      (let program =
-         map_vars
-           (fun _var def ->
-             match def.var_definition with
-             | InputVar -> def
-             | SimpleVar e ->
+      (let map_var _var def =
+         match def.var_definition with
+         | InputVar -> def
+         | SimpleVar e ->
+             { def with var_definition = SimpleVar (expand_functions_expr e) }
+         | TableVar (size, defg) -> (
+             match defg with
+             | IndexGeneric (v, e) ->
                  {
                    def with
-                   var_definition = SimpleVar (expand_functions_expr e);
+                   var_definition =
+                     TableVar (size, IndexGeneric (v, expand_functions_expr e));
                  }
-             | TableVar (size, defg) -> (
-                 match defg with
-                 | IndexGeneric (v, e) ->
-                     {
-                       def with
-                       var_definition =
-                         TableVar
-                           (size, IndexGeneric (v, expand_functions_expr e));
-                     }
-                 | IndexTable es ->
-                     {
-                       def with
-                       var_definition =
-                         TableVar
-                           ( size,
-                             IndexTable
-                               (IndexMap.map
-                                  (fun e -> expand_functions_expr e)
-                                  es) );
-                     }))
-           p.program
+             | IndexTable es ->
+                 {
+                   def with
+                   var_definition =
+                     TableVar
+                       ( size,
+                         IndexTable
+                           (IndexMap.map (fun e -> expand_functions_expr e) es)
+                       );
+                 })
+       in
+       let program = map_vars map_var p.program in
+       let program_targets =
+         let rec map_instr m_instr =
+           let instr, instr_pos = m_instr in
+           match instr with
+           | Affectation (v_id, v_data) ->
+               (Affectation (v_id, map_var v_id v_data), instr_pos)
+           | IfThenElse (i, t, e) ->
+               let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
+               let t' = List.map map_instr t in
+               let e' = List.map map_instr e in
+               (IfThenElse (i', t', e'), instr_pos)
+           | ComputeDomain _ | ComputeChaining _ | ComputeTarget _ -> m_instr
+           | VerifBlock instrs ->
+               let instrs' = List.map map_instr instrs in
+               (VerifBlock instrs', instr_pos)
+           | ComputeVerifs (vdom, e) ->
+               (ComputeVerifs (vdom, expand_functions_expr e), instr_pos)
+           | Print (out, pr_args) ->
+               let pr_args' =
+                 List.map
+                   (fun m_arg ->
+                     let arg, arg_pos = m_arg in
+                     match arg with
+                     | PrintExpr (e, mi, ma) ->
+                         let e' = expand_functions_expr e in
+                         (PrintExpr (e', mi, ma), arg_pos)
+                     | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
+                   pr_args
+               in
+               (Print (out, pr_args'), instr_pos)
+           | Iterate (v_id, cats, e, instrs) ->
+               let e' = expand_functions_expr e in
+               let instrs' = List.map map_instr instrs in
+               (Iterate (v_id, cats, e', instrs'), instr_pos)
+           | Restore (vars, filters, instrs) ->
+               let filters' =
+                 List.map
+                   (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
+                   filters
+               in
+               let instrs' = List.map map_instr instrs in
+               (Restore (vars, filters', instrs'), instr_pos)
+           | RaiseError _ | CleanErrors -> m_instr
+         in
+         TargetMap.map
+           (fun t ->
+             let target_prog = List.map map_instr t.target_prog in
+             { t with target_prog })
+           p.program.program_targets
        in
        {
          program with
@@ -363,5 +406,6 @@ let expand_functions (p : Mir_interface.full_program) :
              (fun cond ->
                { cond with cond_expr = expand_functions_expr cond.cond_expr })
              p.program.program_conds;
+         program_targets;
        });
   }

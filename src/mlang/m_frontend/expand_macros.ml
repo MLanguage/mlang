@@ -550,6 +550,9 @@ let rec expand_instruction (const_map : const_context)
   | Mast.Restore (vars, instrs) ->
       let instrs' = expand_instructions const_map instrs in
       (Mast.Restore (vars, instrs'), instr_pos) :: prev
+  | Mast.VerifBlock instrs ->
+      let instrs' = expand_instructions const_map instrs in
+      (Mast.VerifBlock instrs', instr_pos) :: prev
   | Mast.ComputeVerifs _ | Mast.ComputeDomain _ | Mast.ComputeChaining _
   | Mast.ComputeTarget _ | Mast.RaiseError _ | Mast.CleanErrors ->
       (instr, instr_pos) :: prev

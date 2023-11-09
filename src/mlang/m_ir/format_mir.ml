@@ -152,16 +152,10 @@ let format_program_rules fmt (vars : VariableDict.t)
         format_variables var_defs)
     rules
 
-let format_program_conds fmt (conds : condition_data Mir.RuleMap.t) =
-  Format_mast.pp_print_list_endline
-    (fun fmt (_, cond) -> format_precondition fmt cond)
-    fmt
-    (Mir.RuleMap.bindings conds)
-
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a\n\n%a"
+  Format.fprintf fmt "%a\n\n"
     (fun fmt -> format_program_rules fmt p.program_vars)
-    p.program_rules format_program_conds p.program_conds
+    p.program_rules
 
 let format_variable fmt (v : Variable.t) =
   Format.fprintf fmt "%s: %s"

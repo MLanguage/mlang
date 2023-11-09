@@ -540,7 +540,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         | Some var -> Format.sprintf "\"%s\"" var
         | None -> "NULL"
       in
-      Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" err_name code
+      Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
   | SCleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)

@@ -1241,6 +1241,14 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let env = { env with prog } in
             let res_instr = Mast.ComputeTarget (tname, Pos.no_pos) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Mast.VerifBlock instrs ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            let prog, res_instrs, _, _ =
+              check_instructions instrs is_rule env
+            in
+            let env = { env with prog } in
+            let res_instr = Mast.VerifBlock res_instrs in
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Mast.ComputeTarget _tn ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             aux (env, m_instr :: res, in_vars, out_vars) il
@@ -1491,7 +1499,7 @@ let convert_rules (prog : program) : program =
   let prog_targets =
     IntMap.fold
       (fun id rule prog_targets ->
-        let tname = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+        let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
         let target =
           {
             target_name = (tname, Pos.no_pos);
@@ -1592,7 +1600,7 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   in
   List.map
     (fun id ->
-      let name = Format.sprintf "%s_rule_%d" prog.prog_prefix id in
+      let name = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
       (Mast.ComputeTarget (name, Pos.no_pos), Pos.no_pos))
     sorted_rules
 
@@ -2062,18 +2070,20 @@ let complete_verif_calls (prog : program) : program =
             let prog_targets = StrMap.add tname target prog_targets in
             (prog_targets, verif_calls)
         | None ->
-            let target_prog =
-              List.rev
-                (IntSet.fold
-                   (fun verif_id target_prog ->
-                     let verif_tn =
-                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
-                     in
-
-                     (Mast.ComputeTarget (verif_tn, Pos.no_pos), Pos.no_pos)
-                     :: target_prog)
-                   verif_set [])
+            let instrs =
+              let instrs =
+                IntSet.fold
+                  (fun verif_id target_prog ->
+                    let verif_tn =
+                      Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
+                    in
+                    (Mast.ComputeTarget (verif_tn, Pos.no_pos), Pos.no_pos)
+                    :: target_prog)
+                  verif_set []
+              in
+              List.rev instrs
             in
+            let target_prog = [ (Mast.VerifBlock instrs, Pos.no_pos) ] in
             let target =
               {
                 target_name = (tname, Pos.no_pos);
