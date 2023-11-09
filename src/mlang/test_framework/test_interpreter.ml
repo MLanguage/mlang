@@ -13,31 +13,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Test_ast
+open Irj_ast
 
-let parse_file (test_name : string) : test_file =
-  let input = open_in test_name in
-  let filebuf = Lexing.from_channel input in
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
-    }
-  in
-  let f =
-    try Test_parser.test_file Test_lexer.token filebuf with
-    | Errors.StructuredError e ->
-        close_in input;
-        raise (Errors.StructuredError e)
-    | Test_parser.Error ->
-        close_in input;
-        Errors.raise_spanned_error "Test syntax error"
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
-  in
-  close_in input;
-  f
-
-let to_ast_literal (value : Test_ast.literal) : Mast.literal =
+let to_ast_literal (value : Irj_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
@@ -58,7 +36,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
+let to_MIR_function_and_inputs (program : Bir.program) (t : irj_file)
     (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
@@ -73,7 +51,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
         in
         (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
       (Bir.VariableMap.empty, Bir.VariableMap.empty)
-      t.ep
+      t.prim.entrees
   in
   let func_constant_inputs = Bir.VariableMap.empty in
   let func_outputs = Bir.VariableMap.empty in
@@ -115,7 +93,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
                pos )
            in
            (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
-         t.rp)
+         t.prim.resultats_attendus)
   in
   ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds },
     input_file )
@@ -125,7 +103,7 @@ let check_test (combined_program : Bir.program) (test_name : string)
     (round_ops : Cli.round_ops) (test_error_margin : float) :
     Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
-  let t = parse_file test_name in
+  let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
   let f, input_file =
     to_MIR_function_and_inputs combined_program t test_error_margin
