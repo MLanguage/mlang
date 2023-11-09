@@ -56,22 +56,22 @@ irj_file:
 
 primitif:
   ENTREESPRIM
-  entrees_primitif = list(variable_and_value)
+  entrees = list(variable_and_value)
   CONTROLESPRIM
-  erreurs_attendues_primitif = list(error_code)
+  controles_attendus = list(error_code)
   RESULTATSPRIM
-  resultats_attendus_primitif = list(variable_and_value) 
-  { (entrees_primitif, erreurs_attendues_primitif, resultats_attendus_primitif) }
+  resultats_attendus = list(variable_and_value) 
+  {  { entrees; controles_attendus; resultats_attendus } }
 
 rappels:
 /* The two constructions match respectively corrective test files and primary test files */
 | ENTREESRAPP
   entrees_rappels = list(rappel)
   CONTROLESRAPP
-  erreurs_attendues_rappels = list(error_code)
+  controles_attendus = list(error_code)
   RESULTATSRAPP
-  resultats_attendus_rappels = list(variable_and_value) 
-  { Some (entrees_rappels, erreurs_attendues_rappels, resultats_attendus_rappels) }
+  resultats_attendus = list(variable_and_value) 
+  { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR CONTROLESCORR RESULTATSCORR DATES? AVISIR? AVISCSG? { None }
 
 name:
