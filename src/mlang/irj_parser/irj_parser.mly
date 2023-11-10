@@ -53,13 +53,20 @@ some are characters, some are 0/1, etc. */
 %%
 
 irj_file:
-| NOM nom = name
+| NOM nom = list(name)
   fip?
   prim = primitif
   rapp = rappels
   endsharp 
-  EOF { { nom; prim; rapp } }
-| EOF { assert false }
+  EOF {     
+    let nom =
+      match nom with
+      | [n] -> n
+      | [] -> error $loc(nom) "Missing name in section #NOM"
+      | _ -> error $loc(nom) "Extra line(s) in section #NOM"
+    in
+    { nom; prim; rapp } }
+| EOF { error $loc "Empty test file" }
 
 /* What's the point of this alternative?*/
 name:
