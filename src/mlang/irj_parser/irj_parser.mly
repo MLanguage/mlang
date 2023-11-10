@@ -108,7 +108,7 @@ rappel:
   event_nb = integer SLASH
   rappel_nb = integer SLASH
   variable_code = SYMBOL SLASH
-  change_value = integer SLASH
+  change_value = integer SLASH (* No decimal value was found in existing files *)
   direction = SYMBOL SLASH
   penalty_code = INTEGER? SLASH
   base_tolerance_legale = INTEGER? SLASH

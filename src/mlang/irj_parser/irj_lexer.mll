@@ -70,7 +70,6 @@ rule token = parse
   { check_cr lexbuf; new_line lexbuf;
     if is_bol lexbuf then token lexbuf
     else error lexbuf "Comment with * must start in the first column" }
-    (* Quite sure this will be to much: we have end of line comments*)
 
 | blank any* nl
   { check_cr lexbuf; new_line lexbuf;
@@ -82,13 +81,14 @@ rule token = parse
   
 | '-'? ['0' - '9']+ '.' ['0' - '9']* as f
   { FLOAT (float_of_string f) } (* DONT KEEP THAT *)
+  (* Probably in order to write a specific function for our number format *)
 
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
 
 | ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' ';' (*' '*)]+ as s
   { NAME s }
-  (* Compared to the old lexer, adds _ and . remove space *)
+  (* Compared to the old lexer, adds _ and . removes space *)
 
 | "/"
   { SLASH }
