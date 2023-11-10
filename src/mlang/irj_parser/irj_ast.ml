@@ -1,5 +1,6 @@
 (* Copyright Inria, contributors: Raphaël Monat <raphael.monat@lip6.fr> (2019)
    Mathieu Durero <mathieu.durero@dgfip.finances.gouv.fr> (2023)
+   David Declerck (2023)
 
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
@@ -18,28 +19,48 @@ type literal = I of int | F of float
 
 type var_value = string * literal * Pos.t
 
-type var_values = var_value list
+(* type var_values = var_value list *)
 
-type errors = (string * Pos.t) list
+type calc_error = string * Pos.t
 
-type rappels =
-  (string * string * var_value * string * string * string * string * string)
-  list
+(* type calc_errors = calc_error list *)
+
+(* type rappel = string * string * var_value * string * string * string * string
+   * string *)
+type rappel = {
+  event_nb : int;
+  rappel_nb : int;
+  variable_code : string;
+  change_value : int;
+  direction : string;
+  (* R, C, M, P *)
+  penalty_code : int option;
+  (* 0 - 99 *)
+  base_tolerance_legale : int option;
+  month_year : int;
+  (* MMYYYY *)
+  decl_2042_rect : int option;
+  (* 0 or 1 *)
+  pos : Pos.t;
+}
 
 type prim_data_block = {
-  entrees : var_values;
-  controles_attendus : errors;
-  resultats_attendus : var_values;
+  entrees : var_value list;
+  controles_attendus : calc_error list;
+  resultats_attendus : var_value list;
 }
 
 type corr_data_block = {
-  entrees_rappels : rappels;
-  controles_attendus : errors;
-  resultats_attendus : var_values;
+  entrees_rappels : rappel list;
+  controles_attendus : calc_error list;
+  resultats_attendus : var_value list;
 }
 
 type irj_file = {
   nom : string;
   prim : prim_data_block;
   rapp : corr_data_block option;
+      (* corr : prim_data_block option; *)
+      (*corr is for old correctif form from primitif files, rapp is for the
+        actual one in correctif files*)
 }
