@@ -81,7 +81,7 @@ primitif:
   ENTREESPRIM NL
   entrees = list(variable_and_value)
   CONTROLESPRIM NL
-  controles_attendus = list(error_code)
+  controles_attendus = list(calc_error)
   RESULTATSPRIM NL
   resultats_attendus = list(variable_and_value) 
   {  { entrees; controles_attendus; resultats_attendus } }
@@ -91,7 +91,7 @@ rappels:
 | ENTREESRAPP NL
   entrees_rappels = list(rappel)
   CONTROLESRAPP NL
-  controles_attendus = list(error_code)
+  controles_attendus = list(calc_error)
   RESULTATSRAPP NL
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
@@ -101,7 +101,7 @@ variable_and_value:
 | var = SYMBOL SLASH value = value NL { (var, value, Parse_utils.mk_position $sloc) }
 | SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
-error_code:
+calc_error:
   error = SYMBOL NL { (error, Parse_utils.mk_position $sloc) }
 
 rappel:
