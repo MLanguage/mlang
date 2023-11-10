@@ -46,12 +46,13 @@ let error lb msg =
                               Lexing.lexeme_end_p lb))
 
 let is_bol lb =
+  (* bol = beginning of line *)
   lb.lex_start_p.pos_cnum - lb.lex_start_p.pos_bol = 0
 
 let check_cr lb =
   if String.contains (lexeme lb) '\r' then
     error lb ("Carriage return detected")
-
+  (* No more supposed to be an error in autotests. Keeping it to enforce it later? *)
 }
 
 let blank = [' ' '\t']
@@ -69,6 +70,7 @@ rule token = parse
   { check_cr lexbuf; new_line lexbuf;
     if is_bol lexbuf then token lexbuf
     else error lexbuf "Comment with * must start in the first column" }
+    (* Quite sure this will be to much: we have end of line comments*)
 
 | blank any* nl
   { check_cr lexbuf; new_line lexbuf;
@@ -87,6 +89,7 @@ rule token = parse
 
 | ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' ';' (*' '*)]+ as s
   { NAME s }
+  (* Compared to the old lexer, adds _ and . remove space *)
 
 | "/"
   { SLASH }
