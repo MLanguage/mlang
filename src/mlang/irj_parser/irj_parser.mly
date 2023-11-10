@@ -57,16 +57,17 @@ irj_file:
   fip?
   prim = primitif
   rapp = rappels
-  endsharp { { nom; prim; rapp } }
+  endsharp 
+  EOF { { nom; prim; rapp } }
 | EOF { assert false }
 
-
+/* What's the point of this alternative?*/
 name:
 | n = NAME { n }
 | n = SYMBOL { n }
 
 fip:
-  FIP SLASH option(SYMBOL) { }
+  FIP SLASH SYMBOL? NL { } (* it is actually allowed to leave it blank *)
 
 primitif:
   ENTREESPRIM
@@ -88,12 +89,13 @@ rappels:
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR CONTROLESCORR RESULTATSCORR DATES? AVISIR? AVISCSG? { None }
 
+/* Add NL token below?*/
 variable_and_value:
 | var = SYMBOL SLASH value = value  { (var, value, Parse_utils.mk_position $sloc) }
 | SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
 error_code:
-  error = SYMBOL { (error, Parse_utils.mk_position $sloc) }
+  error = SYMBOL NL { (error, Parse_utils.mk_position $sloc) }
 
 rappel:
   event_nb = integer SLASH
