@@ -60,6 +60,14 @@ irj_file:
   endsharp { { nom; prim; rapp } }
 | EOF { assert false }
 
+
+name:
+| n = NAME { n }
+| n = SYMBOL { n }
+
+fip:
+  FIP SLASH option(SYMBOL) { }
+
 primitif:
   ENTREESPRIM
   entrees = list(variable_and_value)
@@ -79,13 +87,6 @@ rappels:
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR CONTROLESCORR RESULTATSCORR DATES? AVISIR? AVISCSG? { None }
-
-name:
-| n = NAME { n }
-| n = SYMBOL { n }
-
-fip:
-  FIP SLASH option(SYMBOL) { }
 
 variable_and_value:
 | var = SYMBOL SLASH value = value  { (var, value, Parse_utils.mk_position $sloc) }
