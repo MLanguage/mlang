@@ -23,9 +23,9 @@
 
 %}
 
-%token<string> SYMBOL NAME INTEGER FLOAT
-/* Possibly use stronger constraints than just string on rappel's fields
-some are characters, some are 0/1, etc. */
+%token<string> SYMBOL NAME
+%token<int> INTEGER
+%token<float> FLOAT
 
 %token SLASH
 /* Used as field separator */
@@ -117,12 +117,9 @@ rappel:
   {
     if direction <> "R" && direction <> "C" && direction <> "M" && direction <> "P" then
       error $loc(direction) ("Unknown value for 'direction' (type of the 'rappel', should be R, C, M or P) : " ^ direction);
-    let p = match penalty_code with Some p -> int_of_string p | _ -> 0 in
+    let p = match penalty_code with Some p -> p | _ -> 0 in
     if p < 0 || p > 99 then
       error $loc(direction) ("Invalid value for 'penalty_code' (out of range 0-99) : " ^ (string_of_int p));
-    let penalty_code = match penalty_code with Some i -> Some (int_of_string i) | None -> None in
-    let base_tolerance_legale = match base_tolerance_legale with Some i -> Some (int_of_string i) | None -> None in
-    let decl_2042_rect = match decl_2042_rect with Some i -> Some (int_of_string i) | None -> None in
     {event_nb; 
      rappel_nb;
      variable_code;
@@ -136,12 +133,12 @@ rappel:
   }
 
 integer:
-| i = INTEGER { int_of_string i }
+| i = INTEGER { i }
 | error       { error $loc "Missing integer" }
 
 value:
-| i = INTEGER { I (int_of_string i) }
-| f = FLOAT   { F (float_of_string f) }
+| i = INTEGER { I (i) }
+| f = FLOAT   { F (f) }
 | error       { error $loc "Missing numerical value" }
 
 endsharp:

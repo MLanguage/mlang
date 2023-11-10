@@ -78,11 +78,10 @@ rule token = parse
     else NL }
 
 | '-'? ['0' - '9']+ as i
-  { INTEGER i}
-  (* Change here for int_of_string i and float_of_string f*)
-
+  { INTEGER (int_of_string i) }
+  
 | '-'? ['0' - '9']+ '.' ['0' - '9']* as f
-  { FLOAT f}
+  { FLOAT (float_of_string f) } (* DONT KEEP THAT *)
 
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
