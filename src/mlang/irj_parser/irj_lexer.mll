@@ -1,5 +1,5 @@
 (* Copyright Inria, contributors: Raphaël Monat <raphael.monat@lip6.fr> (2019)
-   Mathieu Durero <mathieu.durero@dgfip.finances.gouv.fr> (2023)
+   David Declerck (2023)
 
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
@@ -17,56 +17,91 @@
 {
 open Lexing
 open Irj_parser
+
+module StrMap = Map.Make (String)
+
+let keywords =
+  List.fold_left (fun map (kw, tok) ->
+    StrMap.add kw tok map
+  ) StrMap.empty [
+    "#NOM",                 NOM;
+    "#FIP",                 FIP;
+    "#ENTREES-PRIMITIF",    ENTREESPRIM;
+    "#CONTROLES-PRIMITIF",  CONTROLESPRIM;
+    "#RESULTATS-PRIMITIF",  RESULTATSPRIM;
+    "#ENTREES-CORRECTIF",   ENTREESCORR;
+    "#CONTROLES-CORRECTIF", CONTROLESCORR;
+    "#RESULTATS-CORRECTIF", RESULTATSCORR;
+    "#ENTREES-RAPPELS",     ENTREESRAPP;
+    "#CONTROLES-RAPPELS",   CONTROLESRAPP;
+    "#RESULTATS-RAPPELS",   RESULTATSRAPP;
+    "#DATES",               DATES;
+    "#AVIS_IR",             AVISIR;
+    "#AVIS_CSG",            AVISCSG;
+  ]
+
+let error lb msg =
+  Errors.raise_spanned_error ("Lexing error : " ^ msg)
+    (Parse_utils.mk_position (Lexing.lexeme_start_p lb,
+                              Lexing.lexeme_end_p lb))
+
+let is_bol lb =
+  lb.lex_start_p.pos_cnum - lb.lex_start_p.pos_bol = 0
+
+let check_cr lb =
+  if String.contains (lexeme lb) '\r' then
+    error lb ("Carriage return detected")
+
 }
 
+let blank = [' ' '\t']
+let any =   [^ '\n']
+let nl =    ['\n']
+
 rule token = parse
-| [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)
-  { token lexbuf }
-| '*' [^ '\n']* '\n' (* ignore comments *)
-  { new_line lexbuf; token lexbuf }
+
 | '\n' | "\r\n"
-  { new_line lexbuf; token lexbuf}
-| "/"
-  { SLASH }
-| "#NOM"
-  { NOM }
-| "#FIP"
-  { FIP }
-| "#ENTREES-PRIMITIF"
-  { ENTREESPRIM }
-| "#CONTROLES-PRIMITIF"
-  { CONTROLESPRIM }
-| "#RESULTATS-PRIMITIF"
-  { RESULTATSPRIM }
-| "#ENTREES-CORRECTIF"
-  { ENTREESCORR }
-| "#CONTROLES-CORRECTIF"
-  { CONTROLESCORR }
-| "#RESULTATS-CORRECTIF"
-  { RESULTATSCORR }
-| "#ENTREES-RAPPELS"
-  { ENTREESRAPP }
-| "#CONTROLES-RAPPELS"
-  { CONTROLESRAPP }
-| "#RESULTATS-RAPPELS"
-  { RESULTATSRAPP }
-| "#DATES"
-  { DATES }
-| "#AVIS_IR"
-  { AVISIR }
-| "#AVIS_CSG"
-  { AVISCSG }
-| "##"
-  { ENDSHARP }
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then token lexbuf
+    else NL }
+
+| '*' any* nl
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then token lexbuf
+    else error lexbuf "Comment with * must start in the first column" }
+
+| blank any* nl
+  { check_cr lexbuf; new_line lexbuf;
+    if is_bol lexbuf then error lexbuf "Line can not start with a blank"
+    else NL }
+
 | '-'? ['0' - '9']+ as i
-  { INTEGER i }
+  { INTEGER i}
+  (* Change here for int_of_string i and float_of_string f*)
+
 | '-'? ['0' - '9']+ '.' ['0' - '9']* as f
-  { FLOAT f }
+  { FLOAT f}
+
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
-| ['a'-'z' 'A'-'Z' ' ' '0'-'9' ';' '-']+ as s
+
+| ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' ';' (*' '*)]+ as s
   { NAME s }
+
+| "/"
+  { SLASH }
+
+| "##"
+  { ENDSHARP }
+
+| "#" ['a'-'z' 'A'-'Z' '0'-'9' '_' '-']+ as s
+  { match StrMap.find_opt s keywords with
+    | None -> error lexbuf (Printf.sprintf "Unknown section name: '#%s'" s)
+    | Some t -> t }
+
 | eof
   { EOF }
-| _
-  {  Errors.raise_spanned_error "Test file lexer error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
+
+| _ as c
+  { error lexbuf (Printf.sprintf
+                  "Unexpected character '%c' (%d)" c (Char.code c)) }

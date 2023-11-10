@@ -53,11 +53,12 @@ some are characters, some are 0/1, etc. */
 %%
 
 irj_file:
-| NOM nom = list(name)
+| NOM NL
+  nom = list(name)
   fip?
   prim = primitif
   rapp = rappels
-  endsharp 
+  endsharp NL
   EOF {     
     let nom =
       match nom with
@@ -70,35 +71,34 @@ irj_file:
 
 /* What's the point of this alternative?*/
 name:
-| n = NAME { n }
-| n = SYMBOL { n }
+| n = NAME NL { n }
+| n = SYMBOL NL { n }
 
 fip:
   FIP SLASH SYMBOL? NL { } (* it is actually allowed to leave it blank *)
 
 primitif:
-  ENTREESPRIM
+  ENTREESPRIM NL
   entrees = list(variable_and_value)
-  CONTROLESPRIM
+  CONTROLESPRIM NL
   controles_attendus = list(error_code)
-  RESULTATSPRIM
+  RESULTATSPRIM NL
   resultats_attendus = list(variable_and_value) 
   {  { entrees; controles_attendus; resultats_attendus } }
 
 rappels:
 /* The two constructions match respectively corrective test files and primary test files */
-| ENTREESRAPP
+| ENTREESRAPP NL
   entrees_rappels = list(rappel)
-  CONTROLESRAPP
+  CONTROLESRAPP NL
   controles_attendus = list(error_code)
-  RESULTATSRAPP
+  RESULTATSRAPP NL
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
-| ENTREESCORR CONTROLESCORR RESULTATSCORR DATES? AVISIR? AVISCSG? { None }
+| ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL DATES? AVISIR? AVISCSG? { None }
 
-/* Add NL token below?*/
 variable_and_value:
-| var = SYMBOL SLASH value = value  { (var, value, Parse_utils.mk_position $sloc) }
+| var = SYMBOL SLASH value = value NL { (var, value, Parse_utils.mk_position $sloc) }
 | SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
 error_code:
