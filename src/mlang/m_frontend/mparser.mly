@@ -53,7 +53,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
-%token DOMAIN SPECIALIZE AUTHORIZE BASE GIVEN_BACK COMPUTABLE BY_DEFAULT VERIFIABLE
+%token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
+%token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
 
 %token EOF
 
@@ -73,64 +74,62 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %%
 
+%inline with_pos(X):
+| x = X { (x, mk_position $sloc) }
+
+symbol_with_pos:
+| s = with_pos(SYMBOL) { s }
+
+symbol_list_with_pos:
+| sl = with_pos(symbol_with_pos+) { sl }
+
 source_file:
-| i = source_file_item is = source_file { i::is }
+| i = with_pos(source_file_item) is = source_file { i :: is }
 | EOF { [] }
 
 source_file_item:
-| a = application { (Application a, mk_position $sloc) }
-| c = chaining { let (s, aps) = c in (Chaining (s, aps), mk_position $sloc) }
-| v = variable_decl { (VariableDecl v, mk_position $sloc) }
-| r = rule { (Rule r, mk_position $sloc) }
-| t = target { (Target t, mk_position $sloc) }
-| ver = verification { (Verification ver, mk_position $sloc) }
-| e = error_ { (Error e, mk_position $sloc) }
-| o = output { (Output o, mk_position $sloc) }
-| fonction { (Function, mk_position $sloc) }
-| c = var_category_decl { (VarCatDecl c, mk_position $sloc) }
-| cr = rule_domain_decl { (RuleDomDecl cr, mk_position $sloc) }
-| cv = verif_domain_decl { (VerifDomDecl cv, mk_position $sloc) }
-
-%inline symbol_with_pos:
-| s = SYMBOL { (s, mk_position $sloc) }
-
-%inline symbol_list_with_pos:
-| sl = nonempty_list(symbol_with_pos) { (sl, mk_position $sloc) }
-
-var_category_decl:
-| VARIABLE var_type = var_typ c = symbol_with_pos* COLON ATTRIBUT
-  attr = separated_nonempty_list(COMMA, symbol_with_pos) SEMICOLON
-  {
-    ({
-       var_type;
-       var_category = c;
-       var_attributes = attr;
-      },
-     mk_position $sloc)
-  }
+| c = with_pos(var_category_decl) { VarCatDecl c }
+| a = application { Application a }
+| c = chaining { let s, apps = c in Chaining (s, apps) }
+| v = variable_decl { VariableDecl v }
+| r = rule { Rule r }
+| t = target { Target t }
+| ver = verification { Verification ver }
+| e = error_ { Error e }
+| o = output { Output o }
+| fonction { Function }
+| cr = rule_domain_decl { RuleDomDecl cr }
+| cv = verif_domain_decl { VerifDomDecl cv }
 
 var_typ:
 | INPUT { Input }
 | COMPUTED { Computed }
 
+var_category_decl:
+| VARIABLE var_type = var_typ var_category = symbol_with_pos* COLON
+  ATTRIBUT var_attributes = separated_nonempty_list(COMMA, symbol_with_pos)
+  SEMICOLON {
+    { var_type; var_category; var_attributes }
+  }
+
 rule_domain_decl:
-| DOMAIN RULE rdom_params = separated_nonempty_list(COLON, rdom_param_with_pos) SEMICOLON
-  {
+| DOMAIN RULE rdom_params = separated_nonempty_list(COLON, with_pos(rdom_param))
+  SEMICOLON {
     let err msg pos = Errors.raise_spanned_error msg pos in
     let fold (dno, dso, dco, dpdo) = function
-    | Some dn, _, _, _, pos ->
+    | (Some dn, _, _, _), pos ->
         if dno = None then Some dn, dso, dco, dpdo
         else err "rule domain names are already defined" pos
-    | _, Some ds, _, _, pos ->
+    | (_, Some ds, _, _), pos ->
         if dso = None then dno, Some ds, dco, dpdo
         else err "rule domain specialization is already specified" pos
-    | _, _, Some dc, _, pos ->
+    | (_, _, Some dc, _), pos ->
         if dco = None then dno, dso, Some dc, dpdo
         else err "rule domain is already calculated" pos
-    | _, _, _, Some dpd, pos ->
+    | (_, _, _, Some dpd), pos ->
         if dpdo = None then dno, dso, dco, Some dpd
         else err "rule domain is already defined by defaut" pos
-    | _, _, _, _, _ -> assert false
+    | (_, _, _, _), _ -> assert false
     in
     let init = None, None, None, None in
     let dno, dso, dco, dpdo = List.fold_left fold init rdom_params in
@@ -147,37 +146,37 @@ rule_domain_decl:
     }
   }
 
-rdom_param_with_pos:
+rdom_param:
 | rdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (Some rdom_names, None, None, None, mk_position $sloc) }
+  { (Some rdom_names, None, None, None) }
 | SPECIALIZE rdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (None, Some rdom_parents, None, None, mk_position $sloc) }
+  { (None, Some rdom_parents, None, None) }
 | COMPUTABLE
-  { (None, None, Some (), None, mk_position $sloc) }
+  { (None, None, Some (), None) }
 | BY_DEFAULT
-  { (None, None, None, Some (), mk_position $sloc) }
+  { (None, None, None, Some ()) }
 
 verif_domain_decl:
-| DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, vdom_param_with_pos) SEMICOLON
-  {
+| DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, with_pos(vdom_param))
+  SEMICOLON {
     let err msg pos = Errors.raise_spanned_error msg pos in
     let fold (dno, dso, dvo, dpdo, dco) = function
-    | Some dn, _, _, _, _, pos ->
+    | (Some dn, _, _, _, _), pos ->
         if dno = None then Some dn, dso, dvo, dpdo, dco
         else err "verif domain names are already defined" pos
-    | _, Some ds, _, _, _, pos ->
+    | (_, Some ds, _, _, _), pos ->
         if dso = None then dno, Some ds, dvo, dpdo, dco
         else err "verif domain specialization is already specified" pos
-    | _, _, Some dv, _, _, pos ->
+    | (_, _, Some dv, _, _), pos ->
         if dvo = None then dno, dso, Some dv, dpdo, dco
         else err "verif domain authorization is already specified" pos
-    | _, _, _, Some dpd, _, pos ->
+    | (_, _, _, Some dpd, _), pos ->
         if dpdo = None then dno, dso, dvo, Some dpd, dco
         else err "verif domain is already defined by defaut" pos
-    | _, _, _, _, Some dcd, pos ->
+    | (_, _, _, _, Some dcd), pos ->
         if dco = None then dno, dso, dvo, dpdo, Some dcd
         else err "verif domain is already verifiable" pos
-    | _, _, _, _, _, _ -> assert false
+    | (_, _, _, _, _), _ -> assert false
     in
     let init = None, None, None, None, None in
     let dno, dso, dvo, dpdo, dco = List.fold_left fold init vdom_params in
@@ -198,37 +197,34 @@ verif_domain_decl:
     }
   }
 
-%inline var_computed_category:
-| BASE { ("base", mk_position $sloc) }
-| GIVEN_BACK { ("restituee", mk_position $sloc) }
-| TIMES { ("*", mk_position $sloc) }
+var_comp_category:
+| BASE { "base" }
+| GIVEN_BACK { "restituee" }
+| TIMES { "*" }
 
 var_category_id:
-| INPUT TIMES { (["saisie", Pos.no_pos; "*", Pos.no_pos], mk_position $sloc) }
-| INPUT l = symbol_with_pos+ { (("saisie", Pos.no_pos) :: l, mk_position $sloc) }
-| COMPUTED l = var_computed_category* { (("calculee", Pos.no_pos) :: l, mk_position $sloc) }
-| TIMES { (["*", Pos.no_pos], mk_position $sloc) }
+| INPUT TIMES { ["saisie", Pos.no_pos; "*", Pos.no_pos] }
+| INPUT l = symbol_with_pos+ { ("saisie", Pos.no_pos) :: l }
+| COMPUTED l = with_pos(var_comp_category)* { ("calculee", Pos.no_pos) :: l }
+| TIMES { ["*", Pos.no_pos] }
 
-vdom_param_with_pos:
+vdom_param:
 | vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (Some vdom_names, None, None, None, None, mk_position $sloc) }
+  { (Some vdom_names, None, None, None, None) }
 | SPECIALIZE vdom_parents = separated_nonempty_list(COMMA, symbol_list_with_pos)
-  { (None, Some vdom_parents, None, None, None, mk_position $sloc) }
-| AUTHORIZE vcats = separated_nonempty_list(COMMA, var_category_id)
-  { (None, None, Some vcats, None, None, mk_position $sloc) }
+  { (None, Some vdom_parents, None, None, None) }
+| AUTHORIZE vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  { (None, None, Some vcats, None, None) }
 | BY_DEFAULT
-  { (None, None, None, Some (), None, mk_position $sloc) }
+  { (None, None, None, Some (), None) }
 | VERIFIABLE
-  { (None, None, None, None, Some (), mk_position $sloc) }
+  { (None, None, None, None, Some ()) }
 
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
 
-application_name:
-| s = SYMBOL { (s, mk_position $sloc) }
-
 application:
-| APPLICATION s = application_name SEMICOLON { s }
+| APPLICATION s = with_pos(SYMBOL) SEMICOLON { s }
 
 application_reference:
 | APPLICATION COLON ss = symbol_enumeration { ss }
@@ -236,118 +232,130 @@ application_reference:
 chaining:
 | CHAINING s = symbol_with_pos aps = application_reference SEMICOLON { (s, aps) }
 
-chaining_reference_name:
-| c = SYMBOL { (c, mk_position $sloc) }
-
 chaining_reference:
-| CHAINING COLON c = chaining_reference_name SEMICOLON { c }
+| CHAINING COLON c = with_pos(SYMBOL) SEMICOLON { c }
 
 variable_decl:
-| v = computed_variable  { v }
-| v = const_variable  { v }
-| v = input_variable  { v }
+| v = with_pos(comp_variable) { ComputedVar v }
+| cv = const_variable { let n, v = cv in ConstVar (n, v) }
+| v = with_pos(input_variable) { InputVar v }
 
 const_variable_name:
-| name = SYMBOL COLON CONST { (parse_variable_name $sloc name, mk_position $sloc)}
+| name = SYMBOL COLON CONST { parse_variable_name $sloc name }
 
-const_variable_value:
-| value = SYMBOL { (parse_const_value value, mk_position $sloc) }
+const_value:
+| value = SYMBOL { parse_const_value value }
 
 const_variable:
-| name = const_variable_name EQUALS value = const_variable_value SEMICOLON
-  { ConstVar (name, value) }
+| name = with_pos(const_variable_name) EQUALS value = with_pos(const_value)
+  SEMICOLON { (name, value) }
 
-computed_variable_name:
-| name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc)}
+comp_variable_name:
+| name = SYMBOL COLON { parse_variable_name $sloc name }
 
-computed_variable_descr:
-| descr = STRING { (parse_string descr, mk_position $sloc) }
+comp_variable_table:
+| TABLE LBRACKET size = SYMBOL RBRACKET { parse_table_size size }
 
-computed_attr_or_subtyp:
-| attr = variable_attribute { let (x, y) = attr in Attr (x,y) }
-| BASE { CompSubTyp ("base", mk_position $sloc) }
-| GIVEN_BACK { CompSubTyp ("restituee", mk_position $sloc) }
+comp_variable_descr:
+| descr = STRING { parse_string descr }
 
-computed_variable:
-| name = computed_variable_name size = computed_variable_table? COMPUTED
-  subtyp = computed_attr_or_subtyp*
-  COLON descr = computed_variable_descr typ = value_type? SEMICOLON
-  { ComputedVar ({
-    comp_name = (let (name, nloc) = name in (name, nloc));
-    comp_table = size;
-    comp_attributes = List.map (fun x -> match x with Attr (x, y) -> (x, y) | _ -> assert false (* should not happen *))
-        (List.filter (fun x -> match x with Attr _ -> true | _ -> false) subtyp);
-    comp_category = List.map (fun x -> match x with CompSubTyp x -> x | _ -> assert false (* should not happen *))
-        (List.filter (fun x -> match x with CompSubTyp _ -> true | _ -> false) subtyp);
-    comp_is_givenback = List.exists (fun x -> match x with CompSubTyp ("restituee", _) -> true | _ -> false) subtyp;
-    comp_description = descr;
-    comp_typ = typ;
-  }, mk_position $sloc) }
+comp_attr:
+| BASE { "base" }
+| GIVEN_BACK { "restituee" }
 
-computed_variable_table:
-| TABLE LBRACKET size = SYMBOL RBRACKET { (parse_table_size size, mk_position $sloc) }
+comp_attr_or_subtyp:
+| attr = variable_attribute { let (x, y) = attr in Attr (x, y) }
+| attr = with_pos(comp_attr) { CompSubTyp attr }
+
+comp_variable:
+| comp_name = with_pos(comp_variable_name) comp_table = with_pos(comp_variable_table)?
+  COMPUTED subtyp = comp_attr_or_subtyp* COLON
+  comp_description = with_pos(comp_variable_descr) comp_typ = value_type?
+  SEMICOLON {
+    let comp_attributes =
+      subtyp
+      |> List.filter (function Attr _ -> true | _ -> false)
+      |> List.map (function Attr (x, y) -> (x, y) | _ -> assert false)
+    in
+    let comp_category =
+      subtyp
+      |> List.filter (function CompSubTyp _ -> true | _ -> false) 
+      |> List.map (function CompSubTyp x -> x | _ -> assert false)
+    in
+    let comp_is_givenback =
+      subtyp
+      |> List.exists (function CompSubTyp ("restituee", _) -> true | _ -> false)
+    in
+    {
+      comp_name;
+      comp_table;
+      comp_attributes;
+      comp_category;
+      comp_is_givenback;
+      comp_description;
+      comp_typ;
+    }
+  }
 
 input_variable_name:
-| name = SYMBOL COLON { (parse_variable_name $sloc name, mk_position $sloc) }
+| name = SYMBOL COLON { parse_variable_name $sloc name }
 
 input_descr:
-descr = STRING { (parse_string descr, mk_position $sloc) }
+descr = STRING { parse_string descr }
 
 input_attr_or_category:
 | attr = variable_attribute { (None, Some attr, false) }
 | cat = symbol_with_pos { (Some cat, None, false) }
 | GIVEN_BACK { None, None, true }
 
-input_variable:
-| name = input_variable_name INPUT
-  category_attrs = input_attr_or_category* alias = input_variable_alias COLON descr = input_descr
-  typ = value_type?
-  SEMICOLON {
-  let (category, attrs, givenback) =
-    List.fold_left
-      (fun (category, attrs, givenback) (c, a, r) -> 
-        match c, a, r with
-        | Some x, _, _ -> x :: category, attrs, givenback
-        | _, Some x, _ -> category, x :: attrs, givenback
-        | _, _, true -> category, attrs, true
-        | _, _, _ -> category, attrs, givenback)
-      ([], [], false)
-      category_attrs
-  in
-  InputVar ({
-    input_name = name;
-    input_category = category;
-    input_attributes = attrs;
-    input_alias = alias;
-    input_is_givenback = givenback;
-    input_typ = typ;
-    input_description = descr;
-  }, mk_position $sloc) }
-
 input_variable_alias:
-| ALIAS alias = SYMBOL { (parse_variable_name $sloc alias, mk_position $sloc) }
-
-variable_attribute_name:
-| attr = SYMBOL { (attr, mk_position $sloc) }
+| ALIAS alias = SYMBOL { parse_variable_name $sloc alias }
 
 variable_attribute_value:
- value = SYMBOL { (parse_int $sloc value, mk_position $sloc) }
+| value = SYMBOL { parse_int $sloc value }
 
 variable_attribute:
-| attr = variable_attribute_name EQUALS
-  lit = variable_attribute_value
+| attr = symbol_with_pos EQUALS
+  lit = with_pos(variable_attribute_value)
 { (attr, lit) }
 
-value_type:
-| TYPE typ = value_type_prim { typ }
-
 value_type_prim:
-| BOOLEAN { (Boolean, mk_position $sloc) }
-| DATE_YEAR { (DateYear, mk_position $sloc) }
-| DATE_DAY_MONTH_YEAR { (DateDayMonthYear, mk_position $sloc) }
-| DATE_MONTH { (DateMonth, mk_position $sloc) }
-| INTEGER { (Integer, mk_position $sloc) }
-| REAL { (Real, mk_position $sloc) }
+| BOOLEAN { Boolean }
+| DATE_YEAR { DateYear }
+| DATE_DAY_MONTH_YEAR { DateDayMonthYear }
+| DATE_MONTH { DateMonth }
+| INTEGER { Integer }
+| REAL { Real }
+
+value_type:
+| TYPE typ = with_pos(value_type_prim) { typ }
+
+input_variable:
+| name = with_pos(input_variable_name) INPUT
+  category_attrs = input_attr_or_category* alias = with_pos(input_variable_alias)
+  COLON descr = with_pos(input_descr) typ = value_type?
+  SEMICOLON {
+    let (category, attrs, givenback) =
+      List.fold_left
+        (fun (category, attrs, givenback) (c, a, r) -> 
+          match c, a, r with
+          | Some x, _, _ -> x :: category, attrs, givenback
+          | _, Some x, _ -> category, x :: attrs, givenback
+          | _, _, true -> category, attrs, true
+          | _, _, _ -> category, attrs, givenback)
+        ([], [], false)
+        category_attrs
+    in
+    {
+      input_name = name;
+      input_category = category;
+      input_attributes = attrs;
+      input_alias = alias;
+      input_is_givenback = givenback;
+      input_typ = typ;
+      input_description = descr;
+    }
+  }
 
 rule:
 | RULE name = symbol_list_with_pos COLON apps = application_reference
@@ -402,11 +410,10 @@ target:
   }
 
 temporary_variable_name:
-| name = symbol_with_pos size = computed_variable_table?
-    { 
-      let name_pos = parse_variable_name $sloc (Pos.unmark name), Pos.get_position name in
-      (name_pos, size)
-    }
+| name = symbol_with_pos size = with_pos(comp_variable_table)? {
+    let name_str, name_pos = name in
+    (parse_variable_name $sloc name_str, name_pos), size
+  }
 
 temporary_variables_decl:
 | VARIABLE TEMPORARY COLON
@@ -414,48 +421,49 @@ temporary_variables_decl:
     { tmp_vars }
 
 instruction_list_rev:
-| i = instruction { [i] }
-| il = instruction_list_rev i = instruction  { i :: il }
+| i = with_pos(instruction) { [i] }
+| il = instruction_list_rev i = with_pos(instruction) { i :: il }
 
 instruction:
-| f = formula_kind SEMICOLON { (Formula f, mk_position $sloc)  }
-| IF e = expression THEN ilt = instruction_list_rev ilo = instruction_else_branch? ENDIF
-    {
-      let ile = match ilo with Some ile -> ile | None -> [] in
-      (IfThenElse (e, List.rev ilt, ile), mk_position $sloc)
-    }
-| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON
-    { ComputeDomain dom, mk_position $sloc }
-| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON
-    { ComputeChaining chain, mk_position $sloc }
-| COMPUTE TARGET target = symbol_with_pos SEMICOLON
-    { ComputeTarget target, mk_position $sloc }
+| f = with_pos(formula_kind) SEMICOLON { Formula f }
+| IF e = with_pos(expression)
+  THEN ilt = instruction_list_rev
+  ilo = instruction_else_branch?
+  ENDIF {
+    let ile = match ilo with Some ile -> ile | None -> [] in
+    IfThenElse (e, List.rev ilt, ile)
+  }
+| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { ComputeDomain dom }
+| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { ComputeChaining chain }
+| COMPUTE TARGET target = symbol_with_pos SEMICOLON { ComputeTarget target }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
     {
       let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in
-      ComputeVerifs (dom, expr), mk_position $sloc
+      ComputeVerifs (dom, expr)
     }
-| VERIFY DOMAIN dom = symbol_list_with_pos COLON WITH expr = expression SEMICOLON
-    { ComputeVerifs (dom, expr), mk_position $sloc }
-| PRINT args = print_argument* SEMICOLON
-    { Print (StdOut, args), mk_position $sloc }
-| PRINT_ERR args = print_argument* SEMICOLON
-    { Print (StdErr, args), mk_position $sloc }
-| ITERATE COLON it_params = nonempty_list(it_param_with_pos)
+| VERIFY DOMAIN dom = symbol_list_with_pos COLON
+  WITH expr = with_pos(expression) SEMICOLON {
+    ComputeVerifs (dom, expr)
+  }
+| PRINT args = with_pos(print_argument)* SEMICOLON
+    { Print (StdOut, args) }
+| PRINT_ERR args = with_pos(print_argument)* SEMICOLON
+    { Print (StdErr, args) }
+| ITERATE COLON it_params = nonempty_list(with_pos(it_param))
   IN LPAREN instrs = instruction_list_rev RPAREN
     {
       let err msg pos = Errors.raise_spanned_error msg pos in
       let fold (vno, vco, exo) = function
-      | Some vn, _, _, pos ->
+      | (Some vn, _, _), pos ->
           if vno = None then Some vn, vco, exo
           else err "iterator variable is already defined" pos
-      | _, Some vc, _, pos ->
+      | (_, Some vc, _), pos ->
           if vco = None then vno, Some vc, exo
           else err "variable category is already specified" pos
-      | _, _, Some ex, pos ->
+      | (_, _, Some ex), pos ->
           if exo = None then vno, vco, Some ex
           else err "iterator filter is already defined" pos
-      | _, _, _, _ -> assert false
+      | (_, _, _), _ -> assert false
       in
       let init = None, None, None in
       let vno, vco, exo = List.fold_left fold init it_params in
@@ -474,38 +482,43 @@ instruction:
         | Some expr -> expr
         | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
       in
-      Iterate (var, vcats, expr, List.rev instrs), mk_position $sloc
+      Iterate (var, vcats, expr, List.rev instrs)
     }
-| RESTORE COLON rest_params = rest_param_with_pos*
-  AFTER LPAREN instrs = instruction_list_rev RPAREN
-    { Restore (rest_params, List.rev instrs), mk_position $sloc }
-| RAISE_ERROR e_name = verification_name var = output_name? SEMICOLON
-    { RaiseError (e_name, var), mk_position $sloc }
-| CLEAN_ERRORS SEMICOLON { CleanErrors, mk_position $sloc }
+| RESTORE COLON rest_params = with_pos(rest_param)*
+  AFTER LPAREN instrs = instruction_list_rev RPAREN {
+    Restore (rest_params, List.rev instrs)
+  }
+| RAISE_ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
+    RaiseError (e_name, var)
+  }
+| CLEAN_ERRORS SEMICOLON { CleanErrors }
 
 instruction_else_branch:
 | ELSE il = instruction_list_rev { List.rev il }
 
 print_argument:
-| s = STRING { (PrintString (parse_string s), mk_position $sloc) }
-| f = print_function LPAREN v = symbol_with_pos RPAREN
+| s = STRING { PrintString (parse_string s) }
+| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
     {
       let m_var = (parse_variable $sloc (fst v), snd v) in
       match Pos.unmark f with
-      | "nom" -> (PrintName m_var, mk_position $sloc)
-      | "alias" -> (PrintAlias m_var, mk_position $sloc)
-      | _ -> Errors.raise_spanned_error "unknown print function" (Pos.get_position f)
+      | "nom" -> PrintName m_var
+      | "alias" -> PrintAlias m_var
+      | _ ->
+          Errors.raise_spanned_error
+            "unknown print function"
+            (Pos.get_position f)
     }
-| LPAREN e = expression RPAREN prec = print_precision?
+| LPAREN e = with_pos(expression) RPAREN prec = print_precision?
     {
       match prec with
-      | Some (min, max) -> (PrintExpr (e, min, max), mk_position $sloc)
-      | None ->  (PrintExpr (e, 0, 20), mk_position $sloc)
+      | Some (min, max) -> PrintExpr (e, min, max)
+      | None -> PrintExpr (e, 0, 20)
     }
 
 print_function:
-| ALIAS { "alias", mk_position $sloc }
-| s = SYMBOL { s, mk_position $sloc }
+| ALIAS { "alias" }
+| s = SYMBOL { s }
 
 print_precision:
 | COLON min = symbol_with_pos
@@ -542,62 +555,58 @@ print_precision:
       (min_val, max_val)
     }
 
-it_param_with_pos:
+it_param:
 | VARIABLE var = symbol_with_pos COLON
-    { (Some var, None, None, mk_position $sloc) }
-| CATEGORY vcats = separated_nonempty_list(COMMA, var_category_id) COLON
-    { (None, Some vcats, None, mk_position $sloc) }
-| WITH expr = expression COLON
-    { (None, None, Some expr, mk_position $sloc) }
+    { Some var, None, None }
+| CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON {
+    None, Some vcats, None
+  }
+| WITH expr = with_pos(expression) COLON
+    { None, None, Some expr }
 
-rest_param_with_pos:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON
-    { VarList vars, mk_position $sloc }
+rest_param:
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { VarList vars }
 | VARIABLE var = symbol_with_pos COLON
-  CATEGORY vcats = separated_nonempty_list(COMMA, var_category_id) COLON
-  expr_opt = rest_param_with_expr?
-    { 
-      let expr =
-        match expr_opt with
-        | Some expr -> expr
-        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
-      in
-      VarCats (var, vcats, expr), mk_position $sloc
-    }
+  CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON expr_opt = rest_param_with_expr? { 
+    let expr =
+      match expr_opt with
+      | Some expr -> expr
+      | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+    in
+    VarCats (var, vcats, expr)
+  }
 
 rest_param_with_expr:
-| WITH expr = expression COLON { expr }
+| WITH expr = with_pos(expression) COLON { expr }
 
 formula_list:
-| f = formula_kind SEMICOLON { [f] }
-| f = formula_kind SEMICOLON fs = formula_list { f::fs }
+| f = with_pos(formula_kind) SEMICOLON { [f] }
+| f = with_pos(formula_kind) SEMICOLON fs = formula_list { f :: fs }
 
 formula_kind:
-| f = formula { (SingleFormula f, mk_position $sloc) }
-| fs = for_formula
-  { let (lv, ft) = fs in (MultipleFormulaes (lv, ft), mk_position $sloc) }
+| f = formula { SingleFormula f }
+| fs = for_formula { let (lv, ft) = fs in MultipleFormulaes (lv, ft) }
 
 for_formula:
-| FOR lv = loop_variables COLON ft = formula { (lv, ft) }
+| FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
 lvalue_name:
-| s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
+| s = SYMBOL { parse_variable $sloc s }
 
 lvalue:
-| s = lvalue_name i = brackets? { ({ var = s; index = i}, mk_position $sloc) }
+| s = with_pos(lvalue_name) i = with_pos(brackets)? { { var = s; index = i} }
 
 formula:
-| l = lvalue EQUALS e = expression { {
-    lvalue = l;
-    formula =  e
-  } }
-
-verification_name:
-| name = SYMBOL { (name, mk_position $sloc) }
+| lvalue = with_pos(lvalue) EQUALS formula = with_pos(expression) {
+    { lvalue; formula }
+  }
 
 verification:
-| VERIFICATION name = symbol_list_with_pos COLON apps = application_reference
-  SEMICOLON conds = verification_condition* {
+| VERIFICATION name = symbol_list_with_pos
+  COLON verif_applications = application_reference SEMICOLON
+  verif_conditions = with_pos(verification_condition)+ {
     let num, verif_tag_names =
       let uname = Pos.unmark name in
       let begPos =
@@ -621,67 +630,70 @@ verification:
           "this verification doesn't have an execution number"
           (Pos.get_position num)
     in
-    {
-      verif_number;
-      verif_tag_names;
-      verif_applications = apps;
-      verif_conditions = conds;
-    } }
+    { verif_number; verif_tag_names; verif_applications; verif_conditions }
+  }
 
 verification_condition:
-| IF e = expression THEN
-  ERROR e_name = verification_name var = output_name? SEMICOLON { ({
-    verif_cond_expr = e;
-    verif_cond_error = e_name, var;
-  }, mk_position $sloc) }
+| IF e = with_pos(expression) THEN
+  ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
+    {
+      verif_cond_expr = e;
+      verif_cond_error = e_name, var;
+    }
+  }
 
 error_name:
-n = SYMBOL COLON { (n, mk_position $sloc) }
+n = SYMBOL COLON { n }
 
 error_descr:
-s = STRING { (parse_string s, mk_position $sloc) }
-
-error_:
-| n = error_name t = type_error COLON s1 = error_descr COLON
-   s2 = error_descr COLON s3 = error_descr COLON s4 = error_descr
-   s5 = error_message? SEMICOLON { {
-      error_name = n;
-      error_typ = t;
-      error_descr = s1::s2::s3::s4::(match s5 with
-        | None -> []
-        | Some s5 -> [s5]);
-    } }
+s = STRING { parse_string s }
 
 error_message:
-| COLON  s = error_descr { s }
+| COLON  s = with_pos(error_descr) { s }
+
+error_:
+| n = with_pos(error_name) t = with_pos(type_error)
+  COLON s1 = with_pos(error_descr)
+  COLON s2 = with_pos(error_descr)
+  COLON s3 = with_pos(error_descr)
+  COLON s4 = with_pos(error_descr)
+  s5 = error_message? SEMICOLON {
+    {
+      error_name = n;
+      error_typ = t;
+      error_descr =
+        let s5l = match s5 with None -> [] | Some s -> [s] in
+        s1 :: s2 :: s3 :: s4 :: s5l;
+    }
+  }
 
 type_error:
-| ANOMALY { (Anomaly, mk_position $sloc) }
-| DISCORDANCE { (Discordance, mk_position $sloc) }
-| INFORMATIVE { (Information, mk_position $sloc) }
+| ANOMALY { Anomaly }
+| DISCORDANCE { Discordance }
+| INFORMATIVE { Information }
 
 output_name:
-s = SYMBOL { (parse_variable_name $sloc s, mk_position $sloc) }
+| s = SYMBOL { parse_variable_name $sloc s }
 
 output:
-| OUTPUT LPAREN s = output_name RPAREN SEMICOLON { s }
+| OUTPUT LPAREN s = with_pos(output_name) RPAREN SEMICOLON { s }
 
 brackets:
-| LBRACKET i = SYMBOL RBRACKET { (parse_table_index $sloc i, mk_position $sloc) }
+| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
 
 loop_variables:
-| lrs = loop_variables_ranges { (Ranges lrs, mk_position $sloc) }
-| lvs = loop_variables_values { (ValueSets lvs, mk_position $sloc) }
+| lrs = loop_variables_ranges { Ranges lrs }
+| lvs = loop_variables_values { ValueSets lvs }
 
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
 
 loop_variable_value_name:
-s = PARAMETER { (s, mk_position $sloc) }
+| s = PARAMETER { s }
 
 loop_variables_value:
-| s = loop_variable_value_name EQUALS e = enumeration_loop {
-    let (s,loc) = s in ((s, loc), e)
+| s = with_pos(loop_variable_value_name) EQUALS e = enumeration_loop {
+    let s, loc = s in ((s, loc), e)
   }
 
 loop_variables_ranges:
@@ -689,7 +701,7 @@ loop_variables_ranges:
 | r = loop_variables_range AND rs = loop_variables_ranges { r::rs }
 
 loop_variables_range:
-| ONE s = loop_variable_value_name IN e = enumeration_loop {
+| ONE s = with_pos(loop_variable_value_name) IN e = enumeration_loop {
    let (s, loc) = s in ((s, loc), e)
  }
 
@@ -699,8 +711,10 @@ enumeration_loop:
 
 enumeration_loop_item:
 | bounds = interval_loop { bounds  }
-| s = SYMBOL { Single (parse_to_literal (parse_variable_or_int $sloc s),
-                      mk_position $sloc) }
+| s = SYMBOL {
+    let pos = mk_position $sloc in
+    Single (parse_to_literal (parse_variable_or_int $sloc s), pos)
+  }
 
 range_or_minus:
 | RANGE { `Range }
@@ -708,8 +722,9 @@ range_or_minus:
 
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
-    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), mk_position $sloc in
-    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), mk_position $sloc in
+    let pos = mk_position $sloc in
+    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), pos in
+    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), pos in
     match rm with
     | `Range -> Range (l1, l2)
     | `Minus -> Interval (l1, l2)
@@ -720,74 +735,98 @@ enumeration:
 | i = enumeration_item COMMA is = enumeration { i::is }
 
 enumeration_item:
-| bounds = interval { bounds  }
+| bounds = interval { bounds }
 | s = SYMBOL {
+    let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> VarValue (v, mk_position $sloc)
-    | ParseInt i -> FloatValue (float_of_int i, mk_position $sloc)
-}
+    | ParseVar v -> VarValue (v, pos)
+    | ParseInt i -> FloatValue (float_of_int i, pos)
+  }
 
 interval:
-| i1 = SYMBOL RANGE i2 = SYMBOL
- { Interval ((parse_int $sloc i1, mk_position $sloc),
-   (parse_int $sloc i2, mk_position $sloc)) : set_value }
+| i1 = SYMBOL RANGE i2 = SYMBOL {
+    let pos = mk_position $sloc in
+    let ir1 = parse_int $sloc i1, pos in
+    let ir2 = parse_int $sloc i2, pos in
+    Interval (ir1, ir2) : set_value
+  }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
-| e = sum_expression NOTIN LPAREN s = enumeration RPAREN
-  { (TestInSet (false, e, s), mk_position $sloc) }
-| e = sum_expression IN LPAREN s = enumeration RPAREN
-  { (TestInSet (true, e, s), mk_position $sloc) }
-| e1 = sum_expression op = comparison_op e2 = sum_expression
-  { (Comparison (op, e1, e2), mk_position $sloc) }
+| e = with_pos(sum_expression) NOTIN LPAREN s = enumeration RPAREN {
+    TestInSet (false, e, s)
+  }
+| e = with_pos(sum_expression) IN LPAREN s = enumeration RPAREN {
+    TestInSet (true, e, s)
+  }
+| e1 = with_pos(sum_expression)
+  op = with_pos(comparison_op)
+  e2 = with_pos(sum_expression) {
+    Comparison (op, e1, e2)
+  }
 | e = sum_expression { e }
-| e1 = expression op = logical_binop e2 = expression
-  { (Binop (op, e1, e2), mk_position $sloc) }
-| FOR le =  loop_expression { let (l1, l2, loc) = le in (Loop(l1,l2), loc) }
-| NOT e = expression { (Unop (Not, e), mk_position $sloc) }
+| e1 = with_pos(expression)
+  op = with_pos(logical_binop)
+  e2 = with_pos(expression) {
+    Binop (op, e1, e2)
+  }
+| FOR le = loop_expression { let l1, l2 = le in Loop (l1, l2) }
+| NOT e = with_pos(expression) { Unop (Not, e) }
 
 %inline logical_binop:
-| AND { (And, mk_position $sloc) }
-| OR { (Or, mk_position $sloc) }
+| AND { And }
+| OR { Or }
 
 sum_expression:
 | e = product_expression { e }
-| e1 = sum_expression op = sum_operator e2 = product_expression { (Binop (op, e1, e2), mk_position $sloc) }
+| e1 = with_pos(sum_expression)
+  op = with_pos(sum_operator)
+  e2 = with_pos(product_expression) {
+    Binop (op, e1, e2)
+  }
 
-sum_operator:
-| PLUS { (Add, mk_position $sloc) }
-| MINUS { (Sub, mk_position $sloc) }
+%inline sum_operator:
+| PLUS { Add }
+| MINUS { Sub }
 
 product_expression:
 | e = factor { e }
-| e1 = product_expression op = product_operator e2 = factor
-{ (Binop (op, e1, e2), mk_position $sloc) }
+| e1 = with_pos(product_expression)
+  op = with_pos(product_operator)
+  e2 = with_pos(factor) {
+    Binop (op, e1, e2)
+  }
 
-product_operator:
-| TIMES { (Mul, mk_position $sloc) }
-| DIV { (Div, mk_position $sloc) }
+%inline product_operator:
+| TIMES { Mul }
+| DIV { Div }
 
 table_index_name:
-s = SYMBOL { (parse_variable $sloc s, mk_position $sloc) }
+s = SYMBOL { parse_variable $sloc s }
 
 factor:
-| MINUS e = factor { (Unop (Minus, e), mk_position $sloc) }
+| MINUS e = with_pos(factor) { Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = table_index_name i = brackets { (Index (s, i), mk_position $sloc) }
-| l = factor_literal { (Literal l, mk_position $sloc) }
+| s = with_pos(table_index_name) i = with_pos(brackets) { Index (s, i) }
+| l = factor_literal { Literal l }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
-| lvs = loop_variables COLON e = expression
-  { (lvs, e, mk_position $sloc) } %prec SEMICOLON
+| lvs = with_pos(loop_variables) COLON e = with_pos(expression) {
+    lvs, e
+  } %prec SEMICOLON
 
 ternary_operator:
-| IF e1 = expression THEN e2 = expression e3 = else_branch? ENDIF
-{ (Conditional (e1, e2, e3), mk_position $sloc) }
+| IF e1 = with_pos(expression)
+  THEN e2 = with_pos(expression)
+  e3 = else_branch?
+  ENDIF {
+    Conditional (e1, e2, e3)
+  }
 
 else_branch:
-| ELSE e = expression { e }
+| ELSE e = with_pos(expression) { e }
 
 factor_literal:
 | UNDEFINED { Mast.Undefined }
@@ -796,63 +835,61 @@ factor_literal:
   *)
 
 function_name:
-| VERIF_NUMBER { ("numero_verif", mk_position $sloc) }
-| COMPL_NUMBER { ("numero_compl", mk_position $sloc) }
-| s = SYMBOL { (parse_func_name $sloc s, mk_position $sloc) }
+| VERIF_NUMBER { "numero_verif" }
+| COMPL_NUMBER { "numero_compl" }
+| s = SYMBOL { parse_func_name $sloc s }
 
 function_call:
-| NB_CATEGORY LPAREN cats = var_category_id RPAREN
-  { (NbCategory cats, mk_position $sloc) }
-| ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN
-  { (Attribut ((parse_variable $sloc (fst var), snd var), attr), mk_position $sloc) }
-| SIZE LPAREN var = symbol_with_pos RPAREN
-  { (Size (parse_variable $sloc (fst var), snd var), mk_position $sloc) }
-| NB_ERROR LPAREN RPAREN
-  { (NbError, mk_position $sloc) }
-| s = function_name LPAREN RPAREN
-  { (FunctionCall (s, Mast.ArgList []), mk_position $sloc) }
-| s = function_name LPAREN args = function_call_args RPAREN
-  { (FunctionCall (s, args), mk_position $sloc) }
+| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN { NbCategory cats }
+| ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
+    Attribut ((parse_variable $sloc (fst var), snd var), attr)
+  }
+| SIZE LPAREN var = symbol_with_pos RPAREN {
+    Size (parse_variable $sloc (fst var), snd var)
+  }
+| NB_ERROR LPAREN RPAREN { NbError }
+| s = with_pos(function_name) LPAREN RPAREN {
+    FunctionCall (s, Mast.ArgList [])
+  }
+| s = with_pos(function_name) LPAREN args = function_call_args RPAREN {
+    FunctionCall (s, args)
+  }
 
 function_call_args:
-| l = loop_expression { let (l1, l2, _) = l in LoopList (l1, l2) }
+| l = loop_expression { let l1, l2 = l in LoopList (l1, l2) }
 | args = function_arguments { ArgList (args) }
 
 function_arguments:
-| e = sum_expression { [e] }
-| e = sum_expression COMMA es = function_arguments { e::es }
+| e = with_pos(sum_expression) { [e] }
+| e = with_pos(sum_expression) COMMA es = function_arguments { e :: es }
 
-comparison_op:
-| GTE  { (Gte, mk_position $sloc) }
-| LTE  { (Lte,  mk_position $sloc) }
-| LT { (Lt,  mk_position $sloc) }
-| GT { (Gt,  mk_position $sloc) }
-| NEQ  { (Neq,  mk_position $sloc) }
-| EQUALS { (Eq,  mk_position $sloc) }
-
-marked_symbol:
-| s = SYMBOL { (s, mk_position $sloc) }
+%inline comparison_op:
+| GTE  { Gte }
+| LTE  { Lte }
+| LT { Lt }
+| GT { Gt }
+| NEQ  { Neq }
+| EQUALS { Eq }
 
 symbol_enumeration:
-| ss = separated_nonempty_list(COMMA, marked_symbol) { ss }
+| ss = separated_nonempty_list(COMMA, symbol_with_pos) { ss }
 
 (* This is for the function spec file *)
 
 spec_input_list:
 | NOT { [] }
-| inputs = separated_nonempty_list(COMMA, marked_symbol)
+| inputs = separated_nonempty_list(COMMA, symbol_with_pos)
   { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) inputs }
 
 spec_output_list:
 | NOT { [] }
-| outputs = separated_nonempty_list(COMMA, marked_symbol)
+| outputs = separated_nonempty_list(COMMA, symbol_with_pos)
   { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) outputs  }
 
-const_symbol:
-| s = SYMBOL { (s, mk_position $sloc) }
-
 const_input:
-| var = const_symbol EQUALS expr = expression SEMICOLON { ((parse_variable_name $sloc (fst var), snd var), expr) }
+| var = symbol_with_pos EQUALS expr = with_pos(expression) SEMICOLON {
+    ((parse_variable_name $sloc (fst var), snd var), expr)
+  }
 
 spec_const_list:
 | NOT SEMICOLON { [] }
@@ -861,27 +898,33 @@ spec_const_list:
 
 spec_conds_list:
 | NOT SEMICOLON { [] }
-| cond = expression SEMICOLON { [cond] }
-| cond = expression SEMICOLON others = spec_conds_list { cond::others }
+| cond = with_pos(expression) SEMICOLON { [cond] }
+| cond = with_pos(expression) SEMICOLON others = spec_conds_list {
+    cond :: others
+  }
 
 function_spec:
 | INPUT COLON inputs = spec_input_list SEMICOLON
   CONST COLON consts = spec_const_list
   CONDITION COLON precs = spec_conds_list
-  OUTPUT COLON outputs = spec_output_list SEMICOLON
-   { {
+  OUTPUT COLON outputs = spec_output_list SEMICOLON {
+    {
       spec_inputs = inputs;
       spec_consts = consts;
       spec_outputs = outputs;
       spec_conditions = precs;
-   } }
+    }
+  }
 
-| EOF { {
+| EOF {
+  {
     spec_inputs = [];
     spec_consts = [];
     spec_outputs = [];
     spec_conditions = [];
- } }
+  }
+}
 
- literal_input:
- | l = factor_literal { l }
+literal_input:
+| l = factor_literal { l }
+
