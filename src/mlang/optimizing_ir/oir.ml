@@ -52,6 +52,7 @@ type cfg = {
 type mpp_function = { cfg : cfg; is_verif : bool }
 
 type target_function = {
+  file : string option;
   tmp_vars : (Bir.variable * Pos.t * int option) StrMap.t;
   cfg : cfg;
   is_verif : bool;

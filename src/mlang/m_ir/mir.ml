@@ -576,6 +576,7 @@ module TargetMap = StrMap
 
 type target_data = {
   target_name : string Pos.marked;
+  target_file : string option;
   target_apps : string Pos.marked list;
   target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;

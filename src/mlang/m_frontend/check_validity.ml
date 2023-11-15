@@ -319,6 +319,7 @@ type chaining = {
 
 type target = {
   target_name : string Pos.marked;
+  target_file : string option;
   target_apps : Pos.t StrMap.t;
   target_tmp_vars : int option Pos.marked StrMap.t;
   target_prog : Mast.instruction Pos.marked list;
@@ -368,6 +369,13 @@ type program = {
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
 }
+
+let get_target_file (pos : Pos.t) : string =
+  let file = Pos.get_file pos |> Filename.basename in
+  let file =
+    try Filename.chop_extension file with Invalid_argument _ -> file
+  in
+  Format.sprintf "m_%s" file
 
 let safe_prefix (p : Mast.program) : string =
   let target_names =
@@ -1358,6 +1366,7 @@ let check_target (t : Mast.target) (prog : program) : program =
     | None -> ());
     (tname, tpos)
   in
+  let target_file = Some (get_target_file tpos) in
   let target_apps =
     List.fold_left
       (fun target_apps (app, app_pos) ->
@@ -1401,13 +1410,17 @@ let check_target (t : Mast.target) (prog : program) : program =
       in
       (prog, target_prog)
     in
-    let target = { target_name; target_apps; target_tmp_vars; target_prog } in
+    let target =
+      { target_name; target_file; target_apps; target_tmp_vars; target_prog }
+    in
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets }
   else
     let target_tmp_vars = StrMap.empty in
     let target_prog = [] in
-    let target = { target_name; target_apps; target_tmp_vars; target_prog } in
+    let target =
+      { target_name; target_file; target_apps; target_tmp_vars; target_prog }
+    in
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets }
 
@@ -1500,9 +1513,13 @@ let convert_rules (prog : program) : program =
     IntMap.fold
       (fun id rule prog_targets ->
         let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
+        let target_file =
+          Some (get_target_file (Pos.get_position rule.rule_id))
+        in
         let target =
           {
             target_name = (tname, Pos.no_pos);
+            target_file;
             target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
             target_tmp_vars = StrMap.empty;
             target_prog = rule.rule_instrs;
@@ -1644,6 +1661,7 @@ let complete_rule_domains (prog : program) : program =
           let target =
             {
               target_name = (tname, Pos.no_pos);
+              target_file = None;
               target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
               target_tmp_vars = StrMap.empty;
               target_prog;
@@ -1736,6 +1754,7 @@ let complete_chainings (prog : program) : program =
         let target =
           {
             target_name = (tname, Pos.no_pos);
+            target_file = None;
             target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
             target_tmp_vars = StrMap.empty;
             target_prog;
@@ -1840,6 +1859,9 @@ let convert_verifs (prog : program) : program =
     IntMap.fold
       (fun id verif prog_targets ->
         let tname = Format.sprintf "%s_verif_%d" prog.prog_prefix id in
+        let target_file =
+          Some (get_target_file (Pos.get_position verif.verif_id))
+        in
         let target_prog =
           [
             ( Mast.IfThenElse
@@ -1855,6 +1877,7 @@ let convert_verifs (prog : program) : program =
         let target =
           {
             target_name = (tname, Pos.no_pos);
+            target_file;
             target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
             target_tmp_vars = StrMap.empty;
             target_prog;
@@ -2062,6 +2085,7 @@ let complete_verif_calls (prog : program) : program =
             let target =
               {
                 target_name = (tname, Pos.no_pos);
+                target_file = None;
                 target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
                 target_tmp_vars = StrMap.empty;
                 target_prog;
@@ -2087,6 +2111,7 @@ let complete_verif_calls (prog : program) : program =
             let target =
               {
                 target_name = (tname, Pos.no_pos);
+                target_file = None;
                 target_apps = StrMap.singleton prog.prog_app Pos.no_pos;
                 target_tmp_vars = StrMap.empty;
                 target_prog;

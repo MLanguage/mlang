@@ -123,6 +123,7 @@ let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
 type target_function = {
+  file : string option;
   tmp_vars : (variable * Pos.t * int option) StrMap.t;
   stmts : stmt list;
   is_verif : bool;

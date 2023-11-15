@@ -46,6 +46,7 @@ type chaining = {
 
 type target = {
   target_name : string Pos.marked;
+  target_file : string option;
   target_apps : Pos.t StrMap.t;
   target_tmp_vars : int option Pos.marked StrMap.t;
   target_prog : Mast.instruction Pos.marked list;

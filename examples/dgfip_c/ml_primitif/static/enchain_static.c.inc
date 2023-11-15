@@ -95,15 +95,14 @@ int nb_erreurs_bloquantes(T_irdata *irdata) {
   return irdata->nb_bloquantes;
 }
 
-
 #else
 
-static T_discord *discords = 0;
-static T_discord *tas_discord = 0;
-static T_discord **p_discord = &discords;
-static jmp_buf jmp_bloq;
+T_discord *discords = 0;
+T_discord *tas_discord = 0;
+T_discord **p_discord = &discords;
+jmp_buf jmp_bloq;
 
-static void init_erreur(void)
+void init_erreur(void)
 {
   *p_discord = tas_discord;
   tas_discord = discords;

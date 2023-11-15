@@ -1351,6 +1351,7 @@ let get_targets (error_decls : Mir.Error.t list)
                   in
                   Errors.raise_spanned_error msg pos_item
               | None -> ());
+              let target_file = t.Mast.target_file in
               let target_apps = t.Mast.target_applications in
               List.iter
                 (fun (app, pos) ->
@@ -1421,7 +1422,14 @@ let get_targets (error_decls : Mir.Error.t list)
                   tmp_var_decl_data t.Mast.target_prog
               in
               let target_data =
-                Mir.{ target_name; target_apps; target_tmp_vars; target_prog }
+                Mir.
+                  {
+                    target_name;
+                    target_file;
+                    target_apps;
+                    target_tmp_vars;
+                    target_prog;
+                  }
               in
               ( Mir.TargetMap.add (Pos.unmark target_name) target_data targets,
                 var_data )
@@ -1570,6 +1578,7 @@ let translate (p : Mast.program) : Mir.program =
             Mast.
               {
                 target_name = (tname, Pos.no_pos);
+                target_file = t.Check_validity.target_file;
                 target_applications;
                 target_tmp_vars;
                 target_prog = t.Check_validity.target_prog;

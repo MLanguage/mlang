@@ -28,7 +28,7 @@ SOURCE_DIR_2017:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2017m_6_10/)
 SOURCE_DIR_2018:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2018m_6_7/)
 SOURCE_DIR_2019:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2019m_8_0/)
 SOURCE_DIR_2020:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2020m_6_5/)
-SOURCE_DIR_2022:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2022m22_1/)
+SOURCE_DIR_2022:=$(call source_dir,$(SELF_DIR)/ir-calcul/sources2022m_22_1/)
 
 SOURCE_EXT_DIR_2015:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2015/)
 SOURCE_EXT_DIR_2016:=$(call source_dir_ext,$(SELF_DIR)/mpp_specs/m_ext/2016/)

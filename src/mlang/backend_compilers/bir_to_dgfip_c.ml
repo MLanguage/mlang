@@ -606,6 +606,10 @@ let generate_header (oc : Format.formatter) () : unit =
 #include "var.h"
 
 #ifndef FLG_MULTITHREAD
+extern T_discord *discords;
+extern T_discord *tas_discord;
+extern T_discord **p_discord;
+extern jmp_buf jmp_bloq;
 #define add_erreur(a,b,c) add_erreur(b,c)
 #endif
 
@@ -647,7 +651,7 @@ let generate_var_tmp_decls (oc : Format.formatter)
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     ((f, ret_type) : Bir.function_name * bool) =
-  let { tmp_vars; stmts; is_verif } = Mir.TargetMap.find f program.targets in
+  let { tmp_vars; stmts; is_verif; _ } = Mir.TargetMap.find f program.targets in
   Format.fprintf oc "@[<v 2>%a{@,%a%a%s@]@,}@,"
     (generate_target_protoype false is_verif)
     f generate_var_tmp_decls tmp_vars
@@ -664,13 +668,16 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     else "")
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
-    (oc : Format.formatter) (var_indexes : Dgfip_varid.var_id_map) =
+    (filemap : (out_channel * Format.formatter) StrMap.t)
+    (var_indexes : Dgfip_varid.var_id_map) =
   let targets = Mir.TargetMap.bindings program.Bir.targets in
   List.iter
-    (fun (name, { is_verif; _ }) ->
+    (fun (name, { is_verif; file; _ }) ->
+      let file_str = match file with Some s -> s | None -> "" in
+      let _, fmt = StrMap.find file_str filemap in
       generate_target
         (dgfip_flags : Dgfip_options.flags)
-        program var_indexes oc (name, is_verif))
+        program var_indexes fmt (name, is_verif))
     targets
 
 let generate_targets_signatures (oc : Format.formatter) (program : Bir.program)
@@ -783,7 +790,7 @@ let generate_implem_header oc header_filename =
 |}
     Prelude.message header_filename
 
-let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
+let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
     (_function_spec : Bir_interface.bir_function) (filename : string)
     (vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
@@ -795,17 +802,40 @@ let generate_c_program (dgfip_flags: Dgfip_options.flags) (program : program)
   let header_filename = Filename.remove_extension filename ^ ".h" in
   let _oc = open_out header_filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a@\n@."
-    generate_header ()
-    generate_targets_signatures program
-    generate_mpp_functions_signatures program
-    generate_footer ();
+  Format.fprintf oc "%a%a%a%a@\n@." generate_header ()
+    generate_targets_signatures program generate_mpp_functions_signatures
+    program generate_footer ();
   close_out _oc;
+
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a@\n@."
-    generate_implem_header (Filename.basename header_filename)
-    (generate_rov_functions dgfip_flags program vm) orphan_rovs
-    (generate_targets dgfip_flags program) vm
-    (generate_mpp_functions dgfip_flags program) vm;
-  close_out _oc[@@ocamlformat "disable"]
+  Format.fprintf oc "%a%a%a@\n@." generate_implem_header
+    (Filename.basename header_filename)
+    (generate_rov_functions dgfip_flags program vm)
+    orphan_rovs
+    (generate_mpp_functions dgfip_flags program)
+    vm;
+  let filemap =
+    Mir.TargetMap.fold
+      (fun _ t filemap ->
+        let file_str = match t.Bir.file with Some s -> s | None -> "" in
+        let update = function
+          | Some fmt -> Some fmt
+          | None ->
+              let fn = Filename.concat folder (file_str ^ ".c") in
+              let oc = open_out fn in
+              let fmt = Format.formatter_of_out_channel oc in
+              Format.fprintf fmt "#include \"%s\"\n\n"
+                (Filename.basename header_filename);
+              Some (oc, fmt)
+        in
+        StrMap.update file_str update filemap)
+      program.Bir.targets
+      (StrMap.singleton "" (_oc, oc))
+  in
+  generate_targets dgfip_flags program filemap vm;
+  StrMap.iter
+    (fun _ (oc, fmt) ->
+      Format.fprintf fmt "\n@?";
+      close_out oc)
+    filemap

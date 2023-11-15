@@ -182,6 +182,7 @@ let bir_program_to_oir (p : Bir.program) : Oir.program =
       (fun tf ->
         Oir.
           {
+            file = tf.Bir.file;
             tmp_vars = tf.Bir.tmp_vars;
             cfg = bir_stmts_to_cfg tf.Bir.stmts;
             is_verif = tf.Bir.is_verif;
@@ -295,6 +296,7 @@ let oir_program_to_bir (p : Oir.program) : Bir.program =
       (fun tf ->
         Bir.
           {
+            file = tf.Oir.file;
             tmp_vars = tf.Oir.tmp_vars;
             stmts = cfg_to_bir_stmts tf.Oir.cfg;
             is_verif = tf.Oir.is_verif;

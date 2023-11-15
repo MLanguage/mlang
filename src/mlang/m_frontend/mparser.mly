@@ -394,6 +394,7 @@ target:
   {
     {
       target_name = name;
+      target_file = None;
       target_applications = apps;
       target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
       target_prog = List.rev prog;

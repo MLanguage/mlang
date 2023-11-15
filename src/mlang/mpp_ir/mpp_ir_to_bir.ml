@@ -877,6 +877,7 @@ let create_combined_program (m_program : Mir_interface.full_program)
             Mir.TargetMap.add n
               Bir.
                 {
+                  file = t.Mir.target_file;
                   tmp_vars =
                     StrMap.map
                       (fun (var, pos, size) ->
