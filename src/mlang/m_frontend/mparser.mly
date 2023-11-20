@@ -66,7 +66,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %left OR
 %left AND
 %nonassoc NOT
-%nonassoc SYMBOL
+(* %nonassoc SYMBOL *)
 
 %start source_file
 %start function_spec
@@ -84,26 +84,38 @@ symbol_list_with_pos:
 | sl = with_pos(symbol_with_pos+) { sl }
 
 source_file:
-| i = with_pos(source_file_item) is = source_file { i :: is }
-| EOF { [] }
+| vl = with_pos(symbol_colon_etc)* is = source_file_rev EOF {
+    List.flatten (vl :: List.rev is)
+  }
+
+symbol_colon_etc:
+| v = variable_decl { v }
+| e = error_ { e }
+| fonction { Function }
+
+source_file_rev:
+| is = source_file_rev i = source_file_item { i :: is }
+| { [] }
 
 source_file_item:
-| c = with_pos(var_category_decl) { VarCatDecl c }
-| a = application { Application a }
-| c = chaining { let s, apps = c in Chaining (s, apps) }
-| v = variable_decl { VariableDecl v }
-| r = rule { Rule r }
-| t = target { Target t }
-| ver = verification { Verification ver }
-| e = error_ { Error e }
-| o = output { Output o }
-| fonction { Function }
-| cr = rule_domain_decl { RuleDomDecl cr }
-| cv = verif_domain_decl { VerifDomDecl cv }
+| al = application_etc { al }
+| cl = chaining_etc { cl }
+| cl = var_category_decl_etc { cl }
+| crl = rule_domain_decl_etc { crl }
+| cvl = verif_domain_decl_etc { cvl }
+| ol = output_etc { ol }
+| rl = rule_etc { rl }
+| vl = verification_etc { vl }
+| tl = target_etc { tl }
 
 var_typ:
 | INPUT { Input }
 | COMPUTED { Computed }
+
+var_category_decl_etc:
+| c = with_pos(var_category_decl) l = with_pos(symbol_colon_etc)* {
+    Pos.same_pos_as (VarCatDecl c) c :: l
+  }
 
 var_category_decl:
 | VARIABLE var_type = var_typ var_category = symbol_with_pos* COLON
@@ -111,6 +123,9 @@ var_category_decl:
   SEMICOLON {
     { var_type; var_category; var_attributes }
   }
+
+rule_domain_decl_etc:
+| cr =with_pos(rule_domain_decl) l = with_pos(symbol_colon_etc)* { cr :: l }
 
 rule_domain_decl:
 | DOMAIN RULE rdom_params = separated_nonempty_list(COLON, with_pos(rdom_param))
@@ -138,12 +153,13 @@ rule_domain_decl:
       | None -> err "rule domain names must be defined" (mk_position $sloc)
       | Some dn -> dn
     in
-    {
+    let decl = {
       dom_names;
       dom_parents = (match dso with None -> [] | Some ds -> ds);
       dom_by_default = (match dpdo with None -> false | _ -> true);
       dom_data = {rdom_computable = (match dco with None -> false | _ -> true)};
-    }
+    } in
+    RuleDomDecl decl
   }
 
 rdom_param:
@@ -155,6 +171,9 @@ rdom_param:
   { (None, None, Some (), None) }
 | BY_DEFAULT
   { (None, None, None, Some ()) }
+
+verif_domain_decl_etc:
+| cv = with_pos(verif_domain_decl) l = with_pos(symbol_colon_etc)* { cv :: l }
 
 verif_domain_decl:
 | DOMAIN VERIFICATION vdom_params = separated_nonempty_list(COLON, with_pos(vdom_param))
@@ -189,12 +208,13 @@ verif_domain_decl:
       vdom_auth = (match dvo with None -> [] | Some dv -> dv);
       vdom_verifiable = (match dco with None -> false | _ -> true); 
     } in
-    {
+    let decl = {
       dom_names;
       dom_parents = (match dso with None -> [] | Some ds -> ds);
       dom_by_default = (match dpdo with None -> false | _ -> true);
       dom_data;
-    }
+    } in
+    VerifDomDecl decl
   }
 
 var_comp_category:
@@ -223,22 +243,30 @@ vdom_param:
 fonction:
 | SYMBOL COLON FONCTION SYMBOL SEMICOLON { () }
 
+application_etc:
+| a = with_pos(application) l = with_pos(symbol_colon_etc)* { a :: l }
+
 application:
-| APPLICATION s = with_pos(SYMBOL) SEMICOLON { s }
+| APPLICATION s = with_pos(SYMBOL) SEMICOLON { Application s }
 
 application_reference:
 | APPLICATION COLON ss = symbol_enumeration { ss }
 
+chaining_etc:
+| c = with_pos(chaining) l = with_pos(symbol_colon_etc)* { c :: l }
+
 chaining:
-| CHAINING s = symbol_with_pos aps = application_reference SEMICOLON { (s, aps) }
+| CHAINING s = symbol_with_pos aps = application_reference SEMICOLON {
+    Chaining (s, aps)
+  }
 
 chaining_reference:
 | CHAINING COLON c = with_pos(SYMBOL) SEMICOLON { c }
 
 variable_decl:
-| v = with_pos(comp_variable) { ComputedVar v }
-| cv = const_variable { let n, v = cv in ConstVar (n, v) }
-| v = with_pos(input_variable) { InputVar v }
+| v = with_pos(comp_variable) { VariableDecl (ComputedVar v) }
+| cv = const_variable { let n, v = cv in VariableDecl (ConstVar (n, v)) }
+| v = with_pos(input_variable) { VariableDecl (InputVar v) }
 
 const_variable_name:
 | name = SYMBOL COLON CONST { parse_variable_name $sloc name }
@@ -357,10 +385,10 @@ input_variable:
     }
   }
 
-rule:
+rule_etc:
 | RULE name = symbol_list_with_pos COLON apps = application_reference
   SEMICOLON c = chaining_reference?
-  formulaes = formula_list
+  formulaes_etc = formula_list_etc
   {
     let num, rule_tag_names =
       let uname = Pos.unmark name in
@@ -385,28 +413,32 @@ rule:
           "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
-    {
+    let formulaes, l = formulaes_etc in 
+    let rule = {
       rule_number;
       rule_tag_names;
       rule_applications = apps;
       rule_chaining = c;
       rule_formulaes =  formulaes;
-    }
+    } in
+    Pos.same_pos_as (Rule rule) name :: l
   }
 
-target:
+target_etc:
 | TARGET name = symbol_with_pos COLON
   apps = application_reference SEMICOLON
   tmp_vars = temporary_variables_decl?
-  prog = instruction_list_rev
+  prog_etc = instruction_list_etc
   {
-    {
+    let target_prog, l = prog_etc in
+    let target = {
       target_name = name;
       target_file = None;
       target_applications = apps;
       target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
-      target_prog = List.rev prog;
-    }
+      target_prog;
+    } in
+    Pos.same_pos_as (Target target) name :: l
   }
 
 temporary_variable_name:
@@ -419,6 +451,13 @@ temporary_variables_decl:
 | VARIABLE TEMPORARY COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
     { tmp_vars }
+
+instruction_list_etc:
+| i = with_pos(instruction) l = with_pos(symbol_colon_etc)* { [i], l }
+| i = with_pos(instruction) il_etc = instruction_list_etc {
+    let il, l = il_etc in
+    i :: il, l
+  }
 
 instruction_list_rev:
 | i = with_pos(instruction) { [i] }
@@ -581,9 +620,12 @@ rest_param:
 rest_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
-formula_list:
-| f = with_pos(formula_kind) SEMICOLON { [f] }
-| f = with_pos(formula_kind) SEMICOLON fs = formula_list { f :: fs }
+formula_list_etc:
+| f = with_pos(formula_kind) SEMICOLON l = with_pos(symbol_colon_etc)* { [f], l }
+| f = with_pos(formula_kind) SEMICOLON fs = formula_list_etc {
+    let fl, l = fs in
+    f :: fl, l
+  }
 
 formula_kind:
 | f = formula { SingleFormula f }
@@ -602,6 +644,9 @@ formula:
 | lvalue = with_pos(lvalue) EQUALS formula = with_pos(expression) {
     { lvalue; formula }
   }
+
+verification_etc:
+| v = with_pos(verification) l = with_pos(symbol_colon_etc)* { v :: l }
 
 verification:
 | VERIFICATION name = symbol_list_with_pos
@@ -630,7 +675,13 @@ verification:
           "this verification doesn't have an execution number"
           (Pos.get_position num)
     in
-    { verif_number; verif_tag_names; verif_applications; verif_conditions }
+    let verif = {
+      verif_number;
+      verif_tag_names;
+      verif_applications;
+      verif_conditions
+    } in
+    Verification verif
   }
 
 verification_condition:
@@ -658,13 +709,14 @@ error_:
   COLON s3 = with_pos(error_descr)
   COLON s4 = with_pos(error_descr)
   s5 = error_message? SEMICOLON {
-    {
+    let err = {
       error_name = n;
       error_typ = t;
       error_descr =
         let s5l = match s5 with None -> [] | Some s -> [s] in
         s1 :: s2 :: s3 :: s4 :: s5l;
-    }
+    } in
+    Error err
   }
 
 type_error:
@@ -672,11 +724,15 @@ type_error:
 | DISCORDANCE { Discordance }
 | INFORMATIVE { Information }
 
-output_name:
-| s = SYMBOL { parse_variable_name $sloc s }
+
+output_etc:
+| o = with_pos(output) l = with_pos(symbol_colon_etc)* { o :: l }
 
 output:
-| OUTPUT LPAREN s = with_pos(output_name) RPAREN SEMICOLON { s }
+| OUTPUT LPAREN s = with_pos(output_name) RPAREN SEMICOLON { Output s }
+
+output_name:
+| s = SYMBOL { parse_variable_name $sloc s }
 
 brackets:
 | LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }

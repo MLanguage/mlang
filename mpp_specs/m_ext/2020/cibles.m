@@ -4,8 +4,6 @@ cible calcul_primitif:
 application: iliad;
 calculer domaine primitive;
 
-#TOTOTOTO : calculee primrest = 0 : "prout";
-
 cible calcul_primitif_isf:
 application: iliad;
 calculer domaine isf;
