@@ -218,6 +218,7 @@ application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
+#{
 # primitif ml
 
 cible calcul_prim_corr:
@@ -561,7 +562,7 @@ application: iliad;
 V_IND_TRAIT = 4;
 calculer cible traite_double_liquidation_2;
 
-#{
+
 # obsolète
 
 cible dgfip_calculation:
@@ -582,9 +583,7 @@ V_NEGACO = 0;
 calculer cible calcul_primitif_isf;
 calculer cible calcul_primitif;
 calculer cible calcul_primitif_taux;
-}#
 
-#{
 # debug
 
 cible toto:
