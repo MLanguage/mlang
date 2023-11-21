@@ -33,7 +33,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %}
 
 %token<string> SYMBOL STRING
-%token<char> PARAMETER
 
 %token PLUS MINUS TIMES DIV
 %token GTE LTE GT LT NEQ EQUALS
@@ -745,7 +744,7 @@ loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
 
 loop_variable_value_name:
-| s = PARAMETER { s }
+| s = SYMBOL { parse_parameter $sloc s }
 
 loop_variables_value:
 | s = with_pos(loop_variable_value_name) EQUALS e = enumeration_loop {

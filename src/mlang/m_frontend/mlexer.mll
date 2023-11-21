@@ -22,104 +22,102 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
   let mk_lexbuf_pos lexbuf =
     Parse_utils.mk_position (lexeme_start_p lexbuf, lexeme_end_p lexbuf)
 }
+
 rule token = parse
+| [' ' '\t'] { token lexbuf }
+| '\n' | "\r\n" { new_line lexbuf; token lexbuf}
+| '#' { one_line_comment lexbuf }
 | "#{" { multiline_comment 1 lexbuf }
 | "}#" {
     Errors.raise_spanned_error
       "unexpected end of comment"
       (mk_lexbuf_pos lexbuf)
   }
-| '#' { one_line_comment lexbuf }
-| [' ' '\t'] { token lexbuf }
-| '\n' | "\r\n" { new_line lexbuf; token lexbuf}
-| ".." { RANGE }
-| "un" { ONE }
-| "dans" { IN }
-| '=' { EQUALS }
-| "et" { AND }
-| "ou" { OR }
-| "application" { APPLICATION }
 | ';' { SEMICOLON }
 | ':' { COLON }
 | ',' { COMMA }
-| "enchaineur" { CHAINING }
-| "type" { TYPE }
+| '[' { LBRACKET }
+| ']' { RBRACKET }
+| '(' { LPAREN }
+| ')' { RPAREN }
+| ".." { RANGE }
+| '+' { PLUS }
+| '-' { MINUS }
+| '*' { TIMES }
+| '/' { DIV }
+| '=' { EQUALS }
+| "!=" { NEQ }
+| '>' { GT }
+| '<' { LT }
+| ">=" { GTE }
+| "<=" { LTE }
 | "BOOLEEN" { BOOLEAN }
 | "DATE_AAAA" { DATE_YEAR }
 | "DATE_JJMMAAAA" { DATE_DAY_MONTH_YEAR}
 | "DATE_MM" { DATE_MONTH }
 | "ENTIER" { INTEGER }
 | "REEL" { REAL }
-| "tableau" { TABLE }
-| '[' { LBRACKET }
-| ']' { RBRACKET }
-| "calculee" { COMPUTED }
-| "base" { BASE }
-| "restituee" { GIVEN_BACK }
-| "const" { CONST }
-| "alias" { ALIAS }
-| "saisie" { INPUT }
-| "variable" { VARIABLE }
-| "temporaire" { TEMPORARY }
-| "attribut" { ATTRIBUT }
-| '(' { LPAREN }
-| ')' { RPAREN }
-| "pour" { FOR }
-| '*' { TIMES }
-| '/' { DIV }
-| '+' { PLUS }
-| '-' { MINUS }
-| ">=" { GTE }
-| "<=" { LTE }
-| "!=" { NEQ }
-| '>' { GT }
-| '<' { LT }
-| "non dans" { NOTIN }
-| "non" { NOT }
-| "indefini" { UNDEFINED }
-| "domaine" { DOMAIN }
-| "specialise" { SPECIALIZE }
-| "autorise" { AUTHORIZE }
-| "calculable" { COMPUTABLE }
-| "verifiable" { VERIFIABLE }
-| "par_defaut" { BY_DEFAULT }
-| "regle" { RULE }
-| "cible" { TARGET }
-| "si" { IF }
-| "alors" { THEN }
-| "sinon" { ELSE }
-| "finsi" { ENDIF }
-| "calculer" { COMPUTE }
-| "verifier" { VERIFY }
-| "avec" { WITH }
-| "numero_verif" { VERIF_NUMBER }
-| "numero_compl" { COMPL_NUMBER }
-| "nb_categorie" { NB_CATEGORY }
-| "nb_erreur" { NB_ERROR }
 | "afficher" { PRINT }
 | "afficher_erreur" { PRINT_ERR }
-| "iterer" { ITERATE }
-| "categorie" { CATEGORY }
-| "restaurer" { RESTORE }
-| "apres" { AFTER }
-| "taille" { SIZE }
-| "erreur" { ERROR }
-| "leve_erreur" { RAISE_ERROR }
-| "nettoie_erreurs" { CLEAN_ERRORS }
-| "verif" { VERIFICATION }
-| "condition" { CONDITION }
+| "alias" { ALIAS }
+| "alors" { THEN }
 | "anomalie" { ANOMALY }
+| "application" { APPLICATION }
+| "apres" { AFTER }
+| "attribut" { ATTRIBUT }
+| "autorise" { AUTHORIZE }
+| "avec" { WITH }
+| "base" { BASE }
+| "calculable" { COMPUTABLE }
+| "calculee" { COMPUTED }
+| "calculer" { COMPUTE }
+| "categorie" { CATEGORY }
+| "cible" { TARGET }
+| "condition" { CONDITION }
+| "const" { CONST }
+| "dans" { IN }
 | "discordance" { DISCORDANCE }
-| "informative" { INFORMATIVE }
-| "sortie" { OUTPUT }
+| "domaine" { DOMAIN }
+| "enchaineur" { CHAINING }
+| "erreur" { ERROR }
+| "et" { AND }
+| "finsi" { ENDIF }
 | "fonction" { FONCTION }
+| "indefini" { UNDEFINED }
+| "informative" { INFORMATIVE }
+| "iterer" { ITERATE }
+| "leve_erreur" { RAISE_ERROR }
+| "nb_categorie" { NB_CATEGORY }
+| "nb_erreur" { NB_ERROR }
+| "nettoie_erreurs" { CLEAN_ERRORS }
+| "non" { NOT }
+| "non dans" { NOTIN }
+| "numero_compl" { COMPL_NUMBER }
+| "numero_verif" { VERIF_NUMBER }
+| "ou" { OR }
+| "par_defaut" { BY_DEFAULT }
+| "pour" { FOR }
+| "regle" { RULE }
+| "restaurer" { RESTORE }
+| "restituee" { GIVEN_BACK }
+| "saisie" { INPUT }
+| "si" { IF }
+| "sinon" { ELSE }
+| "sortie" { OUTPUT }
+| "specialise" { SPECIALIZE }
+| "tableau" { TABLE }
+| "taille" { SIZE }
+| "temporaire" { TEMPORARY }
+| "type" { TYPE }
+| "un" { ONE }
+| "variable" { VARIABLE }
+| "verif" { VERIFICATION }
+| "verifiable" { VERIFIABLE }
+| "verifier" { VERIFY }
 | '"' [^'"']* '"' as s { STRING s }
-| ['a'-'z'] as s { PARAMETER s }
-| (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0' - '9']+ '.' ['0' - '9']+) as s {
-    SYMBOL s
-  }
+| (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0'-'9']+ '.' ['0'-'9']+) as s { SYMBOL s }
 | eof { EOF }
-| _ { Errors.raise_spanned_error "M lexer error" (mk_lexbuf_pos lexbuf) }
+| _ { Errors.raise_spanned_error "syntax error" (mk_lexbuf_pos lexbuf) }
 
 and one_line_comment = parse
 | '\n' { new_line lexbuf; token lexbuf }
@@ -134,15 +132,15 @@ and multiline_comment level = parse
     | _ -> multiline_comment (level - 1) lexbuf
   }
 | eof {
-    match level with
-    | 1 -> Errors.raise_error "comment is not closed at end of file"
-    | _ ->
-        let msg =
+    let msg =
+      match level with
+      | 1 -> "comment is not closed at end of file"
+      | _ ->
           Format.sprintf
             "comments are not closed  at end of file (%d levels)"
             level
-        in
-        Errors.raise_error msg
+    in
+    Errors.raise_error msg
   }
 | '\n' { new_line lexbuf; multiline_comment level lexbuf }
 | _ { multiline_comment level lexbuf }

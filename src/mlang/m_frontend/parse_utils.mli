@@ -30,6 +30,8 @@ val parse_variable :
 val parse_variable_name : Lexing.position * Lexing.position -> string -> string
 (** Checks whether the string is entirely capitalized *)
 
+val parse_parameter : Lexing.position * Lexing.position -> string -> char
+
 val parse_string : string -> string
 (** Removes the quotes *)
 

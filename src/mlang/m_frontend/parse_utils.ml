@@ -25,6 +25,15 @@ let parse_variable_name sloc (s : string) : Mast.variable_name =
     E.raise_spanned_error "invalid variable name" (mk_position sloc)
   else s
 
+let parse_parameter sloc (s : string) : char =
+  if String.length s <> 1 then
+    E.raise_spanned_error "invalid parameter" (mk_position sloc)
+  else
+    let p = s.[0] in
+    if p < 'a' || 'z' < p then
+      E.raise_spanned_error "invalid parameter" (mk_position sloc)
+    else p
+
 (** Checks for duplicate generic parameters *)
 let dup_exists l =
   let rec dup_consecutive = function
