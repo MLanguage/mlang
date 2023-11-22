@@ -1,0 +1,46 @@
+(lang dune 2.5)
+
+(name irj_parser)
+
+(generate_opam_files true)
+
+(homepage https://github.com/MLanguage/mlang/tree/IRJ-parser-library)
+
+(bug_reports https://github.com/MLanguage/mlang/issues)
+
+(authors "Mathieu Durero" "Rapha\195\171l Monat")
+
+(maintainers "Mathieu Durero" " Noé Ensarguet")
+
+(license GPL-3.0-or-later)
+
+;(documentation https://url/to/documentation)
+
+(using menhir 2.0)
+
+(package
+ (name irj_parser)
+ (synopsis "Parser for the IRJ tests")
+ (description "This parser is aimed for the tests used by la DGFiP to test the calculation of the French income tax")
+ (depends
+  (ocaml
+   (and(>= "4.11.2")))
+  (dune
+   (and :build))
+  (ANSITerminal
+   (= 0.8.2))
+  (cmdliner
+    (= 1.1.0))
+  (re
+   (= 1.9.0))
+  (ocamlgraph
+   (= 1.8.8))
+  (odoc
+  (= 1.5.3))
+  (dune-build-info
+   (= 2.5.1))
+  (ocamlformat
+   (= 0.19.0))
+  ))
+
+; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project

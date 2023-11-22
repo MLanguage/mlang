@@ -1,5 +1,10 @@
-(ocamllex irj_lexer)
+(env
+ (static
+  (ocamlopt_flags
+   (-O3 -ccopt -static))))
 
-(menhir
- (modules irj_parser)
- (flags --strict --explain))
+(executable
+ (name main)
+ (package irj_parser)
+ (public_name irj_parser.exe)
+ (libraries irj_parser))

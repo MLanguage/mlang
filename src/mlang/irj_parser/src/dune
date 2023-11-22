@@ -1,0 +1,22 @@
+(env
+ (static
+  (ocamlopt_flags
+   (-O3 -ccopt -static))))
+
+(include_subdirs unqualified)
+
+(library
+ (name irj_file)
+ (public_name irj_parser)
+ (wrapped false)
+ (libraries ANSITerminal re dune-build-info threads cmdliner))
+
+(ocamllex irj_lexer)
+
+(menhir
+ (modules irj_parser)
+ (flags --strict --explain))
+
+;(documentation
+; (package irj_parser)
+; (mld_files ("index")))
