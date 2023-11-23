@@ -15,6 +15,12 @@
 
 open Irj_ast
 
+let convert_pos (sloc : Irj_ast.t) : Pos.t =
+  { pos_filename = sloc.pos_filename; pos_loc = sloc.pos_loc }
+
+(* enforces type compatibility (the type t is defined in exactly the same way in
+   Irj_ast and in Pos) *)
+
 let to_ast_literal (value : Irj_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
@@ -43,7 +49,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : irj_file)
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
         let var =
-          find_var_of_name program.mir_program (var, pos)
+          find_var_of_name program.mir_program (var, convert_pos pos)
           |> Bir.(var_from_mir default_tgv)
         in
         let lit =
@@ -65,34 +71,35 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : irj_file)
               two using the line below*)
            let var =
              Pos.unmark
-               (find_var_of_name program.mir_program (var, pos))
+               (find_var_of_name program.mir_program (var, convert_pos pos))
                  .Mir.Variable.name
            in
            (* we allow a difference of 0.000001 between the control value and
               the result *)
            let first_exp =
              ( Mast.Comparison
-                 ( (Lte, pos),
+                 ( (Lte, convert_pos pos),
                    ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
-                     pos ),
-                   (Literal (Float test_error_margin), pos) ),
-               pos )
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
            in
            let second_exp =
              ( Mast.Comparison
-                 ( (Lte, pos),
+                 ( (Lte, convert_pos pos),
                    ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (to_ast_literal value), pos),
-                         (Literal (Variable (Normal var)), pos) ),
-                     pos ),
-                   (Literal (Float test_error_margin), pos) ),
-               pos )
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
            in
-           (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
+           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
+             convert_pos pos ))
          t.prim.resultats_attendus)
   in
   ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds },

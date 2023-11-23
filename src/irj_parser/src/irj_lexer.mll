@@ -17,6 +17,12 @@
 {
 open Lexing
 open Irj_parser
+open Irj_ast
+
+let error lb msg =
+  raise (StructuredError ("Lexing error : " ^ msg,
+                          [ (None, mk_position (Lexing.lexeme_start_p lb, Lexing.lexeme_end_p lb)) ],
+                          None))
 
 module StrMap = Map.Make (String)
 
@@ -39,11 +45,6 @@ let keywords =
     "#AVIS_IR",             AVISIR;
     "#AVIS_CSG",            AVISCSG;
   ]
-
-let error lb msg =
-  Errors.raise_spanned_error ("Lexing error : " ^ msg)
-    (Parse_utils.mk_position (Lexing.lexeme_start_p lb,
-                              Lexing.lexeme_end_p lb))
 
 let is_bol lb =
   (* bol = beginning of line *)

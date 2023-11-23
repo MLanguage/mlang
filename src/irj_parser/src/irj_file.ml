@@ -27,13 +27,16 @@ let parse_file (test_name : string) : irj_file =
   in
   let f =
     try Irj_parser.irj_file Irj_lexer.token filebuf with
-    | Errors.StructuredError e ->
+    | StructuredError e ->
         close_in input;
-        raise (Errors.StructuredError e)
+        raise (StructuredError e)
     | Irj_parser.Error ->
         close_in input;
-        Errors.raise_spanned_error "Test syntax error"
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
+        raise
+          (StructuredError
+             ( "Test syntax error",
+               [ (None, mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)) ],
+               None ))
   in
   close_in input;
   f

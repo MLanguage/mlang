@@ -16,10 +16,9 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 %{ open Irj_ast
-   
+
   let error (sp, ep) msg =
-  Errors.raise_spanned_error ("Parse error : " ^ msg)
-    (Parse_utils.mk_position (sp, ep))
+    raise (StructuredError ("Parse error : " ^ msg, [ (None, mk_position (sp, ep)) ], None))
 
 %}
 
@@ -98,11 +97,11 @@ rappels:
 | ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL DATES? AVISIR? AVISCSG? { None }
 
 variable_and_value:
-| var = SYMBOL SLASH value = value NL { (var, value, Parse_utils.mk_position $sloc) }
+| var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
 | SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
 calc_error:
-  error = SYMBOL NL { (error, Parse_utils.mk_position $sloc) }
+  error = SYMBOL NL { (error, mk_position $sloc) }
 
 rappel:
   event_nb = integer SLASH
@@ -129,7 +128,7 @@ rappel:
      base_tolerance_legale;
      month_year;
      decl_2042_rect; 
-     pos = Parse_utils.mk_position $sloc }
+     pos = mk_position $sloc }
   }
 
 integer:
