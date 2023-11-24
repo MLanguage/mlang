@@ -1,0 +1,6 @@
+compute_toto():
+  ART1731BIS = 0
+  if CMAJ == 8 or CMAJ == 11:
+    ART1731BIS = 1
+    PREM8_11 = 1
+
