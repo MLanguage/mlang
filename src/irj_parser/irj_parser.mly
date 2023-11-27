@@ -18,8 +18,7 @@
 %{ open Irj_ast
 
   let error (sp, ep) msg =
-    raise (StructuredError ("Parse error : " ^ msg, [ (None, mk_position (sp, ep)) ], None))
-
+    raise (TestParsingError ("Parse error : " ^ msg, mk_position (sp, ep)))
 %}
 
 %token<string> SYMBOL NAME

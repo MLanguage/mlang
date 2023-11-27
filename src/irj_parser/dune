@@ -3,8 +3,12 @@
   (ocamlopt_flags
    (-O3 -ccopt -static))))
 
-(executable
- (name main)
- (package irj_parser)
- (public_name irj_parser.exe)
- (libraries irj_parser))
+(library
+ (name irj_include)
+ (public_name irj_parser))
+
+(ocamllex irj_lexer)
+
+(menhir
+ (modules irj_parser)
+ (flags --strict --explain))

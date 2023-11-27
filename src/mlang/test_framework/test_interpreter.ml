@@ -13,13 +13,13 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Irj_ast
+open Irj_include
 
-let convert_pos (sloc : Irj_ast.t) : Pos.t =
-  { pos_filename = sloc.pos_filename; pos_loc = sloc.pos_loc }
+let convert_pos (pos : Irj_ast.pos) =
+  Pos.make_position pos.pos_filename pos.pos_loc
 
-(* enforces type compatibility (the type t is defined in exactly the same way in
-   Irj_ast and in Pos) *)
+(* enforces type compatibility (the type Irj_ast.pos is defined in exactly the
+   same way as Pos.t) *)
 
 let to_ast_literal (value : Irj_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
@@ -42,7 +42,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : irj_file)
+let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
     (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
@@ -53,7 +53,9 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : irj_file)
           |> Bir.(var_from_mir default_tgv)
         in
         let lit =
-          match value with I i -> Mir.Float (float_of_int i) | F f -> Float f
+          match value with
+          | Irj_ast.I i -> Mir.Float (float_of_int i)
+          | F f -> Float f
         in
         (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
       (Bir.VariableMap.empty, Bir.VariableMap.empty)

@@ -18,9 +18,7 @@
 
 (** {2 Source code position} *)
 
-type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
-(* opened this type. Not very satisfactory but necessary to enforce the
-   compatibility of this type t and that of the module Irj_parser *)
+type t
 
 val make_position : string -> Lexing.position * Lexing.position -> t
 
