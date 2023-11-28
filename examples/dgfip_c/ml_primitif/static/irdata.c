@@ -1,10 +1,10 @@
 
-#include "conf.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+
+#include "irdata.h"
 #include "var.h"
 
 #define FALSE 0

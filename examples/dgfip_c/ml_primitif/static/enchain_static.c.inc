@@ -1,12 +1,12 @@
 
-#include "conf.h"
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
 #include <math.h>
 #include <limits.h>
+
+#include "mlang.h"
 #include "var.h"
 
 extern FILE * fd_trace_dialog;
@@ -110,7 +110,7 @@ void init_erreur(void)
   p_discord = &discords;
 }
 
-void add_erreur(T_erreur *erreur, char *code)
+void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code)
 {
   T_discord *new_discord = NULL;
 
@@ -168,8 +168,6 @@ int nb_erreurs_bloquantes(T_irdata *irdata) {
 }
 
 #endif /* FLG_MULTITHREAD */
-
-
 
 #ifdef FLG_TRACE
 
@@ -315,7 +313,7 @@ T_discord * err_NEGATIF(T_irdata *irdata)
   if (setjmp(jmp_bloq) != 0) {
     return discords;
   }
-  add_erreur(&erreur_A000, NULL);
+  add_erreur(irdata, &erreur_A000, NULL);
   return discords;
 #endif /* FLG_MULTITHREAD */
 }

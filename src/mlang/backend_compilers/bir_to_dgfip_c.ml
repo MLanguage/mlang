@@ -591,34 +591,6 @@ let generate_rov_functions (dgfip_flags : Dgfip_options.flags)
     oc rovs;
   Format.fprintf oc "@]"
 
-let generate_header (oc : Format.formatter) () : unit =
-  Format.fprintf oc
-    {|
-/* %s */
-
-#ifndef IR_HEADER_
-#define IR_HEADER_
-
-#include <stdio.h>
-
-#include "irdata.h"
-#include "const.h"
-#include "var.h"
-
-#ifndef FLG_MULTITHREAD
-extern T_discord *discords;
-extern T_discord *tas_discord;
-extern T_discord **p_discord;
-extern jmp_buf jmp_bloq;
-#define add_erreur(a,b,c) add_erreur(b,c)
-#endif
-
-|}
-    Prelude.message
-
-let generate_footer (oc : Format.formatter) () : unit =
-  Format.fprintf oc "\n#endif /* IR_HEADER_ */"
-
 let generate_target_protoype (add_semicolon : bool) (return_type : bool)
     (oc : Format.formatter) (function_name : string) =
   let ret_type = if return_type then "struct S_discord *" else "void" in
@@ -680,14 +652,6 @@ let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
         program var_indexes fmt (name, is_verif))
     targets
 
-let generate_targets_signatures (oc : Format.formatter) (program : Bir.program)
-    =
-  let targets = Mir.TargetMap.bindings program.Bir.targets in
-  Format.fprintf oc "@[<v 0>%a@]@,"
-    (Format.pp_print_list (fun ppf (name, { is_verif; _ }) ->
-         generate_target_protoype true is_verif ppf name))
-    targets
-
 let generate_mpp_function_protoype (add_semicolon : bool) (return_type : bool)
     (oc : Format.formatter) (function_name : Bir.function_name) =
   let ret_type = if return_type then "struct S_discord *" else "void" in
@@ -724,14 +688,6 @@ let generate_mpp_functions (dgfip_flags : Dgfip_options.flags)
       generate_mpp_function
         (dgfip_flags : Dgfip_options.flags)
         program var_indexes oc (fname, mppf_is_verif))
-    funcs
-
-let generate_mpp_functions_signatures (oc : Format.formatter)
-    (program : Bir.program) =
-  let funcs = Bir.FunctionMap.bindings program.Bir.mpp_functions in
-  Format.fprintf oc "@[<v 0>%a@]@,"
-    (Format.pp_print_list (fun ppf (func, { mppf_is_verif; _ }) ->
-         generate_mpp_function_protoype true mppf_is_verif ppf func))
     funcs
 
 let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
@@ -776,7 +732,7 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
         orphan)
     filemap []
 
-let generate_implem_header oc header_filename =
+let generate_implem_header oc msg =
   Format.fprintf oc
     {|
 /* %s */
@@ -784,11 +740,11 @@ let generate_implem_header oc header_filename =
 #include <string.h>
 #include "enchain_static.c.inc"
 
-#include "%s"
+#include "mlang.h"
 
 
 |}
-    Prelude.message header_filename
+    msg
 
 let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
     (_function_spec : Bir_interface.bir_function) (filename : string)
@@ -799,18 +755,9 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
          filename);
   let folder = Filename.dirname filename in
   let orphan_rovs = generate_rovs_files dgfip_flags program folder vm in
-  let header_filename = Filename.remove_extension filename ^ ".h" in
-  let _oc = open_out header_filename in
-  let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a%a@\n@." generate_header ()
-    generate_targets_signatures program generate_mpp_functions_signatures
-    program generate_footer ();
-  close_out _oc;
-
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  Format.fprintf oc "%a%a%a@\n@." generate_implem_header
-    (Filename.basename header_filename)
+  Format.fprintf oc "%a%a%a@\n@." generate_implem_header Prelude.message
     (generate_rov_functions dgfip_flags program vm)
     orphan_rovs
     (generate_mpp_functions dgfip_flags program)
@@ -825,8 +772,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
               let fn = Filename.concat folder (file_str ^ ".c") in
               let oc = open_out fn in
               let fmt = Format.formatter_of_out_channel oc in
-              Format.fprintf fmt "#include \"%s\"\n\n"
-                (Filename.basename header_filename);
+              Format.fprintf fmt "#include \"mlang.h\"\n\n";
               Some (oc, fmt)
         in
         StrMap.update file_str update filemap)

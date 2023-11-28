@@ -2,14 +2,14 @@
 #ifndef _STRUCT_H_
 #define _STRUCT_H_
 
-#include "conf.h"
+#include "mlang.h"
 
 typedef struct S_desc_contexte
 {
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
   int priorite;
   int categorie_TL;
@@ -22,7 +22,7 @@ typedef struct S_desc_famille
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
   int priorite;
   int categorie_TL;
@@ -36,7 +36,7 @@ typedef struct S_desc_revenu
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
   int priorite;
   int categorie_TL;
@@ -58,7 +58,7 @@ typedef struct S_desc_revenu_correc
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
   int priorite;
   int categorie_TL;
@@ -79,7 +79,7 @@ typedef struct S_desc_variation
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
 } T_desc_variation;
 
@@ -88,7 +88,7 @@ typedef struct S_desc_penalite
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
 } T_desc_penalite;
 
 typedef struct S_desc_restituee
@@ -111,7 +111,7 @@ typedef struct S_desc_debug
   char *nom;
   int indice;
   long type_donnee;
-  T_discord * (*verif)(T_irdata *);
+  T_discord *(*verif)(T_irdata *);
   int classe;
   int priorite;
   int categorie_TL;
@@ -138,19 +138,19 @@ typedef struct S_desc_err
 typedef struct S_desc_call
 {
   int num;
-  int (*proc)(T_irdata *irdata);
+  T_discord *(*proc)(T_irdata *irdata);
 } T_desc_call;
 
 typedef struct S_desc_ench
 {
   char *nom;
-  void (*proc)(T_irdata *irdata);
+  T_discord *(*proc)(T_irdata *irdata);
 } T_desc_ench;
 
 typedef struct S_desc_verif
 {
   int num;
-  void (*proc)(T_irdata *irdata);
+  T_discord *(*proc)(T_irdata *irdata);
 } T_desc_verif;
 
 extern T_desc_contexte desc_contexte[];

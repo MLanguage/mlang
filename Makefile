@@ -63,6 +63,9 @@ build-static: build
 dgfip_c_backend: build
 	$(MAKE) -C examples/dgfip_c/ml_primitif calc/enchain.c
 
+compile_dgfip_c_backend: dgfip_c_backend
+	$(MAKE) -C examples/dgfip_c/ml_primitif cal
+
 ##################################################
 # Testing the compiler
 ##################################################
