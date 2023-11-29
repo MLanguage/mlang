@@ -13,31 +13,15 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Test_ast
+open Irj_include
 
-let parse_file (test_name : string) : test_file =
-  let input = open_in test_name in
-  let filebuf = Lexing.from_channel input in
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
-    }
-  in
-  let f =
-    try Test_parser.test_file Test_lexer.token filebuf with
-    | Errors.StructuredError e ->
-        close_in input;
-        raise (Errors.StructuredError e)
-    | Test_parser.Error ->
-        close_in input;
-        Errors.raise_spanned_error "Test syntax error"
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
-  in
-  close_in input;
-  f
+let convert_pos (pos : Irj_ast.pos) =
+  Pos.make_position pos.pos_filename pos.pos_loc
 
-let to_ast_literal (value : Test_ast.literal) : Mast.literal =
+(* enforces type compatibility (the type Irj_ast.pos is defined in exactly the
+   same way as Pos.t) *)
+
+let to_ast_literal (value : Irj_ast.literal) : Mast.literal =
   match value with I i -> Float (float_of_int i) | F f -> Float f
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
@@ -58,22 +42,24 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
+let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
     (test_error_margin : float) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
         let var =
-          find_var_of_name program.mir_program (var, pos)
+          find_var_of_name program.mir_program (var, convert_pos pos)
           |> Bir.(var_from_mir default_tgv)
         in
         let lit =
-          match value with I i -> Mir.Float (float_of_int i) | F f -> Float f
+          match value with
+          | Irj_ast.I i -> Mir.Float (float_of_int i)
+          | F f -> Float f
         in
         (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
       (Bir.VariableMap.empty, Bir.VariableMap.empty)
-      t.ep
+      t.prim.entrees
   in
   let func_constant_inputs = Bir.VariableMap.empty in
   let func_outputs = Bir.VariableMap.empty in
@@ -88,35 +74,36 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : test_file)
               two using the line below*)
            let var =
              Pos.unmark
-               (find_var_of_name program.mir_program (var, pos))
+               (find_var_of_name program.mir_program (var, convert_pos pos))
                  .Mir.Variable.name
            in
            (* we allow a difference of 0.000001 between the control value and
               the result *)
            let first_exp =
              ( Mast.Comparison
-                 ( (Lte, pos),
+                 ( (Lte, convert_pos pos),
                    ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (Variable (Normal var)), pos),
-                         (Literal (to_ast_literal value), pos) ),
-                     pos ),
-                   (Literal (Float test_error_margin), pos) ),
-               pos )
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
            in
            let second_exp =
              ( Mast.Comparison
-                 ( (Lte, pos),
+                 ( (Lte, convert_pos pos),
                    ( Mast.Binop
-                       ( (Mast.Sub, pos),
-                         (Literal (to_ast_literal value), pos),
-                         (Literal (Variable (Normal var)), pos) ),
-                     pos ),
-                   (Literal (Float test_error_margin), pos) ),
-               pos )
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
            in
-           (Mast.Binop ((Mast.And, pos), first_exp, second_exp), pos))
-         t.rp)
+           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
+             convert_pos pos ))
+         t.prim.resultats_attendus)
   in
   ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds },
     input_file )
@@ -126,7 +113,7 @@ let check_test (combined_program : Bir.program) (test_name : string)
     (round_ops : Cli.round_ops) (test_error_margin : float) :
     Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
-  let t = parse_file test_name in
+  let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
   let f, input_file =
     to_MIR_function_and_inputs combined_program t test_error_margin

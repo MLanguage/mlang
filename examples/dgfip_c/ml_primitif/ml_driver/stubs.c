@@ -61,6 +61,7 @@ static ench_t enchaineurs[] = {
   { "calcul_primitif_taux", calcul_primitif_taux },
   { "calcul_correctif", calcul_correctif },
 
+  { "sauve_base_primitive_penalisee", sauve_base_primitive_penalisee },
   { "sauve_base_initial", sauve_base_initial },
   { "sauve_base_1728", sauve_base_1728 },
   { "sauve_base_anterieure_cor", sauve_base_anterieure_cor },

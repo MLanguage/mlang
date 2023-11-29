@@ -1,0 +1,14 @@
+(env
+ (static
+  (ocamlopt_flags
+   (-O3 -ccopt -static))))
+
+(library
+ (name irj_include)
+ (public_name irj_parser))
+
+(ocamllex irj_lexer)
+
+(menhir
+ (modules irj_parser)
+ (flags --strict --explain))

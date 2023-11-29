@@ -51,3 +51,17 @@
    (= 0.19.0))
   (parmap
     (= 1.2.3))))
+
+(package
+ (name irj_parser)
+ (synopsis "Parser for the IRJ tests")
+ (description "This parser is aimed for the tests used by la DGFiP to test the calculation of the French income tax")
+ (depends
+  (ocaml
+   (and(>= "4.11.2")))
+  (dune
+   (and :build))
+  (odoc
+  (= 1.5.3))
+  (ocamlformat
+   (= 0.19.0))))

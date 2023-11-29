@@ -17,6 +17,7 @@ let calcul_primitif_isf tgv = exec_ench "calcul_primitif_isf" tgv
 let calcul_primitif_taux tgv = exec_ench "calcul_primitif_taux" tgv
 let calcul_correctif tgv = exec_ench "calcul_correctif" tgv
 
+let sauve_base_primitive_penalisee tgv = exec_ench "sauve_base_primitive_penalisee" tgv
 let sauve_base_initial tgv = exec_ench "sauve_base_initial" tgv
 let sauve_base_1728 tgv = exec_ench "sauve_base_1728" tgv
 let sauve_base_anterieure_cor tgv = exec_ench "sauve_base_anterieure_cor" tgv
