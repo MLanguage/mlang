@@ -957,68 +957,26 @@ let add_var_def (var_data : Mir.variable_data Mir.VariableMap.t)
   let vdata = create_var_def var_lvalue var_expr def_kind var_decl_data idmap in
   Mir.VariableMap.add var_lvalue vdata var_data
 
-let get_rule_chains (domains : Mir.rule_domain Mast.DomainIdMap.t)
-    (p : Mast.program) : Mir.rule_domain Mast.ChainingMap.t =
-  let fold_rules chains marked_item =
-    match Pos.unmark marked_item with
-    | Mast.Rule r when r.rule_chaining <> None ->
-        let ch_name, ch_pos = Option.get r.rule_chaining in
-        let rule_domain =
-          let dom_id =
-            Mast.DomainId.from_marked_list (Pos.unmark r.rule_tag_names)
-          in
-          Mast.DomainIdMap.find dom_id domains
-        in
-        let ch_dom =
-          match Mast.ChainingMap.find_opt ch_name chains with
-          | Some dom -> dom
-          | None -> rule_domain
-        in
-        let rdom_is_min =
-          Mast.DomainIdSet.mem (Pos.unmark rule_domain.dom_id) ch_dom.dom_min
-        in
-        let rdom_is_max =
-          Mast.DomainIdSet.mem (Pos.unmark rule_domain.dom_id) ch_dom.dom_max
-        in
-        let rdom_is_eq = rule_domain.dom_id = ch_dom.dom_id in
-        if rdom_is_min || rdom_is_max || rdom_is_eq then
-          if not rdom_is_min then
-            Mast.ChainingMap.add ch_name rule_domain chains
-          else chains
-        else
-          let msg = "chaining incompatible with rule domain" in
-          Errors.raise_spanned_error msg ch_pos
-    | _ -> chains
-  in
-  let fold_sources chains source = List.fold_left fold_rules chains source in
-  List.fold_left fold_sources Mast.ChainingMap.empty p
-
 (** Main translation pass that deal with regular variable definition; returns a
     map whose keys are the variables being defined (with the execution number
     corresponding to the place where it is defined) and whose values are the
     expressions corresponding to the definitions. *)
-let get_rules_and_var_data (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+let get_var_data_from_rules (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     (idmap : Mir.idmap) (var_decl_data : var_decl_data Mir.VariableMap.t)
-    (p : Mast.program) :
-    (Mir.Variable.t Pos.marked list
-    * Mir.rov_id Pos.marked
-    * string Pos.marked list Pos.marked
-    * Mast.chaining Pos.marked option)
-    Mir.RuleMap.t
-    * Mir.variable_data Mir.VariableMap.t =
+    (p : Mast.program) : Mir.variable_data Mir.VariableMap.t =
   List.fold_left
-    (fun (rule_data, var_data) source_file ->
+    (fun var_data source_file ->
       List.fold_left
-        (fun (rule_data, var_data) source_file_item ->
+        (fun var_data source_file_item ->
           match Pos.unmark source_file_item with
           | Mast.Rule r ->
               let rule_number = Pos.unmark r.Mast.rule_number in
               if not (belongs_to_iliad_app r.Mast.rule_applications) then
-                (rule_data, var_data)
+                var_data
               else
-                let rule_vars, var_data, _ =
+                let var_data, _ =
                   List.fold_left
-                    (fun (rule_vars, var_data, seq_number) formula ->
+                    (fun (var_data, seq_number) formula ->
                       let ctx =
                         {
                           idmap;
@@ -1036,9 +994,6 @@ let get_rules_and_var_data (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                           let ctx, var_lvalue, def_kind =
                             translate_lvalue ctx f.Mast.lvalue
                           in
-                          let rule_vars =
-                            (var_lvalue, Pos.get_position formula) :: rule_vars
-                          in
                           let var_expr =
                             translate_expression cats idmap ctx f.Mast.formula
                           in
@@ -1046,25 +1001,14 @@ let get_rules_and_var_data (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                             add_var_def var_data var_lvalue var_expr def_kind
                               var_decl_data idmap
                           in
-                          (rule_vars, var_data, seq_number + 1)
+                          (var_data, seq_number + 1)
                       | Mast.MultipleFormulaes _ -> assert false)
-                    ([], var_data, 0) r.Mast.rule_formulaes
+                    (var_data, 0) r.Mast.rule_formulaes
                 in
-                let rule_number =
-                  Pos.map_under_mark (fun n -> Mir.RuleID n) r.rule_number
-                in
-                let rule =
-                  ( List.rev rule_vars,
-                    rule_number,
-                    r.rule_tag_names,
-                    r.rule_chaining )
-                in
-                ( Mir.RuleMap.add (Pos.unmark rule_number) rule rule_data,
-                  var_data )
-          | _ -> (rule_data, var_data))
-        (rule_data, var_data) source_file)
-    (Mir.RuleMap.empty, Mir.VariableMap.empty)
-    (List.rev p)
+                var_data
+          | _ -> var_data)
+        var_data source_file)
+    Mir.VariableMap.empty (List.rev p)
 
 (** At this point [var_data] contains the definition data for all the times a
     variable is defined. However the M language deals with undefined variable,
@@ -1589,7 +1533,6 @@ let translate (p : Mast.program) : Mir.program =
     in
     [ targets ]
   in
-  ignore prog_targets;
   let apps = prog.Check_validity.prog_apps in
   let var_category_decls = get_var_categories p in
   let var_category_map = prog.Check_validity.prog_var_cats in
@@ -1597,82 +1540,29 @@ let translate (p : Mast.program) : Mir.program =
     get_variables_decl p var_category_decls
   in
   let idmap = get_var_redefinitions p idmap in
-  let rule_domains = prog.Check_validity.prog_rdoms in
-  let _rule_domain_by_default =
-    Mast.DomainIdMap.find Mast.DomainId.empty rule_domains
-  in
-  let rule_chains = get_rule_chains rule_domains p in
-  let rule_data, var_data =
-    get_rules_and_var_data var_category_map idmap var_decl_data p
+  let var_data =
+    get_var_data_from_rules var_category_map idmap var_decl_data p
   in
   let var_data =
     add_dummy_definitions_for_variable_declarations var_data var_decl_data idmap
   in
-  let _rules, rule_vars =
-    Mir.RuleMap.fold
-      (fun rule_id (rule_vars, rule_number, rule_tag_names, rule_chaining)
-           (rules, vars) ->
-        let domain_id =
-          Mast.DomainId.from_marked_list (Pos.unmark rule_tag_names)
-        in
-        let rule_domain =
-          match Mast.DomainIdMap.find_opt domain_id rule_domains with
-          | Some domain -> domain
-          | None ->
-              Errors.raise_spanned_error "unknown rule domain"
-                (Pos.get_position rule_tag_names)
-        in
-        let rule_chain =
-          match rule_chaining with
-          | None -> None
-          | Some mch ->
-              let ch_name = Pos.unmark mch in
-              Some (ch_name, Mast.ChainingMap.find ch_name rule_chains)
-        in
-        let rule_vars, vars =
-          List.fold_left
-            (fun (rule_vars, vars) (var, pos) ->
-              ( ( Mir.Affectation
-                    (var.Mir.Variable.id, Mir.VariableMap.find var var_data),
-                  pos )
-                :: rule_vars,
-                Mir.VariableDict.add var vars ))
-            ([], vars) (List.rev rule_vars)
-        in
-        let rule_apps = StrMap.empty in
-        let rule_data =
-          Mir.{ rule_domain; rule_chain; rule_vars; rule_number; rule_apps }
-        in
-        (Mir.RuleMap.add rule_id rule_data rules, vars))
-      rule_data
-      (Mir.RuleMap.empty, Mir.VariableDict.empty)
-  in
-  let var_data, _orphans =
+  let var_data =
     Mir.VariableMap.fold
-      (fun var data (var_dict, orphans) ->
-        let orphans =
-          if Mir.VariableDict.mem var rule_vars then orphans
-          else
-            (Mir.Affectation (var.Mir.Variable.id, data), Pos.no_pos) :: orphans
-        in
-        (Mir.VariableDict.add var var_dict, orphans))
-      var_data
-      (Mir.VariableDict.empty, [])
+      (fun var _data var_dict -> Mir.VariableDict.add var var_dict)
+      var_data Mir.VariableDict.empty
   in
   let targets, var_data =
     get_targets error_decls var_category_map apps var_data idmap var_decl_data
       prog_targets
   in
-  let verif_domains = prog.Check_validity.prog_vdoms in
-  let _conds = get_conds verif_domains var_category_map error_decls idmap p in
   Mir.
     {
       program_safe_prefix = prog.prog_prefix;
       program_applications = apps;
       program_var_categories = var_category_map;
-      program_rule_domains = rule_domains;
-      program_verif_domains = verif_domains;
-      program_chainings = rule_chains;
+      program_rule_domains = prog.Check_validity.prog_rdoms;
+      program_verif_domains = prog.Check_validity.prog_vdoms;
+      program_chainings = Mast.ChainingMap.empty;
       program_vars = var_data;
       program_rules = Mir.RuleMap.empty;
       program_targets = targets;
