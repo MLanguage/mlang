@@ -91,9 +91,6 @@ domaine regle taux
 
 domaine regle modul;
 
-domaine regle corrective base_primitive_penalisee
-: calculable;
-
 domaine regle corrective base_anterieure_cor
 : calculable;
 

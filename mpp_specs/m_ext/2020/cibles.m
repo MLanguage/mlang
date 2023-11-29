@@ -136,6 +136,10 @@ cible sauve_base_HR:
 application: iliad;
 calculer domaine base_HR corrective;
 
+cible sauve_base_primitive_penalisee:
+application: iliad;
+calculer domaine base_primitive_penalisee corrective;
+
 cible ENCH_TL:
 application: iliad;
 calculer enchaineur ENCH_TL;
