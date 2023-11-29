@@ -7,19 +7,6 @@
 #include "irdata.h"
 #include "var.h"
 
-#define FALSE 0
-#define TRUE 1
-
-struct S_desc_var
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord * (*verif)(T_irdata *);
-};
-
-typedef struct S_desc_var T_desc_var;
-
 void env_sauvegarder_un(T_env_sauvegarde *liste, char *oDef, double *oVal) {
   T_env_sauvegarde nouveau = (T_env_sauvegarde)malloc(sizeof (struct S_env_sauvegarde));
   nouveau->sauv_def = *oDef;
@@ -197,34 +184,6 @@ void IRDATA_reset_erreur(T_irdata *irdata)
 #endif /* FLG_MULTITHREAD */
 }
 
-T_discord * IRDATA_range(T_irdata *irdata, T_var_irdata p_desc, double valeur)
-{
-  T_desc_var *desc = (T_desc_var *)p_desc;
-  int indice = 0;
-  T_discord *discord = NULL;
-  if (valeur < 0) {
-    discord = err_NEGATIF(irdata);
-  } else {
-    discord = (*desc->verif)(irdata);
-  }
-  if ((discord != NULL) && (discord->erreur->type == ANOMALIE)) {
-    return discord;
-  }
-#ifdef FLG_COMPACT
-  indice = desc->indice;
-  irdata->valeurs[indice] = valeur;
-  irdata->defs[indice] = 1;
-#else
-  indice = desc->indice & INDICE_VAL;
-  if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
-    return (0);
-  }
-  irdata->saisie[indice] = valeur;
-  irdata->def_saisie[indice] = 1;
-#endif /* FLG_COMPACT */
-  return discord;
-}
-
 void IRDATA_range_base(T_irdata *irdata, T_var_irdata p_desc, double valeur)
 {
   T_desc_var *desc = (T_desc_var *)p_desc;
@@ -251,39 +210,6 @@ void IRDATA_range_base(T_irdata *irdata, T_var_irdata p_desc, double valeur)
 #endif /* FLG_COMPACT */
 }
 
-struct S_discord * IRDATA_range_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind, double valeur)
-{
-  T_desc_var *desc = (T_desc_var *)p_desc;
-  int indice = 0;
-  T_discord *discord = NULL;
-  discord = (*desc->verif)(irdata);
-  if ((discord != NULL) && (discord->erreur->type == ANOMALIE)) {
-    return discord;
-  }
-#ifdef FLG_COMPACT
-  indice = desc->indice + ind;
-  irdata->defs[indice] = 1;
-  irdata->valeurs[indice] = valeur;
-#else
-  indice = (desc->indice & INDICE_VAL) + ind;
-  switch (desc->indice & EST_MASQUE) {
-    case EST_SAISIE:
-      irdata->def_saisie[indice] = 1;
-      irdata->saisie[indice] = valeur;
-      break;
-    case EST_CALCULEE:
-      irdata->def_calculee[indice] = 1;
-      irdata->calculee[indice] = valeur;
-      break;
-    case EST_BASE:
-      irdata->def_base[indice] = 1;
-      irdata->base[indice] = valeur;
-      break;
-  }
-#endif /* FLG_COMPACT */
-  return discord;
-}
-
 void IRDATA_efface(T_irdata *irdata, T_var_irdata p_desc)
 {
   T_desc_var *desc = (T_desc_var *)p_desc;
@@ -294,25 +220,6 @@ void IRDATA_efface(T_irdata *irdata, T_var_irdata p_desc)
   irdata->defs[indice] = 0;
 #else
   indice = desc->indice & INDICE_VAL;
-  if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
-    return;
-  }
-  irdata->saisie[indice] = 0;
-  irdata->def_saisie[indice] = 0;
-#endif /* FLG_COMPACT */
-  return;
-}
-
-void IRDATA_efface_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
-{
-  T_desc_var *desc = (T_desc_var *)p_desc;
-  int indice = 0;
-#ifdef FLG_COMPACT
-  indice = desc->indice + ind;
-  irdata->valeurs[indice] = 0;
-  irdata->defs[indice] = 0;
-#else
-  indice = (desc->indice & INDICE_VAL) + ind;
   if ((desc->indice & EST_MASQUE) != EST_SAISIE) {
     return;
   }
@@ -374,42 +281,6 @@ double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
   }
 #endif /* FLG_COMPACT */
   return res;
-}
-
-static T_var_irdata cherche_desc_var(const char *nom, T_var_irdata table, int taille, int sup)
-{
-  T_desc_var *desc = NULL;
-  int res = -1, inf = 0, millieu;
-  while ((res != 0) && (inf < sup)) {
-    millieu = (inf + sup) / 2;
-    desc = (T_desc_var *)((char *)table + (taille * millieu));
-    res = strcmp(nom, desc->nom);
-    if (res < 0) sup = millieu;
-    else if (res > 0) inf = millieu + 1;
-  }
-  if (res == 0)
-    return (T_var_irdata)desc;
-  else
-    return NULL;
-}
-
-T_var_irdata IRDATA_cherche_desc_var(const char *nom)
-{
-  static T_desc_var * desc[6] = {
-    (T_desc_var *)desc_contexte, (T_desc_var *)desc_famille, (T_desc_var *)desc_revenu,
-    (T_desc_var *)desc_revenu_correc, (T_desc_var *)desc_variation, (T_desc_var *)desc_restituee };
-  static const int size[6] = {
-    sizeof(T_desc_contexte), sizeof(T_desc_famille), sizeof(T_desc_revenu),
-    sizeof(T_desc_revenu_correc), sizeof(T_desc_variation), sizeof(T_desc_restituee) };
-  static const int nb[6] = {
-    NB_CONTEXTE, NB_FAMILLE, NB_REVENU,
-    NB_REVENU_CORREC, NB_VARIATION, NB_RESTITUEE };
-  int i = 0;
-  for (i = 0; i < 6; ++i) {
-    T_desc_var *res = cherche_desc_var(nom, desc[i], size[i], nb[i]);
-    if (res != NULL) return (T_var_irdata)res;
-  }
-  return NULL;
 }
 
 void pr(int i) {

@@ -733,12 +733,10 @@ let generate_rovs_files (dgfip_flags : Dgfip_options.flags) (program : program)
     filemap []
 
 let generate_implem_header oc msg =
-  Format.fprintf oc
-    {|
+  Format.fprintf oc {|
 /* %s */
 
 #include <string.h>
-#include "enchain_static.c.inc"
 
 #include "mlang.h"
 

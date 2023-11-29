@@ -48,18 +48,6 @@ extern T_desc_debug desc_debug04[];
 #error "Ne fonctionne qu'avec NB_DEBUG_C compris entre 1 et 4"
 #endif
 
-struct S_desc_var
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord * (*verif)(T_irdata *);
-};
-
-typedef struct S_desc_var T_desc_var;
-
-#define T_var_irdata T_desc_var *
-
 typedef struct S_discord * (*ench_fun)(T_irdata *);
 
 typedef struct ench_t {

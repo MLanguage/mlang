@@ -592,7 +592,8 @@ let gen_desc fmt vars ~alias_only is_ebcdic =
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
-#include "desc_static.h.inc"
+#include "mlang.h"
+#include "var.h"
 
 |};
 
@@ -1084,7 +1085,7 @@ let gen_var_h fmt flags vars vars_debug =
 #define _VAR_
 
 #include "mlang.h"
-#include "desc_inv.h"
+
 |};
 
   let nb_contexte = count vars (Input (Some Context)) in
@@ -1097,8 +1098,7 @@ let gen_var_h fmt flags vars vars_debug =
   let nb_debug = List.map List.length vars_debug in
 
   Format.fprintf fmt
-    {|
-#define NB_CONTEXTE %d
+    {|#define NB_CONTEXTE %d
 #define NB_FAMILLE %d
 #define NB_REVENU %d
 #define NB_REVENU_CORREC %d
@@ -1123,13 +1123,171 @@ let gen_var_h fmt flags vars vars_debug =
      in
      assert (i = flags.nb_debug_c + 1));
 
+  Format.fprintf fmt
+    {|
+typedef struct S_desc_contexte
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+  int priorite;
+  int categorie_TL;
+  int modcat;
+  char *libelle;
+} T_desc_contexte;
+
+typedef struct S_desc_famille
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+  int priorite;
+  int categorie_TL;
+  int nat_code;
+  int modcat;
+  char *libelle;
+} T_desc_famille;
+
+typedef struct S_desc_revenu
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+  int priorite;
+  int categorie_TL;
+  int nat_code;
+  int cotsoc;
+  int ind_abat;
+  int acompte;
+  int avfisc;
+  int rapcat;
+  int sanction;
+  int modcat;
+  T_var_irdata liee;
+  char *libelle;
+  char *code;
+} T_desc_revenu;
+
+typedef struct S_desc_revenu_correc
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+  int priorite;
+  int categorie_TL;
+  int nat_code;
+  int cotsoc;
+  int ind_abat;
+  int acompte;
+  int avfisc;
+  int rapcat;
+  int sanction;
+  int modcat;
+  T_var_irdata liee;
+  char *libelle;
+} T_desc_revenu_correc;
+
+typedef struct S_desc_variation
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+} T_desc_variation;
+
+typedef struct S_desc_penalite
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+} T_desc_penalite;
+
+typedef struct S_desc_restituee
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  int type;
+  int primrest;
+#ifdef FLG_GENERE_LIBELLE_RESTITUEE
+  char *libelle;
+#endif /* FLG_GENERE_LIBELLE_RESTITUEE */
+#ifdef FLG_EXTRACTION
+  int est_extraite;
+#endif /* FLG_EXTRACTION */
+} T_desc_restituee;
+
+typedef struct S_desc_debug
+{
+  char *nom;
+  int indice;
+  long type_donnee;
+  T_discord *(*verif)(T_irdata *);
+  int classe;
+  int priorite;
+  int categorie_TL;
+  int cotsoc;
+  int ind_abat;
+  int acompte;
+  int avfisc;
+  int rapcat;
+  int sanction;
+  int modcat;
+  int nat_code;
+  T_var_irdata liee;
+#ifdef FLG_EXTRACTION
+  int est_extraite;
+#endif /* FLG_EXTRACTION */
+} T_desc_debug;
+
+typedef struct S_desc_err
+{
+  char *nom;
+  T_erreur *erreur;
+} T_desc_err;
+
+typedef struct S_desc_call
+{
+  int num;
+  T_discord *(*proc)(T_irdata *irdata);
+} T_desc_call;
+
+typedef struct S_desc_ench
+{
+  char *nom;
+  T_discord *(*proc)(T_irdata *irdata);
+} T_desc_ench;
+
+typedef struct S_desc_verif
+{
+  int num;
+  T_discord *(*proc)(T_irdata *irdata);
+} T_desc_verif;
+
+extern T_desc_contexte desc_contexte[];
+extern T_desc_famille desc_famille[];
+extern T_desc_revenu desc_revenu[];
+extern T_desc_revenu_correc desc_revenu_correc[];
+extern T_desc_variation desc_variation[];
+extern T_desc_restituee desc_restituee[];
+
+|};
+
   Format.fprintf fmt "#endif /* _VAR_ */\n"
 
 let gen_var_c fmt flags errors =
   let open Mast in
   gen_header fmt;
-
-  Format.fprintf fmt "#include \"var_static.c.inc\"\n\n";
 
   (* TODO before 2006, the format is slightly different *)
   List.iter
@@ -1306,36 +1464,12 @@ struct S_discord
 
 typedef struct S_discord T_discord;
 
-#ifdef FLG_MULTITHREAD
-
-extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
-extern void free_erreur();
-
 extern double my_ceil(double); /* ceil(a - 0.000001); */
 extern double my_floor(double); /* floor(a + 0.000001); */
 extern double my_arr(double); /* floor(v1 + v2 + 0.5) */
 
-#else
-
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 extern void free_erreur();
-
-#define my_ceil(a)	(ceil((a) - 0.000001))
-
-#ifdef FLG_OPTIM_MIN_MAX
-
-#define my_floor(a)	(floor_g((a) + 0.000001))
-/*#define my_arr(a)	(floor_g((a) + 0.50005)) *//* Ancienne version (2021) */
-#define my_arr(a)	(((a) < 0.0) ? ceil_g((a) - .50005) : floor_g((a) + .50005))
-
-#else
-
-#define my_floor(a)	(floor((a) + 0.000001))
-#define my_arr(a)	((double)(long long)(((a) < 0.0) ? ((a) - .50005) : ((a) + .50005)))
-
-#endif /* FLG_OPTIM_MIN_MAX */
-
-#endif /* FLG_MULTITHREAD */
 
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
@@ -1480,6 +1614,311 @@ let gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings
   gen_decl_targets fmt cprog;
   pr "\n";
   pr "#endif /* _MLANG_H_ */\n\n"
+
+let gen_mlang_c fmt =
+  Format.fprintf fmt "%s"
+    {|/****** LICENCE CECIL *****/
+
+#include "mlang.h"
+#include "var.h"
+
+extern FILE * fd_trace_dialog;
+
+static void add_erreur_code(T_erreur *erreur, const char *code) {
+  size_t len = 0;
+  char *new_message = NULL;
+  char *debut = NULL;
+
+  if (code != NULL) {
+    debut = strstr(erreur->message," ((");
+    if (debut != NULL) {
+      len = strlen(erreur->message) - strlen(debut);
+    } else {
+      len = strlen(erreur->message);
+    }
+
+    new_message = (char *)malloc((len + 10) * sizeof(char));
+    memset(new_message, '\0', (len + 10) * sizeof(char));
+    strncpy(new_message, erreur->message, len);
+    strcat(new_message, " ((");
+    strcat(new_message, code);
+    strcat(new_message, "))\0");
+    erreur->message = new_message;
+  }
+}
+
+double my_floor(double a) {
+  return floor(a + 0.000001);
+}
+
+double my_ceil(double a) {
+  return ceil(a - 0.000001);
+}
+
+double my_arr(double a) {
+  return ((a < 0) ? ceil(a - .50005) : floor(a + .50005));
+}
+
+#ifdef FLG_MULTITHREAD
+
+static void init_erreur(T_irdata *irdata) {
+  if (irdata->nb_bloquantes >= irdata->max_bloquantes) {
+    IRDATA_reset_erreur(irdata);
+  }
+}
+
+void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
+  T_discord *new_discord = NULL;
+
+  if (irdata->tas_discord == 0) {
+    new_discord = (T_discord *)malloc(sizeof(T_discord));
+  } else {
+    new_discord = irdata->tas_discord;
+    irdata->tas_discord = new_discord->suivant;
+  }
+
+  add_erreur_code(erreur, code);
+
+  new_discord->erreur = erreur;
+  new_discord->suivant = 0;
+  *irdata->p_discord = new_discord;
+  irdata->p_discord = &new_discord->suivant;
+
+  if (strcmp(erreur->isisf, "O")) {
+    if ((erreur->type == ANOMALIE) && (++irdata->nb_bloquantes >= irdata->max_bloquantes)) {
+      longjmp(irdata->jmp_bloq, 1);
+    }
+  }
+}
+
+void free_erreur() {}
+
+int nb_erreurs_bloquantes(T_irdata *irdata) {
+  return irdata->nb_bloquantes;
+}
+
+#else
+
+T_discord *discords = 0;
+T_discord *tas_discord = 0;
+T_discord **p_discord = &discords;
+jmp_buf jmp_bloq;
+
+void init_erreur(void) {
+  *p_discord = tas_discord;
+  tas_discord = discords;
+  discords = 0;
+  p_discord = &discords;
+}
+
+void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
+  T_discord *new_discord = NULL;
+
+  if (tas_discord == 0) {
+    new_discord = (T_discord *)malloc(sizeof(T_discord));
+  } else {
+    new_discord = tas_discord;
+    tas_discord = new_discord->suivant;
+  }
+
+  add_erreur_code(erreur, code);
+
+  new_discord->erreur = erreur;
+  new_discord->suivant = 0;
+  *p_discord = new_discord;
+  p_discord = &new_discord->suivant;
+
+  if (strcmp(erreur->isisf, "O")) {
+    if (erreur->type == ANOMALIE) {
+      longjmp(jmp_bloq, 1);
+    }
+  }
+}
+
+void free_erreur() {
+  T_discord *temp_discords = discords;
+  T_discord *dd = NULL;
+  char *debut = NULL;
+  int i = 0;
+
+  while (temp_discords != NULL) {
+    dd = temp_discords;
+    temp_discords = temp_discords->suivant;
+    if (dd->erreur->message != NULL) {
+      debut = strstr(dd->erreur->message, " ((");
+      if (debut != NULL) {
+        free(dd->erreur->message);
+      }
+      dd->erreur->message = NULL;
+    }
+  }
+}
+
+int nb_erreurs_bloquantes(T_irdata *irdata) {
+  T_discord *temp_discords = discords;
+  int nb = 0;
+  while (temp_discords != NULL) {
+    if (temp_discords->erreur->type == ANOMALIE) {
+      nb++;
+    }
+    temp_discords = temp_discords->suivant;
+  }
+  return nb;
+}
+
+#endif /* FLG_MULTITHREAD */
+
+#ifdef FLG_TRACE
+
+int niv_trace = 3;
+
+#ifdef FLG_API
+#define TRACE_FILE fd_trace_dialog
+#else
+#define TRACE_FILE stderr
+#endif /* FLG_API */
+
+void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi) {
+  double valeur;
+  int def;
+  if (expr < 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
+              color, typo, nom, expr, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
+#endif /* FLG_COLOR */
+    }
+    return;
+  } else if (expr >= maxi) {
+#ifdef FLG_COLOR
+    fprintf(TRACE_FILE,
+            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
+            color, typo, expr, maxi);
+#else
+    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
+            expr, maxi);
+#endif /* FLG_COLOR */
+    expr = 0;
+  }
+#ifdef FLG_COMPACT
+  valeur = irdata->valeurs[indice + expr];
+  def = irdata->defs[indice + expr];
+#else
+  switch (indice & EST_MASQUE) {
+    case EST_SAISIE:
+      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
+      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_CALCULEE:
+      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
+      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_BASE:
+      valeur = irdata->base[(indice & INDICE_VAL) + expr];
+      def = irdata->def_base[(indice & INDICE_VAL) + expr];
+      break;
+  }
+#endif /* FLG_COMPACT */
+  if (is_tab) {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
+                color, typo, nom, expr, valeur);
+#else
+        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
+#endif /* FLG_COLOR */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
+                color, typo, nom, expr, chaine);
+#else
+        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
+#endif /* FLG_COLOR */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
+              color, typo, nom, expr, def);
+#else
+      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
+#endif /* FLG_COLOR */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
+              color, typo, nom, expr, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
+#endif /* FLG_COLOR */
+    }
+  } else {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
+                color, typo, nom, valeur);
+#else
+        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
+#endif /* FLG_COLOR */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
+                color, typo, nom, chaine);
+#else
+        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
+#endif /* FLG_COLOR */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
+              color, typo, nom, def);
+#else
+      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
+#endif /* FLG_COLOR */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLOR
+      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
+              color, typo, nom, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
+#endif /* FLG_COLOR */
+    }
+  }
+}
+
+#endif /* FLG_TRACE */
+
+T_discord * no_error(T_irdata *irdata) {
+  return NULL;
+}
+
+int multimax_def(int nbopd, char *var) {
+  int i = 0;
+  for (i = 0; i < nbopd; i++) {
+    if (var[i] == 1) return 1;
+  }
+  return 0;
+}
+
+double multimax(double nbopd, double *var) {
+  int i = 0;
+  double s = 0.0;
+  for (i = 0; i < (int)nbopd; i++) {
+    if (var[i] >= s) s = var[i];
+  }
+  return s;
+}
+
+int modulo_def(int a, int b) {
+  return a;
+}
+
+double modulo(double a, double b) {
+  return (double)(((int)a) % ((int)b));
+}
+|}
 
 (* Generate a map from variables to array indices *)
 let extract_var_ids (cprog : Bir.program) vars =
@@ -1628,6 +2067,10 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in
   gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings errors;
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "mlang.c") in
+  gen_mlang_c fmt;
   close_out oc;
 
   extract_var_ids cprog vars
