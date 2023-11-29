@@ -1,4 +1,5 @@
 (* Copyright Inria, contributors: Raphaël Monat <raphael.monat@lip6.fr> (2019)
+   Mathieu Durero <mathieu.durero@dgfip.finances.gouv.fr> (2023)
 
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
@@ -13,14 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type literal = I of int | F of float
-
-type var_values = (string * literal * Pos.t) list
-
-type test_file = {
-  nom : string;
-  ep : var_values;
-  cp : var_values;
-  rp : var_values;
-  corr : (var_values * var_values * var_values) option;
-}
+val parse_file : string -> Irj_ast.irj_file
+(** [parse_file file] loads the content of a given IRJ [file] in a simple
+    datastructure. *)
