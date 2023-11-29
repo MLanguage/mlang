@@ -28,19 +28,20 @@
   "The Direction G\195\169n\195\169rale des Finances Publiques (DGFiP)\nuses the M language to specify how French taxes are computed\nfrom the characteristics of a fiscal household. This compiler\nparser the M code into a formalized compact intermediate language\nbefore translating it into various backend languages.\n")
  (depends
   (ocaml
-   (and(>= "4.11.2")))
+   (and
+    (>= "4.11.2")))
   (dune
    (and :build))
   (ANSITerminal
    (= 0.8.2))
   (cmdliner
-    (= 1.1.0))
+   (= 1.1.0))
   (re
    (= 1.9.0))
   (ocamlgraph
    (= 1.8.8))
   (odoc
-  (= 1.5.3))
+   (>= 1.5.3))
   (dune-build-info
    (= 2.5.1))
   (num
@@ -50,18 +51,20 @@
   (ocamlformat
    (= 0.19.0))
   (parmap
-    (= 1.2.3))))
+   (= 1.2.3))))
 
 (package
  (name irj_parser)
  (synopsis "Parser for the IRJ tests")
- (description "This parser is aimed for the tests used by la DGFiP to test the calculation of the French income tax")
+ (description
+  "This parser is aimed for the tests used by la DGFiP to test the calculation of the French income tax")
  (depends
   (ocaml
-   (and(>= "4.11.2")))
+   (and
+    (>= "4.11.2")))
   (dune
    (and :build))
   (odoc
-  (= 1.5.3))
+   (>= 1.5.3))
   (ocamlformat
    (= 0.19.0))))
