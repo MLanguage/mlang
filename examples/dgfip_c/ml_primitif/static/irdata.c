@@ -7,35 +7,6 @@
 #include "irdata.h"
 #include "var.h"
 
-void env_sauvegarder_un(T_env_sauvegarde *liste, char *oDef, double *oVal) {
-  T_env_sauvegarde nouveau = (T_env_sauvegarde)malloc(sizeof (struct S_env_sauvegarde));
-  nouveau->sauv_def = *oDef;
-  nouveau->sauv_val = *oVal;
-  nouveau->orig_def = oDef;
-  nouveau->orig_val = oVal;
-  nouveau->suite = *liste;
-  *liste = nouveau;
-}
-
-void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz) {
-  int i;
-  for (i = 0; i < sz; i++) {
-    env_sauvegarder_un(liste, oDef + i, oVal + i);
-  }
-}
-
-void env_restaurer(T_env_sauvegarde *liste) {
-  T_env_sauvegarde courant;
-
-  while (*liste != NULL) {
-    courant = *liste;
-    *liste = courant-> suite;
-    *(courant->orig_def) = courant->sauv_def;
-    *(courant->orig_val) = courant->sauv_val;
-    free(courant);
-  }
-}
-
 static int alloc_tab(double **tab, char **def_tab, int taille)
 {
   if ((tab == NULL) || (def_tab == NULL)) {
@@ -281,82 +252,5 @@ double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
   }
 #endif /* FLG_COMPACT */
   return res;
-}
-
-void pr(int i) {
-  fprintf(stderr, "toto %d\n", i);
-}
-
-void print_double(FILE *std, double f, int pmin, int pmax) {
-  if (pmin < 0) {
-    pmin = 0;
-  }
-  if (pmax < 0) {
-    pmax = 0;
-  }
-  if (pmax < pmin) {
-    pmax = pmin;
-  }
-  if (20 < pmin) {
-    pmin = 20;
-  }
-  if (20 < pmax) {
-    pmax = 20;
-  }
-  if (isnan(f)) {
-    fprintf(std, "incorrect");
-  } else if (isinf(f)) {
-    if (f >= 0.0) {
-      fprintf(std, "+infini");
-    } else {
-      fprintf(std, "-infini");
-    }
-  } else {
-    size_t sz;
-    char *buf;
-    char *ptr_dot;
-    char *ptr;
-    int p;
-
-    sz = (size_t)ceil(log10(fabs(f) + 1)) + 21;
-    buf = malloc(sz + 1);
-    sz = sprintf(buf, "%.*f", pmax, f);
-    ptr_dot = &buf[sz - 1];
-    while (ptr_dot != buf && *ptr_dot != '.') ptr_dot--;
-    if (*ptr_dot == '.') {
-      *ptr_dot = ',';
-      p = 0;
-      while (p < pmin && *ptr_dot != 0) {
-        ptr_dot++;
-        p++;
-      }
-      ptr = ptr_dot;
-      while (p < pmax && *ptr != 0) {
-        ptr++;
-        p++;
-      }
-      if (*ptr == 0) ptr--;
-      while (*ptr == '0' && pmin <= p) {
-        *ptr = 0;
-        ptr--;
-        p--;
-      }
-      if (*ptr == ',') *ptr = 0;
-    }
-    fprintf(std, "%s", buf);
-    free(buf);
-  }
-}
-
-void nettoie_erreur(irdata)
-T_irdata *irdata;
-{
-#ifdef FLG_MULTITHREAD
-  *irdata->p_discord = irdata->tas_discord;
-  irdata->tas_discord = irdata->discords;
-  irdata->discords = 0;
-  irdata->p_discord = &irdata->discords;
-  irdata->nb_bloquantes = 0;
-#endif /* FLG_MULTITHREAD */
 }
 
