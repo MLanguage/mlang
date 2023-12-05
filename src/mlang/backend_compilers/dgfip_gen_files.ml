@@ -444,13 +444,6 @@ let split_list lst cnt =
     let sz = size / cnt in
     aux lst [] 0 sz [] 0
 
-let gen_header fmt =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
-
-#include "var.h"
-
-|}
-
 (* Print a variable's description *)
 let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
     ~desc ~alias_opt =
@@ -526,8 +519,11 @@ let var_matches req_type var_type is_output =
 
 (* Print the specified variable table *)
 let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
-  gen_header fmt;
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
+#include "compir.h"
+
+|};
   (* if opt.with_verif then *)
   Format.fprintf fmt "extern T_discord *no_error(T_irdata *);\n";
 
@@ -589,11 +585,9 @@ let gen_table fmt (flags : Dgfip_options.flags) vars req_type opt =
 let gen_desc fmt vars ~alias_only is_ebcdic =
   let vars = sort_vars_by_name vars is_ebcdic in
 
-  Format.fprintf fmt
-    {|/****** LICENCE CECIL *****/
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
-#include "mlang.h"
-#include "var.h"
+#include "compir.h"
 
 |};
 
@@ -875,7 +869,11 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
   Mir.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
 
 let gen_table_varinfos fmt cprog vars =
-  gen_header fmt;
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+
+#include "mlang.h"
+
+|};
   Mir.CatVarMap.iter
     (fun _ Mir.{ id_str; attributs; _ } ->
       Format.fprintf fmt
@@ -1019,7 +1017,11 @@ let get_rules_verif_etc prog =
 (* Print the table of rule functions, and then the table of errors (tableg.c) *)
 let gen_table_call fmt flags vars_debug prefix rules chainings errors =
   let open Mast in
-  gen_header fmt;
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+
+#include "compir.h"
+
+|};
 
   if flags.Dgfip_options.flg_debug then begin
     if flags.nb_debug_c <= 0 then gen_table_debug fmt flags vars_debug 0;
@@ -1051,7 +1053,11 @@ let gen_table_call fmt flags vars_debug prefix rules chainings errors =
 
 (* Print the table of verification functions (tablev.c) *)
 let gen_table_verif fmt flags prefix verifs =
-  gen_header fmt;
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+
+#include "compir.h"
+
+|};
 
   if flags.Dgfip_options.flg_debug || flags.flg_controle_immediat then begin
     (* TODO: when control_immediat, don' put everything (but what ?) *)
@@ -1076,18 +1082,27 @@ let count vars req_type =
       if var_matches req_type tvar is_output then cpt + size else cpt)
     0 vars
 
-let gen_var_h fmt flags vars vars_debug =
+let gen_annee fmt flags =
+  Format.fprintf fmt "#define ANNEE_REVENU %04d\n"
+    flags.Dgfip_options.annee_revenu;
+  Format.pp_print_flush fmt ()
+
+let gen_compir_h fmt flags vars vars_debug =
   (* TODO paths may differ if dir_var_h is set *)
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
-#ifndef _VAR_
-#define _VAR_
+#ifndef _COMPIR_H_
+#define _COMPIR_H_
 
 #include "mlang.h"
 
+#define FALSE 0
+#define TRUE 1
+
 |};
 
+  gen_annee fmt flags;
   let nb_contexte = count vars (Input (Some Context)) in
   let nb_famille = count vars (Input (Some Family)) in
   let nb_revenu = count vars (Input (Some Income)) in
@@ -1276,18 +1291,34 @@ typedef struct S_desc_verif
 
 extern T_desc_contexte desc_contexte[];
 extern T_desc_famille desc_famille[];
+extern T_desc_penalite desc_penalite[];
 extern T_desc_revenu desc_revenu[];
 extern T_desc_revenu_correc desc_revenu_correc[];
 extern T_desc_variation desc_variation[];
 extern T_desc_restituee desc_restituee[];
 
+extern T_desc_err desc_err[];
+extern T_desc_verif desc_verif[];
+extern T_desc_call desc_call[];
+extern T_desc_ench desc_ench[];
+extern T_desc_debug desc_debug01[];
+extern T_desc_debug desc_debug02[];
+extern T_desc_debug desc_debug03[];
+extern T_desc_debug desc_debug04[];
+
+extern struct S_erreur *tabErreurs[];
+
 |};
 
-  Format.fprintf fmt "#endif /* _VAR_ */\n"
+  Format.fprintf fmt "#endif /* _COMPIR_H_ */\n"
 
-let gen_var_c fmt flags errors =
+let gen_erreurs_c fmt flags errors =
   let open Mast in
-  gen_header fmt;
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+
+#include "mlang.h"
+
+|};
 
   (* TODO before 2006, the format is slightly different *)
   List.iter
@@ -1325,11 +1356,6 @@ let gen_var_c fmt flags errors =
 
     Format.fprintf fmt "    NULL\n};\n"
   end
-
-let gen_annee fmt flags =
-  Format.fprintf fmt "#define ANNEE_REVENU %04d\n"
-    flags.Dgfip_options.annee_revenu;
-  Format.pp_print_flush fmt ()
 
 (* Print #defines corresponding to generation options *)
 let gen_conf fmt flags vars =
@@ -1625,7 +1651,6 @@ let gen_mlang_c fmt =
     {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
-#include "var.h"
 
 extern FILE * fd_trace_dialog;
 
@@ -2097,31 +2122,31 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let vars = get_vars prog Dgfip_options.(flags.flg_tri_ebcdic) in
 
-  let oc, fmt = open_file (Filename.concat folder "restitue.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_restitue.c") in
   gen_table_output fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "contexte.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_contexte.c") in
   gen_table_context fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "famille.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_famille.c") in
   gen_table_family fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "revenu.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_revenu.c") in
   gen_table_income fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "revcor.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_revcor.c") in
   gen_table_corrincome fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "variatio.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_variatio.c") in
   gen_table_variation fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "penalite.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_penalite.c") in
   gen_table_penality fmt flags vars;
   close_out oc;
 
@@ -2135,41 +2160,43 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
     if flags.nb_debug_c > 0 then
       List.fold_left
         (fun i vars ->
-          let file = Printf.sprintf "tableg%02d.c" i in
+          let file = Printf.sprintf "compir_tableg%02d.c" i in
           let oc, fmt = open_file (Filename.concat folder file) in
           if flags.flg_debug then gen_table_debug fmt flags vars i
-          else gen_header fmt;
+          else
+            Format.fprintf fmt
+              "/****** LICENCE CECIL *****/\n\n#include \"compir.h\"\n\n";
           close_out oc;
           i + 1)
         1 vars_debug_split
     else 0
   in
 
-  let oc, fmt = open_file (Filename.concat folder "desc.h") in
+  let oc, fmt = open_file (Filename.concat folder "compir_desc.h") in
   gen_desc fmt vars ~alias_only:true Dgfip_options.(flags.flg_tri_ebcdic);
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "desc_inv.h") in
+  let oc, fmt = open_file (Filename.concat folder "compir_desc_inv.h") in
   gen_desc fmt vars ~alias_only:false Dgfip_options.(flags.flg_tri_ebcdic);
   close_out oc;
 
   let rules, verifs, errors, chainings = get_rules_verif_etc prog in
   let prefix = cprog.Bir.mir_program.Mir.program_safe_prefix in
 
-  let oc, fmt = open_file (Filename.concat folder "tableg.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_tableg.c") in
   gen_table_call fmt flags vars_debug prefix rules chainings errors;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "tablev.c") in
+  let oc, fmt = open_file (Filename.concat folder "compir_tablev.c") in
   gen_table_verif fmt flags prefix verifs;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "var.h") in
-  gen_var_h fmt flags vars vars_debug_split;
+  let oc, fmt = open_file (Filename.concat folder "compir.h") in
+  gen_compir_h fmt flags vars vars_debug_split;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "var.c") in
-  gen_var_c fmt flags errors;
+  let oc, fmt = open_file (Filename.concat folder "erreurs.c") in
+  gen_erreurs_c fmt flags errors;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in

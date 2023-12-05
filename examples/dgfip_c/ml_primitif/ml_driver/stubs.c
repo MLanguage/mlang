@@ -14,9 +14,7 @@
 #include "caml/fail.h"
 #include "caml/custom.h"
 
-#include "mlang.h"
 #include "irdata.h"
-#include "var.h"
 
 #if OCAML_VERSION < 41200
 

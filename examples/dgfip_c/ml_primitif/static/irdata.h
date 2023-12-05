@@ -3,12 +3,9 @@
 #define _IRDATA_H_
 
 #include "mlang.h"
-#include "var.h"
-#include "desc.h"
-#include "desc_inv.h"
-
-#define FALSE 0
-#define TRUE 1
+#include "compir.h"
+#include "compir_desc.h"
+#include "compir_desc_inv.h"
 
 struct S_desc_var {
   char *nom;

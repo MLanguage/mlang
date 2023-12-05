@@ -5,7 +5,6 @@
 #include <math.h>
 
 #include "irdata.h"
-#include "var.h"
 
 static int alloc_tab(double **tab, char **def_tab, int taille)
 {
