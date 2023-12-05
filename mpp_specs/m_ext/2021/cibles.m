@@ -1,5 +1,12 @@
 # compir
 
+cible regle_1:
+application: iliad;
+BIDON = 1;
+APPLI_OCEANS = 0;
+APPLI_BATCH = 0;
+APPLI_ILIAD = 1;
+
 cible calcul_primitif:
 application: iliad;
 calculer domaine primitive;
@@ -163,14 +170,14 @@ si nb_erreur() = 0 alors
   verifier domaine corrective : avec nb_categorie(calculee *) > 0;
 finsi
 
-cible verif_saisie_cohe_primitive_isf:
+cible verif_saisie_cohe_primitive_isf_raw:
 application: iliad;
 verifier domaine isf
 : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
 
 cible verif_saisie_cohe_primitive:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
 si nb_erreur() = 0 alors
   calculer cible calcul_primitif_isf;
   calculer cible verif_calcul_primitive_isf;
@@ -182,7 +189,7 @@ finsi
 
 cible verif_saisie_cohe_corrective:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
 si nb_erreur() = 0 alors
   verifier domaine corrective
   : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
@@ -222,7 +229,6 @@ application: iliad;
 verifier domaine corrective
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
-#{
 # primitif ml
 
 cible calcul_prim_corr:
@@ -366,11 +372,11 @@ VARTMP1 = 0;
 si
      present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
   ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-  ou present(RFDHIS)  ou present(REPSNO3) ou present(COD7CN)
-  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG)
-  ou present(PINELQM) ou present(RCMABD)  ou present(COD7KM)
-  ou present(PINELQP) ou present(COD7QS)  ou present(PINELQN)
-  ou present(PINELQO) ou present(COD7LS)
+  ou present(RFDHIS)  ou present(REPSNO3_A)
+  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
+  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
+  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
+  ou present(PINELQO_A)
 alors
   VARTMP1 = 1;
 sinon
@@ -588,6 +594,24 @@ calculer cible calcul_primitif_isf;
 calculer cible calcul_primitif;
 calculer cible calcul_primitif_taux;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # debug
 
 cible toto:
@@ -650,5 +674,5 @@ iterer
   afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
 )
 afficher_erreur "titi fin\n\n";
-}#
+
 

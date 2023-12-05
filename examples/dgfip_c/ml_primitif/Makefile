@@ -55,12 +55,6 @@ endif
 # Generating C files from M sources with Mlang
 ##################################################
 
-# TODO: use &: when upgraded to GNU Make 4.3+
-calc/var_static.c.inc calc/enchain_static.c.inc calc/desc_static.h.inc calc/const.h calc/dbg.h calc/irdata.c calc/irdata.h :
-	mkdir -p calc
-	@echo "Copie des fichiers C statiques depuis $(STATIC_DIR)"
-	cp $(STATIC_DIR)* calc/
-
 calc/enchain.c: $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 	mkdir -p calc
 	@echo "Compilation des fichiers M avec Mlang (MPP_FUNCTION=$(MPP_FUNCTION), DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS), DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS))"
@@ -78,7 +72,7 @@ calc/enchain.c: $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 M_C_FILES=$(filter-out tgv%.c err%.c,$(notdir $(SOURCE_FILES:.m=.c)))
 
 # ADDITIONAL_C_SOURCES_TARGETS allows to create new targets in configuration to produce or load in the source folder before compiling.
-calc/enchain.o: calc/var_static.c.inc calc/enchain.c $(ADDITIONAL_C_SOURCES_TARGETS)
+calc/enchain.o: calc/enchain.c $(ADDITIONAL_C_SOURCES_TARGETS)
 	@echo "Compilation des fichiers C issus des fichiers M (CC=$(CC), BACKEND_CFLAGS=$(BACKEND_CFLAGS))"
 # If calc/ directory was not cleaned between builds, some driver C files are present that mustn't be compiled at this stage.
 # We use find to scan the directory and keep every .c except files which are in DRIVER_FILES list.

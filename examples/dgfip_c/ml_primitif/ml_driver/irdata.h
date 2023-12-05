@@ -3,9 +3,6 @@
 #define _IRDATA_H_
 
 #include "mlang.h"
-#include "compir.h"
-#include "compir_desc.h"
-#include "compir_desc_inv.h"
 
 struct S_desc_var {
   char *nom;

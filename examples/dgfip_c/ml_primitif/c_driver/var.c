@@ -64,8 +64,22 @@ int get_couleur(void) {
   return color;
 }
 
-struct S_discord *verif_saisie_cohe_primitive_isf(T_irdata *irdata, int ret) {
-  return verif_saisie_cohe_primitive_isf_raw(irdata);
+struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel) {
+#ifdef FLG_MULTITHREAD
+  init_erreur(irdata);
+  if ((appel != 1) && (setjmp(irdata->jmp_bloq) != 0)) {
+    return irdata->discords;
+  }
+  verif_saisie_cohe_primitive_isf_raw(irdata);
+  return irdata->discords;
+#else
+  init_erreur();
+  if ((appel != 1) && (setjmp(jmp_bloq) != 0)) {
+    return discords;
+  }
+  verif_saisie_cohe_primitive_isf_raw(irdata);
+  return discords;
+#endif /* FLG_MULTITHREAD */
 }
 
 T_discord * err_NEGATIF(T_irdata *irdata) {

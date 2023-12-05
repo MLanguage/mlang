@@ -1358,8 +1358,15 @@ let gen_erreurs_c fmt flags errors =
   end
 
 (* Print #defines corresponding to generation options *)
-let gen_conf fmt flags vars =
+let gen_conf_h fmt flags vars =
   let open Dgfip_options in
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
+
+#ifndef _CONF_H_
+#define _CONF_H_
+
+|};
   if flags.flg_correctif then Format.fprintf fmt "#define FLG_CORRECTIF\n";
   if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
   if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
@@ -1396,7 +1403,10 @@ let gen_conf fmt flags vars =
   let nb_calculee = count vars (Computed (Some Computed)) in
   let nb_base = count vars (Computed (Some Base)) in
   let nb_vars = nb_saisie + nb_calculee + nb_base in
-  Format.fprintf fmt "#define NB_VARS  %d\n" nb_vars
+  Format.fprintf fmt "#define NB_VARS  %d\n" nb_vars;
+  Format.fprintf fmt {|
+#endif /* _CONF_H_ */
+|}
 
 let gen_dbg fmt =
   Format.fprintf fmt
@@ -1413,7 +1423,10 @@ extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv
 
 let gen_const fmt =
   Format.fprintf fmt
-    {|#ifdef FLG_COMPACT
+    {|#define FALSE 0
+#define TRUE 1
+
+#ifdef FLG_COMPACT
 
 struct S_irdata {
   double valeurs[NB_VARS];
@@ -1628,11 +1641,11 @@ let gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings
   pr "#include <limits.h>\n";
   pr "#include <setjmp.h>\n";
   pr "\n";
+  pr "#include \"conf.h\"\n";
+  pr "\n";
   pr "#define _PROTS(X) X\n";
   pr "\n";
   gen_annee fmt flags;
-  pr "\n";
-  gen_conf fmt flags vars;
   pr "\n";
   gen_dbg fmt;
   pr "\n";
@@ -2197,6 +2210,10 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let oc, fmt = open_file (Filename.concat folder "erreurs.c") in
   gen_erreurs_c fmt flags errors;
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "conf.h") in
+  gen_conf_h fmt flags vars;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in

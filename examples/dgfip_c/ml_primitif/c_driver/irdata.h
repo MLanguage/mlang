@@ -12,13 +12,6 @@
 #define _PROTS(X) ()
 #endif
 
-#define TRUE   1
-#define FALSE  0
-
-#define ANOMALIE     1
-#define DISCORDANCE  2
-#define INFORMATIVE  4
-
 #define TYPE_CONTEXTE       0
 #define TYPE_FAMILLE        1
 #define TYPE_REVENU         2
@@ -37,21 +30,6 @@
 /* Gestion des erreurs */
 #define ERREUR_DELIMITEUR  " / "
 #define ERREUR_SEPARATEUR  "-"
-
-/* Types de données */
-#define BOOLEEN        0x1
-#define ENTIER         0x100
-#define REEL           0x200
-#define REEL1          0x400
-#define REEL2          0x800
-#define REEL3          0x1000
-#define DATE_JJMMAAAA  0x10000
-#define DATE_MMAAAA    0x20000
-#define DATE_AAAA      0x40000
-#define DATE_JJMM      0x80000
-#define DATE_MM        0x100000
-#define DATE           (DATE_JJMMAAAA|DATE_MMAAAA|DATE_AAAA|DATE_JJMM|DATE_MM)
-#define NUMERIQUE      (ENTIER|REEL|REEL1|REEL2|REEL3)
 
 /* Couleurs */
 #define NOIR          30

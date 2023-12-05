@@ -15,35 +15,19 @@
 #include "caml/custom.h"
 
 #include "irdata.h"
+#include "compir.h"
 
 #if OCAML_VERSION < 41200
 
 #define Val_none Val_int(0)
 
-CAMLexport value caml_alloc_some(value v)
-{
+CAMLexport value caml_alloc_some(value v) {
   CAMLparam1(v);
   value some = caml_alloc_small(1, 0);
   Field(some, 0) = v;
   CAMLreturn(some);
 }
 
-#endif
-
-// Non exportés dans headers standards
-extern T_desc_penalite desc_penalite[];
-extern T_desc_debug desc_debug01[];
-#if NB_DEBUG_C >= 2
-extern T_desc_debug desc_debug02[];
-#endif
-#if NB_DEBUG_C >= 3
-extern T_desc_debug desc_debug03[];
-#endif
-#if NB_DEBUG_C >= 4
-extern T_desc_debug desc_debug04[];
-#endif
-#if NB_DEBUG_C >= 5
-#error "Ne fonctionne qu'avec NB_DEBUG_C compris entre 1 et 4"
 #endif
 
 typedef struct S_discord * (*ench_fun)(T_irdata *);
