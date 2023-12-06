@@ -3,6 +3,9 @@
 
 include Makefile.include
 
+include makefiles/functions.mk
+-include makefiles/svn.mk
+
 ifeq ($(CODE_COVERAGE), 1)
     CODE_COVERAGE_FLAG=--code_coverage
 else
