@@ -1,116 +1,47 @@
 # Check Makefile.config.template if you want to override some of the flags
 # in this Makefile.
 
-include Makefile.include
-
-include makefiles/functions.mk
--include makefiles/svn.mk
-
-ifeq ($(CODE_COVERAGE), 1)
-    CODE_COVERAGE_FLAG=--code_coverage
-else
-    CODE_COVERAGE_FLAG=
+ifndef ROOT_DIR
+  ROOT_DIR:=$(realpath $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 endif
 
-ifeq ($(TEST_FILTER), 1)
-    TEST_FILTER_FLAG=--dgfip_test_filter
-else
-    TEST_FILTER_FLAG=
-endif
+CURR_DIR:=$(realpath $(shell pwd))
 
-TEST_ERROR_MARGIN?=0.
+include $(ROOT_DIR)/makefiles/functions.mk
+include $(ROOT_DIR)/makefiles/variables.mk
+-include $(ROOT_DIR)/makefiles/svn.mk
+include $(ROOT_DIR)/makefiles/mlang.mk
+include $(ROOT_DIR)/makefiles/c_backend.mk
 
-MLANG_INTERPRETER_OPTS=\
-	--test_error_margin=$(TEST_ERROR_MARGIN) \
-	--mpp_function=$(MPP_FUNCTION)
+.PHONY: default \
+  create-switch init-without-switch init deps \
+  format dune build build-static \
+  doc \
+  test tests quick_test test_one \
+  calc_dir info_c calc_o dgfip_c_backend compile_dgfip_c_backend \
+  backend_tests test_dgfip_c_backend \
+  clean_backend clean_backend_c clean_backend_exe clean_backend_tmp clean_backend_res clean_backend_all \
+  test_java_backend
 
-MLANG=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_INTERPRETER_OPTS) $(CODE_COVERAGE_FLAG)
+FORCE:
 
-default: build
+.DEFAULT_GOAL:=default
 
-##################################################
-# Initializing the project
-##################################################
+default: FORCE build
 
-# Workaround for Opam 2.0 bug. Empty switch creation then installation could be a one line
-# "opam switch create . --deps-only" otherwise
-create-switch:
-	opam switch create . --empty
+test_java_backend: FORCE build
+	@echo "\033[0;31mWarning: Java backend not supported\033[0m"
+#ifeq ($(OPTIMIZE), 0)
+#	@echo "\033[0;31mWarning, non-optimized Java files cannot be executed for now (too many constants for the JVM)\033[0m"
+#else
+#endif
+#	$(MAKE) -C examples/java/ run_tests
 
-init-without-switch:
-	opam install . --deps-only
-	git submodule update --init
+all: FORCE quick_test tests test_dgfip_c_backend test_java_backend
 
-init: create-switch init-without-switch
-
-deps:
-	opam switch reinstall --deps-only
-	git submodule update
-
-##################################################
-# Building the compiler
-##################################################
-
-format:
-	dune build @fmt --auto-promote | true
-
-build: format dune
-
-dune:
-	dune build $(DUNE_OPTIONS)
-
-# Run only in an opam switch with musl and static options activated
-build-static: DUNE_OPTIONS+=--profile=static 
-build-static: build
-
-dgfip_c_backend: build
-	$(MAKE) -C examples/dgfip_c/ml_primitif calc/enchain.c
-
-compile_dgfip_c_backend: dgfip_c_backend
-	$(MAKE) -C examples/dgfip_c/ml_primitif cal
-
-##################################################
-# Testing the compiler
-##################################################
-
-# use: TEST_FILE=bla make test
-test: build
-	$(MLANG) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
-
-# use: TESTS_DIR=bla make test
-tests: build
-	$(MLANG) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
-
-test_java_backend: build
-ifeq ($(OPTIMIZE), 0)
-	@echo "\033[0;31mWarning, non-optimized Java files cannot be executed for now (too many constants for the JVM)\033[0m"
-else
-endif
-	$(MAKE) -C examples/java/ run_tests
-
-test_dgfip_c_backend: build
-	$(MAKE) -C examples/dgfip_c/ml_primitif backend_tests
-
-quick_test: build
-	$(MLANG) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
-
-test_one: build
-	$(MLANG) --backend interpreter --run_test=$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
-
-all: tests test_java_backend test_dgfip_c_backend quick_test
-
-##################################################
-# Doc
-##################################################
-
-doc: FORCE build
-	dune build @doc
-	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
-
-clean:
-	$(MAKE) -C examples/dgfip_c/ml_primitif cleanall
-	$(MAKE) -C examples/java clean
+clean: FORCE
+	$(call make_in,$(DGFIP_DIR),clean_backend_all)
+#	$(MAKE) -C examples/java clean
 	rm -f doc/doc.html
 	dune clean
 
-FORCE:
