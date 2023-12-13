@@ -402,24 +402,25 @@ struct
         | Comparison (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
+            let epsilon = N.of_float Bir_roundops.epsilon in
             match (Pos.unmark op, new_e1, new_e2) with
             | Mast.Gt, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 >. i2))
+                Number N.(real_of_bool (i1 >. i2 +. epsilon))
             | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
             | Mast.Gte, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 >=. i2))
+                Number N.(real_of_bool (i1 >. i2 -. epsilon))
             | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
             | Mast.Lt, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 <. i2))
+                Number N.(real_of_bool (i1 +. epsilon <. i2))
             | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
             | Mast.Lte, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 <=. i2))
+                Number N.(real_of_bool (i1 -. epsilon <. i2))
             | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
             | Mast.Eq, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 =. i2))
+                Number N.(real_of_bool (N.abs (i1 -. i2) <. epsilon))
             | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
             | Mast.Neq, Number i1, Number i2 ->
-                Number N.(real_of_bool (not (i1 =. i2)))
+                Number N.(real_of_bool (N.abs (i1 -. i2) >=. epsilon))
             | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined)
         | Binop (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in

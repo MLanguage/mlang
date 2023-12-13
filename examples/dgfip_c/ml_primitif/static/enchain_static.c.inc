@@ -37,6 +37,7 @@ static void add_erreur_code(T_erreur *erreur, const char *code)
 
 #ifdef FLG_MULTITHREAD
 
+/*
 double my_floor(double a)
 {
   return floor(a + 0.000001);
@@ -54,6 +55,7 @@ double my_arr(double a)
   v2 = floor((a - v1) * 100000. + 0.5) / 100000.;
   return floor(v1 + v2 + 0.5);
 }
+*/
 
 static void init_erreur(T_irdata *irdata)
 {

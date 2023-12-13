@@ -308,7 +308,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
     | _ -> Dbinop (op, e1, e2)
   in
-  let e =
+  let _e =
     match op with
     | "==" -> comp ( = )
     | "!=" -> comp ( <> )
@@ -318,7 +318,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     | ">" -> comp ( > )
     | _ -> assert false
   in
-  (e, Def, lv2 @ lv1)
+  (Dbinop (op, e1, e2), Def, lv2 @ lv1)
 
 let dfun (f : string) (args : constr list) (stacks : local_stacks)
     (ctx : local_vars) : t =
@@ -442,9 +442,30 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
       Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
         de2
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
-  | Dbinop (op, de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ %s %a@])" format_dexpr de1 op
-        format_dexpr de2
+  | Dbinop (op, de1, de2) -> begin
+      match op with
+      | ">" ->
+          Format.fprintf fmt "@[<hov 2>(GT_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "<" ->
+          Format.fprintf fmt "@[<hov 2>(LT_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | ">=" ->
+          Format.fprintf fmt "@[<hov 2>(GE_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "<=" ->
+          Format.fprintf fmt "@[<hov 2>(LE_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "==" ->
+          Format.fprintf fmt "@[<hov 2>(EQ_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "!=" ->
+          Format.fprintf fmt "@[<hov 2>(NEQ_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | _ ->
+          Format.fprintf fmt "@[<hov 2>((%a)@ %s (%a)@])" format_dexpr de1 op
+            format_dexpr de2
+    end
   | Dfun (funname, des) ->
       Format.fprintf fmt "@[<hov 2>%s(%a@])" funname
         (Format.pp_print_list

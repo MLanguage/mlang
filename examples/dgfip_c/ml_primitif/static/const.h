@@ -79,45 +79,28 @@ struct S_discord
 };
 
 #ifdef FLG_MULTITHREAD
-
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 extern void free_erreur();
-
-extern double my_ceil(double); /* ceil(a - 0.000001); */
-extern double my_floor(double); /* floor(a + 0.000001); */
-extern double my_arr(double); /* floor(v1 + v2 + 0.5) */
-
 #else
-
 extern void add_erreur(T_erreur *erreur, char *code);
 extern void free_erreur();
-
-#define my_ceil(a)	(ceil((a) - 0.000001))
-
-#ifdef FLG_OPTIM_MIN_MAX
-
-#define my_floor(a)	(floor_g((a) + 0.000001))
-/*#define my_arr(a)	(floor_g((a) + 0.50005)) *//* Ancienne version (2021) */
-#define my_arr(a)	(((a) < 0.0) ? ceil_g((a) - .50005) : floor_g((a) + .50005))
-
-#else
-
-#define my_floor(a)	(floor((a) + 0.000001))
-#define my_arr(a)	((double)(long long)(((a) < 0.0) ? ((a) - .50005) : ((a) + .50005)))
-
-#endif /* FLG_OPTIM_MIN_MAX */
-
 #endif /* FLG_MULTITHREAD */
 
+#define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
-#define divd(a,b)	(((b) != 0.0) ? (a / b) : 0.0)
 
-#ifdef FLG_OPTIM_MIN_MAX
-
-#define fabs(a)		(((a) < 0.0) ? -(a) : (a))
-
-#endif /* FLG_OPTIM_MIN_MAX */
+#define EPSILON 0.000001
+#define GT_E(a,b) ((a) > (b) + EPSILON)
+#define LT_E(a,b) ((a) + EPSILON < (b))
+#define GE_E(a,b) ((a) > (b) - EPSILON)
+#define LE_E(a,b) ((a) - EPSILON < (b))
+#define EQ_E(a,b) (fabs((a) - (b)) < EPSILON)
+#define NEQ_E(a,b) (fabs((a) - (b)) >= EPSILON)
+#define my_floor(a) (floor_g((a) + EPSILON))
+#define my_ceil(a) (ceil_g((a) - EPSILON));
+#define my_arr(a) (((a) < 0) ? ceil_g((a) - EPSILON - 0.5) : floor_g((a) + EPSILON + 0.5))
+#define divd(a,b)	(NEQ_E((b),0.0) ? (a / b) : 0.0)
 
 extern double floor_g(double);
 extern double ceil_g(double);
