@@ -27,7 +27,7 @@ DGFIP_COMMON_FLAGS=-Ailiad,-m$(YEAR),-X
 
 MLANG_DGFIP=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 
-QUIET=>/dev/null # Uncomment to suppress output
+#QUIET=>/dev/null # Uncomment to suppress output
 
 # Options pour le compilateur OCaml
 OCAMLFLAGS=
@@ -70,7 +70,7 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	@echo "  MPP_FUNCTION=$(MPP_FUNCTION_BACKEND)"
 	@echo "  DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS)"
 	@echo "  DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS)"
-	@$(MLANG_DGFIP) \
+	$(MLANG_DGFIP) \
 	  --dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS) \
 	  --backend dgfip_c \
 	  --output calc/enchain.c \
