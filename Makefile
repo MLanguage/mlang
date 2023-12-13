@@ -7,6 +7,8 @@ endif
 
 CURR_DIR:=$(realpath $(shell pwd))
 
+YEAR?=2020
+
 include $(ROOT_DIR)/makefiles/functions.mk
 include $(ROOT_DIR)/makefiles/variables.mk
 -include $(ROOT_DIR)/makefiles/svn.mk
