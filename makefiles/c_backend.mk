@@ -2,8 +2,6 @@
 #                  C backend                  #
 ###############################################
 
-DGFIP_DIR?=examples/dgfip_c/ml_primitif
-
 MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
 
 MLANG_DGFIP_C_OPTS=--mpp_function=$(MPP_FUNCTION_BACKEND)
@@ -75,6 +73,7 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	  --backend dgfip_c \
 	  --output calc/enchain.c \
 	  $(SOURCE_FILES) $(SOURCE_EXT_FILES) $(QUIET)
+	cd calc && rm -f $(DRIVER_FILES)
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -98,10 +97,9 @@ endif
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 calc_o:
 	$(eval override C_FILES:=$(shell cd calc && ls -1 *.c) $(ADDITIONAL_C_SOURCES_TARGETS))
-	cd calc && rm -f $(DRIVER_FILES)
 	@for I in $(C_FILES:.c=.o) ; \
 	do \
-	  $(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR)/calc ROOT_DIR=$(ROOT_DIR) $$I ; \
+	  $(MAKE_DGFIP_CALC) $$I ; \
 	done
 endif
 

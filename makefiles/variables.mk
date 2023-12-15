@@ -106,7 +106,7 @@ ifeq ($(CC), clang)
 else ifeq ($(CC), gcc)
   COMPILER_SPECIFIC_CFLAGS=-O1
 endif
-BACKEND_CFLAGS=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
+BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
 DRIVER_DIR?=ml_driver
@@ -142,6 +142,11 @@ MLANG_INTERPRETER_OPTS=\
 
 MLANG_TEST=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_INTERPRETER_OPTS) $(CODE_COVERAGE_FLAG)
 
+DGFIP_DIR?=examples/dgfip_c/ml_primitif
+
+MAKE_DGFIP=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR) ROOT_DIR="$(ROOT_DIR)"
+
+MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR)/calc ROOT_DIR="$(ROOT_DIR)"
 
 ##################################################
 # Exports to call backends from main Makefile
