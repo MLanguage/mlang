@@ -1444,6 +1444,26 @@ struct S_irdata {
 
 typedef void *T_var_irdata;
 
+struct S_erreur
+{
+  char *message;
+  char *codebo;
+  char *souscode;
+  char *isisf;
+  char *nom;
+  short type;
+};
+
+typedef struct S_erreur T_erreur;
+
+struct S_discord
+{
+  struct S_discord *suivant;
+  T_erreur *erreur;
+};
+
+typedef struct S_discord T_discord;
+
 struct S_irdata
 {
   double *saisie;
@@ -1483,42 +1503,24 @@ typedef struct S_irdata T_irdata;
 #define RESTITUEE_P  6
 #define RESTITUEE_C  7
 
-struct S_erreur
-{
-  char *message;
-  char *codebo;
-  char *souscode;
-  char *isisf;
-  char *nom;
-  short type;
-};
-
-typedef struct S_erreur T_erreur;
-
-struct S_discord
-{
-  struct S_discord *suivant;
-  T_erreur *erreur;
-};
-
-typedef struct S_discord T_discord;
-
-extern double my_ceil(double); /* ceil(a - 0.000001); */
-extern double my_floor(double); /* floor(a + 0.000001); */
-extern double my_arr(double); /* floor(v1 + v2 + 0.5) */
-
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 extern void free_erreur();
 
+#define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
-#define divd(a,b)	(((b) != 0.0) ? (a / b) : 0.0)
 
-#ifdef FLG_OPTIM_MIN_MAX
-
-#define fabs(a)		(((a) < 0.0) ? -(a) : (a))
-
-#endif /* FLG_OPTIM_MIN_MAX */
+#define EPSILON 0.000001
+#define GT_E(a,b) ((a) > (b) + EPSILON)
+#define LT_E(a,b) ((a) + EPSILON < (b))
+#define GE_E(a,b) ((a) > (b) - EPSILON)
+#define LE_E(a,b) ((a) - EPSILON < (b))
+#define EQ_E(a,b) (fabs((a) - (b)) < EPSILON)
+#define NEQ_E(a,b) (fabs((a) - (b)) >= EPSILON)
+#define my_floor(a) (floor_g((a) + EPSILON))
+#define my_ceil(a) (ceil_g((a) - EPSILON));
+#define my_arr(a) (((a) < 0) ? ceil_g((a) - 0.5 - EPSILON) : floor_g((a) + .5 + EPSILON))
+#define divd(a,b)	(NEQ_E((b),0.0) ? (a / b) : 0.0)
 
 extern double floor_g(double);
 extern double ceil_g(double);
@@ -1665,6 +1667,22 @@ let gen_mlang_c fmt =
 
 #include "mlang.h"
 
+double floor_g(double a) {
+  if (fabs(a) <= (double)LONG_MAX) {
+    return floor(a);
+  } else {
+    return a;
+  }
+}
+
+double ceil_g(double a) {
+  if (fabs(a) <= (double)LONG_MAX) {
+    return ceil(a);
+  } else {
+    return a;
+  }
+}
+
 extern FILE * fd_trace_dialog;
 
 static void add_erreur_code(T_erreur *erreur, const char *code) {
@@ -1690,23 +1708,16 @@ static void add_erreur_code(T_erreur *erreur, const char *code) {
   }
 }
 
-double my_floor(double a) {
-  return floor(a + 0.000001);
-}
-
-double my_ceil(double a) {
-  return ceil(a - 0.000001);
-}
-
-double my_arr(double a) {
-  return ((a < 0) ? ceil(a - .50005) : floor(a + .50005));
-}
-
 #ifdef FLG_MULTITHREAD
 
 void init_erreur(T_irdata *irdata) {
   if (irdata->nb_bloquantes >= irdata->max_bloquantes) {
-    IRDATA_reset_erreur(irdata);
+//    IRDATA_reset_erreur(irdata);
+    *irdata->p_discord = irdata->tas_discord;
+    irdata->tas_discord = irdata->discords;
+    irdata->discords = 0;
+    irdata->p_discord = &irdata->discords;
+    irdata->nb_bloquantes = 0;
   }
 }
 

@@ -3,6 +3,14 @@
 ###################################
 
 ##################################################
+# Generic variables
+##################################################
+
+GCC=gcc
+JAVA_HOME?=/usr/lib/jvm/java
+MUSL_HOME?=/usr/local/musl
+
+##################################################
 # Tax computation configuration
 ##################################################
 
@@ -147,15 +155,4 @@ DGFIP_DIR?=examples/dgfip_c/ml_primitif
 MAKE_DGFIP=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR) ROOT_DIR="$(ROOT_DIR)"
 
 MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR)/calc ROOT_DIR="$(ROOT_DIR)"
-
-##################################################
-# Exports to call backends from main Makefile
-##################################################
-
-# common
-export SOURCE_FILES SOURCE_EXT_FILES TESTS_DIR TEST_ONE MLANG_BIN MLANG_DEFAULT_OPTS
-# for C backend (Java compilation is year-independent)
-export YEAR CC BACKEND_CFLAGS DRIVER_DIR DRIVER_FILES NO_BINARY_COMPARE
-# for Java backend (C overload these now)
-export MPP_FUNCTION MPP_FILE
 

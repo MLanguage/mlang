@@ -66,20 +66,17 @@ static void trace_var_irdata(T_var_irdata desc)
                 else fprintf(stderr, "???");
               }
 #else
-              else {
-                delta = ((T_desc_debug *)desc) - desc_debug01;
-                if ((delta >= 0) && (delta < nb_debug01)) trace_type(TYPE_DEBUG);
-              else {
-                delta = ((T_desc_debug *)desc) - desc_debug02;
-                if ((delta >= 0) && (delta < nb_debug02)) trace_type(TYPE_DEBUG);
-              else {
-                delta = ((T_desc_debug *)desc) - desc_debug03;
-                if ((delta >= 0) && (delta < nb_debug03)) trace_type(TYPE_DEBUG);
-              else {
-                delta = ((T_desc_debug *)desc) - desc_debug04;
-                if ((delta >= 0) && (delta < nb_debug04)) trace_type(TYPE_DEBUG);
+#define LOOP_DEBUG(n, _) \
+              else { \
+                delta = ((T_desc_debug *)desc) - CAT(desc_debug, TWO_DIGITS(INC(n))); \
+                if ((delta >= 0) && (delta < CAT(nb_debug, TWO_DIGITS(INC(n))))) trace_type(TYPE_DEBUG);
+EVAL(REPEAT(NB_DEBUG_C, LOOP_DEBUG))
+#undef LOOP_DEBUG
                 else fprintf(stderr, "???");
-              } } } }
+#define LOOP_DEBUG(n, _) \
+              }
+EVAL(REPEAT(NB_DEBUG_C, LOOP_DEBUG))
+#undef LOOP_DEBUG
 #endif /* NB_DEBUG_C <= 0 */
 #endif /* FLG_DEBUG */
             }
@@ -498,24 +495,6 @@ void IRDATA_range_base(T_irdata *irdata, T_var_irdata desc, double valeur)
   irdata->defs[indice] = 1;
 #else
   T_indice indice = ((T_desc_contexte *)desc)->indice & INDICE_VAL;
-#ifdef FLG_DEBUG
-  switch (((T_desc_debug *)desc)->indice & EST_MASQUE) {
-    case EST_SAISIE:
-      fprintf(stderr,"ATTENTION VALEUR NON BASE RANGEE EN BASE!!! %s\n", ((T_desc_contexte *)desc)->nom);
-      irdata->saisie[indice] = valeur;
-      irdata->def_saisie[indice] = 1;
-      break;
-    case EST_CALCULEE:
-      fprintf(stderr,"ATTENTION VALEUR NON BASE RANGEE EN BASE!!! %s\n", ((T_desc_contexte *)desc)->nom);
-      irdata->calculee[indice] = valeur;
-      irdata->def_calculee[indice] = 1;
-      break;
-    case EST_BASE:
-      irdata->base[indice] = valeur;
-      irdata->def_base[indice] = 1;
-      break;
-  }
-#else
   switch (((T_desc_contexte *)desc)->indice & EST_MASQUE) {
     case EST_SAISIE:
       irdata->saisie[indice] = valeur;
@@ -530,7 +509,6 @@ void IRDATA_range_base(T_irdata *irdata, T_var_irdata desc, double valeur)
       irdata->def_base[indice] = 1;
       break;
   }
-#endif /* FLG_DEBUG */
 #endif /* FLG_COMPACT */
 }
 
@@ -897,22 +875,13 @@ T_var_irdata IRDATA_extraction_suivante(struct S_extraction *extraction, int typ
 #if defined(FLG_DEBUG) && NB_DEBUG_C > 0
     while (extraction->nb == 0) {
       switch (++extraction->num_bank) {
-        case 1:
-          extraction->nb = nb_debug01;
-          extraction->desc = desc_debug01;
+#define LOOP_DEBUG(n, _) \
+        case INC(n): \
+          extraction->nb = CAT(nb_debug, TWO_DIGITS(INC(n))); \
+          extraction->desc = CAT(desc_debug, TWO_DIGITS(INC(n))); \
           break;
-        case 2:
-          extraction->nb = nb_debug02;
-          extraction->desc = desc_debug02;
-          break;
-        case 3:
-          extraction->nb = nb_debug03;
-          extraction->desc = desc_debug03;
-          break;
-        case 4:
-          extraction->nb = nb_debug04;
-          extraction->desc = desc_debug04;
-          break;
+EVAL(REPEAT(NB_DEBUG_C, LOOP_DEBUG))
+#undef LOOP_DEBUG
         default: return NULL;
       }
     }
@@ -952,18 +921,13 @@ void IRDATA_reset_extraction(void)
 #if defined(FLG_DEBUG) && NB_DEBUG_C > 0
     while (cnt == 0) {
       switch (++num_bank) {
-        case 2:
-          cnt = nb_debug02;
-          desc = desc_debug02;
+#define LOOP_DEBUG(n, _) \
+        case INC(INC(n)): \
+          cnt = CAT(nb_debug, TWO_DIGITS(INC(INC(n)))); \
+          desc = CAT(desc_debug, TWO_DIGITS(INC(INC(n)))); \
           break;
-        case 3:
-          cnt = nb_debug03;
-          desc = desc_debug03;
-          break;
-        case 4:
-          cnt = nb_debug04;
-          desc = desc_debug04;
-          break;
+EVAL(REPEAT(DEC(NB_DEBUG_C), LOOP_DEBUG))
+#undef LOOP_DEBUG
         default: return;
       }
     }
@@ -1140,9 +1104,10 @@ T_var_irdata IRDATA_get_var_irdata(const char *nom, T_typezone2042 type)
       retour = cherche_nom(nom, (char *)desc_debug, sizeof(T_desc_debug), nb_debug);
 #else
       retour = cherche_nom(nom, (char *)desc_debug01, sizeof(T_desc_debug), nb_debug01);
-      if (retour == NULL) retour = cherche_nom(nom, (char *)desc_debug02, sizeof(T_desc_debug), nb_debug02);
-      if (retour == NULL) retour = cherche_nom(nom, (char *)desc_debug03, sizeof(T_desc_debug), nb_debug03);
-      if (retour == NULL) retour = cherche_nom(nom, (char *)desc_debug04, sizeof(T_desc_debug), nb_debug04);
+#define LOOP_DEBUG(n, _) \
+      if (retour == NULL) retour = cherche_nom(nom, (char *)CAT(desc_debug, TWO_DIGITS(INC(INC(n)))), sizeof(T_desc_debug), CAT(nb_debug, TWO_DIGITS(INC(INC(n)))));
+EVAL(REPEAT(DEC(NB_DEBUG_C), LOOP_DEBUG))
+#undef LOOP_DEBUG
 #endif /* NB_DEBUG_C <= 0 */
       break;
 #endif /* FLG_DEBUG */

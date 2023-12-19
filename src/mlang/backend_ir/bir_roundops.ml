@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+let epsilon = 0.000001
+
 module type RoundOpsInterface = sig
   type t
 
@@ -29,7 +31,7 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float 0.000001)
+  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
@@ -37,7 +39,11 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
   let roundf (x : N.t) =
     N.of_int
       (N.to_int
-         N.(x +. N.of_float (if N.(x < zero ()) then -0.50005 else 0.50005)))
+         N.(
+           x
+           +. N.of_float
+                (if N.(x < zero ()) then Float.sub (-0.5) epsilon
+                else Float.add 0.5 epsilon)))
 end
 
 module MultiRoundOps (N : Bir_number.NumberInterface) :
@@ -66,12 +72,12 @@ end)
   let ceil_g (x : N.t) : N.t =
     if N.abs x <= N.of_int !L.max_long then N.ceil x else x
 
-  let truncatef (x : N.t) : N.t = floor_g N.(x +. N.of_float 0.000001)
+  let truncatef (x : N.t) : N.t = floor_g N.(x +. N.of_float epsilon)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    if N.(x < zero ()) then ceil_g N.(x -. N.of_float 0.50005)
-    else floor_g N.(x +. N.of_float 0.50005)
+    if N.(x < zero ()) then ceil_g N.(x -. N.of_float (Float.add 0.5 epsilon))
+    else floor_g N.(x +. N.of_float (Float.add 0.5 epsilon))
 end

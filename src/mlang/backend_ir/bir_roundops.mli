@@ -14,6 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+val epsilon : float
+(** Rounding precision *)
+
 (** Rounding operations to use in the interpreter *)
 module type RoundOpsInterface = sig
   type t

@@ -14,6 +14,7 @@ include $(ROOT_DIR)/makefiles/variables.mk
 -include $(ROOT_DIR)/makefiles/svn.mk
 include $(ROOT_DIR)/makefiles/mlang.mk
 include $(ROOT_DIR)/makefiles/c_backend.mk
+-include $(ROOT_DIR)/makefiles/dgfip_backend.mk
 
 .PHONY: default \
   create-switch init-without-switch init deps \

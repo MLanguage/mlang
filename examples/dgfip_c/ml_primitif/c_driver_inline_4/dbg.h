@@ -4,17 +4,16 @@
 #define _DEBUG_H_
 
 #include "conf.h"
-#include "repeat.h"
 
 #ifdef FLG_DEBUG
 extern int nb_err;
 #if NB_DEBUG_C <= 0
 extern int nb_debug;
 #else
-#define LOOP_DEBUG(n, _) \
-extern int CAT(nb_debug, TWO_DIGITS(INC(n)));
-EVAL(REPEAT(NB_DEBUG_C, LOOP_DEBUG))
-#undef LOOP_DEBUG
+extern int nb_debug01;
+extern int nb_debug02;
+extern int nb_debug03;
+extern int nb_debug04;
 #endif /* NB_DEBUG_C <= 0 */
 extern int nb_call;
 #endif /* FLG_DEBUG */
@@ -33,10 +32,6 @@ extern void aff_double _PROTS((const char *nom, double valeur));
 #define aff3(nom,irdata,indice) aff_val(nom,irdata,indice,3,":", 0, 0, 1)
 #define aff3_tab(nom,irdata,indice,expr,maxi) aff_val(nom,irdata,indice,3,":", 1, expr, maxi)
 #endif /* FLG_TRACE */
-
-#if defined(FLG_DEBUG) || defined(FLG_CONTROLE_IMMEDIAT)
-extern T_discord *une_verif _PROTS((T_irdata *irdata, void (*)(T_irdata *irdata)));
-#endif /* FLG_DEBUG || FLG_CONTROLE_IMMEDIAT */
 
 #endif /* _DEBUG_H_ */
 

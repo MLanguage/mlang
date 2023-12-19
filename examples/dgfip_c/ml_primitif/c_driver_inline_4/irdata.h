@@ -4,6 +4,7 @@
 #define _IRDATA_H_
 
 #include "conf.h"
+#include "dbg.h"
 #include "annee.h"
 
 #if defined(__GNUC__) || defined(__STDC__)
@@ -66,10 +67,6 @@ typedef int T_sanction;
 typedef int T_modcat;
 typedef int T_nat_code;
 typedef int T_typezone2042;
-
-typedef struct S_irdata T_irdata;
-typedef struct S_discord T_discord;
-typedef struct S_erreur T_erreur;
 
 extern int IRDATA_annee_revenu(void);
 
