@@ -19,7 +19,4 @@
    auxiliary variable (which is merged back afterwards) *)
 
 val create_combined_program :
-  Mir_interface.full_program ->
-  Mpp_ir.mpp_program ->
-  (* function to extract *) string ->
-  Bir.program
+  Mir_interface.full_program -> (* function to extract *) string -> Bir.program

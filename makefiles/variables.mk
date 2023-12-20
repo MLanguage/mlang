@@ -14,28 +14,9 @@ MUSL_HOME?=/usr/local/musl
 # Tax computation configuration
 ##################################################
 
-#SOURCE_DIR_2015:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2015m_4_6/)
-#SOURCE_DIR_2016:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2016m_4_5/)
-#SOURCE_DIR_2017:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2017m_6_10/)
-#SOURCE_DIR_2018:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2018m_6_7/)
-#SOURCE_DIR_2019:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
-#SOURCE_DIR_2020:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
-#SOURCE_DIR_2021:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2021m_20_6/)
-#SOURCE_DIR_2022:=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_22_1/)
-
-#SOURCE_EXT_DIR_2015:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2015/)
-#SOURCE_EXT_DIR_2016:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2016/)
-#SOURCE_EXT_DIR_2017:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2017/)
-#SOURCE_EXT_DIR_2018:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2018/)
-#SOURCE_EXT_DIR_2019:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2019/)
-#SOURCE_EXT_DIR_2020:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2020/)
-#SOURCE_EXT_DIR_2021:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2021/)
-#SOURCE_EXT_DIR_2022:=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
-
 ifeq ($(YEAR), 2018)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2018m_6_7/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2018/)
-	MPP_FILE?=$(ROOT_DIR)/mpp_specs/2018_6_7.mpp
 	TESTS_DIR?=$(ROOT_DIR)/tests/2018/fuzzing/
 	TEST_ONE?=$(ROOT_DIR)/tests/2020/fuzzing/fuzzer_10019.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
@@ -43,7 +24,6 @@ ifeq ($(YEAR), 2018)
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2019/)
-	MPP_FILE?=$(ROOT_DIR)/mpp_specs/2019_8_0.mpp
 	TESTS_DIR?=$(ROOT_DIR)/tests/2019/fuzzing/
 	TEST_ONE?=$(ROOT_DIR)/tests/2019/fuzzing/fuzzer_10029.m_test
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
@@ -51,7 +31,6 @@ else ifeq ($(YEAR), 2019)
 else ifeq ($(YEAR), 2020)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2020/)
-	MPP_FILE?=$(ROOT_DIR)/mpp_specs/2020_6_5.mpp
 	TESTS_DIR?=$(ROOT_DIR)/tests/2020/fuzzing/
 	TEST_ONE?=$(ROOT_DIR)/tests/2020/fuzzing/fuzzer_1001.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
@@ -59,7 +38,6 @@ else ifeq ($(YEAR), 2020)
 else ifeq ($(YEAR), 2021)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2021m_20_6/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2021/)
-	MPP_FILE?=$(ROOT_DIR)/mpp_specs/2020_6_5.mpp
 	TESTS_DIR?=$(ROOT_DIR)/tests/2021/fuzzing/
 	TEST_ONE?=$(ROOT_DIR)/tests/2021/fuzzing/fuzzer_10004.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
@@ -67,7 +45,6 @@ else ifeq ($(YEAR), 2021)
 else ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_22_1/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
-	MPP_FILE?=$(ROOT_DIR)/mpp_specs/2020_6_5.mpp
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing/
 	TEST_ONE?=$(ROOT_DIR)/tests/2022/fuzzing/fuzzer_10004.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec

@@ -94,13 +94,6 @@ let function_spec =
            from the M code corpus. If no function_spec is specified, all \
            available inputs and outputs are used for the calculation.")
 
-let mpp_file =
-  Arg.(
-    value
-    & opt (some file) None
-    & info [ "mpp_file" ] ~docv:"MPP_FILE"
-        ~doc:"M++ preprocessor file (extension .mpp)")
-
 let mpp_function =
   Arg.(
     required
@@ -208,9 +201,9 @@ let var_dependencies =
 let mlang_t f =
   Term.(
     const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
-    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ mpp_file
-    $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ roundops
+    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ output
+    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function $ optimize
+    $ optimize_unsafe_float $ code_coverage $ precision $ roundops
     $ test_error_margin $ m_clean_calls $ dgfip_options $ var_dependencies)
 
 let info =
