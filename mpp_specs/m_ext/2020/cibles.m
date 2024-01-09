@@ -163,14 +163,14 @@ si nb_erreur() = 0 alors
   verifier domaine corrective : avec nb_categorie(calculee *) > 0;
 finsi
 
-cible verif_saisie_cohe_primitive_isf:
+cible verif_saisie_cohe_primitive_isf_raw:
 application: iliad;
 verifier domaine isf
 : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
 
 cible verif_saisie_cohe_primitive:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
 si nb_erreur() = 0 alors
   calculer cible calcul_primitif_isf;
   calculer cible verif_calcul_primitive_isf;
@@ -182,7 +182,7 @@ finsi
 
 cible verif_saisie_cohe_corrective:
 application: iliad;
-calculer cible verif_saisie_cohe_primitive_isf;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
 si nb_erreur() = 0 alors
   verifier domaine corrective
   : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;

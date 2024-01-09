@@ -480,8 +480,8 @@ si present(PVIMPOS) ou present(CODRWB) alors
   si present(IHAUTREVT) alors
     V_CHR3WB = IHAUTREVT;
   finsi
-  si present(ID11) alors
-    V_ID113WB = ID11;
+  si present(IAD11) alors
+    V_ID113WB = IAD11;
   finsi
   FLAG_EXIT = 0;
 finsi
@@ -498,8 +498,8 @@ si present(PVSURSI) ou present(CODRWA) alors
   si present(IHAUTREVT) alors
     V_CHR3WA = IHAUTREVT;
   finsi
-  si present(ID11) alors
-    V_ID113WA = ID11;
+  si present(IAD11) alors
+    V_ID113WA = IAD11;
   finsi
   FLAG_EXIT = 0;
 finsi
@@ -542,27 +542,8 @@ finsi
 FLAG_PVRO = 0;
 calculer cible traite_double_liquidation_exit_taxe;
 
-cible teste_tableaux:
-application: iliad;
-VARTMP1 = 0;
-afficher "0) VARTMP1 = " (VARTMP1) : 0..2 "\n";
-VARTMPTAB1[0] = 0;
-VARTMPTAB1[1] = 1;
-VARTMPTAB1[2] = indefini;
-iterer
-: variable V
-: categorie calculee *
-: dans (
-  V = 1;
-)
-afficher "1) VARTMP1 = " (VARTMP1) : 0..2 "\n";
-afficher "2) VARTMPTAB1[0] = " (VARTMPTAB1[0]) : 0..2 "\n";
-afficher "2) VARTMPTAB1[1] = " (VARTMPTAB1[1]) : 0..2 "\n";
-afficher "2) VARTMPTAB1[2] = " (VARTMPTAB1[2]) : 0..2 "\n";
-
 cible traite_double_liquidation_2:
 application: iliad;
-# calculer cible teste_tableaux;
 calculer cible traite_double_liquidation_pvro;
 
 # primitif iterpréteur
@@ -571,108 +552,4 @@ cible traite_double_liquidation_2_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4;
 calculer cible traite_double_liquidation_2;
-
-
-# obsolète
-
-cible dgfip_calculation:
-application: iliad;
-APPLI_OCEANS = 0;
-V_IND_TRAIT = 4;  # 4 = PRIMITIF, 5 = CORRECTIF
-FLAG_PVRO = 0;
-FLAG_EXIT = 0;
-FLAG_BAREM = 0;
-FLAG_ACO = 0;
-V_NEGACO = 0;
-V_AVFISCOPBIS = 0;
-V_DIFTEOREEL = 0;
-PREM8_11 = 0;
-ART1731BIS = 0;
-V_ACO_MTAP = 0;
-V_NEGACO = 0;
-calculer cible calcul_primitif_isf;
-calculer cible calcul_primitif;
-calculer cible calcul_primitif_taux;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# debug
-
-cible toto:
-application: iliad;
-afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
-afficher_erreur "toto " nom(FLAG_PVRO) " " alias(FLAG_PVRO) "+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
-afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
-
-cible tutu:
-application: iliad;
-iterer
-: variable ITC
-: categorie saisie revenu
-: avec attribut(ITC, acompte) = 0
-: dans (
-  afficher_erreur "tutu0 " nom(ITC) " (" alias(ITC) ") = " (ITC) : 0..2 "\n";
-  afficher_erreur "tutu1 attribut(" nom(ITC) ", acompte) = " (attribut(ITC, acompte)) : 0 "\n";
-  afficher_erreur "tutu1 attribut(" nom(V_VAR7WZ) ", acompte) = " (attribut(V_VAR7WZ, acompte)) : 0 "\n";
-)
-
-cible titi:
-application : iliad;
-variable temporaire: TOTO tableau[3];
-TOTO[0] = 0;
-TOTO[1] = 1 + TOTO[0];
-TOTO[2] = 2 + TOTO[1];
-afficher_erreur "titi debut\n";
-afficher_erreur "titi0 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-afficher_erreur "titi0 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-iterer
-: variable ITC : categorie saisie contexte : avec present(ITC)
-: dans (
-  afficher_erreur "titi0 " nom(ITC) " = " (ITC) "\n";
-)
-afficher_erreur "\n";
-restaurer
-: FLAG_PVRO
-: TOTO
-: variable RESTREV : categorie saisie contexte : avec present(RESTREV)
-: apres (
-  FLAG_PVRO = indefini;
-  afficher_erreur "titi1 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-  TOTO[0] = indefini;
-  TOTO[1] = indefini;
-  TOTO[2] = indefini;
-  afficher_erreur "titi1 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-  iterer
-  : variable ITC : categorie saisie contexte : avec present(ITC)
-  : dans (
-    ITC = indefini;
-    afficher_erreur "titi1 " nom(ITC) " = " (ITC) "\n";
-  )
-)
-afficher_erreur "\n";
-afficher_erreur "toiti2 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-afficher_erreur "titi2 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-iterer
-: variable ITC : categorie saisie contexte : avec present(ITC)
-: dans (
-  afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
-)
-afficher_erreur "titi fin\n\n";
-
 

@@ -95,7 +95,7 @@ static verif_t verifications[] = {
   { "verif_calcul_primitive_isf",  verif_calcul_primitive_isf },
   { "verif_calcul_corrective", verif_calcul_corrective },
   { "verif_saisie_cohe_primitive", verif_saisie_cohe_primitive },
-  { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf },
+  { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf_raw },
   { "verif_saisie_cohe_corrective", verif_saisie_cohe_corrective },
   { "verif_cohe_horizontale", verif_cohe_horizontale },
   { "traite_double_liquidation_2", traite_double_liquidation_2 }
