@@ -301,24 +301,30 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  let comp o =
+  let comp (o : Mast.comp_op) =
     match (e1, e2) with
-    | Dlit f1, Dlit f2 -> if o f1 f2 then Dtrue else Dfalse
+    | Dlit f1, Dlit f2 ->
+        if
+          Bir_interpreter.FloatDefInterp.compare_numbers o
+            (Bir_number.RegularFloatNumber.of_float f1)
+            (Bir_number.RegularFloatNumber.of_float f2)
+        then Dtrue
+        else Dfalse
     | Dvar v1, Dvar v2 ->
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
     | _ -> Dbinop (op, e1, e2)
   in
-  let _e =
+  let e =
     match op with
-    | "==" -> comp ( = )
-    | "!=" -> comp ( <> )
-    | "<=" -> comp ( <= )
-    | "<" -> comp ( < )
-    | ">=" -> comp ( >= )
-    | ">" -> comp ( > )
+    | "==" -> comp Mast.Eq
+    | "!=" -> comp Mast.Neq
+    | "<=" -> comp Mast.Lte
+    | "<" -> comp Mast.Lt
+    | ">=" -> comp Mast.Gte
+    | ">" -> comp Mast.Gt
     | _ -> assert false
   in
-  (Dbinop (op, e1, e2), Def, lv2 @ lv1)
+  (e, Def, lv2 @ lv1)
 
 let dfun (f : string) (args : constr list) (stacks : local_stacks)
     (ctx : local_vars) : t =
