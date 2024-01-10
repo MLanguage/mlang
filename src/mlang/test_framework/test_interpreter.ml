@@ -42,8 +42,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
-    (test_error_margin : float) :
+let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
@@ -77,31 +76,10 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
                (find_var_of_name program.mir_program (var, convert_pos pos))
                  .Mir.Variable.name
            in
-           (* we allow a difference of 0.000001 between the control value and
-              the result *)
-           let first_exp =
-             ( Mast.Comparison
-                 ( (Lte, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           let second_exp =
-             ( Mast.Comparison
-                 ( (Lte, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
+           ( Mast.Comparison
+               ( (Mast.Eq, convert_pos pos),
+                 (Literal (to_ast_literal value), convert_pos pos),
+                 (Literal (Variable (Normal var)), convert_pos pos) ),
              convert_pos pos ))
          t.prim.resultats_attendus)
   in
@@ -110,14 +88,11 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (test_error_margin : float) :
-    Bir_instrumentation.code_coverage_result =
+    (round_ops : Cli.round_ops) : Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file =
-    to_MIR_function_and_inputs combined_program t test_error_margin
-  in
+  let f, input_file = to_MIR_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f
@@ -160,8 +135,7 @@ let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     (code_coverage_activated : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (test_error_margin : float)
-    (filter_function : string -> bool) =
+    (round_ops : Cli.round_ops) (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -184,17 +158,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
       | ( Some (v, l1),
-          Unop
-            ( Mast.Not,
-              ( Mir.Binop
-                  ( (Mast.And, _),
-                    ( Comparison
-                        ( (Mast.Lte, _),
-                          (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _),
-                          (_, _) ),
-                      _ ),
-                    _ ),
-                _ ) ) ) ->
+          Unop (Not, (Comparison ((Mast.Eq, _), (Literal l2, _), (_, _)), _)) )
+        ->
           Cli.error_print "Test %s incorrect (error on variable %s)" name
             (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name);
           let errs_varname =
@@ -215,7 +180,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.debug_flag := false;
       let code_coverage_result =
         check_test p (test_dir ^ name) optimize code_coverage_activated
-          value_sort round_ops test_error_margin
+          value_sort round_ops
       in
       Cli.debug_flag := true;
       let code_coverage_acc =

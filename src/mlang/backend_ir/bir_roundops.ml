@@ -14,8 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let epsilon = 0.000001
-
 module type RoundOpsInterface = sig
   type t
 
@@ -31,7 +29,8 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
+  let truncatef (x : N.t) : N.t =
+    N.floor N.(x +. N.of_float !Cli.comparison_error_margin)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
@@ -42,15 +41,17 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
          N.(
            x
            +. N.of_float
-                (if N.(x < zero ()) then Float.sub (-0.5) epsilon
-                else Float.add 0.5 epsilon)))
+                (if N.(x < zero ()) then
+                 Float.sub (-0.5) !Cli.comparison_error_margin
+                else Float.add 0.5 !Cli.comparison_error_margin)))
 end
 
 module MultiRoundOps (N : Bir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
+  let truncatef (x : N.t) : N.t =
+    N.floor N.(x +. N.of_float !Cli.comparison_error_margin)
 
   let roundf (x : N.t) =
     let n_0_5 = N.of_float 0.5 in
@@ -72,12 +73,15 @@ end)
   let ceil_g (x : N.t) : N.t =
     if N.abs x <= N.of_int !L.max_long then N.ceil x else x
 
-  let truncatef (x : N.t) : N.t = floor_g N.(x +. N.of_float epsilon)
+  let truncatef (x : N.t) : N.t =
+    floor_g N.(x +. N.of_float !Cli.comparison_error_margin)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    if N.(x < zero ()) then ceil_g N.(x -. N.of_float (Float.add 0.5 epsilon))
-    else floor_g N.(x +. N.of_float (Float.add 0.5 epsilon))
+    if N.(x < zero ()) then
+      ceil_g N.(x -. N.of_float (Float.add 0.5 !Cli.comparison_error_margin))
+    else
+      floor_g N.(x +. N.of_float (Float.add 0.5 !Cli.comparison_error_margin))
 end

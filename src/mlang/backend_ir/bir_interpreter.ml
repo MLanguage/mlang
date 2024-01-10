@@ -397,7 +397,7 @@ struct
     else values.(Int64.to_int (N.to_int idx))
 
   let compare_numbers op i1 i2 =
-    let epsilon = N.of_float Bir_roundops.epsilon in
+    let epsilon = N.of_float !Cli.comparison_error_margin in
     match op with
     | Mast.Gt -> N.(i1 >. i2 +. epsilon)
     | Mast.Gte -> N.(i1 >. i2 -. epsilon)

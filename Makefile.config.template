@@ -34,8 +34,6 @@
 # Interpreter instrumentation
 # ---------------------------
 
-# TEST_ERROR_MARGIN=0.
-
 # CODE_COVERAGE=1
 
 ##################################################
