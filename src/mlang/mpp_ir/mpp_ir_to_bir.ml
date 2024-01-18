@@ -392,6 +392,13 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
                    | Mir.PrintString s -> Mir.PrintString s
                    | Mir.PrintName (v, vid) -> Mir.PrintName (v, vid)
                    | Mir.PrintAlias (v, vid) -> Mir.PrintAlias (v, vid)
+                   | Mir.PrintIndent e ->
+                       Mir.PrintIndent
+                         (Pos.same_pos_as
+                            (Mir.map_expr_var
+                               Bir.(var_from_mir default_tgv)
+                               (Pos.unmark e))
+                            e)
                    | Mir.PrintExpr (e, min, max) ->
                        Mir.PrintExpr
                          ( Pos.same_pos_as

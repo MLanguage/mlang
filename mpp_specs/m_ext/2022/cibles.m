@@ -231,35 +231,61 @@ verifier domaine corrective
 
 # primitif ml
 
+# erreur free() quad on affiche PASTOTAL dans trace_in/trace_out
+
+cible trace_in:
+application: iliad;
+afficher_erreur "[ " nom(RASTXFOYER) " = " (RASTXFOYER) "\n";
+afficher_erreur indenter(2);
+
+cible trace_out:
+application: iliad;
+afficher_erreur indenter(-2);
+afficher_erreur "] " nom(RASTXFOYER) " = " (RASTXFOYER) "\n";
+
 cible calcul_prim_corr:
 application: iliad;
+afficher_erreur "calcul_prim_corr[\n";
+calculer cible trace_in;
 si V_IND_TRAIT = 4 alors # PRIMITIF
   calculer cible calcul_primitif;
 sinon
   calculer cible calcul_correctif;
 finsi
+calculer cible trace_out;
+afficher_erreur "]calcul_prim_corr\n";
 
 cible effacer_base_etc:
 application : iliad;
+afficher_erreur "effacer_base_etc[\n";
+calculer cible trace_in;
 iterer
 : variable ITBASE
 : categorie calculee base *
 : dans (
   ITBASE = indefini;
 )
+calculer cible trace_out;
+afficher_erreur "]effacer_base_etc\n";
 
 cible effacer_calculee_etc:
 application : iliad;
+afficher_erreur "effacer_calculee_etc[\n";
+calculer cible trace_in;
 iterer
 : variable ITCAL
 : categorie calculee, calculee restituee
 : dans (
   ITCAL = indefini;
 )
+calculer cible trace_out;
+afficher_erreur "]effacer_calculee_etc\n";
 
 cible calcule_acomptes:
 application: iliad;
 variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+afficher_erreur "calcule_acomptes[\n";
+calculer cible trace_in;
 FLAG_ACO = 1;
 V_CALCUL_ACO = 1;
 calculer cible calcul_prim_corr;
@@ -273,9 +299,13 @@ si V_IND_TRAIT = 4 alors # PRIMITIF
   ART1731BIS = SAUV_ART1731BIS;
   PREM8_11 = SAUV_PREM8_11;
 finsi
+calculer cible trace_out;
+afficher_erreur "]calcule_acomptes\n";
 
 cible effacer_avfisc_1:
 application: iliad;
+afficher_erreur "effacer_avfisc_1[\n";
+calculer cible trace_in;
 iterer
 : variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
@@ -283,15 +313,46 @@ iterer
 : dans (
   REV_AV = indefini;
 )
+calculer cible trace_out;
+afficher_erreur "]effacer_avfisc_1\n";
+
+cible est_code_supp_avfisc:
+application: iliad;
+afficher_erreur "est_code_supp_avfisc[\n";
+calculer cible trace_in;
+VARTMP1 = 0;
+#si
+#     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
+#  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
+#  ou present(RFDHIS)  ou present(REPSNO3_A)
+#  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
+#  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
+#  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
+#  ou present(PINELQO_A)
+#alors
+#  VARTMP1 = 1;
+#sinon
+  iterer
+  : variable REV_AV
+  : categorie saisie revenu, saisie revenu corrective
+  : avec attribut(REV_AV, avfisc) = 2 et present(REV_AV)
+  : dans (
+    VARTMP1 = 1;
+  )
+#finsi
+calculer cible trace_out;
+afficher_erreur "]est_code_supp_avfisc\n";
 
 cible calcule_avfiscal:
 application: iliad;
 variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
+afficher_erreur "calcule_avfiscal[\n";
+calculer cible trace_in;
 EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)  
+  : avec attribut(REV_AV, avfisc) dans (1, 2) et present(REV_AV)  
 : dans (
   EXISTE_AVFISC = 1;
 )
@@ -306,11 +367,11 @@ si EXISTE_AVFISC = 1 alors
     V_CALCUL_NAPS = 1;
     calculer cible calcul_prim_corr;
     V_CALCUL_NAPS = 0;
-    SAUV_ART1731BIS = ART1731BIS + 0;
-    SAUV_PREM8_11 = PREM8_11 + 0;
     SAUV_IAD11 = IAD11;
     SAUV_INE = INE;
     SAUV_IRE = IRE;
+    SAUV_ART1731BIS = ART1731BIS + 0;
+    SAUV_PREM8_11 = PREM8_11 + 0;
     calculer cible effacer_calculee_etc;
     si V_IND_TRAIT = 4 alors # PRIMITIF
       calculer cible effacer_base_etc;
@@ -324,9 +385,13 @@ si EXISTE_AVFISC = 1 alors
 sinon
   calculer cible effacer_avfisc_1;
 finsi
+calculer cible trace_out;
+afficher_erreur "]calcule_avfiscal\n";
 
 cible article_1731_bis:
 application : iliad;
+afficher_erreur "article_1731_bis[\n";
+calculer cible trace_in;
 si V_IND_TRAIT = 4 alors # PRIMITIF
   si CMAJ dans (8, 11) alors
     ART1731BIS = 1;
@@ -335,15 +400,19 @@ si V_IND_TRAIT = 4 alors # PRIMITIF
     ART1731BIS = 0;
   finsi
 finsi
+calculer cible trace_out;
+afficher_erreur "]article_1731_bis\n";
 
 cible calcule_acomptes_avfisc:
 application: iliad;
 variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+afficher_erreur "calcule_acomptes_avfisc[\n";
+calculer cible trace_in;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
 FLAG_ACO = 1;
 calculer cible calcule_avfiscal;
 V_INDTEO = 0;
-V_NEGREEL = si (NAP_SANS_PENA_REEL <= 0.0) alors (1) sinon (0) finsi;
+V_NEGREEL = si (NAP_SANS_PENA_REEL > 0.0) alors (0) sinon (1) finsi;
 V_NAPREEL = abs(NAP_SANS_PENA_REEL);
 V_CALCUL_ACO = 1;
 calculer cible calcul_prim_corr;
@@ -354,9 +423,13 @@ si V_IND_TRAIT = 4 alors # PRIMITIF
   ART1731BIS = SAUV_ART1731BIS;
   PREM8_11 = SAUV_PREM8_11;
 finsi
+calculer cible trace_out;
+afficher_erreur "]calcule_acomptes_avfisc\n";
 
 cible est_calcul_acomptes:
 application: iliad;
+afficher_erreur "est_calcul_acomptes[\n";
+calculer cible trace_in;
 VARTMP1 = 0;
 iterer
 : variable REV_AC
@@ -365,32 +438,13 @@ iterer
 : dans (
   VARTMP1 = 1;
 )
-
-cible est_code_supp_avfisc:
-application: iliad;
-VARTMP1 = 0;
-si
-     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
-  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-  ou present(RFDHIS)  ou present(REPSNO3_A)
-  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
-  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
-  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
-  ou present(PINELQO_A)
-alors
-  VARTMP1 = 1;
-sinon
-  iterer
-  : variable REV_AV
-  : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(REV_AV, avfisc) = 2 et present(REV_AV)
-  : dans (
-    VARTMP1 = 1;
-  )
-finsi
+calculer cible trace_out;
+afficher_erreur "]est_calcul_acomptes\n";
 
 cible est_calcul_avfisc:
 application: iliad;
+afficher_erreur "est_calcul_avfisc[\n";
+calculer cible trace_in;
 calculer cible est_code_supp_avfisc;
 si VARTMP1 = 0 alors
   iterer
@@ -401,10 +455,14 @@ si VARTMP1 = 0 alors
     VARTMP1 = 1;
   )
 finsi
+calculer cible trace_out;
+afficher_erreur "]est_calcul_avfisc\n";
 
 cible traite_double_liquidation3:
 application: iliad;
 variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+afficher_erreur "traite_double_liquidation3[\n";
+calculer cible trace_in;
 P_EST_CALCUL_ACOMPTES = VARTMP1;
 FLAG_ACO = 0;
 V_NEGACO = 0;
@@ -424,7 +482,7 @@ si CALCUL_AVFISC = 1 alors
 sinon
   SAUV_IRANT = 0;
 finsi
-si CALCUL_ACOMPTES  = 1 et P_EST_CALCUL_ACOMPTES alors
+si CALCUL_ACOMPTES = 1 et P_EST_CALCUL_ACOMPTES != 0 alors
   restaurer
   : variable REV_AC
   : categorie saisie revenu, saisie revenu corrective
@@ -460,13 +518,21 @@ V_ACO_MTAP = 0;
 V_NEGACO = 0;
 calculer cible calcul_primitif_isf;
 calculer cible calcul_prim_corr;
+afficher_erreur "calcul_primitif_taux[\n";
+calculer cible trace_in;
 calculer cible calcul_primitif_taux;
+calculer cible trace_out;
+afficher_erreur "]calcul_primitif_taux\n";
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible verif_calcul_primitive;
 finsi
+calculer cible trace_out;
+afficher_erreur "]traite_double_liquidation3\n";
 
 cible traite_double_liquidation_exit_taxe:
 application: iliad;
+afficher_erreur "traite_double_liquidation_exit_taxe[\n";
+calculer cible trace_in;
 si present(PVIMPOS) ou present(CODRWB) alors
   FLAG_3WBNEG = 0;
   FLAG_EXIT = 1;
@@ -529,9 +595,13 @@ finsi
 FLAG_BAREM = 0;
 VARTMP1 = 1;
 calculer cible traite_double_liquidation3;
+calculer cible trace_out;
+afficher_erreur "]traite_double_liquidation_exit_taxe\n";
 
 cible traite_double_liquidation_pvro:
 application: iliad;
+afficher_erreur "traite_double_liquidation_pvro[\n";
+calculer cible trace_in;
 si present(COD3WG) alors
   FLAG_PVRO = 1;
   calculer cible traite_double_liquidation_exit_taxe;
@@ -541,15 +611,368 @@ si present(COD3WG) alors
 finsi
 FLAG_PVRO = 0;
 calculer cible traite_double_liquidation_exit_taxe;
+calculer cible trace_out;
+afficher_erreur "]traite_double_liquidation_pvro\n";
+
+cible ir_verif_saisie_isf:
+application: iliad;
+calculer cible regle_1;
+calculer cible verif_saisie_cohe_primitive_isf_raw;
+
+cible ir_verif_contexte:
+application: iliad;
+calculer cible regle_1;
+calculer cible verif_contexte_cohe_primitive;
+
+cible ir_verif_famille:
+application: iliad;
+calculer cible regle_1;
+calculer cible verif_famille_cohe_primitive;
+
+cible ir_verif_revenu:
+application: iliad;
+afficher_erreur "ir_verif_revenu[\n";
+calculer cible trace_in;
+si
+  present(COD9AA) ou present(COD9AB) ou present(COD9AC) ou present(COD9AD)
+  ou present(COD9AE) ou present(COD9BA) ou present(COD9BB) ou present(COD9CA)
+  ou present(COD9GF) ou present(COD9GH) ou present(COD9GL) ou present(COD9GM)
+  ou present(COD9GN) ou present(COD9GY) ou present(COD9NC) ou present(COD9NG)
+  ou present(COD9PR) ou present(COD9PX) ou present(COD9RS) ou present(CMAJ_ISF)
+  ou present(MOISAN_ISF)
+alors
+  si V_REGCO + 0 = 0 alors
+    V_REGCO = 1;
+  finsi
+  si V_0DA + 0 = 0 alors
+    V_0DA = 1980;
+  finsi
+finsi
+calculer cible regle_1;
+calculer cible verif_revenu_cohe_primitive;
+calculer cible trace_out;
+afficher_erreur "]ir_verif_revenu\n";
+
+cible ir_calcul_primitif_isf:
+application: iliad;
+afficher_erreur "ir_calcul_primitif_isf[\n";
+calculer cible trace_in;
+calculer cible calcul_primitif_isf;
+nettoie_erreurs;
+calculer cible verif_calcul_primitive_isf;
+calculer cible trace_out;
+afficher_erreur "]ir_calcul_primitif_isf\n";
+
+cible modulation_taxation:
+application: iliad;
+afficher_erreur "modulation_taxation[\n";
+calculer cible trace_in;
+si V_MODUL = 1 alors
+  iterer
+  : variable IT_MOD
+  : categorie saisie revenu, saisie revenu corrective, saisie famille
+  : avec present(IT_MOD) et attribut(IT_MOD, modcat) < 1
+  : dans (
+    IT_MOD = indefini;
+    leve_erreur DD40 IT_MOD;
+  )
+  iterer
+  : variable IT_MOD
+  : categorie saisie contexte
+  : avec present(IT_MOD) et attribut(IT_MOD, modcat) < 1
+  : dans (
+    IT_MOD = indefini;
+  )
+finsi
+si (non present(V_MODUL)) ou V_MODUL != 1 alors
+  iterer
+  : variable IT_MOD
+  : categorie saisie revenu, saisie revenu corrective, saisie famille
+  : avec present(IT_MOD) et attribut(IT_MOD, modcat) > 1
+  : dans (
+    IT_MOD = indefini;
+  )
+  iterer
+  : variable IT_MOD
+  : categorie saisie contexte
+  : avec present(IT_MOD) et attribut(IT_MOD, modcat) > 1
+  : dans (
+    IT_MOD = indefini;
+    leve_erreur DD40 IT_MOD;
+  )
+finsi
+calculer cible trace_out;
+afficher_erreur "]modulation_taxation\n";
 
 cible traite_double_liquidation_2:
 application: iliad;
+afficher_erreur "traite_double_liquidation2[\n";
+calculer cible trace_in;
+calculer cible ir_verif_saisie_isf;
+calculer cible ir_verif_contexte;
+calculer cible ir_verif_famille;
+calculer cible ir_verif_revenu;
+calculer cible ir_calcul_primitif_isf;
+calculer cible effacer_base_etc;
+calculer cible modulation_taxation;
 calculer cible traite_double_liquidation_pvro;
+calculer cible sauve_base_initial;
+calculer cible sauve_base_1728;
+calculer cible sauve_base_anterieure;
+calculer cible sauve_base_anterieure_cor;
+calculer cible sauve_base_inr_inter22;
+calculer cible trace_out;
+afficher_erreur "]traite_double_liquidation2\n";
+
 
 # primitif iterpréteur
 
 cible traite_double_liquidation_2_interpreteur:
 application: iliad;
-V_IND_TRAIT = 4;
+V_IND_TRAIT = 4; # primitif
 calculer cible traite_double_liquidation_2;
 
+#{
+
+IAMD2
+  AUTOVERSSUP
+  COD8UA
+  COD8UB
+
+  AVFISCOPTER
+  IAD11
+  IBATMARG
+  IMPETAL19
+  IMPETAL20
+  IMPETAL21
+  ITP
+  PVMTS
+  REI
+  VERSLIB
+
+
+Testing /home/dmichel101/MlangMpp/mlang/tests/2022/fuzzing/fuzzer_10107.m_test...
+KO | IAMD2 attendu: 702802380.000000 - calculé: 2599523890.000000
+KO | IAMD28EA attendu: 702802380.000000 - calculé: 2599523890.000000
+KO | IAR attendu: -1193944130.000000 - calculé: 702777380.000000
+KO | IAVIM attendu: 1054640843.000000 - calculé: 2951362353.000000
+KO | IINET attendu: 5793420719.000000 - calculé: 7690142229.000000
+KO | IINETCALC attendu: 5793420719.000000 - calculé: 7690142229.000000
+KO | IITAZIR attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | ILIIRNET attendu: -842105667.000000 - calculé: 702777380.000000
+KO | ILITOTIRNET attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | IMPNET attendu: 5793420719.000000 - calculé: 7690142229.000000
+KO | IMPNETIR attendu: -4239540292.000000 - calculé: -2342818782.000000
+KO | INDIRN1 attendu: 1.000000 - calculé: 0.000000
+KO | IRB attendu: 702802380.000000 - calculé: 2599523890.000000
+KO | IRCOMP attendu: 1002203818.000000 - calculé: 2898925328.000000
+KO | IRESTCIMR attendu: 842105667.000000 - calculé: 0.000000
+KO | IRESTIR attendu: 842105667.000000 - calculé: 0.000000
+KO | IRN attendu: -1193944130.000000 - calculé: 702777380.000000
+KO | IRN8EA attendu: -1193944130.000000 - calculé: 702777380.000000
+KO | IRNET3 attendu: 1002203818.000000 - calculé: 2547086865.000000
+KO | IRNETBA attendu: -842105667.000000 - calculé: 702777380.000000
+KO | IRPSCUM attendu: 6535132273.000000 - calculé: 8431853783.000000
+KO | IRPSNET attendu: 6535132273.000000 - calculé: 8431853783.000000
+KO | NAPT attendu: 5793420719.000000 - calculé: 7690142229.000000
+KO | NAPTEMP attendu: 6535132273.000000 - calculé: 8431853783.000000
+KO | NAPTIR attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | NAPTIR1 attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | NAPTIR2 attendu: 1002203818.000000 - calculé: 2898925328.000000
+KO | NAPTIR61 attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | NAPTIRNET attendu: 1002203818.000000 - calculé: 2898925328.000000
+KO | NAPTIRNET2 attendu: -842105667.000000 - calculé: 1054615843.000000
+KO | RECUMIR attendu: 842105667.000000 - calculé: 0.000000
+KO | TOTIRCUM attendu: 1844309485.000000 - calculé: 2898925328.000000
+KO | VARIRPSNET attendu: 6535132273.000000 - calculé: 8431853783.000000
+KO | VARNAPTIR attendu: 1002203818.000000 - calculé: 2898925328.000000
+KO | V_BARIITAZIR attendu: 842105667.000000 - calculé: 1054615843.000000
+
+traite_double_liquidation2[
+[ AVFISCOPTER = indefini
+[ IAMD2 = indefini
+  ir_verif_revenu[
+  [ AVFISCOPTER = indefini
+  [ IAMD2 = indefini
+  ] AVFISCOPTER = indefini
+  ] IAMD2 = indefini
+  ]ir_verif_revenu
+  ir_calcul_primitif_isf[
+  [ AVFISCOPTER = indefini
+  [ IAMD2 = indefini
+  ] AVFISCOPTER = indefini
+  ] IAMD2 = indefini
+  ]ir_calcul_primitif_isf
+  effacer_base_etc[
+  [ AVFISCOPTER = indefini
+  [ IAMD2 = indefini
+  ] AVFISCOPTER = indefini
+  ] IAMD2 = indefini
+  ]effacer_base_etc
+  modulation_taxation[
+  [ AVFISCOPTER = indefini
+  [ IAMD2 = indefini
+  ] AVFISCOPTER = indefini
+  ] IAMD2 = indefini
+  ]modulation_taxation
+  traite_double_liquidation_pvro[
+  [ AVFISCOPTER = indefini
+  [ IAMD2 = indefini
+    traite_double_liquidation_exit_taxe[
+    [ AVFISCOPTER = indefini
+    [ IAMD2 = indefini
+      traite_double_liquidation3[
+      [ AVFISCOPTER = indefini
+      [ IAMD2 = indefini
+        article_1731_bis[
+        [ AVFISCOPTER = indefini
+        [ IAMD2 = indefini
+        ] AVFISCOPTER = indefini
+        ] IAMD2 = indefini
+        ]article_1731_bis
+        est_calcul_acomptes[
+        [ AVFISCOPTER = indefini
+        [ IAMD2 = indefini
+        ] AVFISCOPTER = indefini
+        ] IAMD2 = indefini
+        ]est_calcul_acomptes
+        est_calcul_avfisc[
+        [ AVFISCOPTER = indefini
+        [ IAMD2 = indefini
+        ] AVFISCOPTER = indefini
+        ] IAMD2 = indefini
+        ]est_calcul_avfisc
+        calcule_acomptes_avfisc[
+        [ AVFISCOPTER = indefini
+        [ IAMD2 = indefini
+          calcule_avfiscal[
+          [ AVFISCOPTER = indefini
+          [ IAMD2 = indefini
+            effacer_avfisc_1[
+            [ AVFISCOPTER = indefini
+            [ IAMD2 = indefini
+            ] AVFISCOPTER = indefini
+            ] IAMD2 = indefini
+            ]effacer_avfisc_1
+          ] AVFISCOPTER = indefini
+          ] IAMD2 = indefini
+          ]calcule_avfiscal
+          calcul_prim_corr[
+          [ AVFISCOPTER = indefini
+          [ IAMD2 = indefini
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = 2599523890
+          ]calcul_prim_corr
+          effacer_calculee_etc[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = 2599523890
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = indefini
+          ]effacer_calculee_etc
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = indefini
+        ]calcule_acomptes_avfisc
+        calcule_avfiscal[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = indefini
+          effacer_avfisc_1[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = indefini
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = indefini
+          ]effacer_avfisc_1
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = indefini
+        ]calcule_avfiscal
+        calcul_prim_corr[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = indefini
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = 2599523890
+        ]calcul_prim_corr
+      ] AVFISCOPTER = 1896721510
+      ] IAMD2 = 2599523890
+      ]traite_double_liquidation3
+      traite_double_liquidation3[
+      [ AVFISCOPTER = 1896721510
+      [ IAMD2 = 2599523890
+        article_1731_bis[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = 2599523890
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = 2599523890
+        ]article_1731_bis
+        est_calcul_acomptes[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = 2599523890
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = 2599523890
+        ]est_calcul_acomptes
+        est_calcul_avfisc[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = 2599523890
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = 2599523890
+        ]est_calcul_avfisc
+        calcule_acomptes_avfisc[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = 2599523890
+          calcule_avfiscal[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = 2599523890
+            effacer_avfisc_1[
+            [ AVFISCOPTER = 1896721510
+            [ IAMD2 = 2599523890
+            ] AVFISCOPTER = 1896721510
+            ] IAMD2 = 2599523890
+            ]effacer_avfisc_1
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = 2599523890
+          ]calcule_avfiscal
+          calcul_prim_corr[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = 2599523890
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = 2599523890
+          ]calcul_prim_corr
+          effacer_calculee_etc[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = 2599523890
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = indefini
+          ]effacer_calculee_etc
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = indefini
+        ]calcule_acomptes_avfisc
+        calcule_avfiscal[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = indefini
+          effacer_avfisc_1[
+          [ AVFISCOPTER = 1896721510
+          [ IAMD2 = indefini
+          ] AVFISCOPTER = 1896721510
+          ] IAMD2 = indefini
+          ]effacer_avfisc_1
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = indefini
+        ]calcule_avfiscal
+        calcul_prim_corr[
+        [ AVFISCOPTER = 1896721510
+        [ IAMD2 = indefini
+        ] AVFISCOPTER = 1896721510
+        ] IAMD2 = 2599523890
+        ]calcul_prim_corr
+      ] AVFISCOPTER = 1896721510
+      ] IAMD2 = 2599523890
+      ]traite_double_liquidation3
+    ] AVFISCOPTER = 1896721510
+    ] IAMD2 = 2599523890
+    ]traite_double_liquidation_exit_taxe
+  ] AVFISCOPTER = 1896721510
+  ] IAMD2 = 2599523890
+  ]traite_double_liquidation_pvro
+] AVFISCOPTER = 1896721510
+] IAMD2 = 2599523890
+]traite_double_liquidation2
+
+}#

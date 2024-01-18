@@ -194,6 +194,7 @@ type 'variable print_arg =
   | PrintString of string
   | PrintName of string Pos.marked * variable
   | PrintAlias of string Pos.marked * variable
+  | PrintIndent of 'variable expression_ Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type error_descr = {

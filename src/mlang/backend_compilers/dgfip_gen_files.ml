@@ -843,23 +843,24 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        if var.Mir.cats = Some cat then (
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-            (Pos.unmark var.Mir.name)
-            (match var.Mir.alias with Some s -> s | None -> "")
-            idx size id_int;
-          let attr_map =
-            List.fold_left
-              (fun res (an, al) ->
-                let vn = Pos.unmark an in
-                let vl = Pos.unmark al in
-                StrMap.add vn vl res)
-              StrMap.empty var.Mir.attributes
-          in
-          StrMap.iter (fun _ av -> Format.fprintf fmt ", %d" av) attr_map;
-          Format.fprintf fmt " },\n";
-          nb + 1)
-        else nb)
+        match var.Mir.cats with
+        | Some c when Mir.compare_cat_variable c cat = 0 ->
+            Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
+              (Pos.unmark var.Mir.name)
+              (match var.Mir.alias with Some s -> s | None -> "")
+              idx size id_int;
+            let attr_map =
+              List.fold_left
+                (fun res (an, al) ->
+                  let vn = Pos.unmark an in
+                  let vl = Pos.unmark al in
+                  StrMap.add vn vl res)
+                StrMap.empty var.Mir.attributes
+            in
+            StrMap.iter (fun _ av -> Format.fprintf fmt ", %d" av) attr_map;
+            Format.fprintf fmt " },\n";
+            nb + 1
+        | _ -> nb)
       var_dict 0
   in
   Format.fprintf fmt "  NULL\n};\n\n";
@@ -1426,11 +1427,20 @@ let gen_const fmt =
     {|#define FALSE 0
 #define TRUE 1
 
+struct S_print_context {
+  long indent;
+  int is_newline;
+};
+
+typedef struct S_print_context T_print_context;
+
 #ifdef FLG_COMPACT
 
 struct S_irdata {
   double valeurs[NB_VARS];
   char defs[NB_VARS];
+  T_print_context ctx_pr_out;
+  T_print_context ctx_pr_err;
 };
 
 #define S_ irdata->valeurs
@@ -1480,6 +1490,8 @@ struct S_irdata
   int max_bloquantes;
   jmp_buf jmp_bloq;
 #endif /* FLG_MULTITHREAD */
+  T_print_context ctx_pr_out;
+  T_print_context ctx_pr_err;
 };
 
 typedef struct S_irdata T_irdata;
@@ -1590,7 +1602,10 @@ let gen_lib fmt flags vars rules verifs chainings errors =
   else Format.fprintf fmt "\n";
 
   Format.fprintf fmt
-    {|extern void print_double(FILE *std, double f, int pmin, int pmax);
+    {|extern void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff);
+extern void print_indent(FILE *std, T_print_context *pr_ctx);
+extern void print_string(FILE *std, T_print_context *pr_ctx, char *str);
+extern void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax);
 
 typedef struct S_env_sauvegarde {
   char sauv_def;
@@ -2002,7 +2017,35 @@ void env_restaurer(T_env_sauvegarde *liste) {
   }
 }
 
-void print_double(FILE *std, double f, int pmin, int pmax) {
+void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff) {
+  long d = (long)floor(diff + 0.5);
+  pr_ctx->indent = max(0, pr_ctx->indent + d);
+}
+
+void print_indent(FILE *std, T_print_context *pr_ctx) {
+  if (pr_ctx->is_newline) {
+    int i;
+    for (i = 1; i < pr_ctx->indent; i++) {
+      fprintf(std, " ");
+    }
+    pr_ctx->is_newline = 0;
+  }
+}
+
+void print_string(FILE *std, T_print_context *pr_ctx, char *str) {
+  while (*str != 0) {
+    if (*str == '\n') {
+      pr_ctx->is_newline = 1;
+    } else {
+      print_indent(std, pr_ctx);
+    }
+    fprintf(std, "%c", *str);
+    str++;
+  }
+}
+
+void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax) {
+  print_indent(std, pr_ctx);
   if (pmin < 0) {
     pmin = 0;
   }

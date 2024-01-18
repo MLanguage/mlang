@@ -342,6 +342,9 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
               Format.fprintf oc "%s(\"%%s\", %s);@," print_std s
           | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
               Errors.raise_spanned_error "not implemented yet !!!" pos
+          | Mir.PrintIndent _e ->
+              Errors.raise_spanned_error "not implemented yet !!!"
+                (Pos.get_position stmt)
           | Mir.PrintExpr (e, _, _) ->
               Format.fprintf oc "cond = %s;@,%s(\"%%s\", cond.toString());@,"
                 (fst (generate_java_expr e))

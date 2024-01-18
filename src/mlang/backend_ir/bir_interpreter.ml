@@ -69,10 +69,14 @@ module type S = sig
   val format_var_value_with_var :
     Format.formatter -> Bir.variable * var_value -> unit
 
+  type print_ctx = { indent : int; is_newline : bool }
+
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
     ctx_it : Mir.variable IntMap.t;
+    ctx_pr_out : print_ctx;
+    ctx_pr_err : print_ctx;
   }
 
   val empty_ctx : ctx
@@ -190,10 +194,14 @@ struct
             Format.fprintf fmt "| %d -> %a\n" idx format_value value)
           (Array.to_list values)
 
+  type print_ctx = { indent : int; is_newline : bool }
+
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
     ctx_it : Mir.variable IntMap.t;
+    ctx_pr_out : print_ctx;
+    ctx_pr_err : print_ctx;
   }
 
   let empty_ctx : ctx =
@@ -201,6 +209,8 @@ struct
       ctx_local_vars = Mir.LocalVariableMap.empty;
       ctx_vars = Bir.VariableMap.empty;
       ctx_it = IntMap.empty;
+      ctx_pr_out = { indent = 0; is_newline = true };
+      ctx_pr_err = { indent = 0; is_newline = true };
     }
 
   let literal_to_value (l : Mir.literal) : value =
@@ -904,31 +914,81 @@ struct
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
     (* Mpp_function arguments seem to be used only to determine which variables
        are actually output. Does this actually make sense ? *)
-    | Bir.SPrint (std, args) ->
-        let std_fmt =
+    | Bir.SPrint (std, args) -> (
+        let std_fmt, ctx_pr =
           match std with
-          | Mast.StdOut -> Format.std_formatter
-          | Mast.StdErr -> Format.err_formatter
+          | Mast.StdOut -> (Format.std_formatter, ctx.ctx_pr_out)
+          | Mast.StdErr -> (Format.err_formatter, ctx.ctx_pr_err)
         in
-        List.iter
-          (function
-            | Mir.PrintString s -> Format.pp_print_string std_fmt s
-            | Mir.PrintName (_, var) -> (
-                match IntMap.find_opt var.Mir.id ctx.ctx_it with
-                | Some mvar ->
-                    Format.pp_print_string std_fmt (Pos.unmark mvar.Mir.name)
-                | None -> assert false)
-            | Mir.PrintAlias (_, var) -> (
-                match IntMap.find_opt var.Mir.id ctx.ctx_it with
-                | Some mvar ->
-                    Format.pp_print_string std_fmt
-                      (match mvar.Mir.alias with Some a -> a | None -> "")
-                | None -> assert false)
-            | Mir.PrintExpr (e, mi, ma) ->
-                let var_value = evaluate_simple_variable p ctx (Pos.unmark e) in
-                format_var_value_prec mi ma std_fmt var_value)
-          args;
-        ctx
+        let pr_indent ctx_pr =
+          if ctx_pr.is_newline then (
+            for _i = 1 to ctx_pr.indent do
+              Format.fprintf std_fmt " "
+            done;
+            { ctx_pr with is_newline = false })
+          else ctx_pr
+        in
+        let pr_raw ctx_pr s =
+          let len = String.length s in
+          let rec aux ctx_pr = function
+            | n when n >= len -> ctx_pr
+            | n -> (
+                match s.[n] with
+                | '\n' ->
+                    Format.fprintf std_fmt "\n";
+                    aux { ctx_pr with is_newline = true } (n + 1)
+                | c ->
+                    let ctx_pr = pr_indent ctx_pr in
+                    Format.fprintf std_fmt "%c" c;
+                    aux ctx_pr (n + 1))
+          in
+          aux ctx_pr 0
+        in
+        let ctx_pr =
+          List.fold_left
+            (fun ctx_pr arg ->
+              match arg with
+              | Mir.PrintString s -> pr_raw ctx_pr s
+              | Mir.PrintName (_, var) -> (
+                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
+                  | Some mvar -> pr_raw ctx_pr (Pos.unmark mvar.Mir.name)
+                  | None -> assert false)
+              | Mir.PrintAlias (_, var) -> (
+                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
+                  | Some mvar ->
+                      pr_raw ctx_pr
+                        (match mvar.Mir.alias with Some a -> a | None -> "")
+                  | None -> assert false)
+              | Mir.PrintIndent e ->
+                  let var_value =
+                    evaluate_simple_variable p ctx (Pos.unmark e)
+                  in
+                  let diff =
+                    match var_value with
+                    | SimpleVar e -> (
+                        match e with
+                        | Undefined -> 0
+                        | Number x -> Int64.to_int (N.to_int (roundf x)))
+                    | TableVar (_, es) -> (
+                        if Array.length es = 0 then 0
+                        else
+                          match es.(0) with
+                          | Undefined -> 0
+                          | Number x -> Int64.to_int (N.to_int (roundf x)))
+                  in
+                  { ctx_pr with indent = max 0 (ctx_pr.indent + diff) }
+              | Mir.PrintExpr (e, mi, ma) ->
+                  let var_value =
+                    evaluate_simple_variable p ctx (Pos.unmark e)
+                  in
+                  let ctx_pr = pr_indent ctx_pr in
+                  format_var_value_prec mi ma std_fmt var_value;
+                  ctx_pr)
+            ctx_pr args
+        in
+        match std with
+        | Mast.StdOut -> { ctx with ctx_pr_out = ctx_pr }
+        | Mast.StdErr -> { ctx with ctx_pr_err = ctx_pr })
     | Bir.SIterate (var, vcs, expr, stmts) ->
         let eval vc ctx =
           Mir.VariableDict.fold

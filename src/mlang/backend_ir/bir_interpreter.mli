@@ -86,10 +86,14 @@ module type S = sig
   val format_var_value_with_var :
     Format.formatter -> Bir.variable * var_value -> unit
 
+  type print_ctx = { indent : int; is_newline : bool }
+
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
     ctx_it : Mir.variable IntMap.t;
+    ctx_pr_out : print_ctx;
+    ctx_pr_err : print_ctx;
   }
   (** Interpretation context *)
 

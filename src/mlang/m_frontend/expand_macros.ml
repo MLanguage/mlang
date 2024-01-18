@@ -536,6 +536,9 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
+            | Mast.PrintIndent expr ->
+                let expr' = expand_expression const_map ParamsMap.empty expr in
+                (Mast.PrintIndent expr', Pos.get_position arg)
             | Mast.PrintExpr (expr, mi, ma) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Mast.PrintExpr (expr', mi, ma), Pos.get_position arg)

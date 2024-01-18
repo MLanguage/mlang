@@ -198,6 +198,10 @@ T_irdata * IRDATA_new_irdata(void)
   irdata->max_bloquantes = 0;
 #endif /* FLG_MULTITHREAD */
 #endif /* !FLG_COMPACT */
+  irdata->ctx_pr_out.indent = 0;
+  irdata->ctx_pr_out.is_newline = 1;
+  irdata->ctx_pr_err.indent = 0;
+  irdata->ctx_pr_err.is_newline = 1;
   IRDATA_reset_irdata(irdata);
   return irdata;
 }
@@ -1733,4 +1737,47 @@ char * IRDATA_desc_err_nom_erreur(struct S_desc_err *desc_err)
 }
 
 #endif /* FLG_DEBUG */
+
+double cherche_varinfo(T_irdata *irdata, char *nom) {
+#define CHERCHE_VARINFO(TYP,TAB) \
+  for (i = 0; i < NB_##TYP; i++) { \
+    T_varinfo_##TYP *info = &(varinfo_##TYP[i]); \
+    if ( \
+      strcmp(nom, info->name) == 0 \
+      || (info->alias != NULL && strcmp(nom, info->alias) == 0) \
+    ) { \
+      if (irdata->def_##TAB [info->idx] == 0) { \
+        return NAN; \
+      } else { \
+        return irdata->TAB[info->idx]; \
+      } \
+    } \
+  } \
+
+  int i;
+  CHERCHE_VARINFO(calculee,calculee)
+  CHERCHE_VARINFO(calculee_base,base)
+  CHERCHE_VARINFO(calculee_base_restituee,base)
+  CHERCHE_VARINFO(calculee_restituee,calculee)
+  CHERCHE_VARINFO(saisie_contexte,saisie)
+  CHERCHE_VARINFO(saisie_famille,saisie)
+  CHERCHE_VARINFO(saisie_penalite,saisie)
+  CHERCHE_VARINFO(saisie_revenu,saisie)
+  CHERCHE_VARINFO(saisie_variation,saisie)
+#undef CHERCHE_VARINFO
+  return -1;
+}
+
+void pr_var(T_irdata *irdata, char *prefix, char *nom) {
+  double val = cherche_varinfo(irdata, nom);
+  if (isinf(val)) {
+    fprintf(stderr, "XXX %s %s inconnue\n", prefix, nom);
+  } else if (isnan(val)) {
+    fprintf(stderr, "XXX %s %s = indefini\n", prefix, nom);
+  } else {
+    fprintf(stderr, "XXX %s %s = ", prefix, nom);
+    print_double(stderr, val, 0, 30);
+    fprintf(stderr, "\n");
+  }
+}
 

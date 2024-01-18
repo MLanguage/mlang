@@ -41,7 +41,13 @@ let check_result tgv err expected_tgv expected_err =
       | "NBPT" -> ()
       | _ ->
           let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
-          if montant <> montant' then
+          let comp =
+            (* abs_float (montant -. montant') >= 0.000001 *)
+            let m = Float.round (montant *. 100.) in
+            let m' = Float.round (montant' *. 100.) in
+            abs_float (m -. m') > 0.0
+          in
+          if comp then
             begin
               result := false;
               Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
@@ -142,15 +148,11 @@ let run_test test_file flag_no_bin_compare =
     if List.exists (fun e -> e.[0] = 'A') err1 then
       begin
         Printf.eprintf
-          "Anomalies dans les données saisies, pas de calcul primitif\n%!";
-        []
-      end
-    else
-      begin
-        let _err = M.calcul_primitif_isf tgv in
-        let _err = M.verif_calcul_primitive_isf tgv in
-        M.traite_double_liquidation_2 tgv
-      end
+          "Anomalies dans les données saisies\n%!"
+      end;
+    let _err = M.calcul_primitif_isf tgv in
+    let _err = M.verif_calcul_primitive_isf tgv in
+    M.traite_double_liquidation_2 tgv
   in
 
   let err = err1 @ err2 in

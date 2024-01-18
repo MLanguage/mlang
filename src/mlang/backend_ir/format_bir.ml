@@ -26,7 +26,11 @@ let format_print_arg fmt = function
   | Mir.PrintString s -> Format.fprintf fmt "\"%s\"" s
   | Mir.PrintName (v, _) -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
   | Mir.PrintAlias (v, _) -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
-  | PrintExpr (e, min, max) ->
+  | Mir.PrintIndent e ->
+      Format.fprintf fmt "indenter(%a)"
+        (Format_mast.pp_unmark format_expression)
+        e
+  | Mir.PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e
       else if max = max_int then

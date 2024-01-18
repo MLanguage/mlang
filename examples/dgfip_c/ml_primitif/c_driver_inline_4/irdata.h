@@ -251,5 +251,7 @@ extern struct S_discord * verif_revenu_cohe_corrective _PROTS((T_irdata *irdata)
 extern struct S_discord * verif_cohe_horizontale _PROTS((T_irdata *irdata));
 #endif /* FLG_CORRECTIF */
 
+extern void pr_var(T_irdata *irdata, char *prefix, char *nom);
+
 #endif /* _IRDATA_H_ */
 

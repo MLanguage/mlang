@@ -391,8 +391,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       generate_rov_function_header ~definition:false oc rov
   | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);" f
   | SPrint (std, args) ->
-      let print_std =
-        match std with Mast.StdOut -> "stdout" | Mast.StdErr -> "stderr"
+      let print_std, pr_ctx =
+        match std with
+        | Mast.StdOut -> ("stdout", "&(irdata->ctx_pr_out)")
+        | Mast.StdErr -> ("stderr", "&(irdata->ctx_pr_err)")
       in
       let print_val = fresh_c_local "mpp_print" in
       let print_def = print_val ^ "_d" in
@@ -400,22 +402,36 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       List.iter
         (function
           | Mir.PrintString s ->
-              Format.fprintf oc "fprintf(%s, \"%s\");@;" print_std
-                (str_escape s)
+              Format.fprintf oc "print_string(%s, %s, \"%s\");@;" print_std
+                pr_ctx (str_escape s)
           | Mir.PrintName (_, var) -> begin
               match Mir.VariableMap.find var var_indexes with
               | Dgfip_varid.VarIterate (t, _, _) ->
-                  Format.fprintf oc "fprintf(%s, \"%%s\", %s->name);@;"
-                    print_std t
+                  Format.fprintf oc "print_string(%s, %s, %s->name);@;"
+                    print_std pr_ctx t
               | _ -> assert false
             end
           | Mir.PrintAlias (_, var) -> begin
               match Mir.VariableMap.find var var_indexes with
               | Dgfip_varid.VarIterate (t, _, _) ->
-                  Format.fprintf oc "fprintf(%s, \"%%s\", %s->alias);@;"
-                    print_std t
+                  Format.fprintf oc "print_string(%s, %s, %s->alias);@;"
+                    print_std pr_ctx t
               | _ -> assert false
             end
+          | Mir.PrintIndent e ->
+              let locals, def, value =
+                D.build_expression @@ generate_c_expr program e var_indexes
+              in
+              Format.fprintf oc "@[<v 2>{%a%a@;%a@;@]}@;"
+                D.format_local_declarations locals
+                (D.format_assign dgfip_flags var_indexes print_def)
+                def
+                (D.format_assign dgfip_flags var_indexes print_val)
+                value;
+              Format.fprintf oc "@[<v 2>if(%s){@;" print_def;
+              Format.fprintf oc "set_print_indent(%s, %s, %s);@]@;" print_std
+                pr_ctx print_val;
+              Format.fprintf oc "}@;"
           | Mir.PrintExpr (e, min, max) ->
               let locals, def, value =
                 D.build_expression @@ generate_c_expr program e var_indexes
@@ -427,10 +443,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
                 (D.format_assign dgfip_flags var_indexes print_val)
                 value;
               Format.fprintf oc "@[<v 2>if(%s){@;" print_def;
-              Format.fprintf oc "print_double(%s, %s, %d, %d);@]@;" print_std
-                print_val min max;
+              Format.fprintf oc "print_double(%s, %s, %s, %d, %d);@]@;"
+                print_std pr_ctx print_val min max;
               Format.fprintf oc "@[<v 2>} else {@;";
-              Format.fprintf oc "fprintf(%s, \"indefini\");@]@;}@;" print_std)
+              Format.fprintf oc "print_string(%s, %s, \"indefini\");@]@;}@;"
+                print_std pr_ctx)
         args;
       Format.fprintf oc "@]@;}@;"
   | SIterate (var, vcs, expr, stmts) ->

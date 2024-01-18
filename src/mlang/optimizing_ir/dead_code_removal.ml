@@ -149,7 +149,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
                   match arg with
                   | Mir.PrintString _ | Mir.PrintName _ | Mir.PrintAlias _ ->
                       used_vars
-                  | Mir.PrintExpr (e, _, _) ->
+                  | Mir.PrintIndent e | Mir.PrintExpr (e, _, _) ->
                       update_used_vars (Bir.get_used_variables e) pos used_vars)
                 used_vars args
             in

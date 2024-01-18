@@ -201,6 +201,7 @@ type print_arg =
   | PrintString of string
   | PrintName of variable Pos.marked
   | PrintAlias of variable Pos.marked
+  | PrintIndent of expression Pos.marked
   | PrintExpr of expression Pos.marked * int * int
 
 type var_category_id = string Pos.marked list Pos.marked

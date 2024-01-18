@@ -372,6 +372,9 @@ let expand_functions (p : Mir_interface.full_program) :
                    (fun m_arg ->
                      let arg, arg_pos = m_arg in
                      match arg with
+                     | PrintIndent e ->
+                         let e' = expand_functions_expr e in
+                         (PrintIndent e', arg_pos)
                      | PrintExpr (e, mi, ma) ->
                          let e' = expand_functions_expr e in
                          (PrintExpr (e', mi, ma), arg_pos)

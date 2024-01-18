@@ -350,7 +350,8 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
               (fun acc arg ->
                 match arg with
                 | Mir.PrintString _ | Mir.PrintName _ | Mir.PrintAlias _ -> acc
-                | Mir.PrintExpr (e, _, _) -> get_local_vars_expr acc e)
+                | Mir.PrintIndent e | Mir.PrintExpr (e, _, _) ->
+                    get_local_vars_expr acc e)
               acc args
         | SRaiseError _ | SCleanErrors -> acc
         | SFunctionCall _ | SRovCall _ -> assert false

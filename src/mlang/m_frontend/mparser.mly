@@ -47,7 +47,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF PRINT PRINT_ERR RAISE_ERROR CLEAN_ERRORS
+%token IF THEN ELSE ENDIF PRINT PRINT_ERR NAME INDENT RAISE_ERROR CLEAN_ERRORS
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY SIZE NB_ERROR
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
@@ -538,15 +538,12 @@ print_argument:
 | s = STRING { PrintString (parse_string s) }
 | f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
     {
-      let m_var = (parse_variable $sloc (fst v), snd v) in
       match Pos.unmark f with
-      | "nom" -> PrintName m_var
-      | "alias" -> PrintAlias m_var
-      | _ ->
-          Errors.raise_spanned_error
-            "unknown print function"
-            (Pos.get_position f)
+      | "nom" -> PrintName (parse_variable $sloc (fst v), snd v)
+      | "alias" -> PrintAlias (parse_variable $sloc (fst v), snd v)
+      | _ -> assert false
     }
+| INDENT LPAREN e = with_pos(expression) RPAREN { PrintIndent e }
 | LPAREN e = with_pos(expression) RPAREN prec = print_precision?
     {
       match prec with
@@ -555,8 +552,8 @@ print_argument:
     }
 
 print_function:
+| NAME { "nom" }
 | ALIAS { "alias" }
-| s = SYMBOL { s }
 
 print_precision:
 | COLON min = symbol_with_pos

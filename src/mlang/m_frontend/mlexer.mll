@@ -84,12 +84,14 @@ rule token = parse
 | "finsi" { ENDIF }
 | "fonction" { FONCTION }
 | "indefini" { UNDEFINED }
+| "indenter" { INDENT }
 | "informative" { INFORMATIVE }
 | "iterer" { ITERATE }
 | "leve_erreur" { RAISE_ERROR }
 | "nb_categorie" { NB_CATEGORY }
 | "nb_erreur" { NB_ERROR }
 | "nettoie_erreurs" { CLEAN_ERRORS }
+| "nom" { NAME }
 | "non" { NOT }
 | "non dans" { NOTIN }
 | "numero_compl" { COMPL_NUMBER }

@@ -1141,6 +1141,8 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                              Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
+                   | Mast.PrintIndent e ->
+                       Mir.PrintIndent (translate_expression cats idmap ctx e)
                    | Mast.PrintExpr (e, min, max) ->
                        Mir.PrintExpr
                          (translate_expression cats idmap ctx e, min, max)
@@ -1429,22 +1431,9 @@ let get_conds (verif_domains : Mir.verif_domain Mast.DomainIdMap.t)
                           match var.Mir.cats with
                           | None -> subtypes
                           | Some c ->
-                              if
-                                Mir.CatVarSet.mem c
-                                  cond_domain.dom_data.vdom_auth
-                              then
-                                Mir.CatVarMap.add c
-                                  (1 + Mir.CatVarMap.find c subtypes)
-                                  subtypes
-                              else
-                                Errors.raise_error
-                                  (Format.asprintf
-                                     "forbidden variable \"%s\" of category \
-                                      \"%a\" in verif %d of domain \"%a\""
-                                     (Pos.unmark var.Mir.name)
-                                     Mir.pp_cat_variable c rule_number
-                                     (Mast.DomainId.pp ())
-                                     (Pos.unmark cond_domain.dom_id)))
+                              Mir.CatVarMap.add c
+                                (1 + Mir.CatVarMap.find c subtypes)
+                                subtypes)
                         (Mir.CatVarMap.map (fun _ -> 0) cats)
                         (Pos.unmark e)
                     in

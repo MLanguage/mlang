@@ -199,6 +199,8 @@ let format_print_arg fmt = function
   | PrintName v -> Format.fprintf fmt "nom(%a)" format_variable (Pos.unmark v)
   | PrintAlias v ->
       Format.fprintf fmt "alias(%a)" format_variable (Pos.unmark v)
+  | PrintIndent e ->
+      Format.fprintf fmt "indenter(%a)" (pp_unmark format_expression) e
   | PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (pp_unmark format_expression) e

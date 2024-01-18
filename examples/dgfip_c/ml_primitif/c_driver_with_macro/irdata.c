@@ -195,6 +195,10 @@ T_irdata * IRDATA_new_irdata(void)
   irdata->max_bloquantes = 0;
 #endif /* FLG_MULTITHREAD */
 #endif /* !FLG_COMPACT */
+  irdata->ctx_pr_out.indent = 0;
+  irdata->ctx_pr_out.is_newline = 1;
+  irdata->ctx_pr_err.indent = 0;
+  irdata->ctx_pr_err.is_newline = 1;
   IRDATA_reset_irdata(irdata);
   return irdata;
 }

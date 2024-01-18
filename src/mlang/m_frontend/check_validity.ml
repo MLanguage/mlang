@@ -1267,6 +1267,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Mast.PrintString _ -> ()
                 | Mast.PrintName v | Mast.PrintAlias v ->
                     ignore (check_variable v Both env)
+                | Mast.PrintIndent e -> ignore (check_expression false e env)
                 | Mast.PrintExpr (e, _min, _max) ->
                     ignore (check_expression false e env))
               args;
@@ -1346,9 +1347,13 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Some _ -> ());
             (match m_var_opt with
             | Some (var_name, var_pos) -> (
-                match StrMap.find_opt var_name env.prog.prog_vars with
-                | None -> Err.unknown_variable var_pos
-                | Some _ -> ())
+                if
+                  (not (StrMap.mem var_name env.tmp_vars))
+                  && not (StrMap.mem var_name env.it_vars)
+                then
+                  match StrMap.find_opt var_name env.prog.prog_vars with
+                  | None -> Err.unknown_variable var_pos
+                  | Some _ -> ())
             | None -> ());
             aux (env, m_instr :: res, in_vars, out_vars) il
         | Mast.CleanErrors ->
