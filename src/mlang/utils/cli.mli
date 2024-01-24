@@ -109,6 +109,8 @@ val optimize_unsafe_float : bool ref
 val m_clean_calls : bool ref
 (** Clean regular variables between M calls *)
 
+val comparison_error_margin : float ref
+
 val value_sort : value_sort ref
 
 val round_ops : round_ops ref
@@ -124,6 +126,7 @@ val set_all_arg_refs :
   (* output_file *) string option ->
   (* optimize_unsafe_float *) bool ->
   (* m_clean_call *) bool ->
+  (* comparison_error_margin*) float option ->
   value_sort ->
   round_ops ->
   unit

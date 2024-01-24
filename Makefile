@@ -15,10 +15,7 @@ else
     TEST_FILTER_FLAG=
 endif
 
-TEST_ERROR_MARGIN?=0.
-
 MLANG_INTERPRETER_OPTS=\
-	--test_error_margin=$(TEST_ERROR_MARGIN) \
 	--mpp_file=$(MPP_FILE) \
 	--mpp_function=$(MPP_FUNCTION)
 

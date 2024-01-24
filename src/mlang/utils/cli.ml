@@ -171,14 +171,20 @@ let roundops =
            running on a mainframe. In this case, the size of the long type has \
            to be specified; it can be either 32 or 64.")
 
-let test_error_margin =
+let comparison_error_margin_cli =
   Arg.(
     value
-    & opt (some float) (Some 0.)
-    & info [ "test_error_margin" ] ~docv:"ERROR_MARGIN"
+    & opt (some float) None
+    & info
+        [ "comparison_error_margin" ]
+        ~docv:"COMP_ERROR_MARGIN"
         ~doc:
-          "Margin of error tolerated when executing tests, as a float. Default \
-           0.")
+          "When executing comparisons between numbers, the M semantics allows \
+           a little bit of slack to account for imprecise number \
+           representation. This number defines how much slack is allowed and \
+           in which comparisons return true even if they should return false. \
+           This slack also affects the rounding operations by tweaking results \
+           around .5. This option defaults to 10^(-6).")
 
 let m_clean_calls =
   Arg.(
@@ -211,7 +217,8 @@ let mlang_t f =
     $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ mpp_file
     $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
     $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ roundops
-    $ test_error_margin $ m_clean_calls $ dgfip_options $ var_dependencies)
+    $ comparison_error_margin_cli $ m_clean_calls $ dgfip_options
+    $ var_dependencies)
 
 let info =
   let doc =
@@ -295,12 +302,16 @@ let value_sort = ref RegularFloat
 
 let round_ops = ref RODefault
 
+(* Default value for the epsilon slack when comparing things in the
+   interpreter *)
+let comparison_error_margin = ref 0.000001
+
 let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
-    (m_clean_calls_ : bool) (value_sort_ : value_sort) (round_ops_ : round_ops)
-    =
+    (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
+    (value_sort_ : value_sort) (round_ops_ : round_ops) =
   source_files := files_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
@@ -313,7 +324,10 @@ let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
   m_clean_calls := m_clean_calls_;
   value_sort := value_sort_;
   round_ops := round_ops_;
-  match output_file_ with None -> () | Some o -> output_file := o
+  (match output_file_ with None -> () | Some o -> output_file := o);
+  match comparison_error_margin_ with
+  | None -> ()
+  | Some m -> comparison_error_margin := m
 
 (**{1 Terminal formatting}*)
 

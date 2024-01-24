@@ -301,21 +301,27 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  let comp o =
+  let comp (o : Mast.comp_op) =
     match (e1, e2) with
-    | Dlit f1, Dlit f2 -> if o f1 f2 then Dtrue else Dfalse
+    | Dlit f1, Dlit f2 ->
+        if
+          Bir_interpreter.FloatDefInterp.compare_numbers o
+            (Bir_number.RegularFloatNumber.of_float f1)
+            (Bir_number.RegularFloatNumber.of_float f2)
+        then Dtrue
+        else Dfalse
     | Dvar v1, Dvar v2 ->
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
     | _ -> Dbinop (op, e1, e2)
   in
   let e =
     match op with
-    | "==" -> comp ( = )
-    | "!=" -> comp ( <> )
-    | "<=" -> comp ( <= )
-    | "<" -> comp ( < )
-    | ">=" -> comp ( >= )
-    | ">" -> comp ( > )
+    | "==" -> comp Mast.Eq
+    | "!=" -> comp Mast.Neq
+    | "<=" -> comp Mast.Lte
+    | "<" -> comp Mast.Lt
+    | ">=" -> comp Mast.Gte
+    | ">" -> comp Mast.Gt
     | _ -> assert false
   in
   (e, Def, lv2 @ lv1)
@@ -442,9 +448,30 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
       Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
         de2
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
-  | Dbinop (op, de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ %s %a@])" format_dexpr de1 op
-        format_dexpr de2
+  | Dbinop (op, de1, de2) -> begin
+      match op with
+      | ">" ->
+          Format.fprintf fmt "@[<hov 2>(GT_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "<" ->
+          Format.fprintf fmt "@[<hov 2>(LT_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | ">=" ->
+          Format.fprintf fmt "@[<hov 2>(GE_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "<=" ->
+          Format.fprintf fmt "@[<hov 2>(LE_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "==" ->
+          Format.fprintf fmt "@[<hov 2>(EQ_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | "!=" ->
+          Format.fprintf fmt "@[<hov 2>(NEQ_E((%a),(%a))@])" format_dexpr de1
+            format_dexpr de2
+      | _ ->
+          Format.fprintf fmt "@[<hov 2>((%a)@ %s (%a)@])" format_dexpr de1 op
+            format_dexpr de2
+    end
   | Dfun (funname, des) ->
       Format.fprintf fmt "@[<hov 2>%s(%a@])" funname
         (Format.pp_print_list

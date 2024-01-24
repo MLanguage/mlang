@@ -81,7 +81,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (run_test : string option) (mpp_function : string) (optimize : bool)
     (optimize_unsafe_float : bool) (code_coverage : bool)
     (precision : string option) (roundops : string option)
-    (test_error_margin : float option) (m_clean_calls : bool)
+    (comparison_error_margin : float option) (m_clean_calls : bool)
     (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
   let value_sort =
@@ -129,7 +129,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
   in
   Cli.set_all_arg_refs files without_dgfip_m debug var_info_debug display_time
     dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
-    value_sort round_ops;
+    comparison_error_margin value_sort round_ops;
   try
     let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
@@ -261,9 +261,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
       in
       Test_interpreter.check_all_tests combined_program tests optimize
-        code_coverage value_sort round_ops
-        (Option.get test_error_margin)
-        filter_function
+        code_coverage value_sort round_ops filter_function
     end
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
@@ -275,8 +273,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
       in
       ignore
         (Test_interpreter.check_test combined_program test optimize false
-           value_sort round_ops
-           (Option.get test_error_margin));
+           value_sort round_ops);
       Cli.result_print "Test passed!"
     end
     else begin
