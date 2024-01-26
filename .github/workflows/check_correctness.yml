@@ -73,6 +73,12 @@ jobs:
           eval $(opam env)
           make test_java_backend
 
+      - name: Test Ocaml backend
+        run: |
+          eval $(opam env)
+          make test_ocaml_backend
+          
+
 
 
 

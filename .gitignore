@@ -6,3 +6,5 @@ doc.html
 *~
 /_opam
 /Makefile.config
+/.vscode
+examples/ocaml/**/.merlin

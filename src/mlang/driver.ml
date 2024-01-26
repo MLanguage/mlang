@@ -330,6 +330,13 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
               function_spec !Cli.output_file vm;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
+          else if String.lowercase_ascii backend = "ocaml" then begin
+            Cli.debug_print "Compiling codebase to OCaml";
+            if !Cli.output_file = "" then
+              Errors.raise_error "an output file must be defined with --output";
+            Bir_to_ocaml.generate_ocaml_program combined_program function_spec
+              !Cli.output_file
+          end
           else
             Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
