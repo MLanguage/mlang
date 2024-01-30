@@ -42,8 +42,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
              v2.Mir.Variable.execution_number)
          (Pos.VarNameToID.find name p.program_idmap))
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
-    (test_error_margin : float) :
+let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
     List.fold_left
@@ -77,31 +76,10 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
                (find_var_of_name program.mir_program (var, convert_pos pos))
                  .Mir.Variable.name
            in
-           (* we allow a difference of 0.000001 between the control value and
-              the result *)
-           let first_exp =
-             ( Mast.Comparison
-                 ( (Lte, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           let second_exp =
-             ( Mast.Comparison
-                 ( (Lte, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
+           ( Mast.Comparison
+               ( (Mast.Eq, convert_pos pos),
+                 (Literal (to_ast_literal value), convert_pos pos),
+                 (Literal (Variable (Normal var)), convert_pos pos) ),
              convert_pos pos ))
          t.prim.resultats_attendus)
   in
@@ -110,14 +88,11 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file)
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (test_error_margin : float) :
-    Bir_instrumentation.code_coverage_result =
+    (round_ops : Cli.round_ops) : Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file =
-    to_MIR_function_and_inputs combined_program t test_error_margin
-  in
+  let f, input_file = to_MIR_function_and_inputs combined_program t in
   Cli.debug_print "Executing program";
   let combined_program, code_loc_offset =
     Bir_interface.adapt_program_to_function combined_program f
@@ -160,8 +135,7 @@ let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
 
 let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     (code_coverage_activated : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (test_error_margin : float)
-    (filter_function : string -> bool) =
+    (round_ops : Cli.round_ops) (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -184,17 +158,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
       | ( Some (v, l1),
-          Unop
-            ( Mast.Not,
-              ( Mir.Binop
-                  ( (Mast.And, _),
-                    ( Comparison
-                        ( (Mast.Lte, _),
-                          (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _),
-                          (_, _) ),
-                      _ ),
-                    _ ),
-                _ ) ) ) ->
+          Unop (Not, (Comparison ((Mast.Eq, _), (Literal l2, _), (_, _)), _)) )
+        ->
           Cli.error_print "Test %s incorrect (error on variable %s)" name
             (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name);
           let errs_varname =
@@ -215,7 +180,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.debug_flag := false;
       let code_coverage_result =
         check_test p (test_dir ^ name) optimize code_coverage_activated
-          value_sort round_ops test_error_margin
+          value_sort round_ops
       in
       Cli.debug_flag := true;
       let code_coverage_acc =
@@ -224,29 +189,70 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       in
       (name :: successes, failures, code_coverage_acc)
     with
-    | Interp.RuntimeError ((ConditionViolated _ as cv), _) ->
-        let expr, err, bindings =
-          match cv with
-          | Interp.ConditionViolated (err, expr, bindings) -> (
-              ( expr,
-                err,
-                match bindings with
-                | [ (v, Interp.SimpleVar l1) ] ->
-                    Some (v, Interp.value_to_literal l1)
-                | _ -> None ))
-          | _ -> assert false
-          (* should not happen *)
-        in
-        report_violated_condition_error bindings expr err
-    | Interp.RuntimeError (Interp.StructuredError (msg, pos, kont), _)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures, code_coverage_acc)
-    | Interp.RuntimeError (_, _) ->
-        Cli.error_print "Runtime error in test %s" name;
-        (successes, failures, code_coverage_acc)
+    | Interp.RuntimeError (run_error, _) -> (
+        match run_error with
+        | Interp.ConditionViolated _ as cv ->
+            let expr, err, bindings =
+              match cv with
+              | Interp.ConditionViolated (err, expr, bindings) -> (
+                  ( expr,
+                    err,
+                    match bindings with
+                    | [ (v, Interp.SimpleVar l1) ] ->
+                        Some (v, Interp.value_to_literal l1)
+                    | _ -> None ))
+              | _ -> assert false
+              (* should not happen *)
+            in
+            report_violated_condition_error bindings expr err
+        | Interp.StructuredError (msg, pos, kont) ->
+            Cli.error_print "Error in test %s: %a" name
+              Errors.format_structured_error (msg, pos);
+            (match kont with None -> () | Some kont -> kont ());
+            (successes, failures, code_coverage_acc)
+        | Interp.ErrorValue (msg, pos) ->
+            Cli.error_print "Runtime error in test %s: ErrorValue (%s, %a)" name
+              msg Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.FloatIndex (msg, pos) ->
+            Cli.error_print "Runtime error in test %s: FloatIndex (%s, %a)" name
+              msg Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.IndexOutOfBounds (msg, pos) ->
+            Cli.error_print
+              "Runtime error in test %s: IndexOutOfBounds (%s, %a)" name msg
+              Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.IncorrectOutputVariable (msg, pos) ->
+            Cli.error_print
+              "Runtime error in test %s: IncorrectOutputVariable (%s, %a)" name
+              msg Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.UnknownInputVariable (msg, pos) ->
+            Cli.error_print
+              "Runtime error in test %s: UnknownInputVariable (%s, %a)" name msg
+              Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.NanOrInf (msg, (_, pos)) ->
+            Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
+              msg Pos.format_position pos;
+            (successes, failures, code_coverage_acc)
+        | Interp.RaisedError (mir_err, _so, _pos) ->
+            Cli.error_print "Runtime error in test %s: %s)" name
+              (Pos.unmark (Mir.Error.err_descr_string mir_err));
+            (successes, failures, code_coverage_acc))
+    | Irj_include.Irj_ast.TestParsingError (msg, pos) as e ->
+        Cli.error_print "Parsing error: %s %a" msg Pos.format_position
+          (convert_pos pos);
+        raise e
+    | e ->
+        Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
+        raise e
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr)

@@ -2,8 +2,6 @@
 #                  C backend                  #
 ###############################################
 
-MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
-
 MLANG_DGFIP_C_OPTS=--mpp_function=$(MPP_FUNCTION_BACKEND)
 
 # Options supplémentaires pour le backend Mlang/DGFiP spécifiques à la cible
@@ -69,6 +67,7 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	@echo "  DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS)"
 	@echo "  DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS)"
 	@$(MLANG_DGFIP) \
+	  --comparison_error_margin=$(COMPARISON_ERROR_MARGIN) \
 	  --dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS) \
 	  --backend dgfip_c \
 	  --output calc/enchain.c \

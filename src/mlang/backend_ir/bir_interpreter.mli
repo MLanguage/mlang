@@ -139,12 +139,17 @@ module type S = sig
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
+  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+  (** Returns the comparison between two numbers in the rounding and precision
+      context of the interpreter. *)
+
   val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
 
   val evaluate_program : Bir.program -> ctx -> int -> ctx
 end
 
-module FloatDefInterp : S
+module FloatDefInterp :
+  S with type custom_float = Bir_number.RegularFloatNumber.t
 (** The different interpreters, which combine a representation of numbers and
     rounding operations. The first part of the name corresponds to the
     representation of numbers, and is one of the following:
@@ -163,15 +168,17 @@ module FloatDefInterp : S
     - Multi: use the rouding operations of the PC/multi-thread context
     - Mf: use the rounding operations of the mainframe context *)
 
-module FloatMultInterp : S
+module FloatMultInterp :
+  S with type custom_float = Bir_number.RegularFloatNumber.t
 
-module FloatMfInterp : S
+module FloatMfInterp :
+  S with type custom_float = Bir_number.RegularFloatNumber.t
 
-module MPFRDefInterp : S
+module MPFRDefInterp : S with type custom_float = Bir_number.MPFRNumber.t
 
-module MPFRMultInterp : S
+module MPFRMultInterp : S with type custom_float = Bir_number.MPFRNumber.t
 
-module MPFRMfInterp : S
+module MPFRMfInterp : S with type custom_float = Bir_number.MPFRNumber.t
 
 module BigIntDefInterp : S
 
@@ -179,17 +186,17 @@ module BigIntMultInterp : S
 
 module BigIntMfInterp : S
 
-module IntvDefInterp : S
+module IntvDefInterp : S with type custom_float = Bir_number.IntervalNumber.t
 
-module IntvMultInterp : S
+module IntvMultInterp : S with type custom_float = Bir_number.IntervalNumber.t
 
-module IntvMfInterp : S
+module IntvMfInterp : S with type custom_float = Bir_number.IntervalNumber.t
 
-module RatDefInterp : S
+module RatDefInterp : S with type custom_float = Bir_number.RationalNumber.t
 
-module RatMultInterp : S
+module RatMultInterp : S with type custom_float = Bir_number.RationalNumber.t
 
-module RatMfInterp : S
+module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
 
 (** {1 Generic interpretation API}*)
 

@@ -74,7 +74,7 @@ tests: FORCE build
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	$(MLANG_TEST) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR) $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG_TEST) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR)/ $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 quick_test: FORCE build
@@ -88,7 +88,7 @@ test_one: FORCE build
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	$(MLANG_TEST) --backend interpreter --run_test=$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG_TEST) --backend interpreter --run_test=$(TESTS_DIR)/$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 ##################################################

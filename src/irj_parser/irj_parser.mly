@@ -93,7 +93,14 @@ rappels:
   RESULTATSRAPP NL
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
-| ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL DATES? AVISIR? AVISCSG? { None }
+| ENTREESCORR NL
+  entrees_rappels = list(rappel)
+  CONTROLESCORR NL
+  controles_attendus = list(calc_error)
+  RESULTATSCORR NL
+  resultats_attendus = list(variable_and_value) 
+  DATES? AVISIR? AVISCSG?
+  { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }

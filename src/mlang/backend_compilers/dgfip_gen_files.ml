@@ -1521,8 +1521,11 @@ extern void free_erreur();
 #define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
+|};
+  Format.fprintf fmt "#define EPSILON %f" !Cli.comparison_error_margin;
 
-#define EPSILON 0.000001
+  Format.fprintf fmt
+    {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)
 #define LT_E(a,b) ((a) + EPSILON < (b))
 #define GE_E(a,b) ((a) > (b) - EPSILON)
@@ -1530,8 +1533,8 @@ extern void free_erreur();
 #define EQ_E(a,b) (fabs((a) - (b)) < EPSILON)
 #define NEQ_E(a,b) (fabs((a) - (b)) >= EPSILON)
 #define my_floor(a) (floor_g((a) + EPSILON))
-#define my_ceil(a) (ceil_g((a) - EPSILON));
-#define my_arr(a) (((a) < 0) ? ceil_g((a) - 0.5 - EPSILON) : floor_g((a) + .5 + EPSILON))
+#define my_ceil(a) (ceil_g((a) - EPSILON))
+#define my_arr(a) (((a) < 0) ? ceil_g((a) - 0.50005) : floor_g((a) + 0.50005))
 #define divd(a,b)	(NEQ_E((b),0.0) ? (a / b) : 0.0)
 
 extern double floor_g(double);
@@ -1613,10 +1616,10 @@ typedef struct S_env_sauvegarde {
   char *orig_def;
   double *orig_val;
   struct S_env_sauvegarde *suite;
-} *T_env_sauvegarde;
+} T_env_sauvegarde;
 
-extern void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz);
-extern void env_restaurer(T_env_sauvegarde *liste);
+extern void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, int sz);
+extern void env_restaurer(T_env_sauvegarde **liste);
 extern int nb_erreurs_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
 #ifdef FLG_MULTITHREAD
@@ -1988,8 +1991,8 @@ double modulo(double a, double b) {
   return (double)(((int)a) % ((int)b));
 }
 
-void env_sauvegarder_un(T_env_sauvegarde *liste, char *oDef, double *oVal) {
-  T_env_sauvegarde nouveau = (T_env_sauvegarde)malloc(sizeof (struct S_env_sauvegarde));
+void env_sauvegarder_un(T_env_sauvegarde **liste, char *oDef, double *oVal) {
+  T_env_sauvegarde *nouveau = (T_env_sauvegarde *)malloc(sizeof (T_env_sauvegarde));
   nouveau->sauv_def = *oDef;
   nouveau->sauv_val = *oVal;
   nouveau->orig_def = oDef;
@@ -1998,15 +2001,15 @@ void env_sauvegarder_un(T_env_sauvegarde *liste, char *oDef, double *oVal) {
   *liste = nouveau;
 }
 
-void env_sauvegarder(T_env_sauvegarde *liste, char *oDef, double *oVal, int sz) {
+void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, int sz) {
   int i;
   for (i = 0; i < sz; i++) {
     env_sauvegarder_un(liste, oDef + i, oVal + i);
   }
 }
 
-void env_restaurer(T_env_sauvegarde *liste) {
-  T_env_sauvegarde courant;
+void env_restaurer(T_env_sauvegarde **liste) {
+  T_env_sauvegarde *courant;
 
   while (*liste != NULL) {
     courant = *liste;
@@ -2071,13 +2074,13 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
     }
   } else {
     size_t sz;
-    char *buf;
+    char buf[1536];
     char *ptr_dot;
     char *ptr;
     int p;
 
-    sz = (size_t)ceil(log10(fabs(f) + 1)) + 21;
-    buf = malloc(sz + 1);
+/*    sz = (size_t)ceil(log10(fabs(f) + 1)) + 21;
+    buf = malloc(sz + 1); */
     sz = sprintf(buf, "%.*f", pmax, f);
     ptr_dot = &buf[sz - 1];
     while (ptr_dot != buf && *ptr_dot != '.') ptr_dot--;
@@ -2102,7 +2105,7 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
       if (*ptr == ',') *ptr = 0;
     }
     fprintf(std, "%s", buf);
-    free(buf);
+/*    free(buf); */
   }
 }
 

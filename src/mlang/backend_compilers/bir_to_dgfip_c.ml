@@ -491,7 +491,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
   | SRestore (vars, var_params, stmts) ->
       Format.fprintf oc "@[<v 2>{@;";
       let rest_name = fresh_c_local "restore" in
-      Format.fprintf oc "T_env_sauvegarde %s = NULL;@;" rest_name;
+      Format.fprintf oc "T_env_sauvegarde *%s = NULL;@;" rest_name;
       Bir.VariableSet.iter
         (fun v ->
           Format.fprintf oc "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name

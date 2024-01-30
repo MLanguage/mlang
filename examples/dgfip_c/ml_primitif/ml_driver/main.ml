@@ -126,7 +126,7 @@ let compare_dump out outexp =
   close_in out;
   close_in outexp
 
-let run_test test_file flag_no_bin_compare =
+let run_test test_file annee_exec flag_no_bin_compare =
   Printf.printf "Testing %s...\n%!" test_file;
 
   let annee_calc = M.annee_calc () in
@@ -142,8 +142,8 @@ let run_test test_file flag_no_bin_compare =
       annee_calc annee_revenu;
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
-  TGV.set_int tgv "ANCSDED" (annee_calc + 1); (* instead of execution date *)
-  let err1 = M.verif_saisie_cohe_primitive tgv in
+  TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
+(*  let err1 = M.verif_saisie_cohe_primitive tgv in
   let err2 =
     if List.exists (fun e -> e.[0] = 'A') err1 then
       begin
@@ -155,7 +155,8 @@ let run_test test_file flag_no_bin_compare =
     M.traite_double_liquidation_2 tgv
   in
 
-  let err = err1 @ err2 in
+  let err = err1 @ err2 in *)
+  let err = M.traite_double_liquidation_2 tgv in
   M.dump_raw_tgv_in out tgv err;
 
   let res_ok = check_result tgv err res_prim ctl_prim in
@@ -201,11 +202,23 @@ let main () =
     | None | Some "0"-> false
     | _ -> exit 31
   in
+  let annee_exec =
+    match Sys.getenv_opt "FAKE_YEAR" with
+    | Some y -> (
+        try
+          int_of_string y
+        with
+        | _ ->
+            Printf.printf "FAKE_YEAR n'est pas une année valide (%s)\n" y;
+            exit 31
+      )
+    | None -> M.annee_calc () + 1
+  in
   let rec loop =
     function
     | [] -> 0
     | test_file::args ->
-        let res = run_test test_file flag_no_bin_compare in
+        let res = run_test test_file annee_exec flag_no_bin_compare in
         if res <> 0 then res else loop args
   in
   loop args

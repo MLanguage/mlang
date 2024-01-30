@@ -117,6 +117,8 @@ module type S = sig
 
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
 
+  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+
   val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
 
   val evaluate_program : Bir.program -> ctx -> int -> ctx
@@ -465,6 +467,16 @@ struct
     else if N.(idx <. N.zero ()) then Number (N.zero ())
     else values.(Int64.to_int (N.to_int idx))
 
+  let compare_numbers op i1 i2 =
+    let epsilon = N.of_float !Cli.comparison_error_margin in
+    match op with
+    | Mast.Gt -> N.(i1 >. i2 +. epsilon)
+    | Mast.Gte -> N.(i1 >. i2 -. epsilon)
+    | Mast.Lt -> N.(i1 +. epsilon <. i2)
+    | Mast.Lte -> N.(i1 -. epsilon <. i2)
+    | Mast.Eq -> N.(N.abs (i1 -. i2) <. epsilon)
+    | Mast.Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
+
   let rec evaluate_expr (ctx : ctx) (p : Mir.program)
       (e : Bir.expression Pos.marked) : value =
     let out =
@@ -473,26 +485,15 @@ struct
         | Comparison (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
-            let epsilon = N.of_float Bir_roundops.epsilon in
             match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Gt, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 >. i2 +. epsilon))
             | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-            | Mast.Gte, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 >. i2 -. epsilon))
             | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-            | Mast.Lt, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 +. epsilon <. i2))
             | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-            | Mast.Lte, Number i1, Number i2 ->
-                Number N.(real_of_bool (i1 -. epsilon <. i2))
             | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-            | Mast.Eq, Number i1, Number i2 ->
-                Number N.(real_of_bool (N.abs (i1 -. i2) <. epsilon))
             | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-            | Mast.Neq, Number i1, Number i2 ->
-                Number N.(real_of_bool (N.abs (i1 -. i2) >=. epsilon))
-            | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined)
+            | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
+            | op, Number i1, Number i2 ->
+                Number (real_of_bool (compare_numbers op i1 i2)))
         | Binop (op, e1, e2) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
@@ -737,13 +738,21 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let report_error (err : Mir.error) (var_opt : string option) (pos : Pos.t)
+  exception Anomaly of ctx
+
+  let report_error (err : Mir.error) (var_opt : string option) (_pos : Pos.t)
       (ctx : ctx) : 'a =
     match err.Mir.Error.typ with
     | Mast.Anomaly ->
-        raise (RuntimeError (RaisedError (err, var_opt, pos), ctx))
-    | Mast.Discordance ->
+        (* raise (RuntimeError (RaisedError (err, var_opt, pos), ctx)) *)
         Cli.warning_print "Anomaly%s: %s"
+          (match var_opt with
+          | Some var -> Format.sprintf " (%s)" var
+          | None -> "")
+          (Pos.unmark (Mir.Error.err_descr_string err));
+        raise (Anomaly ctx)
+    | Mast.Discordance ->
+        Cli.warning_print "Discordance%s: %s"
           (match var_opt with
           | Some var -> Format.sprintf " (%s)" var
           | None -> "")
@@ -1107,9 +1116,11 @@ struct
            overload entered variables. *)
       in
       ctx
-    with RuntimeError (e, ctx) ->
-      if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
-      else raise (RuntimeError (e, ctx))
+    with
+    | Anomaly ctx -> ctx
+    | RuntimeError (e, ctx) ->
+        if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
+        else raise (RuntimeError (e, ctx))
 end
 
 module BigIntPrecision = struct
