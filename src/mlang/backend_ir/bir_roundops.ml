@@ -37,7 +37,7 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    let e = N.of_float (0.5 +. (epsilon *. 5.)) in
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
     if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
@@ -50,7 +50,7 @@ module MultiRoundOps (N : Bir_number.NumberInterface) :
   let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
   let roundf (x : N.t) =
-    let e = N.of_float (0.5 +. (epsilon *. 5.)) in
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
     if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
@@ -74,6 +74,6 @@ end)
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    let e = N.of_float (0.5 +. (epsilon *. 5.)) in
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
     if N.(x < zero ()) then ceil_g N.(x -. e) else floor_g N.(x +. e)
 end

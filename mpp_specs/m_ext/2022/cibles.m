@@ -231,21 +231,31 @@ verifier domaine corrective
 
 # primitif ml
 
-# erreur free() quand on affiche PASTOTAL dans trace_in/trace_out
-
 cible trace_in:
 application: iliad;
 variable temporaire: TOTO;
 TOTO = 0;
-#afficher_erreur "[ " nom(AVFISCO) " = " (AVFISCO) "\n";
+#afficher_erreur "[<" nom(COD1DH) " = " (COD1DH) "\n";
+#afficher_erreur "[<" nom(COD1DI) " = " (COD1DI) "\n";
+#afficher_erreur "[<" nom(PRB2) " = " (PRB2) "\n";
+#afficher_erreur "[<" nom(TEXPR2) " = " (TEXPR2) "\n";
+#afficher_erreur "[<" nom(TPRN2) " = " (TPRN2) "\n";
+#afficher_erreur "[<" nom(TPRR2) " = " (TPRR2) "\n";
 #afficher_erreur indenter(2);
 
 cible trace_out:
 application: iliad;
 variable temporaire: TOTO;
 TOTO = 0;
+#afficher_erreur "arr(" (TPRN2 * (PRB2 + COD1DI) / (TEXPR2 + COD1DI)) ") = " (arr(TPRN2 * (PRB2 + COD1DI) / (TEXPR2 + COD1DI))) "\n";
+#afficher_erreur "arr(" (TPRN2 * COD1DH / (TEXPR2 + COD1DI)) ") = " (arr(TPRN2 * COD1DH / (TEXPR2 + COD1DI))) "\n";
 #afficher_erreur indenter(-2);
-#afficher_erreur "] " nom(AVFISCO) " = " (AVFISCO) "\n";
+#afficher_erreur ">]" nom(COD1DH) " = " (COD1DH) "\n";
+#afficher_erreur ">]" nom(COD1DI) " = " (COD1DI) "\n";
+#afficher_erreur ">]" nom(PRB2) " = " (PRB2) "\n";
+#afficher_erreur ">]" nom(TEXPR2) " = " (TEXPR2) "\n";
+#afficher_erreur ">]" nom(TPRN2) " = " (TPRN2) "\n";
+#afficher_erreur ">]" nom(TPRR2) " = " (TPRR2) "\n";
 
 cible calcul_prim_corr:
 application: iliad;

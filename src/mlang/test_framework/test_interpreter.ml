@@ -45,6 +45,13 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
     Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
   let func_variable_inputs, input_file =
+    let ancsded =
+      find_var_of_name program.mir_program ("V_ANCSDED", Pos.no_pos)
+      |> Bir.(var_from_mir default_tgv)
+    in
+    let ancsded_val =
+      Mir.Float (float_of_int (Option.get !Cli.income_year + 1))
+    in
     List.fold_left
       (fun (fv, in_f) (var, value, pos) ->
         let var =
@@ -57,7 +64,8 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
           | F f -> Float f
         in
         (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
-      (Bir.VariableMap.empty, Bir.VariableMap.empty)
+      ( Bir.VariableMap.singleton ancsded (),
+        Bir.VariableMap.singleton ancsded ancsded_val )
       t.prim.entrees
   in
   let func_constant_inputs = Bir.VariableMap.empty in
@@ -76,10 +84,32 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
                (find_var_of_name program.mir_program (var, convert_pos pos))
                  .Mir.Variable.name
            in
-           ( Mast.Comparison
-               ( (Mast.Eq, convert_pos pos),
-                 (Literal (to_ast_literal value), convert_pos pos),
-                 (Literal (Variable (Normal var)), convert_pos pos) ),
+           (* we allow a difference of 0.000001 between the control value and
+              the result *)
+           let test_error_margin = 0.01 in
+           let first_exp =
+             ( Mast.Comparison
+                 ( (Lt, convert_pos pos),
+                   ( Mast.Binop
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
+           in
+           let second_exp =
+             ( Mast.Comparison
+                 ( (Lt, convert_pos pos),
+                   ( Mast.Binop
+                       ( (Mast.Sub, convert_pos pos),
+                         (Literal (to_ast_literal value), convert_pos pos),
+                         (Literal (Variable (Normal var)), convert_pos pos) ),
+                     convert_pos pos ),
+                   (Literal (Float test_error_margin), convert_pos pos) ),
+               convert_pos pos )
+           in
+           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
              convert_pos pos ))
          t.prim.resultats_attendus)
   in
@@ -158,10 +188,21 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.debug_flag := true;
       match (bindings, Pos.unmark expr) with
       | ( Some (v, l1),
-          Unop (Not, (Comparison ((Mast.Eq, _), (Literal l2, _), (_, _)), _)) )
-        ->
-          Cli.error_print "Test %s incorrect (error on variable %s)" name
-            (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name);
+          Unop
+            ( Mast.Not,
+              ( Mir.Binop
+                  ( (Mast.And, _),
+                    ( Comparison
+                        ( (Mast.Lt, _),
+                          (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _),
+                          (_, _) ),
+                      _ ),
+                    _ ),
+                _ ) ) ) ->
+          Cli.error_print "Test %s incorrect (error on variable %s: %a != %a)"
+            name
+            (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
+            Format_mir.format_literal l1 Format_mir.format_literal l2;
           let errs_varname =
             try Bir.VariableMap.find v failures with Not_found -> []
           in

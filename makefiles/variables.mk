@@ -127,6 +127,7 @@ endif
 COMPARISON_ERROR_MARGIN?=0.000001
 
 MLANG_INTERPRETER_OPTS=\
+  --income-year=$(YEAR) \
 	--comparison_error_margin=$(COMPARISON_ERROR_MARGIN) \
 	--mpp_function=$(MPP_FUNCTION)
 

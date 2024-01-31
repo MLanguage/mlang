@@ -1534,7 +1534,7 @@ extern void free_erreur();
 #define NEQ_E(a,b) (fabs((a) - (b)) >= EPSILON)
 #define my_floor(a) (floor_g((a) + EPSILON))
 #define my_ceil(a) (ceil_g((a) - EPSILON))
-#define my_arr(a) (((a) < 0) ? ceil_g((a) - 0.50005) : floor_g((a) + 0.50005))
+#define my_arr(a) (((a) < 0) ? ceil_g((a) - 0.5 - EPSILON * 50) : floor_g((a) + 0.5 + EPSILON * 50))
 #define divd(a,b)	(NEQ_E((b),0.0) ? (a / b) : 0.0)
 
 extern double floor_g(double);

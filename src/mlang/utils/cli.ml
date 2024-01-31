@@ -179,6 +179,13 @@ let comparison_error_margin_cli =
            This slack also affects the rounding operations by tweaking results \
            around .5. This option defaults to 10^(-6).")
 
+let income_year_cli =
+  Arg.(
+    value
+    & opt (some int) None
+    & info [ "income-year" ] ~docv:"INCOME_YEAR"
+        ~doc:"Set the year of the income.")
+
 let m_clean_calls =
   Arg.(
     value & flag
@@ -210,8 +217,8 @@ let mlang_t f =
     $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ output
     $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function $ optimize
     $ optimize_unsafe_float $ code_coverage $ precision $ roundops
-    $ comparison_error_margin_cli $ m_clean_calls $ dgfip_options
-    $ var_dependencies)
+    $ comparison_error_margin_cli $ income_year_cli $ m_clean_calls
+    $ dgfip_options $ var_dependencies)
 
 let info =
   let doc =
@@ -299,12 +306,15 @@ let round_ops = ref RODefault
    interpreter *)
 let comparison_error_margin = ref 0.000001
 
+let income_year = ref None
+
 let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
-    (value_sort_ : value_sort) (round_ops_ : round_ops) =
+    (income_year_ : int option) (value_sort_ : value_sort)
+    (round_ops_ : round_ops) =
   source_files := files_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
@@ -315,6 +325,7 @@ let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
   no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
+  income_year := income_year_;
   value_sort := value_sort_;
   round_ops := round_ops_;
   match output_file_ with

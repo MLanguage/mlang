@@ -81,9 +81,11 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (run_test : string option) (mpp_function : string) (optimize : bool)
     (optimize_unsafe_float : bool) (code_coverage : bool)
     (precision : string option) (roundops : string option)
-    (comparison_error_margin : float option) (m_clean_calls : bool)
-    (dgfip_options : string list option)
+    (comparison_error_margin : float option) (income_year : int option)
+    (m_clean_calls : bool) (dgfip_options : string list option)
     (var_dependencies : (string * string) option) =
+  if income_year = None then
+    Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
     let precision = Option.get precision in
     if precision = "double" then Cli.RegularFloat
@@ -129,7 +131,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
   in
   Cli.set_all_arg_refs files without_dgfip_m debug var_info_debug display_time
     dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
-    comparison_error_margin value_sort round_ops;
+    comparison_error_margin income_year value_sort round_ops;
   try
     let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";

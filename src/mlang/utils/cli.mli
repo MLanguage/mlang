@@ -39,6 +39,7 @@ val mlang_t :
   string option ->
   string option ->
   float option ->
+  int option ->
   bool ->
   string list option ->
   (string * string) option ->
@@ -110,6 +111,8 @@ val m_clean_calls : bool ref
 
 val comparison_error_margin : float ref
 
+val income_year : int option ref
+
 val value_sort : value_sort ref
 
 val round_ops : round_ops ref
@@ -126,6 +129,7 @@ val set_all_arg_refs :
   (* optimize_unsafe_float *) bool ->
   (* m_clean_call *) bool ->
   (* comparison_error_margin*) float option ->
+  (* income_year *) int option ->
   value_sort ->
   round_ops ->
   unit

@@ -67,6 +67,7 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	@echo "  DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS)"
 	@echo "  DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS)"
 	@$(MLANG_DGFIP) \
+	  --income-year=$(YEAR) \
 	  --comparison_error_margin=$(COMPARISON_ERROR_MARGIN) \
 	  --dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS) \
 	  --backend dgfip_c \
