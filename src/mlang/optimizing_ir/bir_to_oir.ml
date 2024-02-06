@@ -148,6 +148,11 @@ and translate_statement (s : Bir.stmt) (curr_block_id : Oir.block_id)
         append_to_block
           (Pos.same_pos_as Oir.SCleanErrors s)
           curr_block_id blocks )
+  | Bir.SExportErrors ->
+      ( curr_block_id,
+        append_to_block
+          (Pos.same_pos_as Oir.SExportErrors s)
+          curr_block_id blocks )
 
 let bir_stmts_to_cfg (stmts : Bir.stmt list) : Oir.cfg =
   let entry_block = fresh_block_id () in
@@ -231,6 +236,7 @@ let rec re_translate_statement (s : Oir.stmt)
   | Oir.SRaiseError (err, var_opt) ->
       (None, Some (Pos.same_pos_as (Bir.SRaiseError (err, var_opt)) s))
   | Oir.SCleanErrors -> (None, Some (Pos.same_pos_as Bir.SCleanErrors s))
+  | Oir.SExportErrors -> (None, Some (Pos.same_pos_as Bir.SExportErrors s))
 
 and re_translate_statement_list (stmts : Oir.stmt list)
     (blocks : Oir.block Oir.BlockMap.t) : int option * Bir.stmt list =

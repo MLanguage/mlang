@@ -164,7 +164,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
       (se3, s3)
-  | Attribut _ | Size _ | NbError ->
+  | Attribut _ | Size _ | NbAnomalies | NbDiscordances | NbInformatives ->
       Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
 
@@ -356,7 +356,7 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
   | SRestore _ ->
       Errors.raise_spanned_error "restorators not implemented in Java"
         (Pos.get_position stmt)
-  | SRaiseError _ | SCleanErrors ->
+  | SRaiseError _ | SCleanErrors | SExportErrors ->
       Errors.raise_spanned_error "errors not implemented in Java"
         (Pos.get_position stmt)
 

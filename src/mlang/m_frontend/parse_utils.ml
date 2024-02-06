@@ -159,3 +159,12 @@ let parse_string (s : string) : string =
       end
   in
   aux 0
+
+let parse_if_then_etc l =
+  let rec aux = function
+    | [ (Some e, ilt, pos) ] -> [ (Mast.IfThenElse (e, ilt, []), pos) ]
+    | [ (None, ile, _pos) ] -> ile
+    | (Some e, ilt, pos) :: le -> [ (Mast.IfThenElse (e, ilt, aux le), pos) ]
+    | _ -> assert false
+  in
+  match aux l with [ (i, _pos) ] -> i | _ -> assert false

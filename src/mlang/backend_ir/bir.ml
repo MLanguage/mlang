@@ -116,6 +116,7 @@ and stmt_kind =
       VariableSet.t * (variable * Mir.CatVarSet.t * expression) list * stmt list
   | SRaiseError of Mir.error * string option
   | SCleanErrors
+  | SExportErrors
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
   match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
@@ -206,7 +207,7 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
     (fun acc stmt ->
       match Pos.unmark stmt with
       | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ | SPrint _
-      | SRaiseError _ | SCleanErrors ->
+      | SRaiseError _ | SCleanErrors | SExportErrors ->
           acc + 1
       | SVerifBlock s -> acc + 1 + count_instr_blocks p s
       | SIterate (_, _, _, s) -> acc + 1 + count_instr_blocks p s
@@ -278,7 +279,7 @@ let get_assigned_variables (p : program) : VariableSet.t =
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
         | SPrint _ -> acc
-        | SRaiseError _ | SCleanErrors -> acc
+        | SRaiseError _ | SCleanErrors | SExportErrors -> acc
         | SRovCall _ | SFunctionCall _ -> assert false
         (* Cannot happen get_all_statements inlines all rule and mpp_function
            calls *))
@@ -304,7 +305,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
             get_local_vars_expr acc arg)
           acc args
     | Mir.Literal _ | Mir.Var _ | Mir.Error | Mir.NbCategory _ | Mir.Attribut _
-    | Mir.Size _ | Mir.NbError ->
+    | Mir.Size _ | Mir.NbAnomalies | Mir.NbDiscordances | Mir.NbInformatives ->
         acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
@@ -353,7 +354,7 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                 | Mir.PrintIndent e | Mir.PrintExpr (e, _, _) ->
                     get_local_vars_expr acc e)
               acc args
-        | SRaiseError _ | SCleanErrors -> acc
+        | SRaiseError _ | SCleanErrors | SExportErrors -> acc
         | SFunctionCall _ | SRovCall _ -> assert false
         (* Can't happen because SFunctionCall and SRovCall are eliminated by
            get_all_statements below*))

@@ -94,6 +94,11 @@ module type S = sig
     ctx_it : Mir.variable IntMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
+    ctx_anos : (Mir.error * string option) list;
+    ctx_nb_anos : int;
+    ctx_nb_discos : int;
+    ctx_nb_infos : int;
+    ctx_exported_anos : (Mir.error * string option) list;
   }
   (** Interpretation context *)
 
@@ -209,8 +214,7 @@ val evaluate_program :
   int ->
   Cli.value_sort ->
   Cli.round_ops ->
-  unit ->
-  unit
+  (unit -> unit) * (Mir.error * string option) list
 (** Main interpreter function *)
 
 val evaluate_expr :

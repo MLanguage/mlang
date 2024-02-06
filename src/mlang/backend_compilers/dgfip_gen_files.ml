@@ -1486,8 +1486,9 @@ struct S_irdata
   T_discord *discords;
   T_discord *tas_discord;
   T_discord **p_discord;
-  int nb_bloquantes;
-  int max_bloquantes;
+  int nb_anos;
+  int nb_dicos;
+  int nb_infos;
   jmp_buf jmp_bloq;
 #endif /* FLG_MULTITHREAD */
   T_print_context ctx_pr_out;
@@ -1622,6 +1623,7 @@ extern void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, 
 extern void env_restaurer(T_env_sauvegarde **liste);
 extern int nb_erreurs_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
+extern void exporte_erreur _PROTS((T_irdata *irdata ));
 #ifdef FLG_MULTITHREAD
 extern void init_erreur(T_irdata *irdata);
 #else
@@ -1635,6 +1637,9 @@ let gen_decl_targets fmt cprog =
 extern T_discord *discords;
 extern T_discord *tas_discord;
 extern T_discord **p_discord;
+extern int nb_anos;
+extern int nb_discos;
+extern int nb_infos;
 extern jmp_buf jmp_bloq;
 #endif
 
@@ -1729,14 +1734,14 @@ static void add_erreur_code(T_erreur *erreur, const char *code) {
 #ifdef FLG_MULTITHREAD
 
 void init_erreur(T_irdata *irdata) {
-  if (irdata->nb_bloquantes >= irdata->max_bloquantes) {
-//    IRDATA_reset_erreur(irdata);
-    *irdata->p_discord = irdata->tas_discord;
-    irdata->tas_discord = irdata->discords;
-    irdata->discords = 0;
-    irdata->p_discord = &irdata->discords;
-    irdata->nb_bloquantes = 0;
-  }
+//  IRDATA_reset_erreur(irdata);
+  *irdata->p_discord = irdata->tas_discord;
+  irdata->tas_discord = irdata->discords;
+  irdata->discords = 0;
+  irdata->p_discord = &irdata->discords;
+  irdata->nb_anos = 0;
+  irdata->nb_discos = 0;
+  irdata->nb_infos = 0;
 }
 
 void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
@@ -1756,8 +1761,12 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
   *irdata->p_discord = new_discord;
   irdata->p_discord = &new_discord->suivant;
 
+  if (erreur->type == ANOMALIE) irdata->nb_anos++;
+  if (erreur->type == DISCORDANCE) irdata->nb_discos++;
+  if (erreur->type == INFORMATIVE) irdata->nb_infos++;
+
   if (strcmp(erreur->isisf, "O")) {
-    if ((erreur->type == ANOMALIE) && (++irdata->nb_bloquantes >= irdata->max_bloquantes)) {
+    if (erreur->type == ANOMALIE) {
       longjmp(irdata->jmp_bloq, 1);
     }
   }
@@ -1765,8 +1774,16 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
 
 void free_erreur() {}
 
-int nb_erreurs_bloquantes(T_irdata *irdata) {
-  return irdata->nb_bloquantes;
+int nb_anomalies(T_irdata *irdata) {
+  return irdata->nb_anos;
+}
+
+int nb_discordances(T_irdata *irdata) {
+  return irdata->nb_discos;
+}
+
+int nb_informatives(T_irdata *irdata) {
+  return irdata->nb_infos;
 }
 
 #else
@@ -1774,6 +1791,9 @@ int nb_erreurs_bloquantes(T_irdata *irdata) {
 T_discord *discords = 0;
 T_discord *tas_discord = 0;
 T_discord **p_discord = &discords;
+int nb_anos = 0;
+int nb_discos = 0;
+int nb_infos = 0;
 jmp_buf jmp_bloq;
 
 void init_erreur(void) {
@@ -1781,6 +1801,9 @@ void init_erreur(void) {
   tas_discord = discords;
   discords = 0;
   p_discord = &discords;
+  nb_anos = 0;
+  nb_discos = 0;
+  nb_infos = 0;
 }
 
 void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
@@ -1799,6 +1822,10 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
   new_discord->suivant = 0;
   *p_discord = new_discord;
   p_discord = &new_discord->suivant;
+
+  if (erreur->type == ANOMALIE) nb_anos++;
+  if (erreur->type == DISCORDANCE) nb_discos++;
+  if (erreur->type == INFORMATIVE) nb_infos++;
 
   if (strcmp(erreur->isisf, "O")) {
     if (erreur->type == ANOMALIE) {
@@ -1826,16 +1853,16 @@ void free_erreur() {
   }
 }
 
-int nb_erreurs_bloquantes(T_irdata *irdata) {
-  T_discord *temp_discords = discords;
-  int nb = 0;
-  while (temp_discords != NULL) {
-    if (temp_discords->erreur->type == ANOMALIE) {
-      nb++;
-    }
-    temp_discords = temp_discords->suivant;
-  }
-  return nb;
+int nb_anomalies(T_irdata *irdata) {
+  return nb_anos;
+}
+
+int nb_discordances(T_irdata *irdata) {
+  return nb_discos;
+}
+
+int nb_informatives(T_irdata *irdata) {
+  return nb_infos;
 }
 
 #endif /* FLG_MULTITHREAD */
@@ -2118,7 +2145,17 @@ T_irdata *irdata;
   irdata->discords = 0;
   irdata->p_discord = &irdata->discords;
   irdata->nb_bloquantes = 0;
+#else
+  *p_discord = tas_discord;
+  tas_discord = discords;
+  discords = 0;
+  p_discord = &discords;
 #endif /* FLG_MULTITHREAD */
+}
+
+void exporte_erreur(irdata)
+T_irdata *irdata;
+{
 }
 |}
 

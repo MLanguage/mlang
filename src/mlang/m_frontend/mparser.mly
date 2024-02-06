@@ -46,9 +46,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET TEMPORARY
-%token IF THEN ELSE ENDIF PRINT PRINT_ERR NAME INDENT RAISE_ERROR CLEAN_ERRORS
-%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY SIZE NB_ERROR
+%token RULE VERIFICATION TARGET TEMPORARY SIZE
+%token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
+%token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
+%token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES
+%token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE CONDITION
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
@@ -466,10 +468,9 @@ instruction:
 | f = with_pos(formula_kind) SEMICOLON { Formula f }
 | IF e = with_pos(expression)
   THEN ilt = instruction_list_rev
-  ilo = instruction_else_branch?
-  ENDIF {
-    let ile = match ilo with Some ile -> ile | None -> [] in
-    IfThenElse (e, List.rev ilt, ile)
+  ilel = instruction_else_branch {
+    let ilite = (Some e, List.rev ilt, Pos.no_pos) :: ilel in
+    parse_if_then_etc ilite
   }
 | COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { ComputeDomain dom }
 | COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { ComputeChaining chain }
@@ -530,9 +531,18 @@ instruction:
     RaiseError (e_name, var)
   }
 | CLEAN_ERRORS SEMICOLON { CleanErrors }
+| EXPORT_ERRORS SEMICOLON { ExportErrors }
 
 instruction_else_branch:
-| ELSE il = instruction_list_rev { List.rev il }
+| ELSEIF e = with_pos(expression)
+  THEN ilt = instruction_list_rev
+  ilel = instruction_else_branch {
+    (Some e, List.rev ilt, mk_position $sloc) :: ilel
+  }
+| ELSE il = instruction_list_rev ENDIF {
+    [None, List.rev il, mk_position $sloc]
+  }
+| ENDIF { [] }
 
 print_argument:
 | s = STRING { PrintString (parse_string s) }
@@ -899,7 +909,9 @@ function_call:
 | SIZE LPAREN var = symbol_with_pos RPAREN {
     Size (parse_variable $sloc (fst var), snd var)
   }
-| NB_ERROR LPAREN RPAREN { NbError }
+| NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
+| NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
+| NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | s = with_pos(function_name) LPAREN RPAREN {
     FunctionCall (s, Mast.ArgList [])
   }

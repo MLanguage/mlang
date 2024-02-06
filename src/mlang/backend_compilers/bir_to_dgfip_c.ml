@@ -243,9 +243,17 @@ let rec generate_c_expr (program : program) (e : expression Pos.marked)
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
       D.build_transitive_composition { def_test; value_comp }
-  | NbError ->
+  | NbAnomalies ->
       let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_erreurs_bloquantes(irdata)" in
+      let value_comp = D.dinstr "nb_anomalies(irdata)" in
+      D.build_transitive_composition { def_test; value_comp }
+  | NbDiscordances ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_discordances(irdata)" in
+      D.build_transitive_composition { def_test; value_comp }
+  | NbInformatives ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_informatives(irdata)" in
       D.build_transitive_composition { def_test; value_comp }
   | NbCategory _ -> assert false
 
@@ -559,6 +567,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       in
       Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
   | SCleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
+  | SExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

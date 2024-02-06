@@ -286,7 +286,9 @@ type 'variable expression_ =
   | NbCategory of CatVarSet.t
   | Attribut of string Pos.marked * 'variable * string Pos.marked
   | Size of 'variable
-  | NbError
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
 
 type expression = variable expression_
 
@@ -307,7 +309,9 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | NbCategory l -> NbCategory l
   | Attribut (v, var, a) -> Attribut (v, f var, a)
   | Size var -> Size (f var)
-  | NbError -> NbError
+  | NbAnomalies -> NbAnomalies
+  | NbDiscordances -> NbDiscordances
+  | NbInformatives -> NbInformatives
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
@@ -321,7 +325,7 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
   | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ | Size _
-  | NbError ->
+  | NbAnomalies | NbDiscordances | NbInformatives ->
       acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
@@ -558,6 +562,7 @@ type instruction =
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
+  | ExportErrors
 
 type rule_data = {
   rule_apps : Pos.t StrMap.t;

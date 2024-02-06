@@ -174,7 +174,9 @@ let rec format_expression fmt (e : expression) =
       Format.fprintf fmt "attribut(%a, %s)" format_variable (Pos.unmark v)
         (Pos.unmark a)
   | Size v -> Format.fprintf fmt "taille(%a)" format_variable (Pos.unmark v)
-  | NbError -> Format.fprintf fmt "nb_erreur()"
+  | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
+  | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
+  | NbInformatives -> Format.fprintf fmt "nb_informatives()"
 
 and format_func_args fmt (args : func_args) =
   match args with
@@ -284,6 +286,7 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt "leve_erreur %s%s;" (Pos.unmark err)
         (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
   | CleanErrors -> Format.fprintf fmt "nettoie_erreurs;"
+  | ExportErrors -> Format.fprintf fmt "exporte_erreurs;"
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

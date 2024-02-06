@@ -161,7 +161,9 @@ type expression =
   | NbCategory of string Pos.marked list Pos.marked
   | Attribut of variable Pos.marked * string Pos.marked
   | Size of variable Pos.marked
-  | NbError
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
@@ -230,6 +232,7 @@ type instruction =
   | Restore of restore_vars Pos.marked list * instruction Pos.marked list
   | RaiseError of error_name Pos.marked * variable_name Pos.marked option
   | CleanErrors
+  | ExportErrors
 
 type rule = {
   rule_number : int Pos.marked;

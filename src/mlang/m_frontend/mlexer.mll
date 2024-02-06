@@ -81,7 +81,6 @@ rule token = parse
 | "enchaineur" { CHAINING }
 | "erreur" { ERROR }
 | "et" { AND }
-| "finsi" { ENDIF }
 | "fonction" { FONCTION }
 | "indefini" { UNDEFINED }
 | "indenter" { INDENT }
@@ -89,8 +88,11 @@ rule token = parse
 | "iterer" { ITERATE }
 | "leve_erreur" { RAISE_ERROR }
 | "nb_categorie" { NB_CATEGORY }
-| "nb_erreur" { NB_ERROR }
+| "nb_anomalies" { NB_ANOMALIES }
+| "nb_discordances" { NB_DISCORDANCES }
+| "nb_informatives" { NB_INFORMATIVES }
 | "nettoie_erreurs" { CLEAN_ERRORS }
+| "exporte_erreurs" { EXPORT_ERRORS }
 | "nom" { NAME }
 | "non" { NOT }
 | "non dans" { NOTIN }
@@ -104,7 +106,9 @@ rule token = parse
 | "restituee" { GIVEN_BACK }
 | "saisie" { INPUT }
 | "si" { IF }
+| "sinon_si" { ELSEIF }
 | "sinon" { ELSE }
+| "finsi" { ENDIF }
 | "sortie" { OUTPUT }
 | "specialise" { SPECIALIZE }
 | "tableau" { TABLE }

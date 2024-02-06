@@ -54,3 +54,8 @@ val parse_int : Lexing.position * Lexing.position -> string -> int
 val parse_literal : Lexing.position * Lexing.position -> string -> Mast.literal
 
 val parse_const_value : string -> Mast.literal
+
+val parse_if_then_etc :
+  (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
+  list ->
+  Mast.instruction

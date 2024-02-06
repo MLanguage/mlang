@@ -77,6 +77,11 @@ module type S = sig
     ctx_it : Mir.variable IntMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
+    ctx_anos : (Mir.error * string option) list;
+    ctx_nb_anos : int;
+    ctx_nb_discos : int;
+    ctx_nb_infos : int;
+    ctx_exported_anos : (Mir.error * string option) list;
   }
 
   val empty_ctx : ctx
@@ -204,6 +209,11 @@ struct
     ctx_it : Mir.variable IntMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
+    ctx_anos : (Mir.error * string option) list;
+    ctx_nb_anos : int;
+    ctx_nb_discos : int;
+    ctx_nb_infos : int;
+    ctx_exported_anos : (Mir.error * string option) list;
   }
 
   let empty_ctx : ctx =
@@ -213,6 +223,11 @@ struct
       ctx_it = IntMap.empty;
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
+      ctx_anos = [];
+      ctx_nb_anos = 0;
+      ctx_nb_discos = 0;
+      ctx_nb_infos = 0;
+      ctx_exported_anos = [];
     }
 
   let literal_to_value (l : Mir.literal) : value =
@@ -707,7 +722,9 @@ struct
                 | Some i -> Number (N.of_float (float_of_int i))
                 | None -> Number (N.of_float 1.0))
             | None -> assert false)
-        | NbError -> Number (N.of_float 0.0) (* à faire *)
+        | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
+        | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
+        | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
         | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
@@ -740,7 +757,7 @@ struct
 
   exception Anomaly of ctx
 
-  let report_error (err : Mir.error) (var_opt : string option) (_pos : Pos.t)
+  let _report_error (err : Mir.error) (var_opt : string option) (_pos : Pos.t)
       (ctx : ctx) : 'a =
     match err.Mir.Error.typ with
     | Mast.Anomaly ->
@@ -1066,8 +1083,38 @@ struct
         in
         { ctx with ctx_vars }
     | Bir.SRaiseError (err, var_opt) ->
-        report_error err var_opt (Pos.get_position stmt) ctx
-    | Bir.SCleanErrors -> ctx
+        (* report_error err var_opt (Pos.get_position stmt) ctx*)
+        let ctx_nb_anos =
+          if err.typ = Mast.Anomaly then ctx.ctx_nb_anos + 1
+          else ctx.ctx_nb_anos
+        in
+        let ctx_nb_discos =
+          if err.typ = Mast.Discordance then ctx.ctx_nb_discos + 1
+          else ctx.ctx_nb_discos
+        in
+        let ctx_nb_infos =
+          if err.typ = Mast.Information then ctx.ctx_nb_infos + 1
+          else ctx.ctx_nb_infos
+        in
+        Format.eprintf "leve_erreur: %s\n" (Pos.unmark err.name);
+        {
+          ctx with
+          ctx_anos = (err, var_opt) :: ctx.ctx_anos;
+          ctx_nb_anos;
+          ctx_nb_discos;
+          ctx_nb_infos;
+        }
+    | Bir.SCleanErrors ->
+        {
+          ctx with
+          ctx_anos = [];
+          ctx_nb_anos = 0;
+          ctx_nb_discos = 0;
+          ctx_nb_infos = 0;
+        }
+    | Bir.SExportErrors ->
+        let ctx_exported_anos = ctx.ctx_anos @ ctx.ctx_exported_anos in
+        { ctx with ctx_exported_anos }
 
   and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
       (loc : code_location) (start_value : int) : ctx =
@@ -1218,13 +1265,20 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
 
 let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
     (inputs : Mir.literal Bir.VariableMap.t) (code_loc_start_value : int)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit -> unit =
+    (sort : Cli.value_sort) (roundops : Cli.round_ops) :
+    (unit -> unit) * (Mir.error * string option) list =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.update_ctx_with_inputs Interp.empty_ctx inputs in
   let ctx = Interp.complete_ctx ctx p.Bir.mir_program.Mir.program_vars in
   let ctx = Interp.evaluate_program p ctx code_loc_start_value in
-  fun () -> Interp.print_output bir_func ctx
+  let sorted_anos =
+    let cmp (e0, so0) (e1, so1) =
+      compare (Pos.unmark e0.Mir.name, so0) (Pos.unmark e1.Mir.name, so1)
+    in
+    List.sort_uniq cmp ctx.ctx_exported_anos
+  in
+  ((fun () -> Interp.print_output bir_func ctx), sorted_anos)
 
 let evaluate_expr (p : Mir.program) (e : Bir.expression Pos.marked)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) : Mir.literal =

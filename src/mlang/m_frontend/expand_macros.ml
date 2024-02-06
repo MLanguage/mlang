@@ -442,7 +442,9 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       | Mast.Literal (Variable v), v_pos -> (Mast.Size (v, v_pos), expr_pos)
       | Mast.Literal (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
       | _ -> assert false)
-  | Mast.NbCategory _ | Mast.NbError -> m_expr
+  | Mast.NbCategory _ | Mast.NbAnomalies | Mast.NbDiscordances
+  | Mast.NbInformatives ->
+      m_expr
 
 and expand_func_args (const_map : const_context) (loop_map : loop_context)
     (args : Mast.func_args) : Mast.func_args =
@@ -557,7 +559,8 @@ let rec expand_instruction (const_map : const_context)
       let instrs' = expand_instructions const_map instrs in
       (Mast.VerifBlock instrs', instr_pos) :: prev
   | Mast.ComputeVerifs _ | Mast.ComputeDomain _ | Mast.ComputeChaining _
-  | Mast.ComputeTarget _ | Mast.RaiseError _ | Mast.CleanErrors ->
+  | Mast.ComputeTarget _ | Mast.RaiseError _ | Mast.CleanErrors
+  | Mast.ExportErrors ->
       (instr, instr_pos) :: prev
 
 and expand_instructions (const_map : const_context)

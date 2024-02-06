@@ -19,6 +19,7 @@ type bir_function = {
   func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
   func_outputs : unit Bir.VariableMap.t;
   func_conds : Bir.condition_data Mir.RuleMap.t;
+  func_errors : string list;
 }
 
 let var_set_from_variable_name_list (p : Bir.program)
@@ -224,6 +225,7 @@ let generate_function_all_vars (p : Bir.program) : bir_function =
     func_constant_inputs = Bir.VariableMap.empty;
     func_outputs = output_vars;
     func_conds = Mir.RuleMap.empty;
+    func_errors = [];
   }
 
 let read_function_from_spec (p : Bir.program) (spec_file : string) :
@@ -253,6 +255,7 @@ let read_function_from_spec (p : Bir.program) (spec_file : string) :
       func_conds =
         translate_external_conditions p.mir_program.program_var_categories
           p.idmap func_spec.Mast.spec_conditions;
+      func_errors = [];
     }
   with
   | Errors.StructuredError e ->

@@ -158,7 +158,7 @@ verifier domaine isf : avec nb_categorie(calculee *) > 0;
 cible verif_calcul_primitive:
 application: iliad;
 calculer cible verif_calcul_primitive_isf;
-si nb_erreur() = 0 alors
+si nb_anomalies() = 0 alors
   verifier domaine primitive : avec nb_categorie(calculee *) > 0;
 finsi
 
@@ -166,7 +166,7 @@ cible verif_calcul_corrective:
 application: iliad;
 calculer cible calcul_primitif_isf;
 calculer cible verif_calcul_primitive_isf;
-si nb_erreur() = 0 alors
+si nb_anomalies() = 0 alors
   verifier domaine corrective : avec nb_categorie(calculee *) > 0;
 finsi
 
@@ -178,10 +178,10 @@ verifier domaine isf
 cible verif_saisie_cohe_primitive:
 application: iliad;
 calculer cible verif_saisie_cohe_primitive_isf_raw;
-si nb_erreur() = 0 alors
+si nb_anomalies() = 0 alors
   calculer cible calcul_primitif_isf;
   calculer cible verif_calcul_primitive_isf;
-  si nb_erreur() = 0 alors
+  si nb_anomalies() = 0 alors
     verifier domaine primitive
     : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
   finsi
@@ -190,7 +190,7 @@ finsi
 cible verif_saisie_cohe_corrective:
 application: iliad;
 calculer cible verif_saisie_cohe_primitive_isf_raw;
-si nb_erreur() = 0 alors
+si nb_anomalies() = 0 alors
   verifier domaine corrective
   : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
 finsi
@@ -202,22 +202,26 @@ verifier domaine horizontale corrective;
 cible verif_contexte_cohe_primitive:
 application: iliad;
 verifier domaine primitive
-: avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
+: avec nb_categorie(saisie contexte) = nb_categorie(*);
 
 cible verif_contexte_cohe_corrective:
 application: iliad;
 verifier domaine corrective
-: avec nb_categorie(saisie contexte) > 0 et nb_categorie(calculee *) = 0;
+: avec nb_categorie(saisie contexte) = nb_categorie(*);
 
 cible verif_famille_cohe_primitive:
 application: iliad;
 verifier domaine primitive
-: avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
+: avec nb_categorie(saisie famille) > 0
+  et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
+  et numero_verif() != 1021;
 
 cible verif_famille_cohe_corrective:
 application: iliad;
 verifier domaine corrective
-: avec nb_categorie(saisie famille) > 0 et nb_categorie(calculee *) = 0;
+: avec nb_categorie(saisie famille) > 0
+  et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
+  et numero_verif() != 1021;
 
 cible verif_revenu_cohe_primitive:
 application: iliad;
@@ -735,18 +739,40 @@ application: iliad;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
-calculer cible ir_verif_contexte;
-calculer cible ir_verif_famille;
-calculer cible ir_verif_revenu;
-calculer cible ir_calcul_primitif_isf;
-calculer cible effacer_base_etc;
-calculer cible modulation_taxation;
-calculer cible traite_double_liquidation_pvro;
-calculer cible sauve_base_initial;
-calculer cible sauve_base_1728;
-calculer cible sauve_base_anterieure;
-calculer cible sauve_base_anterieure_cor;
-calculer cible sauve_base_inr_inter22;
+si nb_anomalies() > 0 alors
+  exporte_erreurs;
+sinon_si nb_discordances() + nb_informatives() = 0 alors
+  calculer cible ir_verif_contexte;
+  si nb_anomalies() = 0 alors
+    si nb_discordances() + nb_informatives() > 0 alors
+      exporte_erreurs;
+    finsi
+    calculer cible ir_verif_famille;
+    si nb_anomalies() = 0 alors
+      si nb_discordances() + nb_informatives() > 0 alors
+        exporte_erreurs;
+      finsi
+      calculer cible ir_verif_revenu;
+      si nb_anomalies() > 0 alors
+        exporte_erreurs;
+      sinon
+        si nb_discordances() + nb_informatives() > 0 alors
+          exporte_erreurs;
+        finsi
+        calculer cible ir_calcul_primitif_isf;
+        calculer cible effacer_base_etc;
+        calculer cible modulation_taxation;
+        calculer cible traite_double_liquidation_pvro;
+        calculer cible sauve_base_initial;
+        calculer cible sauve_base_1728;
+        calculer cible sauve_base_anterieure;
+        calculer cible sauve_base_anterieure_cor;
+        calculer cible sauve_base_inr_inter22;
+        exporte_erreurs;
+      finsi
+    finsi
+  finsi
+finsi
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
 

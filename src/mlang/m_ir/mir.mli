@@ -127,7 +127,9 @@ type 'variable expression_ =
   | NbCategory of CatVarSet.t
   | Attribut of string Pos.marked * 'variable * string Pos.marked
   | Size of 'variable
-  | NbError
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
 
 type expression = variable expression_
 
@@ -258,6 +260,7 @@ type instruction =
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
+  | ExportErrors
 
 type rule_data = {
   rule_apps : Pos.t StrMap.t;

@@ -113,7 +113,16 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
              convert_pos pos ))
          t.prim.resultats_attendus)
   in
-  ( { func_variable_inputs; func_constant_inputs; func_outputs; func_conds },
+  let func_errors =
+    List.sort_uniq compare (List.map fst t.prim.controles_attendus)
+  in
+  ( {
+      func_variable_inputs;
+      func_constant_inputs;
+      func_outputs;
+      func_conds;
+      func_errors;
+    },
     input_file )
 
 let check_test (combined_program : Bir.program) (test_name : string)
@@ -142,10 +151,48 @@ let check_test (combined_program : Bir.program) (test_name : string)
     else combined_program
   in
   if code_coverage then Bir_instrumentation.code_coverage_init ();
-  let _print_outputs =
+  let _print_outputs, sorted_anos =
     Bir_interpreter.evaluate_program f combined_program input_file
       (-code_loc_offset) value_sort round_ops
   in
+  let rec check_errors nbUnex nbMiss exp rais =
+    match (exp, rais) with
+    | ee :: el, (re, _) :: rl ->
+        let ren = Pos.unmark re.Mir.name in
+        if ee < ren then (
+          Cli.error_print "Missing error: %s" ee;
+          check_errors nbUnex (nbMiss + 1) el rais)
+        else if ren < ee then (
+          Cli.error_print "Unexpected error: %s" ren;
+          check_errors (nbUnex + 1) nbMiss exp rl)
+        else (
+          Cli.debug_print "Raised error: %s" ee;
+          check_errors nbUnex nbMiss el rl)
+    | ee :: el, [] ->
+        Cli.error_print "Missing error: %s" ee;
+        check_errors nbUnex (nbMiss + 1) el []
+    | [], (re, _) :: rl ->
+        let ren = Pos.unmark re.Mir.name in
+        Cli.error_print "Unexpected error: %s" ren;
+        check_errors (nbUnex + 1) nbMiss [] rl
+    | [], [] ->
+        if nbUnex + nbMiss > 0 then
+          let msg =
+            if nbMiss = 0 then
+              Format.sprintf "%d unexpected error%s" nbUnex
+                (if nbUnex > 1 then "s" else "")
+            else if nbUnex = 0 then
+              Format.sprintf "%d missing error%s" nbMiss
+                (if nbMiss > 1 then "s" else "")
+            else
+              Format.sprintf "%d unexpected error%s, %d missing error%s" nbUnex
+                (if nbUnex > 1 then "s" else "")
+                nbMiss
+                (if nbMiss > 1 then "s" else "")
+          in
+          raise (Errors.StructuredError (msg, [], None))
+  in
+  check_errors 0 0 f.func_errors sorted_anos;
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
@@ -234,7 +281,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
-        (successes, failures, code_coverage_acc)
+        ignore (successes, failures, code_coverage_acc);
+        failwith "Stop"
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
         | Interp.ConditionViolated _ as cv ->

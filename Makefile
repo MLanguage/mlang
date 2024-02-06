@@ -16,6 +16,8 @@ include $(ROOT_DIR)/makefiles/mlang.mk
 include $(ROOT_DIR)/makefiles/c_backend.mk
 -include $(ROOT_DIR)/makefiles/dgfip_backend.mk
 
+-include $(ROOT_DIR)/makefiles/aif2.mk
+
 .PHONY: default \
   create-switch init-without-switch init deps \
   format dune build build-static \

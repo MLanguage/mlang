@@ -256,9 +256,17 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
               (Pos.unmark cond.Mir.cond_expr)
           in
           Mir.Float nb
-      | Mir.NbError ->
+      | Mir.NbAnomalies ->
           Errors.raise_spanned_error
-            "nb_erreur is forbidden in verification filter"
+            "nb_anmoalies is forbidden in verification filter"
+            (Pos.get_position expr)
+      | Mir.NbDiscordances ->
+          Errors.raise_spanned_error
+            "nb_discordances is forbidden in verification filter"
+            (Pos.get_position expr)
+      | Mir.NbInformatives ->
+          Errors.raise_spanned_error
+            "nb_informatives is forbidden in verification filter"
             (Pos.get_position expr)
       | Mir.Attribut _ | Mir.Size _ -> assert false
     in
@@ -455,6 +463,8 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         aux ctx ((Bir.SRaiseError (err, var_opt), pos) :: res) instrs
     | (Mir.CleanErrors, pos) :: instrs ->
         aux ctx ((Bir.SCleanErrors, pos) :: res) instrs
+    | (Mir.ExportErrors, pos) :: instrs ->
+        aux ctx ((Bir.SExportErrors, pos) :: res) instrs
   in
   aux ctx [] instrs
 

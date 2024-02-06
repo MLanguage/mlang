@@ -304,13 +304,23 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
           if String.lowercase_ascii backend = "interpreter" then begin
             Cli.debug_print "Interpreting the program...";
             let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let print_output =
+            let print_output, sorted_anos =
               Bir_interpreter.evaluate_program function_spec combined_program
                 inputs 0 value_sort round_ops
             in
             Format.pp_print_flush Format.err_formatter ();
             Format.pp_print_flush Format.std_formatter ();
-            print_output ()
+            print_output ();
+            List.iter
+              (fun (err, so) ->
+                let s =
+                  match so with
+                  | Some s -> Format.sprintf " (%s)" s
+                  | None -> ""
+                in
+                Cli.result_print "Raised error: %s%s\n"
+                  (Pos.unmark err.Mir.name) s)
+              sorted_anos
           end
           else if String.lowercase_ascii backend = "java" then begin
             Cli.debug_print "Compiling codebase to Java...";

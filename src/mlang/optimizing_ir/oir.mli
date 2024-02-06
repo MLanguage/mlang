@@ -38,6 +38,7 @@ and stmt_kind =
       * block_id
   | SRaiseError of Mir.error * string option
   | SCleanErrors
+  | SExportErrors
 
 type block = stmt list
 

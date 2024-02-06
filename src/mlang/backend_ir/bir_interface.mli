@@ -21,6 +21,7 @@ type bir_function = {
   func_constant_inputs : Bir.expression Pos.marked Bir.VariableMap.t;
   func_outputs : unit Bir.VariableMap.t;
   func_conds : Bir.condition_data Mir.RuleMap.t;
+  func_errors : string list;
 }
 (** Input-output data necessary to interpret a BIR program*)
 

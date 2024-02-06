@@ -609,7 +609,8 @@ let rec partially_evaluate_expr (ctx : partial_ev_ctx) (p : Mir.program)
             | _ -> assert false
         in
         (Pos.same_pos_as new_e e, d)
-    | Attribut _ | Size _ | NbError -> (e, Top)
+    | Attribut _ | Size _ | NbAnomalies | NbDiscordances | NbInformatives ->
+        (e, Top)
     | NbCategory _ -> assert false
   in
   if not @@ check new_e d then
@@ -766,7 +767,8 @@ let partially_evaluate_stmt (stmt : stmt) (block_id : block_id)
       ( Pos.same_pos_as (SRestore (vars, var_params, b, b_end)) stmt :: new_block,
         ctx )
   | SGoto _ -> (stmt :: new_block, ctx)
-  | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _ | SCleanErrors ->
+  | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _ | SCleanErrors
+  | SExportErrors ->
       (stmt :: new_block, all_top_ctx ctx block_id)
 
 let partial_evaluation0 (p : program) (cfg : cfg) : cfg =
