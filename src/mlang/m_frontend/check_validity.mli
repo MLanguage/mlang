@@ -70,6 +70,7 @@ type verif = {
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
+  verif_is_blocking : bool;
   verif_cat_var_stats : int Mir.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;

@@ -1729,6 +1729,7 @@ static void add_erreur_code(T_erreur *erreur, const char *code) {
     strcat(new_message, "))\0");
     erreur->message = new_message;
   }
+  fprintf(stderr, "leve_erreur %s\n", erreur->nom);
 }
 
 #ifdef FLG_MULTITHREAD

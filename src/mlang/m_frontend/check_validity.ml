@@ -343,6 +343,7 @@ type verif = {
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
+  verif_is_blocking : bool;
   verif_cat_var_stats : int Mir.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;
@@ -568,12 +569,7 @@ let check_global_var (var : global_variable) (prog : program) : program =
   let name, name_pos = var.global_name in
   let cat =
     match Mir.CatVarMap.find_opt var.global_category prog.prog_var_cats with
-    | None ->
-        Format.eprintf "XXX %a\n" Mir.pp_cat_variable var.global_category;
-        Mir.CatVarMap.iter
-          (fun cat _ -> Format.eprintf "YYY %a\n" Mir.pp_cat_variable cat)
-          prog.prog_var_cats;
-        Err.variable_of_unknown_category var.global_category name_pos
+    | None -> Err.variable_of_unknown_category var.global_category name_pos
     | Some cat -> cat
   in
   StrMap.iter
@@ -1801,9 +1797,12 @@ let check_verif (v : Mast.verification) (prog : program) : program =
           let verif_expr = cond.Mast.verif_cond_expr in
           let verif_error, verif_var = cond.Mast.verif_cond_error in
           let err_name, err_pos = verif_error in
-          (match StrMap.find_opt err_name prog.prog_errors with
-          | None -> Err.unknown_error err_pos
-          | Some _ -> ());
+          let verif_is_blocking =
+            match StrMap.find_opt err_name prog.prog_errors with
+            | None -> Err.unknown_error err_pos
+            | Some err -> (
+                match err.typ with Mast.Anomaly -> true | _ -> false)
+          in
           (match verif_var with
           | Some (var_name, var_pos) -> (
               match StrMap.find_opt var_name prog.prog_vars with
@@ -1841,6 +1840,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
               verif_expr;
               verif_error;
               verif_var;
+              verif_is_blocking;
               verif_cat_var_stats;
               verif_var_stats;
               verif_seq;
@@ -2071,20 +2071,51 @@ let vdom_rule_filter (prog : program) (vdom : Mir.verif_domain_data Mir.domain)
   && (Mast.DomainId.equal vdom_id verif_vdom_id
      || Mast.DomainIdSet.mem verif_vdom_id vdom.Mir.dom_min)
 
+module OrdVerif = struct
+  type t = int * int * int
+
+  let make v =
+    let iBlock = if v.verif_is_blocking then 0 else 1 in
+    (iBlock, -v.verif_seq, Pos.unmark v.verif_id)
+
+  let get_id (_, _, id) = id
+
+  let compare x y = compare x y
+end
+
+module OrdVerifSet = struct
+  include SetExt.Make (OrdVerif)
+
+  let _pp ?(sep = " ")
+      ?(pp_elt =
+        fun fmt (i, j, k) -> Format.fprintf fmt "(%d, %d, %d)" i (-j) k)
+      (_ : unit) (fmt : Format.formatter) (set : t) : unit =
+    pp ~sep ~pp_elt () fmt set
+end
+
+module OrdVerifSetMap = struct
+  include MapExt.Make (OrdVerifSet)
+
+  let _pp ?(sep = ", ") ?(pp_key = OrdVerifSet.pp ()) ?(assoc = " => ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
+end
+
 let complete_verif_calls (prog : program) : program =
   let prog_targets, _ =
     StrMap.fold
       (fun tname (_, vdom_id, expr) (prog_targets, verif_calls) ->
         let verif_set =
           IntMap.fold
-            (fun verif_id verif verif_set ->
+            (fun _verif_id verif verif_set ->
               let vdom = Mast.DomainIdMap.find vdom_id prog.prog_vdoms in
               if vdom_rule_filter prog vdom expr verif then
-                IntSet.add verif_id verif_set
+                OrdVerifSet.add (OrdVerif.make verif) verif_set
               else verif_set)
-            prog.prog_verifs IntSet.empty
+            prog.prog_verifs OrdVerifSet.empty
         in
-        match IntSetMap.find_opt verif_set verif_calls with
+        match OrdVerifSetMap.find_opt verif_set verif_calls with
         | Some tn ->
             let target_prog =
               [ (Mast.ComputeTarget (tn, Pos.no_pos), Pos.no_pos) ]
@@ -2103,8 +2134,9 @@ let complete_verif_calls (prog : program) : program =
         | None ->
             let instrs =
               let instrs =
-                IntSet.fold
-                  (fun verif_id target_prog ->
+                OrdVerifSet.fold
+                  (fun ord_verif target_prog ->
+                    let verif_id = OrdVerif.get_id ord_verif in
                     let verif_tn =
                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
                     in
@@ -2125,10 +2157,10 @@ let complete_verif_calls (prog : program) : program =
               }
             in
             let prog_targets = StrMap.add tname target prog_targets in
-            let verif_calls = IntSetMap.add verif_set tname verif_calls in
+            let verif_calls = OrdVerifSetMap.add verif_set tname verif_calls in
             (prog_targets, verif_calls))
       prog.prog_vdom_calls
-      (prog.prog_targets, IntSetMap.empty)
+      (prog.prog_targets, OrdVerifSetMap.empty)
   in
   { prog with prog_targets }
 

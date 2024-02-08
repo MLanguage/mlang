@@ -159,7 +159,10 @@ cible verif_calcul_primitive:
 application: iliad;
 calculer cible verif_calcul_primitive_isf;
 si nb_anomalies() = 0 alors
-  verifier domaine primitive : avec nb_categorie(calculee *) > 0;
+  verifier domaine primitive
+  : avec
+      nb_categorie(calculee *) > 0
+      ou numero_verif() = 1021;
 finsi
 
 cible verif_calcul_corrective:
@@ -167,7 +170,10 @@ application: iliad;
 calculer cible calcul_primitif_isf;
 calculer cible verif_calcul_primitive_isf;
 si nb_anomalies() = 0 alors
-  verifier domaine corrective : avec nb_categorie(calculee *) > 0;
+  verifier domaine corrective
+  : avec
+      nb_categorie(calculee *) > 0
+      ou numero_verif() = 1021;
 finsi
 
 cible verif_saisie_cohe_primitive_isf_raw:
@@ -183,7 +189,9 @@ si nb_anomalies() = 0 alors
   calculer cible verif_calcul_primitive_isf;
   si nb_anomalies() = 0 alors
     verifier domaine primitive
-    : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+    : avec
+        nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0
+        et numero_verif() != 1021;
   finsi
 finsi
 
@@ -192,7 +200,9 @@ application: iliad;
 calculer cible verif_saisie_cohe_primitive_isf_raw;
 si nb_anomalies() = 0 alors
   verifier domaine corrective
-  : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
+  : avec
+      nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0
+      et numero_verif() != 1021;
 finsi
 
 cible verif_cohe_horizontale:
@@ -212,16 +222,18 @@ verifier domaine corrective
 cible verif_famille_cohe_primitive:
 application: iliad;
 verifier domaine primitive
-: avec nb_categorie(saisie famille) > 0
-  et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
-  et numero_verif() != 1021;
+: avec
+    nb_categorie(saisie famille) > 0
+    et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
+    et numero_verif() != 1021;
 
 cible verif_famille_cohe_corrective:
 application: iliad;
 verifier domaine corrective
-: avec nb_categorie(saisie famille) > 0
-  et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
-  et numero_verif() != 1021;
+: avec
+    nb_categorie(saisie famille) > 0
+    et nb_categorie(*) = nb_categorie(saisie famille) + nb_categorie(saisie contexte)
+    et numero_verif() != 1021;
 
 cible verif_revenu_cohe_primitive:
 application: iliad;
@@ -239,27 +251,13 @@ cible trace_in:
 application: iliad;
 variable temporaire: TOTO;
 TOTO = 0;
-#afficher_erreur "[<" nom(COD1DH) " = " (COD1DH) "\n";
-#afficher_erreur "[<" nom(COD1DI) " = " (COD1DI) "\n";
-#afficher_erreur "[<" nom(PRB2) " = " (PRB2) "\n";
-#afficher_erreur "[<" nom(TEXPR2) " = " (TEXPR2) "\n";
-#afficher_erreur "[<" nom(TPRN2) " = " (TPRN2) "\n";
-#afficher_erreur "[<" nom(TPRR2) " = " (TPRR2) "\n";
 #afficher_erreur indenter(2);
 
 cible trace_out:
 application: iliad;
 variable temporaire: TOTO;
 TOTO = 0;
-#afficher_erreur "arr(" (TPRN2 * (PRB2 + COD1DI) / (TEXPR2 + COD1DI)) ") = " (arr(TPRN2 * (PRB2 + COD1DI) / (TEXPR2 + COD1DI))) "\n";
-#afficher_erreur "arr(" (TPRN2 * COD1DH / (TEXPR2 + COD1DI)) ") = " (arr(TPRN2 * COD1DH / (TEXPR2 + COD1DI))) "\n";
 #afficher_erreur indenter(-2);
-#afficher_erreur ">]" nom(COD1DH) " = " (COD1DH) "\n";
-#afficher_erreur ">]" nom(COD1DI) " = " (COD1DI) "\n";
-#afficher_erreur ">]" nom(PRB2) " = " (PRB2) "\n";
-#afficher_erreur ">]" nom(TEXPR2) " = " (TEXPR2) "\n";
-#afficher_erreur ">]" nom(TPRN2) " = " (TPRN2) "\n";
-#afficher_erreur ">]" nom(TPRR2) " = " (TPRR2) "\n";
 
 cible calcul_prim_corr:
 application: iliad;
@@ -760,6 +758,7 @@ sinon_si nb_discordances() + nb_informatives() = 0 alors
           exporte_erreurs;
         finsi
         calculer cible ir_calcul_primitif_isf;
+        exporte_erreurs;
         calculer cible effacer_base_etc;
         calculer cible modulation_taxation;
         calculer cible traite_double_liquidation_pvro;

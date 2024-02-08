@@ -755,8 +755,6 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  exception Anomaly of ctx
-
   let _report_error (err : Mir.error) (var_opt : string option) (_pos : Pos.t)
       (ctx : ctx) : 'a =
     match err.Mir.Error.typ with
@@ -767,7 +765,7 @@ struct
           | Some var -> Format.sprintf " (%s)" var
           | None -> "")
           (Pos.unmark (Mir.Error.err_descr_string err));
-        raise (Anomaly ctx)
+        ctx
     | Mast.Discordance ->
         Cli.warning_print "Discordance%s: %s"
           (match var_opt with
@@ -894,8 +892,10 @@ struct
                 | None -> curr_value)))
     | Mir.InputVar -> assert false
 
-  let rec evaluate_stmt (p : Bir.program) (ctx : ctx) (stmt : Bir.stmt)
-      (loc : code_location) =
+  exception BlockingError of ctx
+
+  let rec evaluate_stmt (canBlock : bool) (p : Bir.program) (ctx : ctx)
+      (stmt : Bir.stmt) (loc : code_location) =
     match Pos.unmark stmt with
     | Bir.SAssign (var, vdef) ->
         let var =
@@ -916,9 +916,9 @@ struct
     | Bir.SConditional (b, t, f) -> (
         match evaluate_simple_variable p ctx b with
         | SimpleVar (Number z) when N.(z =. zero ()) ->
-            evaluate_stmts p ctx f (ConditionalBranch false :: loc) 0
+            evaluate_stmts canBlock p ctx f (ConditionalBranch false :: loc) 0
         | SimpleVar (Number _) ->
-            evaluate_stmts p ctx t (ConditionalBranch true :: loc) 0
+            evaluate_stmts canBlock p ctx t (ConditionalBranch true :: loc) 0
         | SimpleVar Undefined -> ctx
         | _ -> assert false)
     | Bir.SVerif data -> (
@@ -926,17 +926,17 @@ struct
         | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
         | _ -> ctx)
     | Bir.SVerifBlock stmts ->
-        evaluate_stmts p ctx stmts (InsideBlock 0 :: loc) 0
+        evaluate_stmts true p ctx stmts (InsideBlock 0 :: loc) 0
     | Bir.SRovCall r ->
         let rule = Bir.ROVMap.find r p.rules_and_verifs in
-        evaluate_stmts p ctx
+        evaluate_stmts canBlock p ctx
           (Bir.rule_or_verif_as_statements rule)
           (InsideRule r :: loc) 0
     | Bir.SFunctionCall (f, _args) -> (
         match Mir.TargetMap.find_opt f p.targets with
-        | Some tf -> evaluate_target p ctx loc tf
+        | Some tf -> evaluate_target canBlock p ctx loc tf
         | None ->
-            evaluate_stmts p ctx
+            evaluate_stmts canBlock p ctx
               (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
     (* Mpp_function arguments seem to be used only to determine which variables
        are actually output. Does this actually make sense ? *)
@@ -1028,7 +1028,9 @@ struct
                 in
                 match evaluate_simple_variable p ctx expr with
                 | SimpleVar (Number z) when N.(z =. one ()) ->
-                    evaluate_stmts p ctx stmts (ConditionalBranch true :: loc) 0
+                    evaluate_stmts canBlock p ctx stmts
+                      (ConditionalBranch true :: loc)
+                      0
                 | SimpleVar _ -> ctx
                 | _ -> assert false
               else ctx)
@@ -1074,7 +1076,9 @@ struct
                 vcs backup)
             backup var_params
         in
-        let ctx = evaluate_stmts p ctx stmts (InsideBlock 0 :: loc) 0 in
+        let ctx =
+          evaluate_stmts canBlock p ctx stmts (InsideBlock 0 :: loc) 0
+        in
         let ctx_vars =
           List.fold_left
             (fun ctx_vars (v, value) ->
@@ -1096,14 +1100,17 @@ struct
           if err.typ = Mast.Information then ctx.ctx_nb_infos + 1
           else ctx.ctx_nb_infos
         in
-        Format.eprintf "leve_erreur: %s\n" (Pos.unmark err.name);
-        {
-          ctx with
-          ctx_anos = (err, var_opt) :: ctx.ctx_anos;
-          ctx_nb_anos;
-          ctx_nb_discos;
-          ctx_nb_infos;
-        }
+        let ctx =
+          {
+            ctx with
+            ctx_anos = (err, var_opt) :: ctx.ctx_anos;
+            ctx_nb_anos;
+            ctx_nb_discos;
+            ctx_nb_infos;
+          }
+        in
+        if err.typ = Mast.Anomaly && canBlock then raise (BlockingError ctx)
+        else ctx
     | Bir.SCleanErrors ->
         {
           ctx with
@@ -1116,18 +1123,21 @@ struct
         let ctx_exported_anos = ctx.ctx_anos @ ctx.ctx_exported_anos in
         { ctx with ctx_exported_anos }
 
-  and evaluate_stmts (p : Bir.program) (ctx : ctx) (stmts : Bir.stmt list)
-      (loc : code_location) (start_value : int) : ctx =
+  and evaluate_stmts canBlock (p : Bir.program) (ctx : ctx)
+      (stmts : Bir.stmt list) (loc : code_location) (start_value : int) : ctx =
     let ctx, _ =
-      List.fold_left
-        (fun (ctx, i) stmt ->
-          (evaluate_stmt p ctx stmt (InsideBlock i :: loc), i + 1))
-        (ctx, start_value) stmts
+      try
+        List.fold_left
+          (fun (ctx, i) stmt ->
+            (evaluate_stmt canBlock p ctx stmt (InsideBlock i :: loc), i + 1))
+          (ctx, start_value) stmts
+      with BlockingError ctx as b_err ->
+        if canBlock then raise b_err else (ctx, 0)
     in
     ctx
 
-  and evaluate_target (p : Bir.program) (ctx : ctx) (loc : code_location)
-      (tf : Bir.target_function) =
+  and evaluate_target canBlock (p : Bir.program) (ctx : ctx)
+      (loc : code_location) (tf : Bir.target_function) =
     let ctx =
       let ctx_vars =
         StrMap.fold
@@ -1141,13 +1151,13 @@ struct
       in
       { ctx with ctx_vars }
     in
-    evaluate_stmts p ctx tf.stmts loc 0
+    evaluate_stmts canBlock p ctx tf.stmts loc 0
 
   let evaluate_program (p : Bir.program) (ctx : ctx)
       (code_loc_start_value : int) : ctx =
     try
       let ctx =
-        evaluate_stmts p ctx
+        evaluate_stmts false p ctx
           (Bir.main_statements_with_context_and_tgv_init p)
           [] code_loc_start_value
         (* For the interpreter to operate properly, all input variables must be
@@ -1163,11 +1173,9 @@ struct
            overload entered variables. *)
       in
       ctx
-    with
-    | Anomaly ctx -> ctx
-    | RuntimeError (e, ctx) ->
-        if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
-        else raise (RuntimeError (e, ctx))
+    with RuntimeError (e, ctx) ->
+      if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
+      else raise (RuntimeError (e, ctx))
 end
 
 module BigIntPrecision = struct
