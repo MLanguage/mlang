@@ -76,6 +76,7 @@ let rec format_stmt fmt (stmt : stmt) =
         (match var_opt with Some var -> " " ^ var | None -> "")
   | SCleanErrors -> Format.fprintf fmt "nettoie_erreurs@,"
   | SExportErrors -> Format.fprintf fmt "exporte_erreurs@,"
+  | SFinalizeErrors -> Format.fprintf fmt "finalise_erreurs@,"
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts

@@ -95,9 +95,12 @@ module type S = sig
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
+    ctx_old_anos : StrSet.t;
     ctx_nb_anos : int;
     ctx_nb_discos : int;
     ctx_nb_infos : int;
+    ctx_nb_bloquantes : int;
+    ctx_finalized_anos : (Mir.error * string option) list;
     ctx_exported_anos : (Mir.error * string option) list;
   }
   (** Interpretation context *)

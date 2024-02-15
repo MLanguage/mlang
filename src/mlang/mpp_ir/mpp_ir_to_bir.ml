@@ -268,6 +268,10 @@ let generate_verifs_prog (m_program : Mir_interface.full_program)
           Errors.raise_spanned_error
             "nb_informatives is forbidden in verification filter"
             (Pos.get_position expr)
+      | Mir.NbBloquantes ->
+          Errors.raise_spanned_error
+            "nb_bloquantes is forbidden in verification filter"
+            (Pos.get_position expr)
       | Mir.Attribut _ | Mir.Size _ -> assert false
     in
     aux IntMap.empty expr
@@ -465,6 +469,8 @@ let rec translate_m_code (m_program : Mir_interface.full_program)
         aux ctx ((Bir.SCleanErrors, pos) :: res) instrs
     | (Mir.ExportErrors, pos) :: instrs ->
         aux ctx ((Bir.SExportErrors, pos) :: res) instrs
+    | (Mir.FinalizeErrors, pos) :: instrs ->
+        aux ctx ((Bir.SFinalizeErrors, pos) :: res) instrs
   in
   aux ctx [] instrs
 

@@ -1065,7 +1065,8 @@ let rec fold_var_expr
           | None -> ()));
       fold_var v Both env acc
   | Mast.Size v -> fold_var v Both env acc
-  | Mast.NbAnomalies | Mast.NbDiscordances | Mast.NbInformatives ->
+  | Mast.NbAnomalies | Mast.NbDiscordances | Mast.NbInformatives
+  | Mast.NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
   | Mast.Loop _ -> assert false
@@ -1352,7 +1353,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   | Some _ -> ())
             | None -> ());
             aux (env, m_instr :: res, in_vars, out_vars) il
-        | Mast.CleanErrors | Mast.ExportErrors ->
+        | Mast.CleanErrors | Mast.ExportErrors | Mast.FinalizeErrors ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             aux (env, m_instr :: res, in_vars, out_vars) il)
   in
@@ -2050,7 +2051,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             in
             Some (if res = positive then 1.0 else 0.0))
     | Mast.NbAnomalies | Mast.NbDiscordances | Mast.NbInformatives
-    | Mast.Index _ | Mast.Loop _ ->
+    | Mast.NbBloquantes | Mast.Index _ | Mast.Loop _ ->
         assert false
   in
   aux expr

@@ -58,6 +58,7 @@ and stmt_kind =
   | SRaiseError of Mir.error * string option
   | SCleanErrors
   | SExportErrors
+  | SFinalizeErrors
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 

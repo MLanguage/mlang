@@ -41,6 +41,7 @@ and stmt_kind =
   | SRaiseError of Mir.error * string option
   | SCleanErrors
   | SExportErrors
+  | SFinalizeErrors
 
 type block = stmt list
 
@@ -113,7 +114,7 @@ let count_instr (p : program) : int =
         match Pos.unmark s with
         | SConditional _ | SAssign _ | SVerif _ | SVerifBlock _ | SRovCall _
         | SFunctionCall _ | SPrint _ | SIterate _ | SRestore _ | SRaiseError _
-        | SCleanErrors | SExportErrors ->
+        | SCleanErrors | SExportErrors | SFinalizeErrors ->
             acc + 1
         | SGoto _ -> acc)
       acc stmts

@@ -827,6 +827,7 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     | Mast.NbAnomalies -> Mir.NbAnomalies
     | Mast.NbDiscordances -> Mir.NbDiscordances
     | Mast.NbInformatives -> Mir.NbInformatives
+    | Mast.NbBloquantes -> Mir.NbBloquantes
     | Mast.Loop _ -> assert false
   in
   Pos.same_pos_as expr f
@@ -1275,6 +1276,8 @@ let rec translate_prog (error_decls : Mir.Error.t list)
         aux ((Mir.CleanErrors, pos) :: res, var_data) il
     | (Mast.ExportErrors, pos) :: il ->
         aux ((Mir.ExportErrors, pos) :: res, var_data) il
+    | (Mast.FinalizeErrors, pos) :: il ->
+        aux ((Mir.FinalizeErrors, pos) :: res, var_data) il
   in
   aux ([], var_data) prog
 

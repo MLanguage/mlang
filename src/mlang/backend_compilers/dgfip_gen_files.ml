@@ -1486,9 +1486,19 @@ struct S_irdata
   T_discord *discords;
   T_discord *tas_discord;
   T_discord **p_discord;
+  int sz_err_finalise;
+  char **err_finalise;
+  int nb_err_finalise;
+  int sz_err_sortie;
+  char **err_sortie;
+  int nb_err_sortie;
+  int sz_err_archive;
+  char **err_archive;
+  int nb_err_archive;
   int nb_anos;
   int nb_dicos;
   int nb_infos;
+  int nb_bloqus;
   jmp_buf jmp_bloq;
 #endif /* FLG_MULTITHREAD */
   T_print_context ctx_pr_out;
@@ -1621,8 +1631,12 @@ typedef struct S_env_sauvegarde {
 
 extern void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, int sz);
 extern void env_restaurer(T_env_sauvegarde **liste);
-extern int nb_erreurs_bloquantes(T_irdata *irdata);
+extern int nb_informatives(T_irdata *irdata);
+extern int nb_discordances(T_irdata *irdata);
+extern int nb_anomalies(T_irdata *irdata);
+extern int nb_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
+extern void finalise_erreur _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
 #ifdef FLG_MULTITHREAD
 extern void init_erreur(T_irdata *irdata);
@@ -1637,9 +1651,19 @@ let gen_decl_targets fmt cprog =
 extern T_discord *discords;
 extern T_discord *tas_discord;
 extern T_discord **p_discord;
+extern int sz_err_finalise;
+extern char **err_finalise;
+extern int nb_err_finalise;
+extern int sz_err_sortie;
+extern char **err_sortie;
+extern int nb_err_sortie;
+extern int sz_err_archive;
+extern char **err_archive;
+extern int nb_err_archive;
 extern int nb_anos;
 extern int nb_discos;
 extern int nb_infos;
+extern int nb_bloqs;
 extern jmp_buf jmp_bloq;
 #endif
 
@@ -1729,7 +1753,6 @@ static void add_erreur_code(T_erreur *erreur, const char *code) {
     strcat(new_message, "))\0");
     erreur->message = new_message;
   }
-  fprintf(stderr, "leve_erreur %s\n", erreur->nom);
 }
 
 #ifdef FLG_MULTITHREAD
@@ -1743,6 +1766,7 @@ void init_erreur(T_irdata *irdata) {
   irdata->nb_anos = 0;
   irdata->nb_discos = 0;
   irdata->nb_infos = 0;
+  irdata->nb_bloqs = 0;
 }
 
 void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
@@ -1766,8 +1790,9 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
   if (erreur->type == DISCORDANCE) irdata->nb_discos++;
   if (erreur->type == INFORMATIVE) irdata->nb_infos++;
 
-  if (strcmp(erreur->isisf, "O")) {
-    if (erreur->type == ANOMALIE) {
+  if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
+    irdata->nb_bloqus++;
+    if (irdata->nb_bloqus >= 4) {
       longjmp(irdata->jmp_bloq, 1);
     }
   }
@@ -1787,15 +1812,30 @@ int nb_informatives(T_irdata *irdata) {
   return irdata->nb_infos;
 }
 
+int nb_bloquantes(T_irdata *irdata) {
+  return irdata->nb_bloqus;
+}
+
 #else
 
 T_discord *discords = 0;
 T_discord *tas_discord = 0;
 T_discord **p_discord = &discords;
+int sz_err_finalise = 0;
+char **err_finalise = NULL;
+int nb_err_finalise = 0;
+int sz_err_sortie = 0;
+char **err_sortie = NULL;
+int nb_err_sortie = 0;
+int sz_err_archive = 0;
+char **err_archive = NULL;
+int nb_err_archive = 0;
 int nb_anos = 0;
 int nb_discos = 0;
 int nb_infos = 0;
+int nb_bloqus = 0;
 jmp_buf jmp_bloq;
+
 
 void init_erreur(void) {
   *p_discord = tas_discord;
@@ -1805,6 +1845,7 @@ void init_erreur(void) {
   nb_anos = 0;
   nb_discos = 0;
   nb_infos = 0;
+  nb_bloqus = 0;
 }
 
 void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
@@ -1828,8 +1869,9 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
   if (erreur->type == DISCORDANCE) nb_discos++;
   if (erreur->type == INFORMATIVE) nb_infos++;
 
-  if (strcmp(erreur->isisf, "O")) {
-    if (erreur->type == ANOMALIE) {
+  if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
+    nb_bloqus++;
+    if (nb_bloqus >= 4) {
       longjmp(jmp_bloq, 1);
     }
   }
@@ -1864,6 +1906,10 @@ int nb_discordances(T_irdata *irdata) {
 
 int nb_informatives(T_irdata *irdata) {
   return nb_infos;
+}
+
+int nb_bloquantes(T_irdata *irdata) {
+  return nb_bloqus;
 }
 
 #endif /* FLG_MULTITHREAD */
@@ -2141,22 +2187,98 @@ void nettoie_erreur(irdata)
 T_irdata *irdata;
 {
 #ifdef FLG_MULTITHREAD
-  *irdata->p_discord = irdata->tas_discord;
-  irdata->tas_discord = irdata->discords;
-  irdata->discords = 0;
-  irdata->p_discord = &irdata->discords;
-  irdata->nb_bloquantes = 0;
+  init_erreur(irdata);
 #else
-  *p_discord = tas_discord;
-  tas_discord = discords;
-  discords = 0;
-  p_discord = &discords;
+  init_erreur();
+#endif /* FLG_MULTITHREAD */
+}
+
+void ajouter_espace(int *sz, char ***tab, int nb) {
+  if (nb >= *sz) {
+    int i = 0;
+    int old_sz = *sz;
+    if (*sz == 0) {
+      *sz = 128;
+    } else {
+      while (nb >= *sz) {
+        *sz *= 2;
+      }
+    }
+    *tab = (char **)realloc(*tab, *sz * (sizeof (char *)));    
+    for (i = old_sz; i < *sz; i++) {
+      (*tab)[i] = NULL;
+    }
+  }
+}
+
+void finalise_erreur(irdata)
+T_irdata *irdata;
+{
+#ifdef FLG_MULTITHREAD
+  int i = 0;
+  int trouve = 0;
+  T_discord *pDisco = irdata->discords;
+  irdata->nb_err_finalise = 0;
+  while (pDisco != NULL) {
+    trouve = 0;
+    for (i = 0; i < irdata->nb_err_archive && ! trouve; i++) {
+      if (strcmp(pDisco->erreur->nom, irdata->err_archive[i]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (trouve) {
+      ajouter_espace(&irdata->sz_err_archive, &irdata->err_archive, irdata->nb_err_archive);
+      irdata->err_archive[irdata->nb_err_archive] = pDisco->erreur->nom;
+      nb_err_archive++;
+      ajouter_espace(&irdata->sz_err_finalise, &irdata->err_finalise, irdata->nb_err_finalise);
+      irdata->err_finalise[irdata->nb_err_finalise] = pDisco->erreur->nom;
+      nb_err_finalise++;
+    }
+    pDisco = pDisco->suivant;
+  }
+#else
+  int i = 0;
+  int trouve = 0;
+  T_discord *pDisco = discords;
+  nb_err_finalise = 0;
+  while (pDisco != NULL) {
+    trouve = 0;
+    for (i = 0; i < nb_err_archive && ! trouve; i++) {
+      if (strcmp(pDisco->erreur->nom, err_archive[i]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (! trouve) {
+      ajouter_espace(&sz_err_archive, &err_archive, nb_err_archive);
+      err_archive[nb_err_archive] = pDisco->erreur->nom;
+      nb_err_archive++;
+      ajouter_espace(&sz_err_finalise, &err_finalise, nb_err_finalise);
+      err_finalise[nb_err_finalise] = pDisco->erreur->nom;
+      nb_err_finalise++;
+    }
+    pDisco = pDisco->suivant;
+  }
 #endif /* FLG_MULTITHREAD */
 }
 
 void exporte_erreur(irdata)
 T_irdata *irdata;
 {
+#ifdef FLG_MULTITHREAD
+  int i;
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
+    ajouter_espace(&irdata->sz_err_sortie, &irdata->err_sortie, irdata->nb_err_sortie);
+    irdata->err_sortie[irdata->nb_err_sortie] = irdata->err_finalise[i];
+    irdata->nb_err_sortie++;
+  }
+#else
+  int i;
+  for (i = 0; i < sz_err_finalise && err_finalise[i] != NULL; i++) {
+    ajouter_espace(&sz_err_sortie, &err_sortie, nb_err_sortie);
+    err_sortie[nb_err_sortie] = err_finalise[i];
+    nb_err_sortie++;
+  }
+#endif /* FLG_MULTITHREAD */
 }
 |}
 

@@ -47,7 +47,7 @@ let rec typecheck_top_down ~(in_generic_table : bool)
       typecheck_top_down ~in_generic_table e1;
       typecheck_top_down ~in_generic_table e2
   | Error | LocalVar _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
-  | NbDiscordances | NbInformatives ->
+  | NbDiscordances | NbInformatives | NbBloquantes ->
       ()
   | Index ((var, var_pos), e') ->
       (* Tables are only tables of arrays *)
@@ -160,7 +160,7 @@ let rec check_non_recursivity_expr (e : expression Pos.marked)
   | FunctionCall (_, args) ->
       List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
   | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ | Size _
-  | NbAnomalies | NbDiscordances | NbInformatives ->
+  | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       ()
   | Var var ->
       if var = lvar then
@@ -396,7 +396,8 @@ let expand_functions (p : Mir_interface.full_program) :
                in
                let instrs' = List.map map_instr instrs in
                (Restore (vars, filters', instrs'), instr_pos)
-           | RaiseError _ | CleanErrors | ExportErrors -> m_instr
+           | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
+               m_instr
          in
          TargetMap.map
            (fun t ->

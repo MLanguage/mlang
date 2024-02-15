@@ -87,11 +87,17 @@ rule token = parse
 | "informative" { INFORMATIVE }
 | "iterer" { ITERATE }
 | "leve_erreur" { RAISE_ERROR }
-| "nb_categorie" { NB_CATEGORY }
-| "nb_anomalies" { NB_ANOMALIES }
-| "nb_discordances" { NB_DISCORDANCES }
-| "nb_informatives" { NB_INFORMATIVES }
+| "nb_" ['a'-'z']+ as kw {
+    match kw with
+    | "nb_categorie" -> NB_CATEGORY
+    | "nb_anomalies" -> NB_ANOMALIES
+    | "nb_discordances" -> NB_DISCORDANCES
+    | "nb_informatives" -> NB_INFORMATIVES
+    | "nb_bloquantes" -> NB_BLOCKING
+    | _ -> Errors.raise_error (Format.sprintf "bad keyword: %s" kw)
+  }
 | "nettoie_erreurs" { CLEAN_ERRORS }
+| "finalise_erreurs" { FINALIZE_ERRORS }
 | "exporte_erreurs" { EXPORT_ERRORS }
 | "nom" { NAME }
 | "non" { NOT }

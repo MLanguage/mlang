@@ -130,6 +130,7 @@ type 'variable expression_ =
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
+  | NbBloquantes
 
 type expression = variable expression_
 
@@ -261,6 +262,7 @@ type instruction =
   | RaiseError of error * string option
   | CleanErrors
   | ExportErrors
+  | FinalizeErrors
 
 type rule_data = {
   rule_apps : Pos.t StrMap.t;

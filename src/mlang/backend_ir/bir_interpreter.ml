@@ -78,9 +78,12 @@ module type S = sig
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
+    ctx_old_anos : StrSet.t;
     ctx_nb_anos : int;
     ctx_nb_discos : int;
     ctx_nb_infos : int;
+    ctx_nb_bloquantes : int;
+    ctx_finalized_anos : (Mir.error * string option) list;
     ctx_exported_anos : (Mir.error * string option) list;
   }
 
@@ -210,9 +213,12 @@ struct
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
+    ctx_old_anos : StrSet.t;
     ctx_nb_anos : int;
     ctx_nb_discos : int;
     ctx_nb_infos : int;
+    ctx_nb_bloquantes : int;
+    ctx_finalized_anos : (Mir.error * string option) list;
     ctx_exported_anos : (Mir.error * string option) list;
   }
 
@@ -224,9 +230,12 @@ struct
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
+      ctx_old_anos = StrSet.empty;
       ctx_nb_anos = 0;
       ctx_nb_discos = 0;
       ctx_nb_infos = 0;
+      ctx_nb_bloquantes = 0;
+      ctx_finalized_anos = [];
       ctx_exported_anos = [];
     }
 
@@ -725,6 +734,7 @@ struct
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
+        | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
         | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
@@ -1087,7 +1097,6 @@ struct
         in
         { ctx with ctx_vars }
     | Bir.SRaiseError (err, var_opt) ->
-        (* report_error err var_opt (Pos.get_position stmt) ctx*)
         let ctx_nb_anos =
           if err.typ = Mast.Anomaly then ctx.ctx_nb_anos + 1
           else ctx.ctx_nb_anos
@@ -1100,28 +1109,68 @@ struct
           if err.typ = Mast.Information then ctx.ctx_nb_infos + 1
           else ctx.ctx_nb_infos
         in
+        let ctx_nb_bloquantes, is_blocking =
+          let is_b =
+            err.typ = Mast.Anomaly && Pos.unmark err.descr.isisf = "N"
+          in
+          ((ctx.ctx_nb_bloquantes + if is_b then 1 else 0), is_b)
+        in
         let ctx =
           {
             ctx with
-            ctx_anos = (err, var_opt) :: ctx.ctx_anos;
+            ctx_anos = ctx.ctx_anos @ [ (err, var_opt) ];
             ctx_nb_anos;
             ctx_nb_discos;
             ctx_nb_infos;
+            ctx_nb_bloquantes;
           }
         in
-        if err.typ = Mast.Anomaly && canBlock then raise (BlockingError ctx)
+        Format.eprintf "leve erreur %s\n" (Pos.unmark err.Mir.name);
+        if is_blocking && ctx.ctx_nb_bloquantes >= 4 && canBlock then
+          raise (BlockingError ctx)
         else ctx
     | Bir.SCleanErrors ->
+        Format.eprintf "nettoie erreurs\n";
         {
           ctx with
           ctx_anos = [];
           ctx_nb_anos = 0;
           ctx_nb_discos = 0;
           ctx_nb_infos = 0;
+          ctx_nb_bloquantes = 0;
         }
+    | Bir.SFinalizeErrors ->
+        let not_in_old_anos (err, _) =
+          let name = Pos.unmark err.Mir.name in
+          not (StrSet.mem name ctx.ctx_old_anos)
+        in
+        let ctx_finalized_anos =
+          let rec merge_anos old_anos new_anos =
+            match (old_anos, new_anos) with
+            | [], anos | anos, [] -> anos
+            | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
+          in
+          let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
+          List.iter
+            (fun (err, _) ->
+              Format.eprintf "finalise: %s\n" (Pos.unmark err.Mir.name))
+            new_anos;
+          merge_anos ctx.ctx_finalized_anos new_anos
+        in
+        let add_ano res (err, _) = StrSet.add (Pos.unmark err.Mir.name) res in
+        let ctx_old_anos =
+          List.fold_left add_ano ctx.ctx_old_anos ctx.ctx_anos
+        in
+        { ctx with ctx_finalized_anos; ctx_old_anos }
     | Bir.SExportErrors ->
-        let ctx_exported_anos = ctx.ctx_anos @ ctx.ctx_exported_anos in
-        { ctx with ctx_exported_anos }
+        let ctx_exported_anos =
+          ctx.ctx_exported_anos @ ctx.ctx_finalized_anos
+        in
+        List.iter
+          (fun (err, _) ->
+            Format.eprintf "sortie: %s\n" (Pos.unmark err.Mir.name))
+          ctx.ctx_finalized_anos;
+        { ctx with ctx_exported_anos; ctx_finalized_anos = [] }
 
   and evaluate_stmts canBlock (p : Bir.program) (ctx : ctx)
       (stmts : Bir.stmt list) (loc : code_location) (start_value : int) : ctx =

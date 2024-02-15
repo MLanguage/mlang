@@ -173,7 +173,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
             (used_vars, used_defs, stmt :: acc, pos - 1)
         | SGoto _ | SRovCall _ | SFunctionCall _ ->
             (used_vars, used_defs, stmt :: acc, pos - 1)
-        | SRaiseError _ | SCleanErrors | SExportErrors ->
+        | SRaiseError _ | SCleanErrors | SExportErrors | SFinalizeErrors ->
             (used_vars, used_defs, stmt :: acc, pos - 1))
       (used_vars, used_defs, [], pos)
       (List.rev stmts)

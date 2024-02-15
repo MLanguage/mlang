@@ -164,6 +164,7 @@ type expression =
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
+  | NbBloquantes
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
@@ -233,6 +234,7 @@ type instruction =
   | RaiseError of error_name Pos.marked * variable_name Pos.marked option
   | CleanErrors
   | ExportErrors
+  | FinalizeErrors
 
 type rule = {
   rule_number : int Pos.marked;

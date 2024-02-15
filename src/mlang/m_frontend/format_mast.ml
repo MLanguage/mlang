@@ -177,6 +177,7 @@ let rec format_expression fmt (e : expression) =
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
+  | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
 and format_func_args fmt (args : func_args) =
   match args with
@@ -287,6 +288,7 @@ let rec format_instruction fmt (i : instruction) =
         (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
   | CleanErrors -> Format.fprintf fmt "nettoie_erreurs;"
   | ExportErrors -> Format.fprintf fmt "exporte_erreurs;"
+  | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs;"
 
 and format_instruction_list fmt (il : instruction Pos.marked list) =
   (Format.pp_print_list

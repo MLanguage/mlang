@@ -60,7 +60,7 @@ let rec no_local_vars (e : Bir.expression Pos.marked) : bool =
   | Mir.Conditional (e1, e2, e3) ->
       no_local_vars e1 && no_local_vars e2 && no_local_vars e3
   | Mir.Attribut _ | Mir.Size _ | Mir.NbAnomalies | Mir.NbDiscordances
-  | Mir.NbInformatives ->
+  | Mir.NbInformatives | Mir.NbBloquantes ->
       false
   | Mir.NbCategory _ -> assert false
 
@@ -80,7 +80,7 @@ let rec has_this_local_var (e : Bir.expression Pos.marked)
       has_this_local_var e1 l || has_this_local_var e2 l
       || has_this_local_var e3 l
   | Mir.Attribut _ | Mir.Size _ | Mir.NbAnomalies | Mir.NbDiscordances
-  | Mir.NbInformatives ->
+  | Mir.NbInformatives | Mir.NbBloquantes ->
       false
   | Mir.NbCategory _ -> assert false
 
@@ -94,7 +94,7 @@ let rec expr_size (e : Bir.expression Pos.marked) : int =
       List.fold_left (fun acc arg -> acc + expr_size arg) 1 args
   | Mir.Conditional (e1, e2, e3) -> expr_size e1 + expr_size e2 + expr_size e3
   | Mir.Attribut _ | Mir.Size _ | Mir.NbAnomalies | Mir.NbDiscordances
-  | Mir.NbInformatives ->
+  | Mir.NbInformatives | Mir.NbBloquantes ->
       1
   | Mir.NbCategory _ -> assert false
 
@@ -260,7 +260,7 @@ let rec inline_in_expr (e : Bir.expression) (ctx : ctx)
       in
       Mir.FunctionCall (f, new_args)
   | Mir.Attribut _ | Mir.Size _ | Mir.NbAnomalies | Mir.NbDiscordances
-  | Mir.NbInformatives ->
+  | Mir.NbInformatives | Mir.NbBloquantes ->
       e
   | Mir.NbCategory _ -> assert false
 
@@ -356,7 +356,7 @@ let inline_in_stmt (stmt : stmt) (ctx : ctx) (current_block : block_id)
       in
       (new_stmt, ctx, current_stmt_pos)
   | SGoto _ | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _
-  | SCleanErrors | SExportErrors ->
+  | SCleanErrors | SExportErrors | SFinalizeErrors ->
       (stmt, ctx, current_stmt_pos)
 
 let inlining0 (cfg : cfg) : cfg =

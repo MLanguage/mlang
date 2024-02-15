@@ -99,6 +99,7 @@ let rec format_expression fmt (e : expression) =
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
+  | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
 let format_variable_def fmt (def : variable_def) =
   match def with

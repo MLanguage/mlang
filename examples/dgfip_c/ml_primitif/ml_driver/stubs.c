@@ -610,6 +610,56 @@ cherche_var(
 }
 
 CAMLprim value
+ml_init_errs(value unit)
+{
+  CAMLparam1(unit);
+  for (int i = 0; i < sz_err_finalise; i++) {
+    err_finalise[i] = NULL;
+  }
+  nb_err_sortie = 0;
+  for (int i = 0; i < sz_err_sortie; i++) {
+    err_sortie[i] = NULL;
+  }
+  nb_err_archive = 0;
+  for (int i = 0; i < sz_err_archive; i++) {
+    err_archive[i] = NULL;
+  }
+  nb_err_archive = 0;
+  CAMLreturn(unit);
+}
+
+CAMLprim value
+ml_get_err_list(value unit)
+{
+  CAMLparam1(unit);
+  CAMLlocal2(res, cons);
+  res = Val_emptylist;
+  for (int i = 0; i < nb_err_sortie; ++i) {
+    cons = caml_alloc_small(2, Tag_cons);
+    Field(cons, 0) = caml_copy_string(err_sortie[i]);
+    Field(cons, 1) = res;
+    res = cons;
+  }
+  CAMLreturn(res);
+}
+
+CAMLprim value
+ml_free_errs(value unit)
+{
+  CAMLparam1(unit);
+  if (err_finalise != NULL) {
+    free(err_finalise);
+  }
+  if (err_sortie  != NULL) {
+    free(err_sortie);
+  }
+  if (err_archive  != NULL) {
+    free(err_archive);
+  }
+  CAMLreturn(unit);
+}
+
+CAMLprim value
 ml_charge_vars(void)
 {
   CAMLparam0();

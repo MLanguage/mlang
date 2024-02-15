@@ -255,6 +255,10 @@ let rec generate_c_expr (program : program) (e : expression Pos.marked)
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_informatives(irdata)" in
       D.build_transitive_composition { def_test; value_comp }
+  | NbBloquantes ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_bloquantes(irdata)" in
+      D.build_transitive_composition { def_test; value_comp }
   | NbCategory _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
@@ -382,12 +386,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@\n";
       pr "#ifdef FLG_MULTITHREAD@\n";
-      pr "  init_erreur(irdata);@\n";
       pr "  if (setjmp(irdata->jmp_bloq) != 0) {@\n";
       pr "    goto %s;@\n" goto_label;
       pr "  }@\n";
       pr "#else@\n";
-      pr "  init_erreur();@\n";
       pr "  if (setjmp(jmp_bloq) != 0) {@\n";
       pr "    goto %s;@\n" goto_label;
       pr "  }@\n";
@@ -568,6 +570,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
   | SCleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
   | SExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
+  | SFinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

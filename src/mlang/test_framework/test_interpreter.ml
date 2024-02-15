@@ -275,6 +275,7 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
         Bir_instrumentation.merge_code_coverage_single_results_with_acc
           code_coverage_result code_coverage_acc
       in
+      Cli.result_print "%s" name;
       (name :: successes, failures, code_coverage_acc)
     with
     | Errors.StructuredError (msg, pos, kont) ->

@@ -22,13 +22,13 @@ let read_test filename =
         | `ControlesPrimitif el ->
             let ctl_prim =
               List.fold_left (fun erreurs e ->
-                  e :: erreurs
+                  StrSet.add e erreurs
                 ) ctl_prim el
             in
             res_prim, ctl_prim
         | _ ->
             res_prim, ctl_prim
-      ) (StrMap.empty, []) test
+      ) (StrMap.empty, StrSet.empty) test
   in
   tgv, res_prim, ctl_prim
 
@@ -54,6 +54,13 @@ let check_result tgv err expected_tgv expected_err =
                code montant montant'
             end
     ) expected_tgv;
+  let missing_errs = StrSet.diff expected_err err in
+  let unexpected_errs = StrSet.diff err expected_err in
+  if not (StrSet.is_empty missing_errs && StrSet.is_empty unexpected_errs) then (
+    result := false;
+    StrSet.iter (Printf.eprintf "KO | %s attendue non recue\n") missing_errs;
+    StrSet.iter (Printf.eprintf "KO | %s recue en trop\n") unexpected_errs;
+  );
   !result
 
 let var_addr () =
@@ -137,29 +144,20 @@ let run_test test_file annee_exec flag_no_bin_compare =
   let tgv, res_prim, ctl_prim = read_test test_file in
 
   let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
-  if annee_revenu <> annee_calc then
-    Printf.eprintf "Attention, année calculette (%d) <> année revenu (%d)\n%!"
-      annee_calc annee_revenu;
+  if annee_revenu <> annee_calc then (
+    Printf.eprintf
+      "Attention, année calculette (%d) <> année revenu (%d)\n%!"
+      annee_calc
+      annee_revenu
+  );
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
   TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
-(*  let err1 = M.verif_saisie_cohe_primitive tgv in
-  let err2 =
-    if List.exists (fun e -> e.[0] = 'A') err1 then
-      begin
-        Printf.eprintf
-          "Anomalies dans les données saisies\n%!"
-      end;
-    let _err = M.calcul_primitif_isf tgv in
-    let _err = M.verif_calcul_primitive_isf tgv in
-    M.traite_double_liquidation_2 tgv
-  in
-
-  let err = err1 @ err2 in *)
+  init_errs ();
   let err = M.traite_double_liquidation_2 tgv in
   M.dump_raw_tgv_in out tgv err;
 
-  let res_ok = check_result tgv err res_prim ctl_prim in
+  let res_ok = check_result tgv (get_errs ()) res_prim ctl_prim in
 
   match flag_no_bin_compare with
   | true -> if res_ok then 0 else 1
@@ -227,8 +225,10 @@ let () =
   Printexc.record_backtrace true;
   try
     let res = main () in
+    free_errs ();
     exit res
   with e ->
     Printf.eprintf "%s\n" (Printexc.to_string e);
     Printexc.print_backtrace stderr;
+    free_errs ();
     exit 30

@@ -153,12 +153,13 @@ calculer enchaineur ENCH_TL;
 
 cible verif_calcul_primitive_isf:
 application: iliad;
+nettoie_erreurs;
 verifier domaine isf : avec nb_categorie(calculee *) > 0;
 
 cible verif_calcul_primitive:
 application: iliad;
 calculer cible verif_calcul_primitive_isf;
-si nb_anomalies() = 0 alors
+si nb_bloquantes() = 0 alors
   verifier domaine primitive
   : avec
       nb_categorie(calculee *) > 0
@@ -167,9 +168,10 @@ finsi
 
 cible verif_calcul_corrective:
 application: iliad;
+nettoie_erreurs;
 calculer cible calcul_primitif_isf;
 calculer cible verif_calcul_primitive_isf;
-si nb_anomalies() = 0 alors
+si nb_bloquantes() = 0 alors
   verifier domaine corrective
   : avec
       nb_categorie(calculee *) > 0
@@ -178,16 +180,18 @@ finsi
 
 cible verif_saisie_cohe_primitive_isf_raw:
 application: iliad;
+nettoie_erreurs;
 verifier domaine isf
 : avec nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0;
 
 cible verif_saisie_cohe_primitive:
 application: iliad;
+nettoie_erreurs;
 calculer cible verif_saisie_cohe_primitive_isf_raw;
-si nb_anomalies() = 0 alors
+si nb_bloquantes() = 0 alors
   calculer cible calcul_primitif_isf;
   calculer cible verif_calcul_primitive_isf;
-  si nb_anomalies() = 0 alors
+  si nb_bloquantes() = 0 alors
     verifier domaine primitive
     : avec
         nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0
@@ -197,8 +201,9 @@ finsi
 
 cible verif_saisie_cohe_corrective:
 application: iliad;
+nettoie_erreurs;
 calculer cible verif_saisie_cohe_primitive_isf_raw;
-si nb_anomalies() = 0 alors
+si nb_bloquantes() = 0 alors
   verifier domaine corrective
   : avec
       nb_categorie(saisie *) > 0 et nb_categorie(calculee *) = 0
@@ -207,20 +212,24 @@ finsi
 
 cible verif_cohe_horizontale:
 application: iliad;
+nettoie_erreurs;
 verifier domaine horizontale corrective;
 
 cible verif_contexte_cohe_primitive:
 application: iliad;
+nettoie_erreurs;
 verifier domaine primitive
 : avec nb_categorie(saisie contexte) = nb_categorie(*);
 
 cible verif_contexte_cohe_corrective:
 application: iliad;
+nettoie_erreurs;
 verifier domaine corrective
 : avec nb_categorie(saisie contexte) = nb_categorie(*);
 
 cible verif_famille_cohe_primitive:
 application: iliad;
+nettoie_erreurs;
 verifier domaine primitive
 : avec
     nb_categorie(saisie famille) > 0
@@ -229,6 +238,7 @@ verifier domaine primitive
 
 cible verif_famille_cohe_corrective:
 application: iliad;
+nettoie_erreurs;
 verifier domaine corrective
 : avec
     nb_categorie(saisie famille) > 0
@@ -237,11 +247,13 @@ verifier domaine corrective
 
 cible verif_revenu_cohe_primitive:
 application: iliad;
+nettoie_erreurs;
 verifier domaine primitive
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
 cible verif_revenu_cohe_corrective:
 application: iliad;
+nettoie_erreurs;
 verifier domaine corrective
 : avec nb_categorie(saisie revenu) > 0 et nb_categorie(calculee *) = 0;
 
@@ -738,27 +750,32 @@ application: iliad;
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
 si nb_anomalies() > 0 alors
+  finalise_erreurs;
   exporte_erreurs;
 sinon_si nb_discordances() + nb_informatives() = 0 alors
   calculer cible ir_verif_contexte;
   si nb_anomalies() = 0 alors
     si nb_discordances() + nb_informatives() > 0 alors
+      finalise_erreurs;
       exporte_erreurs;
     finsi
     calculer cible ir_verif_famille;
     si nb_anomalies() = 0 alors
       si nb_discordances() + nb_informatives() > 0 alors
+        finalise_erreurs;
         exporte_erreurs;
       finsi
       calculer cible ir_verif_revenu;
       si nb_anomalies() > 0 alors
+        finalise_erreurs;
         exporte_erreurs;
       sinon
         si nb_discordances() + nb_informatives() > 0 alors
+          finalise_erreurs;
           exporte_erreurs;
         finsi
         calculer cible ir_calcul_primitif_isf;
-        exporte_erreurs;
+        finalise_erreurs;
         calculer cible effacer_base_etc;
         calculer cible modulation_taxation;
         calculer cible traite_double_liquidation_pvro;
@@ -767,6 +784,7 @@ sinon_si nb_discordances() + nb_informatives() = 0 alors
         calculer cible sauve_base_anterieure;
         calculer cible sauve_base_anterieure_cor;
         calculer cible sauve_base_inr_inter22;
+        finalise_erreurs;
         exporte_erreurs;
       finsi
     finsi
