@@ -253,5 +253,8 @@ extern struct S_discord * verif_cohe_horizontale _PROTS((T_irdata *irdata));
 
 extern void pr_var(T_irdata *irdata, char *prefix, char *nom);
 
+extern void finalise_erreur(T_irdata *irdata);
+extern void exporte_erreur(T_irdata *irdata);
+
 #endif /* _IRDATA_H_ */
 

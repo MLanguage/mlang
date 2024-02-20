@@ -257,3 +257,103 @@ double * IRDATA_extrait_tableau(T_irdata *irdata, T_var_irdata p_desc, int ind)
   return res;
 }
 
+/* Gestion des erreurs */
+
+int sz_err_finalise = 0;
+char **err_finalise = NULL;
+int nb_err_finalise = 0;
+int sz_err_sortie = 0;
+char **err_sortie = NULL;
+int nb_err_sortie = 0;
+int sz_err_archive = 0;
+char **err_archive = NULL;
+int nb_err_archive = 0;
+
+void ajouter_espace(int *sz, char ***tab, int nb) {
+  if (nb >= *sz) {
+    int i = 0;
+    int old_sz = *sz;
+    if (*sz == 0) {
+      *sz = 128;
+    } else {
+      while (nb >= *sz) {
+        *sz *= 2;
+      }
+    }
+    *tab = (char **)realloc(*tab, *sz * (sizeof (char *)));    
+    for (i = old_sz; i < *sz; i++) {
+      (*tab)[i] = NULL;
+    }
+  }
+}
+
+void finalise_erreur(irdata)
+T_irdata *irdata;
+{
+#ifdef FLG_MULTITHREAD
+  int i = 0;
+  int trouve = 0;
+  T_discord *pDisco = irdata->discords;
+  irdata->nb_err_finalise = 0;
+  while (pDisco != NULL) {
+    trouve = 0;
+    for (i = 0; i < irdata->nb_err_archive && ! trouve; i++) {
+      if (strcmp(pDisco->erreur->nom, irdata->err_archive[i]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (trouve) {
+      ajouter_espace(&irdata->sz_err_archive, &irdata->err_archive, irdata->nb_err_archive);
+      irdata->err_archive[irdata->nb_err_archive] = pDisco->erreur->nom;
+      nb_err_archive++;
+      ajouter_espace(&irdata->sz_err_finalise, &irdata->err_finalise, irdata->nb_err_finalise);
+      irdata->err_finalise[irdata->nb_err_finalise] = pDisco->erreur->nom;
+      nb_err_finalise++;
+    }
+    pDisco = pDisco->suivant;
+  }
+#else
+  int i = 0;
+  int trouve = 0;
+  T_discord *pDisco = discords;
+  nb_err_finalise = 0;
+  while (pDisco != NULL) {
+    trouve = 0;
+    for (i = 0; i < nb_err_archive && ! trouve; i++) {
+      if (strcmp(pDisco->erreur->nom, err_archive[i]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (! trouve) {
+      ajouter_espace(&sz_err_archive, &err_archive, nb_err_archive);
+      err_archive[nb_err_archive] = pDisco->erreur->nom;
+      nb_err_archive++;
+      ajouter_espace(&sz_err_finalise, &err_finalise, nb_err_finalise);
+      err_finalise[nb_err_finalise] = pDisco->erreur->nom;
+      nb_err_finalise++;
+    }
+    pDisco = pDisco->suivant;
+  }
+#endif /* FLG_MULTITHREAD */
+}
+
+void exporte_erreur(irdata)
+T_irdata *irdata;
+{
+#ifdef FLG_MULTITHREAD
+  int i;
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
+    ajouter_espace(&irdata->sz_err_sortie, &irdata->err_sortie, irdata->nb_err_sortie);
+    irdata->err_sortie[irdata->nb_err_sortie] = irdata->err_finalise[i];
+    irdata->nb_err_sortie++;
+  }
+#else
+  int i;
+  for (i = 0; i < sz_err_finalise && err_finalise[i] != NULL; i++) {
+    ajouter_espace(&sz_err_sortie, &err_sortie, nb_err_sortie);
+    err_sortie[nb_err_sortie] = err_finalise[i];
+    nb_err_sortie++;
+  }
+#endif /* FLG_MULTITHREAD */
+}
+

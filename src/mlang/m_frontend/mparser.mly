@@ -37,7 +37,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token PLUS MINUS TIMES DIV
 %token GTE LTE GT LT NEQ EQUALS
 %token SEMICOLON COLON COMMA
-%token AND OR NOTIN NOT UNDEFINED
+%token AND OR NOT UNDEFINED
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
@@ -816,7 +816,7 @@ interval:
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
 expression:
-| e = with_pos(sum_expression) NOTIN LPAREN s = enumeration RPAREN {
+| e = with_pos(sum_expression) NOT IN LPAREN s = enumeration RPAREN {
     TestInSet (false, e, s)
   }
 | e = with_pos(sum_expression) IN LPAREN s = enumeration RPAREN {

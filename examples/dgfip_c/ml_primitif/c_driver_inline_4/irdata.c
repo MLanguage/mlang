@@ -1776,8 +1776,19 @@ void pr_var(T_irdata *irdata, char *prefix, char *nom) {
     fprintf(stderr, "XXX %s %s = indefini\n", prefix, nom);
   } else {
     fprintf(stderr, "XXX %s %s = ", prefix, nom);
-    print_double(stderr, val, 0, 30);
+    print_double(stderr, &(irdata->ctx_pr_err), val, 0, 30);
     fprintf(stderr, "\n");
   }
 }
+
+/* Gestion des erreurs */
+
+void finalise_erreur(T_irdata *irdata) {
+
+}
+
+void exporte_erreur(T_irdata *irdata) {
+
+}
+
 
