@@ -9,6 +9,8 @@ external exec_verif_raw : string -> TGV.t -> string list = "ml_exec_verif"
 
 external dump_raw_tgv_in : string -> TGV.t -> string list -> unit = "ml_dump_raw_tgv" (* filename, tgv, err *)
 
+external export_errs : TGV.t -> unit = "ml_export_errs"
+
 let exec_ench ench tgv = exec_ench_raw ench tgv
 let exec_verif ench tgv = exec_verif_raw ench tgv
 
@@ -61,5 +63,5 @@ let verif_saisie_cohe_primitive_isf tgv = exec_verif "verif_saisie_cohe_primitiv
 let verif_saisie_cohe_corrective tgv = exec_verif "verif_saisie_cohe_corrective" tgv
 let verif_cohe_horizontale tgv = exec_verif "verif_cohe_horizontale" tgv
 
-let traite_double_liquidation_2 tgv = exec_verif "traite_double_liquidation_2" tgv
+let enchainement_primitif tgv = exec_verif "enchainement_primitif" tgv
 

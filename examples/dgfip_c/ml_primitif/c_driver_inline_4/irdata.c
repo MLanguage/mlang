@@ -1783,12 +1783,76 @@ void pr_var(T_irdata *irdata, char *prefix, char *nom) {
 
 /* Gestion des erreurs */
 
-void finalise_erreur(T_irdata *irdata) {
+extern int recup_disco(struct S_discord *ptr_d);
 
+void finalise_erreur(T_irdata *irdata) {
+#ifdef FLG_MULTITHREAD
+  recup_disco(irdata->discords);
+#else
+  recup_disco(discords);
+#endif /* FLG_MULTITHREAD */
 }
+
+extern int rech_code_recu(void);
 
 void exporte_erreur(T_irdata *irdata) {
-
+  rech_code_recu();
 }
 
+/* Interface  avec Mlang */
+
+extern int trace;
+extern int gen_creneau;
+extern FILE *sortie;
+extern T_irdata * tgv_primitif;
+extern int traitement;
+
+#include "defcal.h"
+#include "eea.h"
+
+int enchainement(void) {
+  int l_CodeErreur;
+
+  if (trace == PROG) {
+    printf("enchainement()\n");
+  }
+  if (gen_creneau == OFF) {
+    fputs(TRAIT, sortie);
+    fputs(TAB, sortie);
+  }
+  if (traitement == PRIMITIF) {
+    if (gen_creneau == OFF) {
+      fputs("\tControles de coherence - Primitif\n\n", sortie);
+    } else {
+      fputs("#CONTROLES-PRIMITIF\n", sortie);
+    }
+    enchainement_primitif(tgv_primitif);
+    if (trace == PROG) {
+      printf("Sortie enchainement primitif, code retour CER\n");
+    }
+    return(CER);
+  } else {
+    if (gen_creneau == OFF) {
+      fputs("\tControles de coherence - Correctif\n\n", sortie);
+    } else {
+      fputs("#CONTROLES-CORRECTIF\n", sortie);
+    }
+    return OK;
+  }
+}
+
+T_discord *IC_EnchaineCalcul(int p_Traitement, T_irdata *pp_TGV) {
+  T_discord * lp_Discord = NULL;
+  TRACE_DIALOG3("Entree dans : T_discord *IC_EnchaineCalcul([int] %d, [T_irdata *] %p).\n", p_Traitement, pp_TGV);
+  TRACE_DIALOG1("# IC_EnchaineCalcul\n");
+
+  enchaine_calcul(pp_TGV);
+  TRACE_DIALOG1("# Sortie de IC_EnchaineCalcul.\n");
+  return lp_Discord;
+}
+
+struct S_discord * IN_traite_double_liquidation2(T_irdata * pp_TGV,int p_traitement) {
+  traite_double_liquidation_2(pp_TGV);
+  return discords;
+}
 

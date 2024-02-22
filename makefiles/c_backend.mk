@@ -99,7 +99,7 @@ calc_o:
 	$(eval override C_FILES:=$(shell cd calc && ls -1 *.c) $(ADDITIONAL_C_SOURCES_TARGETS))
 	@for I in $(C_FILES:.c=.o) ; \
 	do \
-	  $(MAKE_DGFIP_CALC) $$I ; \
+	  $(MAKE_DGFIP_CALC) $$I || exit; \
 	done
 endif
 

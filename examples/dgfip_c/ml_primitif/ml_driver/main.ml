@@ -154,7 +154,8 @@ let run_test test_file annee_exec flag_no_bin_compare =
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
   TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
   init_errs ();
-  let err = M.traite_double_liquidation_2 tgv in
+  let err = M.enchainement_primitif tgv in
+  M.export_errs tgv;
   M.dump_raw_tgv_in out tgv err;
 
   let res_ok = check_result tgv (get_errs ()) res_prim ctl_prim in

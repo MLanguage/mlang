@@ -302,7 +302,7 @@ T_irdata *irdata;
         trouve = 1;
       }
     }
-    if (trouve) {
+    if (! trouve) {
       ajouter_espace(&irdata->sz_err_archive, &irdata->err_archive, irdata->nb_err_archive);
       irdata->err_archive[irdata->nb_err_archive] = pDisco->erreur->nom;
       nb_err_archive++;

@@ -746,46 +746,63 @@ calculer cible trace_out;
 
 cible traite_double_liquidation_2:
 application: iliad;
+calculer cible modulation_taxation;
+calculer cible traite_double_liquidation_pvro;
+
+cible enchaine_calcul:
+application: iliad;
+si V_IND_TRAIT = 4 alors # primitif
+  calculer cible effacer_base_etc;
+  calculer cible traite_double_liquidation_2;
+  calculer cible sauve_base_initial;
+  calculer cible sauve_base_1728;
+  calculer cible sauve_base_anterieure;
+  calculer cible sauve_base_anterieure_cor;
+  calculer cible sauve_base_inr_inter22;
+sinon
+  V_ACO_MTAP = 0;
+  V_NEGACO = 0;
+#  VARTMP1 = si (present(FLAGDERNIE)) alors (1) sinon (0) finsi;
+#  calculer cible traite_double_liquidation3;
+  calculer cible traite_double_liquidation_pvro;
+finsi
+
+cible enchainement_primitif:
+application: iliad;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
+finalise_erreurs;
 si nb_anomalies() > 0 alors
-  finalise_erreurs;
   exporte_erreurs;
 sinon_si nb_discordances() + nb_informatives() = 0 alors
   calculer cible ir_verif_contexte;
+  finalise_erreurs;
   si nb_anomalies() = 0 alors
     si nb_discordances() + nb_informatives() > 0 alors
-      finalise_erreurs;
       exporte_erreurs;
     finsi
     calculer cible ir_verif_famille;
+    finalise_erreurs;
     si nb_anomalies() = 0 alors
       si nb_discordances() + nb_informatives() > 0 alors
-        finalise_erreurs;
         exporte_erreurs;
       finsi
       calculer cible ir_verif_revenu;
+      finalise_erreurs;
       si nb_anomalies() > 0 alors
-        finalise_erreurs;
         exporte_erreurs;
       sinon
         si nb_discordances() + nb_informatives() > 0 alors
-          finalise_erreurs;
           exporte_erreurs;
         finsi
         calculer cible ir_calcul_primitif_isf;
         finalise_erreurs;
-        calculer cible effacer_base_etc;
-        calculer cible modulation_taxation;
-        calculer cible traite_double_liquidation_pvro;
-        calculer cible sauve_base_initial;
-        calculer cible sauve_base_1728;
-        calculer cible sauve_base_anterieure;
-        calculer cible sauve_base_anterieure_cor;
-        calculer cible sauve_base_inr_inter22;
+        calculer cible enchaine_calcul;
         finalise_erreurs;
-        exporte_erreurs;
+        si nb_discordances() + nb_informatives() > 0 alors
+          exporte_erreurs;
+        finsi
       finsi
     finsi
   finsi
@@ -795,10 +812,10 @@ calculer cible trace_out;
 
 # primitif iterpréteur
 
-cible traite_double_liquidation_2_interpreteur:
+cible enchainement_primitif_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4; # primitif
-calculer cible traite_double_liquidation_2;
+calculer cible enchainement_primitif;
 
 #{
 

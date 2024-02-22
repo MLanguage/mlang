@@ -1125,12 +1125,12 @@ struct
             ctx_nb_bloquantes;
           }
         in
-        Format.eprintf "leve erreur %s\n" (Pos.unmark err.Mir.name);
+        (* Format.eprintf "leve erreur %s\n" (Pos.unmark err.Mir.name);*)
         if is_blocking && ctx.ctx_nb_bloquantes >= 4 && canBlock then
           raise (BlockingError ctx)
         else ctx
     | Bir.SCleanErrors ->
-        Format.eprintf "nettoie erreurs\n";
+        (*Format.eprintf "nettoie erreurs\n";*)
         {
           ctx with
           ctx_anos = [];
@@ -1151,10 +1151,8 @@ struct
             | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
           in
           let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
-          List.iter
-            (fun (err, _) ->
-              Format.eprintf "finalise: %s\n" (Pos.unmark err.Mir.name))
-            new_anos;
+          (* List.iter (fun (err, _) -> Format.eprintf "finalise: %s\n"
+             (Pos.unmark err.Mir.name)) new_anos;*)
           merge_anos ctx.ctx_finalized_anos new_anos
         in
         let add_ano res (err, _) = StrSet.add (Pos.unmark err.Mir.name) res in
@@ -1166,10 +1164,8 @@ struct
         let ctx_exported_anos =
           ctx.ctx_exported_anos @ ctx.ctx_finalized_anos
         in
-        List.iter
-          (fun (err, _) ->
-            Format.eprintf "sortie: %s\n" (Pos.unmark err.Mir.name))
-          ctx.ctx_finalized_anos;
+        (* List.iter (fun (err, _) -> Format.eprintf "sortie: %s\n" (Pos.unmark
+           err.Mir.name)) ctx.ctx_finalized_anos;*)
         { ctx with ctx_exported_anos; ctx_finalized_anos = [] }
 
   and evaluate_stmts canBlock (p : Bir.program) (ctx : ctx)
@@ -1207,7 +1203,8 @@ struct
     try
       let ctx =
         evaluate_stmts false p ctx
-          (Bir.main_statements_with_context_and_tgv_init p)
+          (Bir.main_statements_with_context_and_tgv_init p
+          @ [ (Bir.SExportErrors, Pos.no_pos) ])
           [] code_loc_start_value
         (* For the interpreter to operate properly, all input variables must be
            declared at some point, even if they aren't used as input (either

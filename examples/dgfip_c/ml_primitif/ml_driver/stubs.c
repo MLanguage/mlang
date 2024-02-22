@@ -98,7 +98,7 @@ static verif_t verifications[] = {
   { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf_raw },
   { "verif_saisie_cohe_corrective", verif_saisie_cohe_corrective },
   { "verif_cohe_horizontale", verif_cohe_horizontale },
-  { "traite_double_liquidation_2", traite_double_liquidation_2 }
+  { "enchainement_primitif", enchainement_primitif }
 };
 
 typedef enum genre_t {
@@ -626,6 +626,15 @@ ml_init_errs(value unit)
   }
   nb_err_archive = 0;
   CAMLreturn(unit);
+}
+
+CAMLprim value
+ml_export_errs(value mlTgv)
+{
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  exporte_erreur(tgv);
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value

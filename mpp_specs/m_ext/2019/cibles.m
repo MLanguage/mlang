@@ -513,16 +513,16 @@ finsi
 FLAG_PVRO = 0;
 calculer cible traite_double_liquidation_exit_taxe;
 
-cible traite_double_liquidation_2:
+cible enchainement_primitif:
 application: iliad;
 # calculer cible teste_tableaux;
 calculer cible traite_double_liquidation_pvro;
 
 # primitif iterpréteur
 
-cible traite_double_liquidation_2_interpreteur:
+cible enchainement_primitif_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4;
-calculer cible traite_double_liquidation_2;
+calculer cible enchainement_primitif;
 
 

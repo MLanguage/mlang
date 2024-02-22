@@ -20,7 +20,7 @@ ifeq ($(YEAR), 2018)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2018/fuzzing
 	TEST_ONE?=fuzzer_10019.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
-	MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=compute_double_liquidation_pvro
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
@@ -28,32 +28,32 @@ else ifeq ($(YEAR), 2019)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2019/fuzzing
 	TEST_ONE?=fuzzer_10029.m_test
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
-	MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
-	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2020)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2020/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2020/fuzzing
 	TEST_ONE?=fuzzer_1001.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
-	MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
-	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2021)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2021m_20_6/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2021/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2021/fuzzing
 	TEST_ONE?=fuzzer_10004.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
-	MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
-	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
 	TEST_ONE?=fuzzer_10032.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
-	MPP_FUNCTION_BACKEND?=traite_double_liquidation_2
-	MPP_FUNCTION?=traite_double_liquidation_2_interpreteur
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else
  	$(warning WARNING: there is no default configuration for year: $(YEAR))
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
@@ -93,6 +93,7 @@ endif
 COMMON_CFLAGS?=-std=c89 -pedantic
 ifeq ($(CC), clang)
   COMPILER_SPECIFIC_CFLAGS=-O2
+#  COMPILER_SPECIFIC_CFLAGS=
 else ifeq ($(CC), gcc)
   COMPILER_SPECIFIC_CFLAGS=-O1
 endif

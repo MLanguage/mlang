@@ -553,17 +553,17 @@ afficher "2) VARTMPTAB1[0] = " (VARTMPTAB1[0]) : 0..2 "\n";
 afficher "2) VARTMPTAB1[1] = " (VARTMPTAB1[1]) : 0..2 "\n";
 afficher "2) VARTMPTAB1[2] = " (VARTMPTAB1[2]) : 0..2 "\n";
 
-cible traite_double_liquidation_2:
+cible enchainement_primitif:
 application: iliad;
 # calculer cible teste_tableaux;
 calculer cible traite_double_liquidation_pvro;
 
 # primitif iterpréteur
 
-cible traite_double_liquidation_2_interpreteur:
+cible enchainement_primitif_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4;
-calculer cible traite_double_liquidation_2;
+calculer cible enchainement_primitif;
 
 #{
 # obsolète
