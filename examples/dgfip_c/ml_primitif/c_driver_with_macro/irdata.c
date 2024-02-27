@@ -1722,3 +1722,21 @@ char * IRDATA_desc_err_nom_erreur(struct S_desc_err *desc_err)
 
 #endif /* FLG_DEBUG */
 
+/* Gestion des erreurs */
+
+extern int recup_disco(struct S_discord *ptr_d);
+
+void finalise_erreur(T_irdata *irdata) {
+#ifdef FLG_MULTITHREAD
+  recup_disco(irdata->discords);
+#else
+  recup_disco(discords);
+#endif /* FLG_MULTITHREAD */
+}
+
+extern int rech_code_recu(void);
+
+void exporte_erreur(T_irdata *irdata) {
+  rech_code_recu();
+}
+

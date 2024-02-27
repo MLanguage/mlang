@@ -47,7 +47,7 @@ else ifeq ($(YEAR), 2021)
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2022)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/2022/code_m/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
 	TEST_ONE?=fuzzer_10032.m_test

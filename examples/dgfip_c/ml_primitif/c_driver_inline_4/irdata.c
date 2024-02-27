@@ -1800,7 +1800,7 @@ void exporte_erreur(T_irdata *irdata) {
 }
 
 /* Interface  avec Mlang */
-
+/*
 extern int trace;
 extern int gen_creneau;
 extern FILE *sortie;
@@ -1855,4 +1855,4 @@ struct S_discord * IN_traite_double_liquidation2(T_irdata * pp_TGV,int p_traitem
   traite_double_liquidation_2(pp_TGV);
   return discords;
 }
-
+*/
