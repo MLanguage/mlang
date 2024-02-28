@@ -38,14 +38,6 @@ val generate_function_all_vars : Bir.program -> bir_function
 (** Function used to generate a [bir_function] that includes all possible inputs
     and outputs *)
 
-val read_function_from_spec : Bir.program -> string -> bir_function
-(** [read_function_from_spec program spec_file] reads and parses [spec_file] and
-    extracts all the inputs, outputs and conditions from it. *)
-
-val read_inputs_from_stdin : bir_function -> Mir.literal Bir.VariableMap.t
-(** Given an input-output specification, prompts the user on [stdin] for the
-    values of the inputs and returns them as a map *)
-
 val adapt_program_to_function : Bir.program -> bir_function -> Bir.program * int
 (** [adapt_program_to_function program io] modifies [program] according to the
     input-output specification of [io]*)

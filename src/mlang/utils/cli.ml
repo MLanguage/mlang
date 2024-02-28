@@ -82,18 +82,6 @@ let backend =
     & info [ "backend"; "b" ] ~docv:"BACKEND"
         ~doc:"Backend selection: interpreter, Python, C, dgfip_c")
 
-let function_spec =
-  Arg.(
-    value
-    & opt (some file) None
-    & info [ "function_spec"; "f" ] ~docv:"SPEC"
-        ~doc:
-          "M function specification file (extension .m_spec).$(i, SPEC) should \
-           define the expected inputs, outputs and constant values. This \
-           information will be used to select the relevant computational rules \
-           from the M code corpus. If no function_spec is specified, all \
-           available inputs and outputs are used for the calculation.")
-
 let mpp_function =
   Arg.(
     required
@@ -204,21 +192,14 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
-let var_dependencies =
-  Arg.(
-    value
-    & opt (some (pair string string)) None
-    & info [ "var_dependencies" ]
-        ~doc:"Output list of dependencies of the given variable")
-
 let mlang_t f =
   Term.(
     const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
-    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function $ optimize
+    $ dep_graph_file $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize
     $ optimize_unsafe_float $ code_coverage $ precision $ roundops
     $ comparison_error_margin_cli $ income_year_cli $ m_clean_calls
-    $ dgfip_options $ var_dependencies)
+    $ dgfip_options)
 
 let info =
   let doc =

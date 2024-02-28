@@ -22,71 +22,6 @@ type bir_function = {
   func_errors : string list;
 }
 
-let var_set_from_variable_name_list (p : Bir.program)
-    (names : string Pos.marked list) : unit Bir.VariableMap.t =
-  List.fold_left
-    (fun acc name ->
-      let var = Mir.find_var_by_name p.mir_program name in
-      Bir.VariableMap.add (Bir.var_from_mir Bir.default_tgv var) () acc)
-    Bir.VariableMap.empty names
-
-let check_const_expression_is_really_const (e : Mir.expression Pos.marked) :
-    unit =
-  match Pos.unmark e with
-  | Literal _ -> ()
-  | _ ->
-      Errors.raise_spanned_error
-        "Constant input defined in function specification file is not a \
-         constant expression"
-        (Pos.get_position e)
-
-let const_var_set_from_list (p : Bir.program)
-    (names : (string Pos.marked * Mast.expression Pos.marked) list) :
-    Bir.expression Pos.marked Bir.VariableMap.t =
-  List.fold_left
-    (fun acc ((name, e) : string Pos.marked * Mast.expression Pos.marked) ->
-      let var =
-        try
-          List.hd
-            (List.sort
-               (fun v1 v2 ->
-                 compare v1.Mir.Variable.execution_number
-                   v2.Mir.Variable.execution_number)
-               (Pos.VarNameToID.find (Pos.unmark name) p.idmap))
-          |> Bir.(var_from_mir default_tgv)
-        with Not_found -> (
-          try
-            let name = Mir.find_var_name_by_alias p.mir_program name in
-            List.hd
-              (List.sort
-                 (fun v1 v2 ->
-                   compare v1.Mir.Variable.execution_number
-                     v2.Mir.Variable.execution_number)
-                 (Pos.VarNameToID.find name p.idmap))
-            |> Bir.(var_from_mir default_tgv)
-          with Errors.StructuredError _ ->
-            Errors.raise_spanned_error
-              (Format.asprintf "unknown variable %s" (Pos.unmark name))
-              (Pos.get_position e))
-      in
-      let new_e =
-        Mast_to_mir.translate_expression p.mir_program.program_var_categories
-          p.mir_program.program_idmap
-          {
-            table_definition = false;
-            idmap = p.idmap;
-            exec_number = Mast_to_mir.dummy_exec_number Pos.no_pos;
-          }
-          e
-      in
-      check_const_expression_is_really_const new_e;
-      Bir.VariableMap.add var
-        (Pos.map_under_mark
-           (Mir.map_expr_var Bir.(var_from_mir default_tgv))
-           new_e)
-        acc)
-    Bir.VariableMap.empty names
-
 let translate_external_conditions var_cats idmap
     (conds : Mast.expression Pos.marked list) : Bir.condition_data Mir.RuleMap.t
     =
@@ -199,69 +134,7 @@ let generate_function_all_vars (_p : Bir.program) : bir_function =
     func_errors = [];
   }
 
-let read_function_from_spec (p : Bir.program) (spec_file : string) :
-    bir_function =
-  let input = open_in spec_file in
-  let filebuf = Lexing.from_channel input in
-  Cli.debug_print "Parsing %s" spec_file;
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = spec_file };
-    }
-  in
-  try
-    let func_spec = Mparser.function_spec Mlexer.token filebuf in
-    close_in input;
-    Cli.debug_print "M_spec has %d inputs and %d outputs"
-      (List.length func_spec.spec_inputs)
-      (List.length func_spec.spec_outputs);
-    {
-      func_variable_inputs =
-        var_set_from_variable_name_list p func_spec.Mast.spec_inputs;
-      func_constant_inputs =
-        const_var_set_from_list p func_spec.Mast.spec_consts;
-      func_outputs =
-        var_set_from_variable_name_list p func_spec.Mast.spec_outputs;
-      func_conds =
-        translate_external_conditions p.mir_program.program_var_categories
-          p.idmap func_spec.Mast.spec_conditions;
-      func_errors = [];
-    }
-  with
-  | Errors.StructuredError e ->
-      close_in input;
-      raise (Errors.StructuredError e)
-  | Mparser.Error ->
-      close_in input;
-      Errors.raise_spanned_error "Error while parsing the m_spec file"
-        (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
-
-let read_inputs_from_stdin (f : bir_function) : Mir.literal Bir.VariableMap.t =
-  if Bir.VariableMap.cardinal f.func_variable_inputs > 0 then
-    Cli.result_print "Enter the input values of the program:";
-  Bir.VariableMap.mapi
-    (fun var _ ->
-      let mvar = Bir.var_to_mir var in
-      Format.printf "%s (%s) = @?"
-        (match mvar.Mir.Variable.alias with
-        | Some s -> s
-        | None -> Pos.unmark mvar.Mir.Variable.name)
-        (Pos.unmark mvar.Mir.Variable.descr);
-      let value = read_line () in
-      try
-        let value_ast =
-          Mparser.literal_input Mlexer.token (Lexing.from_string value)
-        in
-        match value_ast with
-        | Mast.Float f -> Mir.Float f
-        | Mast.Undefined -> Mir.Undefined
-        | Mast.Variable _ ->
-            Errors.raise_error "input must be a numeric constant"
-      with Mparser.Error -> Errors.raise_error "Lexer error in input!")
-    f.func_variable_inputs
-
-(** Add varibles, constants, conditions and outputs from [f] to [p] *)
+(** Add variables, constants, conditions and outputs from [f] to [p] *)
 let adapt_program_to_function (p : Bir.program) (f : bir_function) :
     Bir.program * int =
   let const_input_stmts =

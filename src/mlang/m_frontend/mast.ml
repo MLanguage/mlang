@@ -394,15 +394,6 @@ type source_file = source_file_item Pos.marked list
 
 type program = source_file list
 
-(**{1 Function specification AST}*)
-
-type function_spec = {
-  spec_inputs : variable_name Pos.marked list;
-  spec_consts : (variable_name Pos.marked * expression Pos.marked) list;
-  spec_outputs : variable_name Pos.marked list;
-  spec_conditions : expression Pos.marked list;
-}
-
 (** {1 Helper functions} *)
 
 let get_variable_name (v : variable) : string =

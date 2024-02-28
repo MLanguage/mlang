@@ -723,3 +723,163 @@ let mast_to_catvar (cats : 'a CatVarMap.t)
             id_pos
     end
   | _, pos -> Errors.raise_spanned_error "unknown variable category" pos
+
+let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
+    'var expression_ Pos.marked =
+  match Pos.unmark e with
+  | Comparison (op, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e
+  | Binop (op, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (Binop (op, new_e1, new_e2)) e
+  | Unop (op, e1) ->
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Unop (op, new_e1)) e
+  | Conditional (e1, e2, e3) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      let new_e3 = expand_functions_expr e3 in
+      Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
+  | Index (var, e1) ->
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Index (var, new_e1)) e
+  | Literal _ -> e
+  | Var _ -> e
+  | LocalVar _ -> e
+  | Error -> e
+  | LocalLet (lvar, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e
+  | FunctionCall (SumFunc, args) ->
+      Pos.same_pos_as
+        (List.fold_left
+           (fun acc arg ->
+             if acc = Error then Pos.unmark (expand_functions_expr arg)
+             else
+               Binop
+                 ( Pos.same_pos_as Mast.Add e,
+                   Pos.same_pos_as acc e,
+                   expand_functions_expr arg ))
+           Error args)
+        e
+  | FunctionCall (GtzFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Gt e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (GtezFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Gte e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
+      let earg1 = expand_functions_expr arg1 in
+      let earg2 = expand_functions_expr arg2 in
+      Pos.same_pos_as (FunctionCall (f, [ earg1; earg2 ])) e
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      Pos.same_pos_as (FunctionCall (AbsFunc, [ expand_functions_expr arg ])) e
+  | FunctionCall (NullFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Eq e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (PresentFunc, [ arg ]) ->
+      (* we do not expand this function as it deals specifically with undefined
+         variables *)
+      Pos.same_pos_as
+        (FunctionCall (PresentFunc, [ expand_functions_expr arg ]))
+        e
+  | FunctionCall (ArrFunc, [ arg ]) ->
+      (* we do not expand this function as it requires modulo or modf *)
+      Pos.same_pos_as (FunctionCall (ArrFunc, [ expand_functions_expr arg ])) e
+  | FunctionCall (InfFunc, [ arg ]) ->
+      (* we do not expand this function as it requires modulo or modf *)
+      Pos.same_pos_as (FunctionCall (InfFunc, [ expand_functions_expr arg ])) e
+  | _ -> e
+
+let expand_functions (p : program) : program =
+  let map_var _var def =
+    match def.var_definition with
+    | InputVar -> def
+    | SimpleVar e ->
+        { def with var_definition = SimpleVar (expand_functions_expr e) }
+    | TableVar (size, defg) -> (
+        match defg with
+        | IndexGeneric (v, e) ->
+            {
+              def with
+              var_definition =
+                TableVar (size, IndexGeneric (v, expand_functions_expr e));
+            }
+        | IndexTable es ->
+            {
+              def with
+              var_definition =
+                TableVar
+                  ( size,
+                    IndexTable
+                      (IndexMap.map (fun e -> expand_functions_expr e) es) );
+            })
+  in
+  let program_targets =
+    let rec map_instr m_instr =
+      let instr, instr_pos = m_instr in
+      match instr with
+      | Affectation (v_id, v_data) ->
+          (Affectation (v_id, map_var v_id v_data), instr_pos)
+      | IfThenElse (i, t, e) ->
+          let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
+          let t' = List.map map_instr t in
+          let e' = List.map map_instr e in
+          (IfThenElse (i', t', e'), instr_pos)
+      | ComputeTarget _ -> m_instr
+      | VerifBlock instrs ->
+          let instrs' = List.map map_instr instrs in
+          (VerifBlock instrs', instr_pos)
+      | Print (out, pr_args) ->
+          let pr_args' =
+            List.map
+              (fun m_arg ->
+                let arg, arg_pos = m_arg in
+                match arg with
+                | PrintIndent e ->
+                    let e' = expand_functions_expr e in
+                    (PrintIndent e', arg_pos)
+                | PrintExpr (e, mi, ma) ->
+                    let e' = expand_functions_expr e in
+                    (PrintExpr (e', mi, ma), arg_pos)
+                | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
+              pr_args
+          in
+          (Print (out, pr_args'), instr_pos)
+      | Iterate (v_id, cats, e, instrs) ->
+          let e' = expand_functions_expr e in
+          let instrs' = List.map map_instr instrs in
+          (Iterate (v_id, cats, e', instrs'), instr_pos)
+      | Restore (vars, filters, instrs) ->
+          let filters' =
+            List.map
+              (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
+              filters
+          in
+          let instrs' = List.map map_instr instrs in
+          (Restore (vars, filters', instrs'), instr_pos)
+      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+    in
+    TargetMap.map
+      (fun t ->
+        let target_prog = List.map map_instr t.target_prog in
+        { t with target_prog })
+      p.program_targets
+  in
+  { p with program_targets }

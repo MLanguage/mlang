@@ -76,7 +76,6 @@ rule token = parse
     | "calculer" -> COMPUTE
     | "categorie" -> CATEGORY
     | "cible" -> TARGET
-    | "condition" -> CONDITION
     | "const" -> CONST
     | "dans" -> IN
     | "discordance" -> DISCORDANCE

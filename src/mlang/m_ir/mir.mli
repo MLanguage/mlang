@@ -413,3 +413,6 @@ val is_dummy_variable : Variable.t -> bool
 
 val mast_to_catvar :
   'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable
+
+val expand_functions : program -> program
+(** Calls [expand_functions_expr] on the whole program *)

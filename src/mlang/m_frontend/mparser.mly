@@ -52,7 +52,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
 %token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS FINALIZE_ERRORS
 %token ITERATE CATEGORY RESTORE AFTER
-%token ERROR ANOMALY DISCORDANCE CONDITION
+%token ERROR ANOMALY DISCORDANCE
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
@@ -60,8 +60,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token EOF
 
 %type<Mast.source_file> source_file
-%type<Mast.function_spec> function_spec
-%type<Mast.literal> literal_input
 
 %nonassoc SEMICOLON
 %left OR
@@ -70,8 +68,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 (* %nonassoc SYMBOL *)
 
 %start source_file
-%start function_spec
-%start literal_input
 
 %%
 
@@ -939,58 +935,4 @@ function_arguments:
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, symbol_with_pos) { ss }
-
-(* This is for the function spec file *)
-
-spec_input_list:
-| NOT { [] }
-| inputs = separated_nonempty_list(COMMA, symbol_with_pos)
-  { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) inputs }
-
-spec_output_list:
-| NOT { [] }
-| outputs = separated_nonempty_list(COMMA, symbol_with_pos)
-  { List.map (fun s -> parse_variable_name $sloc (fst s), snd s) outputs  }
-
-const_input:
-| var = symbol_with_pos EQUALS expr = with_pos(expression) SEMICOLON {
-    ((parse_variable_name $sloc (fst var), snd var), expr)
-  }
-
-spec_const_list:
-| NOT SEMICOLON { [] }
-| const = const_input { [const] }
-| const = const_input rest = spec_const_list { const::rest }
-
-spec_conds_list:
-| NOT SEMICOLON { [] }
-| cond = with_pos(expression) SEMICOLON { [cond] }
-| cond = with_pos(expression) SEMICOLON others = spec_conds_list {
-    cond :: others
-  }
-
-function_spec:
-| INPUT COLON inputs = spec_input_list SEMICOLON
-  CONST COLON consts = spec_const_list
-  CONDITION COLON precs = spec_conds_list
-  OUTPUT COLON outputs = spec_output_list SEMICOLON {
-    {
-      spec_inputs = inputs;
-      spec_consts = consts;
-      spec_outputs = outputs;
-      spec_conditions = precs;
-    }
-  }
-
-| EOF {
-  {
-    spec_inputs = [];
-    spec_consts = [];
-    spec_outputs = [];
-    spec_conditions = [];
-  }
-}
-
-literal_input:
-| l = factor_literal { l }
 

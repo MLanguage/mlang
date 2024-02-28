@@ -29,7 +29,6 @@ val mlang_t :
   string option ->
   string option ->
   string option ->
-  string option ->
   bool ->
   string option ->
   string ->
@@ -42,7 +41,6 @@ val mlang_t :
   int option ->
   bool ->
   string list option ->
-  (string * string) option ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)

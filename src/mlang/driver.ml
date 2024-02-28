@@ -76,14 +76,13 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (var_info_debug : string list) (display_time : bool)
     (dep_graph_file : string) (print_cycles : bool) (backend : string option)
-    (function_spec : string option) (output : string option)
-    (run_all_tests : string option) (dgfip_test_filter : bool)
-    (run_test : string option) (mpp_function : string) (optimize : bool)
-    (optimize_unsafe_float : bool) (code_coverage : bool)
-    (precision : string option) (roundops : string option)
-    (comparison_error_margin : float option) (income_year : int option)
-    (m_clean_calls : bool) (dgfip_options : string list option)
-    (_var_dependencies : (string * string) option) =
+    (output : string option) (run_all_tests : string option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
+    (code_coverage : bool) (precision : string option)
+    (roundops : string option) (comparison_error_margin : float option)
+    (income_year : int option) (m_clean_calls : bool)
+    (dgfip_options : string list option) =
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -184,7 +183,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
     let m_program = Mast_to_mir.translate !m_program in
-    let m_program = Mir_typechecker.expand_functions m_program in
+    let m_program = Mir.expand_functions m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program =
       Mpp_ir_to_bir.create_combined_program m_program mpp_function
@@ -222,10 +221,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
       Cli.debug_print
         "Extracting the desired function from the whole program...";
       let function_spec =
-        match function_spec with
-        | None -> Bir_interface.generate_function_all_vars combined_program
-        | Some spec_file ->
-            Bir_interface.read_function_from_spec combined_program spec_file
+        Bir_interface.generate_function_all_vars combined_program
       in
       let combined_program, _ =
         Bir_interface.adapt_program_to_function combined_program function_spec
@@ -244,28 +240,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
       in
       match backend with
       | Some backend ->
-          if String.lowercase_ascii backend = "interpreter" then begin
-            Cli.debug_print "Interpreting the program...";
-            let inputs = Bir_interface.read_inputs_from_stdin function_spec in
-            let print_output, sorted_anos =
-              Bir_interpreter.evaluate_program function_spec combined_program
-                inputs 0 value_sort round_ops
-            in
-            Format.pp_print_flush Format.err_formatter ();
-            Format.pp_print_flush Format.std_formatter ();
-            print_output ();
-            List.iter
-              (fun (err, so) ->
-                let s =
-                  match so with
-                  | Some s -> Format.sprintf " (%s)" s
-                  | None -> ""
-                in
-                Cli.result_print "Raised error: %s%s\n"
-                  (Pos.unmark err.Mir.name) s)
-              sorted_anos
-          end
-          else if String.lowercase_ascii backend = "java" then begin
+          if String.lowercase_ascii backend = "java" then begin
             Cli.debug_print "Compiling codebase to Java...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";

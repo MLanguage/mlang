@@ -778,22 +778,7 @@ struct
     | Mast.Anomaly ->
         raise
           (RuntimeError
-             ( ConditionViolated
-                 ( fst cond.cond_error,
-                   cond.cond_expr,
-                   List.rev
-                   @@ List.fold_left
-                        (fun acc var ->
-                          (var, Bir.VariableMap.find var ctx.ctx_vars) :: acc)
-                        []
-                        (List.map
-                           (fun (_, x) -> Bir.(var_from_mir default_tgv) x)
-                           (Mir.VariableDict.bindings
-                              (Mir_dependency_graph.get_used_variables
-                                 (Pos.map_under_mark
-                                    (Mir.map_expr_var Bir.var_to_mir)
-                                    cond.cond_expr)))) ),
-               ctx ))
+             (ConditionViolated (fst cond.cond_error, cond.cond_expr, []), ctx))
     | Mast.Discordance ->
         Cli.warning_print "Anomaly: %s"
           (Pos.unmark (Mir.Error.err_descr_string err));
