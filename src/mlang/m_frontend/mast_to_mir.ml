@@ -1088,16 +1088,8 @@ let rec translate_prog (error_decls : Mir.Error.t list)
         aux
           ((Mir.IfThenElse (expr, prog_then, prog_else), pos) :: res, var_data)
           il
-    | (Mast.ComputeDomain l, pos) :: il ->
-        aux ((Mir.ComputeDomain l, pos) :: res, var_data) il
-    | (Mast.ComputeChaining ch, pos) :: il ->
-        aux ((Mir.ComputeChaining ch, pos) :: res, var_data) il
     | (Mast.ComputeTarget tn, pos) :: il ->
         aux ((Mir.ComputeTarget tn, pos) :: res, var_data) il
-    | (Mast.ComputeVerifs (l, expr), pos) :: il ->
-        let ctx = new_ctx pos in
-        let mir_expr = translate_expression cats idmap ctx expr in
-        aux ((Mir.ComputeVerifs (l, mir_expr), pos) :: res, var_data) il
     | (Mast.VerifBlock instrs, pos) :: il ->
         let instrs', var_data = aux ([], var_data) instrs in
         aux ((Mir.VerifBlock instrs', pos) :: res, var_data) il
@@ -1278,6 +1270,10 @@ let rec translate_prog (error_decls : Mir.Error.t list)
         aux ((Mir.ExportErrors, pos) :: res, var_data) il
     | (Mast.FinalizeErrors, pos) :: il ->
         aux ((Mir.FinalizeErrors, pos) :: res, var_data) il
+    | (Mast.ComputeDomain _, _) :: _
+    | (Mast.ComputeChaining _, _) :: _
+    | (Mast.ComputeVerifs (_, _), _) :: _ ->
+        assert false
   in
   aux ([], var_data) prog
 
@@ -1560,7 +1556,6 @@ let translate (p : Mast.program) : Mir.program =
       program_verif_domains = prog.Check_validity.prog_vdoms;
       program_chainings = Mast.ChainingMap.empty;
       program_vars = var_data;
-      program_rules = Mir.RuleMap.empty;
       program_targets = targets;
       program_idmap = idmap;
       program_exec_passes = [];

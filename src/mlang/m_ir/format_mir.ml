@@ -155,11 +155,6 @@ let format_program_rules fmt (vars : VariableDict.t)
         format_variables var_defs)
     rules
 
-let format_program fmt (p : program) =
-  Format.fprintf fmt "%a\n\n"
-    (fun fmt -> format_program_rules fmt p.program_vars)
-    p.program_rules
-
 let format_variable fmt (v : Variable.t) =
   Format.fprintf fmt "%s: %s"
     (Pos.unmark v.Variable.name)

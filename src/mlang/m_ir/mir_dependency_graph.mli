@@ -14,25 +14,12 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(** Defines the dependency graph of an M program *)
-
-module RG : Graph.Sig.P
-(** Dependency graph for the rules of the M program. Each node corresponds to a
-    rule, each edge to variables use. The edges in the graph go from input to
-    outputs. *)
-
 val get_used_variables_ :
   Mir.expression Pos.marked -> Mir.VariableDict.t -> Mir.VariableDict.t
 (** Add all the sucessors of [lvar] in the graph that are used by [e] *)
 
 val get_used_variables : Mir.expression Pos.marked -> Mir.VariableDict.t
 (** Calls the previous function with an empty dict *)
-
-val create_rules_dependency_graph :
-  Mir.rule_data Mir.RuleMap.t -> Mir.rov_id Mir.VariableMap.t -> RG.t
-
-val check_for_cycle : RG.t -> Mir.program -> bool -> bool
-(** Outputs [true] and a warning in case of cycles. *)
 
 type rule_execution_order = Mir.rov_id list
 
@@ -42,8 +29,3 @@ val get_var_dependencies :
   rule_execution_order ->
   Mir.variable ->
   Mir.variable list
-
-val pull_rules_dependencies :
-  RG.t -> Mir.rov_id list -> RG.t * rule_execution_order
-
-val get_rules_execution_order : RG.t -> rule_execution_order

@@ -547,10 +547,7 @@ type instruction =
   | Affectation of variable_id * variable_data
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | VerifBlock of instruction Pos.marked list
   | Print of Mast.print_std * variable print_arg Pos.marked list
   | Iterate of
@@ -644,9 +641,6 @@ type program = {
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
-  program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization
-          passes *)
   program_targets : target_data TargetMap.t;
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
@@ -703,78 +697,12 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
 (** Explores the rules to find rule and variable data *)
-let find_var_definition (p : program) (var : Variable.t) :
+let find_var_definition (_p : program) (_var : Variable.t) :
     rule_data * variable_data =
-  (* using exceptions to cut short exploration *)
-  let exception Found_rule of rule_data * variable_data in
-  let exception Found_var of variable_data in
-  try
-    RuleMap.iter
-      (fun _ rule_data ->
-        try
-          List.iter
-            (fun instr ->
-              match Pos.unmark instr with
-              | Affectation (vid, def) ->
-                  if var.id = vid then raise (Found_var def)
-              | _ -> assert false
-              (* never used *))
-            rule_data.rule_vars
-        with Found_var def -> raise (Found_rule (rule_data, def)))
-      p.program_rules;
-    raise Not_found
-  with Found_rule (rule, var) -> (rule, var)
-
-let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) :
-    program =
-  let program_rules =
-    RuleMap.map
-      (fun rule_data ->
-        let rule_vars =
-          List.map
-            (fun instr ->
-              match Pos.unmark instr with
-              | Affectation (vid, def) ->
-                  let var = VariableDict.find vid p.program_vars in
-                  (Affectation (vid, f var def), Pos.get_position instr)
-              | _ -> assert false
-              (* never used *))
-            rule_data.rule_vars
-        in
-        { rule_data with rule_vars })
-      p.program_rules
-  in
-  { p with program_rules }
-
-let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program)
-    (acc : 'a) : 'a =
-  RuleMap.fold
-    (fun _ rule_data acc ->
-      List.fold_left
-        (fun acc instr ->
-          match Pos.unmark instr with
-          | Affectation (vid, def) ->
-              let var = VariableDict.find vid p.program_vars in
-              f var def acc
-          | _ -> assert false
-          (* never used *))
-        acc rule_data.rule_vars)
-    p.program_rules acc
+  raise Not_found
 
 let is_dummy_variable (var : Variable.t) : bool =
   var.execution_number.rule_number = -1
-
-let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
-  fold_vars
-    (fun var var_data acc ->
-      if
-        var_data.var_io = io_to_find
-        && var
-           = get_var_sorted_by_execution_number p (Pos.unmark var.name)
-               sort_by_lowest_exec_number
-      then VariableDict.add var acc
-      else acc)
-    p VariableDict.empty
 
 let mast_to_catvar (cats : 'a CatVarMap.t)
     (l : string Pos.marked list Pos.marked) : cat_variable =

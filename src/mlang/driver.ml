@@ -83,7 +83,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int option)
     (m_clean_calls : bool) (dgfip_options : string list option)
-    (var_dependencies : (string * string) option) =
+    (_var_dependencies : (string * string) option) =
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -184,67 +184,10 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
     let m_program = Mast_to_mir.translate !m_program in
-    let full_m_program = Mir_interface.to_full_program m_program in
-    let full_m_program = Mir_typechecker.expand_functions full_m_program in
-    Cli.debug_print "Typechecking...";
-    let full_m_program = Mir_typechecker.typecheck full_m_program in
-    Mast.DomainIdMap.iter
-      (fun rdom_id Mir_interface.{ dep_graph; _ } ->
-        Cli.debug_print
-          "Checking for circular variable definitions for rule domain %a..."
-          (Mast.DomainId.pp ()) rdom_id;
-        if
-          Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
-            true
-        then Errors.raise_error "Cycles between rules.")
-      full_m_program.domains_orders;
-    Mast.ChainingMap.iter
-      (fun chaining_id Mir_interface.{ dep_graph; _ } ->
-        Cli.debug_print
-          "Checking for circular variable definitions for chaining %s..."
-          chaining_id;
-        if
-          Mir_dependency_graph.check_for_cycle dep_graph full_m_program.program
-            true
-        then Errors.raise_error "Cycles between rules.")
-      full_m_program.chainings_orders;
-    let full_m_program =
-      Mir_interface.to_full_program
-        (match function_spec with
-        | Some _ -> Mir_interface.reset_all_outputs full_m_program.program
-        | None -> full_m_program.program)
-    in
-    (match var_dependencies with
-    | Some (var, chain) ->
-        let var =
-          Mir.find_var_by_name full_m_program.program (var, Pos.no_pos)
-        in
-        let order =
-          try
-            let rdom_id =
-              try
-                Mast.DomainId.from_list (Dgfip_m.string_to_rule_domain_id chain)
-              with Not_found ->
-                Errors.raise_error (Format.sprintf "Unknown rule tag: %s" chain)
-            in
-            match
-              Mast.DomainIdMap.find_opt rdom_id full_m_program.domains_orders
-            with
-            | Some order -> order
-            | None -> Errors.raise_error ("unknown rule domain: " ^ chain)
-          with Not_found -> (
-            match
-              Mast.ChainingMap.find_opt chain full_m_program.chainings_orders
-            with
-            | Some order -> order
-            | None -> Errors.raise_error ("unknown chaining: " ^ chain))
-        in
-        Mir_interface.output_var_dependencies full_m_program order var;
-        exit 0
-    | None -> ());
+    let m_program = Mir_typechecker.expand_functions m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program =
-      Mpp_ir_to_bir.create_combined_program full_m_program mpp_function
+      Mpp_ir_to_bir.create_combined_program m_program mpp_function
     in
     if run_all_tests <> None then begin
       if code_coverage && optimize then

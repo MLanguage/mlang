@@ -244,10 +244,7 @@ type instruction =
   | Affectation of variable_id * variable_data
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | VerifBlock of instruction Pos.marked list
   | Print of Mast.print_std * variable print_arg Pos.marked list
   | Iterate of
@@ -312,9 +309,6 @@ type program = {
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
-  program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization
-          passes *)
   program_targets : target_data TargetMap.t;
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
@@ -391,11 +385,6 @@ val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
 val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
 
-val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
-
-val map_vars :
-  (variable -> variable_data -> variable_data) -> program -> program
-
 val compare_execution_number : execution_number -> execution_number -> int
 
 val find_var_definition : program -> variable -> rule_data * variable_data
@@ -421,11 +410,6 @@ val find_var_by_name : program -> string Pos.marked -> variable
     variable with the highest execution number is returned. *)
 
 val is_dummy_variable : Variable.t -> bool
-
-val find_vars_by_io : program -> io -> VariableDict.t
-(** Returns a VariableDict.t containing all the variables that have a given io
-    type, only one variable per name is entered in the VariableDict.t, this
-    function chooses the one with the highest execution number*)
 
 val mast_to_catvar :
   'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable

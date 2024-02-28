@@ -137,11 +137,6 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val replace_undefined_with_input_variables :
-    Mir.program -> Mir.VariableDict.t -> Mir.program
-  (** Before execution of the program, replaces the [undefined] stubs for input
-      variables by their true input value *)
-
   val print_output : Bir_interface.bir_function -> ctx -> unit
 
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a

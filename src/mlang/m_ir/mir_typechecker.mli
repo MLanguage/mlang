@@ -17,10 +17,6 @@
 (** This modules defines M's static semantic. There is only one type: float. The
     typechecking is mostly about differentiating table from non-tables variables *)
 
-(* The typechecker returns a new program because it defines missing table
-   entries as "undefined" *)
-val typecheck : Mir_interface.full_program -> Mir_interface.full_program
-
 val typecheck_top_down :
   in_generic_table:bool -> Mir.expression Pos.marked -> unit
 
@@ -29,5 +25,5 @@ val expand_functions_expr :
 (** Most functions are just syntactic sugar for operations expressible with the
     rest of the language, so we expand these. *)
 
-val expand_functions : Mir_interface.full_program -> Mir_interface.full_program
+val expand_functions : Mir.program -> Mir.program
 (** Calls [expand_functions_expr] on the whole program *)

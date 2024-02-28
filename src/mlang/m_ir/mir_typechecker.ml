@@ -108,128 +108,6 @@ and typecheck_func_args (f : func) (pos : Pos.t) (in_generic_table : bool)
       if List.length args <> 0 then
         Errors.raise_spanned_error "numero_compl function takes no argument" pos
 
-let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
-    (defs : (int * Pos.t) list) : int list =
-  (* Return all undefined indexes *)
-  let defs_array = Array.make size false in
-  List.iter
-    (fun (def, def_pos) ->
-      try defs_array.(def) <- true
-      with Invalid_argument _ ->
-        Errors.raise_multispanned_error
-          (Format.asprintf
-             "the definition of index %d, from table %s of size %d is out of \
-              bounds"
-             def
-             (Pos.unmark table_var.Variable.name)
-             size)
-          [
-            (Some "index definition", def_pos);
-            ( Some "variable declaration",
-              Pos.get_position table_var.Variable.name );
-          ])
-    defs;
-  let undefined = ref [] in
-  Array.iteri
-    (fun index defined -> if not defined then undefined := index :: !undefined)
-    defs_array;
-  List.sort compare !undefined
-
-let rec check_non_recursivity_expr (e : expression Pos.marked)
-    (lvar : Variable.t) : unit =
-  match Pos.unmark e with
-  | Comparison (_, e1, e2) | Binop (_, e1, e2) | LocalLet (_, e1, e2) ->
-      check_non_recursivity_expr e1 lvar;
-      check_non_recursivity_expr e2 lvar
-  | Unop (_, e1) -> check_non_recursivity_expr e1 lvar
-  | Index (_, e1) ->
-      (* We don't check for recursivity in indexes because tables can refer to
-         themselves in definition. It is only at runtime that we return
-         [Undefined] for index definitions that refer to indexes of the same
-         table greater than themselves. *)
-      check_non_recursivity_expr e1 lvar
-  | Conditional (e1, e2, e3) ->
-      check_non_recursivity_expr e1 lvar;
-      check_non_recursivity_expr e2 lvar;
-      check_non_recursivity_expr e3 lvar
-  | FunctionCall (_, args) ->
-      List.iter (fun arg -> check_non_recursivity_expr arg lvar) args
-  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ | Size _
-  | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
-      ()
-  | Var var ->
-      if var = lvar then
-        Errors.raise_spanned_error
-          (Format.asprintf
-             "you cannot refer to the variable %s since you are defining it"
-             (Pos.unmark var.Variable.name))
-          (Pos.get_position e)
-      else ()
-
-let check_non_recursivity_of_variable_defs (var : Variable.t)
-    (def : variable_def) : unit =
-  match def with
-  | SimpleVar e -> check_non_recursivity_expr e var
-  | TableVar _ | InputVar -> ()
-
-let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
-  let check_var_def vid def =
-    let var = VariableDict.find vid p.program.program_vars in
-    check_non_recursivity_of_variable_defs var def.var_definition;
-    (* All top-level variables are og type Real *)
-    match def.var_definition with
-    | SimpleVar e ->
-        typecheck_top_down ~in_generic_table:false e;
-        def
-    | TableVar (size, defs) -> (
-        match defs with
-        | IndexGeneric (_v, e) ->
-            typecheck_top_down ~in_generic_table:true e;
-            def
-        | IndexTable es ->
-            IndexMap.iter
-              (fun _ e -> typecheck_top_down ~in_generic_table:false e)
-              es;
-            let undefined_indexes =
-              determine_def_complete_cover var size
-                (List.map
-                   (fun (x, e) -> (x, Pos.get_position e))
-                   (IndexMap.bindings es))
-            in
-            if List.length undefined_indexes = 0 then def
-            else
-              let previous_var_def =
-                Mast_to_mir.get_var_from_name p.program.program_idmap
-                  var.Variable.name var.Variable.execution_number false
-              in
-              let new_es =
-                List.fold_left
-                  (fun es undef_index ->
-                    Mir.IndexMap.add undef_index
-                      (Pos.same_pos_as
-                         (Mir.Index
-                            ( Pos.same_pos_as previous_var_def
-                                var.Mir.Variable.name,
-                              Pos.same_pos_as
-                                (Mir.Literal (Float (float_of_int undef_index)))
-                                var.Mir.Variable.name ))
-                         var.Mir.Variable.name)
-                      es)
-                  es undefined_indexes
-              in
-              {
-                def with
-                Mir.var_definition = Mir.TableVar (size, Mir.IndexTable new_es);
-              })
-    | InputVar -> def
-  in
-  let program =
-    Mir.map_vars
-      (fun var def -> check_var_def var.Mir.Variable.id def)
-      p.program
-  in
-  { p with program }
-
 let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
     'var expression_ Pos.marked =
   match Pos.unmark e with
@@ -313,90 +191,79 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
       Pos.same_pos_as (FunctionCall (InfFunc, [ expand_functions_expr arg ])) e
   | _ -> e
 
-let expand_functions (p : Mir_interface.full_program) :
-    Mir_interface.full_program =
-  {
-    (* this expansion does not modify the dependency graph *)
-    p with
-    program =
-      (let map_var _var def =
-         match def.var_definition with
-         | InputVar -> def
-         | SimpleVar e ->
-             { def with var_definition = SimpleVar (expand_functions_expr e) }
-         | TableVar (size, defg) -> (
-             match defg with
-             | IndexGeneric (v, e) ->
-                 {
-                   def with
-                   var_definition =
-                     TableVar (size, IndexGeneric (v, expand_functions_expr e));
-                 }
-             | IndexTable es ->
-                 {
-                   def with
-                   var_definition =
-                     TableVar
-                       ( size,
-                         IndexTable
-                           (IndexMap.map (fun e -> expand_functions_expr e) es)
-                       );
-                 })
-       in
-       let program = map_vars map_var p.program in
-       let program_targets =
-         let rec map_instr m_instr =
-           let instr, instr_pos = m_instr in
-           match instr with
-           | Affectation (v_id, v_data) ->
-               (Affectation (v_id, map_var v_id v_data), instr_pos)
-           | IfThenElse (i, t, e) ->
-               let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
-               let t' = List.map map_instr t in
-               let e' = List.map map_instr e in
-               (IfThenElse (i', t', e'), instr_pos)
-           | ComputeDomain _ | ComputeChaining _ | ComputeTarget _ -> m_instr
-           | VerifBlock instrs ->
-               let instrs' = List.map map_instr instrs in
-               (VerifBlock instrs', instr_pos)
-           | ComputeVerifs (vdom, e) ->
-               (ComputeVerifs (vdom, expand_functions_expr e), instr_pos)
-           | Print (out, pr_args) ->
-               let pr_args' =
-                 List.map
-                   (fun m_arg ->
-                     let arg, arg_pos = m_arg in
-                     match arg with
-                     | PrintIndent e ->
-                         let e' = expand_functions_expr e in
-                         (PrintIndent e', arg_pos)
-                     | PrintExpr (e, mi, ma) ->
-                         let e' = expand_functions_expr e in
-                         (PrintExpr (e', mi, ma), arg_pos)
-                     | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
-                   pr_args
-               in
-               (Print (out, pr_args'), instr_pos)
-           | Iterate (v_id, cats, e, instrs) ->
-               let e' = expand_functions_expr e in
-               let instrs' = List.map map_instr instrs in
-               (Iterate (v_id, cats, e', instrs'), instr_pos)
-           | Restore (vars, filters, instrs) ->
-               let filters' =
-                 List.map
-                   (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
-                   filters
-               in
-               let instrs' = List.map map_instr instrs in
-               (Restore (vars, filters', instrs'), instr_pos)
-           | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
-               m_instr
-         in
-         TargetMap.map
-           (fun t ->
-             let target_prog = List.map map_instr t.target_prog in
-             { t with target_prog })
-           p.program.program_targets
-       in
-       { program with program_targets });
-  }
+let expand_functions (p : Mir.program) : Mir.program =
+  let map_var _var def =
+    match def.var_definition with
+    | InputVar -> def
+    | SimpleVar e ->
+        { def with var_definition = SimpleVar (expand_functions_expr e) }
+    | TableVar (size, defg) -> (
+        match defg with
+        | IndexGeneric (v, e) ->
+            {
+              def with
+              var_definition =
+                TableVar (size, IndexGeneric (v, expand_functions_expr e));
+            }
+        | IndexTable es ->
+            {
+              def with
+              var_definition =
+                TableVar
+                  ( size,
+                    IndexTable
+                      (IndexMap.map (fun e -> expand_functions_expr e) es) );
+            })
+  in
+  let program_targets =
+    let rec map_instr m_instr =
+      let instr, instr_pos = m_instr in
+      match instr with
+      | Affectation (v_id, v_data) ->
+          (Affectation (v_id, map_var v_id v_data), instr_pos)
+      | IfThenElse (i, t, e) ->
+          let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
+          let t' = List.map map_instr t in
+          let e' = List.map map_instr e in
+          (IfThenElse (i', t', e'), instr_pos)
+      | ComputeTarget _ -> m_instr
+      | VerifBlock instrs ->
+          let instrs' = List.map map_instr instrs in
+          (VerifBlock instrs', instr_pos)
+      | Print (out, pr_args) ->
+          let pr_args' =
+            List.map
+              (fun m_arg ->
+                let arg, arg_pos = m_arg in
+                match arg with
+                | PrintIndent e ->
+                    let e' = expand_functions_expr e in
+                    (PrintIndent e', arg_pos)
+                | PrintExpr (e, mi, ma) ->
+                    let e' = expand_functions_expr e in
+                    (PrintExpr (e', mi, ma), arg_pos)
+                | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
+              pr_args
+          in
+          (Print (out, pr_args'), instr_pos)
+      | Iterate (v_id, cats, e, instrs) ->
+          let e' = expand_functions_expr e in
+          let instrs' = List.map map_instr instrs in
+          (Iterate (v_id, cats, e', instrs'), instr_pos)
+      | Restore (vars, filters, instrs) ->
+          let filters' =
+            List.map
+              (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
+              filters
+          in
+          let instrs' = List.map map_instr instrs in
+          (Restore (vars, filters', instrs'), instr_pos)
+      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+    in
+    TargetMap.map
+      (fun t ->
+        let target_prog = List.map map_instr t.target_prog in
+        { t with target_prog })
+      p.program_targets
+  in
+  { p with program_targets }

@@ -118,9 +118,6 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val replace_undefined_with_input_variables :
-    Mir.program -> Mir.VariableDict.t -> Mir.program
-
   val print_output : Bir_interface.bir_function -> ctx -> unit
 
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
@@ -316,22 +313,6 @@ struct
     | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
-
-  (* During evaluation, variables that have an I/O property set to InputVariable
-     have a value that is read directly from the input map. However, one can
-     pass inside the input map a value for a variable whose I/O type was not
-     properly set to InputVariable. This function is precisely for these cases,
-     it set the I/O flag properly for execution. Not that such a change to the
-     program does not require to recompute the dependency graph and the
-     execution order. *)
-  let replace_undefined_with_input_variables (p : Mir.program)
-      (input_values : Mir.VariableDict.t) : Mir.program =
-    Mir.map_vars
-      (fun var def ->
-        match Mir.VariableDict.find var.id input_values with
-        | _input -> { def with var_definition = InputVar; var_io = Input }
-        | exception Not_found -> def)
-      p
 
   let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
     Bir.VariableMap.iter

@@ -190,40 +190,11 @@ let translate_external_conditions var_cats idmap
     (fun data -> Mir.map_cond_data_var Bir.(var_from_mir default_tgv) data)
     conds
 
-let generate_function_all_vars (p : Bir.program) : bir_function =
-  let output_vars =
-    Mir.VariableDict.fold
-      (fun k acc -> Bir.VariableMap.add Bir.(var_from_mir default_tgv k) () acc)
-      (Mir.find_vars_by_io p.mir_program Output)
-      Bir.VariableMap.empty
-  in
-  let input_vars =
-    let program_input_vars =
-      Mir.find_vars_by_io p.mir_program Input
-      |> Bir.(set_from_mir_dict default_tgv)
-    in
-    let max_exec_vars =
-      Pos.VarNameToID.fold
-        (fun _ v acc ->
-          let max_exec_var =
-            Mast_to_mir.list_max_execution_number v
-            |> Bir.(var_from_mir default_tgv)
-          in
-          Bir.VariableSet.add max_exec_var acc)
-        p.idmap Bir.VariableSet.empty
-    in
-    Bir.VariableSet.fold
-      (fun k acc -> Bir.VariableMap.add k () acc)
-      (Bir.VariableSet.inter program_input_vars max_exec_vars)
-      Bir.VariableMap.empty
-  in
-  Cli.debug_print "Using all %d outputs and %d inputs from m sources"
-    (Bir.VariableMap.cardinal output_vars)
-    (Bir.VariableMap.cardinal input_vars);
+let generate_function_all_vars (_p : Bir.program) : bir_function =
   {
-    func_variable_inputs = input_vars;
+    func_variable_inputs = Bir.VariableMap.empty;
     func_constant_inputs = Bir.VariableMap.empty;
-    func_outputs = output_vars;
+    func_outputs = Bir.VariableMap.empty;
     func_conds = Mir.RuleMap.empty;
     func_errors = [];
   }
@@ -299,41 +270,7 @@ let adapt_program_to_function (p : Bir.program) (f : bir_function) :
         Pos.same_pos_as (Bir.SAssign (var, Mir.SimpleVar e)) e :: acc)
       f.func_constant_inputs []
   in
-  let unused_input_stmts =
-    Mir.fold_vars
-      (fun var def acc ->
-        match def.Mir.var_definition with
-        | Mir.InputVar ->
-            if
-              Bir.VariableMap.mem
-                Bir.(var_from_mir default_tgv var)
-                f.func_variable_inputs
-            then acc
-            else
-              let pos = Pos.no_pos in
-              ( Bir.SAssign
-                  ( Bir.(var_from_mir default_tgv) var,
-                    match var.Mir.Variable.is_table with
-                    | None -> Mir.SimpleVar (Mir.Literal Mir.Undefined, pos)
-                    | Some size ->
-                        let idxmap =
-                          let rec loop i acc =
-                            if i < 0 then acc
-                            else
-                              loop (i - 1)
-                                (Mir.IndexMap.add i
-                                   (Pos.same_pos_as (Mir.Literal Mir.Undefined)
-                                      var.Mir.Variable.name)
-                                   acc)
-                          in
-                          loop (size - 1) Mir.IndexMap.empty
-                        in
-                        Mir.TableVar (size, Mir.IndexTable idxmap) ),
-                pos )
-              :: acc
-        | _ -> acc)
-      p.mir_program []
-  in
+  let unused_input_stmts = [] in
   let conds_stmts =
     Mir.RuleMap.fold
       (fun _ cond acc ->
