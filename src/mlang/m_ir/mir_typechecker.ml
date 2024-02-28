@@ -135,11 +135,6 @@ let determine_def_complete_cover (table_var : Mir.Variable.t) (size : int)
     defs_array;
   List.sort compare !undefined
 
-let typecheck_program_conds (conds : condition_data Mir.RuleMap.t) =
-  Mir.RuleMap.iter
-    (fun _ cond -> typecheck_top_down ~in_generic_table:false cond.cond_expr)
-    conds
-
 let rec check_non_recursivity_expr (e : expression Pos.marked)
     (lvar : Variable.t) : unit =
   match Pos.unmark e with
@@ -233,8 +228,6 @@ let typecheck (p : Mir_interface.full_program) : Mir_interface.full_program =
       (fun var def -> check_var_def var.Mir.Variable.id def)
       p.program
   in
-  let _ = typecheck_program_conds p.program.program_conds in
-  (* the typechecking modifications do not change the dependency graph *)
   { p with program }
 
 let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
@@ -405,13 +398,5 @@ let expand_functions (p : Mir_interface.full_program) :
              { t with target_prog })
            p.program.program_targets
        in
-       {
-         program with
-         program_conds =
-           Mir.RuleMap.map
-             (fun cond ->
-               { cond with cond_expr = expand_functions_expr cond.cond_expr })
-             p.program.program_conds;
-         program_targets;
-       });
+       { program with program_targets });
   }

@@ -1562,7 +1562,6 @@ let translate (p : Mast.program) : Mir.program =
       program_vars = var_data;
       program_rules = Mir.RuleMap.empty;
       program_targets = targets;
-      program_conds = Mir.RuleMap.empty;
       program_idmap = idmap;
       program_exec_passes = [];
     }

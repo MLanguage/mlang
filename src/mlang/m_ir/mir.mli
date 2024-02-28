@@ -316,9 +316,6 @@ type program = {
       (** Definitions of variables, some may be removed during optimization
           passes *)
   program_targets : target_data TargetMap.t;
-  program_conds : condition_data RuleMap.t;
-      (** Conditions are affected to dummy variables containing informations
-          about actual variables in the conditions *)
   program_idmap : idmap;
   program_exec_passes : exec_pass list;
 }
