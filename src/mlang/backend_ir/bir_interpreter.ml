@@ -118,8 +118,6 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val print_output : Bir_interface.bir_function -> ctx -> unit
-
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
@@ -313,13 +311,6 @@ struct
     | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
-
-  let print_output (f : Bir_interface.bir_function) (results : ctx) : unit =
-    Bir.VariableMap.iter
-      (fun var value ->
-        if Bir.VariableMap.mem var f.func_outputs then
-          Cli.result_print "%a" format_var_value_with_var (var, value))
-      results.ctx_vars
 
   let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
     Cli.warning_print
@@ -1169,8 +1160,7 @@ struct
     try
       let ctx =
         evaluate_stmts false p ctx
-          (Bir.main_statements_with_context_and_tgv_init p
-          @ [ (Bir.SExportErrors, Pos.no_pos) ])
+          (Bir.main_statements p @ [ (Bir.SExportErrors, Pos.no_pos) ])
           [] code_loc_start_value
         (* For the interpreter to operate properly, all input variables must be
            declared at some point, even if they aren't used as input (either
@@ -1283,22 +1273,34 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (bir_func : Bir_interface.bir_function) (p : Bir.program)
-    (inputs : Mir.literal Bir.VariableMap.t) (code_loc_start_value : int)
+let evaluate_program (p : Bir.program) (inputs : Mir.literal Bir.VariableMap.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
-    (unit -> unit) * (Mir.error * string option) list =
+    float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.update_ctx_with_inputs Interp.empty_ctx inputs in
   let ctx = Interp.complete_ctx ctx p.Bir.mir_program.Mir.program_vars in
-  let ctx = Interp.evaluate_program p ctx code_loc_start_value in
-  let sorted_anos =
-    let cmp (e0, so0) (e1, so1) =
-      compare (Pos.unmark e0.Mir.name, so0) (Pos.unmark e1.Mir.name, so1)
+  let ctx = Interp.evaluate_program p ctx 0 in
+  let varMap =
+    let fold var value res =
+      let name = Pos.unmark var.Bir.mir_var.Mir.name in
+      let fVal =
+        match value with
+        | Interp.SimpleVar litt -> (
+            match Interp.value_to_literal litt with
+            | Mir.Float f -> Some f
+            | Mir.Undefined -> None)
+        | _ -> None
+      in
+      StrMap.add name fVal res
     in
-    List.sort_uniq cmp ctx.ctx_exported_anos
+    Bir.VariableMap.fold fold ctx.ctx_vars StrMap.empty
   in
-  ((fun () -> Interp.print_output bir_func ctx), sorted_anos)
+  let anoSet =
+    let fold res (e, _) = StrSet.add (Pos.unmark e.Mir.name) res in
+    List.fold_left fold StrSet.empty ctx.ctx_exported_anos
+  in
+  (varMap, anoSet)
 
 let evaluate_expr (p : Mir.program) (e : Bir.expression Pos.marked)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) : Mir.literal =

@@ -133,4 +133,4 @@ let format_rules fmt rules =
 
 let format_program fmt (p : program) =
   Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
-    (Bir.main_statements_with_context_and_tgv_init p)
+    (Bir.main_statements p)

@@ -774,8 +774,7 @@ let generate_implem_header oc msg =
     msg
 
 let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
-    (_function_spec : Bir_interface.bir_function) (filename : string)
-    (vm : Dgfip_varid.var_id_map) : unit =
+    (filename : string) (vm : Dgfip_varid.var_id_map) : unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"

@@ -203,23 +203,7 @@ let generate_var_def (var : variable) (def : variable_def)
         format_var_name var (get_tgv_position v) se
   | InputVar -> assert false
 
-let generate_input_handling (function_spec : Bir_interface.bir_function)
-    (oc : Format.formatter) (split_threshold : int) =
-  let input_vars =
-    List.map fst (VariableMap.bindings function_spec.func_variable_inputs)
-  in
-  let rec split_input_vars old_list filling_list acc =
-    match old_list with
-    | hd :: tl ->
-        let filling_list, acc =
-          if List.length filling_list >= split_threshold then
-            ([ hd ], List.rev filling_list :: acc)
-          else (hd :: filling_list, acc)
-        in
-        split_input_vars tl filling_list acc
-    | [] -> List.rev (List.rev filling_list :: acc)
-  in
-  let input_vars = split_input_vars input_vars [] [] in
+let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
   let input_methods_count = ref 0 in
   let print_input fmt var =
     Format.fprintf fmt
@@ -227,7 +211,7 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
        MValue.mUndefined;"
       (get_tgv_position var) (generate_name var) (generate_name var)
   in
-  let print_method fmt inputs =
+  let _print_method fmt inputs =
     Format.fprintf fmt
       "@[<hv 2>private static void loadInputVariables_%d(Map<String, \
        MValue>inputVariables, MValue[] tgv) {@,\
@@ -238,7 +222,6 @@ let generate_input_handling (function_spec : Bir_interface.bir_function)
       inputs;
     input_methods_count := !input_methods_count + 1
   in
-  Format.pp_print_list print_method oc input_vars;
   let load_calls = List.init !input_methods_count (fun i -> i) in
   let print_call oc i =
     Format.fprintf oc "loadInputVariables_%d(inputVariables, tgv);" i
@@ -361,11 +344,8 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
       Errors.raise_spanned_error "errors not implemented in Java"
         (Pos.get_position stmt)
 
-let generate_return (oc : Format.formatter)
-    (function_spec : Bir_interface.bir_function) =
-  let returned_variables =
-    List.map fst (VariableMap.bindings function_spec.func_outputs)
-  in
+let generate_return (oc : Format.formatter) (_x : 'a) =
+  let returned_variables = [] in
   let print_outputs oc returned_variables =
     Format.pp_print_list
       (fun oc var ->
@@ -444,7 +424,7 @@ let generate_calculateTax_method (calculation_vars_len : int)
      @,"
     print_double_cut () calculation_vars_len locals_size print_double_cut ()
     print_double_cut () print_double_cut () (generate_stmts program)
-    (Bir.main_statements_with_context program)
+    (Bir.main_statements program)
 
 let generate_mpp_function (program : program) (oc : Format.formatter)
     (f : function_name) =
@@ -469,8 +449,7 @@ let generate_mpp_functions (oc : Format.formatter) (program : program) =
     oc function_names
 
 let generate_main_class (program : program) (var_table_size : int)
-    (locals_size : int) (function_spec : Bir_interface.bir_function)
-    (fmt : Format.formatter) (filename : string) =
+    (locals_size : int) (fmt : Format.formatter) (filename : string) =
   let class_name =
     String.split_on_char '.' filename |> List.hd |> String.split_on_char '/'
     |> fun list -> List.nth list (List.length list - 1)
@@ -487,9 +466,9 @@ let generate_main_class (program : program) (var_table_size : int)
      }"
     Prelude.message java_imports class_name
     (generate_calculateTax_method var_table_size program locals_size)
-    () generate_return function_spec
+    () generate_return []
 
-let generate_java_program (program : program) (function_spec : Bir_interface.bir_function)
+let generate_java_program (program : program) 
     (filename : string) : unit =
   let split_treshold = 100 in
   let _oc = open_out filename in
@@ -502,10 +481,9 @@ let generate_java_program (program : program) (function_spec : Bir_interface.bir
      @[<v 2>class InputHandler {@,%a@]@,}%a\
      @[<v 2>class MppFunction {@,%a@]@,}%a\
      @[<hv 2>class Rule {@,%a@]@,}@]@."
-     (generate_main_class program var_table_size locals_size
-             function_spec) filename
+     (generate_main_class program var_table_size locals_size) filename
      print_double_cut ()
-     (generate_input_handling function_spec) split_treshold
+     generate_input_handling split_treshold
      print_double_cut ()
      generate_mpp_functions program
      print_double_cut ()

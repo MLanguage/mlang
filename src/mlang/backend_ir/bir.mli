@@ -71,11 +71,6 @@ type target_function = {
 
 module FunctionMap : MapExt.T with type key = function_name
 
-type program_context = {
-  constant_inputs_init_stmts : stmt list;
-  adhoc_specs_conds_stmts : stmt list;
-  unused_inputs_init_stmts : stmt list;
-}
 (** This record allows to store statements generated from the m_spec file
     without modifying the [Bir.program] function map. Thus the map reflects the
     computation strictly as described in M and MPP.
@@ -99,10 +94,8 @@ type program = {
   targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit VariableMap.t;
 }
 
 val default_tgv : tgv_id
@@ -122,10 +115,6 @@ val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
 val rule_or_verif_as_statements : rule_or_verif -> stmt list
 
 val main_statements : program -> stmt list
-
-val main_statements_with_context : program -> stmt list
-
-val main_statements_with_context_and_tgv_init : program -> stmt list
 
 val get_all_statements : program -> stmt list
 

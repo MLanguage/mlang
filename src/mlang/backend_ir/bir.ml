@@ -137,21 +137,13 @@ module FunctionMap = MapExt.Make (struct
   let compare = String.compare
 end)
 
-type program_context = {
-  constant_inputs_init_stmts : stmt list;
-  adhoc_specs_conds_stmts : stmt list;
-  unused_inputs_init_stmts : stmt list;
-}
-
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
   targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit VariableMap.t;
 }
 
 let main_statements (p : program) : stmt list =
@@ -160,23 +152,6 @@ let main_statements (p : program) : stmt list =
     try (Mir.TargetMap.find p.main_function p.targets).stmts
     with Not_found ->
       Errors.raise_error "Unable to find main function of Bir program")
-
-let main_statements_with_context (p : program) : stmt list =
-  match p.context with
-  | Some context ->
-      context.constant_inputs_init_stmts @ main_statements p
-      @ context.adhoc_specs_conds_stmts
-  | None ->
-      Errors.raise_error
-        "This Bir program has no context constants and conditions stored"
-
-let main_statements_with_context_and_tgv_init (p : program) : stmt list =
-  match p.context with
-  | Some context ->
-      context.unused_inputs_init_stmts @ main_statements_with_context p
-  | None ->
-      Errors.raise_error
-        "This Bir program has no context input reset statements stored"
 
 let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left

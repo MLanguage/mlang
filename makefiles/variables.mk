@@ -49,7 +49,7 @@ else ifeq ($(YEAR), 2021)
 else ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing.test
+	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
 	TEST_ONE?=fuzzer_10032.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif

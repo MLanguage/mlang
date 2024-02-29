@@ -70,9 +70,7 @@ type program = {
   rules_and_verifs : rov Bir.ROVMap.t;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit Bir.VariableMap.t;
   main_function : Bir.function_name;
-  context : Bir.program_context option;
 }
 
 let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
@@ -102,9 +100,7 @@ let map_program_cfgs (f : cfg -> cfg) (p : program) : program =
     rules_and_verifs;
     idmap = p.idmap;
     mir_program = p.mir_program;
-    outputs = p.outputs;
     main_function = p.main_function;
-    context = p.context;
   }
 
 let count_instr (p : program) : int =

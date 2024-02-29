@@ -171,10 +171,8 @@ let create_combined_program (m_program : Mir.program)
       rules_and_verifs = Bir.ROVMap.empty;
       mpp_functions = Bir.FunctionMap.empty;
       main_function = mpp_function_to_extract;
-      context = None;
       idmap = m_program.program_idmap;
       mir_program = m_program;
-      outputs = Bir.VariableMap.empty;
     }
   with Bir_interpreter.FloatDefInterp.RuntimeError (r, ctx) ->
     Bir_interpreter.FloatDefInterp.raise_runtime_as_structured r ctx m_program

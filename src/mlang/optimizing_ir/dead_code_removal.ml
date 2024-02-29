@@ -185,7 +185,7 @@ let remove_dead_statements (stmts : block) (id : block_id)
   in
   (used_vars, used_defs, new_stmts)
 
-let dead_code_removal0 (outputs : unit Bir.VariableMap.t) (cfg : cfg) : cfg =
+let dead_code_removal0 (cfg : cfg) : cfg =
   let g = get_cfg cfg in
   let rev_topological_order = Topological.fold (fun id acc -> id :: acc) g [] in
   let is_entry block_id = block_id = cfg.entry_block in
@@ -212,14 +212,10 @@ let dead_code_removal0 (outputs : unit Bir.VariableMap.t) (cfg : cfg) : cfg =
           let p = { p with blocks = BlockMap.add block_id block p.blocks } in
           (used_vars, defs_vars, p)
         with Not_found -> (used_vars, defs_vars, p))
-      ( Bir.VariableMap.map
-          (fun () -> BlockMap.singleton cfg.exit_block (PosSet.singleton 1))
-          outputs,
-        Bir.VariableMap.empty,
-        cfg )
+      (Bir.VariableMap.empty, Bir.VariableMap.empty, cfg)
       rev_topological_order
   in
   cfg
 
 let dead_code_removal (p : program) : program =
-  map_program_cfgs (dead_code_removal0 p.outputs) p
+  map_program_cfgs dead_code_removal0 p

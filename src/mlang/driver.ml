@@ -220,12 +220,6 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     else begin
       Cli.debug_print
         "Extracting the desired function from the whole program...";
-      let function_spec =
-        Bir_interface.generate_function_all_vars combined_program
-      in
-      let combined_program, _ =
-        Bir_interface.adapt_program_to_function combined_program function_spec
-      in
       let combined_program =
         if optimize then begin
           Cli.debug_print "Translating to CFG form for optimizations...";
@@ -244,8 +238,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
             Cli.debug_print "Compiling codebase to Java...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Bir_to_java.generate_java_program combined_program function_spec
-              !Cli.output_file
+            Bir_to_java.generate_java_program combined_program !Cli.output_file
           end
           else if String.lowercase_ascii backend = "dgfip_c" then begin
             Cli.debug_print "Compiling the codebase to DGFiP C...";
@@ -256,7 +249,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
                 source_m_program combined_program
             in
             Bir_to_dgfip_c.generate_c_program dgfip_flags combined_program
-              function_spec !Cli.output_file vm;
+              !Cli.output_file vm;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else

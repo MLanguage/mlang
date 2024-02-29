@@ -137,8 +137,6 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val print_output : Bir_interface.bir_function -> ctx -> unit
-
   val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
@@ -206,13 +204,11 @@ module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
 val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
-  Bir_interface.bir_function ->
   Bir.program ->
   Mir.literal Bir.VariableMap.t ->
-  int ->
   Cli.value_sort ->
   Cli.round_ops ->
-  (unit -> unit) * (Mir.error * string option) list
+  float option StrMap.t * StrSet.t
 (** Main interpreter function *)
 
 val evaluate_expr :

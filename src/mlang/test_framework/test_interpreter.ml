@@ -21,9 +21,6 @@ let convert_pos (pos : Irj_ast.pos) =
 (* enforces type compatibility (the type Irj_ast.pos is defined in exactly the
    same way as Pos.t) *)
 
-let to_ast_literal (value : Irj_ast.literal) : Mast.literal =
-  match value with I i -> Float (float_of_int i) | F f -> Float f
-
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     Mir.Variable.t =
   try
@@ -43,8 +40,8 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
          (Pos.VarNameToID.find name p.program_idmap))
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
-    Bir_interface.bir_function * Mir.literal Bir.VariableMap.t =
-  let func_variable_inputs, input_file =
+    float StrMap.t * StrSet.t * Mir.literal Bir.VariableMap.t =
+  let input_file =
     let ancsded =
       find_var_of_name program.mir_program ("V_ANCSDED", Pos.no_pos)
       |> Bir.(var_from_mir default_tgv)
@@ -53,7 +50,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
       Mir.Float (float_of_int (Option.get !Cli.income_year + 1))
     in
     List.fold_left
-      (fun (fv, in_f) (var, value, pos) ->
+      (fun in_f (var, value, pos) ->
         let var =
           find_var_of_name program.mir_program (var, convert_pos pos)
           |> Bir.(var_from_mir default_tgv)
@@ -63,67 +60,24 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
           | Irj_ast.I i -> Mir.Float (float_of_int i)
           | F f -> Float f
         in
-        (Bir.VariableMap.add var () fv, Bir.VariableMap.add var lit in_f))
-      ( Bir.VariableMap.singleton ancsded (),
-        Bir.VariableMap.singleton ancsded ancsded_val )
+        Bir.VariableMap.add var lit in_f)
+      (Bir.VariableMap.singleton ancsded ancsded_val)
       t.prim.entrees
   in
-  let func_constant_inputs = Bir.VariableMap.empty in
-  let func_outputs = Bir.VariableMap.empty in
-  (* some output variables are actually input, so we don't declare any for
-     now *)
-  let func_conds =
-    Bir_interface.translate_external_conditions
-      program.mir_program.program_var_categories program.idmap
-      (List.map
-         (fun (var, value, pos) ->
-           (* sometimes test outputs mention aliases so we have to catch thos
-              two using the line below*)
-           let var =
-             Pos.unmark
-               (find_var_of_name program.mir_program (var, convert_pos pos))
-                 .Mir.Variable.name
-           in
-           (* we allow a difference of 0.000001 between the control value and
-              the result *)
-           let test_error_margin = 0.01 in
-           let first_exp =
-             ( Mast.Comparison
-                 ( (Lt, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           let second_exp =
-             ( Mast.Comparison
-                 ( (Lt, convert_pos pos),
-                   ( Mast.Binop
-                       ( (Mast.Sub, convert_pos pos),
-                         (Literal (to_ast_literal value), convert_pos pos),
-                         (Literal (Variable (Normal var)), convert_pos pos) ),
-                     convert_pos pos ),
-                   (Literal (Float test_error_margin), convert_pos pos) ),
-               convert_pos pos )
-           in
-           ( Mast.Binop ((Mast.And, convert_pos pos), first_exp, second_exp),
-             convert_pos pos ))
-         t.prim.resultats_attendus)
+  let expectedVars =
+    let fold res (var, value, _pos) =
+      let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
+      StrMap.add var fVal res
+    in
+    List.fold_left fold StrMap.empty t.prim.resultats_attendus
   in
-  let func_errors =
-    List.sort_uniq compare (List.map fst t.prim.controles_attendus)
+  let expectedAnos =
+    let fold res ano = StrSet.add ano res in
+    List.fold_left fold StrSet.empty (List.map fst t.prim.controles_attendus)
   in
-  ( {
-      func_variable_inputs;
-      func_constant_inputs;
-      func_outputs;
-      func_conds;
-      func_errors;
-    },
-    input_file )
+  (expectedVars, expectedAnos, input_file)
+
+exception InterpError of int
 
 let check_test (combined_program : Bir.program) (test_name : string)
     (optimize : bool) (code_coverage : bool) (value_sort : Cli.value_sort)
@@ -131,11 +85,10 @@ let check_test (combined_program : Bir.program) (test_name : string)
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let f, input_file = to_MIR_function_and_inputs combined_program t in
-  Cli.debug_print "Executing program";
-  let combined_program, code_loc_offset =
-    Bir_interface.adapt_program_to_function combined_program f
+  let expVars, expAnos, input_file =
+    to_MIR_function_and_inputs combined_program t
   in
+  Cli.debug_print "Executing program";
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program combined_program; *)
   let combined_program =
@@ -151,55 +104,37 @@ let check_test (combined_program : Bir.program) (test_name : string)
     else combined_program
   in
   if code_coverage then Bir_instrumentation.code_coverage_init ();
-  let _print_outputs, sorted_anos =
-    Bir_interpreter.evaluate_program f combined_program input_file
-      (-code_loc_offset) value_sort round_ops
+  let varMap, anoSet =
+    Bir_interpreter.evaluate_program combined_program input_file value_sort
+      round_ops
   in
-  let rec check_errors nbUnex nbMiss exp rais =
-    match (exp, rais) with
-    | ee :: el, (re, _) :: rl ->
-        let ren = Pos.unmark re.Mir.name in
-        if ee < ren then (
-          Cli.error_print "Missing error: %s" ee;
-          check_errors nbUnex (nbMiss + 1) el rais)
-        else if ren < ee then (
-          Cli.error_print "Unexpected error: %s" ren;
-          check_errors (nbUnex + 1) nbMiss exp rl)
-        else (
-          Cli.debug_print "Raised error: %s" ee;
-          check_errors nbUnex nbMiss el rl)
-    | ee :: el, [] ->
-        Cli.error_print "Missing error: %s" ee;
-        check_errors nbUnex (nbMiss + 1) el []
-    | [], (re, _) :: rl ->
-        let ren = Pos.unmark re.Mir.name in
-        Cli.error_print "Unexpected error: %s" ren;
-        check_errors (nbUnex + 1) nbMiss [] rl
-    | [], [] ->
-        if nbUnex + nbMiss > 0 then
-          let msg =
-            if nbMiss = 0 then
-              Format.sprintf "%d unexpected error%s" nbUnex
-                (if nbUnex > 1 then "s" else "")
-            else if nbUnex = 0 then
-              Format.sprintf "%d missing error%s" nbMiss
-                (if nbMiss > 1 then "s" else "")
-            else
-              Format.sprintf "%d unexpected error%s, %d missing error%s" nbUnex
-                (if nbUnex > 1 then "s" else "")
-                nbMiss
-                (if nbMiss > 1 then "s" else "")
-          in
-          raise (Errors.StructuredError (msg, [], None))
+  let check_vars exp vars =
+    let test_error_margin = 0.01 in
+    let fold var f nb =
+      let f' =
+        match StrMap.find_opt var vars with Some (Some f') -> f' | _ -> 0.0
+      in
+      if abs_float (f -. f') > test_error_margin then (
+        Cli.error_print "KO | %s expected: %f - evaluated: %f" var f f';
+        nb + 1)
+      else nb
+    in
+    StrMap.fold fold exp 0
   in
-  check_errors 0 0 f.func_errors sorted_anos;
+  let check_anos exp rais =
+    let missAnos = StrSet.diff exp rais in
+    let unexAnos = StrSet.diff rais exp in
+    StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
+    StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
+    StrSet.cardinal missAnos + StrSet.cardinal unexAnos
+  in
+  let nbErrs = check_vars expVars varMap + check_anos expAnos anoSet in
+  if nbErrs > 0 then raise (InterpError nbErrs);
   if code_coverage then Bir_instrumentation.code_coverage_result ()
   else Bir_instrumentation.empty_code_coverage_result
 
-type test_failures = (string * Mir.literal * Mir.literal) list Bir.VariableMap.t
-
 type process_acc =
-  string list * test_failures * Bir_instrumentation.code_coverage_acc
+  string list * int StrMap.t * Bir_instrumentation.code_coverage_acc
 
 type coverage_kind =
   | NotCovered
@@ -229,38 +164,6 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   let _, finish = Cli.create_progress_bar "Testing files" in
   let process (name : string)
       ((successes, failures, code_coverage_acc) : process_acc) : process_acc =
-    let report_violated_condition_error
-        (bindings : (Bir.variable * Mir.literal) option)
-        (expr : Bir.expression Pos.marked) (err : Mir.Error.t) =
-      Cli.debug_flag := true;
-      match (bindings, Pos.unmark expr) with
-      | ( Some (v, l1),
-          Unop
-            ( Mast.Not,
-              ( Mir.Binop
-                  ( (Mast.And, _),
-                    ( Comparison
-                        ( (Mast.Lt, _),
-                          (Mir.Binop ((Mast.Sub, _), _, (Literal l2, _)), _),
-                          (_, _) ),
-                      _ ),
-                    _ ),
-                _ ) ) ) ->
-          Cli.error_print "Test %s incorrect (error on variable %s: %a != %a)"
-            name
-            (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
-            Format_mir.format_literal l1 Format_mir.format_literal l2;
-          let errs_varname =
-            try Bir.VariableMap.find v failures with Not_found -> []
-          in
-          ( successes,
-            Bir.VariableMap.add v ((name, l1, l2) :: errs_varname) failures,
-            code_coverage_acc )
-      | _ ->
-          Cli.error_print "Test %s incorrect (error %s raised)" name
-            (Pos.unmark err.Mir.Error.name);
-          (successes, failures, code_coverage_acc)
-    in
     let module Interp = (val Bir_interpreter.get_interp value_sort round_ops
                            : Bir_interpreter.S)
     in
@@ -278,28 +181,21 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
       Cli.result_print "%s" name;
       (name :: successes, failures, code_coverage_acc)
     with
+    | InterpError nbErr ->
+        (successes, StrMap.add name nbErr failures, code_coverage_acc)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
-        ignore (successes, failures, code_coverage_acc);
-        failwith "Stop"
+        (successes, failures, code_coverage_acc)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.ConditionViolated _ as cv ->
-            let expr, err, bindings =
-              match cv with
-              | Interp.ConditionViolated (err, expr, bindings) -> (
-                  ( expr,
-                    err,
-                    match bindings with
-                    | [ (v, Interp.SimpleVar l1) ] ->
-                        Some (v, Interp.value_to_literal l1)
-                    | _ -> None ))
-              | _ -> assert false
-              (* should not happen *)
-            in
-            report_violated_condition_error bindings expr err
+        | Interp.ConditionViolated (_err, (expr, pos), _bindings) ->
+            let msg = Format.asprintf "%a" Format_bir.format_expression expr in
+            Cli.error_print "Error in test %s: %a" name
+              Errors.format_structured_error
+              (msg, [ (None, pos) ]);
+            (successes, failures, code_coverage_acc)
         | Interp.StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
@@ -346,11 +242,11 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr)
-      ([], Bir.VariableMap.empty, Bir.VariableMap.empty)
+      ([], StrMap.empty, Bir.VariableMap.empty)
       (fun (old_s, old_f, old_code_coverage) (new_s, new_f, new_code_coverage)
       ->
         ( new_s @ old_s,
-          Bir.VariableMap.union (fun _ x1 x2 -> Some (x1 @ x2)) old_f new_f,
+          StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f,
           Bir_instrumentation.merge_code_coverage_acc old_code_coverage
             new_code_coverage ))
   in
@@ -359,23 +255,12 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
   Cli.display_time := true;
   Cli.result_print "Test results: %d successes" (List.length s);
 
-  let f_l =
-    List.sort
-      (fun (_, i) (_, i') -> -compare (List.length i) (List.length i'))
-      (Bir.VariableMap.bindings f)
-  in
-  if List.length f_l = 0 then Cli.result_print "No failures!"
-  else begin
+  if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
+  else (
     Cli.warning_print "Failures:";
-    List.iter
-      (fun (var, infos) ->
-        Cli.error_print "\t%s, %d errors in files %s"
-          (Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
-          (List.length infos)
-          (String.concat ", "
-             (List.map (fun (n, _, _) -> n) (List.sort compare infos))))
-      f_l
-  end;
+    StrMap.iter
+      (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
+      f);
   if code_coverage_activated then begin
     let all_code_locs = Bir_instrumentation.get_code_locs p in
     let all_code_locs_with_coverage =

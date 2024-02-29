@@ -154,4 +154,4 @@ and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
   locs
 
 let get_code_locs (p : Bir.program) : code_locs =
-  get_code_locs_stmts p (Bir.main_statements_with_context_and_tgv_init p) []
+  get_code_locs_stmts p (Bir.main_statements p) []
