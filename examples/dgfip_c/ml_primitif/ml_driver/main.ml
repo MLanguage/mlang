@@ -41,8 +41,9 @@ let check_result tgv err expected_tgv expected_err =
       | "NBPT" -> ()
       | _ ->
           let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
+          (* Comparaison des valeurs au centime près, conformément à la doctrine
+             DGFiP actuellement en vigueur *)
           let comp =
-            (* abs_float (montant -. montant') >= 0.000001 *)
             let m = Float.round (montant *. 100.) in
             let m' = Float.round (montant' *. 100.) in
             abs_float (m -. m') > 0.0

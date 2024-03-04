@@ -737,32 +737,6 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let _report_error (err : Mir.error) (var_opt : string option) (_pos : Pos.t)
-      (ctx : ctx) : 'a =
-    match err.Mir.Error.typ with
-    | Mast.Anomaly ->
-        (* raise (RuntimeError (RaisedError (err, var_opt, pos), ctx)) *)
-        Cli.warning_print "Anomaly%s: %s"
-          (match var_opt with
-          | Some var -> Format.sprintf " (%s)" var
-          | None -> "")
-          (Pos.unmark (Mir.Error.err_descr_string err));
-        ctx
-    | Mast.Discordance ->
-        Cli.warning_print "Discordance%s: %s"
-          (match var_opt with
-          | Some var -> Format.sprintf " (%s)" var
-          | None -> "")
-          (Pos.unmark (Mir.Error.err_descr_string err));
-        ctx
-    | Mast.Information ->
-        Cli.debug_print "Information%s: %s"
-          (match var_opt with
-          | Some var -> Format.sprintf " (%s)" var
-          | None -> "")
-          (Pos.unmark (Mir.Error.err_descr_string err));
-        ctx
-
   let report_violatedcondition (cond : Bir.condition_data) (ctx : ctx) : 'a =
     let err = fst cond.cond_error in
     match err.Mir.Error.typ with

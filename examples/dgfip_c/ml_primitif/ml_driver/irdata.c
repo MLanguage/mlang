@@ -269,6 +269,13 @@ int sz_err_archive = 0;
 char **err_archive = NULL;
 int nb_err_archive = 0;
 
+/*
+ * # ajouter_espace(sz, tab, nb) #
+ *
+ * tab est un tableau dynamique de taille sz.
+ * On demande à disposer de nb cases dans tab.
+ * Si il n'y a pas assez de place dans tab, on double sa taille.
+ */
 void ajouter_espace(int *sz, char ***tab, int nb) {
   if (nb >= *sz) {
     int i = 0;
