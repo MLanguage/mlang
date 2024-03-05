@@ -16,26 +16,8 @@
 
 open Mir
 
-let format_execution_number fmt (exec_number : execution_number) =
-  if exec_number.rule_number = -1 then
-    Format.fprintf fmt "declaration, %a" Pos.format_position exec_number.pos
-  else
-    Format.fprintf fmt "rule %d, sequence index %d, %a" exec_number.rule_number
-      exec_number.seq_number Pos.format_position exec_number.pos
-
-let format_execution_number_short fmt (exec_number : execution_number) =
-  if exec_number.rule_number = -1 then Format.fprintf fmt "declaration"
-  else Format.fprintf fmt "%d#%d" exec_number.rule_number exec_number.seq_number
-
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
-
-let format_io fmt (io : io) =
-  Format.pp_print_string fmt
-    (match io with
-    | Input -> "input"
-    | Output -> "output"
-    | Regular -> "regular")
 
 let format_func fmt (f : func) =
   Format.pp_print_string fmt
@@ -78,10 +60,7 @@ let rec format_expression fmt (e : expression) =
            (Format_mast.pp_unmark format_expression))
         args
   | Literal lit -> format_literal fmt lit
-  | Var var ->
-      Format.fprintf fmt "%s[%a]"
-        (Pos.unmark var.Variable.name)
-        format_execution_number_short var.Variable.execution_number
+  | Var var -> Format.fprintf fmt "%s" (Pos.unmark var.Variable.name)
   | LocalVar lvar -> Format.fprintf fmt "t%d" lvar.LocalVariable.id
   | Error -> Format.fprintf fmt "erreur"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
@@ -113,12 +92,12 @@ let format_variable_def fmt (def : variable_def) =
       IndexMap.pp (Format_mast.pp_unmark format_expression) fmt defs
 
 let format_variable_data fmt (def : variable_data) =
-  Format.fprintf fmt "type %a, io %a:\n%a"
+  Format.fprintf fmt "type %a:\n%a"
     (fun fmt () ->
       match def.var_typ with
       | None -> Format.fprintf fmt "unknown"
       | Some t -> format_typ fmt t)
-    () format_io def.var_io format_variable_def def.var_definition
+    () format_variable_def def.var_definition
 
 let format_variables fmt (p : variable_data VariableMap.t) =
   VariableMap.pp format_variable_data fmt p
@@ -159,10 +138,3 @@ let format_variable fmt (v : Variable.t) =
   Format.fprintf fmt "%s: %s"
     (Pos.unmark v.Variable.name)
     (Pos.unmark v.Variable.descr)
-
-let format_io fmt (io : io) =
-  Format.pp_print_string fmt
-    (match io with
-    | Input -> "input"
-    | Output -> "output"
-    | Regular -> "regular")

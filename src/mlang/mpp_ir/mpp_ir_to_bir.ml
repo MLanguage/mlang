@@ -32,7 +32,7 @@ let rec translate_m_code (m_program : Mir.program)
               aux
                 (( Bir.SAssign
                      (Bir.(var_from_mir default_tgv) var, var_definition),
-                   var.Mir.Variable.execution_number.pos )
+                   Pos.get_position var.name )
                 :: res)
                 instrs
         with Not_found ->

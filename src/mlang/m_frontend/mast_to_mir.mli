@@ -25,8 +25,6 @@ type translating_context = {
       (** [true] if translating an expression susceptible to contain a generic
           table index *)
   idmap : Mir.idmap;  (** Current string-to-{!type: Mir.Variable.t} mapping *)
-  exec_number : Mir.execution_number;
-      (** Number of the rule of verification condition being translated *)
 }
 
 (** {1 Translation helpers} *)
@@ -34,15 +32,11 @@ type translating_context = {
 val get_var_from_name :
   Mir.idmap ->
   (* name of the variable to query *) string Pos.marked ->
-  (* using_var_in_def *) bool ->
   Mir.Variable.t
 (** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a
     variable and the rule number from which the variable is requested. Returns
     the variable with the same name and highest rule number that is below the
     current rule number from where this variable is requested *)
-
-val list_max_execution_number : Mir.Variable.t list -> Mir.Variable.t
-(** Helper to compute the max SSA candidate in a list *)
 
 val translate_expression :
   Mir.cat_variable_data Mir.CatVarMap.t ->
@@ -51,9 +45,6 @@ val translate_expression :
   Mast.expression Pos.marked ->
   Mir.expression Pos.marked
 (** Main translation function for expressions *)
-
-val dummy_exec_number : Pos.t -> Mir.execution_number
-(** Dummy execution number used for variable declarations *)
 
 val get_conds :
   Mir.verif_domain Mast.DomainIdMap.t ->

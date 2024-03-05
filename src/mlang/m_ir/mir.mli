@@ -14,13 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type execution_number = {
-  rule_number : int;
-      (** Written in the name of the rule or verification condition *)
-  seq_number : int;  (** Index in the sequence of the definitions in the rule *)
-  pos : Pos.t;
-}
-
 type cat_computed = Base | GivenBack
 
 module CatCompSet : SetExt.T with type elt = cat_computed
@@ -51,9 +44,6 @@ type variable_id = int
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which
-          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
   descr : string Pos.marked;
@@ -160,14 +150,11 @@ type 'variable variable_def_ =
 
 type variable_def = variable variable_def_
 
-type io = Input | Output | Regular
-
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
-  var_io : io;
 }
 
 type variable_data = variable variable_data_
@@ -297,8 +284,6 @@ type idmap = variable Pos.VarNameToID.t
     so we need to keep a mapping between the two. A name is mapped to a list of
     variables because variables can be redefined in different rules *)
 
-type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
-
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
@@ -311,7 +296,6 @@ type program = {
           calculation *)
   program_targets : target_data TargetMap.t;
   program_idmap : idmap;
-  program_exec_passes : exec_pass list;
 }
 
 module Variable : sig
@@ -319,9 +303,6 @@ module Variable : sig
 
   type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    execution_number : execution_number;
-        (** The number associated with the rule of verification condition in
-            which the variable is defined *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
@@ -342,7 +323,6 @@ module Variable : sig
     string Pos.marked ->
     string option ->
     string Pos.marked ->
-    execution_number ->
     attributes:Mast.variable_attribute list ->
     origin:variable option ->
     cats:cat_variable option ->
@@ -371,8 +351,6 @@ val true_literal : literal
 
 val num_of_rule_or_verif_id : rov_id -> int
 
-val same_execution_number : execution_number -> execution_number -> bool
-
 val find_var_name_by_alias : program -> string Pos.marked -> string
 
 val map_expr_var : ('v -> 'v2) -> 'v expression_ -> 'v2 expression_
@@ -385,14 +363,9 @@ val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
 val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
 
-val compare_execution_number : execution_number -> execution_number -> int
-
 val find_var_definition : program -> variable -> rule_data * variable_data
 
-val is_candidate_valid : execution_number -> execution_number -> bool -> bool
-
-val get_max_var_sorted_by_execution_number :
-  string -> Variable.t Pos.VarNameToID.t -> Variable.t
+val get_var : string -> Variable.t Pos.VarNameToID.t -> Variable.t
 
 val fresh_rule_num : unit -> int
 
@@ -403,8 +376,6 @@ val find_var_by_name : program -> string Pos.marked -> variable
     share a name or alias. If an alias is provided, the variable returned is
     that with the lowest execution number. When a name is provided, then the
     variable with the highest execution number is returned. *)
-
-val is_dummy_variable : Variable.t -> bool
 
 val mast_to_catvar :
   'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable

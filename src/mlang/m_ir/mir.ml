@@ -20,44 +20,6 @@
 
 (** Variables are first-class objects *)
 
-type execution_number = {
-  rule_number : int;
-      (** Written in the name of the rule or verification condition *)
-  seq_number : int;  (** Index in the sequence of the definitions in the rule *)
-  pos : Pos.t;
-}
-(** To determine in which order execute the different variable assigment we have
-    to record their position in the graph. *)
-
-let compare_execution_number (n1 : execution_number) (n2 : execution_number) :
-    int =
-  if n1.rule_number = n2.rule_number then compare n1.seq_number n2.seq_number
-  else compare n1.rule_number n2.rule_number
-
-(** This is the operator used to determine the if a candidate definition is
-    valid at a given point *)
-let is_candidate_valid (candidate : execution_number)
-    (current : execution_number) (is_lvalue : bool) : bool =
-  if is_lvalue then
-    (* This is the case where we are using variable [VAR] while defining [VAR]:
-       i.e we are querying the left hand side of the assignation. The valid
-       definitions here are either the declaration or earlier definitions in the
-       same rules. *)
-    candidate.rule_number = -1
-    || candidate.rule_number = current.rule_number
-       && candidate.seq_number < current.seq_number
-  else
-    (* In this case, we are using [FOO] in the definition of [BAR]. Then valid
-       definitions of [FOO] include all that are in different rules or earlier
-       definition in the same rule. *)
-    candidate.rule_number <> current.rule_number
-    || candidate.seq_number < current.seq_number
-
-(** This is the operator used to find a particular variable in the [idmap] *)
-let same_execution_number (en1 : execution_number) (en2 : execution_number) :
-    bool =
-  en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
-
 type cat_computed = Base | GivenBack
 
 let pp_cat_computed fmt = function
@@ -136,9 +98,6 @@ type variable_id = int
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which
-          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
   descr : string Pos.marked;
@@ -158,9 +117,6 @@ module Variable = struct
 
   type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    execution_number : execution_number;
-        (** The number associated with the rule of verification condition in
-            which the variable is defined *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
@@ -183,16 +139,14 @@ module Variable = struct
       v
 
   let new_var (name : string Pos.marked) (alias : string option)
-      (descr : string Pos.marked) (execution_number : execution_number)
-      ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(cats : cat_variable option) ~(is_table : int option) ~(is_temp : bool)
-      ~(is_it : bool) : t =
+      (descr : string Pos.marked) ~(attributes : Mast.variable_attribute list)
+      ~(origin : t option) ~(cats : cat_variable option)
+      ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
     {
       name;
       id = fresh_id ();
       descr;
       alias;
-      execution_number;
       attributes;
       origin;
       cats;
@@ -420,14 +374,11 @@ let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
 
 type variable_def = variable variable_def_
 
-type io = Input | Output | Regular
-
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
-  var_io : io;
 }
 
 type variable_data = variable variable_data_
@@ -629,8 +580,6 @@ type idmap = Variable.t Pos.VarNameToID.t
     mapped to a list of variables because variables can be redefined in
     different rules *)
 
-type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
-
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
@@ -643,7 +592,6 @@ type program = {
           calculation *)
   program_targets : target_data TargetMap.t;
   program_idmap : idmap;
-  program_exec_passes : exec_pass list;
 }
 
 (** {1 Helpers}*)
@@ -667,20 +615,15 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
-let get_max_var_sorted_by_execution_number (name : string)
-    (idmap : _ Pos.VarNameToID.t) : Variable.t =
+let get_var (name : string) (idmap : _ Pos.VarNameToID.t) : Variable.t =
   Pos.VarNameToID.find name idmap
 
-let get_var_sorted_by_execution_number (p : program) (name : string) :
-    Variable.t =
-  get_max_var_sorted_by_execution_number name p.program_idmap
-
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try get_var_sorted_by_execution_number p (Pos.unmark name)
+  try get_var (Pos.unmark name) p.program_idmap
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
-      get_var_sorted_by_execution_number p name
+      get_var name p.program_idmap
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
@@ -688,9 +631,6 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
 let find_var_definition (_p : program) (_var : Variable.t) :
     rule_data * variable_data =
   raise Not_found
-
-let is_dummy_variable (var : Variable.t) : bool =
-  var.execution_number.rule_number = -1
 
 let mast_to_catvar (cats : 'a CatVarMap.t)
     (l : string Pos.marked list Pos.marked) : cat_variable =
