@@ -14,44 +14,32 @@ MUSL_HOME?=/usr/local/musl
 # Tax computation configuration
 ##################################################
 
-ifeq ($(YEAR), 2018)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2018m_6_7/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2018/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/2018/fuzzing
-	TEST_ONE?=fuzzer_10019.m_test
-	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2018.m_spec
-	MPP_FUNCTION_BACKEND?=enchainement_primitif
-	MPP_FUNCTION?=compute_double_liquidation_pvro
-else ifeq ($(YEAR), 2019)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2019/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/2019/fuzzing
-	TEST_ONE?=fuzzer_10029.m_test
-	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
-	MPP_FUNCTION_BACKEND?=enchainement_primitif
-	MPP_FUNCTION?=enchainement_primitif_interpreteur
-else ifeq ($(YEAR), 2020)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2020/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/2020/fuzzing
-	TEST_ONE?=fuzzer_1001.m_test
+ifeq ($(YEAR), 2022)
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2022/)
+	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2021)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2021m_20_6/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2021/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2021/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2021/fuzzing
-	TEST_ONE?=fuzzer_10004.m_test
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
-else ifeq ($(YEAR), 2022)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/mpp_specs/m_ext/2022/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
-	TEST_ONE?=fuzzer_10032.m_test
+else ifeq ($(YEAR), 2020)
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2020/)
+	TESTS_DIR?=$(ROOT_DIR)/tests/2020/fuzzing
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
+else ifeq ($(YEAR), 2019)
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2019/)
+	TESTS_DIR?=$(ROOT_DIR)/tests/2019/fuzzing
+	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else
@@ -63,19 +51,12 @@ endif
 # Mlang configuration
 ##################################################
 
-ifeq ($(OPTIMIZE), 0)
-  OPTIMIZE_FLAG=
-else
-  OPTIMIZE_FLAG=-O
-endif
-
 MLANG_BIN=dune exec $(ROOT_DIR)/_build/default/src/main.exe --
 
 PRECISION?=double
 MLANG_DEFAULT_OPTS=\
  --display_time --debug\
- --precision $(PRECISION)\
- $(OPTIMIZE_FLAG)
+ --precision $(PRECISION)
 
 ##################################################
 # C backend configuration

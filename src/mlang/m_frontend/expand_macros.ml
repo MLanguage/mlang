@@ -115,7 +115,7 @@ let add_const (name, name_pos) (cval, cval_pos) const_map =
           | None -> Err.unknown_constant cval_pos)
       | _ -> assert false)
 
-let expand_table_size const_map table_size =
+let expand_table_size (const_map : const_context) table_size =
   match table_size with
   | Some (Mast.SymbolSize c, size_pos) -> (
       match ConstMap.find_opt c const_map with
@@ -644,5 +644,5 @@ let proceed (p : Mast.program) : Mast.program =
   in
   List.rev expanded_prog
 
-(** Screugneugneuh ! *)
+(* Screugneugneuh ! *)
 let _ = ignore (format_loop_context, format_loop_domain)

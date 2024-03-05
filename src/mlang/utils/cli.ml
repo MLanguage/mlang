@@ -63,12 +63,6 @@ let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
   Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
 
-let optimize =
-  let doc =
-    "Applies dead code removal and partial evaluation to the generated code"
-  in
-  Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
-
 let optimize_unsafe_float =
   let doc =
     "Activate unsafe floating point optimizations (such as x * 0 ~> 0)"
@@ -196,10 +190,9 @@ let mlang_t f =
   Term.(
     const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
     $ dep_graph_file $ no_print_cycles $ backend $ output $ run_all_tests
-    $ dgfip_test_filter $ run_test $ mpp_function $ optimize
-    $ optimize_unsafe_float $ code_coverage $ precision $ roundops
-    $ comparison_error_margin_cli $ income_year_cli $ m_clean_calls
-    $ dgfip_options)
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ code_coverage $ precision $ roundops $ comparison_error_margin_cli
+    $ income_year_cli $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =

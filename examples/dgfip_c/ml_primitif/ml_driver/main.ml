@@ -51,8 +51,8 @@ let check_result tgv err expected_tgv expected_err =
           if comp then
             begin
               result := false;
-              Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
-               code montant montant'
+              Printf.eprintf "KO | %s = %f au lieu de %f\n"
+               code montant' montant
             end
     ) expected_tgv;
   let missing_errs = StrSet.diff expected_err err in
@@ -60,7 +60,7 @@ let check_result tgv err expected_tgv expected_err =
   if not (StrSet.is_empty missing_errs && StrSet.is_empty unexpected_errs) then (
     result := false;
     StrSet.iter (Printf.eprintf "KO | %s attendue non recue\n") missing_errs;
-    StrSet.iter (Printf.eprintf "KO | %s recue en trop\n") unexpected_errs;
+    StrSet.iter (Printf.eprintf "KO | %s recu en trop\n") unexpected_errs;
   );
   !result
 

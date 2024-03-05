@@ -77,19 +77,21 @@ else
 	$(MLANG_TEST) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR)/ $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
-quick_test: FORCE build
-ifeq ($(call is_in,),)
-	$(call make_in,,$@)
-else
-	$(MLANG_TEST) --backend interpreter --function_spec $(M_SPEC_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
-endif
-
 test_one: FORCE build
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	$(MLANG_TEST) --backend interpreter --run_test=$(TESTS_DIR)/$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	$(MLANG_TEST) --run_test=$(TESTS_DIR)/$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
+
+
+test_file: FORCE build
+ifeq ($(call is_in,),)
+	$(call make_in,,$@)
+else
+	$(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+endif
+
 
 ##################################################
 # Doc

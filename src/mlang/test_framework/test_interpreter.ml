@@ -80,7 +80,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
 exception InterpError of int
 
 let check_test (combined_program : Bir.program) (test_name : string)
-    (optimize : bool) (code_coverage : bool) (value_sort : Cli.value_sort)
+    (code_coverage : bool) (value_sort : Cli.value_sort)
     (round_ops : Cli.round_ops) : Bir_instrumentation.code_coverage_result =
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
@@ -91,18 +91,6 @@ let check_test (combined_program : Bir.program) (test_name : string)
   Cli.debug_print "Executing program";
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program combined_program; *)
-  let combined_program =
-    if optimize then begin
-      Cli.debug_print "Translating to CFG form for optimizations...";
-      let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
-      Cli.debug_print "Optimizing...";
-      let oir_program = Oir_optimizations.optimize oir_program in
-      Cli.debug_print "Translating back to AST...";
-      let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
-      combined_program
-    end
-    else combined_program
-  in
   if code_coverage then Bir_instrumentation.code_coverage_init ();
   let varMap, anoSet =
     Bir_interpreter.evaluate_program combined_program input_file value_sort
@@ -145,7 +133,7 @@ let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
   | None -> IntMap.add key 0 m
   | Some i -> IntMap.add key (i + 1) m
 
-let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
+let check_all_tests (p : Bir.program) (test_dir : string)
     (code_coverage_activated : bool) (value_sort : Cli.value_sort)
     (round_ops : Cli.round_ops) (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
@@ -170,8 +158,8 @@ let check_all_tests (p : Bir.program) (test_dir : string) (optimize : bool)
     try
       Cli.debug_flag := false;
       let code_coverage_result =
-        check_test p (test_dir ^ name) optimize code_coverage_activated
-          value_sort round_ops
+        check_test p (test_dir ^ name) code_coverage_activated value_sort
+          round_ops
       in
       Cli.debug_flag := true;
       let code_coverage_acc =

@@ -78,7 +78,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (dep_graph_file : string) (print_cycles : bool) (backend : string option)
     (output : string option) (run_all_tests : string option)
     (dgfip_test_filter : bool) (run_test : string option)
-    (mpp_function : string) (optimize : bool) (optimize_unsafe_float : bool)
+    (mpp_function : string) (optimize_unsafe_float : bool)
     (code_coverage : bool) (precision : string option)
     (roundops : string option) (comparison_error_margin : float option)
     (income_year : int option) (m_clean_calls : bool)
@@ -188,11 +188,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     let combined_program =
       Mpp_ir_to_bir.create_combined_program m_program mpp_function
     in
-    if run_all_tests <> None then begin
-      if code_coverage && optimize then
-        Errors.raise_error
-          "Code coverage and program optimizations cannot be enabled together \
-           when running a test suite, check your command-line options";
+    if run_all_tests <> None then
       let tests : string =
         match run_all_tests with Some s -> s | _ -> assert false
       in
@@ -201,9 +197,8 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         | false -> fun _ -> true
         | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
       in
-      Test_interpreter.check_all_tests combined_program tests optimize
-        code_coverage value_sort round_ops filter_function
-    end
+      Test_interpreter.check_all_tests combined_program tests code_coverage
+        value_sort round_ops filter_function
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
       if code_coverage then
@@ -213,25 +208,13 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         match run_test with Some s -> s | _ -> assert false
       in
       ignore
-        (Test_interpreter.check_test combined_program test optimize false
-           value_sort round_ops);
+        (Test_interpreter.check_test combined_program test false value_sort
+           round_ops);
       Cli.result_print "Test passed!"
     end
     else begin
       Cli.debug_print
         "Extracting the desired function from the whole program...";
-      let combined_program =
-        if optimize then begin
-          Cli.debug_print "Translating to CFG form for optimizations...";
-          let oir_program = Bir_to_oir.bir_program_to_oir combined_program in
-          Cli.debug_print "Optimizing...";
-          let oir_program = Oir_optimizations.optimize oir_program in
-          Cli.debug_print "Translating back to AST...";
-          let combined_program = Bir_to_oir.oir_program_to_bir oir_program in
-          combined_program
-        end
-        else combined_program
-      in
       match backend with
       | Some backend ->
           if String.lowercase_ascii backend = "java" then begin

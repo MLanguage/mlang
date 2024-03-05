@@ -96,47 +96,33 @@ installed in order to provide the correct version of the base classes.
 
 ## Usage
 
-Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
-of what happens in this example. You can compare what happens on the
-[official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm)
-by entering the exact amounts of the case in the right income codes. Everything should be the same.
-
-The input variables that you want to use have to be declared beforehand in the `.m_spec`
-file, in the `const` section. If you put a variable in the `saisie` section, you will then be
-prompted to input it at interpretation time. You can also change which variables you want the
-interpreter to output in the `sortie` section.
-
-If you invoke `make quick_test`, Make will show you the Mlang options is is
-using to run a simple test of the Mlang interpreter.
-
-Please refer to the DGFiP's simulator for the meaning of the variables. Important variables are:
-
-* `0AC` and `0AM`, which should be set to 1 for respectively single or married;
-* `1AJ` and `1BJ`, salaried income for individuals number 1 and 2;
-* `0CF`, the number of dependent persons (children);
-* ...
-
-Mlang's run are configured by a specification file (`.m_spec`), see the
-[dedicated README](m_specs/README.md) for more details.
-
-Mlang also need an M++ file to know how to run the "liquidations multiples"
+Mlang also need an M file to know how to run the "liquidations multiples"
 mechanism that is necessary to compute the income tax correctly. For instance, the file
-`mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
-for version of the 2018 M sources published in `ir-calcul`.
+`ir_calcul/2022/cible.m` corresponds to the unpublished code of the DGFiP
+for version of the 2022 M sources published in `ir-calcul`.
 
-If you want to test the output of the interpreter on a situation you made up,
-edit your own `.m_spec` and run it with the command:
+Some of the `Makefile` flags can be permanently configured by modifying the
+file `makefiles/variables.mk`.
 
-    YEAR=<2018 or 2019 or 2020> M_SPEC_FILE=<path to .m_spec> make quick_test
+If you want to generate source files of the ML backend, run the command:
 
-For how to produce ready-to-use income tax computation
-source files for your application, see the
-[dedicated README](examples/README.md).
+    make YEAR=<2020 or 2022> dgfip_c_backend
 
-Some of the `Makefile` flags can be permanently configured by creating
-a file `Makefile.config` in the top directory. Check the file
-`Makefile.config.template` to see some of the options that can be
-configured in that way.
+or
+
+    make dgfip_c_backend
+
+with default year 2022. The files are then generated in `example/dgfip_c/ml_primitif/calc`.
+
+If you want to generate the executable of the ML backend, run the command:
+
+    make YEAR=<2020 or 2022> compile_dgfip_c_backend
+
+or
+
+    make compile_dgfip_c_backend
+
+with default year 2022.
 
 ## Testing
 
@@ -178,6 +164,52 @@ expected, but when doing computations with a higher precision, a difference
 lower than the smallest representable float value might appear. To pass the test,
 we have provided the command line option `--test_error_margin=0.0000001` to
 let you define how much error margin you want to tolerate when running tests.
+
+If you want to run the `mlang` interpreter on all tests of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> tests
+
+or
+
+    make tests
+
+with default year 2022.
+
+If you want to run the `mlang` interpreter on a specific test of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> TEST_ONE=<test file> test_one
+
+or
+
+    make TEST_ONE=<test file> test_one
+
+with default year 2022. The tests files are stored in `tests/<year>/fuzzing/`.
+
+If you want to test the output of the interpreter on a situation you made up,
+edit your own `.m_test` and run it with the command:
+
+    make YEAR=<2020 or 2022> TEST_FILE=<path to .m_test> make test_file
+
+or
+
+    make TEST_ONE=<test file> test_one
+
+with default year 2022.
+
+If you want to test the output of the ML backend on all tests of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> test_dgfip_c_backend
+
+or
+
+    make TEST_ONE=<test file> test_dgfip_c_backend
+
+with default year 2022.
+
+Please read the `tests/README.md` for a walk-through of what happens in input files.
 
 ## Documentation
 
