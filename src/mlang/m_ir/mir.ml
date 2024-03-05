@@ -623,7 +623,7 @@ let cond_cats_to_set cats =
 
 type condition_data = variable condition_data_
 
-type idmap = Variable.t list Pos.VarNameToID.t
+type idmap = Variable.t Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type:
     Mir.Variable.t}, so we need to keep a mapping between the two. A name is
     mapped to a list of variables because variables can be redefined in
@@ -667,32 +667,20 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
-let sort_by_lowest_exec_number v1 v2 =
-  -compare_execution_number v1.Variable.execution_number
-     v2.Variable.execution_number
-(* here the minus sign is to have the "meaningful" execution numbers first, and
-   the declarative execution number last *)
-
-let sort_by_highest_exec_number v1 v2 =
-  compare v1.Variable.execution_number v2.Variable.execution_number
-
-let get_max_var_sorted_by_execution_number compare (name : string)
+let get_max_var_sorted_by_execution_number (name : string)
     (idmap : _ Pos.VarNameToID.t) : Variable.t =
-  let vars = Pos.VarNameToID.find name idmap |> List.sort compare in
-  match vars with [] -> raise Not_found | hd :: _ -> hd
+  Pos.VarNameToID.find name idmap
 
-let get_var_sorted_by_execution_number (p : program) (name : string) sort :
+let get_var_sorted_by_execution_number (p : program) (name : string) :
     Variable.t =
-  get_max_var_sorted_by_execution_number sort name p.program_idmap
+  get_max_var_sorted_by_execution_number name p.program_idmap
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try
-    get_var_sorted_by_execution_number p (Pos.unmark name)
-      sort_by_lowest_exec_number
+  try get_var_sorted_by_execution_number p (Pos.unmark name)
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
-      get_var_sorted_by_execution_number p name sort_by_highest_exec_number
+      get_var_sorted_by_execution_number p name
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 

@@ -174,5 +174,5 @@ let create_combined_program (m_program : Mir.program)
       idmap = m_program.program_idmap;
       mir_program = m_program;
     }
-  with Bir_interpreter.FloatDefInterp.RuntimeError (r, ctx) ->
-    Bir_interpreter.FloatDefInterp.raise_runtime_as_structured r ctx m_program
+  with Bir_interpreter.FloatDefInterp.RuntimeError (r, _ctx) ->
+    Bir_interpreter.FloatDefInterp.raise_runtime_as_structured r

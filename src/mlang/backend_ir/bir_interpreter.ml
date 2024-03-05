@@ -118,7 +118,7 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
+  val raise_runtime_as_structured : run_error -> 'a
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
 
@@ -312,80 +312,7 @@ struct
 
   exception RuntimeError of run_error * ctx
 
-  let repl_debugguer (ctx : ctx) (p : Mir.program) : unit =
-    Cli.warning_print
-      "Starting interactive debugger. Please query the interpreter state for \
-       the values of variables. Exit with \"quit\".@\n";
-    let exit = ref false in
-    while not !exit do
-      Format.printf "> @?";
-      let query = read_line () in
-      if query = "quit" then exit := true
-      else if query = "explain" then begin
-        Format.printf ">> @?";
-        let query = read_line () in
-        try
-          let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
-          let vars =
-            List.sort
-              (fun (var1 : Mir.Variable.t) var2 ->
-                Mir.(
-                  compare_execution_number var1.Variable.execution_number
-                    var2.Variable.execution_number))
-              vars
-          in
-          List.iter
-            Mir.(
-              fun var ->
-                Format.printf "[%a %a] -> %a@\n"
-                  Format_mir.format_execution_number_short
-                  var.Variable.execution_number Pos.format_position
-                  var.Variable.execution_number.pos
-                  (fun fmt () ->
-                    try
-                      let rule, def = Mir.find_var_definition p var in
-                      Format.fprintf fmt "rule %d, %a"
-                        (Mir.num_of_rule_or_verif_id
-                           (Pos.unmark rule.rule_number))
-                        Format_mir.format_variable_def def.var_definition
-                    with Not_found -> Format.fprintf fmt "unused definition")
-                  ())
-            vars
-        with Not_found -> Format.printf "Inexisting variable@\n"
-      end
-      else
-        try
-          let vars = Pos.VarNameToID.find query p.Mir.program_idmap in
-          let vars =
-            List.sort
-              (fun var1 var2 ->
-                Mir.(
-                  compare_execution_number var1.Variable.execution_number
-                    var2.Variable.execution_number))
-              vars
-          in
-          List.iter
-            Mir.(
-              fun var ->
-                let bvar = Bir.(var_from_mir default_tgv) var in
-                try
-                  let var_l = Bir.VariableMap.find bvar ctx.ctx_vars in
-                  Format.printf "[%a %a] -> %a@\n"
-                    Format_mir.format_execution_number_short
-                    var.Variable.execution_number Pos.format_position
-                    var.Variable.execution_number.pos format_var_value_with_var
-                    (bvar, var_l)
-                with Not_found ->
-                  Format.printf "[%a %a] -> not computed@\n"
-                    Format_mir.format_execution_number_short
-                    var.Variable.execution_number Pos.format_position
-                    var.Variable.execution_number.pos)
-            vars
-        with Not_found -> Format.printf "Inexisting variable@\n"
-    done
-
-  let raise_runtime_as_structured (e : run_error) (ctx : ctx) (p : Mir.program)
-      =
+  let raise_runtime_as_structured (e : run_error) =
     match e with
     | ErrorValue (s, pos) ->
         Errors.raise_spanned_error
@@ -400,11 +327,10 @@ struct
           (Format.asprintf "Index out of bounds: %s" s)
           pos
     | NanOrInf (v, e) ->
-        Errors.raise_spanned_error_with_continuation
+        Errors.raise_spanned_error
           (Format.asprintf "Expression evaluated to %s: %a" v
              Format_bir.format_expression (Pos.unmark e))
           (Pos.get_position e)
-          (fun _ -> repl_debugguer ctx p)
     | UnknownInputVariable (s, pos) ->
         Errors.raise_spanned_error
           (Format.asprintf "Unknown input variable: %s" s)
@@ -414,7 +340,7 @@ struct
           (Format.asprintf "Incorrect output variable: %s" s)
           pos
     | ConditionViolated (error, condition, bindings) ->
-        Errors.raise_spanned_error_with_continuation
+        Errors.raise_spanned_error
           (Format.asprintf
              "Verification condition failed! Errors thrown:\n\
              \  * %a\n\
@@ -431,11 +357,10 @@ struct
                   Format.fprintf fmt "  * %a" format_var_value_with_var v))
              bindings)
           (Pos.get_position condition)
-          (fun _ -> repl_debugguer ctx p)
     | StructuredError (msg, pos, kont) ->
         raise (Errors.StructuredError (msg, pos, kont))
     | RaisedError (err, var_opt, pos) ->
-        Errors.raise_spanned_error_with_continuation
+        Errors.raise_spanned_error
           (Format.sprintf "Error %s thrown%s: %s"
              (Pos.unmark err.Mir.Error.name)
              (match var_opt with
@@ -443,7 +368,6 @@ struct
              | None -> "")
              (Pos.unmark @@ Mir.Error.err_descr_string err))
           pos
-          (fun _ -> repl_debugguer ctx p)
 
   let is_zero (l : value) : bool =
     match l with Number z -> N.is_zero z | _ -> false
@@ -710,7 +634,7 @@ struct
         | NbCategory _ -> assert false
       with
       | RuntimeError (e, ctx) ->
-          if !exit_on_rte then raise_runtime_as_structured e ctx p
+          if !exit_on_rte then raise_runtime_as_structured e
           else raise (RuntimeError (e, ctx))
       | Errors.StructuredError (msg, pos, kont) ->
           if !exit_on_rte then
@@ -733,7 +657,7 @@ struct
             | Number out -> Format.asprintf "%a" N.format_t out),
             e )
       in
-      if !exit_on_rte then raise_runtime_as_structured e ctx p
+      if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))
     else out
 
@@ -1150,7 +1074,7 @@ struct
       in
       ctx
     with RuntimeError (e, ctx) ->
-      if !exit_on_rte then raise_runtime_as_structured e ctx p.mir_program
+      if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))
 end
 

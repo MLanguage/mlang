@@ -23,21 +23,10 @@ let convert_pos (pos : Irj_ast.pos) =
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     Mir.Variable.t =
-  try
-    List.hd
-      (List.sort
-         (fun v1 v2 ->
-           compare v1.Mir.Variable.execution_number
-             v2.Mir.Variable.execution_number)
-         (Pos.VarNameToID.find (Pos.unmark name) p.program_idmap))
+  try Pos.VarNameToID.find (Pos.unmark name) p.program_idmap
   with Not_found ->
     let name = Mir.find_var_name_by_alias p name in
-    List.hd
-      (List.sort
-         (fun v1 v2 ->
-           compare v1.Mir.Variable.execution_number
-             v2.Mir.Variable.execution_number)
-         (Pos.VarNameToID.find name p.program_idmap))
+    Pos.VarNameToID.find name p.program_idmap
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
     float StrMap.t * StrSet.t * Mir.literal Bir.VariableMap.t =

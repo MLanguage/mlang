@@ -137,7 +137,7 @@ module type S = sig
 
   exception RuntimeError of run_error * ctx
 
-  val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
+  val raise_runtime_as_structured : run_error -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool

@@ -34,7 +34,6 @@ type translating_context = {
 val get_var_from_name :
   Mir.idmap ->
   (* name of the variable to query *) string Pos.marked ->
-  Mir.execution_number ->
   (* using_var_in_def *) bool ->
   Mir.Variable.t
 (** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a

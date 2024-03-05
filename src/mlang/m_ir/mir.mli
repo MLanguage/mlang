@@ -292,7 +292,7 @@ type 'variable condition_data_ = {
 
 type condition_data = variable condition_data_
 
-type idmap = variable list Pos.VarNameToID.t
+type idmap = variable Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type: Mir.variable},
     so we need to keep a mapping between the two. A name is mapped to a list of
     variables because variables can be redefined in different rules *)
@@ -391,13 +391,8 @@ val find_var_definition : program -> variable -> rule_data * variable_data
 
 val is_candidate_valid : execution_number -> execution_number -> bool -> bool
 
-val sort_by_lowest_exec_number : Variable.t -> Variable.t -> int
-
 val get_max_var_sorted_by_execution_number :
-  (Variable.t -> Variable.t -> int) ->
-  string ->
-  Variable.t list Pos.VarNameToID.t ->
-  Variable.t
+  string -> Variable.t Pos.VarNameToID.t -> Variable.t
 
 val fresh_rule_num : unit -> int
 

@@ -65,89 +65,20 @@ let rec list_max_execution_number (l : Mir.Variable.t list) : Mir.Variable.t =
       then max_rest
       else v
 
-(** Given a list of candidates for an SSA variable query, returns the correct
-    one: the maximum in the same rule or if no candidates in the same rule, the
-    maximum in other rules. *)
-let find_var_among_candidates (exec_number : Mir.execution_number)
-    (l : Mir.Variable.t list) : Mir.Variable.t =
-  let same_rule =
-    List.filter
-      (fun var ->
-        var.Mir.Variable.execution_number.Mir.rule_number
-        = exec_number.Mir.rule_number)
-      l
-  in
-  if List.length same_rule = 0 then list_max_execution_number l
-  else list_max_execution_number same_rule
-
-(** Implementation of legacy hack to use TGV variables as reusable local
-    variables *)
-let is_vartmp (v : Mir.Variable.t) =
-  let vartmp_pattern = "VARTMP" in
-  try
-    String.sub (Pos.unmark v.Mir.name) 0 (String.length vartmp_pattern)
-    |> String.equal vartmp_pattern
-  with Invalid_argument _ -> false
-
-let get_var_from_name (d : Mir.Variable.t list Pos.VarNameToID.t)
-    (name : Mast.variable_name Pos.marked) (exec_number : Mir.execution_number)
-    (is_lvalue : bool) : Mir.Variable.t =
-  try
-    let same_name = Pos.VarNameToID.find (Pos.unmark name) d in
-    let candidate_list =
-      List.filter
-        (fun var ->
-          Mir.is_candidate_valid var.Mir.Variable.execution_number exec_number
-            is_lvalue)
-        same_name
-    in
-    (* If there is no candidate in the same rule and more one than more
-       candidate outside of the (-1) declaration stub that have to different
-       rule numbers, then we throw an error because it breaks an M invariant *)
-    (if
-     (not is_lvalue)
-     && not
-          (List.exists
-             (fun var ->
-               var.Mir.Variable.execution_number.rule_number
-               = exec_number.rule_number)
-             candidate_list)
-    then
-     let rules_containing_candidates : Mir.Variable.t IntMap.t =
-       List.fold_left
-         (fun acc var ->
-           if var.Mir.Variable.execution_number.rule_number <> -1 then
-             IntMap.add var.Mir.Variable.execution_number.rule_number var acc
-           else acc)
-         IntMap.empty candidate_list
-     in
-     if IntMap.cardinal rules_containing_candidates > 2 then
-       Errors.print_spanned_warning
-         "A variable is used with multiple candidates for its previous \
-          definition. Please initialize the variable in the rule before using \
-          it."
-         (Pos.get_position name));
-    (* If the above check passes, we select the right candidate *)
-    find_var_among_candidates exec_number candidate_list
+let get_var_from_name (d : Mir.Variable.t Pos.VarNameToID.t)
+    (name : Mast.variable_name Pos.marked) (_is_lvalue : bool) : Mir.Variable.t
+    =
+  try Pos.VarNameToID.find (Pos.unmark name) d
   with Not_found ->
     Errors.raise_spanned_error
       (Format.asprintf "variable %s has not been declared" (Pos.unmark name))
       (Pos.get_position name)
 
 (** Same but also take into account variables defined in the same execution unit *)
-let get_var_from_name_lax (d : Mir.Variable.t list Pos.VarNameToID.t)
-    (name : Mast.variable_name Pos.marked) (exec_number : Mir.execution_number)
-    (using_var_in_def : bool) : Mir.Variable.t =
-  try
-    let same_name = Pos.VarNameToID.find (Pos.unmark name) d in
-    find_var_among_candidates exec_number
-      (List.filter
-         (fun var ->
-           Mir.is_candidate_valid var.Mir.Variable.execution_number exec_number
-             using_var_in_def
-           || Mir.same_execution_number var.Mir.Variable.execution_number
-                exec_number)
-         same_name)
+let get_var_from_name_lax (d : Mir.Variable.t Pos.VarNameToID.t)
+    (name : Mast.variable_name Pos.marked) (_exec_number : Mir.execution_number)
+    (_using_var_in_def : bool) : Mir.Variable.t =
+  try Pos.VarNameToID.find (Pos.unmark name) d
   with Not_found ->
     Errors.raise_spanned_error
       (Format.asprintf "variable %s has not been declared" (Pos.unmark name))
@@ -163,11 +94,11 @@ let get_var_from_name_lax (d : Mir.Variable.t list Pos.VarNameToID.t)
     replace *inside the string* the loop parameter by its value to produce the
     new variable. *)
 
-let get_var (d : Mir.Variable.t list Pos.VarNameToID.t)
+let get_var (d : Mir.Variable.t Pos.VarNameToID.t)
     (exec_number : Mir.execution_number) (name : Mast.variable_name Pos.marked)
     (is_lvalue : bool) (lax : bool) : Mir.expression =
   if lax then Mir.Var (get_var_from_name_lax d name exec_number is_lvalue)
-  else Mir.Var (get_var_from_name d name exec_number is_lvalue)
+  else Mir.Var (get_var_from_name d name is_lvalue)
 
 (**{2 Preliminary passes}*)
 
@@ -372,8 +303,7 @@ let get_variables_decl (p : Mast.program)
                     try
                       let old_pos =
                         Pos.get_position
-                          (List.hd
-                             (Pos.VarNameToID.find (Pos.unmark var_name) idmap))
+                          (Pos.VarNameToID.find (Pos.unmark var_name) idmap)
                             .Mir.Variable.name
                       in
                       Cli.var_info_print
@@ -437,7 +367,7 @@ let get_variables_decl (p : Mast.program)
                           let new_idmap =
                             Pos.VarNameToID.add
                               (Pos.unmark cvar.Mast.comp_name)
-                              [ new_var ] idmap
+                              new_var idmap
                           in
                           let new_out_list =
                             if cvar.Mast.comp_is_givenback then
@@ -483,7 +413,7 @@ let get_variables_decl (p : Mast.program)
                           let new_idmap =
                             Pos.VarNameToID.add
                               (Pos.unmark ivar.Mast.input_name)
-                              [ new_var ] idmap
+                              new_var idmap
                           in
                           (new_vars, new_idmap, errors, out_list)
                       | Mast.ConstVar _ -> assert false)))
@@ -541,24 +471,6 @@ let translate_variable (ctx : translating_context)
         var
   | Mast.Generic _ -> assert false
 
-let duplicate_var (var : Mir.Variable.t) (exec_number : Mir.execution_number)
-    (idmap : Mir.idmap) : Mir.Variable.t =
-  let origin =
-    if is_vartmp var then None
-    else
-      match Pos.VarNameToID.find (Pos.unmark var.name) idmap with
-      | [] ->
-          Errors.raise_error "Tried to duplicate a variable without declaration"
-      | v :: _ -> (
-          match v.Mir.Variable.origin with None -> Some v | Some v -> Some v)
-    (* invariant : every variables with the same name have the same origin
-       (itself have None), with the exception of [VARTMP]s which are used as
-       local variables *)
-  in
-  Mir.Variable.new_var var.name None var.descr exec_number
-    ~attributes:var.attributes ~origin ~cats:var.cats ~is_table:var.is_table
-    ~is_temp:var.is_temp ~is_it:var.is_it
-
 (** Linear pass that fills [idmap] with all the variable assignments along with
     their execution number. *)
 let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap) : Mir.idmap =
@@ -599,16 +511,12 @@ let get_var_redefinitions (p : Mast.program) (idmap : Mir.idmap) : Mir.idmap =
                                | _ -> assert false
                                (* should not happen *)
                              in
-                             let new_var =
-                               duplicate_var lvar exec_number idmap
-                             in
                              let new_idmap =
                                Pos.VarNameToID.add
                                  (Pos.unmark lvar.Mir.Variable.name)
-                                 (new_var
-                                 :: Pos.VarNameToID.find
-                                      (Pos.unmark lvar.Mir.Variable.name)
-                                      idmap)
+                                 (Pos.VarNameToID.find
+                                    (Pos.unmark lvar.Mir.Variable.name)
+                                    idmap)
                                  idmap
                              in
                              (new_idmap, seq_number + 1)
@@ -795,7 +703,7 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
           | _ -> assert false
         in
         match Pos.VarNameToID.find_opt v_name idmap with
-        | Some (var :: _) -> (
+        | Some var -> (
             if var.is_it then Mir.Attribut (Pos.same_pos_as v_name v, var, a)
             else
               match
@@ -815,7 +723,7 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
           | _ -> assert false
         in
         match Pos.VarNameToID.find_opt v_name idmap with
-        | Some (var :: _) -> (
+        | Some var -> (
             if var.is_it then Mir.Size var
             else
               match var.is_table with
@@ -892,12 +800,7 @@ let create_var_def (var_lvalue : Mir.Variable.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (idmap : Mir.idmap) :
     Mir.variable_data =
   let var_at_declaration =
-    List.find
-      (fun var ->
-        Mir.(
-          same_execution_number var.Mir.Variable.execution_number
-            (dummy_exec_number (Pos.get_position var_expr))))
-      (Pos.VarNameToID.find (Pos.unmark var_lvalue.name) idmap)
+    Pos.VarNameToID.find (Pos.unmark var_lvalue.name) idmap
   in
   let decl_data =
     try Mir.VariableMap.find var_at_declaration var_decl_data
@@ -1029,7 +932,7 @@ let add_dummy_definitions_for_variable_declarations
         | Input -> ()
         | Output | Regular ->
             if
-              List.for_all Mir.is_dummy_variable
+              Mir.is_dummy_variable
                 (Pos.VarNameToID.find (Pos.unmark var.Mir.Variable.name) idmap)
             then
               Cli.var_info_print
@@ -1109,7 +1012,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                          | Mast.Generic _ -> assert false
                        in
                        match Pos.VarNameToID.find_opt name idmap with
-                       | Some (var :: _) ->
+                       | Some var ->
                            if var.is_it then
                              Mir.PrintName (Pos.same_pos_as name v, var)
                            else Mir.PrintString (Pos.unmark var.name)
@@ -1125,7 +1028,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                          | Mast.Generic _ -> assert false
                        in
                        match Pos.VarNameToID.find_opt name idmap with
-                       | Some (var :: _) ->
+                       | Some var ->
                            if var.is_it then
                              Mir.PrintAlias (Pos.same_pos_as name v, var)
                            else
@@ -1150,7 +1053,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
         let var_name = Pos.unmark vn in
         let var_pos = Pos.get_position vn in
         (match Pos.VarNameToID.find_opt var_name idmap with
-        | Some (v :: _) ->
+        | Some v ->
             let msg =
               Format.asprintf "variable already declared %a" Pos.format_position
                 (Pos.get_position v.name)
@@ -1163,7 +1066,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
             ~is_table:None ~is_temp:false ~is_it:true
         in
         let var_data = Mir.VariableDict.add var var_data in
-        let idmap = Pos.VarNameToID.add var_name [ var ] idmap in
+        let idmap = Pos.VarNameToID.add var_name var idmap in
         let var_decl =
           {
             var_decl_typ = None;
@@ -1197,7 +1100,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                         let var_name = Pos.unmark vn in
                         let var_pos = Pos.get_position vn in
                         match Pos.VarNameToID.find_opt var_name idmap with
-                        | Some (v :: _) -> begin
+                        | Some v -> begin
                             match Mir.VariableMap.find_opt v vars with
                             | None -> Mir.VariableMap.add v var_pos vars
                             | Some old_pos ->
@@ -1207,7 +1110,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                                      Pos.format_position old_pos)
                                   var_pos
                           end
-                        | Some [] | None ->
+                        | None ->
                             Errors.raise_spanned_error "unknown variable"
                               var_pos)
                       vars vl
@@ -1217,7 +1120,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                   let var_name = Pos.unmark vn in
                   let var_pos = Pos.get_position vn in
                   (match Pos.VarNameToID.find_opt var_name idmap with
-                  | Some (v :: _) ->
+                  | Some v ->
                       let msg =
                         Format.asprintf "variable already declared %a"
                           Pos.format_position (Pos.get_position v.name)
@@ -1231,7 +1134,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
                       ~is_temp:false ~is_it:true
                   in
                   let var_data = Mir.VariableDict.add var var_data in
-                  let idmap = Pos.VarNameToID.add var_name [ var ] idmap in
+                  let idmap = Pos.VarNameToID.add var_name var idmap in
                   let catSet =
                     Check_validity.cats_variable_from_decl_list vcats cats
                   in
@@ -1279,8 +1182,7 @@ let rec translate_prog (error_decls : Mir.Error.t list)
 
 let get_targets (error_decls : Mir.Error.t list)
     (cats : Mir.cat_variable_data Mir.CatVarMap.t) (apps : Pos.t StrMap.t)
-    (var_data : Mir.VariableDict.t)
-    (idmap : Mir.variable list Pos.VarNameToID.t)
+    (var_data : Mir.VariableDict.t) (idmap : Mir.variable Pos.VarNameToID.t)
     (var_decl_data : var_decl_data Mir.VariableMap.t) (p : Mast.program) :
     Mir.target_data Mir.TargetMap.t * Mir.VariableDict.t =
   List.fold_left
@@ -1311,7 +1213,7 @@ let get_targets (error_decls : Mir.Error.t list)
                 List.fold_left
                   (fun vars ((var, pos), size) ->
                     match Pos.VarNameToID.find_opt var idmap with
-                    | Some (v :: _) ->
+                    | Some v ->
                         let msg =
                           Format.asprintf "variable already declared %a"
                             Pos.format_position (Pos.get_position v.name)
@@ -1341,7 +1243,7 @@ let get_targets (error_decls : Mir.Error.t list)
                         ~cats:None ~is_table:size' ~is_temp:true ~is_it:false
                     in
                     let var_data = Mir.VariableDict.add var var_data in
-                    let map = Pos.VarNameToID.add name [ var ] map in
+                    let map = Pos.VarNameToID.add name var map in
                     let var_decl =
                       {
                         var_decl_typ = None;
@@ -1359,7 +1261,7 @@ let get_targets (error_decls : Mir.Error.t list)
               let target_tmp_vars =
                 StrMap.mapi
                   (fun vn (pos, size) ->
-                    let var = List.hd (Pos.VarNameToID.find vn tmp_idmap) in
+                    let var = Pos.VarNameToID.find vn tmp_idmap in
                     let size' =
                       Pos.unmark_option (Mast.get_table_size_opt size)
                     in
@@ -1454,8 +1356,7 @@ let get_conds (verif_domains : Mir.verif_domain Mast.DomainIdMap.t)
                           Option.map
                             (fun v ->
                               Mir.get_max_var_sorted_by_execution_number
-                                Mir.sort_by_lowest_exec_number (Pos.unmark v)
-                                idmap)
+                                (Pos.unmark v) idmap)
                             err_var )
                       with Not_found ->
                         Errors.raise_error
