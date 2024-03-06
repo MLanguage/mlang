@@ -1,7 +1,10 @@
 (env
  (static
   (ocamlopt_flags
-   (-ccopt -static -O3))))
+   (-ccopt -static -O3)))
+ (dev
+  (flags
+   (:standard -warn-error -A))))
 
 (executable
  (name main)

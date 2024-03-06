@@ -186,7 +186,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     let m_program = Mir.expand_functions m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
     let combined_program =
-      Mpp_ir_to_bir.create_combined_program m_program mpp_function
+      Mir_to_bir.create_combined_program m_program mpp_function
     in
     if run_all_tests <> None then
       let tests : string =

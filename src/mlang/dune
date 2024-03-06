@@ -8,7 +8,7 @@
 (library
  (public_name mlang)
  (libraries ocamlgraph re ANSITerminal parmap cmdliner threads
-   dune-build-info num gmp irj_parser))
+   dune-build-info num gmp))
 
 (documentation
  (package mlang)

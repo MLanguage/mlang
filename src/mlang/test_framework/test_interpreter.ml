@@ -13,8 +13,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Irj_include
-
 let convert_pos (pos : Irj_ast.pos) =
   Pos.make_position pos.pos_filename pos.pos_loc
 
@@ -138,7 +136,7 @@ let check_all_tests (p : Bir.program) (test_dir : string)
   Array.sort compare arr;
   Cli.warning_flag := false;
   Cli.display_time := false;
-  let _, finish = Cli.create_progress_bar "Testing files" in
+  (* let _, finish = Cli.create_progress_bar "Testing files" in*)
   let process (name : string)
       ((successes, failures, code_coverage_acc) : process_acc) : process_acc =
     let module Interp = (val Bir_interpreter.get_interp value_sort round_ops
@@ -209,7 +207,7 @@ let check_all_tests (p : Bir.program) (test_dir : string)
             Cli.error_print "Runtime error in test %s: %s)" name
               (Pos.unmark (Mir.Error.err_descr_string mir_err));
             (successes, failures, code_coverage_acc))
-    | Irj_include.Irj_ast.TestParsingError (msg, pos) as e ->
+    | Irj_ast.TestParsingError (msg, pos) as e ->
         Cli.error_print "Parsing error: %s %a" msg Pos.format_position
           (convert_pos pos);
         raise e
@@ -227,7 +225,7 @@ let check_all_tests (p : Bir.program) (test_dir : string)
           Bir_instrumentation.merge_code_coverage_acc old_code_coverage
             new_code_coverage ))
   in
-  finish "done!";
+  (* finish "done!"; *)
   Cli.warning_flag := true;
   Cli.display_time := true;
   Cli.result_print "Test results: %d successes" (List.length s);

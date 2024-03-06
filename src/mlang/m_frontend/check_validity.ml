@@ -295,8 +295,6 @@ type global_variable = {
   global_typ : Mast.value_typ option;
 }
 
-type variable = GlobalVar of global_variable
-
 type error = {
   name : string Pos.marked;
   typ : Mast.error_typ;
