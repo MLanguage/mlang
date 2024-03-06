@@ -16,28 +16,28 @@ MUSL_HOME?=/usr/local/musl
 
 ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2022/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2022/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2021)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2021m_20_6/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2021/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2021/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2021/fuzzing
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2020)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2020m_6_5/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2020/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2020/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2020/fuzzing
 	M_SPEC_FILE?=$(ROOT_DIR)/m_specs/complex_case_with_ins_outs_2020.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else ifeq ($(YEAR), 2019)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2019m_8_0/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/ir-calcul/m_ext/2019/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2019/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2019/fuzzing
 	M_SPEC_FILE?=m_specs/complex_case_with_ins_outs_2019.m_spec
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
