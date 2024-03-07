@@ -1399,6 +1399,7 @@ let gen_conf_h fmt flags vars =
     FLG_TRACE_IRDATA\n"; *)
   if flags.flg_debug then Format.fprintf fmt "#define FLG_DEBUG\n";
   Format.fprintf fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
+  Format.fprintf fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
 
   let nb_saisie = count vars (Input None) in
   let nb_calculee = count vars (Computed (Some Computed)) in

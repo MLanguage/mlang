@@ -122,6 +122,8 @@ module type S = sig
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
 
+  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+
   val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
 
   val evaluate_program : Bir.program -> ctx -> int -> ctx

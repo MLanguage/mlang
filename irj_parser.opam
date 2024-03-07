@@ -12,7 +12,7 @@ bug-reports: "https://gitlab.inria.fr/verifisc/mlang/issues"
 depends: [
   "ocaml" {>= "4.11.2"}
   "dune" {build}
-  "odoc" {= "1.5.3"}
+  "odoc" {>= "1.5.3"}
   "ocamlformat" {= "0.19.0"}
 ]
 build: [

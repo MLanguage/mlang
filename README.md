@@ -8,8 +8,8 @@ The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
-of the syntax and the semantics of M, from the codebase previously released by the DGFiP on 
-[Framagit forge](https://framagit.org) and now regularly published on 
+of the syntax and the semantics of M, from the codebase previously released by the DGFiP on
+[Framagit forge](https://framagit.org) and now regularly published on
 [Adullact forge](https://gitlab.adullact.net/dgfip/ir-calcul).
 
 ## Disclaimer
@@ -76,7 +76,7 @@ being preferred if available.
 
 The Java backend in `examples/java/` requires Java development environment.
 The generated code targets Java 7, and could be used with OpenJDK 1.7 or more.
-However, the test harness code requires Java 8, so to use the automated backend tests, we ask for 
+However, the test harness code requires Java 8, so to use the automated backend tests, we ask for
 OpenJDK 1.8 or more.
 
 For Debian-based distributions, you can try:
@@ -91,7 +91,7 @@ or
 
     sudo yum install java-11-openjdk-devel
 
-NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7 
+NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7
 installed in order to provide the correct version of the base classes.
 
 ## Usage
