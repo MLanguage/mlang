@@ -197,7 +197,7 @@ let main () =
 
   let args = List.tl (Array.to_list Sys.argv) in
   let flag_bin_compare, annee_exec, test_files =
-    let rec aux bin_opt annee_opt files = function
+    let rec aux bin_opt annee_opt = function
     | "--bin-compare" :: arg :: args -> (
         match bin_opt with
         | Some _ ->
@@ -212,7 +212,7 @@ let main () =
                   Printf.eprintf "--bin-compare accepte 0 ou 1 comme argument (%s)\n" arg;
                   exit 31
             in
-            aux (Some bin) annee_opt files args
+            aux (Some bin) annee_opt args
       )
     | "--bin-compare" :: []->
         Printf.eprintf "argument manquant pour --bin-compare\n";
@@ -229,13 +229,12 @@ let main () =
                   Printf.eprintf "--annee accepte un entier comme argument (%s)\n" arg;
                   exit 31
             in
-            aux bin_opt (Some annee) files args
+            aux bin_opt (Some annee) args
       )
     | "--annee" :: []->
         Printf.eprintf "argument manquant pour --annee\n";
         exit 31
-    | arg :: args -> aux bin_opt annee_opt (arg :: files) args
-    | [] ->
+    | args ->
         let bin =
           match bin_opt with
           | Some b -> b
@@ -248,16 +247,15 @@ let main () =
               (* 1900 + Unix.gmtime (Unix.time ()).Unix.tm_year *)
               M.annee_calc () + 1
         in
-        bin, annee, List.rev files
+        bin, annee, args
     in
-    aux None None [] args
+    aux None None args
   in
-  let rec loop =
-    function
-    | [] -> 0
-    | test_file :: files ->
-        let res = run_test test_file annee_exec (not flag_bin_compare) in
-        if res <> 0 then res else loop files
+  let rec loop = function
+  | [] -> 0
+  | test_file :: files ->
+      let res = run_test test_file annee_exec (not flag_bin_compare) in
+      if res <> 0 then res else loop files
   in
   loop test_files
 
