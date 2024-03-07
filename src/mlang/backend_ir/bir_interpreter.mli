@@ -121,19 +121,9 @@ module type S = sig
 
   (** Interpreter runtime errors *)
   type run_error =
-    | ErrorValue of string * Pos.t
-    | FloatIndex of string * Pos.t
-    | IndexOutOfBounds of string * Pos.t
-    | IncorrectOutputVariable of string * Pos.t
-    | UnknownInputVariable of string * Pos.t
-    | ConditionViolated of
-        Mir.Error.t
-        * Bir.expression Pos.marked
-        * (Bir.variable * var_value) list
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
-    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 

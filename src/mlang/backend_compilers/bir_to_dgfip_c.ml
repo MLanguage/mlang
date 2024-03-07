@@ -147,6 +147,12 @@ let rec generate_c_expr (e : expression Pos.marked)
         D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { def_test; value_comp }
+  | FunctionCall (Supzero, [ arg ]) ->
+      let se = generate_c_expr arg var_indexes in
+      let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
+      let def_test = D.ite cond D.dfalse se.def_test in
+      let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
+      D.build_transitive_composition { def_test; value_comp }
   | FunctionCall (PresentFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = D.dtrue in
@@ -155,7 +161,9 @@ let rec generate_c_expr (e : expression Pos.marked)
   | FunctionCall (NullFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
-      let value_comp = D.dand def_test (D.comp "==" se.value_comp (D.lit 0.)) in
+      let value_comp =
+        D.dand def_test (D.comp "==" se.value_comp (D.lit 0.0))
+      in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
   | FunctionCall (ArrFunc, [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
@@ -205,7 +213,6 @@ let rec generate_c_expr (e : expression Pos.marked)
   | LocalVar lvar ->
       let ldef, lval = D.locals_from_m lvar in
       { def_test = D.local_var ldef; value_comp = D.local_var lval }
-  | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
@@ -324,32 +331,6 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
         sv
   | InputVar -> assert false
 
-let generate_var_cond (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (cond : condition_data)
-    (oc : Format.formatter) =
-  let econd = generate_c_expr cond.cond_expr var_indexes in
-  let locals, _def, value =
-    D.build_expression
-    @@ D.build_transitive_composition ~safe_def:true
-         {
-           def_test = D.dtrue;
-           value_comp = D.dand econd.def_test econd.value_comp;
-         }
-  in
-  let erreur = Pos.unmark (fst cond.cond_error).Mir.Error.name in
-  let code =
-    match snd cond.cond_error with
-    | None -> "NULL"
-    | Some v ->
-        Format.sprintf "\"%s\""
-          (Pos.unmark (Bir.var_to_mir v).Mir.Variable.name)
-  in
-  Format.fprintf oc "%a%a@,@[<v 2>if(cond){@," D.format_local_declarations
-    locals
-    (D.format_assign dgfip_flags var_indexes "cond")
-    value;
-  Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@]@,}" erreur code
-
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
     =
@@ -380,7 +361,6 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           (generate_stmts dgfip_flags program var_indexes)
           iffalse;
       Format.fprintf oc "@]@,}"
-  | SVerif v -> generate_var_cond dgfip_flags var_indexes v oc
   | SVerifBlock stmts ->
       let goto_label = fresh_c_local "verif_block" in
       let pr fmt = Format.fprintf oc fmt in

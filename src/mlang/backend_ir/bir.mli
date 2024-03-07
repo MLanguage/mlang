@@ -47,7 +47,6 @@ and stmt = stmt_kind Pos.marked
 and stmt_kind =
   | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
-  | SVerif of condition_data
   | SVerifBlock of stmt list
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list

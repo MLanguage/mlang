@@ -232,7 +232,6 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of (LocalVariable.t[@opaque])
-  | Error
   | LocalLet of
       (LocalVariable.t[@opaque])
       * 'variable expression_ Pos.marked
@@ -260,7 +259,6 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | LocalLet (v, e1, e2) -> LocalLet (v, map e1, map e2)
   | Literal l -> Literal l
   | LocalVar v -> LocalVar v
-  | Error -> Error
   | NbCategory l -> NbCategory l
   | Attribut (v, var, a) -> Attribut (v, f var, a)
   | Size var -> Size (f var)
@@ -280,8 +278,8 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | Error | NbCategory _ | Attribut _ | Size _
-  | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
+  | Literal _ | LocalVar _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
+  | NbDiscordances | NbInformatives | NbBloquantes ->
       acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
@@ -677,23 +675,28 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
   | Literal _ -> e
   | Var _ -> e
   | LocalVar _ -> e
-  | Error -> e
   | LocalLet (lvar, e1, e2) ->
       let new_e1 = expand_functions_expr e1 in
       let new_e2 = expand_functions_expr e2 in
       Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e
   | FunctionCall (SumFunc, args) ->
-      Pos.same_pos_as
-        (List.fold_left
-           (fun acc arg ->
-             if acc = Error then Pos.unmark (expand_functions_expr arg)
-             else
-               Binop
-                 ( Pos.same_pos_as Mast.Add e,
-                   Pos.same_pos_as acc e,
-                   expand_functions_expr arg ))
-           Error args)
-        e
+      let expr_opt =
+        List.fold_left
+          (fun acc_opt arg ->
+            match acc_opt with
+            | None -> Some (Pos.unmark (expand_functions_expr arg))
+            | Some acc ->
+                Some
+                  (Binop
+                     ( Pos.same_pos_as Mast.Add e,
+                       Pos.same_pos_as acc e,
+                       expand_functions_expr arg )))
+          None args
+      in
+      let expr =
+        match expr_opt with None -> Literal (Float 0.0) | Some expr -> expr
+      in
+      Pos.same_pos_as expr e
   | FunctionCall (GtzFunc, [ arg ]) ->
       Pos.same_pos_as
         (Comparison

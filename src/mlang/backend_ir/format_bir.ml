@@ -54,16 +54,6 @@ let rec format_stmt fmt (stmt : stmt) =
   | SConditional (cond, t, f) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
         format_expression cond format_stmts t format_stmts f
-  | SVerif cond_data ->
-      let cond_error_opt_var =
-        Option.map var_to_mir (snd cond_data.cond_error)
-      in
-      Format.fprintf fmt "assert (%a) or raise %a@,%a" format_expression
-        (Pos.unmark cond_data.cond_expr)
-        Format_mir.format_error (fst cond_data.cond_error)
-        (Format.pp_print_option (fun fmt v ->
-             Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
-        cond_error_opt_var
   | SVerifBlock stmts ->
       Format.fprintf fmt
         "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" format_stmts

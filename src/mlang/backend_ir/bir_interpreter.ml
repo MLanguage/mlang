@@ -102,25 +102,13 @@ module type S = sig
   val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
 
   type run_error =
-    | ErrorValue of string * Pos.t
-    | FloatIndex of string * Pos.t
-    | IndexOutOfBounds of string * Pos.t
-    | IncorrectOutputVariable of string * Pos.t
-    | UnknownInputVariable of string * Pos.t
-    | ConditionViolated of
-        Mir.Error.t
-        * Bir.expression Pos.marked
-        * (Bir.variable * var_value) list
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
-    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 
   val raise_runtime_as_structured : run_error -> 'a
-
-  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
 
@@ -298,78 +286,21 @@ struct
     }
 
   type run_error =
-    | ErrorValue of string * Pos.t
-    | FloatIndex of string * Pos.t
-    | IndexOutOfBounds of string * Pos.t
-    | IncorrectOutputVariable of string * Pos.t
-    | UnknownInputVariable of string * Pos.t
-    | ConditionViolated of
-        Mir.Error.t
-        * Bir.expression Pos.marked
-        * (Bir.variable * var_value) list
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
-    | RaisedError of Mir.Error.t * string option * Pos.t
 
   exception RuntimeError of run_error * ctx
 
   let raise_runtime_as_structured (e : run_error) =
     match e with
-    | ErrorValue (s, pos) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Error value at runtime: %s" s)
-          pos
-    | FloatIndex (s, pos) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Index is not an integer: %s" s)
-          pos
-    | IndexOutOfBounds (s, pos) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Index out of bounds: %s" s)
-          pos
     | NanOrInf (v, e) ->
         Errors.raise_spanned_error
           (Format.asprintf "Expression evaluated to %s: %a" v
              Format_bir.format_expression (Pos.unmark e))
           (Pos.get_position e)
-    | UnknownInputVariable (s, pos) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Unknown input variable: %s" s)
-          pos
-    | IncorrectOutputVariable (s, pos) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Incorrect output variable: %s" s)
-          pos
-    | ConditionViolated (error, condition, bindings) ->
-        Errors.raise_spanned_error
-          (Format.asprintf
-             "Verification condition failed! Errors thrown:\n\
-             \  * %a\n\
-              Violated condition:\n\
-             \  * %a\n\
-              Values of the relevant variables at this point:\n\
-              %a"
-             (fun fmt err ->
-               Format.fprintf fmt "Error %s [%s]"
-                 (Pos.unmark err.Mir.Error.name)
-                 (Pos.unmark @@ Mir.Error.err_descr_string err))
-             error Format_bir.format_expression (Pos.unmark condition)
-             (Format_mast.pp_print_list_endline (fun fmt v ->
-                  Format.fprintf fmt "  * %a" format_var_value_with_var v))
-             bindings)
-          (Pos.get_position condition)
     | StructuredError (msg, pos, kont) ->
         raise (Errors.StructuredError (msg, pos, kont))
-    | RaisedError (err, var_opt, pos) ->
-        Errors.raise_spanned_error
-          (Format.sprintf "Error %s thrown%s: %s"
-             (Pos.unmark err.Mir.Error.name)
-             (match var_opt with
-             | Some var -> " with variable " ^ var
-             | None -> "")
-             (Pos.unmark @@ Mir.Error.err_descr_string err))
-          pos
 
   let is_zero (l : value) : bool =
     match l with Number z -> N.is_zero z | _ -> false
@@ -502,14 +433,6 @@ struct
                   (Pos.get_position e)
             in
             r
-        | Error ->
-            raise
-              (RuntimeError
-                 ( ErrorValue
-                     ( Format.asprintf "%a" Pos.format_position
-                         (Pos.get_position e),
-                       Pos.get_position e ),
-                   ctx ))
         | LocalLet (lvar, e1, e2) ->
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 =
@@ -540,10 +463,11 @@ struct
             match evaluate_expr ctx p arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
-        | FunctionCall (NullFunc, [ arg ]) -> (
+        | FunctionCall (Supzero, [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
-            | Number f -> if N.is_zero f then true_value () else false_value ())
+            | Number f as n ->
+                if compare_numbers Mast.Lte f (N.zero ()) then Undefined else n)
         | FunctionCall (AbsFunc, [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
@@ -561,56 +485,42 @@ struct
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))
         | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
-            let up =
-              match evaluate_expr ctx p arg1 with
-              | Number f -> N.to_int (roundf f)
-              | e ->
-                  raise
-                    (RuntimeError
-                       ( ErrorValue
-                           ( Format.asprintf
-                               "evaluation of %a should be an integer, not %a"
-                               Format_bir.format_expression (Pos.unmark arg1)
-                               format_value e,
-                             Pos.get_position arg1 ),
-                         ctx ))
-            in
-            let var_arg2 =
-              match Pos.unmark arg2 with Var v -> v | _ -> assert false
-              (* todo: rte *)
-            in
-            let cast_to_int (v : value) : Int64.t option =
-              match v with
-              | Number f -> Some (N.to_int (roundf f))
-              | Undefined -> None
-            in
-            let pos = Pos.get_position arg2 in
-            let access_index (i : int) : Int64.t option =
-              cast_to_int
-              @@ evaluate_expr ctx p
-                   ( Index
-                       ((var_arg2, pos), (Literal (Float (float_of_int i)), pos)),
-                     pos )
-            in
-            let maxi = ref (access_index 0) in
-            for i = 0 to Int64.to_int up do
-              match access_index i with
-              | None -> ()
-              | Some n ->
-                  maxi :=
-                    Option.fold ~none:(Some n)
-                      ~some:(fun m -> Some (max n m))
-                      !maxi
-            done;
-            match !maxi with None -> Undefined | Some f -> Number (N.of_int f))
-        | FunctionCall (func, _) ->
-            raise
-              (RuntimeError
-                 ( ErrorValue
-                     ( Format.asprintf "the function %a  has not been expanded"
-                         Format_mir.format_func func,
-                       Pos.get_position e ),
-                   ctx ))
+            match evaluate_expr ctx p arg1 with
+            | Undefined -> Undefined
+            | Number f -> (
+                let up = N.to_int (roundf f) in
+                let var_arg2 =
+                  match Pos.unmark arg2 with Var v -> v | _ -> assert false
+                  (* todo: rte *)
+                in
+                let cast_to_int (v : value) : Int64.t option =
+                  match v with
+                  | Number f -> Some (N.to_int (roundf f))
+                  | Undefined -> None
+                in
+                let pos = Pos.get_position arg2 in
+                let access_index (i : int) : Int64.t option =
+                  cast_to_int
+                  @@ evaluate_expr ctx p
+                       ( Index
+                           ( (var_arg2, pos),
+                             (Literal (Float (float_of_int i)), pos) ),
+                         pos )
+                in
+                let maxi = ref (access_index 0) in
+                for i = 0 to Int64.to_int up do
+                  match access_index i with
+                  | None -> ()
+                  | Some n ->
+                      maxi :=
+                        Option.fold ~none:(Some n)
+                          ~some:(fun m -> Some (max n m))
+                          !maxi
+                done;
+                match !maxi with
+                | None -> Undefined
+                | Some f -> Number (N.of_int f)))
+        | FunctionCall (_func, _) -> assert false
         | Attribut (_v, var, a) -> (
             match IntMap.find_opt var.mir_var.id ctx.ctx_it with
             | Some mvar -> (
@@ -662,22 +572,6 @@ struct
       if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))
     else out
-
-  let report_violatedcondition (cond : Bir.condition_data) (ctx : ctx) : 'a =
-    let err = fst cond.cond_error in
-    match err.Mir.Error.typ with
-    | Mast.Anomaly ->
-        raise
-          (RuntimeError
-             (ConditionViolated (fst cond.cond_error, cond.cond_expr, []), ctx))
-    | Mast.Discordance ->
-        Cli.warning_print "Anomaly: %s"
-          (Pos.unmark (Mir.Error.err_descr_string err));
-        ctx
-    | Mast.Information ->
-        Cli.debug_print "Information: %s"
-          (Pos.unmark (Mir.Error.err_descr_string err));
-        ctx
 
   let evaluate_simple_variable (p : Bir.program) (ctx : ctx)
       (expr : Bir.expression) : var_value =
@@ -788,10 +682,6 @@ struct
             evaluate_stmts canBlock p ctx t (ConditionalBranch true :: loc) 0
         | SimpleVar Undefined -> ctx
         | _ -> assert false)
-    | Bir.SVerif data -> (
-        match evaluate_expr ctx p.mir_program data.cond_expr with
-        | Number f when not (N.is_zero f) -> report_violatedcondition data ctx
-        | _ -> ctx)
     | Bir.SVerifBlock stmts ->
         evaluate_stmts true p ctx stmts (InsideBlock 0 :: loc) 0
     | Bir.SRovCall r ->

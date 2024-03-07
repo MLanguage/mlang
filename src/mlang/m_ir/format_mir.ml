@@ -62,7 +62,6 @@ let rec format_expression fmt (e : expression) =
   | Literal lit -> format_literal fmt lit
   | Var var -> Format.fprintf fmt "%s" (Pos.unmark var.Variable.name)
   | LocalVar lvar -> Format.fprintf fmt "t%d" lvar.LocalVariable.id
-  | Error -> Format.fprintf fmt "erreur"
   | LocalLet (lvar, (e1, _), (e2, _)) ->
       Format.fprintf fmt "soit t%d = (%a) dans %a" lvar.LocalVariable.id
         format_expression e1 format_expression e2

@@ -83,9 +83,6 @@ type func =
   | ComplNumber
 
 (** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
-    Because M lets you define conditional without an else branch although it is
-    an expression-based language, we include an [Error] constructor to which the
-    missing else branch is translated to.
 
     Because translating to MIR requires a lot of unrolling and expansion, we
     introduce a [LocalLet] construct to avoid code duplication. *)
@@ -109,7 +106,6 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of local_variable
-  | Error
   | LocalLet of
       local_variable
       * 'variable expression_ Pos.marked

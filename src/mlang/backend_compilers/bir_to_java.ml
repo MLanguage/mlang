@@ -158,7 +158,6 @@ let rec generate_java_expr (e : expression Pos.marked) :
   | Var var -> (get_tgv_position var, [])
   | LocalVar lvar ->
       (Format.asprintf "localVariables[%d]" lvar.Mir.LocalVariable.id, [])
-  | Error -> assert false (* should not happen *)
   | LocalLet (lvar, e1, e2) ->
       let _, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
@@ -235,42 +234,6 @@ let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
     (Format.pp_print_list print_call)
     load_calls
 
-let generate_var_cond oc (cond : condition_data) =
-  let open Strings in
-  Format.fprintf oc "cond = %s;@,"
-    (let se, _ = generate_java_expr cond.cond_expr in
-     se);
-  let cond_error, var = cond.cond_error in
-  let error_name = sanitize_str cond_error.Mir.Error.name in
-  let error_kind = sanitize_str cond_error.Mir.Error.descr.kind in
-  let error_major_code = sanitize_str cond_error.Mir.Error.descr.major_code in
-  let error_minor_code = sanitize_str cond_error.Mir.Error.descr.minor_code in
-  let error_description = sanitize_str cond_error.Mir.Error.descr.description in
-  let error_alias =
-    match var with
-    | Some v -> (
-        match (Bir.var_to_mir v).Mir.Variable.alias with
-        | Some alias -> "(( " ^ alias ^ " ))"
-        | None -> "")
-    | None -> ""
-  in
-  Format.fprintf oc
-    "@[<hv 2>if (m_is_defined_true(cond)) {@,\
-     MError error = new MError(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \
-     \"%s\");@,\
-     calculationErrors.add(error);@,"
-    error_name error_kind error_major_code error_minor_code error_description
-    error_alias;
-  if cond_error.Mir.Error.typ = Anomaly then
-    Format.fprintf oc
-      "mCalculation.setCurrentAnomalies(mCalculation.getCurrentAnomalies() + \
-       1);@,\
-       @[<hv 2>if (mCalculation.getCurrentAnomalies() >= \
-       mCalculation.getMaxAnomalies()) {@,\
-      \ throw new MException(calculationErrors);@]@,\
-       }";
-  Format.fprintf oc "@]@,@[}@]"
-
 let fresh_cond_counter = ref 0
 
 let generate_rov_header (oc : Format.formatter) (rov : rule_or_verif) =
@@ -310,7 +273,6 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
         cond_name (generate_stmts program) tt;
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
-  | SVerif v -> generate_var_cond oc v
   | SVerifBlock s -> generate_stmts program oc s
   | SFunctionCall (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f

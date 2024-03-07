@@ -106,12 +106,16 @@ let parse_int sloc (s : string) : int =
   with Failure _ ->
     E.raise_spanned_error "should be an integer" (mk_position sloc)
 
+(* # parse_string #
+ * Takes a litteral string and produces a String.t of the corresponding chars
+ *)
 let parse_string (s : string) : string =
-  (* we remove the quotes *)
+  (* we remove the quotes (first and last chars) *)
   let s = Re.Str.string_after s 1 in
   let s = Re.Str.string_before s (String.length s - 1) in
   let l = String.length s in
   let buf = Buffer.create l in
+  (* We decode litteral encoded chars (i.e. "\t" "\xA0", etc.) *)
   let rec aux = function
     | i when i >= l -> Buffer.contents buf
     | i -> begin

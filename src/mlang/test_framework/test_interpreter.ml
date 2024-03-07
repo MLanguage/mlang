@@ -165,47 +165,14 @@ let check_all_tests (p : Bir.program) (test_dir : string)
         (successes, failures, code_coverage_acc)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.ConditionViolated (_err, (expr, pos), _bindings) ->
-            let msg = Format.asprintf "%a" Format_bir.format_expression expr in
-            Cli.error_print "Error in test %s: %a" name
-              Errors.format_structured_error
-              (msg, [ (None, pos) ]);
-            (successes, failures, code_coverage_acc)
         | Interp.StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures, code_coverage_acc)
-        | Interp.ErrorValue (msg, pos) ->
-            Cli.error_print "Runtime error in test %s: ErrorValue (%s, %a)" name
-              msg Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
-        | Interp.FloatIndex (msg, pos) ->
-            Cli.error_print "Runtime error in test %s: FloatIndex (%s, %a)" name
-              msg Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
-        | Interp.IndexOutOfBounds (msg, pos) ->
-            Cli.error_print
-              "Runtime error in test %s: IndexOutOfBounds (%s, %a)" name msg
-              Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
-        | Interp.IncorrectOutputVariable (msg, pos) ->
-            Cli.error_print
-              "Runtime error in test %s: IncorrectOutputVariable (%s, %a)" name
-              msg Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
-        | Interp.UnknownInputVariable (msg, pos) ->
-            Cli.error_print
-              "Runtime error in test %s: UnknownInputVariable (%s, %a)" name msg
-              Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
         | Interp.NanOrInf (msg, (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format_position pos;
-            (successes, failures, code_coverage_acc)
-        | Interp.RaisedError (mir_err, _so, _pos) ->
-            Cli.error_print "Runtime error in test %s: %s)" name
-              (Pos.unmark (Mir.Error.err_descr_string mir_err));
             (successes, failures, code_coverage_acc))
     | Irj_ast.TestParsingError (msg, pos) as e ->
         Cli.error_print "Parsing error: %s %a" msg Pos.format_position
