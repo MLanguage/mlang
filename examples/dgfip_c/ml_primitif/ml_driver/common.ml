@@ -166,9 +166,6 @@ module TGV = struct
   external uget : t -> string -> float option = "ml_tgv_get"
   external uget_array : t -> string -> int -> float option = "ml_tgv_get_array"
   external uset : t -> string -> float -> unit = "ml_tgv_set"
-  external reset_calculee : t -> unit = "ml_tgv_reset_calculee"
-  external reset_base : t -> unit = "ml_tgv_reset_base"
-  external reset_saisie_calculee : t -> unit = "ml_tgv_reset_saisie_calculee"
   external copy_all : t -> t -> unit = "ml_tgv_copy"
 
   let defined tgv var = udefined tgv (VarDict.unalias var)
@@ -275,11 +272,6 @@ module TGV = struct
         set tgv svar (Float.abs v);
         set_bool tgv signvar (v < 0.0);
         set tgv dvar (Float.abs v)
-
-  let reset_saisie_calc ~except tgv =
-    let save = get_map_opt tgv except in
-    reset_saisie_calculee tgv;
-    set_map tgv save
 
   type undef_action =
     | UDIgnore

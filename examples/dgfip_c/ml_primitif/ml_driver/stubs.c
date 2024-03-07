@@ -185,10 +185,12 @@ static struct custom_operations tgv_block_ops = {
 
 static value alloc_tgv()
 {
+  CAMLparam0();
+  CAMLlocal1(v);
   T_irdata *tgv = IRDATA_new_irdata();
-  value v = caml_alloc_custom(&tgv_block_ops, sizeof(T_irdata *), 0, 1);
+  v = caml_alloc_custom(&tgv_block_ops, sizeof(T_irdata *), 0, 1);
   Tgv_val(v) = tgv;
-  return v;
+  CAMLreturn(v);
 }
 
 CAMLprim value
@@ -616,11 +618,11 @@ ml_init_errs(value unit)
   for (int i = 0; i < sz_err_finalise; i++) {
     err_finalise[i] = NULL;
   }
-  nb_err_sortie = 0;
+  nb_err_finalise = 0;
   for (int i = 0; i < sz_err_sortie; i++) {
     err_sortie[i] = NULL;
   }
-  nb_err_archive = 0;
+  nb_err_sortie = 0;
   for (int i = 0; i < sz_err_archive; i++) {
     err_archive[i] = NULL;
   }
@@ -806,33 +808,6 @@ ml_tgv_set(value mlTgv, value mlCode, value mlMontant)
 }
 
 CAMLprim value
-ml_tgv_reset_calculee(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_calculee(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
-ml_tgv_reset_saisie_calculee(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_light(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
-ml_tgv_reset_base(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_base(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
 ml_tgv_copy(value mlSTgv, value mlDTgv)
 {
   CAMLparam2(mlSTgv, mlDTgv);
@@ -914,9 +889,9 @@ ml_exec_verif(
 }
 
 CAMLprim value
-ml_annee_calc(void)
+ml_annee_calc(value unit)
 {
-  CAMLparam0();
+  CAMLparam1(unit);
   CAMLreturn(Val_int(ANNEE_REVENU));
 }
 
@@ -1018,22 +993,22 @@ ml_dump_raw_tgv(
   FILE *f = fopen(filename, "wb");
   if (f == NULL) {
     printf("Can't open file %s\n", filename);
-    CAMLreturn(Val_unit);
-  }
-  dump_array(tgv->def_saisie, tgv->saisie, TAILLE_SAISIE, f);
-  dump_array(tgv->def_calculee, tgv->calculee, TAILLE_CALCULEE, f);
-  dump_array(tgv->def_base, tgv->base, TAILLE_BASE, f);
+  } else {
+    dump_array(tgv->def_saisie, tgv->saisie, TAILLE_SAISIE, f);
+    dump_array(tgv->def_calculee, tgv->calculee, TAILLE_CALCULEE, f);
+    dump_array(tgv->def_base, tgv->base, TAILLE_BASE, f);
 
-  mlErrListTemp = mlErrList;
-  while (mlErrListTemp != Val_emptylist) {
-    const char *err = String_val(Field(mlErrListTemp, 0));
-    char data[32] = { 0 };
-    memcpy(data, err, strlen(err));
-    fwrite(data, sizeof(char), 8, f);
-    mlErrListTemp = Field(mlErrListTemp, 1);
-  }
+    mlErrListTemp = mlErrList;
+    while (mlErrListTemp != Val_emptylist) {
+      const char *err = String_val(Field(mlErrListTemp, 0));
+      char data[32] = { 0 };
+      memcpy(data, err, strlen(err));
+      fwrite(data, sizeof(char), 8, f);
+      mlErrListTemp = Field(mlErrListTemp, 1);
+    }
 
-  fclose(f);
+    fclose(f);
+  }
 
   CAMLreturn(Val_unit);
 }
