@@ -91,9 +91,6 @@ domaine regle taux
 
 domaine regle modul;
 
-domaine regle corrective base_primitive_penalisee
-: calculable;
-
 domaine regle corrective base_anterieure_cor
 : calculable;
 
@@ -183,6 +180,9 @@ domaine regle corrective base_inr_inter22
 
 domaine regle corrective base_inr_r9901
 : calculable;
+
+domaine regle corrective base_primitive_penalisee
+: calculable;
 |}
 
 let verif_domains_declaration =
@@ -199,26 +199,30 @@ domaine verif primitive
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
     saisie variation
-: specialise primitive corrective;
+: specialise primitive corrective
+: verifiable;
 
 domaine verif isf
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation;
+    saisie variation
+: verifiable;
 
 domaine verif corrective
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
     saisie variation
-: specialise primitive corrective;
+: specialise primitive corrective
+: verifiable;
 
 domaine verif corrective horizontale
 : autorise
     calculee *,
     saisie contexte, saisie famille, saisie revenu, saisie revenu corrective,
-    saisie variation, saisie penalite;
+    saisie variation, saisie penalite
+: verifiable;
 |}
 
 let declarations =
@@ -260,4 +264,5 @@ let string_to_rule_domain_id : string -> string list = function
   | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
   | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
   | "horizontale" -> [ "horizontale" ]
+  | "base_primitive_penalisee" -> [ "corrective"; "base_primitive_penalisee" ]
   | _ -> raise Not_found

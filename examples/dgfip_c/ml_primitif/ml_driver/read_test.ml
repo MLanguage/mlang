@@ -43,7 +43,7 @@ let parse_generic s =
 let parse_controle s =
   let sl = String.split_on_char '/' s in
   match sl with
-  | [ err ] -> (err)
+  | [ err ] -> (String.trim err)
   | _ -> failwith (Printf.sprintf "Ligne controle invalide: '%s'" s)
 
 let parse_entree_corr s =

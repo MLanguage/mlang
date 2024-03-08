@@ -63,12 +63,6 @@ let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
   Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
 
-let optimize =
-  let doc =
-    "Applies dead code removal and partial evaluation to the generated code"
-  in
-  Arg.(value & flag & info [ "optimize"; "O" ] ~doc)
-
 let optimize_unsafe_float =
   let doc =
     "Activate unsafe floating point optimizations (such as x * 0 ~> 0)"
@@ -81,25 +75,6 @@ let backend =
     & opt (some string) None
     & info [ "backend"; "b" ] ~docv:"BACKEND"
         ~doc:"Backend selection: interpreter, Python, C, dgfip_c")
-
-let function_spec =
-  Arg.(
-    value
-    & opt (some file) None
-    & info [ "function_spec"; "f" ] ~docv:"SPEC"
-        ~doc:
-          "M function specification file (extension .m_spec).$(i, SPEC) should \
-           define the expected inputs, outputs and constant values. This \
-           information will be used to select the relevant computational rules \
-           from the M code corpus. If no function_spec is specified, all \
-           available inputs and outputs are used for the calculation.")
-
-let mpp_file =
-  Arg.(
-    required
-    & opt (some file) None
-    & info [ "mpp_file" ] ~docv:"MPP_FILE"
-        ~doc:"M++ preprocessor file (extension .mpp)")
 
 let mpp_function =
   Arg.(
@@ -186,6 +161,13 @@ let comparison_error_margin_cli =
            This slack also affects the rounding operations by tweaking results \
            around .5. This option defaults to 10^(-6).")
 
+let income_year_cli =
+  Arg.(
+    value
+    & opt (some int) None
+    & info [ "income-year" ] ~docv:"INCOME_YEAR"
+        ~doc:"Set the year of the income.")
+
 let m_clean_calls =
   Arg.(
     value & flag
@@ -204,21 +186,13 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
-let var_dependencies =
-  Arg.(
-    value
-    & opt (some (pair string string)) None
-    & info [ "var_dependencies" ]
-        ~doc:"Output list of dependencies of the given variable")
-
 let mlang_t f =
   Term.(
     const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
-    $ dep_graph_file $ no_print_cycles $ backend $ function_spec $ mpp_file
-    $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize $ optimize_unsafe_float $ code_coverage $ precision $ roundops
-    $ comparison_error_margin_cli $ m_clean_calls $ dgfip_options
-    $ var_dependencies)
+    $ dep_graph_file $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ code_coverage $ precision $ roundops $ comparison_error_margin_cli
+    $ income_year_cli $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
@@ -306,12 +280,15 @@ let round_ops = ref RODefault
    interpreter *)
 let comparison_error_margin = ref 0.000001
 
+let income_year = ref None
+
 let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
-    (value_sort_ : value_sort) (round_ops_ : round_ops) =
+    (income_year_ : int option) (value_sort_ : value_sort)
+    (round_ops_ : round_ops) =
   source_files := files_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
@@ -322,12 +299,16 @@ let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
   no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
+  income_year := income_year_;
   value_sort := value_sort_;
   round_ops := round_ops_;
-  (match output_file_ with None -> () | Some o -> output_file := o);
-  match comparison_error_margin_ with
+  match output_file_ with
   | None -> ()
-  | Some m -> comparison_error_margin := m
+  | Some o -> (
+      output_file := o;
+      match comparison_error_margin_ with
+      | None -> ()
+      | Some m -> comparison_error_margin := m)
 
 (**{1 Terminal formatting}*)
 

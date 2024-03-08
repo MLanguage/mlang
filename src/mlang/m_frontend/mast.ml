@@ -58,13 +58,24 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Variable of variable | Float of float
+type literal = Variable of variable | Float of float | Undefined
 
 (** A table index is used in expressions like [TABLE\[X\]], and can be
     variables, integer or the special [X] variable that stands for a "generic"
     index (to define table values as a function of the index). [X] is contained
     here in [SymbolIndex] because there can also be a variable named ["X"]... *)
 type table_index = LiteralIndex of int | SymbolIndex of variable
+
+type table_size = LiteralSize of int | SymbolSize of string
+
+let get_table_size = function
+  | LiteralSize i -> i
+  | SymbolSize _ -> assert false
+
+let get_table_size_opt = function
+  | Some (LiteralSize i, pos) -> Some (i, pos)
+  | None -> None
+  | Some (SymbolSize _, _) -> assert false
 
 type set_value =
   | FloatValue of float Pos.marked
@@ -147,6 +158,13 @@ type expression =
   | Literal of literal
   | Loop of loop_variables Pos.marked * expression Pos.marked
       (** The loop is prefixed with the loop variables declarations *)
+  | NbCategory of string Pos.marked list Pos.marked
+  | Attribut of variable Pos.marked * string Pos.marked
+  | Size of variable Pos.marked
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
+  | NbBloquantes
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
@@ -180,6 +198,44 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of loop_variables Pos.marked * formula_decl
 
+type print_std = StdOut | StdErr
+
+type print_arg =
+  | PrintString of string
+  | PrintName of variable Pos.marked
+  | PrintAlias of variable Pos.marked
+  | PrintIndent of expression Pos.marked
+  | PrintExpr of expression Pos.marked * int * int
+
+type var_category_id = string Pos.marked list Pos.marked
+
+type restore_vars =
+  | VarList of string Pos.marked list
+  | VarCats of string Pos.marked * var_category_id list * expression Pos.marked
+
+type instruction =
+  | Formula of formula Pos.marked
+  | IfThenElse of
+      expression Pos.marked
+      * instruction Pos.marked list
+      * instruction Pos.marked list
+  | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeTarget of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
+  | VerifBlock of instruction Pos.marked list
+  | Print of print_std * print_arg Pos.marked list
+  | Iterate of
+      string Pos.marked
+      * var_category_id list
+      * expression Pos.marked
+      * instruction Pos.marked list
+  | Restore of restore_vars Pos.marked list * instruction Pos.marked list
+  | RaiseError of error_name Pos.marked * variable_name Pos.marked option
+  | CleanErrors
+  | ExportErrors
+  | FinalizeErrors
+
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
@@ -187,6 +243,14 @@ type rule = {
   rule_chaining : chaining Pos.marked option;
   rule_formulaes : formula Pos.marked list;
       (** A rule can contain many variable definitions *)
+}
+
+type target = {
+  target_name : string Pos.marked;
+  target_file : string option;
+  target_applications : application Pos.marked list;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
+  target_prog : instruction Pos.marked list;
 }
 
 type 'a domain_decl = {
@@ -210,7 +274,7 @@ type rule_domain_decl = rule_domain_data domain_decl
 
 (**{3 Input variables}*)
 
-type variable_attribute = string Pos.marked * literal Pos.marked
+type variable_attribute = string Pos.marked * int Pos.marked
 
 (** Here are all the types a value can have. Date types don't seem to be used at
     all though. *)
@@ -234,7 +298,7 @@ type input_variable = {
 
 type computed_variable = {
   comp_name : variable_name Pos.marked;
-  comp_table : int Pos.marked option;
+  comp_table : table_size Pos.marked option;
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
   comp_category : string Pos.marked list;
@@ -285,9 +349,10 @@ type verification = {
   verif_conditions : verification_condition Pos.marked list;
 }
 
-type verif_auth_decl = string Pos.marked list Pos.marked
-
-type verif_domain_data = { vdom_auth : verif_auth_decl list }
+type verif_domain_data = {
+  vdom_auth : var_category_id list;
+  vdom_verifiable : bool;
+}
 
 type verif_domain_decl = verif_domain_data domain_decl
 
@@ -311,10 +376,10 @@ type error_ = {
 
 type source_file_item =
   | Application of application Pos.marked  (** Declares an application *)
-  | Chaining of chaining * application Pos.marked list
-      (** Unused, declares an "enchaineur" *)
+  | Chaining of chaining Pos.marked * application Pos.marked list
   | VariableDecl of variable_decl
   | Rule of rule
+  | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
@@ -328,15 +393,6 @@ type source_file_item =
 type source_file = source_file_item Pos.marked list
 
 type program = source_file list
-
-(**{1 Function specification AST}*)
-
-type function_spec = {
-  spec_inputs : variable_name Pos.marked list;
-  spec_consts : (variable_name Pos.marked * expression Pos.marked) list;
-  spec_outputs : variable_name Pos.marked list;
-  spec_conditions : expression Pos.marked list;
-}
 
 (** {1 Helper functions} *)
 

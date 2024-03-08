@@ -106,14 +106,29 @@ and stmt = stmt_kind Pos.marked
 and stmt_kind =
   | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
-  | SVerif of condition_data
+  | SVerifBlock of stmt list
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
+  | SPrint of Mast.print_std * variable Mir.print_arg list
+  | SIterate of variable * Mir.CatVarSet.t * expression * stmt list
+  | SRestore of
+      VariableSet.t * (variable * Mir.CatVarSet.t * expression) list * stmt list
+  | SRaiseError of Mir.error * string option
+  | SCleanErrors
+  | SExportErrors
+  | SFinalizeErrors
 
 let rule_or_verif_as_statements (rov : rule_or_verif) : stmt list =
   match rov.rov_code with Rule stmts -> stmts | Verif stmt -> [ stmt ]
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
+
+type target_function = {
+  file : string option;
+  tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  stmts : stmt list;
+  is_verif : bool;
+}
 
 module FunctionMap = MapExt.Make (struct
   type t = function_name
@@ -121,43 +136,21 @@ module FunctionMap = MapExt.Make (struct
   let compare = String.compare
 end)
 
-type program_context = {
-  constant_inputs_init_stmts : stmt list;
-  adhoc_specs_conds_stmts : stmt list;
-  unused_inputs_init_stmts : stmt list;
-}
-
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
+  targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit VariableMap.t;
 }
 
 let main_statements (p : program) : stmt list =
   try (FunctionMap.find p.main_function p.mpp_functions).mppf_stmts
-  with Not_found ->
-    Errors.raise_error "Unable to find main function of Bir program"
-
-let main_statements_with_context (p : program) : stmt list =
-  match p.context with
-  | Some context ->
-      context.constant_inputs_init_stmts @ main_statements p
-      @ context.adhoc_specs_conds_stmts
-  | None ->
-      Errors.raise_error
-        "This Bir program has no context constants and conditions stored"
-
-let main_statements_with_context_and_tgv_init (p : program) : stmt list =
-  match p.context with
-  | Some context ->
-      context.unused_inputs_init_stmts @ main_statements_with_context p
-  | None ->
-      Errors.raise_error
-        "This Bir program has no context input reset statements stored"
+  with Not_found -> (
+    try (Mir.TargetMap.find p.main_function p.targets).stmts
+    with Not_found ->
+      Errors.raise_error "Unable to find main function of Bir program")
 
 let rec get_block_statements (p : program) (stmts : stmt list) : stmt list =
   List.fold_left
@@ -188,7 +181,12 @@ let rec count_instr_blocks (p : program) (stmts : stmt list) : int =
   List.fold_left
     (fun acc stmt ->
       match Pos.unmark stmt with
-      | SAssign _ | SVerif _ | SRovCall _ | SFunctionCall _ -> acc + 1
+      | SAssign _ | SRovCall _ | SFunctionCall _ | SPrint _ | SRaiseError _
+      | SCleanErrors | SExportErrors | SFinalizeErrors ->
+          acc + 1
+      | SVerifBlock s -> acc + 1 + count_instr_blocks p s
+      | SIterate (_, _, _, s) -> acc + 1 + count_instr_blocks p s
+      | SRestore (_, _, s) -> acc + 1 + count_instr_blocks p s
       | SConditional (_, s1, s2) ->
           acc + 1 + count_instr_blocks p s1 + count_instr_blocks p s2)
     0 stmts
@@ -247,11 +245,15 @@ let get_assigned_variables (p : program) : VariableSet.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
-        | SVerif _ -> acc
         | SAssign (var, _) -> VariableSet.add var acc
+        | SVerifBlock s -> get_assigned_variables_block acc s
+        | SIterate (_, _, _, s) -> get_assigned_variables_block acc s
+        | SRestore (_, _, s) -> get_assigned_variables_block acc s
         | SConditional (_, s1, s2) ->
             let acc = get_assigned_variables_block acc s1 in
             get_assigned_variables_block acc s2
+        | SPrint _ -> acc
+        | SRaiseError _ | SCleanErrors | SExportErrors | SFinalizeErrors -> acc
         | SRovCall _ | SFunctionCall _ -> assert false
         (* Cannot happen get_all_statements inlines all rule and mpp_function
            calls *))
@@ -276,7 +278,10 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
           (fun (acc : unit Mir.LocalVariableMap.t) arg ->
             get_local_vars_expr acc arg)
           acc args
-    | Mir.Literal _ | Mir.Var _ | Mir.Error -> acc
+    | Mir.Literal _ | Mir.Var _ | Mir.NbCategory _ | Mir.Attribut _ | Mir.Size _
+    | Mir.NbAnomalies | Mir.NbDiscordances | Mir.NbInformatives
+    | Mir.NbBloquantes ->
+        acc
     | Mir.LocalVar lvar -> Mir.LocalVariableMap.add lvar () acc
     | Mir.LocalLet (lvar, e1, e2) ->
         let acc = get_local_vars_expr acc e1 in
@@ -288,7 +293,6 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
     List.fold_left
       (fun acc stmt ->
         match Pos.unmark stmt with
-        | SVerif cond -> get_local_vars_expr acc cond.Mir.cond_expr
         | SAssign (_, def) -> (
             match def with
             | Mir.SimpleVar e -> get_local_vars_expr acc e
@@ -300,10 +304,31 @@ let get_local_variables (p : program) : unit Mir.LocalVariableMap.t =
                       es acc
                 | Mir.IndexGeneric (_v, e) -> get_local_vars_expr acc e)
             | _ -> acc)
+        | SVerifBlock s -> get_local_vars_block acc s
+        | SIterate (_, _, expr, s) ->
+            let acc = get_local_vars_expr acc (expr, Pos.no_pos) in
+            get_local_vars_block acc s
+        | SRestore (_, vpl, s) ->
+            let acc =
+              List.fold_left
+                (fun acc (_, _, expr) ->
+                  get_local_vars_expr acc (expr, Pos.no_pos))
+                acc vpl
+            in
+            get_local_vars_block acc s
         | SConditional (cond, s1, s2) ->
             let acc = get_local_vars_expr acc (cond, Pos.no_pos) in
             let acc = get_local_vars_block acc s1 in
             get_local_vars_block acc s2
+        | SPrint (_, args) ->
+            List.fold_left
+              (fun acc arg ->
+                match arg with
+                | Mir.PrintString _ | Mir.PrintName _ | Mir.PrintAlias _ -> acc
+                | Mir.PrintIndent e | Mir.PrintExpr (e, _, _) ->
+                    get_local_vars_expr acc e)
+              acc args
+        | SRaiseError _ | SCleanErrors | SExportErrors | SFinalizeErrors -> acc
         | SFunctionCall _ | SRovCall _ -> assert false
         (* Can't happen because SFunctionCall and SRovCall are eliminated by
            get_all_statements below*))

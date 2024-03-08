@@ -57,6 +57,7 @@ let format_literal fmt (l : literal) =
   match l with
   | Variable v -> format_variable fmt v
   | Float f -> Format.fprintf fmt "%f" f
+  | Undefined -> Format.fprintf fmt "indefini"
 
 let format_table_index fmt (i : table_index) =
   match i with
@@ -165,6 +166,18 @@ let rec format_expression fmt (e : expression) =
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a" format_loop_variables (Pos.unmark lvs)
         format_expression (Pos.unmark e)
+  | NbCategory l ->
+      Format.fprintf fmt "nb_categorie(%a)"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
+  | Attribut (v, a) ->
+      Format.fprintf fmt "attribut(%a, %s)" format_variable (Pos.unmark v)
+        (Pos.unmark a)
+  | Size v -> Format.fprintf fmt "taille(%a)" format_variable (Pos.unmark v)
+  | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
+  | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
+  | NbInformatives -> Format.fprintf fmt "nb_informatives()"
+  | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
 and format_func_args fmt (args : func_args) =
   match args with
@@ -184,6 +197,105 @@ let format_formula fmt (f : formula) =
       Format.fprintf fmt "pour %a\n%a" format_loop_variables (Pos.unmark lvs)
         format_formula_decl f
 
+let format_print_arg fmt = function
+  | PrintString s -> Format.fprintf fmt "\"%s\"" s
+  | PrintName v -> Format.fprintf fmt "nom(%a)" format_variable (Pos.unmark v)
+  | PrintAlias v ->
+      Format.fprintf fmt "alias(%a)" format_variable (Pos.unmark v)
+  | PrintIndent e ->
+      Format.fprintf fmt "indenter(%a)" (pp_unmark format_expression) e
+  | PrintExpr (e, min, max) ->
+      if min = max_int then
+        Format.fprintf fmt "(%a)" (pp_unmark format_expression) e
+      else if max = max_int then
+        Format.fprintf fmt "(%a):%d" (pp_unmark format_expression) e min
+      else
+        Format.fprintf fmt "(%a):%d..%d" (pp_unmark format_expression) e min max
+
+let format_var_category_id fmt (vd : var_category_id) =
+  match Pos.unmark vd with
+  | ("saisie", _) :: l ->
+      Format.fprintf fmt "saisie %a"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        l
+  | ("calculee", _) :: l ->
+      Format.fprintf fmt "calculee %a"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        l
+  | [ ("*", _) ] -> Format.fprintf fmt "*"
+  | _ -> assert false
+
+let rec format_instruction fmt (i : instruction) =
+  match i with
+  | Formula f -> pp_unmark format_formula fmt f
+  | IfThenElse (e, il, []) ->
+      Format.fprintf fmt "si %a alors %a finsi"
+        (pp_unmark format_expression)
+        e format_instruction_list il
+  | IfThenElse (e, ilt, ile) ->
+      Format.fprintf fmt "si %a alors %a sinon %a finsi"
+        (pp_unmark format_expression)
+        e format_instruction_list ilt format_instruction_list ile
+  | ComputeDomain l ->
+      Format.fprintf fmt "calculer domaine %a;"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
+  | ComputeChaining ch ->
+      Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
+  | ComputeTarget tn -> Format.fprintf fmt "calculer cible %s;" (Pos.unmark tn)
+  | ComputeVerifs (l, expr) ->
+      Format.fprintf fmt "verifier %a : avec %a;"
+        (pp_print_list_space (pp_unmark Format.pp_print_string))
+        (Pos.unmark l)
+        (pp_unmark format_expression)
+        expr
+  | VerifBlock instrs ->
+      Format.fprintf fmt "bloc_de_verif ( %a )" format_instruction_list instrs
+  | Print (std, args) ->
+      let print_cmd =
+        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
+      in
+      Format.fprintf fmt "%s %a;" print_cmd
+        (pp_print_list_space (pp_unmark format_print_arg))
+        args
+  | Iterate (var, vcats, expr, instrs) ->
+      Format.fprintf fmt
+        "iterer : variable %s : categorie %a : avec %a : dans ( %a )"
+        (Pos.unmark var)
+        (pp_print_list_comma format_var_category_id)
+        vcats
+        (pp_unmark format_expression)
+        expr format_instruction_list instrs
+  | Restore (rest_params, instrs) ->
+      let pp_rest_param fmt = function
+        | VarList l ->
+            Format.fprintf fmt ": %a "
+              (pp_print_list_comma (pp_unmark Format.pp_print_string))
+              l
+        | VarCats (var, vcats, expr) ->
+            Format.fprintf fmt ": variable %s : categorie %a : avec %a "
+              (Pos.unmark var)
+              (pp_print_list_comma format_var_category_id)
+              vcats
+              (pp_unmark format_expression)
+              expr
+      in
+      Format.fprintf fmt "restaurer %a : dans ( %a )"
+        (pp_print_list_space (pp_unmark pp_rest_param))
+        rest_params format_instruction_list instrs
+  | RaiseError (err, var_opt) ->
+      Format.fprintf fmt "leve_erreur %s%s;" (Pos.unmark err)
+        (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
+  | CleanErrors -> Format.fprintf fmt "nettoie_erreurs;"
+  | ExportErrors -> Format.fprintf fmt "exporte_erreurs;"
+  | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs;"
+
+and format_instruction_list fmt (il : instruction Pos.marked list) =
+  (Format.pp_print_list
+     ~pp_sep:(fun fmt () -> Format.fprintf fmt "")
+     (pp_unmark format_instruction))
+    fmt il
+
 let format_rule fmt (r : rule) =
   Format.fprintf fmt "regle %d:\napplication %a;\n%a;\n"
     (Pos.unmark r.rule_number)
@@ -193,6 +305,24 @@ let format_rule fmt (r : rule) =
        ~pp_sep:(fun fmt () -> Format.fprintf fmt ";\n")
        (pp_unmark format_formula))
     r.rule_formulaes
+
+let format_table_size fmt = function
+  | Some (Mast.LiteralSize i, _) -> Format.fprintf fmt "[%d]" i
+  | Some (Mast.SymbolSize s, _) -> Format.fprintf fmt "[%s]" s
+  | None -> ()
+
+let format_target fmt (t : target) =
+  let format_tmp_var fmt (name, size) =
+    let name = Pos.unmark name in
+    Format.fprintf fmt "%s%a" name format_table_size size
+  in
+  Format.fprintf fmt
+    "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
+    (Pos.unmark t.target_name)
+    (pp_print_list_comma (pp_unmark Format.pp_print_string))
+    t.target_applications
+    (pp_print_list_comma format_tmp_var)
+    t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_value_typ fmt (t : value_typ) =
   Format.pp_print_string fmt
@@ -205,7 +335,7 @@ let format_value_typ fmt (t : value_typ) =
     | Real -> "REEL")
 
 let format_input_attribute fmt ((n, v) : variable_attribute) =
-  Format.fprintf fmt "%s = %a" (Pos.unmark n) format_literal (Pos.unmark v)
+  Format.fprintf fmt "%s = %d" (Pos.unmark n) (Pos.unmark v)
 
 let format_input_variable fmt (v : input_variable) =
   Format.fprintf fmt "%a %s %a %a %a : %s%a;" format_variable_name
@@ -220,9 +350,7 @@ let format_input_variable fmt (v : input_variable) =
 
 let format_computed_variable fmt (v : computed_variable) =
   Format.fprintf fmt "%s%a %s %a : %a%s;" (Pos.unmark v.comp_name)
-    (option_print Format.pp_print_int)
-    (option_bind Pos.unmark v.comp_table)
-    computed_category
+    format_table_size v.comp_table computed_category
     (pp_print_list_space (pp_unmark Format.pp_print_string))
     v.comp_category
     (option_print format_value_typ)
@@ -309,21 +437,9 @@ let format_rule_domain fmt (rd : rule_domain_decl) =
   format_domain pp_data fmt rd
 
 let format_verif_domain fmt (vd : verif_domain_decl) =
-  let pp_auth fmt = function
-    | ("saisie", _) :: l ->
-        Format.fprintf fmt "saisie %a"
-          (pp_print_list_space (pp_unmark Format.pp_print_string))
-          l
-    | ("calculee", _) :: l ->
-        Format.fprintf fmt "calculee %a"
-          (pp_print_list_space (pp_unmark Format.pp_print_string))
-          l
-    | [ ("*", _) ] -> Format.fprintf fmt "*"
-    | _ -> assert false
-  in
   let pp_data fmt data =
     Format.fprintf fmt "%a"
-      (pp_print_list_comma (pp_unmark pp_auth))
+      (pp_print_list_comma format_var_category_id)
       data.vdom_auth
   in
   format_domain pp_data fmt vd
@@ -333,11 +449,12 @@ let format_source_file_item fmt (i : source_file_item) =
   | Application app ->
       Format.fprintf fmt "application %a;" format_application (Pos.unmark app)
   | Chaining (c, apps) ->
-      Format.fprintf fmt "enchaineur %a %a;" format_chaining c
+      Format.fprintf fmt "enchaineur %a %a;" format_chaining (Pos.unmark c)
         (pp_print_list_space (pp_unmark format_application))
         apps
   | VariableDecl vd -> format_variable_decl fmt vd
   | Rule r -> format_rule fmt r
+  | Target t -> format_target fmt t
   | Verification v -> format_verification fmt v
   | Function -> ()
   | Error e -> format_error_ fmt e

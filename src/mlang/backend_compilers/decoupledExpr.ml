@@ -1,5 +1,6 @@
 type offset =
   | GetValueConst of int
+  | GetValueExpr of string
   | GetValueVar of Bir.variable
   | PassPointer
   | None
@@ -18,6 +19,7 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           | None -> ""
           | GetValueVar offset -> " + (int)" ^ generate_variable vm None offset
           | GetValueConst offset -> " + " ^ string_of_int offset
+          | GetValueExpr offset -> Format.sprintf " + (%s)" offset
           | PassPointer -> assert false
         in
         if def_flag then Dgfip_varid.gen_access_def vm mvar offset
@@ -66,6 +68,7 @@ and expr =
   | Dfun of string * expr list
   | Daccess of Bir.variable * dflag * expr
   | Dite of expr * expr * expr
+  | Dinstr of string
 
 and expr_var = Local of stack_slot | M of Bir.variable * offset * dflag
 
@@ -338,6 +341,9 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
   (* TODO : distinguish kinds *)
   (Dfun (f, args), Val, lv)
 
+let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
+  (Dinstr i, Val, [])
+
 let access (var : Bir.variable) (df : dflag) (e : constr)
     (stacks : local_stacks) (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Val e in
@@ -478,6 +484,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
+  | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Daccess (var, dflag, de) ->
       Format.fprintf fmt "(%s[(int)%a])"
         (generate_variable ~def_flag:(dflag = Def)

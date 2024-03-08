@@ -22,13 +22,13 @@ let read_test filename =
         | `ControlesPrimitif el ->
             let ctl_prim =
               List.fold_left (fun erreurs e ->
-                  e :: erreurs
+                  StrSet.add e erreurs
                 ) ctl_prim el
             in
             res_prim, ctl_prim
         | _ ->
             res_prim, ctl_prim
-      ) (StrMap.empty, []) test
+      ) (StrMap.empty, StrSet.empty) test
   in
   tgv, res_prim, ctl_prim
 
@@ -41,13 +41,27 @@ let check_result tgv err expected_tgv expected_err =
       | "NBPT" -> ()
       | _ ->
           let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
-          if montant <> montant' then
+          (* Comparaison des valeurs au centime près, conformément à la doctrine
+             DGFiP actuellement en vigueur *)
+          let comp =
+            let m = Float.round (montant *. 100.) in
+            let m' = Float.round (montant' *. 100.) in
+            abs_float (m -. m') > 0.0
+          in
+          if comp then
             begin
               result := false;
-              Printf.eprintf "KO | %s attendu: %f - calculé: %f\n"
-               code montant montant'
+              Printf.eprintf "KO | %s = %f au lieu de %f\n"
+               code montant' montant
             end
     ) expected_tgv;
+  let missing_errs = StrSet.diff expected_err err in
+  let unexpected_errs = StrSet.diff err expected_err in
+  if not (StrSet.is_empty missing_errs && StrSet.is_empty unexpected_errs) then (
+    result := false;
+    StrSet.iter (Printf.eprintf "KO | %s attendue non recue\n") missing_errs;
+    StrSet.iter (Printf.eprintf "KO | %s recu en trop\n") unexpected_errs;
+  );
   !result
 
 let var_addr () =
@@ -120,7 +134,7 @@ let compare_dump out outexp =
   close_in out;
   close_in outexp
 
-let run_test test_file flag_no_bin_compare =
+let run_test test_file annee_exec flag_no_bin_compare =
   Printf.printf "Testing %s...\n%!" test_file;
 
   let annee_calc = M.annee_calc () in
@@ -131,33 +145,21 @@ let run_test test_file flag_no_bin_compare =
   let tgv, res_prim, ctl_prim = read_test test_file in
 
   let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
-  if annee_revenu <> annee_calc then
-    Printf.eprintf "Attention, année calculette (%d) <> année revenu (%d)\n%!"
-      annee_calc annee_revenu;
+  if annee_revenu <> annee_calc then (
+    Printf.eprintf
+      "Attention, année calculette (%d) <> année revenu (%d)\n%!"
+      annee_calc
+      annee_revenu
+  );
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
-  TGV.set_int tgv "ANCSDED" (annee_calc + 1); (* instead of execution date *)
-
-  let err1 = M.verif_saisie_cohe_primitive tgv in
-  let err2 =
-    if List.exists (fun e -> e.[0] = 'A') err1 then
-      begin
-        Printf.eprintf
-          "Anomalies dans les données saisies, pas de calcul primitif\n%!";
-        []
-      end
-    else
-      begin
-        let _err = M.calcul_primitif_isf tgv in
-        let _err = M.verif_calcul_primitive_isf tgv in
-        M.traite_double_liquidation_2 tgv M.Primitif
-      end
-  in
-
-  let err = err1 @ err2 in
+  TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
+  init_errs ();
+  let err = M.enchainement_primitif tgv in
+  M.export_errs tgv;
   M.dump_raw_tgv_in out tgv err;
 
-  let res_ok = check_result tgv err res_prim ctl_prim in
+  let res_ok = check_result tgv (get_errs ()) res_prim ctl_prim in
 
   match flag_no_bin_compare with
   | true -> if res_ok then 0 else 1
@@ -194,27 +196,40 @@ let main () =
          0o755 with _ -> ());
 
   let args = List.tl (Array.to_list Sys.argv) in
-  let flag_no_bin_compare = 
-    match Sys.getenv_opt "NO_BINARY_COMPARE" with
-    | Some "1" -> true
-    | None | Some "0"-> false
-    | _ -> exit 31
+  let annee_exec, test_files =
+    match args with
+    | "--annee" :: ann :: files ->
+        let annee =
+          try int_of_string ann with
+          | _ ->
+              Printf.eprintf "--annee accepte un entier comme argument (%s)\n" ann;
+              exit 31
+        in
+        annee, files
+    | "--annee" :: []->
+        Printf.eprintf "argument manquant pour --annee\n";
+        exit 31
+    | files ->
+        let annee = M.annee_calc () + 1 in
+        annee, files
   in
-  let rec loop =
-    function
-    | [] -> 0
-    | test_file::args ->
-        let res = run_test test_file flag_no_bin_compare in
-        if res <> 0 then res else loop args
+  let rec loop = function
+  | [] -> 0
+  | test_file :: files ->
+      let res = run_test test_file annee_exec true in
+      (* Gc.minor (); (* sinon out of memory *)*)
+      if res <> 0 then res else loop files
   in
-  loop args
+  loop test_files
 
 let () =
   Printexc.record_backtrace true;
   try
     let res = main () in
+    free_errs ();
     exit res
   with e ->
     Printf.eprintf "%s\n" (Printexc.to_string e);
     Printexc.print_backtrace stderr;
+    free_errs ();
     exit 30

@@ -13,6 +13,8 @@ module type S = sig
 
   val find : key -> t -> elt
 
+  val find_opt : key -> t -> elt option
+
   val mem : elt -> t -> bool
 
   val union : t -> t -> t

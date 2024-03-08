@@ -34,6 +34,7 @@ type code_location_segment =
   | ConditionalBranch of bool
   | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
+  | InsideIterate of Bir.variable
 
 val format_code_location_segment :
   Format.formatter -> code_location_segment -> unit
@@ -72,17 +73,35 @@ module type S = sig
 
   val format_value : Format.formatter -> value -> unit
 
+  val format_value_prec : int -> int -> Format.formatter -> value -> unit
+
   (** Functor-specific variable values *)
   type var_value = SimpleVar of value | TableVar of int * value array
 
   val format_var_value : Format.formatter -> var_value -> unit
 
+  val format_var_value_prec :
+    int -> int -> Format.formatter -> var_value -> unit
+
   val format_var_value_with_var :
     Format.formatter -> Bir.variable * var_value -> unit
+
+  type print_ctx = { indent : int; is_newline : bool }
 
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
+    ctx_it : Mir.variable IntMap.t;
+    ctx_pr_out : print_ctx;
+    ctx_pr_err : print_ctx;
+    ctx_anos : (Mir.error * string option) list;
+    ctx_old_anos : StrSet.t;
+    ctx_nb_anos : int;
+    ctx_nb_discos : int;
+    ctx_nb_infos : int;
+    ctx_nb_bloquantes : int;
+    ctx_finalized_anos : (Mir.error * string option) list;
+    ctx_exported_anos : (Mir.error * string option) list;
   }
   (** Interpretation context *)
 
@@ -98,31 +117,17 @@ module type S = sig
 
   val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
 
+  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+
   (** Interpreter runtime errors *)
   type run_error =
-    | ErrorValue of string * Pos.t
-    | FloatIndex of string * Pos.t
-    | IndexOutOfBounds of string * Pos.t
-    | IncorrectOutputVariable of string * Pos.t
-    | UnknownInputVariable of string * Pos.t
-    | ConditionViolated of
-        Mir.Error.t
-        * Bir.expression Pos.marked
-        * (Bir.variable * var_value) list
     | NanOrInf of string * Bir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 
-  val replace_undefined_with_input_variables :
-    Mir.program -> Mir.VariableDict.t -> Mir.program
-  (** Before execution of the program, replaces the [undefined] stubs for input
-      variables by their true input value *)
-
-  val print_output : Bir_interface.bir_function -> ctx -> unit
-
-  val raise_runtime_as_structured : run_error -> ctx -> Mir.program -> 'a
+  val raise_runtime_as_structured : run_error -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
   val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
@@ -189,14 +194,11 @@ module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
 val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
-  Bir_interface.bir_function ->
   Bir.program ->
   Mir.literal Bir.VariableMap.t ->
-  int ->
   Cli.value_sort ->
   Cli.round_ops ->
-  unit ->
-  unit
+  float option StrMap.t * StrSet.t
 (** Main interpreter function *)
 
 val evaluate_expr :

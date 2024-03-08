@@ -18,143 +18,139 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 {
   open Lexing
   open Mparser
+
+  let mk_lexbuf_pos lexbuf =
+    Parse_utils.mk_position (lexeme_start_p lexbuf, lexeme_end_p lexbuf)
 }
+
 rule token = parse
-| [' ' '\t'] (* also ignore newlines, not only whitespace and tabs *)
-  { token lexbuf }
-| '#' [^ '\n']* '\n' (* ignore comments *)
-  { new_line lexbuf; token lexbuf }
-| '\n' | "\r\n"
-  { new_line lexbuf; token lexbuf}
-| ".."
-  { RANGE }
-| "un"
-  { ONE }
-| "dans"
-  { IN }
-| '='
-  { EQUALS }
-| "et"
-  { AND }
-| "ou"
-  { OR }
-| "application"
-  { APPLICATION }
-| ';'
-  { SEMICOLON }
-| ':'
-  { COLON }
-| ','
-  { COMMA }
-| "enchaineur"
-  { CHAINING }
-| "type"
-  { TYPE }
-| "BOOLEEN"
-  { BOOLEAN }
-| "DATE_AAAA"
-  { DATE_YEAR }
-| "DATE_JJMMAAAA"
-  { DATE_DAY_MONTH_YEAR}
-| "DATE_MM"
-  { DATE_MONTH }
-| "ENTIER"
-  { INTEGER }
-| "REEL"
-  { REAL }
-| "tableau"
-  { TABLE }
-| '['
-  { LBRACKET }
-| ']'
-  { RBRACKET }
-| "calculee"
-  { COMPUTED }
-| "base"
-  { BASE }
-| "restituee"
-  { GIVEN_BACK }
-| "const"
-  { CONST }
-| "alias"
-  { ALIAS }
-| "saisie"
-  { INPUT }
-| "variable"
-  { VARIABLE }
-| "attribut"
-  { ATTRIBUT }
-| '('
-  { LPAREN }
-| ')'
-  { RPAREN }
-| "pour"
-  { FOR }
-| '*'
-  { TIMES }
-| '/'
-  { DIV }
-| '+'
-  { PLUS }
-| '-'
-  { MINUS }
-| ">="
-  { GTE }
-| "<="
-  { LTE }
-| "!="
-  { NEQ }
-| '>'
-  { GT }
-| '<'
-  { LT }
-| "non dans"
-  { NOTIN }
-| "non"
-  { NOT }
-| "domaine"
-  { DOMAIN }
-| "specialise"
-  { SPECIALIZE }
-| "autorise"
-  { AUTHORIZE }
-| "calculable"
-  { COMPUTABLE }
-| "par_defaut"
-  { BY_DEFAULT }
-| "regle"
-  { RULE }
-| "si"
-  { IF }
-| "alors"
-  { THEN }
-| "sinon"
-  { ELSE }
-| "finsi"
-  { ENDIF }
-| "erreur"
-  { ERROR }
-| "verif"
-  { VERIFICATION }
-| "condition"
-  { CONDITION }
-| "anomalie"
-  { ANOMALY }
-| "discordance"
-  { DISCORDANCE }
-| "informative"
-  { INFORMATIVE }
-| "sortie"
-  { OUTPUT }
-| "fonction"
-  { FONCTION }
-| '"' [^'"']* '"' as s
-  { STRING s }
-| ['a'-'z'] as s
-    { PARAMETER s }
-| (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0' - '9']+ '.' ['0' - '9']+) as s
-  { SYMBOL s }
-| eof
-  { EOF }
-| _
-  { Errors.raise_spanned_error "M lexer error" (Parse_utils.mk_position (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) }
+| [' ' '\t'] { token lexbuf }
+| '\n' | "\r\n" { new_line lexbuf; token lexbuf}
+| '#' { one_line_comment lexbuf }
+| "#{" { multiline_comment 1 lexbuf }
+| "}#" {
+    Errors.raise_spanned_error
+      "unexpected end of comment"
+      (mk_lexbuf_pos lexbuf)
+  }
+| ';' { SEMICOLON }
+| ':' { COLON }
+| ',' { COMMA }
+| '[' { LBRACKET }
+| ']' { RBRACKET }
+| '(' { LPAREN }
+| ')' { RPAREN }
+| ".." { RANGE }
+| '+' { PLUS }
+| '-' { MINUS }
+| '*' { TIMES }
+| '/' { DIV }
+| '=' { EQUALS }
+| "!=" { NEQ }
+| '>' { GT }
+| '<' { LT }
+| ">=" { GTE }
+| "<=" { LTE }
+| '"' [^'"']* '"' as s { STRING s }
+| (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0'-'9']+ '.' ['0'-'9']+) as s {
+    match s with
+    | "BOOLEEN" -> BOOLEAN
+    | "DATE_AAAA" -> DATE_YEAR
+    | "DATE_JJMMAAAA" -> DATE_DAY_MONTH_YEAR
+    | "DATE_MM" -> DATE_MONTH
+    | "ENTIER" -> INTEGER
+    | "REEL" -> REAL
+    | "afficher" -> PRINT
+    | "afficher_erreur" -> PRINT_ERR
+    | "alias" -> ALIAS
+    | "alors" -> THEN
+    | "anomalie" -> ANOMALY
+    | "application" -> APPLICATION
+    | "apres" -> AFTER
+    | "attribut" -> ATTRIBUT
+    | "autorise" -> AUTHORIZE
+    | "avec" -> WITH
+    | "base" -> BASE
+    | "calculable" -> COMPUTABLE
+    | "calculee" -> COMPUTED
+    | "calculer" -> COMPUTE
+    | "categorie" -> CATEGORY
+    | "cible" -> TARGET
+    | "const" -> CONST
+    | "dans" -> IN
+    | "discordance" -> DISCORDANCE
+    | "domaine" -> DOMAIN
+    | "enchaineur" -> CHAINING
+    | "erreur" -> ERROR
+    | "et" -> AND
+    | "exporte_erreurs" -> EXPORT_ERRORS
+    | "finalise_erreurs" -> FINALIZE_ERRORS
+    | "fonction" -> FONCTION
+    | "indefini" -> UNDEFINED
+    | "indenter" -> INDENT
+    | "informative" -> INFORMATIVE
+    | "iterer" -> ITERATE
+    | "leve_erreur" -> RAISE_ERROR
+    | "nb_bloquantes" -> NB_BLOCKING
+    | "nb_categorie" -> NB_CATEGORY
+    | "nb_anomalies" -> NB_ANOMALIES
+    | "nb_discordances" -> NB_DISCORDANCES
+    | "nb_informatives" -> NB_INFORMATIVES
+    | "nettoie_erreurs" -> CLEAN_ERRORS
+    | "nom" -> NAME
+    | "non" -> NOT
+    | "numero_compl" -> COMPL_NUMBER
+    | "numero_verif" -> VERIF_NUMBER
+    | "ou" -> OR
+    | "par_defaut" -> BY_DEFAULT
+    | "pour" -> FOR
+    | "regle" -> RULE
+    | "restaurer" -> RESTORE
+    | "restituee" -> GIVEN_BACK
+    | "saisie" -> INPUT
+    | "si" -> IF
+    | "sinon_si" -> ELSEIF
+    | "sinon" -> ELSE
+    | "finsi" -> ENDIF
+    | "sortie" -> OUTPUT
+    | "specialise" -> SPECIALIZE
+    | "tableau" -> TABLE
+    | "taille" -> SIZE
+    | "temporaire" -> TEMPORARY
+    | "type" -> TYPE
+    | "un" -> ONE
+    | "variable" -> VARIABLE
+    | "verif" -> VERIFICATION
+    | "verifiable" -> VERIFIABLE
+    | "verifier" -> VERIFY
+    | _ -> SYMBOL s 
+  }
+| eof { EOF }
+| _ { Errors.raise_spanned_error "syntax error" (mk_lexbuf_pos lexbuf) }
+
+and one_line_comment = parse
+| '\n' { new_line lexbuf; token lexbuf }
+| eof { EOF }
+| _ { one_line_comment lexbuf }
+
+and multiline_comment level = parse
+| "#{" { multiline_comment (level + 1) lexbuf }
+| "}#" {
+    match level with
+    | 1 -> token lexbuf
+    | _ -> multiline_comment (level - 1) lexbuf
+  }
+| eof {
+    let msg =
+      match level with
+      | 1 -> "comment is not closed at end of file"
+      | _ ->
+          Format.sprintf
+            "comments are not closed  at end of file (%d levels)"
+            level
+    in
+    Errors.raise_error msg
+  }
+| '\n' { new_line lexbuf; multiline_comment level lexbuf }
+| _ { multiline_comment level lexbuf }
+

@@ -14,13 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type execution_number = {
-  rule_number : int;
-      (** Written in the name of the rule or verification condition *)
-  seq_number : int;  (** Index in the sequence of the definitions in the rule *)
-  pos : Pos.t;
-}
-
 type cat_computed = Base | GivenBack
 
 module CatCompSet : SetExt.T with type elt = cat_computed
@@ -35,14 +28,22 @@ module CatVarSet : SetExt.T with type elt = cat_variable
 
 module CatVarMap : MapExt.T with type key = cat_variable
 
+type cat_variable_loc = LocCalculated | LocBase | LocInput
+
+type cat_variable_data = {
+  id : cat_variable;
+  id_str : string;
+  id_int : int;
+  loc : cat_variable_loc;
+  pos : Pos.t;
+  attributs : Pos.t StrMap.t;
+}
+
 type variable_id = int
 (** Each variable has an unique ID *)
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which
-          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
   descr : string Pos.marked;
@@ -51,8 +52,10 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  cats : CatVarSet.t;
+  cats : cat_variable option;
   is_table : int option;
+  is_temp : bool;
+  is_it : bool;
 }
 
 type local_variable = { id : int }
@@ -76,11 +79,10 @@ type func =
   | PresentFunc  (** Different than zero ? *)
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
+  | VerifNumber
+  | ComplNumber
 
 (** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
-    Because M lets you define conditional without an else branch although it is
-    an expression-based language, we include an [Error] constructor to which the
-    missing else branch is translated to.
 
     Because translating to MIR requires a lot of unrolling and expansion, we
     introduce a [LocalLet] construct to avoid code duplication. *)
@@ -104,11 +106,17 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of local_variable
-  | Error
   | LocalLet of
       local_variable
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
+  | NbCategory of CatVarSet.t
+  | Attribut of string Pos.marked * 'variable * string Pos.marked
+  | Size of 'variable
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
+  | NbBloquantes
 
 type expression = variable expression_
 
@@ -138,14 +146,11 @@ type 'variable variable_def_ =
 
 type variable_def = variable variable_def_
 
-type io = Input | Output | Regular
-
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
-  var_io : io;
 }
 
 type variable_data = variable variable_data_
@@ -154,25 +159,29 @@ type rov_id = RuleID of int | VerifID of int
 
 module RuleMap : MapExt.T with type key = rov_id
 
+module TargetMap : StrMap.T
+
 type 'a domain = {
-  dom_id : Mast.DomainId.t;
-  dom_names : Mast.DomainIdSet.t;
+  dom_id : Mast.DomainId.t Pos.marked;
+  dom_names : Pos.t Mast.DomainIdMap.t;
   dom_by_default : bool;
   dom_min : Mast.DomainIdSet.t;
   dom_max : Mast.DomainIdSet.t;
+  dom_rov : IntSet.t;
   dom_data : 'a;
+  dom_used : int Pos.marked option;
 }
 
 type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type rule_data = {
-  rule_domain : rule_domain;
-  rule_chain : (string * rule_domain) option;
-  rule_vars : (variable_id * variable_data) list;
-  rule_number : rov_id Pos.marked;
-}
+type 'variable print_arg =
+  | PrintString of string
+  | PrintName of string Pos.marked * variable
+  | PrintAlias of string Pos.marked * variable
+  | PrintIndent of 'variable expression_ Pos.marked
+  | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type error_descr = {
   kind : string Pos.marked;
@@ -181,6 +190,7 @@ type error_descr = {
   description : string Pos.marked;
   isisf : string Pos.marked;
 }
+
 (** Errors are first-class objects *)
 
 type error = {
@@ -189,93 +199,6 @@ type error = {
   descr : error_descr;  (** Description taken from the variable declaration *)
   typ : Mast.error_typ;
 }
-
-type verif_domain_data = { vdom_auth : CatVarSet.t }
-
-type verif_domain = verif_domain_data domain
-
-type 'variable condition_data_ = {
-  cond_seq_id : int;
-  cond_number : rov_id Pos.marked;
-  cond_domain : verif_domain;
-  cond_expr : 'variable expression_ Pos.marked;
-  cond_error : error * 'variable option;
-  cond_cats : int CatVarMap.t;
-}
-
-type condition_data = variable condition_data_
-
-type idmap = variable list Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type: Mir.variable},
-    so we need to keep a mapping between the two. A name is mapped to a list of
-    variables because variables can be redefined in different rules *)
-
-type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
-
-type program = {
-  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
-  program_rule_domains : rule_domain Mast.DomainIdMap.t;
-  program_verif_domains : verif_domain Mast.DomainIdMap.t;
-  program_chainings : rule_domain Mast.ChainingMap.t;
-  program_vars : VariableDict.t;
-      (** A static register of all variables that can be used during a
-          calculation *)
-  program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization
-          passes *)
-  program_conds : condition_data RuleMap.t;
-      (** Conditions are affected to dummy variables containing informations
-          about actual variables in the conditions *)
-  program_idmap : idmap;
-  program_exec_passes : exec_pass list;
-}
-
-module Variable : sig
-  type id = variable_id
-
-  type t = variable = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    execution_number : execution_number;
-        (** The number associated with the rule of verification condition in
-            which the variable is defined *)
-    alias : string option;  (** Input variable have an alias *)
-    id : variable_id;
-    descr : string Pos.marked;
-        (** Description taken from the variable declaration *)
-    attributes : Mast.variable_attribute list;
-    origin : variable option;
-        (** If the variable is an SSA duplication, refers to the original
-            (declared) variable *)
-    cats : CatVarSet.t;
-    is_table : int option;
-  }
-
-  val fresh_id : unit -> id
-
-  val new_var :
-    string Pos.marked ->
-    string option ->
-    string Pos.marked ->
-    execution_number ->
-    attributes:Mast.variable_attribute list ->
-    origin:variable option ->
-    cats:CatVarSet.t ->
-    is_table:int option ->
-    variable
-
-  val compare : t -> t -> int
-end
-
-(** Local variables don't appear in the M source program but can be introduced
-    by let bindings when translating to MIR. They should be De Bruijn indices
-    but instead are unique globals identifiers out of laziness. *)
-module LocalVariable : sig
-  type t = local_variable = { id : int }
-
-  val new_var : unit -> t
-
-  val compare : t -> t -> int
-end
 
 module Error : sig
   type descr = error_descr = {
@@ -300,13 +223,129 @@ module Error : sig
   val compare : t -> t -> int
 end
 
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+  | ComputeTarget of string Pos.marked
+  | VerifBlock of instruction Pos.marked list
+  | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Iterate of
+      variable_id
+      * CatVarSet.t
+      * expression Pos.marked
+      * instruction Pos.marked list
+  | Restore of
+      Pos.t VariableMap.t
+      * (variable * CatVarSet.t * expression Pos.marked) list
+      * instruction Pos.marked list
+  | RaiseError of error * string option
+  | CleanErrors
+  | ExportErrors
+  | FinalizeErrors
+
+type rule_data = {
+  rule_apps : Pos.t StrMap.t;
+  rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
+  rule_vars : instruction Pos.marked list;
+  rule_number : rov_id Pos.marked;
+}
+
+type target_data = {
+  target_name : string Pos.marked;
+  target_file : string option;
+  target_apps : string Pos.marked list;
+  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  target_prog : instruction Pos.marked list;
+}
+
+type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
+
+type verif_domain = verif_domain_data domain
+
+type 'variable condition_data_ = {
+  cond_seq_id : int;
+  cond_number : rov_id Pos.marked;
+  cond_domain : verif_domain;
+  cond_expr : 'variable expression_ Pos.marked;
+  cond_error : error * 'variable option;
+  cond_cats : int CatVarMap.t;
+}
+
+type condition_data = variable condition_data_
+
+type idmap = variable Pos.VarNameToID.t
+(** We translate string variables into first-class unique {!type: Mir.variable},
+    so we need to keep a mapping between the two. A name is mapped to a list of
+    variables because variables can be redefined in different rules *)
+
+type program = {
+  program_safe_prefix : string;
+  program_applications : Pos.t StrMap.t;
+  program_var_categories : cat_variable_data CatVarMap.t;
+  program_rule_domains : rule_domain Mast.DomainIdMap.t;
+  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_chainings : rule_domain Mast.ChainingMap.t;
+  program_vars : VariableDict.t;
+      (** A static register of all variables that can be used during a
+          calculation *)
+  program_targets : target_data TargetMap.t;
+  program_idmap : idmap;
+}
+
+module Variable : sig
+  type id = variable_id
+
+  type t = variable = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    alias : string option;  (** Input variable have an alias *)
+    id : variable_id;
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attributes : Mast.variable_attribute list;
+    origin : variable option;
+        (** If the variable is an SSA duplication, refers to the original
+            (declared) variable *)
+    cats : cat_variable option;
+    is_table : int option;
+    is_temp : bool;
+    is_it : bool;
+  }
+
+  val fresh_id : unit -> id
+
+  val new_var :
+    string Pos.marked ->
+    string option ->
+    string Pos.marked ->
+    attributes:Mast.variable_attribute list ->
+    origin:variable option ->
+    cats:cat_variable option ->
+    is_table:int option ->
+    is_temp:bool ->
+    is_it:bool ->
+    variable
+
+  val compare : t -> t -> int
+end
+
+(** Local variables don't appear in the M source program but can be introduced
+    by let bindings when translating to MIR. They should be De Bruijn indices
+    but instead are unique globals identifiers out of laziness. *)
+module LocalVariable : sig
+  type t = local_variable = { id : int }
+
+  val new_var : unit -> t
+
+  val compare : t -> t -> int
+end
+
 val false_literal : literal
 
 val true_literal : literal
 
 val num_of_rule_or_verif_id : rov_id -> int
-
-val same_execution_number : execution_number -> execution_number -> bool
 
 val find_var_name_by_alias : program -> string Pos.marked -> string
 
@@ -320,24 +359,9 @@ val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
 val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
 
-val fold_vars : (variable -> variable_data -> 'a -> 'a) -> program -> 'a -> 'a
-
-val map_vars :
-  (variable -> variable_data -> variable_data) -> program -> program
-
-val compare_execution_number : execution_number -> execution_number -> int
-
 val find_var_definition : program -> variable -> rule_data * variable_data
 
-val is_candidate_valid : execution_number -> execution_number -> bool -> bool
-
-val sort_by_lowest_exec_number : Variable.t -> Variable.t -> int
-
-val get_max_var_sorted_by_execution_number :
-  (Variable.t -> Variable.t -> int) ->
-  string ->
-  Variable.t list Pos.VarNameToID.t ->
-  Variable.t
+val get_var : string -> Variable.t Pos.VarNameToID.t -> Variable.t
 
 val fresh_rule_num : unit -> int
 
@@ -349,15 +373,8 @@ val find_var_by_name : program -> string Pos.marked -> variable
     that with the lowest execution number. When a name is provided, then the
     variable with the highest execution number is returned. *)
 
-val is_dummy_variable : Variable.t -> bool
-
-val find_vars_by_io : program -> io -> VariableDict.t
-(** Returns a VariableDict.t containing all the variables that have a given io
-    type, only one variable per name is entered in the VariableDict.t, this
-    function chooses the one with the highest execution number*)
-
-val mast_to_catvars :
-  'a CatVarMap.t -> string Pos.marked list Pos.marked -> CatVarSet.t
-
 val mast_to_catvar :
   'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable
+
+val expand_functions : program -> program
+(** Calls [expand_functions_expr] on the whole program *)

@@ -47,19 +47,29 @@ and stmt = stmt_kind Pos.marked
 and stmt_kind =
   | SAssign of variable * variable_def
   | SConditional of expression * stmt list * stmt list
-  | SVerif of condition_data
+  | SVerifBlock of stmt list
   | SRovCall of rov_id
   | SFunctionCall of function_name * Mir.Variable.t list
+  | SPrint of Mast.print_std * variable Mir.print_arg list
+  | SIterate of variable * Mir.CatVarSet.t * expression * stmt list
+  | SRestore of
+      VariableSet.t * (variable * Mir.CatVarSet.t * expression) list * stmt list
+  | SRaiseError of Mir.error * string option
+  | SCleanErrors
+  | SExportErrors
+  | SFinalizeErrors
 
 type mpp_function = { mppf_stmts : stmt list; mppf_is_verif : bool }
 
+type target_function = {
+  file : string option;
+  tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  stmts : stmt list;
+  is_verif : bool;
+}
+
 module FunctionMap : MapExt.T with type key = function_name
 
-type program_context = {
-  constant_inputs_init_stmts : stmt list;
-  adhoc_specs_conds_stmts : stmt list;
-  unused_inputs_init_stmts : stmt list;
-}
 (** This record allows to store statements generated from the m_spec file
     without modifying the [Bir.program] function map. Thus the map reflects the
     computation strictly as described in M and MPP.
@@ -80,12 +90,11 @@ type program_context = {
 
 type program = {
   mpp_functions : mpp_function FunctionMap.t;
+  targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  context : program_context option;
   idmap : Mir.idmap;
   mir_program : Mir.program;
-  outputs : unit VariableMap.t;
 }
 
 val default_tgv : tgv_id
@@ -105,10 +114,6 @@ val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
 val rule_or_verif_as_statements : rule_or_verif -> stmt list
 
 val main_statements : program -> stmt list
-
-val main_statements_with_context : program -> stmt list
-
-val main_statements_with_context_and_tgv_init : program -> stmt list
 
 val get_all_statements : program -> stmt list
 

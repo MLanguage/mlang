@@ -119,7 +119,8 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
            (Bir_interpreter.ConditionalBranch true :: loc))
         (get_code_locs_stmts p f
            (Bir_interpreter.ConditionalBranch false :: loc))
-  | Bir.SVerif _ -> CodeLocationMap.empty
+  | Bir.SVerifBlock s ->
+      get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
   | Bir.SRovCall r ->
       get_code_locs_stmts p
@@ -128,6 +129,14 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
   | Bir.SFunctionCall (f, _) ->
       get_code_locs_stmts p (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
         (Bir_interpreter.InsideFunction f :: loc)
+  | Bir.SPrint _ -> CodeLocationMap.empty
+  | Bir.SIterate (var, _, _, s) ->
+      get_code_locs_stmts p s (Bir_interpreter.InsideIterate var :: loc)
+  | Bir.SRestore (_, _, s) ->
+      get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
+  | Bir.SRaiseError _ | Bir.SCleanErrors | Bir.SExportErrors
+  | Bir.SFinalizeErrors ->
+      CodeLocationMap.empty
 
 and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
     (loc : Bir_interpreter.code_location) : code_locs =
@@ -144,4 +153,4 @@ and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
   locs
 
 let get_code_locs (p : Bir.program) : code_locs =
-  get_code_locs_stmts p (Bir.main_statements_with_context_and_tgv_init p) []
+  get_code_locs_stmts p (Bir.main_statements p) []

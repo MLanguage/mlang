@@ -16,7 +16,6 @@
 val check_test :
   Bir.program ->
   (* test file name *) string ->
-  (* optimize *) bool ->
   (* code coverage *) bool ->
   Cli.value_sort ->
   Cli.round_ops ->
@@ -30,7 +29,6 @@ val check_test :
 val check_all_tests :
   Bir.program ->
   string ->
-  bool ->
   bool ->
   Cli.value_sort ->
   Cli.round_ops ->

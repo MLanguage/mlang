@@ -29,36 +29,29 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let truncatef (x : N.t) : N.t =
-    N.floor N.(x +. N.of_float !Cli.comparison_error_margin)
+  let epsilon = !Cli.comparison_error_margin
+
+  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    N.of_int
-      (N.to_int
-         N.(
-           x
-           +. N.of_float
-                (if N.(x < zero ()) then
-                 Float.sub (-0.5) !Cli.comparison_error_margin
-                else Float.add 0.5 !Cli.comparison_error_margin)))
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
+    if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
 module MultiRoundOps (N : Bir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let truncatef (x : N.t) : N.t =
-    N.floor N.(x +. N.of_float !Cli.comparison_error_margin)
+  let epsilon = !Cli.comparison_error_margin
+
+  let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
   let roundf (x : N.t) =
-    let n_0_5 = N.of_float 0.5 in
-    let n_100000_0 = N.of_float 100000.0 in
-    let v1 = N.floor x in
-    let v2 = N.(N.floor (((x -. v1) *. n_100000_0) +. n_0_5) /. n_100000_0) in
-    N.floor N.(v1 +. v2 +. n_0_5)
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
+    if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
 module MainframeRoundOps (L : sig
@@ -67,21 +60,20 @@ end)
 (N : Bir_number.NumberInterface) : RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
+  let epsilon = !Cli.comparison_error_margin
+
   let floor_g (x : N.t) : N.t =
     if N.abs x <= N.of_int !L.max_long then N.floor x else x
 
   let ceil_g (x : N.t) : N.t =
     if N.abs x <= N.of_int !L.max_long then N.ceil x else x
 
-  let truncatef (x : N.t) : N.t =
-    floor_g N.(x +. N.of_float !Cli.comparison_error_margin)
+  let truncatef (x : N.t) : N.t = floor_g N.(x +. N.of_float epsilon)
 
   (* Careful : rounding in M is done with this arbitrary behavior. We can't use
      copysign here because [x < zero] is critical to have the correct behavior
      on -0 *)
   let roundf (x : N.t) =
-    if N.(x < zero ()) then
-      ceil_g N.(x -. N.of_float (Float.add 0.5 !Cli.comparison_error_margin))
-    else
-      floor_g N.(x +. N.of_float (Float.add 0.5 !Cli.comparison_error_margin))
+    let e = N.of_float (0.5 +. (epsilon *. 50.)) in
+    if N.(x < zero ()) then ceil_g N.(x -. e) else floor_g N.(x +. e)
 end

@@ -14,19 +14,14 @@
 #include "caml/fail.h"
 #include "caml/custom.h"
 
-#include "annee.h"
-#include "conf.h"
 #include "irdata.h"
-#include "const.h"
-#include "var.h"
-#include "enchain.h"
+#include "compir.h"
 
 #if OCAML_VERSION < 41200
 
 #define Val_none Val_int(0)
 
-CAMLexport value caml_alloc_some(value v)
-{
+CAMLexport value caml_alloc_some(value v) {
   CAMLparam1(v);
   value some = caml_alloc_small(1, 0);
   Field(some, 0) = v;
@@ -35,35 +30,7 @@ CAMLexport value caml_alloc_some(value v)
 
 #endif
 
-// Non exportés dans headers standards
-extern T_desc_penalite desc_penalite[];
-extern T_desc_debug desc_debug01[];
-#if NB_DEBUG_C >= 2
-extern T_desc_debug desc_debug02[];
-#endif
-#if NB_DEBUG_C >= 3
-extern T_desc_debug desc_debug03[];
-#endif
-#if NB_DEBUG_C >= 4
-extern T_desc_debug desc_debug04[];
-#endif
-#if NB_DEBUG_C >= 5
-#error "Ne fonctionne qu'avec NB_DEBUG_C compris entre 1 et 4"
-#endif
-
-struct S_desc_var
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord * (*verif)(T_irdata *);
-};
-
-typedef struct S_desc_var T_desc_var;
-
-#define T_var_irdata T_desc_var *
-
-typedef void (*ench_fun)(T_irdata *);
+typedef struct S_discord * (*ench_fun)(T_irdata *);
 
 typedef struct ench_t {
   char *name;
@@ -116,19 +83,6 @@ static ench_t enchaineurs[] = {
   { "ENCH_TL", ENCH_TL }
 };
 
-extern struct S_discord * verif_calcul_primitive(T_irdata *irdata);
-extern struct S_discord * verif_calcul_primitive_isf(T_irdata *irdata);
-extern struct S_discord * verif_calcul_corrective(T_irdata *irdata);
-extern struct S_discord * verif_saisie_cohe_primitive(T_irdata *irdata);
-extern struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel);
-extern struct S_discord * verif_saisie_cohe_corrective(T_irdata *irdata);
-extern struct S_discord * verif_cohe_horizontale(T_irdata *irdata);
-
-struct S_discord * verif_saisie_cohe_primitive_isf_stub(T_irdata *irdata)
-{
-  return verif_saisie_cohe_primitive_isf(irdata, 0);
-}
-
 typedef struct S_discord * (*verif_fun)(T_irdata *);
 
 typedef struct verif_t {
@@ -141,9 +95,10 @@ static verif_t verifications[] = {
   { "verif_calcul_primitive_isf",  verif_calcul_primitive_isf },
   { "verif_calcul_corrective", verif_calcul_corrective },
   { "verif_saisie_cohe_primitive", verif_saisie_cohe_primitive },
-  { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf_stub },
+  { "verif_saisie_cohe_primitive_isf", verif_saisie_cohe_primitive_isf_raw },
   { "verif_saisie_cohe_corrective", verif_saisie_cohe_corrective },
   { "verif_cohe_horizontale", verif_cohe_horizontale },
+  { "enchainement_primitif", enchainement_primitif }
 };
 
 typedef enum genre_t {
@@ -230,10 +185,12 @@ static struct custom_operations tgv_block_ops = {
 
 static value alloc_tgv()
 {
+  CAMLparam0();
+  CAMLlocal1(v);
   T_irdata *tgv = IRDATA_new_irdata();
-  value v = caml_alloc_custom(&tgv_block_ops, sizeof(T_irdata *), 0, 1);
+  v = caml_alloc_custom(&tgv_block_ops, sizeof(T_irdata *), 0, 1);
   Tgv_val(v) = tgv;
-  return v;
+  CAMLreturn(v);
 }
 
 CAMLprim value
@@ -655,6 +612,65 @@ cherche_var(
 }
 
 CAMLprim value
+ml_init_errs(value unit)
+{
+  CAMLparam1(unit);
+  for (int i = 0; i < sz_err_finalise; i++) {
+    err_finalise[i] = NULL;
+  }
+  nb_err_finalise = 0;
+  for (int i = 0; i < sz_err_sortie; i++) {
+    err_sortie[i] = NULL;
+  }
+  nb_err_sortie = 0;
+  for (int i = 0; i < sz_err_archive; i++) {
+    err_archive[i] = NULL;
+  }
+  nb_err_archive = 0;
+  CAMLreturn(unit);
+}
+
+CAMLprim value
+ml_export_errs(value mlTgv)
+{
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  exporte_erreur(tgv);
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value
+ml_get_err_list(value unit)
+{
+  CAMLparam1(unit);
+  CAMLlocal2(res, cons);
+  res = Val_emptylist;
+  for (int i = 0; i < nb_err_sortie; ++i) {
+    cons = caml_alloc_small(2, Tag_cons);
+    Field(cons, 0) = caml_copy_string(err_sortie[i]);
+    Field(cons, 1) = res;
+    res = cons;
+  }
+  CAMLreturn(res);
+}
+
+CAMLprim value
+ml_free_errs(value unit)
+{
+  CAMLparam1(unit);
+  if (err_finalise != NULL) {
+    free(err_finalise);
+  }
+  if (err_sortie  != NULL) {
+    free(err_sortie);
+  }
+  if (err_archive  != NULL) {
+    free(err_archive);
+  }
+  CAMLreturn(unit);
+}
+
+CAMLprim value
 ml_charge_vars(void)
 {
   CAMLparam0();
@@ -792,33 +808,6 @@ ml_tgv_set(value mlTgv, value mlCode, value mlMontant)
 }
 
 CAMLprim value
-ml_tgv_reset_calculee(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_calculee(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
-ml_tgv_reset_saisie_calculee(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_light(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
-ml_tgv_reset_base(value mlTgv)
-{
-  CAMLparam1(mlTgv);
-  T_irdata *tgv = Tgv_val(mlTgv);
-  IRDATA_reset_base(tgv);
-  CAMLreturn(Val_unit);
-}
-
-CAMLprim value
 ml_tgv_copy(value mlSTgv, value mlDTgv)
 {
   CAMLparam2(mlSTgv, mlDTgv);
@@ -900,9 +889,9 @@ ml_exec_verif(
 }
 
 CAMLprim value
-ml_annee_calc(void)
+ml_annee_calc(value unit)
 {
-  CAMLparam0();
+  CAMLparam1(unit);
   CAMLreturn(Val_int(ANNEE_REVENU));
 }
 
@@ -1004,22 +993,22 @@ ml_dump_raw_tgv(
   FILE *f = fopen(filename, "wb");
   if (f == NULL) {
     printf("Can't open file %s\n", filename);
-    CAMLreturn(Val_unit);
-  }
-  dump_array(tgv->def_saisie, tgv->saisie, TAILLE_SAISIE, f);
-  dump_array(tgv->def_calculee, tgv->calculee, TAILLE_CALCULEE, f);
-  dump_array(tgv->def_base, tgv->base, TAILLE_BASE, f);
+  } else {
+    dump_array(tgv->def_saisie, tgv->saisie, TAILLE_SAISIE, f);
+    dump_array(tgv->def_calculee, tgv->calculee, TAILLE_CALCULEE, f);
+    dump_array(tgv->def_base, tgv->base, TAILLE_BASE, f);
 
-  mlErrListTemp = mlErrList;
-  while (mlErrListTemp != Val_emptylist) {
-    const char *err = String_val(Field(mlErrListTemp, 0));
-    char data[32] = { 0 };
-    memcpy(data, err, strlen(err));
-    fwrite(data, sizeof(char), 8, f);
-    mlErrListTemp = Field(mlErrListTemp, 1);
-  }
+    mlErrListTemp = mlErrList;
+    while (mlErrListTemp != Val_emptylist) {
+      const char *err = String_val(Field(mlErrListTemp, 0));
+      char data[32] = { 0 };
+      memcpy(data, err, strlen(err));
+      fwrite(data, sizeof(char), 8, f);
+      mlErrListTemp = Field(mlErrListTemp, 1);
+    }
 
-  fclose(f);
+    fclose(f);
+  }
 
   CAMLreturn(Val_unit);
 }

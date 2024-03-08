@@ -14,5 +14,4 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val generate_java_program :
-  Bir.program -> Bir_interface.bir_function -> string -> unit
+val generate_java_program : Bir.program -> string -> unit

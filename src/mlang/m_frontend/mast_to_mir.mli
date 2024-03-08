@@ -18,24 +18,6 @@
 
 (** {1 Translation context}*)
 
-(** {2 Loop translation context} *)
-
-(** The M language has a strange way of doing loops. We translate them by
-    unrolling; but for that we need a context to hold the loop parameters, which
-    consists of a mapping from characters to integers or other characters. *)
-
-(** The values of the map can be either strings of integers *)
-type loop_param_value = VarName of Mast.variable_name | RangeInt of int
-
-module ConstMap : StrMap.T
-
-module ParamsMap : CharMap.T
-(** Map whose keys are loop parameters *)
-
-type loop_context = (loop_param_value * int) ParamsMap.t
-(** This is the context when iterating a loop : for each loop parameter, we have
-    access to the current value of this loop parameter in this iteration. *)
-
 (** {2 General translation context} *)
 
 type translating_context = {
@@ -43,11 +25,6 @@ type translating_context = {
       (** [true] if translating an expression susceptible to contain a generic
           table index *)
   idmap : Mir.idmap;  (** Current string-to-{!type: Mir.Variable.t} mapping *)
-  lc : loop_context option;  (** Current loop translation context *)
-  const_map : float Pos.marked ConstMap.t;
-      (** Mapping from constant variables to their value *)
-  exec_number : Mir.execution_number;
-      (** Number of the rule of verification condition being translated *)
 }
 
 (** {1 Translation helpers} *)
@@ -55,31 +32,27 @@ type translating_context = {
 val get_var_from_name :
   Mir.idmap ->
   (* name of the variable to query *) string Pos.marked ->
-  Mir.execution_number ->
-  (* using_var_in_def *) bool ->
   Mir.Variable.t
 (** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a
     variable and the rule number from which the variable is requested. Returns
     the variable with the same name and highest rule number that is below the
     current rule number from where this variable is requested *)
 
-val list_max_execution_number : Mir.Variable.t list -> Mir.Variable.t
-(** Helper to compute the max SSA candidate in a list *)
-
 val translate_expression :
-  translating_context -> Mast.expression Pos.marked -> Mir.expression Pos.marked
+  Mir.cat_variable_data Mir.CatVarMap.t ->
+  Mir.idmap ->
+  translating_context ->
+  Mast.expression Pos.marked ->
+  Mir.expression Pos.marked
 (** Main translation function for expressions *)
 
-val dummy_exec_number : Pos.t -> Mir.execution_number
-(** Dummy execution number used for variable declarations *)
-
 val get_conds :
-  'a Mir.CatVarMap.t ->
+  Mir.verif_domain Mast.DomainIdMap.t ->
+  Mir.cat_variable_data Mir.CatVarMap.t ->
   Mir.Error.t list ->
-  float Pos.marked ConstMap.t ->
   Mir.idmap ->
   Mast.program ->
-  Mir.verif_domain Mast.DomainIdMap.t * Mir.condition_data Mir.RuleMap.t
+  Mir.condition_data Mir.RuleMap.t
 (** Returns a map whose keys are dummy variables and whose values are the
     verification conditions. *)
 

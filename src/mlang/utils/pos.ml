@@ -129,11 +129,9 @@ let retrieve_loc_text (pos : t) : string =
             let lng = String.length src in
             let rec new_curr () =
               if !curr < lng then
-                if src.[!curr] = '\n' || src.[!curr] = '\r' || !curr = lng then (
+                if src.[!curr] = '\n' then (
                   let res = !curr in
-                  while src.[!curr] = '\n' || src.[!curr] = '\r' do
-                    incr curr
-                  done;
+                  incr curr;
                   Some res)
                 else (
                   incr curr;

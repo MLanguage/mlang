@@ -22,6 +22,26 @@ let format_expression fmt (e : expression) =
 let format_variable_def fmt (vdef : variable_def) =
   Format_mir.format_variable_def fmt (Mir.map_var_def_var Bir.var_to_mir vdef)
 
+let format_print_arg fmt = function
+  | Mir.PrintString s -> Format.fprintf fmt "\"%s\"" s
+  | Mir.PrintName (v, _) -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
+  | Mir.PrintAlias (v, _) -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
+  | Mir.PrintIndent e ->
+      Format.fprintf fmt "indenter(%a)"
+        (Format_mast.pp_unmark format_expression)
+        e
+  | Mir.PrintExpr (e, min, max) ->
+      if min = max_int then
+        Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e
+      else if max = max_int then
+        Format.fprintf fmt "(%a):%d"
+          (Format_mast.pp_unmark format_expression)
+          e min
+      else
+        Format.fprintf fmt "(%a):%d..%d"
+          (Format_mast.pp_unmark format_expression)
+          e min max
+
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdef) ->
@@ -34,16 +54,10 @@ let rec format_stmt fmt (stmt : stmt) =
   | SConditional (cond, t, f) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
         format_expression cond format_stmts t format_stmts f
-  | SVerif cond_data ->
-      let cond_error_opt_var =
-        Option.map var_to_mir (snd cond_data.cond_error)
-      in
-      Format.fprintf fmt "assert (%a) or raise %a@,%a" format_expression
-        (Pos.unmark cond_data.cond_expr)
-        Format_mir.format_error (fst cond_data.cond_error)
-        (Format.pp_print_option (fun fmt v ->
-             Format.fprintf fmt " (%s)" (Pos.unmark v.Mir.Variable.name)))
-        cond_error_opt_var
+  | SVerifBlock stmts ->
+      Format.fprintf fmt
+        "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" format_stmts
+        stmts
   | SRovCall r ->
       Format.fprintf fmt "call_rule(%d)@\n" (Mir.num_of_rule_or_verif_id r)
   | SFunctionCall (func, args) ->
@@ -51,6 +65,41 @@ let rec format_stmt fmt (stmt : stmt) =
         (Format.pp_print_list (fun fmt arg ->
              Format.fprintf fmt "%s" (arg.Mir.Variable.name |> Pos.unmark)))
         args
+  | SPrint (std, args) ->
+      let print_cmd =
+        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
+      in
+      Format.fprintf fmt "%s %a;" print_cmd
+        (Format_mast.pp_print_list_space format_print_arg)
+        args
+  | SIterate (var, vcs, expr, stmts) ->
+      Format.fprintf fmt
+        "iterate variable %s@\n: categorie %a@\n: avec %a@\n: dans ("
+        (Pos.unmark (var_to_mir var).Mir.Variable.name)
+        (Mir.CatVarSet.pp ()) vcs format_expression expr;
+      Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
+  | SRestore (vars, var_params, stmts) ->
+      let format_var_param fmt (var, vcs, expr) =
+        Format.fprintf fmt ": variable %s : categorie %a : avec %a@\n"
+          (Pos.unmark (var_to_mir var).Mir.Variable.name)
+          (Mir.CatVarSet.pp ()) vcs format_expression expr
+      in
+      Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
+        (VariableSet.pp ~sep:", "
+           ~pp_elt:(fun fmt var ->
+             Format.fprintf fmt "%s"
+               (Pos.unmark (var_to_mir var).Mir.Variable.name))
+           ())
+        vars
+        (Format_mast.pp_print_list_space format_var_param)
+        var_params;
+      Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
+  | SRaiseError (err, var_opt) ->
+      Format.fprintf fmt "leve_erreur %s %s\n" (Pos.unmark err.Mir.name)
+        (match var_opt with Some var -> " " ^ var | None -> "")
+  | SCleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
+  | SExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
+  | SFinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
 
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
@@ -74,4 +123,4 @@ let format_rules fmt rules =
 
 let format_program fmt (p : program) =
   Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
-    (Bir.main_statements_with_context_and_tgv_init p)
+    (Bir.main_statements p)

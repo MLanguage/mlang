@@ -20,44 +20,6 @@
 
 (** Variables are first-class objects *)
 
-type execution_number = {
-  rule_number : int;
-      (** Written in the name of the rule or verification condition *)
-  seq_number : int;  (** Index in the sequence of the definitions in the rule *)
-  pos : Pos.t;
-}
-(** To determine in which order execute the different variable assigment we have
-    to record their position in the graph. *)
-
-let compare_execution_number (n1 : execution_number) (n2 : execution_number) :
-    int =
-  if n1.rule_number = n2.rule_number then compare n1.seq_number n2.seq_number
-  else compare n1.rule_number n2.rule_number
-
-(** This is the operator used to determine the if a candidate definition is
-    valid at a given point *)
-let is_candidate_valid (candidate : execution_number)
-    (current : execution_number) (is_lvalue : bool) : bool =
-  if is_lvalue then
-    (* This is the case where we are using variable [VAR] while defining [VAR]:
-       i.e we are querying the left hand side of the assignation. The valid
-       definitions here are either the declaration or earlier definitions in the
-       same rules. *)
-    candidate.rule_number = -1
-    || candidate.rule_number = current.rule_number
-       && candidate.seq_number < current.seq_number
-  else
-    (* In this case, we are using [FOO] in the definition of [BAR]. Then valid
-       definitions of [FOO] include all that are in different rules or earlier
-       definition in the same rule. *)
-    candidate.rule_number <> current.rule_number
-    || candidate.seq_number < current.seq_number
-
-(** This is the operator used to find a particular variable in the [idmap] *)
-let same_execution_number (en1 : execution_number) (en2 : execution_number) :
-    bool =
-  en1.rule_number = en2.rule_number && en1.seq_number = en2.seq_number
-
 type cat_computed = Base | GivenBack
 
 let pp_cat_computed fmt = function
@@ -120,14 +82,22 @@ module CatVarMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
+type cat_variable_loc = LocCalculated | LocBase | LocInput
+
+type cat_variable_data = {
+  id : cat_variable;
+  id_str : string;
+  id_int : int;
+  loc : cat_variable_loc;
+  pos : Pos.t;
+  attributs : Pos.t StrMap.t;
+}
+
 type variable_id = int
 (** Each variable has an unique ID *)
 
 type variable = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  execution_number : execution_number;
-      (** The number associated with the rule of verification condition in which
-          the variable is defined *)
   alias : string option;  (** Input variable have an alias *)
   id : variable_id;
   descr : string Pos.marked;
@@ -136,8 +106,10 @@ type variable = {
   origin : variable option;
       (** If the variable is an SSA duplication, refers to the original
           (declared) variable *)
-  cats : CatVarSet.t;
+  cats : cat_variable option;
   is_table : int option;
+  is_temp : bool;
+  is_it : bool;
 }
 
 module Variable = struct
@@ -145,9 +117,6 @@ module Variable = struct
 
   type t = variable = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    execution_number : execution_number;
-        (** The number associated with the rule of verification condition in
-            which the variable is defined *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
@@ -156,8 +125,10 @@ module Variable = struct
     origin : variable option;
         (** If the variable is an SSA duplication, refers to the original
             (declared) variable *)
-    cats : CatVarSet.t;
+    cats : cat_variable option;
     is_table : int option;
+    is_temp : bool;
+    is_it : bool;
   }
 
   let fresh_id : unit -> id =
@@ -168,19 +139,20 @@ module Variable = struct
       v
 
   let new_var (name : string Pos.marked) (alias : string option)
-      (descr : string Pos.marked) (execution_number : execution_number)
-      ~(attributes : Mast.variable_attribute list) ~(origin : t option)
-      ~(cats : CatVarSet.t) ~(is_table : int option) : t =
+      (descr : string Pos.marked) ~(attributes : Mast.variable_attribute list)
+      ~(origin : t option) ~(cats : cat_variable option)
+      ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
     {
       name;
       id = fresh_id ();
       descr;
       alias;
-      execution_number;
       attributes;
       origin;
       cats;
       is_table;
+      is_temp;
+      is_it;
     }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
@@ -230,6 +202,8 @@ type func =
   | PresentFunc  (** Different than zero ? *)
   | Multimax  (** ??? *)
   | Supzero  (** ??? *)
+  | VerifNumber
+  | ComplNumber
 
 (** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
     Because M lets you define conditional without an else branch although it is
@@ -258,11 +232,17 @@ type 'variable expression_ =
   | Literal of (literal[@opaque])
   | Var of 'variable
   | LocalVar of (LocalVariable.t[@opaque])
-  | Error
   | LocalLet of
       (LocalVariable.t[@opaque])
       * 'variable expression_ Pos.marked
       * 'variable expression_ Pos.marked
+  | NbCategory of CatVarSet.t
+  | Attribut of string Pos.marked * 'variable * string Pos.marked
+  | Size of 'variable
+  | NbAnomalies
+  | NbDiscordances
+  | NbInformatives
+  | NbBloquantes
 
 type expression = variable expression_
 
@@ -279,7 +259,13 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | LocalLet (v, e1, e2) -> LocalLet (v, map e1, map e2)
   | Literal l -> Literal l
   | LocalVar v -> LocalVar v
-  | Error -> Error
+  | NbCategory l -> NbCategory l
+  | Attribut (v, var, a) -> Attribut (v, f var, a)
+  | Size var -> Size (f var)
+  | NbAnomalies -> NbAnomalies
+  | NbDiscordances -> NbDiscordances
+  | NbInformatives -> NbInformatives
+  | NbBloquantes -> NbBloquantes
 
 let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
@@ -292,7 +278,9 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
   | Var v -> f acc v
-  | Literal _ | LocalVar _ | Error -> acc
+  | Literal _ | LocalVar _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
+  | NbDiscordances | NbInformatives | NbBloquantes ->
+      acc
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -384,14 +372,11 @@ let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
 
 type variable_def = variable variable_def_
 
-type io = Input | Output | Regular
-
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
   var_typ : typ option;
       (** The typing info here comes from the variable declaration in the source
           program *)
-  var_io : io;
 }
 
 type variable_data = variable variable_data_
@@ -411,32 +396,26 @@ let fresh_rule_num =
 let initial_undef_rule_id = RuleID (-1)
 
 type 'a domain = {
-  dom_id : Mast.DomainId.t;
-  dom_names : Mast.DomainIdSet.t;
+  dom_id : Mast.DomainId.t Pos.marked;
+  dom_names : Pos.t Mast.DomainIdMap.t;
   dom_by_default : bool;
   dom_min : Mast.DomainIdSet.t;
   dom_max : Mast.DomainIdSet.t;
+  dom_rov : IntSet.t;
   dom_data : 'a;
+  dom_used : int Pos.marked option;
 }
 
 type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type rule_data = {
-  rule_domain : rule_domain;
-  rule_chain : (string * rule_domain) option;
-  rule_vars : (Variable.id * variable_data) list;
-  rule_number : rov_id Pos.marked;
-}
-
-module RuleMap = MapExt.Make (struct
-  type t = rov_id
-
-  let compare = compare
-end)
-
-(**{1 Verification conditions}*)
+type 'variable print_arg =
+  | PrintString of string
+  | PrintName of string Pos.marked * variable
+  | PrintAlias of string Pos.marked * variable
+  | PrintIndent of 'variable expression_ Pos.marked
+  | PrintExpr of 'variable expression_ Pos.marked * int * int
 
 type error_descr = {
   kind : string Pos.marked;
@@ -513,7 +492,54 @@ module Error = struct
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
 end
 
-type verif_domain_data = { vdom_auth : CatVarSet.t }
+type instruction =
+  | Affectation of variable_id * variable_data
+  | IfThenElse of
+      expression * instruction Pos.marked list * instruction Pos.marked list
+  | ComputeTarget of string Pos.marked
+  | VerifBlock of instruction Pos.marked list
+  | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Iterate of
+      variable_id
+      * CatVarSet.t
+      * expression Pos.marked
+      * instruction Pos.marked list
+  | Restore of
+      Pos.t VariableMap.t
+      * (variable * CatVarSet.t * expression Pos.marked) list
+      * instruction Pos.marked list
+  | RaiseError of error * string option
+  | CleanErrors
+  | ExportErrors
+  | FinalizeErrors
+
+type rule_data = {
+  rule_apps : Pos.t StrMap.t;
+  rule_domain : rule_domain;
+  rule_chain : (string * rule_domain) option;
+  rule_vars : instruction Pos.marked list;
+  rule_number : rov_id Pos.marked;
+}
+
+module RuleMap = MapExt.Make (struct
+  type t = rov_id
+
+  let compare = compare
+end)
+
+module TargetMap = StrMap
+
+type target_data = {
+  target_name : string Pos.marked;
+  target_file : string option;
+  target_apps : string Pos.marked list;
+  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  target_prog : instruction Pos.marked list;
+}
+
+(**{1 Verification conditions}*)
+
+type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
@@ -546,29 +572,24 @@ let cond_cats_to_set cats =
 
 type condition_data = variable condition_data_
 
-type idmap = Variable.t list Pos.VarNameToID.t
+type idmap = Variable.t Pos.VarNameToID.t
 (** We translate string variables into first-class unique {!type:
     Mir.Variable.t}, so we need to keep a mapping between the two. A name is
     mapped to a list of variables because variables can be redefined in
     different rules *)
 
-type exec_pass = { exec_pass_set_variables : literal Pos.marked VariableMap.t }
-
 type program = {
-  program_var_categories : Pos.t StrMap.t Pos.marked CatVarMap.t;
+  program_safe_prefix : string;
+  program_applications : Pos.t StrMap.t;
+  program_var_categories : cat_variable_data CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : VariableDict.t;
       (** A static register of all variables that can be used during a
           calculation *)
-  program_rules : rule_data RuleMap.t;
-      (** Definitions of variables, some may be removed during optimization
-          passes *)
-  program_conds : condition_data RuleMap.t;
-      (** Conditions are affected to dummy variables *)
+  program_targets : target_data TargetMap.t;
   program_idmap : idmap;
-  program_exec_passes : exec_pass list;
 }
 
 (** {1 Helpers}*)
@@ -592,148 +613,22 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
-let sort_by_lowest_exec_number v1 v2 =
-  -compare_execution_number v1.Variable.execution_number
-     v2.Variable.execution_number
-(* here the minus sign is to have the "meaningful" execution numbers first, and
-   the declarative execution number last *)
-
-let sort_by_highest_exec_number v1 v2 =
-  compare v1.Variable.execution_number v2.Variable.execution_number
-
-let get_max_var_sorted_by_execution_number compare (name : string)
-    (idmap : _ Pos.VarNameToID.t) : Variable.t =
-  let vars = Pos.VarNameToID.find name idmap |> List.sort compare in
-  match vars with [] -> raise Not_found | hd :: _ -> hd
-
-let get_var_sorted_by_execution_number (p : program) (name : string) sort :
-    Variable.t =
-  get_max_var_sorted_by_execution_number sort name p.program_idmap
+let get_var (name : string) (idmap : _ Pos.VarNameToID.t) : Variable.t =
+  Pos.VarNameToID.find name idmap
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try
-    get_var_sorted_by_execution_number p (Pos.unmark name)
-      sort_by_lowest_exec_number
+  try get_var (Pos.unmark name) p.program_idmap
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
-      get_var_sorted_by_execution_number p name sort_by_highest_exec_number
+      get_var name p.program_idmap
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
 (** Explores the rules to find rule and variable data *)
-let find_var_definition (p : program) (var : Variable.t) :
+let find_var_definition (_p : program) (_var : Variable.t) :
     rule_data * variable_data =
-  (* using exceptions to cut short exploration *)
-  let exception Found_rule of rule_data * variable_data in
-  let exception Found_var of variable_data in
-  try
-    RuleMap.iter
-      (fun _ rule_data ->
-        try
-          List.iter
-            (fun (vid, def) -> if var.id = vid then raise (Found_var def))
-            rule_data.rule_vars
-        with Found_var def -> raise (Found_rule (rule_data, def)))
-      p.program_rules;
-    raise Not_found
-  with Found_rule (rule, var) -> (rule, var)
-
-let map_vars (f : Variable.t -> variable_data -> variable_data) (p : program) :
-    program =
-  let program_rules =
-    RuleMap.map
-      (fun rule_data ->
-        let rule_vars =
-          List.map
-            (fun (vid, def) ->
-              let var = VariableDict.find vid p.program_vars in
-              (vid, f var def))
-            rule_data.rule_vars
-        in
-        { rule_data with rule_vars })
-      p.program_rules
-  in
-  { p with program_rules }
-
-let fold_vars (f : Variable.t -> variable_data -> 'a -> 'a) (p : program)
-    (acc : 'a) : 'a =
-  RuleMap.fold
-    (fun _ rule_data acc ->
-      List.fold_left
-        (fun acc (vid, def) ->
-          let var = VariableDict.find vid p.program_vars in
-          f var def acc)
-        acc rule_data.rule_vars)
-    p.program_rules acc
-
-let is_dummy_variable (var : Variable.t) : bool =
-  var.execution_number.rule_number = -1
-
-let find_vars_by_io (p : program) (io_to_find : io) : VariableDict.t =
-  fold_vars
-    (fun var var_data acc ->
-      if
-        var_data.var_io = io_to_find
-        && var
-           = get_var_sorted_by_execution_number p (Pos.unmark var.name)
-               sort_by_lowest_exec_number
-      then VariableDict.add var acc
-      else acc)
-    p VariableDict.empty
-
-let mast_to_catvars (cats : 'a CatVarMap.t)
-    (l : string Pos.marked list Pos.marked) : CatVarSet.t =
-  let filter_cats pred =
-    CatVarMap.fold
-      (fun cv _ res -> if pred cv then CatVarSet.add cv res else res)
-      cats CatVarSet.empty
-  in
-  match l with
-  | [ ("*", _) ], _ -> filter_cats (fun _ -> true)
-  | [ ("saisie", _); ("*", _) ], _ ->
-      filter_cats (fun cv -> match cv with CatInput _ -> true | _ -> false)
-  | ("saisie", _) :: id, pos ->
-      let vcat = CatInput (StrSet.from_marked_list id) in
-      if CatVarMap.mem vcat cats then CatVarSet.singleton vcat
-      else Errors.raise_spanned_error "unknown variable category" pos
-  | ("calculee", _) :: id, id_pos -> begin
-      match id with
-      | [] -> CatVarSet.singleton (CatComputed CatCompSet.empty)
-      | [ ("base", _) ] ->
-          let base = CatCompSet.singleton Base in
-          CatVarSet.singleton (CatComputed base)
-      | [ ("base", _); ("*", _) ] ->
-          let base = CatCompSet.singleton Base in
-          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
-          CatVarSet.singleton (CatComputed base)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | [ ("restituee", _) ] ->
-          let givenBack = CatCompSet.singleton GivenBack in
-          CatVarSet.singleton (CatComputed givenBack)
-      | [ ("restituee", _); ("*", _) ] ->
-          let givenBack = CatCompSet.singleton GivenBack in
-          let baseAndGivenBack = givenBack |> CatCompSet.add Base in
-          CatVarSet.singleton (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          let baseAndGivenBack =
-            CatCompSet.singleton Base |> CatCompSet.add GivenBack
-          in
-          CatVarSet.singleton (CatComputed baseAndGivenBack)
-      | [ ("*", _) ] ->
-          let base = CatCompSet.singleton Base in
-          let givenBack = CatCompSet.singleton GivenBack in
-          let baseAndGivenBack = base |> CatCompSet.add GivenBack in
-          CatVarSet.singleton (CatComputed CatCompSet.empty)
-          |> CatVarSet.add (CatComputed base)
-          |> CatVarSet.add (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-      | _ ->
-          Errors.raise_spanned_error "unlnown calculated variable category"
-            id_pos
-    end
-  | _ -> assert false
+  raise Not_found
 
 let mast_to_catvar (cats : 'a CatVarMap.t)
     (l : string Pos.marked list Pos.marked) : cat_variable =
@@ -754,3 +649,168 @@ let mast_to_catvar (cats : 'a CatVarMap.t)
             id_pos
     end
   | _, pos -> Errors.raise_spanned_error "unknown variable category" pos
+
+let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
+    'var expression_ Pos.marked =
+  match Pos.unmark e with
+  | Comparison (op, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (Comparison (op, new_e1, new_e2)) e
+  | Binop (op, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (Binop (op, new_e1, new_e2)) e
+  | Unop (op, e1) ->
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Unop (op, new_e1)) e
+  | Conditional (e1, e2, e3) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      let new_e3 = expand_functions_expr e3 in
+      Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
+  | Index (var, e1) ->
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Index (var, new_e1)) e
+  | Literal _ -> e
+  | Var _ -> e
+  | LocalVar _ -> e
+  | LocalLet (lvar, e1, e2) ->
+      let new_e1 = expand_functions_expr e1 in
+      let new_e2 = expand_functions_expr e2 in
+      Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e
+  | FunctionCall (SumFunc, args) ->
+      let expr_opt =
+        List.fold_left
+          (fun acc_opt arg ->
+            match acc_opt with
+            | None -> Some (Pos.unmark (expand_functions_expr arg))
+            | Some acc ->
+                Some
+                  (Binop
+                     ( Pos.same_pos_as Mast.Add e,
+                       Pos.same_pos_as acc e,
+                       expand_functions_expr arg )))
+          None args
+      in
+      let expr =
+        match expr_opt with None -> Literal (Float 0.0) | Some expr -> expr
+      in
+      Pos.same_pos_as expr e
+  | FunctionCall (GtzFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Gt e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (GtezFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Gte e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
+      let earg1 = expand_functions_expr arg1 in
+      let earg2 = expand_functions_expr arg2 in
+      Pos.same_pos_as (FunctionCall (f, [ earg1; earg2 ])) e
+  | FunctionCall (AbsFunc, [ arg ]) ->
+      Pos.same_pos_as (FunctionCall (AbsFunc, [ expand_functions_expr arg ])) e
+  | FunctionCall (NullFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (Comparison
+           ( Pos.same_pos_as Mast.Eq e,
+             expand_functions_expr arg,
+             Pos.same_pos_as (Literal (Float 0.0)) e ))
+        e
+  | FunctionCall (PresentFunc, [ arg ]) ->
+      (* we do not expand this function as it deals specifically with undefined
+         variables *)
+      Pos.same_pos_as
+        (FunctionCall (PresentFunc, [ expand_functions_expr arg ]))
+        e
+  | FunctionCall (ArrFunc, [ arg ]) ->
+      (* we do not expand this function as it requires modulo or modf *)
+      Pos.same_pos_as (FunctionCall (ArrFunc, [ expand_functions_expr arg ])) e
+  | FunctionCall (InfFunc, [ arg ]) ->
+      (* we do not expand this function as it requires modulo or modf *)
+      Pos.same_pos_as (FunctionCall (InfFunc, [ expand_functions_expr arg ])) e
+  | _ -> e
+
+let expand_functions (p : program) : program =
+  let map_var _var def =
+    match def.var_definition with
+    | InputVar -> def
+    | SimpleVar e ->
+        { def with var_definition = SimpleVar (expand_functions_expr e) }
+    | TableVar (size, defg) -> (
+        match defg with
+        | IndexGeneric (v, e) ->
+            {
+              def with
+              var_definition =
+                TableVar (size, IndexGeneric (v, expand_functions_expr e));
+            }
+        | IndexTable es ->
+            {
+              def with
+              var_definition =
+                TableVar
+                  ( size,
+                    IndexTable
+                      (IndexMap.map (fun e -> expand_functions_expr e) es) );
+            })
+  in
+  let program_targets =
+    let rec map_instr m_instr =
+      let instr, instr_pos = m_instr in
+      match instr with
+      | Affectation (v_id, v_data) ->
+          (Affectation (v_id, map_var v_id v_data), instr_pos)
+      | IfThenElse (i, t, e) ->
+          let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
+          let t' = List.map map_instr t in
+          let e' = List.map map_instr e in
+          (IfThenElse (i', t', e'), instr_pos)
+      | ComputeTarget _ -> m_instr
+      | VerifBlock instrs ->
+          let instrs' = List.map map_instr instrs in
+          (VerifBlock instrs', instr_pos)
+      | Print (out, pr_args) ->
+          let pr_args' =
+            List.map
+              (fun m_arg ->
+                let arg, arg_pos = m_arg in
+                match arg with
+                | PrintIndent e ->
+                    let e' = expand_functions_expr e in
+                    (PrintIndent e', arg_pos)
+                | PrintExpr (e, mi, ma) ->
+                    let e' = expand_functions_expr e in
+                    (PrintExpr (e', mi, ma), arg_pos)
+                | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
+              pr_args
+          in
+          (Print (out, pr_args'), instr_pos)
+      | Iterate (v_id, cats, e, instrs) ->
+          let e' = expand_functions_expr e in
+          let instrs' = List.map map_instr instrs in
+          (Iterate (v_id, cats, e', instrs'), instr_pos)
+      | Restore (vars, filters, instrs) ->
+          let filters' =
+            List.map
+              (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
+              filters
+          in
+          let instrs' = List.map map_instr instrs in
+          (Restore (vars, filters', instrs'), instr_pos)
+      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+    in
+    TargetMap.map
+      (fun t ->
+        let target_prog = List.map map_instr t.target_prog in
+        { t with target_prog })
+      p.program_targets
+  in
+  { p with program_targets }

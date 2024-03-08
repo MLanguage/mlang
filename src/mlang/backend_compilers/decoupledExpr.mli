@@ -1,5 +1,6 @@
 type offset =
   | GetValueConst of int
+  | GetValueExpr of string
   | GetValueVar of Bir.variable
   | PassPointer
   | None
@@ -109,6 +110,9 @@ val comp : string -> constr -> constr -> constr
 
 val dfun : string -> constr list -> constr
 (** Function call *)
+
+val dinstr : string -> constr
+(** Direct instruction *)
 
 val access : Bir.variable -> dflag -> constr -> constr
 (** Arbitrary access to M TGV variable. Either defineness of valuation *)
