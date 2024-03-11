@@ -91,7 +91,7 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_it : Mir.Variable.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
@@ -117,7 +117,7 @@ module type S = sig
 
   val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
 
-  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+  val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
   (** Interpreter runtime errors *)
   type run_error =

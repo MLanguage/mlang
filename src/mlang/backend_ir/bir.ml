@@ -53,7 +53,7 @@ type offset_alloc = { mutable name_map : int NameMap.t; mutable size : int }
    through optimisations *)
 let offset_alloc = { name_map = NameMap.empty; size = 0 }
 
-let allocate_variable (var : Mir.variable) : int =
+let allocate_variable (var : Mir.Variable.t) : int =
   let name = Pos.unmark var.Mir.Variable.name in
   match NameMap.find_opt name offset_alloc.name_map with
   | Some offset -> offset
@@ -69,8 +69,7 @@ let allocate_variable (var : Mir.variable) : int =
 let size_of_tgv () = offset_alloc.size
 
 (* unify SSA variables *)
-let var_from_mir (on_tgv : tgv_id) (v : Mir.Variable.t) : variable =
-  let mir_var = match v.origin with Some v -> v | None -> v in
+let var_from_mir (on_tgv : tgv_id) (mir_var : Mir.Variable.t) : variable =
   { offset = allocate_variable mir_var; on_tgv; mir_var }
 
 let var_to_mir v = v.mir_var
@@ -81,8 +80,8 @@ let map_from_mir_map on_tgv map =
     map VariableMap.empty
 
 let set_from_mir_dict on_tgv dict =
-  Mir.VariableDict.fold
-    (fun var -> VariableSet.add (var_from_mir on_tgv var))
+  StrMap.fold
+    (fun _ var -> VariableSet.add (var_from_mir on_tgv var))
     dict VariableSet.empty
 
 type expression = variable Mir.expression_
@@ -141,7 +140,6 @@ type program = {
   targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  idmap : Mir.idmap;
   mir_program : Mir.program;
 }
 
