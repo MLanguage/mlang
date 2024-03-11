@@ -843,21 +843,15 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        match var.Mir.cats with
+        match var.Mir.Variable.cats with
         | Some c when Mir.compare_cat_variable c cat = 0 ->
             Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-              (Pos.unmark var.Mir.name)
-              (match var.Mir.alias with Some s -> s | None -> "")
+              (Pos.unmark var.Mir.Variable.name)
+              (match var.Mir.Variable.alias with Some s -> s | None -> "")
               idx size id_int;
-            let attr_map =
-              List.fold_left
-                (fun res (an, al) ->
-                  let vn = Pos.unmark an in
-                  let vl = Pos.unmark al in
-                  StrMap.add vn vl res)
-                StrMap.empty var.Mir.attributes
-            in
-            StrMap.iter (fun _ av -> Format.fprintf fmt ", %d" av) attr_map;
+            StrMap.iter
+              (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
+              var.Mir.Variable.attributes;
             Format.fprintf fmt " },\n";
             nb + 1
         | _ -> nb)
@@ -896,10 +890,11 @@ let gen_table_varinfos fmt cprog vars =
       Format.fprintf fmt "}\n\n")
     cprog.Bir.mir_program.program_var_categories;
   let var_dict =
-    Mir.VariableDict.fold
-      (fun var dict ->
-        match var.Mir.cats with
-        | Some _ -> StrMap.add (Pos.unmark var.Mir.name) (var, -1, -1) dict
+    StrMap.fold
+      (fun _ var dict ->
+        match var.Mir.Variable.cats with
+        | Some _ ->
+            StrMap.add (Pos.unmark var.Mir.Variable.name) (var, -1, -1) dict
         | None -> dict)
       cprog.Bir.mir_program.program_vars StrMap.empty
   in
@@ -2214,20 +2209,20 @@ let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
   (* let open Dgfip_varid in *)
   let pvars = cprog.mir_program.program_vars in
-  let add vn v vm =
+  let add vn (v : Variable.t) vm =
     let vs =
       match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
       | Some vs -> vs
     in
-    StrMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
+    StrMap.add (Pos.unmark v.name) (VariableSet.add v vs) vm
   in
   (* Build a map from variable names to all their definitions (with different
      ids) *)
   let vars_map =
-    VariableDict.fold
-      (fun v vm ->
-        let vm = add (Pos.unmark v.Variable.name) v vm in
+    StrMap.fold
+      (fun _ (v : Variable.t) vm ->
+        let vm = add (Pos.unmark v.name) v vm in
         match v.Variable.alias with Some a -> add a v vm | None -> vm)
       pvars StrMap.empty
   in

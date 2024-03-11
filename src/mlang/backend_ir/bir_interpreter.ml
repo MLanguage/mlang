@@ -74,7 +74,7 @@ module type S = sig
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_it : Mir.Variable.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
@@ -99,7 +99,7 @@ module type S = sig
 
   val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
 
-  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+  val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
   type run_error =
     | NanOrInf of string * Bir.expression Pos.marked
@@ -194,7 +194,7 @@ struct
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
     ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_it : Mir.Variable.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Mir.error * string option) list;
@@ -211,7 +211,7 @@ struct
     {
       ctx_local_vars = Mir.LocalVariableMap.empty;
       ctx_vars = Bir.VariableMap.empty;
-      ctx_it = IntMap.empty;
+      ctx_it = StrMap.empty;
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
@@ -266,12 +266,12 @@ struct
           ctx.ctx_vars;
     }
 
-  let complete_ctx (ctx : ctx) (vars : Mir.VariableDict.t) : ctx =
+  let complete_ctx (ctx : ctx) (vars : Mir.Variable.t StrMap.t) : ctx =
     {
       ctx with
       ctx_vars =
-        Mir.VariableDict.fold
-          (fun mvar ctx_vars ->
+        StrMap.fold
+          (fun _ mvar ctx_vars ->
             let var = Bir.(var_from_mir default_tgv) mvar in
             match Bir.VariableMap.find_opt var ctx.ctx_vars with
             | Some _ -> ctx_vars
@@ -392,7 +392,7 @@ struct
         | Index (var, e1) -> (
             let var = Pos.unmark var in
             let var =
-              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+              match StrMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
               | Some mvar -> Bir.(var_from_mir default_tgv) mvar
               | None -> var
             in
@@ -416,7 +416,7 @@ struct
             with Not_found -> assert false (* should not happen*))
         | Var var ->
             let var =
-              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+              match StrMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
               | Some mvar -> Bir.(var_from_mir default_tgv) mvar
               | None -> var
             in
@@ -522,18 +522,14 @@ struct
                 | Some f -> Number (N.of_int f)))
         | FunctionCall (_func, _) -> assert false
         | Attribut (_v, var, a) -> (
-            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
+            match StrMap.find_opt var.mir_var.id ctx.ctx_it with
             | Some mvar -> (
-                match
-                  List.find_opt
-                    (fun (attr, _) -> Pos.unmark a = Pos.unmark attr)
-                    mvar.attributes
-                with
-                | Some (_, l) -> Number (N.of_float (float (Pos.unmark l)))
+                match StrMap.find_opt (Pos.unmark a) mvar.attributes with
+                | Some l -> Number (N.of_float (float (Pos.unmark l)))
                 | None -> Undefined)
             | None -> assert false)
         | Size var -> (
-            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
+            match StrMap.find_opt var.mir_var.id ctx.ctx_it with
             | Some mvar -> (
                 match mvar.is_table with
                 | Some i -> Number (N.of_float (float_of_int i))
@@ -582,7 +578,7 @@ struct
       var_value =
     match vdef with
     | Mir.SimpleVar e -> (
-        match var.Bir.mir_var.Mir.is_table with
+        match var.Bir.mir_var.Mir.Variable.is_table with
         | Some sz ->
             let value = evaluate_expr ctx p.mir_program e in
             let tab =
@@ -606,7 +602,7 @@ struct
               | Some (TableVar (s, t)) -> if s > 0 then t.(0) else Undefined
               | None -> assert false
             in
-            match var.Bir.mir_var.Mir.is_table with
+            match var.Bir.mir_var.Mir.Variable.is_table with
             | Some sz ->
                 assert (size = sz);
                 let tab =
@@ -631,7 +627,7 @@ struct
                     if i' = 0 then SimpleVar (evaluate_expr ctx p.mir_program e)
                     else curr_value))
         | IndexTable it -> (
-            match var.Bir.mir_var.Mir.is_table with
+            match var.Bir.mir_var.Mir.Variable.is_table with
             | Some sz ->
                 assert (size = sz);
                 let tab =
@@ -660,7 +656,7 @@ struct
     match Pos.unmark stmt with
     | Bir.SAssign (var, vdef) ->
         let var =
-          match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
+          match StrMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
           | Some mvar -> Bir.(var_from_mir default_tgv) mvar
           | None -> var
         in
@@ -733,14 +729,17 @@ struct
               match arg with
               | Mir.PrintString s -> pr_raw ctx_pr s
               | Mir.PrintName (_, var) -> (
-                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
-                  | Some mvar -> pr_raw ctx_pr (Pos.unmark mvar.Mir.name)
+                  match StrMap.find_opt var.Mir.Variable.id ctx.ctx_it with
+                  | Some mvar ->
+                      pr_raw ctx_pr (Pos.unmark mvar.Mir.Variable.name)
                   | None -> assert false)
               | Mir.PrintAlias (_, var) -> (
-                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
+                  match StrMap.find_opt var.Mir.Variable.id ctx.ctx_it with
                   | Some mvar ->
                       pr_raw ctx_pr
-                        (match mvar.Mir.alias with Some a -> a | None -> "")
+                        (match mvar.Mir.Variable.alias with
+                        | Some a -> a
+                        | None -> "")
                   | None -> assert false)
               | Mir.PrintIndent e ->
                   let var_value =
@@ -774,13 +773,13 @@ struct
         | Mast.StdErr -> { ctx with ctx_pr_err = ctx_pr })
     | Bir.SIterate (var, vcs, expr, stmts) ->
         let eval vc ctx =
-          Mir.VariableDict.fold
-            (fun v ctx ->
-              if v.Mir.cats = Some vc then
+          StrMap.fold
+            (fun _ v ctx ->
+              if v.Mir.Variable.cats = Some vc then
                 let ctx =
                   {
                     ctx with
-                    ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
+                    ctx_it = StrMap.add var.Bir.mir_var.id v ctx.ctx_it;
                   }
                 in
                 match evaluate_simple_variable p ctx expr with
@@ -799,7 +798,7 @@ struct
           Bir.VariableSet.fold
             (fun v backup ->
               let v =
-                match IntMap.find_opt v.mir_var.id ctx.ctx_it with
+                match StrMap.find_opt v.mir_var.id ctx.ctx_it with
                 | None -> v
                 | Some v -> Bir.(var_from_mir default_tgv) v
               in
@@ -812,13 +811,13 @@ struct
             (fun backup (var, vcs, expr) ->
               Mir.CatVarSet.fold
                 (fun vc backup ->
-                  Mir.VariableDict.fold
-                    (fun v backup ->
-                      if v.Mir.cats = Some vc then
+                  StrMap.fold
+                    (fun _ v backup ->
+                      if v.Mir.Variable.cats = Some vc then
                         let ctx =
                           {
                             ctx with
-                            ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
+                            ctx_it = StrMap.add var.Bir.mir_var.id v ctx.ctx_it;
                           }
                         in
                         match evaluate_simple_variable p ctx expr with
@@ -1073,7 +1072,7 @@ let evaluate_program (p : Bir.program) (inputs : Mir.literal Bir.VariableMap.t)
   let ctx = Interp.evaluate_program p ctx 0 in
   let varMap =
     let fold var value res =
-      let name = Pos.unmark var.Bir.mir_var.Mir.name in
+      let name = Pos.unmark var.Bir.mir_var.Mir.Variable.name in
       let fVal =
         match value with
         | Interp.SimpleVar litt -> (

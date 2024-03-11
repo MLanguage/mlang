@@ -15,34 +15,36 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 let rec translate_m_code (m_program : Mir.program)
+    (target_vars : Mir.Variable.t StrMap.t)
     (instrs : Mir.instruction Pos.marked list) =
   let rec aux res = function
     | [] -> List.rev res
     | (Mir.Affectation (vid, vdef), pos) :: instrs -> (
-        try
-          let var = Mir.VariableDict.find vid m_program.program_vars in
-          let var_definition =
-            Mir.map_var_def_var
-              Bir.(var_from_mir default_tgv)
-              vdef.Mir.var_definition
-          in
-          match var_definition with
-          | InputVar -> aux res instrs
-          | TableVar _ | SimpleVar _ ->
-              aux
-                (( Bir.SAssign
-                     (Bir.(var_from_mir default_tgv) var, var_definition),
-                   Pos.get_position var.name )
-                :: res)
-                instrs
-        with Not_found ->
-          Errors.raise_spanned_error
-            (Format.sprintf "unknown variable id %d" vid)
-            pos)
+        let var =
+          match StrMap.find_opt vid target_vars with
+          | Some var -> var
+          | None ->
+              Errors.raise_spanned_error
+                (Format.sprintf "unknown variable %s" vid)
+                pos
+        in
+        let var_definition =
+          Mir.map_var_def_var
+            Bir.(var_from_mir default_tgv)
+            vdef.Mir.var_definition
+        in
+        match var_definition with
+        | InputVar -> aux res instrs
+        | TableVar _ | SimpleVar _ ->
+            aux
+              (( Bir.SAssign (Bir.(var_from_mir default_tgv) var, var_definition),
+                 Pos.get_position var.name )
+              :: res)
+              instrs)
     | (Mir.IfThenElse (e, ilt, ile), pos) :: instrs ->
         let expr = Mir.map_expr_var Bir.(var_from_mir default_tgv) e in
-        let stmts_then = translate_m_code m_program ilt in
-        let stmts_else = translate_m_code m_program ile in
+        let stmts_then = translate_m_code m_program target_vars ilt in
+        let stmts_else = translate_m_code m_program target_vars ile in
         aux
           ((Bir.SConditional (expr, stmts_then, stmts_else), pos) :: res)
           instrs
@@ -58,7 +60,7 @@ let rec translate_m_code (m_program : Mir.program)
         in
         aux (stmt :: res) instrs
     | (Mir.VerifBlock stmts, pos) :: instrs ->
-        let stmts' = translate_m_code m_program stmts in
+        let stmts' = translate_m_code m_program target_vars stmts in
         aux ((Bir.SVerifBlock stmts', pos) :: res) instrs
     | (Mir.Print (std, args), pos) :: instrs ->
         let bir_args =
@@ -93,32 +95,32 @@ let rec translate_m_code (m_program : Mir.program)
         aux ((Bir.SPrint (std, bir_args), pos) :: res) instrs
     | (Mir.Iterate (v, vcs, e, iit), pos) :: instrs ->
         let var =
-          Bir.(var_from_mir default_tgv)
-            (Mir.VariableDict.find v m_program.program_vars)
+          Mir.Variable.new_var (v, pos) None ("iterate", pos)
+            ~attributes:StrMap.empty ~cats:None ~typ:None ~is_table:None
+            ~is_temp:false ~is_it:true
         in
+        let target_vars = StrMap.add v var target_vars in
+        let bir_var = Bir.(var_from_mir default_tgv) var in
         let expr =
           Mir.map_expr_var Bir.(var_from_mir default_tgv) (Pos.unmark e)
         in
-        let stmts = translate_m_code m_program iit in
-        aux ((Bir.SIterate (var, vcs, expr, stmts), pos) :: res) instrs
+        let stmts = translate_m_code m_program target_vars iit in
+        aux ((Bir.SIterate (bir_var, vcs, expr, stmts), pos) :: res) instrs
     | (Mir.Restore (vars, var_params, irest), pos) :: instrs ->
         let vars =
           Mir.VariableMap.fold
             (fun v _ vars ->
               let var =
                 Bir.(var_from_mir default_tgv)
-                  (Mir.VariableDict.find v.Mir.id m_program.program_vars)
+                  (StrMap.find v.Mir.Variable.id target_vars)
               in
               Bir.VariableSet.add var vars)
             vars Bir.VariableSet.empty
         in
         let var_params =
           List.fold_left
-            (fun var_params ((v : Mir.variable), vcs, expr) ->
-              let var =
-                Bir.(var_from_mir default_tgv)
-                  (Mir.VariableDict.find v.Mir.id m_program.program_vars)
-              in
+            (fun var_params ((v : Mir.Variable.t), vcs, expr) ->
+              let var = Bir.(var_from_mir default_tgv) v in
               let expr =
                 Mir.map_expr_var
                   Bir.(var_from_mir default_tgv)
@@ -127,7 +129,7 @@ let rec translate_m_code (m_program : Mir.program)
               (var, vcs, expr) :: var_params)
             [] var_params
         in
-        let stmts = translate_m_code m_program irest in
+        let stmts = translate_m_code m_program target_vars irest in
         aux ((Bir.SRestore (vars, var_params, stmts), pos) :: res) instrs
     | (Mir.RaiseError (err, var_opt), pos) :: instrs ->
         aux ((Bir.SRaiseError (err, var_opt), pos) :: res) instrs
@@ -146,7 +148,15 @@ let create_combined_program (m_program : Mir.program)
     let targets =
       Mir.TargetMap.fold
         (fun n t targets ->
-          let code = translate_m_code m_program t.Mir.target_prog in
+          let target_vars =
+            StrMap.union
+              (fun _ _ _ -> assert false)
+              m_program.program_vars
+              (StrMap.map
+                 (fun ((v : Mir.Variable.t), _, _) -> v)
+                 t.Mir.target_tmp_vars)
+          in
+          let code = translate_m_code m_program target_vars t.Mir.target_prog in
           Mir.TargetMap.add n
             Bir.
               {
@@ -171,7 +181,6 @@ let create_combined_program (m_program : Mir.program)
       rules_and_verifs = Bir.ROVMap.empty;
       mpp_functions = Bir.FunctionMap.empty;
       main_function = mpp_function_to_extract;
-      idmap = m_program.program_idmap;
       mir_program = m_program;
     }
   with Bir_interpreter.FloatDefInterp.RuntimeError (r, _ctx) ->

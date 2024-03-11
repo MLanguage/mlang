@@ -34,6 +34,9 @@ val format_error : Format.formatter -> Mir.Error.t -> unit
 val format_precondition : Format.formatter -> Mir.condition_data -> unit
 
 val format_program_rules :
-  Format.formatter -> Mir.VariableDict.t -> Mir.rule_data Mir.RuleMap.t -> unit
+  Format.formatter ->
+  Mir.Variable.t StrMap.t ->
+  Mir.rule_data Mir.RuleMap.t ->
+  unit
 
 val format_variable : Format.formatter -> Mir.Variable.t -> unit

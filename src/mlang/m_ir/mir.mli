@@ -39,24 +39,40 @@ type cat_variable_data = {
   attributs : Pos.t StrMap.t;
 }
 
-type variable_id = int
+type variable_id = string
 (** Each variable has an unique ID *)
 
-type variable = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  alias : string option;  (** Input variable have an alias *)
-  id : variable_id;
-  descr : string Pos.marked;
-      (** Description taken from the variable declaration *)
-  attributes : Mast.variable_attribute list;
-  origin : variable option;
-      (** If the variable is an SSA duplication, refers to the original
-          (declared) variable *)
-  cats : cat_variable option;
-  is_table : int option;
-  is_temp : bool;
-  is_it : bool;
-}
+module Variable : sig
+  type id = variable_id
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    alias : string option;  (** Input variable have an alias *)
+    id : variable_id;
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attributes : int Pos.marked StrMap.t;
+    cats : cat_variable option;
+    typ : Mast.value_typ option;
+    is_table : int option;
+    is_temp : bool;
+    is_it : bool;
+  }
+
+  val new_var :
+    string Pos.marked ->
+    string option ->
+    string Pos.marked ->
+    attributes:int Pos.marked StrMap.t ->
+    cats:cat_variable option ->
+    typ:Mast.value_typ option ->
+    is_table:int option ->
+    is_temp:bool ->
+    is_it:bool ->
+    t
+
+  val compare : t -> t -> int
+end
 
 type local_variable = { id : int }
 
@@ -118,15 +134,13 @@ type 'variable expression_ =
   | NbInformatives
   | NbBloquantes
 
-type expression = variable expression_
+type expression = Variable.t expression_
 
-module VariableMap : MapExt.T with type key = variable
+module VariableMap : MapExt.T with type key = Variable.t
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
 
-module VariableDict : Dict.S with type key = variable_id and type elt = variable
-
-module VariableSet : SetExt.T with type elt = variable
+module VariableSet : SetExt.T with type elt = Variable.t
 
 module LocalVariableMap : sig
   include MapExt.T with type key = local_variable
@@ -144,7 +158,7 @@ type 'variable variable_def_ =
   | TableVar of int * 'variable index_def
   | InputVar
 
-type variable_def = variable variable_def_
+type variable_def = Variable.t variable_def_
 
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
@@ -153,7 +167,7 @@ type 'variable variable_data_ = {
           program *)
 }
 
-type variable_data = variable variable_data_
+type variable_data = Variable.t variable_data_
 
 type rov_id = RuleID of int | VerifID of int
 
@@ -178,8 +192,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked * variable
-  | PrintAlias of string Pos.marked * variable
+  | PrintName of string Pos.marked * Variable.t
+  | PrintAlias of string Pos.marked * Variable.t
   | PrintIndent of 'variable expression_ Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
@@ -195,7 +209,6 @@ type error_descr = {
 
 type error = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  id : int;  (** Each variable has an unique ID *)
   descr : error_descr;  (** Description taken from the variable declaration *)
   typ : Mast.error_typ;
 }
@@ -211,7 +224,6 @@ module Error : sig
 
   type t = error = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    id : int;  (** Each variable has an unique ID *)
     descr : error_descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
@@ -229,7 +241,7 @@ type instruction =
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeTarget of string Pos.marked
   | VerifBlock of instruction Pos.marked list
-  | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Print of Mast.print_std * Variable.t print_arg Pos.marked list
   | Iterate of
       variable_id
       * CatVarSet.t
@@ -237,7 +249,7 @@ type instruction =
       * instruction Pos.marked list
   | Restore of
       Pos.t VariableMap.t
-      * (variable * CatVarSet.t * expression Pos.marked) list
+      * (Variable.t * CatVarSet.t * expression Pos.marked) list
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
@@ -256,7 +268,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked list;
-  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 
@@ -273,12 +285,7 @@ type 'variable condition_data_ = {
   cond_cats : int CatVarMap.t;
 }
 
-type condition_data = variable condition_data_
-
-type idmap = variable Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type: Mir.variable},
-    so we need to keep a mapping between the two. A name is mapped to a list of
-    variables because variables can be redefined in different rules *)
+type condition_data = Variable.t condition_data_
 
 type program = {
   program_safe_prefix : string;
@@ -287,48 +294,11 @@ type program = {
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;
-  program_vars : VariableDict.t;
+  program_vars : Variable.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_targets : target_data TargetMap.t;
-  program_idmap : idmap;
 }
-
-module Variable : sig
-  type id = variable_id
-
-  type t = variable = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    alias : string option;  (** Input variable have an alias *)
-    id : variable_id;
-    descr : string Pos.marked;
-        (** Description taken from the variable declaration *)
-    attributes : Mast.variable_attribute list;
-    origin : variable option;
-        (** If the variable is an SSA duplication, refers to the original
-            (declared) variable *)
-    cats : cat_variable option;
-    is_table : int option;
-    is_temp : bool;
-    is_it : bool;
-  }
-
-  val fresh_id : unit -> id
-
-  val new_var :
-    string Pos.marked ->
-    string option ->
-    string Pos.marked ->
-    attributes:Mast.variable_attribute list ->
-    origin:variable option ->
-    cats:cat_variable option ->
-    is_table:int option ->
-    is_temp:bool ->
-    is_it:bool ->
-    variable
-
-  val compare : t -> t -> int
-end
 
 (** Local variables don't appear in the M source program but can be introduced
     by let bindings when translating to MIR. They should be De Bruijn indices
@@ -359,15 +329,13 @@ val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
 
 val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
 
-val find_var_definition : program -> variable -> rule_data * variable_data
-
-val get_var : string -> Variable.t Pos.VarNameToID.t -> Variable.t
+val find_var_definition : program -> Variable.t -> rule_data * variable_data
 
 val fresh_rule_num : unit -> int
 
 val initial_undef_rule_id : rov_id
 
-val find_var_by_name : program -> string Pos.marked -> variable
+val find_var_by_name : program -> string Pos.marked -> Variable.t
 (** Get a variable for a given name or alias, because of SSA multiple variables
     share a name or alias. If an alias is provided, the variable returned is
     that with the lowest execution number. When a name is provided, then the

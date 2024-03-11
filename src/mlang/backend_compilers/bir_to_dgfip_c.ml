@@ -301,7 +301,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
   match def with
   | SimpleVar e ->
       let se = generate_c_expr e var_indexes in
-      if var.Bir.mir_var.Mir.is_it then (
+      if var.Bir.mir_var.Mir.Variable.is_it then (
         let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
         let idx = fresh_c_local "idxPROUT" in

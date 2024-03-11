@@ -87,8 +87,6 @@ let same_pos_as (x : 'a) ((_, y) : 'b marked) : 'a marked = (x, y)
 let unmark_option (x : 'a marked option) : 'a option =
   match x with Some x -> Some (unmark x) | None -> None
 
-module VarNameToID = StrMap
-
 let get_start_line (pos : t) : int =
   let s, _ = pos.pos_loc in
   s.Lexing.pos_lnum
