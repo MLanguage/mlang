@@ -93,7 +93,6 @@ type program = {
   targets : target_function Mir.TargetMap.t;
   rules_and_verifs : rule_or_verif ROVMap.t;
   main_function : function_name;
-  idmap : Mir.idmap;
   mir_program : Mir.program;
 }
 
@@ -109,7 +108,7 @@ val compare_variable : variable -> variable -> int
 
 val map_from_mir_map : tgv_id -> 'a Mir.VariableMap.t -> 'a VariableMap.t
 
-val set_from_mir_dict : tgv_id -> Mir.VariableDict.t -> VariableSet.t
+val set_from_mir_dict : tgv_id -> Mir.Variable.t StrMap.t -> VariableSet.t
 
 val rule_or_verif_as_statements : rule_or_verif -> stmt list
 

@@ -60,14 +60,14 @@ let rec format_expression fmt (e : expression) =
            (Format_mast.pp_unmark format_expression))
         args
   | Literal lit -> format_literal fmt lit
-  | Var var -> Format.fprintf fmt "%s" (Pos.unmark var.Variable.name)
+  | Var var -> Format.fprintf fmt "%s" (Pos.unmark var.name)
   | LocalVar lvar -> Format.fprintf fmt "t%d" lvar.LocalVariable.id
   | LocalLet (lvar, (e1, _), (e2, _)) ->
       Format.fprintf fmt "soit t%d = (%a) dans %a" lvar.LocalVariable.id
         format_expression e1 format_expression e2
   | Index (var, i) ->
       Format.fprintf fmt "%s[%a]"
-        (Pos.unmark (Pos.unmark var).Variable.name)
+        (Pos.unmark (Pos.unmark var).name)
         format_expression (Pos.unmark i)
   | NbCategory cats ->
       Format.fprintf fmt "nb_categorie(%a)" (Mir.CatVarSet.pp ()) cats
@@ -84,9 +84,8 @@ let format_variable_def fmt (def : variable_def) =
   | SimpleVar e -> Format.fprintf fmt "%a@\n" format_expression (Pos.unmark e)
   | InputVar -> Format.fprintf fmt "[User input]@\n"
   | TableVar (_, IndexGeneric (v, e)) ->
-      Format.fprintf fmt "%s -> %a@\n"
-        (Pos.unmark v.Variable.name)
-        format_expression (Pos.unmark e)
+      Format.fprintf fmt "%s -> %a@\n" (Pos.unmark v.name) format_expression
+        (Pos.unmark e)
   | TableVar (_, IndexTable defs) ->
       IndexMap.pp (Format_mast.pp_unmark format_expression) fmt defs
 
@@ -109,11 +108,11 @@ let format_precondition fmt (precond : condition_data) =
   Format.fprintf fmt "Précondition : %a\nSinon %a%a" format_expression
     (Pos.unmark precond.cond_expr)
     format_error (fst precond.cond_error)
-    (Format.pp_print_option (fun fmt v ->
-         Format.fprintf fmt " (%s)" (Pos.unmark v.Variable.name)))
+    (Format.pp_print_option (fun fmt (v : Variable.t) ->
+         Format.fprintf fmt " (%s)" (Pos.unmark v.name)))
     (snd precond.cond_error)
 
-let format_program_rules fmt (vars : VariableDict.t)
+let format_program_rules fmt (vars : Variable.t StrMap.t)
     (rules : rule_data RuleMap.t) =
   RuleMap.iter
     (fun _ { rule_vars; rule_number; _ } ->
@@ -122,7 +121,7 @@ let format_program_rules fmt (vars : VariableDict.t)
           (fun var_defs instr ->
             match Pos.unmark instr with
             | Mir.Affectation (vid, def) ->
-                let var = VariableDict.find vid vars in
+                let var = StrMap.find vid vars in
                 VariableMap.add var def var_defs
             | _ -> assert false
             (* never used *))
@@ -134,6 +133,4 @@ let format_program_rules fmt (vars : VariableDict.t)
     rules
 
 let format_variable fmt (v : Variable.t) =
-  Format.fprintf fmt "%s: %s"
-    (Pos.unmark v.Variable.name)
-    (Pos.unmark v.Variable.descr)
+  Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Pos.unmark v.descr)

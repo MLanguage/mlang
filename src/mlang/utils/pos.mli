@@ -45,8 +45,6 @@ val same_pos_as : 'a -> 'b marked -> 'a marked
 
 val unmark_option : 'a marked option -> 'a option
 
-module VarNameToID : StrMap.T
-
 val get_start_line : t -> int
 
 val get_start_column : t -> int

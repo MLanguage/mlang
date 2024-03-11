@@ -21,10 +21,10 @@ let convert_pos (pos : Irj_ast.pos) =
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     Mir.Variable.t =
-  try Pos.VarNameToID.find (Pos.unmark name) p.program_idmap
+  try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found ->
     let name = Mir.find_var_name_by_alias p name in
-    Pos.VarNameToID.find name p.program_idmap
+    StrMap.find name p.program_vars
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
     float StrMap.t * StrSet.t * Mir.literal Bir.VariableMap.t =

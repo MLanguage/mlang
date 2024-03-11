@@ -93,63 +93,38 @@ type cat_variable_data = {
   attributs : Pos.t StrMap.t;
 }
 
-type variable_id = int
+type variable_id = string
 (** Each variable has an unique ID *)
-
-type variable = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  alias : string option;  (** Input variable have an alias *)
-  id : variable_id;
-  descr : string Pos.marked;
-      (** Description taken from the variable declaration *)
-  attributes : Mast.variable_attribute list;
-  origin : variable option;
-      (** If the variable is an SSA duplication, refers to the original
-          (declared) variable *)
-  cats : cat_variable option;
-  is_table : int option;
-  is_temp : bool;
-  is_it : bool;
-}
 
 module Variable = struct
   type id = variable_id
 
-  type t = variable = {
+  type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     alias : string option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
-    attributes : Mast.variable_attribute list;
-    origin : variable option;
-        (** If the variable is an SSA duplication, refers to the original
-            (declared) variable *)
+    attributes : int Pos.marked StrMap.t;
     cats : cat_variable option;
+    typ : Mast.value_typ option;
     is_table : int option;
     is_temp : bool;
     is_it : bool;
   }
 
-  let fresh_id : unit -> id =
-    let counter : int ref = ref 0 in
-    fun () ->
-      let v = !counter in
-      counter := !counter + 1;
-      v
-
   let new_var (name : string Pos.marked) (alias : string option)
-      (descr : string Pos.marked) ~(attributes : Mast.variable_attribute list)
-      ~(origin : t option) ~(cats : cat_variable option)
+      (descr : string Pos.marked) ~(attributes : int Pos.marked StrMap.t)
+      ~(cats : cat_variable option) ~(typ : Mast.value_typ option)
       ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
     {
       name;
-      id = fresh_id ();
+      id = Pos.unmark name;
       descr;
       alias;
       attributes;
-      origin;
       cats;
+      typ;
       is_table;
       is_temp;
       is_it;
@@ -244,7 +219,7 @@ type 'variable expression_ =
   | NbInformatives
   | NbBloquantes
 
-type expression = variable expression_
+type expression = Variable.t expression_
 
 let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   let map = Pos.map_under_mark (map_expr_var f) in
@@ -290,34 +265,13 @@ module VariableMap = struct
   let pp_key fmt key =
     Format.fprintf fmt "Variable %s%s"
       (Pos.unmark key.Variable.name)
-      (match key.Variable.alias with
-      | Some x -> " (alias " ^ x ^ ")"
-      | None -> "")
+      (match key.alias with Some x -> " (alias " ^ x ^ ")" | None -> "")
 
   let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
       (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
       (map : 'a t) : unit =
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
-
-(* module VariableDictMap = MapExt.Make (struct
- *   type t = Variable.id
- * 
- *   let compare = compare
- * end)
- * 
- * type variable_dict = variable VariableDictMap.t *)
-
-(** Variable dictionary, act as a set but refered by keys *)
-module VariableDict = Dict.Make (struct
-  type t = Variable.id
-
-  type elt = Variable.t
-
-  let key_of_elt v = v.Variable.id
-
-  let compare = compare
-end)
 
 module VariableSet = SetExt.Make (Variable)
 
@@ -370,7 +324,7 @@ let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
       in
       TableVar (i, idef)
 
-type variable_def = variable variable_def_
+type variable_def = Variable.t variable_def_
 
 type 'variable variable_data_ = {
   var_definition : 'variable variable_def_;
@@ -379,7 +333,7 @@ type 'variable variable_data_ = {
           program *)
 }
 
-type variable_data = variable variable_data_
+type variable_data = Variable.t variable_data_
 
 type rov_id = RuleID of int | VerifID of int
 
@@ -412,8 +366,8 @@ type rule_domain = rule_domain_data domain
 
 type 'variable print_arg =
   | PrintString of string
-  | PrintName of string Pos.marked * variable
-  | PrintAlias of string Pos.marked * variable
+  | PrintName of string Pos.marked * Variable.t
+  | PrintAlias of string Pos.marked * Variable.t
   | PrintIndent of 'variable expression_ Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
@@ -428,7 +382,6 @@ type error_descr = {
 
 type error = {
   name : string Pos.marked;  (** The position is the variable declaration *)
-  id : int;  (** Each variable has an unique ID *)
   descr : error_descr;  (** Description taken from the variable declaration *)
   typ : Mast.error_typ;
 }
@@ -444,17 +397,9 @@ module Error = struct
 
   type t = error = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    id : int;  (** Each variable has an unique ID *)
     descr : error_descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
-
-  let counter : int ref = ref 0
-
-  let fresh_id () : int =
-    let v = !counter in
-    counter := !counter + 1;
-    v
 
   let mast_error_desc_to_ErrorDesc (error : Mast.error_) =
     {
@@ -470,12 +415,7 @@ module Error = struct
 
   let new_error (name : string Pos.marked) (error : Mast.error_)
       (error_typ : Mast.error_typ) : t =
-    {
-      name;
-      id = fresh_id ();
-      descr = error |> mast_error_desc_to_ErrorDesc;
-      typ = error_typ;
-    }
+    { name; descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
 
   let err_descr_string (err : t) =
     Pos.same_pos_as
@@ -489,7 +429,7 @@ module Error = struct
          ])
       err.name
 
-  let compare (var1 : t) (var2 : t) = compare var1.id var2.id
+  let compare (var1 : t) (var2 : t) = compare var1.name var2.name
 end
 
 type instruction =
@@ -498,7 +438,7 @@ type instruction =
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeTarget of string Pos.marked
   | VerifBlock of instruction Pos.marked list
-  | Print of Mast.print_std * variable print_arg Pos.marked list
+  | Print of Mast.print_std * Variable.t print_arg Pos.marked list
   | Iterate of
       variable_id
       * CatVarSet.t
@@ -506,7 +446,7 @@ type instruction =
       * instruction Pos.marked list
   | Restore of
       Pos.t VariableMap.t
-      * (variable * CatVarSet.t * expression Pos.marked) list
+      * (Variable.t * CatVarSet.t * expression Pos.marked) list
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
@@ -533,7 +473,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked list;
-  target_tmp_vars : (variable * Pos.t * int option) StrMap.t;
+  target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 
@@ -570,13 +510,7 @@ let cond_cats_to_set cats =
     (fun cv nb res -> if nb > 0 then CatVarSet.add cv res else res)
     cats CatVarSet.empty
 
-type condition_data = variable condition_data_
-
-type idmap = Variable.t Pos.VarNameToID.t
-(** We translate string variables into first-class unique {!type:
-    Mir.Variable.t}, so we need to keep a mapping between the two. A name is
-    mapped to a list of variables because variables can be redefined in
-    different rules *)
+type condition_data = Variable.t condition_data_
 
 type program = {
   program_safe_prefix : string;
@@ -585,11 +519,10 @@ type program = {
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_chainings : rule_domain Mast.ChainingMap.t;
-  program_vars : VariableDict.t;
+  program_vars : Variable.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_targets : target_data TargetMap.t;
-  program_idmap : idmap;
 }
 
 (** {1 Helpers}*)
@@ -597,12 +530,12 @@ type program = {
 (** Throws an error in case of alias not found *)
 let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   let v =
-    VariableDict.fold
-      (fun v acc ->
+    StrMap.fold
+      (fun _ v acc ->
         match (acc, v.Variable.alias) with
         | Some _, _ | None, None -> acc
         | None, Some v_alias ->
-            if v_alias = Pos.unmark alias then Some (Pos.unmark v.Variable.name)
+            if v_alias = Pos.unmark alias then Some (Pos.unmark v.name)
             else None)
       p.program_vars None
   in
@@ -613,15 +546,12 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
-let get_var (name : string) (idmap : _ Pos.VarNameToID.t) : Variable.t =
-  Pos.VarNameToID.find name idmap
-
 let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
-  try get_var (Pos.unmark name) p.program_idmap
+  try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found -> (
     try
       let name = find_var_name_by_alias p name in
-      get_var name p.program_idmap
+      StrMap.find name p.program_vars
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
