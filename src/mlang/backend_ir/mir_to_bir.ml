@@ -28,21 +28,15 @@ let rec translate_m_code (m_program : Mir.program)
                 (Format.sprintf "unknown variable %s" vid)
                 pos
         in
-        let var_definition =
-          Mir.map_var_def_var
-            Bir.(var_from_mir default_tgv)
-            vdef.Mir.var_definition
-        in
+        let var_definition = vdef.Mir.var_definition in
         match var_definition with
         | InputVar -> aux res instrs
         | TableVar _ | SimpleVar _ ->
             aux
-              (( Bir.SAssign (Bir.(var_from_mir default_tgv) var, var_definition),
-                 Pos.get_position var.name )
+              ((Bir.SAssign (var, var_definition), Pos.get_position var.name)
               :: res)
               instrs)
-    | (Mir.IfThenElse (e, ilt, ile), pos) :: instrs ->
-        let expr = Mir.map_expr_var Bir.(var_from_mir default_tgv) e in
+    | (Mir.IfThenElse (expr, ilt, ile), pos) :: instrs ->
         let stmts_then = translate_m_code m_program target_vars ilt in
         let stmts_else = translate_m_code m_program target_vars ile in
         aux
@@ -72,22 +66,8 @@ let rec translate_m_code (m_program : Mir.program)
                    | Mir.PrintString s -> Mir.PrintString s
                    | Mir.PrintName (v, vid) -> Mir.PrintName (v, vid)
                    | Mir.PrintAlias (v, vid) -> Mir.PrintAlias (v, vid)
-                   | Mir.PrintIndent e ->
-                       Mir.PrintIndent
-                         (Pos.same_pos_as
-                            (Mir.map_expr_var
-                               Bir.(var_from_mir default_tgv)
-                               (Pos.unmark e))
-                            e)
-                   | Mir.PrintExpr (e, min, max) ->
-                       Mir.PrintExpr
-                         ( Pos.same_pos_as
-                             (Mir.map_expr_var
-                                Bir.(var_from_mir default_tgv)
-                                (Pos.unmark e))
-                             e,
-                           min,
-                           max )
+                   | Mir.PrintIndent e -> Mir.PrintIndent e
+                   | Mir.PrintExpr (e, min, max) -> Mir.PrintExpr (e, min, max)
                  in
                  bir_arg :: res)
                [] args)
@@ -100,33 +80,21 @@ let rec translate_m_code (m_program : Mir.program)
             ~is_temp:false ~is_it:true
         in
         let target_vars = StrMap.add v var target_vars in
-        let bir_var = Bir.(var_from_mir default_tgv) var in
-        let expr =
-          Mir.map_expr_var Bir.(var_from_mir default_tgv) (Pos.unmark e)
-        in
+        let expr = Pos.unmark e in
         let stmts = translate_m_code m_program target_vars iit in
-        aux ((Bir.SIterate (bir_var, vcs, expr, stmts), pos) :: res) instrs
+        aux ((Bir.SIterate (var, vcs, expr, stmts), pos) :: res) instrs
     | (Mir.Restore (vars, var_params, irest), pos) :: instrs ->
         let vars =
           Mir.VariableMap.fold
             (fun v _ vars ->
-              let var =
-                Bir.(var_from_mir default_tgv)
-                  (StrMap.find v.Mir.Variable.id target_vars)
-              in
-              Bir.VariableSet.add var vars)
-            vars Bir.VariableSet.empty
+              let var = StrMap.find v.Mir.Variable.id target_vars in
+              Mir.VariableSet.add var vars)
+            vars Mir.VariableSet.empty
         in
         let var_params =
           List.fold_left
-            (fun var_params ((v : Mir.Variable.t), vcs, expr) ->
-              let var = Bir.(var_from_mir default_tgv) v in
-              let expr =
-                Mir.map_expr_var
-                  Bir.(var_from_mir default_tgv)
-                  (Pos.unmark expr)
-              in
-              (var, vcs, expr) :: var_params)
+            (fun var_params ((var : Mir.Variable.t), vcs, expr) ->
+              (var, vcs, Pos.unmark expr) :: var_params)
             [] var_params
         in
         let stmts = translate_m_code m_program target_vars irest in
@@ -161,13 +129,8 @@ let create_combined_program (m_program : Mir.program)
             Bir.
               {
                 file = t.Mir.target_file;
-                tmp_vars =
-                  StrMap.map
-                    (fun (var, pos, size) ->
-                      (Bir.(var_from_mir default_tgv) var, pos, size))
-                    t.Mir.target_tmp_vars;
+                tmp_vars = t.Mir.target_tmp_vars;
                 stmts = code;
-                is_verif = true;
               }
             targets)
         m_program.program_targets Mir.TargetMap.empty
@@ -178,8 +141,6 @@ let create_combined_program (m_program : Mir.program)
            mpp_function_to_extract);
     {
       targets;
-      rules_and_verifs = Bir.ROVMap.empty;
-      mpp_functions = Bir.FunctionMap.empty;
       main_function = mpp_function_to_extract;
       mir_program = m_program;
     }

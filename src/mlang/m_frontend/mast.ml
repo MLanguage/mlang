@@ -248,8 +248,8 @@ type rule = {
 type target = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_applications : application Pos.marked list;
-  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
+  target_apps : application Pos.marked StrMap.t;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 

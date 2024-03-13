@@ -46,119 +46,6 @@ let get_var (var_data : Mir.Variable.t StrMap.t)
 
 (**{2 Preliminary passes}*)
 
-(** Retrieves variable declaration data. Done in a separate pass because we
-    don't want to deal with sorting the dependencies between files or inside
-    files. *)
-let get_variables_decl (p : Mast.program) : Mir.Variable.t StrMap.t =
-  List.fold_left
-    (fun vars source_file ->
-      List.fold_left
-        (fun (vars : Mir.Variable.t StrMap.t) source_file_item ->
-          match Pos.unmark source_file_item with
-          | Mast.VariableDecl var_decl -> (
-              match var_decl with
-              | Mast.ConstVar (_, _) -> vars (* already treated before *)
-              | Mast.ComputedVar _ | Mast.InputVar _ -> (
-                  let var_name =
-                    match var_decl with
-                    | Mast.ComputedVar v -> (Pos.unmark v).Mast.comp_name
-                    | Mast.InputVar v -> (Pos.unmark v).Mast.input_name
-                    | Mast.ConstVar _ -> assert false
-                  in
-                  (* First we check if the variable has not been declared a
-                     first time *)
-                  try
-                    let old_pos =
-                      Pos.get_position
-                        (StrMap.find (Pos.unmark var_name) vars)
-                          .Mir.Variable.name
-                    in
-                    Cli.var_info_print
-                      "Dropping declaration of %s %a because variable was \
-                       previously defined %a"
-                      (Pos.unmark var_name) Pos.format_position
-                      (Pos.get_position var_name)
-                      Pos.format_position old_pos;
-                    vars
-                  with Not_found -> (
-                    match var_decl with
-                    | Mast.ComputedVar cvar ->
-                        let cvar = Pos.unmark cvar in
-                        let cat =
-                          let comp_set =
-                            List.fold_left
-                              (fun res (str, pos) ->
-                                let elt =
-                                  match str with
-                                  | "base" -> Mir.Base
-                                  | "restituee" -> Mir.GivenBack
-                                  | _ ->
-                                      Errors.raise_spanned_error
-                                        "unknown computed category (must be \
-                                         \"base\" or \"restituee\")"
-                                        pos
-                                in
-                                Mir.CatCompSet.add elt res)
-                              Mir.CatCompSet.empty cvar.comp_category
-                          in
-                          Mir.CatComputed comp_set
-                        in
-                        let attrs =
-                          List.fold_left
-                            (fun res (name, value) ->
-                              let n = Pos.unmark name in
-                              let v = Pos.unmark value in
-                              StrMap.add n (Pos.same_pos_as v name) res)
-                            StrMap.empty cvar.comp_attributes
-                        in
-                        let new_var =
-                          Mir.Variable.new_var cvar.Mast.comp_name None
-                            cvar.Mast.comp_description ~attributes:attrs
-                            ~cats:(Some cat) ~typ:None
-                            ~is_table:
-                              (Pos.unmark_option
-                                 (Mast.get_table_size_opt cvar.Mast.comp_table))
-                            ~is_temp:false ~is_it:false
-                        in
-                        StrMap.add
-                          (Pos.unmark new_var.Mir.Variable.name)
-                          new_var vars
-                    | Mast.InputVar ivar ->
-                        let ivar = Pos.unmark ivar in
-                        let cat =
-                          let input_set =
-                            List.fold_left
-                              (fun res (str, _pos) -> StrSet.add str res)
-                              StrSet.empty ivar.input_category
-                          in
-                          Mir.CatInput input_set
-                        in
-                        let attrs =
-                          List.fold_left
-                            (fun res (name, value) ->
-                              let n = Pos.unmark name in
-                              let v = Pos.unmark value in
-                              StrMap.add n (Pos.same_pos_as v name) res)
-                            StrMap.empty ivar.input_attributes
-                        in
-
-                        let new_var =
-                          Mir.Variable.new_var ivar.Mast.input_name
-                            (Some (Pos.unmark ivar.Mast.input_alias))
-                            ivar.Mast.input_description ~attributes:attrs
-                            ~cats:(Some cat) ~typ:None ~is_table:None
-                            ~is_temp:false ~is_it:false
-                          (* Input variables also have a low order *)
-                        in
-                        StrMap.add
-                          (Pos.unmark new_var.Mir.Variable.name)
-                          new_var vars
-                    | Mast.ConstVar _ -> assert false)))
-          | Mast.Output _out_name -> vars
-          | _ -> vars)
-        vars source_file)
-    StrMap.empty p
-
 (**{2 SSA construction}*)
 
 let translate_variable (var_data : Mir.Variable.t StrMap.t)
@@ -532,7 +419,9 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                              Mir.PrintAlias (Pos.same_pos_as name v, var)
                            else
                              Mir.PrintString
-                               (match var.alias with Some a -> a | None -> "")
+                               (match var.alias with
+                               | Some a -> Pos.unmark a
+                               | None -> "")
                        | _ ->
                            let msg =
                              Format.sprintf "unknown variable %s" name
@@ -644,161 +533,69 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
   aux [] prog
 
 let get_targets (error_decls : Mir.Error.t StrMap.t)
-    (cats : Mir.cat_variable_data Mir.CatVarMap.t) (apps : Pos.t StrMap.t)
-    (var_data : Mir.Variable.t StrMap.t) (p : Mast.program) :
+    (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+    (var_data : Mir.Variable.t StrMap.t) (ts : Mast.target StrMap.t) :
     Mir.target_data Mir.TargetMap.t =
-  List.fold_left
-    (fun targets source_file ->
-      List.fold_left
-        (fun targets (item, pos_item) ->
-          match item with
-          | Mast.Target t ->
-              let target_name = t.Mast.target_name in
-              let name = Pos.unmark target_name in
-              (match Mir.TargetMap.find_opt name targets with
-              | Some data ->
-                  let old_pos = Pos.get_position data.Mir.target_name in
-                  let msg =
-                    Format.asprintf "target %s already defined %a" name
-                      Pos.format_position old_pos
-                  in
-                  Errors.raise_spanned_error msg pos_item
-              | None -> ());
-              let target_file = t.Mast.target_file in
-              let target_apps = t.Mast.target_applications in
-              List.iter
-                (fun (app, pos) ->
-                  if not (StrMap.mem app apps) then
-                    Errors.raise_spanned_error "unknown application" pos)
-                target_apps;
-              let target_tmp_vars =
-                List.fold_left
-                  (fun vars ((var, pos), size) ->
-                    match StrMap.find_opt var var_data with
-                    | Some (v : Mir.Variable.t) ->
-                        let msg =
-                          Format.asprintf "variable already declared %a"
-                            Pos.format_position
-                            (Pos.get_position v.Mir.Variable.name)
-                        in
-                        Errors.raise_spanned_error msg pos
-                    | _ -> begin
-                        match StrMap.find_opt var vars with
-                        | Some (old_pos, _) ->
-                            let msg =
-                              Format.asprintf "variable already declared %a"
-                                Pos.format_position old_pos
-                            in
-                            Errors.raise_spanned_error msg pos
-                        | None -> StrMap.add var (pos, size) vars
-                      end)
-                  StrMap.empty t.Mast.target_tmp_vars
-              in
-              let tmp_var_data =
-                StrMap.fold
-                  (fun name (pos, size) tmp_var_data ->
-                    let size' =
-                      Pos.unmark_option (Mast.get_table_size_opt size)
-                    in
-                    let var =
-                      Mir.Variable.new_var (name, pos) None ("temporary", pos)
-                        ~attributes:StrMap.empty ~cats:None ~typ:None
-                        ~is_table:size' ~is_temp:true ~is_it:false
-                    in
-                    let tmp_var_data = StrMap.add name var tmp_var_data in
-                    tmp_var_data)
-                  target_tmp_vars var_data
-              in
-              let target_tmp_vars =
-                StrMap.mapi
-                  (fun vn (pos, size) ->
-                    let var = StrMap.find vn tmp_var_data in
-                    let size' =
-                      Pos.unmark_option (Mast.get_table_size_opt size)
-                    in
-                    (var, pos, size'))
-                  target_tmp_vars
-              in
-              let target_prog =
-                translate_prog error_decls cats tmp_var_data t.Mast.target_prog
-              in
-              let target_data =
-                Mir.
-                  {
-                    target_name;
-                    target_file;
-                    target_apps;
-                    target_tmp_vars;
-                    target_prog;
-                  }
-              in
-              Mir.TargetMap.add (Pos.unmark target_name) target_data targets
-          | _ -> targets)
-        targets source_file)
-    Mir.TargetMap.empty p
+  StrMap.fold
+    (fun _ t targets ->
+      let target_name = t.Mast.target_name in
+      let target_file = t.Mast.target_file in
+      let target_apps = t.Mast.target_apps in
+      let target_tmp_vars =
+        StrMap.map (fun ((_, pos), size) -> (pos, size)) t.Mast.target_tmp_vars
+      in
+      let tmp_var_data =
+        StrMap.fold
+          (fun name (pos, size) tmp_var_data ->
+            let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
+            let var =
+              Mir.Variable.new_var (name, pos) None ("temporary", pos)
+                ~attributes:StrMap.empty ~cats:None ~typ:None ~is_table:size'
+                ~is_temp:true ~is_it:false
+            in
+            let tmp_var_data = StrMap.add name var tmp_var_data in
+            tmp_var_data)
+          target_tmp_vars var_data
+      in
+      let target_tmp_vars =
+        StrMap.mapi
+          (fun vn (pos, size) ->
+            let var = StrMap.find vn tmp_var_data in
+            let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
+            (var, pos, size'))
+          target_tmp_vars
+      in
+      let target_prog =
+        translate_prog error_decls cats tmp_var_data t.Mast.target_prog
+      in
+      let target_data =
+        Mir.
+          {
+            target_name;
+            target_file;
+            target_apps;
+            target_tmp_vars;
+            target_prog;
+          }
+      in
+      Mir.TargetMap.add (Pos.unmark target_name) target_data targets)
+    ts Mir.TargetMap.empty
 
 let translate (p : Mast.program) : Mir.program =
   let p = Expand_macros.proceed p in
   let prog = Check_validity.proceed p in
-  let prog_targets =
-    let targets =
-      StrMap.fold
-        (fun tname t prog_targets ->
-          let target_applications = [ (prog.prog_app, Pos.no_pos) ] in
-          let target_tmp_vars =
-            StrMap.fold
-              (fun vn (sz_opt, pos) tmp_vars ->
-                let size =
-                  Option.map (fun i -> (Mast.LiteralSize i, pos)) sz_opt
-                in
-                ((vn, pos), size) :: tmp_vars)
-              t.Check_validity.target_tmp_vars []
-          in
-          let target =
-            Mast.
-              {
-                target_name = (tname, Pos.no_pos);
-                target_file = t.Check_validity.target_file;
-                target_applications;
-                target_tmp_vars;
-                target_prog = t.Check_validity.target_prog;
-              }
-          in
-          (Mast.Target target, Pos.no_pos) :: prog_targets)
-        prog.prog_targets []
-    in
-    [ targets ]
-  in
-  let apps = prog.Check_validity.prog_apps in
-  let var_category_map = prog.Check_validity.prog_var_cats in
-  let var_data = get_variables_decl p in
-  let errs =
-    StrMap.map
-      (fun e ->
-        let descr =
-          Mir.
-            {
-              kind = e.Check_validity.kind;
-              major_code = e.Check_validity.major_code;
-              minor_code = e.Check_validity.minor_code;
-              description =
-                Pos.same_pos_as e.Check_validity.description
-                  e.Check_validity.name;
-              isisf = e.Check_validity.isisf;
-            }
-        in
-        Mir.{ name = e.Check_validity.name; descr; typ = e.Check_validity.typ })
-      prog.Check_validity.prog_errors
-  in
-  let targets = get_targets errs var_category_map apps var_data prog_targets in
+  let prog_targets = prog.prog_targets in
+  let var_category_map = prog.prog_var_cats in
+  let var_data = prog.prog_vars in
+  let errs = prog.prog_errors in
+  let targets = get_targets errs var_category_map var_data prog_targets in
   Mir.
     {
       program_safe_prefix = prog.prog_prefix;
-      program_applications = apps;
+      program_applications = prog.prog_apps;
       program_var_categories = var_category_map;
-      program_rule_domains = prog.Check_validity.prog_rdoms;
-      program_verif_domains = prog.Check_validity.prog_vdoms;
-      program_chainings = Mast.ChainingMap.empty;
+      program_rule_domains = prog.prog_rdoms;
+      program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
       program_targets = targets;
     }

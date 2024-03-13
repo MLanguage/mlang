@@ -14,18 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val format_print_arg : Format.formatter -> Bir.variable Mir.print_arg -> unit
-
-val format_expression : Format.formatter -> Bir.expression -> unit
-
-val format_variable_def : Format.formatter -> Bir.variable_def -> unit
+val format_print_arg : Format.formatter -> Mir.Variable.t Mir.print_arg -> unit
 
 val format_stmt : Format.formatter -> Bir.stmt -> unit
 
 val format_stmts : Format.formatter -> Bir.stmt list -> unit
-
-val format_rule : Format.formatter -> Bir.rule_or_verif -> unit
-
-val format_rules : Format.formatter -> Bir.rule_or_verif Bir.ROVMap.t -> unit
 
 val format_program : Format.formatter -> Bir.program -> unit

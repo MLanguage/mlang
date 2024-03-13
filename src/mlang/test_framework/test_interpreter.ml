@@ -27,28 +27,24 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     StrMap.find name p.program_vars
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
-    float StrMap.t * StrSet.t * Mir.literal Bir.VariableMap.t =
+    float StrMap.t * StrSet.t * Mir.literal Mir.VariableMap.t =
   let input_file =
     let ancsded =
       find_var_of_name program.mir_program ("V_ANCSDED", Pos.no_pos)
-      |> Bir.(var_from_mir default_tgv)
     in
     let ancsded_val =
       Mir.Float (float_of_int (Option.get !Cli.income_year + 1))
     in
     List.fold_left
       (fun in_f (var, value, pos) ->
-        let var =
-          find_var_of_name program.mir_program (var, convert_pos pos)
-          |> Bir.(var_from_mir default_tgv)
-        in
+        let var = find_var_of_name program.mir_program (var, convert_pos pos) in
         let lit =
           match value with
           | Irj_ast.I i -> Mir.Float (float_of_int i)
           | F f -> Float f
         in
-        Bir.VariableMap.add var lit in_f)
-      (Bir.VariableMap.singleton ancsded ancsded_val)
+        Mir.VariableMap.add var lit in_f)
+      (Mir.VariableMap.singleton ancsded ancsded_val)
       t.prim.entrees
   in
   let expectedVars =
@@ -184,7 +180,7 @@ let check_all_tests (p : Bir.program) (test_dir : string)
   in
   let s, f, code_coverage =
     Parmap.parfold ~chunksize:5 process (Parmap.A arr)
-      ([], StrMap.empty, Bir.VariableMap.empty)
+      ([], StrMap.empty, Mir.VariableMap.empty)
       (fun (old_s, old_f, old_code_coverage) (new_s, new_f, new_code_coverage)
       ->
         ( new_s @ old_s,
@@ -208,7 +204,7 @@ let check_all_tests (p : Bir.program) (test_dir : string)
     let all_code_locs_with_coverage =
       Bir_instrumentation.CodeLocationMap.mapi
         (fun code_loc var ->
-          match Bir.VariableMap.find_opt var code_coverage with
+          match Mir.VariableMap.find_opt var code_coverage with
           | None -> NotCovered
           | Some used_code_locs -> (
               match
