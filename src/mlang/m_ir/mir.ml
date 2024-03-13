@@ -101,7 +101,7 @@ module Variable = struct
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    alias : string option;  (** Input variable have an alias *)
+    alias : string Pos.marked option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -113,7 +113,7 @@ module Variable = struct
     is_it : bool;
   }
 
-  let new_var (name : string Pos.marked) (alias : string option)
+  let new_var (name : string Pos.marked) (alias : string Pos.marked option)
       (descr : string Pos.marked) ~(attributes : int Pos.marked StrMap.t)
       ~(cats : cat_variable option) ~(typ : Mast.value_typ option)
       ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
@@ -265,7 +265,9 @@ module VariableMap = struct
   let pp_key fmt key =
     Format.fprintf fmt "Variable %s%s"
       (Pos.unmark key.Variable.name)
-      (match key.alias with Some x -> " (alias " ^ x ^ ")" | None -> "")
+      (match key.alias with
+      | Some x -> " (alias " ^ Pos.unmark x ^ ")"
+      | None -> "")
 
   let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
       (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
@@ -371,38 +373,33 @@ type 'variable print_arg =
   | PrintIndent of 'variable expression_ Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
-type error_descr = {
+(** Errors are first-class objects *)
+
+type error = {
+  name : string Pos.marked;  (** The position is the variable declaration *)
   kind : string Pos.marked;
   major_code : string Pos.marked;
   minor_code : string Pos.marked;
   description : string Pos.marked;
   isisf : string Pos.marked;
-}
-(** Errors are first-class objects *)
-
-type error = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  descr : error_descr;  (** Description taken from the variable declaration *)
   typ : Mast.error_typ;
 }
 
 module Error = struct
-  type descr = error_descr = {
+  type t = error = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
     kind : string Pos.marked;
     major_code : string Pos.marked;
     minor_code : string Pos.marked;
     description : string Pos.marked;
     isisf : string Pos.marked;
-  }
-
-  type t = error = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    descr : error_descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
-  let mast_error_desc_to_ErrorDesc (error : Mast.error_) =
+  let new_error (name : string Pos.marked) (error : Mast.error_)
+      (error_typ : Mast.error_typ) : t =
     {
+      name;
       kind = List.nth error.error_descr 0;
       major_code = List.nth error.error_descr 1;
       minor_code = List.nth error.error_descr 2;
@@ -411,21 +408,18 @@ module Error = struct
         (match List.nth_opt error.error_descr 4 with
         | Some s -> s
         | None -> ("", Pos.no_pos));
+      typ = error_typ;
     }
-
-  let new_error (name : string Pos.marked) (error : Mast.error_)
-      (error_typ : Mast.error_typ) : t =
-    { name; descr = error |> mast_error_desc_to_ErrorDesc; typ = error_typ }
 
   let err_descr_string (err : t) =
     Pos.same_pos_as
       (String.concat ":"
          [
-           err.descr.kind |> Pos.unmark;
-           err.descr.major_code |> Pos.unmark;
-           err.descr.minor_code |> Pos.unmark;
-           err.descr.description |> Pos.unmark;
-           err.descr.isisf |> Pos.unmark;
+           err.kind |> Pos.unmark;
+           err.major_code |> Pos.unmark;
+           err.minor_code |> Pos.unmark;
+           err.description |> Pos.unmark;
+           err.isisf |> Pos.unmark;
          ])
       err.name
 
@@ -472,7 +466,7 @@ module TargetMap = StrMap
 type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_apps : string Pos.marked list;
+  target_apps : string Pos.marked StrMap.t;
   target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
@@ -518,7 +512,6 @@ type program = {
   program_var_categories : cat_variable_data CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
-  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : Variable.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
@@ -535,7 +528,8 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         match (acc, v.Variable.alias) with
         | Some _, _ | None, None -> acc
         | None, Some v_alias ->
-            if v_alias = Pos.unmark alias then Some (Pos.unmark v.name)
+            if Pos.unmark v_alias = Pos.unmark alias then
+              Some (Pos.unmark v.name)
             else None)
       p.program_vars None
   in

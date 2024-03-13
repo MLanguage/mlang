@@ -32,9 +32,8 @@ type var_literal =
 type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
-  | InsideRule of Bir.rov_id
   | InsideFunction of Bir.function_name
-  | InsideIterate of Bir.variable
+  | InsideIterate of Mir.Variable.t
 
 val format_code_location_segment :
   Format.formatter -> code_location_segment -> unit
@@ -45,7 +44,7 @@ type code_location = code_location_segment list
 val format_code_location : Format.formatter -> code_location -> unit
 
 val assign_hook :
-  (Bir.variable -> (unit -> var_literal) -> code_location -> unit) ref
+  (Mir.Variable.t -> (unit -> var_literal) -> code_location -> unit) ref
 (** The instrumentation of the interpreter is done through this reference. The
     function that you assign to this reference will be called each time a
     variable assignment is executed *)
@@ -84,13 +83,13 @@ module type S = sig
     int -> int -> Format.formatter -> var_value -> unit
 
   val format_var_value_with_var :
-    Format.formatter -> Bir.variable * var_value -> unit
+    Format.formatter -> Mir.Variable.t * var_value -> unit
 
   type print_ctx = { indent : int; is_newline : bool }
 
   type ctx = {
     ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
-    ctx_vars : var_value Bir.VariableMap.t;
+    ctx_vars : var_value Mir.VariableMap.t;
     ctx_it : Mir.Variable.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
@@ -115,13 +114,13 @@ module type S = sig
 
   val var_value_to_var_literal : var_value -> var_literal
 
-  val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
+  val update_ctx_with_inputs : ctx -> Mir.literal Mir.VariableMap.t -> ctx
 
   val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
   (** Interpreter runtime errors *)
   type run_error =
-    | NanOrInf of string * Bir.expression Pos.marked
+    | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -134,7 +133,7 @@ module type S = sig
   (** Returns the comparison between two numbers in the rounding and precision
       context of the interpreter. *)
 
-  val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
+  val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
   val evaluate_program : Bir.program -> ctx -> int -> ctx
 end
@@ -195,7 +194,7 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
   Bir.program ->
-  Mir.literal Bir.VariableMap.t ->
+  Mir.literal Mir.VariableMap.t ->
   Cli.value_sort ->
   Cli.round_ops ->
   float option StrMap.t * StrSet.t
@@ -203,7 +202,7 @@ val evaluate_program :
 
 val evaluate_expr :
   Mir.program ->
-  Bir.expression Pos.marked ->
+  Mir.expression Pos.marked ->
   Cli.value_sort ->
   Cli.round_ops ->
   Mir.literal

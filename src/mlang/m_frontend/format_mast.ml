@@ -319,9 +319,12 @@ let format_target fmt (t : target) =
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
     (Pos.unmark t.target_name)
-    (pp_print_list_comma (pp_unmark Format.pp_print_string))
-    t.target_applications
-    (pp_print_list_comma format_tmp_var)
+    (StrMap.pp
+       ~pp_key:(fun _ _ -> ())
+       ~sep:","
+       (pp_unmark Format.pp_print_string))
+    t.target_apps
+    (StrMap.pp ~pp_key:(fun _ _ -> ()) ~sep:"," format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_value_typ fmt (t : value_typ) =

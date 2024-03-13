@@ -428,11 +428,41 @@ target_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
+    let target_apps = 
+      List.fold_left (
+        fun res (app, pos) ->
+          match StrMap.find_opt app res with
+          | Some (_, old_pos) ->
+              let msg =
+                Format.asprintf "application %s already declared %a"
+                  app
+                  Pos.format_position old_pos
+              in
+              Errors.raise_spanned_error msg pos
+          | None -> StrMap.add app (app, pos) res)
+        StrMap.empty apps
+    in
+    let target_tmp_vars = 
+      List.fold_left (
+        fun res (vnm, vt) ->
+          let vn, pos = vnm in
+          match StrMap.find_opt vn res with
+          | Some ((_, old_pos), _) ->
+              let msg =
+                Format.asprintf "temporary variable %s already declared %a"
+                  vn
+                  Pos.format_position old_pos
+              in
+              Errors.raise_spanned_error msg pos
+          | None -> StrMap.add vn (vnm, vt) res)
+        StrMap.empty
+        (match tmp_vars with None -> [] | Some l -> l)
+    in
     let target = {
       target_name = name;
       target_file = None;
-      target_applications = apps;
-      target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
+      target_apps;
+      target_tmp_vars;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
