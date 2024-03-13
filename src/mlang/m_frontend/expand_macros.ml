@@ -621,7 +621,7 @@ let proceed (p : Mast.program) : Mast.program =
                   (const_map, prog_file)
               | Mast.Target target ->
                   let target_tmp_vars =
-                    List.map
+                    StrMap.map
                       (fun (name, tsz) ->
                         (name, expand_table_size const_map tsz))
                       target.Mast.target_tmp_vars

@@ -16,50 +16,43 @@
 
 open Bir
 
-let format_expression fmt (e : expression) =
-  Format_mir.format_expression fmt (Mir.map_expr_var Bir.var_to_mir e)
-
-let format_variable_def fmt (vdef : variable_def) =
-  Format_mir.format_variable_def fmt (Mir.map_var_def_var Bir.var_to_mir vdef)
-
 let format_print_arg fmt = function
   | Mir.PrintString s -> Format.fprintf fmt "\"%s\"" s
   | Mir.PrintName (v, _) -> Format.fprintf fmt "nom(%s)" (Pos.unmark v)
   | Mir.PrintAlias (v, _) -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
   | Mir.PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
-        (Format_mast.pp_unmark format_expression)
+        (Format_mast.pp_unmark Format_mir.format_expression)
         e
   | Mir.PrintExpr (e, min, max) ->
       if min = max_int then
-        Format.fprintf fmt "(%a)" (Format_mast.pp_unmark format_expression) e
+        Format.fprintf fmt "(%a)"
+          (Format_mast.pp_unmark Format_mir.format_expression)
+          e
       else if max = max_int then
         Format.fprintf fmt "(%a):%d"
-          (Format_mast.pp_unmark format_expression)
+          (Format_mast.pp_unmark Format_mir.format_expression)
           e min
       else
         Format.fprintf fmt "(%a):%d..%d"
-          (Format_mast.pp_unmark format_expression)
+          (Format_mast.pp_unmark Format_mir.format_expression)
           e min max
 
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
   | SAssign (v, vdef) ->
-      Format.fprintf fmt "%s = %a"
-        (Pos.unmark (var_to_mir v).Mir.Variable.name)
-        format_variable_def vdef
+      Format.fprintf fmt "%s = %a" (Pos.unmark v.name)
+        Format_mir.format_variable_def vdef
   | SConditional (cond, t, []) ->
-      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" format_expression cond
-        format_stmts t
+      Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n"
+        Format_mir.format_expression cond format_stmts t
   | SConditional (cond, t, f) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
-        format_expression cond format_stmts t format_stmts f
+        Format_mir.format_expression cond format_stmts t format_stmts f
   | SVerifBlock stmts ->
       Format.fprintf fmt
         "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" format_stmts
         stmts
-  | SRovCall r ->
-      Format.fprintf fmt "call_rule(%d)@\n" (Mir.num_of_rule_or_verif_id r)
   | SFunctionCall (func, args) ->
       Format.fprintf fmt "call_function: %s with args %a@," func
         (Format.pp_print_list (fun fmt arg ->
@@ -75,20 +68,19 @@ let rec format_stmt fmt (stmt : stmt) =
   | SIterate (var, vcs, expr, stmts) ->
       Format.fprintf fmt
         "iterate variable %s@\n: categorie %a@\n: avec %a@\n: dans ("
-        (Pos.unmark (var_to_mir var).Mir.Variable.name)
-        (Mir.CatVarSet.pp ()) vcs format_expression expr;
+        (Pos.unmark var.name) (Mir.CatVarSet.pp ()) vcs
+        Format_mir.format_expression expr;
       Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
   | SRestore (vars, var_params, stmts) ->
       let format_var_param fmt (var, vcs, expr) =
         Format.fprintf fmt ": variable %s : categorie %a : avec %a@\n"
-          (Pos.unmark (var_to_mir var).Mir.Variable.name)
-          (Mir.CatVarSet.pp ()) vcs format_expression expr
+          (Pos.unmark var.Mir.Variable.name)
+          (Mir.CatVarSet.pp ()) vcs Format_mir.format_expression expr
       in
       Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
-        (VariableSet.pp ~sep:", "
+        (Mir.VariableSet.pp ~sep:", "
            ~pp_elt:(fun fmt var ->
-             Format.fprintf fmt "%s"
-               (Pos.unmark (var_to_mir var).Mir.Variable.name))
+             Format.fprintf fmt "%s" (Pos.unmark var.Mir.Variable.name))
            ())
         vars
         (Format_mast.pp_print_list_space format_var_param)
@@ -104,23 +96,5 @@ let rec format_stmt fmt (stmt : stmt) =
 and format_stmts fmt (stmts : stmt list) =
   Format.pp_print_list ~pp_sep:(fun _ () -> ()) format_stmt fmt stmts
 
-let format_rule fmt rule =
-  match rule.rov_code with
-  | Rule stmts ->
-      Format.fprintf fmt "rule %d:@\n@[<h 2>  %a@]@\n"
-        (Mir.num_of_rule_or_verif_id rule.rov_id)
-        format_stmts stmts
-  | Verif stmt ->
-      Format.fprintf fmt "verif %d:@\n@[<h 2>  %a@]@\n"
-        (Mir.num_of_rule_or_verif_id rule.rov_id)
-        format_stmts [ stmt ]
-
-let format_rules fmt rules =
-  Format.pp_print_list
-    ~pp_sep:(fun _ () -> ())
-    format_rule fmt
-    (Bir.ROVMap.bindings rules |> List.map snd)
-
 let format_program fmt (p : program) =
-  Format.fprintf fmt "%a%a" format_rules p.rules_and_verifs format_stmts
-    (Bir.main_statements p)
+  Format.fprintf fmt "%a" format_stmts (Bir.main_statements p)

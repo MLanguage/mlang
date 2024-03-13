@@ -51,26 +51,25 @@ let generate_binop (op : Mast.binop) : string =
 let generate_unop (op : Mast.unop) : string =
   match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
 
-let generate_var_name (var : variable) : string =
-  let v = Pos.unmark (Bir.var_to_mir var).Mir.Variable.name in
+let generate_var_name (var : Mir.Variable.t) : string =
+  let v = Pos.unmark var.name in
   String.uppercase_ascii v
 
-let format_var_name (fmt : Format.formatter) (var : variable) : unit =
+let format_var_name (fmt : Format.formatter) (var : Mir.Variable.t) : unit =
   Format.fprintf fmt "%s" (generate_var_name var)
 
-let generate_name (v : variable) : string =
-  let v = Bir.var_to_mir v in
-  match v.alias with Some v -> v | None -> Pos.unmark v.Mir.Variable.name
+let generate_name (v : Mir.Variable.t) : string =
+  match v.alias with Some v -> Pos.unmark v | None -> Pos.unmark v.name
 
 let print_double_cut oc () = Format.fprintf oc "@,@,"
 
-let get_var_pos (var : variable) : int = var.Bir.offset
+let get_var_pos (_var : Mir.Variable.t) : int = 0 (* var.Bir.offset *)
 
-let get_tgv_position (var : variable) : string =
+let get_tgv_position (var : Mir.Variable.t) : string =
   Format.asprintf "tgv[%d /* %s */]" (get_var_pos var) (generate_var_name var)
 
-let rec generate_java_expr (e : expression Pos.marked) :
-    string * (Mir.LocalVariable.t * expression Pos.marked) list =
+let rec generate_java_expr (e : Mir.expression Pos.marked) :
+    string * (Mir.LocalVariable.t * Mir.expression Pos.marked) list =
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 in
@@ -95,9 +94,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
   | Index (var, e) ->
       let se, s = generate_java_expr e in
       let unmarked_var = Pos.unmark var in
-      let size =
-        Option.get (Bir.var_to_mir unmarked_var).Mir.Variable.is_table
-      in
+      let size = Option.get unmarked_var.is_table in
       let se2, s2 =
         ( Format.asprintf "m_array_index(tgv, %d ,%s, %d)"
             (get_var_pos unmarked_var) se size,
@@ -169,14 +166,14 @@ let rec generate_java_expr (e : expression Pos.marked) :
   | NbCategory _ -> assert false
 
 let format_local_vars_defs (oc : Format.formatter)
-    (defs : (Mir.LocalVariable.t * expression Pos.marked) list) =
+    (defs : (Mir.LocalVariable.t * Mir.expression Pos.marked) list) =
   Format.pp_print_list
     (fun fmt (lvar, expr) ->
       let se, _ = generate_java_expr expr in
       Format.fprintf fmt "localVariables[%d] = %s;" lvar.Mir.LocalVariable.id se)
     oc defs
 
-let generate_var_def (var : variable) (def : variable_def)
+let generate_var_def (var : Mir.Variable.t) (def : Mir.variable_def)
     (oc : Format.formatter) =
   match def with
   | SimpleVar e ->
@@ -236,11 +233,6 @@ let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
 
 let fresh_cond_counter = ref 0
 
-let generate_rov_header (oc : Format.formatter) (rov : rule_or_verif) =
-  let tname = match rov.rov_code with Rule _ -> "rule" | Verif _ -> "verif" in
-  Format.fprintf oc "Rule.m_%s_%s(mCalculation, calculationErrors);" tname
-    (Pos.unmark rov.rov_name)
-
 let rec generate_stmts (program : program) (oc : Format.formatter)
     (stmts : stmt list) =
   Format.pp_print_list (generate_stmt program) oc stmts
@@ -248,9 +240,6 @@ let rec generate_stmts (program : program) (oc : Format.formatter)
 and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
     unit =
   match Pos.unmark stmt with
-  | SRovCall r ->
-      let rov = ROVMap.find r program.rules_and_verifs in
-      generate_rov_header oc rov
   | SAssign (var, vdata) -> generate_var_def var vdata oc
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
@@ -325,32 +314,6 @@ let generate_return (oc : Format.formatter) (_x : 'a) =
      }"
     print_outputs returned_variables
 
-let generate_rov_method (program : program) (oc : Format.formatter)
-    (rov : rule_or_verif) =
-  let tname, stmts =
-    match rov.rov_code with
-    | Rule stmts -> ("rule", stmts)
-    | Verif stmt -> ("verif", [ stmt ])
-  in
-  Format.fprintf oc
-    "@[<v 2>static void m_%s_%s(MCalculation mCalculation, List<MError> \
-     calculationErrors) {@,\
-     MValue cond = MValue.mUndefined;@,\
-     MValue[] tgv = mCalculation.getCalculationVariables();@,\
-     MValue[] localVariables = mCalculation.getLocalVariables();@,\
-     Map<String, List<MValue>> tableVariables = \
-     mCalculation.getTableVariables();@,\
-     %a@]@,\
-     }"
-    tname (Pos.unmark rov.rov_name) (generate_stmts program) stmts
-
-let generate_rov_methods (oc : Format.formatter) (program : program) : unit =
-  let rovs = ROVMap.bindings program.rules_and_verifs in
-  let _, rovs = List.split rovs in
-  Format.pp_print_list ~pp_sep:print_double_cut
-    (generate_rov_method program)
-    oc rovs
-
 let generate_calculateTax_method (calculation_vars_len : int)
     (program : program) (locals_size : int) (oc : Format.formatter) () =
   Format.fprintf oc
@@ -388,28 +351,6 @@ let generate_calculateTax_method (calculation_vars_len : int)
     print_double_cut () print_double_cut () (generate_stmts program)
     (Bir.main_statements program)
 
-let generate_mpp_function (program : program) (oc : Format.formatter)
-    (f : function_name) =
-  let { mppf_stmts; _ } = FunctionMap.find f program.mpp_functions in
-  Format.fprintf oc
-    "@[<v 2>static void %s(MCalculation mCalculation, List<MError> \
-     calculationErrors) {@,\
-     MValue cond = MValue.mUndefined;@,\
-     MValue[] tgv = mCalculation.getCalculationVariables();@,\
-     MValue[] localVariables = mCalculation.getLocalVariables();@,\
-     Map<String, List<MValue>> tableVariables = \
-     mCalculation.getTableVariables();@,\
-     %a@]@,\
-     }"
-    f (generate_stmts program) mppf_stmts
-
-let generate_mpp_functions (oc : Format.formatter) (program : program) =
-  let functions = FunctionMap.bindings program.Bir.mpp_functions in
-  let function_names, _ = List.split functions in
-  Format.pp_print_list ~pp_sep:print_double_cut
-    (generate_mpp_function program)
-    oc function_names
-
 let generate_main_class (program : program) (var_table_size : int)
     (locals_size : int) (fmt : Format.formatter) (filename : string) =
   let class_name =
@@ -435,19 +376,17 @@ let generate_java_program (program : program)
   let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let locals_size = Bir.get_locals_size program |> ( + ) 1 in
-  let var_table_size = Bir.size_of_tgv () in
-  let program = Bir.squish_statements program split_treshold "java_rule_" in
+  let locals_size = 0 in (* Bir.get_locals_size program |> ( + ) 1 in *)
+  let var_table_size = 0 in (* Bir.size_of_tgv () in *)
+  let program = program in (*Bir.squish_statements program split_treshold "java_rule_" in*)
   Format.fprintf oc
     "@[<v 0>%a%a\
      @[<v 2>class InputHandler {@,%a@]@,}%a\
-     @[<v 2>class MppFunction {@,%a@]@,}%a\
-     @[<hv 2>class Rule {@,%a@]@,}@]@."
+     @[<v 2>class MppFunction {@,@]@,}%a\
+     @,}@]@."
      (generate_main_class program var_table_size locals_size) filename
      print_double_cut ()
      generate_input_handling split_treshold
      print_double_cut ()
-     generate_mpp_functions program
-     print_double_cut ()
-     generate_rov_methods program;
+     print_double_cut ();
   close_out _oc[@@ocamlformat "disable"]

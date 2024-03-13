@@ -47,7 +47,7 @@ module Variable : sig
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    alias : string option;  (** Input variable have an alias *)
+    alias : string Pos.marked option;  (** Input variable have an alias *)
     id : variable_id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -61,7 +61,7 @@ module Variable : sig
 
   val new_var :
     string Pos.marked ->
-    string option ->
+    string Pos.marked option ->
     string Pos.marked ->
     attributes:int Pos.marked StrMap.t ->
     cats:cat_variable option ->
@@ -197,34 +197,26 @@ type 'variable print_arg =
   | PrintIndent of 'variable expression_ Pos.marked
   | PrintExpr of 'variable expression_ Pos.marked * int * int
 
-type error_descr = {
+(** Errors are first-class objects *)
+
+type error = {
+  name : string Pos.marked;  (** The position is the variable declaration *)
   kind : string Pos.marked;
   major_code : string Pos.marked;
   minor_code : string Pos.marked;
   description : string Pos.marked;
   isisf : string Pos.marked;
-}
-
-(** Errors are first-class objects *)
-
-type error = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  descr : error_descr;  (** Description taken from the variable declaration *)
   typ : Mast.error_typ;
 }
 
 module Error : sig
-  type descr = error_descr = {
+  type t = error = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
     kind : string Pos.marked;
     major_code : string Pos.marked;
     minor_code : string Pos.marked;
     description : string Pos.marked;
     isisf : string Pos.marked;
-  }
-
-  type t = error = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    descr : error_descr;  (** Description taken from the variable declaration *)
     typ : Mast.error_typ;
   }
 
@@ -267,7 +259,7 @@ type rule_data = {
 type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_apps : string Pos.marked list;
+  target_apps : string Pos.marked StrMap.t;
   target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
@@ -293,7 +285,6 @@ type program = {
   program_var_categories : cat_variable_data CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
-  program_chainings : rule_domain Mast.ChainingMap.t;
   program_vars : Variable.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)

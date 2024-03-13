@@ -21,12 +21,12 @@ module CodeLocationMap = MapExt.Make (struct
 end)
 
 type code_coverage_result =
-  Bir_interpreter.var_literal CodeLocationMap.t Bir.VariableMap.t
+  Bir_interpreter.var_literal CodeLocationMap.t Mir.VariableMap.t
 (** The result of the code coverage measurement is a map of the successive
     definitions of all the non-array variables during interpretation of the
     program *)
 
-let empty_code_coverage_result : code_coverage_result = Bir.VariableMap.empty
+let empty_code_coverage_result : code_coverage_result = Mir.VariableMap.empty
 
 let code_coverage_acc : code_coverage_result ref =
   ref empty_code_coverage_result
@@ -36,7 +36,7 @@ let code_coverage_init () : unit =
   Bir_interpreter.assign_hook :=
     fun var literal code_loc ->
       code_coverage_acc :=
-        Bir.VariableMap.update var
+        Mir.VariableMap.update var
           (fun old_defs ->
             match old_defs with
             | None -> Some (CodeLocationMap.singleton code_loc (literal ()))
@@ -69,19 +69,19 @@ end)
 type code_coverage_map_value = VarLiteralSet.t
 
 type code_coverage_acc =
-  code_coverage_map_value CodeLocationMap.t Bir.VariableMap.t
+  code_coverage_map_value CodeLocationMap.t Mir.VariableMap.t
 
 let merge_code_coverage_single_results_with_acc (results : code_coverage_result)
     (acc : code_coverage_acc) : code_coverage_acc =
-  Bir.VariableMap.fold
+  Mir.VariableMap.fold
     (fun var (new_defs : Bir_interpreter.var_literal CodeLocationMap.t) acc ->
-      match Bir.VariableMap.find_opt var acc with
+      match Mir.VariableMap.find_opt var acc with
       | None ->
-          Bir.VariableMap.add var
+          Mir.VariableMap.add var
             (CodeLocationMap.map (fun x -> VarLiteralSet.singleton x) new_defs)
             acc
       | Some old_defs ->
-          Bir.VariableMap.add var
+          Mir.VariableMap.add var
             (CodeLocationMap.fold
                (fun code_loc new_def defs ->
                  match CodeLocationMap.find_opt code_loc defs with
@@ -99,7 +99,7 @@ let merge_code_coverage_single_results_with_acc (results : code_coverage_result)
 
 let merge_code_coverage_acc (acc1 : code_coverage_acc)
     (acc2 : code_coverage_acc) : code_coverage_acc =
-  Bir.VariableMap.union
+  Mir.VariableMap.union
     (fun _ defs1 defs2 ->
       Some
         (CodeLocationMap.union
@@ -107,7 +107,7 @@ let merge_code_coverage_acc (acc1 : code_coverage_acc)
            defs1 defs2))
     acc1 acc2
 
-type code_locs = Bir.variable CodeLocationMap.t
+type code_locs = Mir.Variable.t CodeLocationMap.t
 
 let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
     (loc : Bir_interpreter.code_location) : code_locs =
@@ -122,12 +122,8 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
   | Bir.SVerifBlock s ->
       get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
   | Bir.SAssign (var, _) -> CodeLocationMap.singleton loc var
-  | Bir.SRovCall r ->
-      get_code_locs_stmts p
-        (Bir.rule_or_verif_as_statements (Bir.ROVMap.find r p.rules_and_verifs))
-        (Bir_interpreter.InsideRule r :: loc)
   | Bir.SFunctionCall (f, _) ->
-      get_code_locs_stmts p (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts
+      get_code_locs_stmts p (Mir.TargetMap.find f p.targets).stmts
         (Bir_interpreter.InsideFunction f :: loc)
   | Bir.SPrint _ -> CodeLocationMap.empty
   | Bir.SIterate (var, _, _, s) ->

@@ -847,7 +847,9 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
         | Some c when Mir.compare_cat_variable c cat = 0 ->
             Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
               (Pos.unmark var.Mir.Variable.name)
-              (match var.Mir.Variable.alias with Some s -> s | None -> "")
+              (match var.Mir.Variable.alias with
+              | Some s -> Pos.unmark s
+              | None -> "")
               idx size id_int;
             StrMap.iter
               (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
@@ -2223,7 +2225,9 @@ let extract_var_ids (cprog : Bir.program) vars =
     StrMap.fold
       (fun _ (v : Variable.t) vm ->
         let vm = add (Pos.unmark v.name) v vm in
-        match v.Variable.alias with Some a -> add a v vm | None -> vm)
+        match v.Variable.alias with
+        | Some a -> add (Pos.unmark a) v vm
+        | None -> vm)
       pvars StrMap.empty
   in
   let process_var ~alias
