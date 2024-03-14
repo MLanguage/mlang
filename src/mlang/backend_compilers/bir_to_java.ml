@@ -71,6 +71,7 @@ let get_tgv_position (var : Mir.Variable.t) : string =
 let rec generate_java_expr (e : Mir.expression Pos.marked) :
     string * (Mir.LocalVariable.t * Mir.expression Pos.marked) list =
   match Pos.unmark e with
+  | TestInSet _ -> assert false
   | Comparison (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
@@ -142,7 +143,9 @@ let rec generate_java_expr (e : Mir.expression Pos.marked) :
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 =
-        (Format.asprintf "m_multimax(%s, tgv, %d)" se1 (get_var_pos v2), [])
+        ( Format.asprintf "m_multimax(%s, tgv, %d)" se1
+            (get_var_pos (Pos.unmark v2)),
+          [] )
       in
       (se2, s1 @ s2)
   | FunctionCall _ -> assert false (* should not happen *)
@@ -152,52 +155,11 @@ let rec generate_java_expr (e : Mir.expression Pos.marked) :
       | 1. -> (Format.asprintf "MValue.one", [])
       | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (get_tgv_position var, [])
-  | LocalVar lvar ->
-      (Format.asprintf "localVariables[%d]" lvar.Mir.LocalVariable.id, [])
-  | LocalLet (lvar, e1, e2) ->
-      let _, s1 = generate_java_expr e1 in
-      let se2, s2 = generate_java_expr e2 in
-      let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
-      (se3, s3)
+  | Var var -> (get_tgv_position (Pos.unmark var), [])
   | Attribut _ | Size _ | NbAnomalies | NbDiscordances | NbInformatives
   | NbBloquantes ->
       Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
-
-let format_local_vars_defs (oc : Format.formatter)
-    (defs : (Mir.LocalVariable.t * Mir.expression Pos.marked) list) =
-  Format.pp_print_list
-    (fun fmt (lvar, expr) ->
-      let se, _ = generate_java_expr expr in
-      Format.fprintf fmt "localVariables[%d] = %s;" lvar.Mir.LocalVariable.id se)
-    oc defs
-
-let generate_var_def (var : Mir.Variable.t) (def : Mir.variable_def)
-    (oc : Format.formatter) =
-  match def with
-  | SimpleVar e ->
-      let se, defs = generate_java_expr e in
-      Format.fprintf oc "%a%s = %s;" format_local_vars_defs defs
-        (get_tgv_position var) se
-  | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a"
-        (fun fmt ->
-          Mir.IndexMap.iter (fun i v ->
-              let sv, defs = generate_java_expr v in
-              Format.fprintf fmt "%atgv[%d /* %a */] = %s;"
-                format_local_vars_defs defs
-                (get_var_pos var |> ( + ) i)
-                format_var_name var sv))
-        es
-  | TableVar (_size, IndexGeneric (v, e)) ->
-      let se, s = generate_java_expr e in
-      Format.fprintf oc
-        "if(!%s.isUndefined())@[<hov 2>{@ %atgv[%d/* %a */ + \
-         (int)%s.getValue()] = %s;@] }@,"
-        (get_tgv_position v) format_local_vars_defs s (get_var_pos var)
-        format_var_name var (get_tgv_position v) se
-  | InputVar -> assert false
 
 let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
   let input_methods_count = ref 0 in
@@ -240,7 +202,7 @@ let rec generate_stmts (program : program) (oc : Format.formatter)
 and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
     unit =
   match Pos.unmark stmt with
-  | SAssign (var, vdata) -> generate_var_def var vdata oc
+  | SAssign (_var, _vi, _ve) -> assert false
   | SConditional (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =

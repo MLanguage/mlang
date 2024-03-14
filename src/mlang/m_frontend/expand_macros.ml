@@ -349,17 +349,6 @@ let expand_loop_variables (lvs : Mast.loop_variables Pos.marked)
       let loop_map_list = iterate_all_combinations varying_domain in
       fun translator -> List.map translator loop_map_list
 
-let expand_table_index (const_map : const_context) (loop_map : loop_context)
-    (m_i : Mast.table_index Pos.marked) : Mast.table_index Pos.marked =
-  let i, i_pos = m_i in
-  match i with
-  | Mast.LiteralIndex _ -> m_i
-  | Mast.SymbolIndex v -> (
-      match expand_variable const_map loop_map (v, i_pos) with
-      | Mast.Literal (Float f), _ -> (Mast.LiteralIndex (int_of_float f), i_pos)
-      | Mast.Literal (Variable v'), _ -> (Mast.SymbolIndex v', i_pos)
-      | _ -> assert false)
-
 let rec expand_expression (const_map : const_context) (loop_map : loop_context)
     (m_expr : Mast.expression Pos.marked) : Mast.expression Pos.marked =
   let expr, expr_pos = m_expr in
@@ -398,7 +387,7 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
         | Mast.Literal (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
         | _ -> assert false
       in
-      let i' = expand_table_index const_map loop_map i in
+      let i' = expand_expression const_map loop_map i in
       (Mast.Index (t', i'), expr_pos)
   | Mast.Conditional (e1, e2, e3_opt) ->
       let e1' = expand_expression const_map loop_map e1 in
@@ -476,17 +465,7 @@ let expand_lvalue (const_map : const_context) (loop_map : loop_context)
     | _ -> assert false
   in
   let index =
-    match lval.Mast.index with
-    | Some (ti, ti_pos) -> (
-        match ti with
-        | Mast.LiteralIndex _ -> lval.Mast.index
-        | Mast.SymbolIndex ivar -> (
-            match expand_variable const_map loop_map (ivar, ti_pos) with
-            | Mast.Literal (Variable v), _ -> Some (Mast.SymbolIndex v, ti_pos)
-            | Mast.Literal (Float f), _ ->
-                Some (Mast.LiteralIndex (int_of_float f), ti_pos)
-            | _ -> assert false))
-    | None -> None
+    Option.map (expand_expression const_map loop_map) lval.Mast.index
   in
   (Mast.{ var; index }, lval_pos)
 

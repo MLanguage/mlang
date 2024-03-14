@@ -768,7 +768,7 @@ output_name:
 | s = SYMBOL { parse_variable_name $sloc s }
 
 brackets:
-| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
+| LBRACKET i = expression RBRACKET { i }
 
 loop_variables:
 | lrs = loop_variables_ranges { Ranges lrs }

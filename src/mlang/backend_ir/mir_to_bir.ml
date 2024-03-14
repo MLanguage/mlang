@@ -19,7 +19,7 @@ let rec translate_m_code (m_program : Mir.program)
     (instrs : Mir.instruction Pos.marked list) =
   let rec aux res = function
     | [] -> List.rev res
-    | (Mir.Affectation (vid, vdef), pos) :: instrs -> (
+    | (Mir.Affectation (vid, vidx_opt, vexpr), pos) :: instrs ->
         let var =
           match StrMap.find_opt vid target_vars with
           | Some var -> var
@@ -28,14 +28,10 @@ let rec translate_m_code (m_program : Mir.program)
                 (Format.sprintf "unknown variable %s" vid)
                 pos
         in
-        let var_definition = vdef.Mir.var_definition in
-        match var_definition with
-        | InputVar -> aux res instrs
-        | TableVar _ | SimpleVar _ ->
-            aux
-              ((Bir.SAssign (var, var_definition), Pos.get_position var.name)
-              :: res)
-              instrs)
+        aux
+          ((Bir.SAssign (var, vidx_opt, vexpr), Pos.get_position var.name)
+          :: res)
+          instrs
     | (Mir.IfThenElse (expr, ilt, ile), pos) :: instrs ->
         let stmts_then = translate_m_code m_program target_vars ilt in
         let stmts_else = translate_m_code m_program target_vars ile in

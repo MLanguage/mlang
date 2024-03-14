@@ -77,11 +77,6 @@ let get_table_size_opt = function
   | None -> None
   | Some (SymbolSize _, _) -> assert false
 
-type set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of variable Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
-
 (**{2 Loops}*)
 
 (** The M language has an extremely odd way to specify looping. Rather than
@@ -136,31 +131,31 @@ let is_left_associative = function Sub | Div -> true | _ -> false
 (** Unary operators *)
 type unop = Not | Minus
 
+type 'v set_value_ =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v
+  | Interval of int Pos.marked * int Pos.marked
+
 (** The main type of the M language *)
-type expression =
-  | TestInSet of bool * expression Pos.marked * set_value list
+type 'v expression_ =
+  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Comparison of
-      comp_op Pos.marked * expression Pos.marked * expression Pos.marked
+  | Comparison of comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
       (** Compares two expressions and produce a boolean *)
-  | Binop of binop Pos.marked * expression Pos.marked * expression Pos.marked
-  | Unop of unop * expression Pos.marked
-  | Index of variable Pos.marked * table_index Pos.marked
-      (** Access a cell in a table *)
-  | Conditional of
-      expression Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked option
+  | Binop of binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Unop of unop * 'v m_expression_
+  | Index of 'v * 'v m_expression_  (** Access a cell in a table *)
+  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_ option
       (** Classic conditional with an optional else clause ([None] only for
           verification conditions) *)
-  | FunctionCall of func_name Pos.marked * func_args
+  | FunctionCall of func_name Pos.marked * 'v func_args_
   | Literal of literal
-  | Loop of loop_variables Pos.marked * expression Pos.marked
+  | Loop of loop_variables Pos.marked * 'v m_expression_
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of string Pos.marked list Pos.marked
-  | Attribut of variable Pos.marked * string Pos.marked
-  | Size of variable Pos.marked
+  | Attribut of 'v * string Pos.marked
+  | Size of 'v
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -168,9 +163,17 @@ type expression =
 
 (** Functions can take a explicit list of argument or a loop expression that
     expands into a list *)
-and func_args =
-  | ArgList of expression Pos.marked list
-  | LoopList of loop_variables Pos.marked * expression Pos.marked
+and 'v func_args_ =
+  | ArgList of 'v m_expression_ list
+  | LoopList of loop_variables Pos.marked * 'v m_expression_
+
+and 'v m_expression_ = 'v expression_ Pos.marked
+
+type set_value = variable Pos.marked set_value_
+
+type func_args = variable Pos.marked func_args_
+
+type expression = variable Pos.marked expression_
 
 (**{1 Toplevel clauses}*)
 
@@ -181,7 +184,7 @@ and func_args =
 
 type lvalue = {
   var : variable Pos.marked;
-  index : table_index Pos.marked option; (* [None] if not a table *)
+  index : expression Pos.marked option; (* [None] if not a table *)
 }
 (** An lvalue (left value) is a variable being assigned. It can be a table or a
     non-table variable *)

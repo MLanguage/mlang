@@ -958,13 +958,9 @@ let rec fold_var_expr
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
   | Mast.Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
-  | Mast.Index (t, (i, i_pos)) ->
+  | Mast.Index (t, e) ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      let acc =
-        match i with
-        | Mast.LiteralIndex _ -> acc
-        | Mast.SymbolIndex v -> fold_var (v, i_pos) (OneOf None) env acc
-      in
+      let acc = fold_var_expr fold_var is_filter acc e env in
       fold_var t (OneOf (Some ())) env acc
   | Mast.Conditional (e1, e2, e3_opt) -> (
       let acc = fold_var_expr fold_var is_filter acc e1 env in
@@ -1159,11 +1155,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 in
                 let in_vars_index =
                   match lval.index with
-                  | Some (Mast.SymbolIndex vn, vpos) ->
-                      let var = (vn, vpos) in
-                      let name = check_variable var (OneOf None) env in
-                      StrSet.singleton name
-                  | Some (Mast.LiteralIndex _, _) | None -> StrSet.empty
+                  | Some ei -> check_expression false ei env
+                  | None -> StrSet.empty
                 in
                 let in_vars_expr = check_expression false sf.formula env in
                 if is_rule then

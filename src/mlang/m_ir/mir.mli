@@ -98,41 +98,34 @@ type func =
   | VerifNumber
   | ComplNumber
 
-(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
+type 'v set_value_ =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v Pos.marked
+  | Interval of int Pos.marked * int Pos.marked
 
-    Because translating to MIR requires a lot of unrolling and expansion, we
-    introduce a [LocalLet] construct to avoid code duplication. *)
-
-type 'variable expression_ =
-  | Unop of (Mast.unop[@opaque]) * 'variable expression_ Pos.marked
-  | Comparison of
-      (Mast.comp_op[@opaque]) Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | Binop of
-      (Mast.binop[@opaque]) Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | Index of 'variable Pos.marked * 'variable expression_ Pos.marked
-  | Conditional of
-      'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | FunctionCall of (func[@opaque]) * 'variable expression_ Pos.marked list
-  | Literal of (literal[@opaque])
-  | Var of 'variable
-  | LocalVar of local_variable
-  | LocalLet of
-      local_variable
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
+type 'v expression_ =
+  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
+      (** Test if an expression is in a set of value (or not in the set if the
+          flag is set to [false]) *)
+  | Unop of Mast.unop * 'v m_expression_
+  | Comparison of Mast.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Binop of Mast.binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Index of 'v Pos.marked * 'v m_expression_
+  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
+  | FunctionCall of func * 'v m_expression_ list
+  | Literal of literal
+  | Var of 'v Pos.marked
   | NbCategory of CatVarSet.t
-  | Attribut of string Pos.marked * 'variable * string Pos.marked
-  | Size of 'variable
+  | Attribut of string Pos.marked * 'v * string Pos.marked
+  | Size of 'v Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
+
+and 'v m_expression_ = 'v expression_ Pos.marked
+
+type set_value = Variable.t set_value_
 
 type expression = Variable.t expression_
 
@@ -147,31 +140,6 @@ module LocalVariableMap : sig
 end
 
 module IndexMap : IntMap.T
-
-type 'variable index_def =
-  | IndexTable of
-      ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of 'variable * 'variable expression_ Pos.marked
-
-type 'variable variable_def_ =
-  | SimpleVar of 'variable expression_ Pos.marked
-  | TableVar of int * 'variable index_def
-  | InputVar
-
-type variable_def = Variable.t variable_def_
-
-type 'variable variable_data_ = {
-  var_definition : 'variable variable_def_;
-  var_typ : typ option;
-      (** The typing info here comes from the variable declaration in the source
-          program *)
-}
-
-type variable_data = Variable.t variable_data_
-
-type rov_id = RuleID of int | VerifID of int
-
-module RuleMap : MapExt.T with type key = rov_id
 
 module TargetMap : StrMap.T
 
@@ -228,7 +196,8 @@ module Error : sig
 end
 
 type instruction =
-  | Affectation of variable_id * variable_data
+  | Affectation of
+      variable_id * (int * expression Pos.marked) option * expression Pos.marked
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeTarget of string Pos.marked
@@ -248,14 +217,6 @@ type instruction =
   | ExportErrors
   | FinalizeErrors
 
-type rule_data = {
-  rule_apps : Pos.t StrMap.t;
-  rule_domain : rule_domain;
-  rule_chain : (string * rule_domain) option;
-  rule_vars : instruction Pos.marked list;
-  rule_number : rov_id Pos.marked;
-}
-
 type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
@@ -267,17 +228,6 @@ type target_data = {
 type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
-
-type 'variable condition_data_ = {
-  cond_seq_id : int;
-  cond_number : rov_id Pos.marked;
-  cond_domain : verif_domain;
-  cond_expr : 'variable expression_ Pos.marked;
-  cond_error : error * 'variable option;
-  cond_cats : int CatVarMap.t;
-}
-
-type condition_data = Variable.t condition_data_
 
 type program = {
   program_safe_prefix : string;
@@ -306,25 +256,13 @@ val false_literal : literal
 
 val true_literal : literal
 
-val num_of_rule_or_verif_id : rov_id -> int
-
 val find_var_name_by_alias : program -> string Pos.marked -> string
 
 val map_expr_var : ('v -> 'v2) -> 'v expression_ -> 'v2 expression_
 
 val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v expression_ -> 'a
 
-val map_var_def_var : ('v -> 'v2) -> 'v variable_def_ -> 'v2 variable_def_
-
-val map_cond_data_var : ('v -> 'v2) -> 'v condition_data_ -> 'v2 condition_data_
-
 val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
-
-val find_var_definition : program -> Variable.t -> rule_data * variable_data
-
-val fresh_rule_num : unit -> int
-
-val initial_undef_rule_id : rov_id
 
 val find_var_by_name : program -> string Pos.marked -> Variable.t
 (** Get a variable for a given name or alias, because of SSA multiple variables

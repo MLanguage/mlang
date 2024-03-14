@@ -180,63 +180,58 @@ type func =
   | VerifNumber
   | ComplNumber
 
-(** MIR expressions are simpler than M; there are no loops or syntaxtic sugars.
-    Because M lets you define conditional without an else branch although it is
-    an expression-based language, we include an [Error] constructor to which the
-    missing else branch is translated to.
+type 'v set_value_ =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v Pos.marked
+  | Interval of int Pos.marked * int Pos.marked
 
-    Because translating to MIR requires a lot of unrolling and expansion, we
-    introduce a [LocalLet] construct to avoid code duplication. *)
-
-type 'variable expression_ =
-  | Unop of (Mast.unop[@opaque]) * 'variable expression_ Pos.marked
-  | Comparison of
-      (Mast.comp_op[@opaque]) Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | Binop of
-      (Mast.binop[@opaque]) Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | Index of 'variable Pos.marked * 'variable expression_ Pos.marked
-  | Conditional of
-      'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
-  | FunctionCall of (func[@opaque]) * 'variable expression_ Pos.marked list
-  | Literal of (literal[@opaque])
-  | Var of 'variable
-  | LocalVar of (LocalVariable.t[@opaque])
-  | LocalLet of
-      (LocalVariable.t[@opaque])
-      * 'variable expression_ Pos.marked
-      * 'variable expression_ Pos.marked
+type 'v expression_ =
+  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
+      (** Test if an expression is in a set of value (or not in the set if the
+          flag is set to [false]) *)
+  | Unop of Mast.unop * 'v m_expression_
+  | Comparison of Mast.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Binop of Mast.binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Index of 'v Pos.marked * 'v m_expression_
+  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
+  | FunctionCall of func * 'v m_expression_ list
+  | Literal of literal
+  | Var of 'v Pos.marked
   | NbCategory of CatVarSet.t
-  | Attribut of string Pos.marked * 'variable * string Pos.marked
-  | Size of 'variable
+  | Attribut of string Pos.marked * 'v * string Pos.marked
+  | Size of 'v Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
+
+and 'v m_expression_ = 'v expression_ Pos.marked
+
+type set_value = Variable.t set_value_
 
 type expression = Variable.t expression_
 
 let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   let map = Pos.map_under_mark (map_expr_var f) in
   match (e :> 'v expression_) with
+  | TestInSet (positive, e, values) ->
+      let map_values = function
+        | FloatValue f -> FloatValue f
+        | VarValue mv -> VarValue (Pos.map_under_mark f mv)
+        | Interval (bv, ev) -> Interval (bv, ev)
+      in
+      TestInSet (positive, map e, List.map map_values values)
   | Unop (op, e) -> Unop (op, map e)
   | Comparison (op, e1, e2) -> Comparison (op, map e1, map e2)
   | Binop (op, e1, e2) -> Binop (op, map e1, map e2)
   | Index ((v, pos), e) -> Index ((f v, pos), map e)
   | Conditional (e1, e2, e3) -> Conditional (map e1, map e2, map e3)
   | FunctionCall (func, es) -> FunctionCall (func, List.map map es)
-  | Var v -> Var (f v)
-  | LocalLet (v, e1, e2) -> LocalLet (v, map e1, map e2)
+  | Var mv -> Var (Pos.map_under_mark f mv)
   | Literal l -> Literal l
-  | LocalVar v -> LocalVar v
   | NbCategory l -> NbCategory l
   | Attribut (v, var, a) -> Attribut (v, f var, a)
-  | Size var -> Size (f var)
+  | Size mv -> Size (Pos.map_under_mark f mv)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
@@ -246,14 +241,19 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
     =
   let fold acc e = fold_expr_var f acc (Pos.unmark e) in
   match (e :> 'v expression_) with
+  | TestInSet (_, e, values) ->
+      let fold_values acc = function
+        | FloatValue _ | Interval _ -> acc
+        | VarValue (v, _) -> f acc v
+      in
+      List.fold_left fold_values (fold acc e) values
   | Unop (_, e) -> fold acc e
-  | Comparison (_, e1, e2) | Binop (_, e1, e2) | LocalLet (_, e1, e2) ->
-      fold (fold acc e1) e2
+  | Comparison (_, e1, e2) | Binop (_, e1, e2) -> fold (fold acc e1) e2
   | Index ((v, _), e) -> fold (f acc v) e
   | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
   | FunctionCall (_, es) -> List.fold_left fold acc es
-  | Var v -> f acc v
-  | Literal _ | LocalVar _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
+  | Var v -> f acc (Pos.unmark v)
+  | Literal _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
   | NbDiscordances | NbInformatives | NbBloquantes ->
       acc
 
@@ -299,57 +299,9 @@ module IndexMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
-type 'variable index_def =
-  | IndexTable of
-      ('variable expression_ Pos.marked IndexMap.t[@name "index_map"])
-  | IndexGeneric of 'variable * 'variable expression_ Pos.marked
-
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
     model tables. *)
-type 'variable variable_def_ =
-  | SimpleVar of 'variable expression_ Pos.marked
-  | TableVar of int * 'variable index_def
-  | InputVar
-
-let map_var_def_var (f : 'v -> 'v2) (vdef : 'v variable_def_) :
-    'v2 variable_def_ =
-  let map_expr = Pos.map_under_mark (map_expr_var f) in
-  match vdef with
-  | InputVar -> InputVar
-  | SimpleVar e -> SimpleVar (map_expr e)
-  | TableVar (i, idef) ->
-      let idef =
-        match idef with
-        | IndexTable idx_map -> IndexTable (IndexMap.map map_expr idx_map)
-        | IndexGeneric (v, e) -> IndexGeneric (f v, map_expr e)
-      in
-      TableVar (i, idef)
-
-type variable_def = Variable.t variable_def_
-
-type 'variable variable_data_ = {
-  var_definition : 'variable variable_def_;
-  var_typ : typ option;
-      (** The typing info here comes from the variable declaration in the source
-          program *)
-}
-
-type variable_data = Variable.t variable_data_
-
-type rov_id = RuleID of int | VerifID of int
-
-let num_of_rule_or_verif_id = function RuleID n | VerifID n -> n
-
-let fresh_rule_num =
-  let count = ref 0 in
-  fun () ->
-    let n = !count in
-    incr count;
-    n
-
-(** Special rule id for initial definition of variables *)
-let initial_undef_rule_id = RuleID (-1)
 
 type 'a domain = {
   dom_id : Mast.DomainId.t Pos.marked;
@@ -427,7 +379,8 @@ module Error = struct
 end
 
 type instruction =
-  | Affectation of variable_id * variable_data
+  | Affectation of
+      variable_id * (int * expression Pos.marked) option * expression Pos.marked
   | IfThenElse of
       expression * instruction Pos.marked list * instruction Pos.marked list
   | ComputeTarget of string Pos.marked
@@ -447,20 +400,6 @@ type instruction =
   | ExportErrors
   | FinalizeErrors
 
-type rule_data = {
-  rule_apps : Pos.t StrMap.t;
-  rule_domain : rule_domain;
-  rule_chain : (string * rule_domain) option;
-  rule_vars : instruction Pos.marked list;
-  rule_number : rov_id Pos.marked;
-}
-
-module RuleMap = MapExt.Make (struct
-  type t = rov_id
-
-  let compare = compare
-end)
-
 module TargetMap = StrMap
 
 type target_data = {
@@ -477,34 +416,10 @@ type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
-type 'variable condition_data_ = {
-  cond_seq_id : int;
-  cond_number : rov_id Pos.marked;
-  cond_domain : verif_domain;
-  cond_expr : 'variable expression_ Pos.marked;
-  cond_error : (Error.t[@opaque]) * 'variable option;
-  cond_cats : int CatVarMap.t;
-}
-
-let map_cond_data_var (f : 'v -> 'v2) (cond : 'v condition_data_) :
-    'v2 condition_data_ =
-  {
-    cond_seq_id = cond.cond_seq_id;
-    cond_number = cond.cond_number;
-    cond_domain = cond.cond_domain;
-    cond_expr = Pos.map_under_mark (map_expr_var f) cond.cond_expr;
-    cond_error =
-      (let e, v = cond.cond_error in
-       (e, Option.map f v));
-    cond_cats = cond.cond_cats;
-  }
-
 let cond_cats_to_set cats =
   CatVarMap.fold
     (fun cv nb res -> if nb > 0 then CatVarSet.add cv res else res)
     cats CatVarSet.empty
-
-type condition_data = Variable.t condition_data_
 
 type program = {
   program_safe_prefix : string;
@@ -548,11 +463,6 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
       StrMap.find name p.program_vars
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
-
-(** Explores the rules to find rule and variable data *)
-let find_var_definition (_p : program) (_var : Variable.t) :
-    rule_data * variable_data =
-  raise Not_found
 
 let mast_to_catvar (cats : 'a CatVarMap.t)
     (l : string Pos.marked list Pos.marked) : cat_variable =
@@ -598,11 +508,6 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
       Pos.same_pos_as (Index (var, new_e1)) e
   | Literal _ -> e
   | Var _ -> e
-  | LocalVar _ -> e
-  | LocalLet (lvar, e1, e2) ->
-      let new_e1 = expand_functions_expr e1 in
-      let new_e2 = expand_functions_expr e2 in
-      Pos.same_pos_as (LocalLet (lvar, new_e1, new_e2)) e
   | FunctionCall (SumFunc, args) ->
       let expr_opt =
         List.fold_left
@@ -663,35 +568,18 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
   | _ -> e
 
 let expand_functions (p : program) : program =
-  let map_var _var def =
-    match def.var_definition with
-    | InputVar -> def
-    | SimpleVar e ->
-        { def with var_definition = SimpleVar (expand_functions_expr e) }
-    | TableVar (size, defg) -> (
-        match defg with
-        | IndexGeneric (v, e) ->
-            {
-              def with
-              var_definition =
-                TableVar (size, IndexGeneric (v, expand_functions_expr e));
-            }
-        | IndexTable es ->
-            {
-              def with
-              var_definition =
-                TableVar
-                  ( size,
-                    IndexTable
-                      (IndexMap.map (fun e -> expand_functions_expr e) es) );
-            })
-  in
   let program_targets =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
-      | Affectation (v_id, v_data) ->
-          (Affectation (v_id, map_var v_id v_data), instr_pos)
+      | Affectation (v_id, v_idx_opt, v_expr) ->
+          let m_idx_opt =
+            match v_idx_opt with
+            | Some (sz, v_idx) -> Some (sz, expand_functions_expr v_idx)
+            | None -> None
+          in
+          let m_expr = expand_functions_expr v_expr in
+          (Affectation (v_id, m_idx_opt, m_expr), instr_pos)
       | IfThenElse (i, t, e) ->
           let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
           let t' = List.map map_instr t in

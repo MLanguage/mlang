@@ -59,18 +59,6 @@ let format_literal fmt (l : literal) =
   | Float f -> Format.fprintf fmt "%f" f
   | Undefined -> Format.fprintf fmt "indefini"
 
-let format_table_index fmt (i : table_index) =
-  match i with
-  | LiteralIndex i -> Format.fprintf fmt "%d" i
-  | SymbolIndex v -> format_variable fmt v
-
-let format_lvalue fmt (lv : lvalue) =
-  match lv.index with
-  | Some vi ->
-      Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark lv.var)
-        format_table_index (Pos.unmark vi)
-  | None -> Format.fprintf fmt "%a" format_variable (Pos.unmark lv.var)
-
 let format_set_value fmt (sv : set_value) =
   match sv with
   | VarValue v -> format_variable fmt (Pos.unmark v)
@@ -153,7 +141,7 @@ let rec format_expression fmt (e : expression) =
       Format.fprintf fmt "%a %a" format_unop op format_expression (Pos.unmark e)
   | Index (v, i) ->
       Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark v)
-        format_table_index (Pos.unmark i)
+        format_expression (Pos.unmark i)
   | Conditional (e1, e2, e3) ->
       Format.fprintf fmt "(si %a alors %a %afinsi)" format_expression
         (Pos.unmark e1) format_expression (Pos.unmark e2)
@@ -186,7 +174,14 @@ and format_func_args fmt (args : func_args) =
       Format.fprintf fmt "%a%a" format_loop_variables (Pos.unmark lvs)
         format_expression (Pos.unmark e)
 
-let format_formula_decl fmt (f : formula_decl) =
+and format_lvalue fmt (lv : lvalue) =
+  match lv.index with
+  | Some vi ->
+      Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark lv.var)
+        format_expression (Pos.unmark vi)
+  | None -> Format.fprintf fmt "%a" format_variable (Pos.unmark lv.var)
+
+and format_formula_decl fmt (f : formula_decl) =
   Format.fprintf fmt "%a = %a" format_lvalue (Pos.unmark f.lvalue)
     format_expression (Pos.unmark f.formula)
 
