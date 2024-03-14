@@ -1412,8 +1412,16 @@ let gen_conf_h fmt flags vars =
 
 let gen_dbg fmt =
   Format.fprintf fmt
-    {|#ifdef FLG_TRACE
+    {|#ifdef FLG_COLORS
+int change_couleur (int couleur,int typographie);
+int get_couleur ( );
+int get_typo ( );
+#endif
+    
+#ifdef FLG_TRACE
 extern int niv_trace;
+
+extern void aff1(char *nom);
 
 extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi);
 
@@ -1698,6 +1706,28 @@ let gen_mlang_c fmt =
 
 #include "mlang.h"
 
+#ifdef FLG_COLORS 
+int color = 37;
+int typo = 0;
+
+int change_couleur (int couleur,int typographie)
+{
+	 color = couleur;
+	 typo = typographie;
+	return 0 ;
+}
+
+int get_couleur ( )
+{
+	return color ;
+}
+
+int get_typo ( )
+{
+	return typo ;
+}
+#endif 
+
 double floor_g(double a) {
   if (fabs(a) <= (double)LONG_MAX) {
     return floor(a);
@@ -1899,28 +1929,38 @@ int niv_trace = 3;
 #define TRACE_FILE stderr
 #endif /* FLG_API */
 
+void aff1(nom)
+char *nom ;
+{
+#ifdef FLG_COLORS
+if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
+#else
+if (niv_trace >= 1) fprintf(stderr, "%s \n", nom) ;
+#endif
+}
+
 void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi) {
   double valeur;
   int def;
   if (expr < 0) {
     if (niv_trace >= niv) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
       fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
               color, typo, nom, expr, chaine);
 #else
       fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     }
     return;
   } else if (expr >= maxi) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
     fprintf(TRACE_FILE,
             "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
             color, typo, expr, maxi);
 #else
     fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
             expr, maxi);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     expr = 0;
   }
 #ifdef FLG_COMPACT
@@ -1945,66 +1985,66 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
   if (is_tab) {
     if (def == 0) {
       if (valeur != 0) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
         fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
                 color, typo, nom, expr, valeur);
 #else
         fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
       } else if (niv_trace >= niv) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
         fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
                 color, typo, nom, expr, chaine);
 #else
         fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
       }
     } else if (def != 1) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
       fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
               color, typo, nom, expr, def);
 #else
       fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     } else if (niv_trace >= niv) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
       fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
               color, typo, nom, expr, chaine, valeur);
 #else
       fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     }
   } else {
     if (def == 0) {
       if (valeur != 0) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
         fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
                 color, typo, nom, valeur);
 #else
         fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
       } else if (niv_trace >= niv) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
         fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
                 color, typo, nom, chaine);
 #else
         fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
       }
     } else if (def != 1) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
       fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
               color, typo, nom, def);
 #else
       fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     } else if (niv_trace >= niv) {
-#ifdef FLG_COLOR
+#ifdef FLG_COLORS
       fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
               color, typo, nom, chaine, valeur);
 #else
       fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
-#endif /* FLG_COLOR */
+#endif /* FLG_COLORS */
     }
   }
 }

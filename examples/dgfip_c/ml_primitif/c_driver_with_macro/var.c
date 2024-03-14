@@ -16,9 +16,6 @@ int nb_penalite = NB_PENALITE;
 int nb_restituee = NB_RESTITUEE;
 int nb_enchaine = NB_ENCH;
 
-int color = 37;
-int typo = 0;
-
 #ifdef FLG_DEBUG
 int nb_err = NB_ERR;
 #if NB_DEBUG_C <= 0
@@ -52,16 +49,6 @@ T_discord * une_verif(T_irdata *irdata, struct S_discord *(*proc)(T_irdata *irda
   (*proc)(irdata);
   return discords;
 #endif /* FLG_MULTITHREAD */
-}
-
-int change_couleur(int couleur, int typographie) {
-  color = couleur;
-  typo = typographie;
-  return 0;
-}
-
-int get_couleur(void) {
-  return color;
 }
 
 struct S_discord * verif_saisie_cohe_primitive_isf(T_irdata *irdata, int appel) {

@@ -632,11 +632,13 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     ((f, ret_type) : Bir.function_name * bool) =
   let { tmp_vars; stmts; is_verif; _ } = Mir.TargetMap.find f program.targets in
-  Format.fprintf oc "@[<v 2>%a{@,%a%a%s@]@,}@,"
+  Format.fprintf oc "@[<v 2>%a{@,%a%s@\n%a%s@\n%s@]@,}@,"
     (generate_target_prototype false is_verif)
     f generate_var_tmp_decls tmp_vars
+    (if dgfip_flags.flg_trace then "aff1(\"debut " ^ f ^ "\\n\") ;" else "")
     (generate_stmts dgfip_flags program var_indexes)
     stmts
+    (if dgfip_flags.flg_trace then "aff1(\"fin " ^ f ^ "\\n\") ;" else "")
     (if ret_type then
      {|
 #ifdef FLG_MULTITHREAD
