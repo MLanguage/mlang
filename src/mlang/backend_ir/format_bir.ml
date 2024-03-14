@@ -40,9 +40,15 @@ let format_print_arg fmt = function
 
 let rec format_stmt fmt (stmt : stmt) =
   match Pos.unmark stmt with
-  | SAssign (v, vdef) ->
-      Format.fprintf fmt "%s = %a" (Pos.unmark v.name)
-        Format_mir.format_variable_def vdef
+  | SAssign (v, vi_opt, ve) ->
+      let pr_idx fmt = function
+        | Some (_, vi) ->
+            Format.fprintf fmt "[%a]" Format_mir.format_expression
+              (Pos.unmark vi)
+        | None -> ()
+      in
+      Format.fprintf fmt "%s%a = %a" (Pos.unmark v.name) pr_idx vi_opt
+        Format_mir.format_expression (Pos.unmark ve)
   | SConditional (cond, t, []) ->
       Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n"
         Format_mir.format_expression cond format_stmts t

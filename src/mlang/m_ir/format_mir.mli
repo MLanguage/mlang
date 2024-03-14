@@ -22,21 +22,6 @@ val format_literal : Format.formatter -> Mir.literal -> unit
 
 val format_expression : Format.formatter -> Mir.expression -> unit
 
-val format_variable_def : Format.formatter -> Mir.variable_def -> unit
-
-val format_variable_data : Format.formatter -> Mir.variable_data -> unit
-
-val format_variables :
-  Format.formatter -> Mir.variable_data Mir.VariableMap.t -> unit
-
 val format_error : Format.formatter -> Mir.Error.t -> unit
-
-val format_precondition : Format.formatter -> Mir.condition_data -> unit
-
-val format_program_rules :
-  Format.formatter ->
-  Mir.Variable.t StrMap.t ->
-  Mir.rule_data Mir.RuleMap.t ->
-  unit
 
 val format_variable : Format.formatter -> Mir.Variable.t -> unit
