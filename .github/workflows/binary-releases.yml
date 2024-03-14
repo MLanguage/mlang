@@ -1,8 +1,9 @@
 name: binary-releases
 
 on:
-  push:
+  - push:
     branches: [master]
+  - workflow_dispatch
 
 jobs:
 
