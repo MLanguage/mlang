@@ -50,79 +50,129 @@ let fresh_c_local =
 
 let rec generate_c_expr (e : Mir.expression Pos.marked)
     (var_indexes : Dgfip_varid.var_id_map) : D.expression_composition =
+  let comparison op se1 se2 =
+    let safe_def = false in
+    let def_test = D.dand se1.D.def_test se2.D.def_test in
+    let value_comp =
+      let op =
+        match Pos.unmark op with
+        | Mast.Gt -> ">"
+        | Mast.Gte -> ">="
+        | Mast.Lt -> "<"
+        | Mast.Lte -> "<="
+        | Mast.Eq -> "=="
+        | Mast.Neq -> "!="
+      in
+      D.comp op se1.value_comp se2.value_comp
+    in
+    D.build_transitive_composition ~safe_def { def_test; value_comp }
+  in
+  let binop op se1 se2 =
+    match op with
+    | Mast.Div, _ ->
+        let def_test = D.dand se1.D.def_test se2.D.def_test in
+        let value_comp =
+          D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
+        in
+        D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+    | _ ->
+        let def_test =
+          match Pos.unmark op with
+          | Mast.And | Mast.Mul -> D.dand se1.def_test se2.def_test
+          | Mast.Or | Mast.Add | Mast.Sub -> D.dor se1.def_test se2.def_test
+          | Mast.Div -> assert false
+          (* see above *)
+        in
+        let op e1 e2 =
+          match Pos.unmark op with
+          | Mast.And -> D.dand e1 e2
+          | Mast.Or -> D.dor e1 e2
+          | Mast.Add -> D.plus e1 e2
+          | Mast.Sub -> D.sub e1 e2
+          | Mast.Mul -> D.mult e1 e2
+          | Mast.Div -> assert false
+          (* see above *)
+        in
+        let value_comp = op se1.value_comp se2.value_comp in
+        D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+  in
+  let unop op se =
+    let def_test = se.D.def_test in
+    let op, safe_def =
+      match op with Mast.Not -> (D.dnot, false) | Mast.Minus -> (D.minus, true)
+    in
+    let value_comp = op se.value_comp in
+    D.build_transitive_composition ~safe_def { def_test; value_comp }
+  in
   match Pos.unmark e with
+  | Mir.TestInSet (positive, e0, values) ->
+      let se0 = generate_c_expr e0 var_indexes in
+      let ldef, lval = D.locals_from_m (Mir.LocalVariable.new_var ()) in
+      let sle0 = D.{ def_test = local_var ldef; value_comp = local_var lval } in
+      let declare_local constr =
+        D.let_local ldef se0.def_test (D.let_local lval se0.value_comp constr)
+      in
+      let or_chain =
+        List.fold_left
+          (fun or_chain set_value ->
+            let equal_test =
+              match set_value with
+              | Mir.VarValue set_var ->
+                  let s_set_var =
+                    let v = Pos.unmark set_var in
+                    let def_test = D.m_var v None Def in
+                    let value_comp = D.m_var v None Val in
+                    D.{ def_test; value_comp }
+                  in
+                  comparison (Mast.Eq, Pos.no_pos) sle0 s_set_var
+              | Mir.FloatValue i ->
+                  let s_i =
+                    D.{ def_test = dtrue; value_comp = lit (Pos.unmark i) }
+                  in
+                  comparison (Mast.Eq, Pos.no_pos) sle0 s_i
+              | Mir.Interval (bn, en) ->
+                  let s_bn =
+                    let bn' = float_of_int (Pos.unmark bn) in
+                    D.{ def_test = dtrue; value_comp = lit bn' }
+                  in
+                  let s_en =
+                    let en' = float_of_int (Pos.unmark en) in
+                    D.{ def_test = dtrue; value_comp = lit en' }
+                  in
+                  binop (Mast.And, Pos.no_pos)
+                    (comparison (Mast.Gte, Pos.no_pos) sle0 s_bn)
+                    (comparison (Mast.Lte, Pos.no_pos) sle0 s_en)
+            in
+            binop (Mast.Or, Pos.no_pos) or_chain equal_test)
+          D.{ def_test = dfalse; value_comp = lit 0. }
+          values
+      in
+      let se = if positive then or_chain else unop Mast.Not or_chain in
+      D.
+        {
+          def_test = declare_local se.def_test;
+          value_comp = declare_local se.value_comp;
+        }
   | Comparison (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let safe_def =
-        match (Pos.unmark op, Pos.unmark e2) with
-        | Mast.Gt, Mir.(Literal (Undefined | Float 0.)) ->
-            (* hack to catch positive test in M *) true
-        | _ -> false
-      in
-      let def_test = D.dand se1.def_test se2.def_test in
-      let value_comp =
-        let op =
-          match Pos.unmark op with
-          | Mast.Gt -> ">"
-          | Mast.Gte -> ">="
-          | Mast.Lt -> "<"
-          | Mast.Lte -> "<="
-          | Mast.Eq -> "=="
-          | Mast.Neq -> "!="
-        in
-        D.comp op se1.value_comp se2.value_comp
-      in
-      D.build_transitive_composition ~safe_def { def_test; value_comp }
-  | Binop ((Mast.Div, _), e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
-      let def_test = D.dand se1.def_test se2.def_test in
-      let value_comp =
-        D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
-      in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      comparison op se1 se2
   | Binop (op, e1, e2) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
-      let def_test =
-        match Pos.unmark op with
-        | Mast.And | Mast.Mul -> D.dand se1.def_test se2.def_test
-        | Mast.Or | Mast.Add | Mast.Sub -> D.dor se1.def_test se2.def_test
-        | Mast.Div -> assert false
-        (* see above *)
-      in
-      let op e1 e2 =
-        match Pos.unmark op with
-        | Mast.And -> D.dand e1 e2
-        | Mast.Or -> D.dor e1 e2
-        | Mast.Add -> D.plus e1 e2
-        | Mast.Sub -> D.sub e1 e2
-        | Mast.Mul -> D.mult e1 e2
-        | Mast.Div -> assert false
-        (* see above *)
-      in
-      let value_comp = op se1.value_comp se2.value_comp in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      binop op se1 se2
   | Unop (op, e) ->
       let se = generate_c_expr e var_indexes in
-      let def_test = se.def_test in
-      let op, safe_def =
-        match op with
-        | Mast.Not -> (D.dnot, false)
-        | Mast.Minus -> (D.minus, true)
-      in
-      let value_comp = op se.value_comp in
-      D.build_transitive_composition ~safe_def { def_test; value_comp }
+      unop op se
   | Index (var, e) ->
       let idx = generate_c_expr e var_indexes in
-      let size = Option.get (Pos.unmark var).is_table in
+      let size = Dgfip_varid.gen_size var_indexes (Pos.unmark var) in
       let idx_var = D.new_local () in
       let def_test =
         D.let_local idx_var idx.value_comp
           (D.dand
              (D.dand idx.def_test
-                (D.comp "<" (D.local_var idx_var) (D.lit (float_of_int size))))
+                (D.comp "<" (D.local_var idx_var) (D.dinstr size)))
              (D.access (Pos.unmark var) Def (D.local_var idx_var)))
       in
       let value_comp =
@@ -197,31 +247,20 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
       let def_test =
-        D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
+        D.dfun "multimax_def"
+          [ bound.value_comp; D.m_var (Pos.unmark v2) PassPointer Def ]
       in
       let value_comp =
-        D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
+        D.dfun "multimax"
+          [ bound.value_comp; D.m_var (Pos.unmark v2) PassPointer Val ]
       in
       D.build_transitive_composition { def_test; value_comp }
   | FunctionCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> { def_test = D.dtrue; value_comp = D.lit f }
   | Literal Undefined -> { def_test = D.dfalse; value_comp = D.lit 0. }
-  | Var var ->
+  | Var mvar ->
+      let var = Pos.unmark mvar in
       { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
-  | LocalVar lvar ->
-      let ldef, lval = D.locals_from_m lvar in
-      { def_test = D.local_var ldef; value_comp = D.local_var lval }
-  | LocalLet (lvar, e1, e2) ->
-      let se1 = generate_c_expr e1 var_indexes in
-      let se2 = generate_c_expr e2 var_indexes in
-      let ldef, lval = D.locals_from_m lvar in
-      let declare_local constr =
-        D.let_local ldef se1.def_test (D.let_local lval se1.value_comp constr)
-      in
-      {
-        def_test = declare_local se2.def_test;
-        value_comp = declare_local se2.value_comp;
-      }
   | Attribut (_v, var, a) ->
       let ptr, var_cat_data =
         match Mir.VariableMap.find var var_indexes with
@@ -241,7 +280,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
       D.build_transitive_composition { def_test; value_comp }
   | Size var ->
       let ptr =
-        match Mir.VariableMap.find var var_indexes with
+        match Mir.VariableMap.find (Pos.unmark var) var_indexes with
         | Dgfip_varid.VarIterate (t, _, _) -> t
         | _ -> assert false
       in
@@ -295,10 +334,11 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Variable.t)
-    (def : Mir.variable_def) (fmt : Format.formatter) : unit =
-  match def with
-  | SimpleVar e ->
-      let se = generate_c_expr e var_indexes in
+    (vidx_opt : (int * Mir.expression Pos.marked) option)
+    (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
+  match vidx_opt with
+  | None ->
+      let se = generate_c_expr vexpr var_indexes in
       if var.is_it then (
         let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
@@ -313,30 +353,33 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
         pr "@]@;}";
         pr "@]@;}@;")
       else generate_m_assign dgfip_flags var_indexes var None fmt se
-  | TableVar (_, IndexTable es) ->
-      Mir.IndexMap.iter
-        (fun i v ->
-          let sv = generate_c_expr v var_indexes in
-          Format.fprintf fmt "@[<hov 2>{@,%a@]}@,"
-            (generate_m_assign dgfip_flags var_indexes var (GetValueConst i))
-            sv)
-        es
-  | TableVar (_size, IndexGeneric (v, e)) ->
-      (* TODO: boundary checks *)
-      let sv = generate_c_expr e var_indexes in
-      Format.fprintf fmt "if(%s)@[<hov 2>{%a@]@;}"
-        (D.generate_variable var_indexes None ~def_flag:true v)
-        (generate_m_assign dgfip_flags var_indexes var (GetValueVar v))
-        sv
-  | InputVar -> assert false
+  | Some (_size, ei) ->
+      Format.fprintf fmt "@[<v 2>{@,";
+      let idx_val = fresh_c_local "mpp_idx" in
+      let idx_def = idx_val ^ "_d" in
+      let locals_idx, def_idx, value_idx =
+        D.build_expression @@ generate_c_expr ei var_indexes
+      in
+      Format.fprintf fmt "char %s;@;long %s;@;%a%a@;%a" idx_def idx_val
+        D.format_local_declarations locals_idx
+        (D.format_assign dgfip_flags var_indexes idx_def)
+        def_idx
+        (D.format_assign dgfip_flags var_indexes idx_val)
+        value_idx;
+      let size = Dgfip_varid.gen_size var_indexes var in
+      Format.fprintf fmt "@[<hov 2>if(%s && 0 <= %s && %s < %s){@,%a@]@,}"
+        idx_def idx_val idx_val size
+        (generate_m_assign dgfip_flags var_indexes var (GetValueExpr idx_val))
+        (generate_c_expr vexpr var_indexes);
+      Format.fprintf fmt "@]@,}"
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
     =
   match Pos.unmark stmt with
-  | SAssign (var, vdata) ->
+  | SAssign (var, vidx_opt, vexpr) ->
       Format.fprintf oc "@[<v 2>{@,";
-      generate_var_def dgfip_flags var_indexes var vdata oc;
+      generate_var_def dgfip_flags var_indexes var vidx_opt vexpr oc;
       Format.fprintf oc "@]@,}"
   | SConditional (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";

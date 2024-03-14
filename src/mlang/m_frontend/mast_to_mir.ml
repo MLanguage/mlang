@@ -42,7 +42,7 @@ let get_var_from_name (var_data : Mir.Variable.t StrMap.t)
 
 let get_var (var_data : Mir.Variable.t StrMap.t)
     (name : Mast.variable_name Pos.marked) : Mir.expression =
-  Mir.Var (get_var_from_name var_data name)
+  Mir.Var (Pos.same_pos_as (get_var_from_name var_data name) name)
 
 (**{2 Preliminary passes}*)
 
@@ -56,15 +56,6 @@ let translate_variable (var_data : Mir.Variable.t StrMap.t)
   | Mast.Generic _ -> assert false
 
 (** {2 Translation of expressions}*)
-
-let translate_table_index (var_data : Mir.Variable.t StrMap.t)
-    (i : Mast.table_index Pos.marked) : Mir.expression Pos.marked =
-  match Pos.unmark i with
-  | Mast.LiteralIndex i' ->
-      Pos.same_pos_as (Mir.Literal (Mir.Float (float_of_int i'))) i
-  | Mast.SymbolIndex v ->
-      let var = translate_variable var_data (Pos.same_pos_as v i) in
-      var
 
 (** Only accepts functions in {!type: Mir.func}*)
 let translate_function_name (f_name : string Pos.marked) =
@@ -95,66 +86,21 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     match Pos.unmark f with
     | Mast.TestInSet (positive, e, values) ->
         let new_e = translate_expression cats var_data e in
-        let local_var = Mir.LocalVariable.new_var () in
-        let local_var_expr = Mir.LocalVar local_var in
-        let or_chain =
-          List.fold_left
-            (fun or_chain set_value ->
-              let equal_test =
-                match set_value with
-                | Mast.VarValue set_var ->
-                    Mir.Comparison
-                      ( Pos.same_pos_as Mast.Eq set_var,
-                        Pos.same_pos_as local_var_expr e,
-                        translate_variable var_data set_var )
-                | Mast.FloatValue i ->
-                    Mir.Comparison
-                      ( Pos.same_pos_as Mast.Eq i,
-                        Pos.same_pos_as local_var_expr e,
-                        Pos.same_pos_as
-                          (Mir.Literal (Mir.Float (Pos.unmark i)))
-                          i )
-                | Mast.Interval (bn, en) ->
-                    if Pos.unmark bn > Pos.unmark en then
-                      Errors.raise_spanned_error "wrong interval bounds"
-                        (Pos.get_position bn)
-                    else
-                      Mir.Binop
-                        ( Pos.same_pos_as Mast.And bn,
-                          Pos.same_pos_as
-                            (Mir.Comparison
-                               ( Pos.same_pos_as Mast.Gte bn,
-                                 Pos.same_pos_as local_var_expr e,
-                                 Pos.same_pos_as
-                                   (Mir.Literal
-                                      (Mir.Float (float_of_int (Pos.unmark bn))))
-                                   bn ))
-                            bn,
-                          Pos.same_pos_as
-                            (Mir.Comparison
-                               ( Pos.same_pos_as Mast.Lte en,
-                                 Pos.same_pos_as local_var_expr e,
-                                 Pos.same_pos_as
-                                   (Mir.Literal
-                                      (Mir.Float (float_of_int (Pos.unmark en))))
-                                   en ))
-                            en )
-              in
-              Pos.same_pos_as
-                (Mir.Binop
-                   ( Pos.same_pos_as Mast.Or f,
-                     or_chain,
-                     Pos.same_pos_as equal_test f ))
-                f)
-            (Pos.same_pos_as (Mir.Literal Mir.Undefined) f)
+        let new_set_values =
+          List.map
+            (function
+              | Mast.FloatValue f -> Mir.FloatValue f
+              | Mast.VarValue (v, pos) ->
+                  let new_v =
+                    match v with
+                    | Mast.Normal name -> StrMap.find name var_data
+                    | Mast.Generic _ -> assert false
+                  in
+                  Mir.VarValue (new_v, pos)
+              | Mast.Interval (bv, ev) -> Mir.Interval (bv, ev))
             values
         in
-        let or_chain =
-          if not positive then
-            Pos.same_pos_as (Mir.Unop (Mast.Not, or_chain)) or_chain
-          else or_chain
-        in
-        Mir.LocalLet (local_var, new_e, or_chain)
+        Mir.TestInSet (positive, new_e, new_set_values)
     | Mast.Comparison (op, e1, e2) ->
         let new_e1 = translate_expression cats var_data e1 in
         let new_e2 = translate_expression cats var_data e2 in
@@ -177,10 +123,10 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         Mir.Unop (op, new_e)
     | Mast.Index (t, i) ->
         let t_var = translate_variable var_data t in
-        let new_i = translate_table_index var_data i in
+        let new_i = translate_expression cats var_data i in
         Mir.Index
           ( (match Pos.unmark t_var with
-            | Mir.Var v -> Pos.same_pos_as v t_var
+            | Mir.Var v -> v
             | _ -> assert false (* should not happen *)),
             new_i )
     | Mast.Conditional (e1, e2, e3) ->
@@ -238,16 +184,12 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
           | Mast.Normal v_name -> v_name
           | _ -> assert false
         in
-        match StrMap.find_opt v_name var_data with
-        | Some var -> (
-            if var.is_it then Mir.Size var
-            else
-              match var.is_table with
-              | Some i -> Mir.Literal (Mir.Float (float_of_int i))
-              | None -> Mir.Literal (Mir.Float 1.0))
-        | _ ->
-            let msg = Format.sprintf "unknown variable %s" v_name in
-            Errors.raise_spanned_error msg (Pos.get_position v))
+        let var = StrMap.find v_name var_data in
+        if var.is_it then Mir.Size (Pos.same_pos_as var v)
+        else
+          match var.is_table with
+          | Some i -> Mir.Literal (Mir.Float (float_of_int i))
+          | None -> Mir.Literal (Mir.Float 1.0))
     | Mast.NbAnomalies -> Mir.NbAnomalies
     | Mast.NbDiscordances -> Mir.NbDiscordances
     | Mast.NbInformatives -> Mir.NbInformatives
@@ -267,94 +209,6 @@ and translate_func_args (cats : Mir.cat_variable_data Mir.CatVarMap.t)
 
 (** {2 Translation of source file items}*)
 
-(** Helper type to indicate the kind of variable assignment *)
-type index_def = NoIndex | ConstIndex of int | DynamicIndex of Mir.Variable.t
-
-let translate_index_def (var_data : Mir.Variable.t StrMap.t)
-    ((v, pos) : Mast.variable Pos.marked) : Mir.Variable.t StrMap.t * index_def
-    =
-  match translate_variable var_data (v, pos) with
-  | Mir.Var v, _ -> (var_data, DynamicIndex v)
-  | _ -> assert false
-
-(** Translates lvalues into the assigning variable as well as the type of
-    assignment *)
-let translate_lvalue (var_data : Mir.Variable.t StrMap.t)
-    (lval : Mast.lvalue Pos.marked) :
-    Mir.Variable.t StrMap.t * Mir.Variable.t * index_def =
-  let var =
-    match
-      Pos.unmark (translate_variable var_data (Pos.unmark lval).Mast.var)
-    with
-    | Mir.Var (var : Mir.Variable.t) -> var
-    | _ -> assert false
-    (* should not happen *)
-  in
-  match (Pos.unmark lval).Mast.index with
-  | Some ti -> (
-      match Pos.unmark ti with
-      | Mast.LiteralIndex i -> (var_data, var, ConstIndex i)
-      | Mast.SymbolIndex (Mast.Normal _ as v) ->
-          let var_data, index_def =
-            translate_index_def var_data (Pos.same_pos_as v ti)
-          in
-          (var_data, var, index_def)
-      | Mast.SymbolIndex (Mast.Generic _) -> assert false)
-  | None -> (var_data, var, NoIndex)
-
-(** Date types are not supported *)
-let translate_value_typ (typ : Mast.value_typ Pos.marked option) :
-    Mir.typ option =
-  match typ with
-  | Some (Mast.Boolean, _) -> Some Mir.Real
-  (* Indeed, the BOOLEEN annotations are useless because they feed it to
-     functions that expect reals *)
-  | Some (Mast.Real, _) -> Some Mir.Real
-  | Some (_, _) -> Some Mir.Real
-  | None -> None
-
-let create_var_def (var_lvalue : Mir.Variable.t)
-    (var_expr : Mir.expression Pos.marked) (def_kind : index_def)
-    (var_data : Mir.Variable.t StrMap.t) : Mir.variable_data =
-  let var = StrMap.find (Pos.unmark var_lvalue.name) var_data in
-  let var_typ =
-    translate_value_typ
-      (Option.map
-         (fun x -> (x, Pos.get_position var.Mir.Variable.name))
-         var.Mir.Variable.typ)
-  in
-  match var.Mir.Variable.is_table with
-  | Some size -> (
-      match def_kind with
-      | NoIndex -> assert false (* should not happen *)
-      | ConstIndex i ->
-          {
-            Mir.var_definition =
-              Mir.TableVar
-                (size, Mir.IndexTable (Mir.IndexMap.singleton i var_expr));
-            Mir.var_typ;
-          }
-      | DynamicIndex v ->
-          {
-            Mir.var_definition =
-              Mir.TableVar (size, Mir.IndexGeneric (v, var_expr));
-            Mir.var_typ;
-          })
-  | None ->
-      if def_kind = NoIndex then
-        { Mir.var_definition = Mir.SimpleVar var_expr; Mir.var_typ }
-      else
-        Errors.raise_multispanned_error
-          (Format.asprintf
-             "variable %s is defined as a table but has been declared as a \
-              non-table"
-             (Pos.unmark var_lvalue.Mir.Variable.name))
-          [
-            (Some "variable definition", Pos.get_position var_expr);
-            ( Some "variable declaration",
-              Pos.get_position var_lvalue.Mir.Variable.name );
-          ]
-
 let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
     (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) prog =
@@ -363,14 +217,27 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
     | (Mast.Formula f, pos) :: il -> begin
         match f with
         | Mast.SingleFormula sf, _ ->
-            let var_data, var_lvalue, def_kind =
-              translate_lvalue var_data sf.Mast.lvalue
-            in
             let var_e = translate_expression cats var_data sf.Mast.formula in
-            let var_d = create_var_def var_lvalue var_e def_kind var_data in
-            aux
-              ((Mir.Affectation (var_lvalue.Mir.Variable.id, var_d), pos) :: res)
-              il
+            let var =
+              match
+                Pos.unmark
+                  (translate_variable var_data
+                     (Pos.unmark sf.Mast.lvalue).Mast.var)
+              with
+              | Mir.Var var -> Pos.unmark var
+              | _ -> assert false
+              (* should not happen *)
+            in
+            let var_idx, var_e =
+              match (Pos.unmark sf.Mast.lvalue).Mast.index with
+              | Some ti -> (
+                  let ei = translate_expression cats var_data ti in
+                  match var.Mir.Variable.is_table with
+                  | Some size -> (Some (size, ei), var_e)
+                  | None -> (None, var_e))
+              | None -> (None, var_e)
+            in
+            aux ((Mir.Affectation (var.id, var_idx, var_e), pos) :: res) il
         | Mast.MultipleFormulaes _, _ -> assert false
       end
     | (Mast.IfThenElse (e, ilt, ile), pos) :: il ->
