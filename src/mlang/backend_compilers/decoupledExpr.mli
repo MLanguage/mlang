@@ -9,7 +9,7 @@ val generate_variable :
   Dgfip_varid.var_id_map ->
   offset ->
   ?def_flag:bool ->
-  ?debug_flag:bool ->
+  ?trace_flag:bool ->
   Bir.variable ->
   string
 

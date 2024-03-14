@@ -1679,9 +1679,10 @@ let gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings
   pr "\n";
   gen_annee fmt flags;
   pr "\n";
-  gen_dbg fmt;
-  pr "\n";
   gen_const fmt;
+  pr "\n";
+  (* The debug functions need T_irdata to be defined so we put them after *)
+  gen_dbg fmt;
   pr "\n";
   gen_decl_varinfos fmt stats_varinfos;
   pr "\n";
