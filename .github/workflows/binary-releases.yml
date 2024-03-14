@@ -100,7 +100,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
+          sudo apt install m4 perl python3 clang git build-essential lzip
+          # We pull GMP and MPFR from their sources and build them with MUSL
+          # in order to get a static.
           wget https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
           ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
           wget https://www.mpfr.org/mpfr-4.1.0/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
