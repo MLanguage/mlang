@@ -109,7 +109,7 @@ jobs:
           ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
           eval $(opam env)
           opam update
-          MPFR_PREFIX=/tmp/gmp-prefix GMP_PREFIX=/tmp/gmp-prefix make init-without-switch
+          CPPFLAGS=-I/tmp/gmp-prefix/include LDFLAGS=-L/tmp/gmp-prefix/lib make init-without-switch
 
       - name: Make mlang binary
         run: |
