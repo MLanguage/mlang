@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-
   create-release:
     runs-on: ubuntu-latest
     outputs:
@@ -21,19 +20,18 @@ jobs:
           tag_name: ${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
 
-
   macos-build:
     runs-on: macos-latest
     needs: create-release
 
     steps:
-     - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-     - name: Opam modules cache
-       uses: actions/cache@v1
-       env:
+      - name: Opam modules cache
+        uses: actions/cache@v1
+        env:
           cache-name: cache-opam-modules
-       with:
+        with:
           path: ~/.opam
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
           restore-keys: |
@@ -41,27 +39,27 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-     - name: Set up OCaml
-       uses: ocaml/setup-ocaml@v2
-       with:
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
           ocaml-compiler: 4.11.2
 
-     - name: Install dependencies
-       run: |
-            brew install gmp mpfr
-            opam update
-            make init-without-switch
+      - name: Install dependencies
+        run: |
+          brew install gmp mpfr
+          opam update
+          make init-without-switch
 
-     - name: Make mlang binary
-       run: |
+      - name: Make mlang binary
+        run: |
           eval $(opam env)
           make build
 
-     - name: Upload release asset
-       uses: actions/upload-release-asset@v1
-       env:
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       with:
+        with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           asset_path: ./_build/default/src/main.exe
           asset_name: mlang-macos-v${{ github.run_number }}.exe
@@ -101,16 +99,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install m4 perl python3 clang git build-essential lzip
-          # We pull GMP and MPFR from their sources and build them with MUSL
-          # in order to get a static.
-          wget https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
-          ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
-          wget https://www.mpfr.org/mpfr-4.1.0/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
-          ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
+          sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
           eval $(opam env)
           opam update
-          CPPFLAGS=-I/tmp/gmp-prefix/include LDFLAGS=-L/tmp/gmp-prefix/lib make init-without-switch
+          make init-without-switch
 
       - name: Make mlang binary
         run: |
