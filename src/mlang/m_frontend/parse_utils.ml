@@ -93,11 +93,11 @@ let parse_table_size (s : string) : Mast.table_size =
 
 let parse_literal sloc (s : string) : Mast.literal =
   try Mast.Float (float_of_string s)
-  with Failure _ -> Mast.Variable (parse_variable sloc s)
+  with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_const_value (s : string) : Mast.literal =
-  try Mast.Float (float_of_string s)
-  with Failure _ -> Mast.Variable (Mast.Normal s)
+let parse_atom sloc (s : string) : Mast.atom =
+  try Mast.AtomLiteral (Mast.Float (float_of_string s))
+  with Failure _ -> Mast.AtomVar (parse_variable sloc s)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
@@ -105,6 +105,31 @@ let parse_int sloc (s : string) : int =
   try int_of_string s
   with Failure _ ->
     E.raise_spanned_error "should be an integer" (mk_position sloc)
+
+(** Parse function name *)
+let parse_function_name f_name =
+  let open Com in
+  let map = function
+    | "somme" -> SumFunc
+    | "min" -> MinFunc
+    | "max" -> MaxFunc
+    | "abs" -> AbsFunc
+    | "positif" -> GtzFunc
+    | "positif_ou_nul" -> GtezFunc
+    | "null" -> NullFunc
+    | "arr" -> ArrFunc
+    | "inf" -> InfFunc
+    | "present" -> PresentFunc
+    | "multimax" -> Multimax
+    | "supzero" -> Supzero
+    | "numero_verif" -> VerifNumber
+    | "numero_compl" -> ComplNumber
+    | x ->
+        Errors.raise_spanned_error
+          (Format.asprintf "unknown function %s" x)
+          (Pos.get_position f_name)
+  in
+  Pos.map_under_mark map f_name
 
 (* # parse_string #
  * Takes a litteral string and produces a String.t of the corresponding chars

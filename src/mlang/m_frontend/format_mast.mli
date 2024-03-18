@@ -14,12 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val format_comp_op : Format.formatter -> Mast.comp_op -> unit
-
-val format_binop : Format.formatter -> Mast.binop -> unit
-
-val format_unop : Format.formatter -> Mast.unop -> unit
-
 val format_value_typ : Format.formatter -> Mast.value_typ -> unit
 
 val format_var_type : Mast.var_type -> string

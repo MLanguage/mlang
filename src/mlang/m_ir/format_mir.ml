@@ -19,24 +19,6 @@ open Mir
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
-let format_func fmt (f : func) =
-  Format.pp_print_string fmt
-    (match f with
-    | SumFunc -> "somme"
-    | AbsFunc -> "abs"
-    | MinFunc -> "min"
-    | MaxFunc -> "max"
-    | GtzFunc -> "positif"
-    | GtezFunc -> "positif_ou_nul"
-    | NullFunc -> "null"
-    | ArrFunc -> "arr"
-    | InfFunc -> "inf"
-    | PresentFunc -> "present"
-    | Multimax -> "multimax"
-    | Supzero -> "supzero"
-    | VerifNumber -> "numero_verif"
-    | ComplNumber -> "numero_compl")
-
 let format_literal fmt (l : literal) =
   Format.pp_print_string fmt
     (match l with Float f -> string_of_float f | Undefined -> "indéfini")
@@ -56,18 +38,18 @@ let rec format_expression fmt (e : expression) =
         (Format_mast.pp_print_list_comma format_set_value)
         values
   | Comparison ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1
-        Format_mast.format_comp_op op format_expression e2
+      Format.fprintf fmt "(%a %a %a)" format_expression e1 Com.format_comp_op op
+        format_expression e2
   | Binop ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1
-        Format_mast.format_binop op format_expression e2
+      Format.fprintf fmt "(%a %a %a)" format_expression e1 Com.format_binop op
+        format_expression e2
   | Unop (op, (e, _)) ->
-      Format.fprintf fmt "%a %a" Format_mast.format_unop op format_expression e
+      Format.fprintf fmt "%a %a" Com.format_unop op format_expression e
   | Conditional ((e1, _), (e2, _), (e3, _)) ->
       Format.fprintf fmt "(si %a alors %a sinon %a)" format_expression e1
         format_expression e2 format_expression e3
   | FunctionCall (f, args) ->
-      Format.fprintf fmt "%a(%a)" format_func f
+      Format.fprintf fmt "%a(%a)" Com.format_func (Pos.unmark f)
         (Format_mast.pp_print_list_comma
            (Format_mast.pp_unmark format_expression))
         args

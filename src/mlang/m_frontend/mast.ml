@@ -58,7 +58,7 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Variable of variable | Float of float | Undefined
+type literal = Float of float | Undefined
 
 (** A table index is used in expressions like [TABLE\[X\]], and can be
     variables, integer or the special [X] variable that stands for a "generic"
@@ -91,10 +91,13 @@ let get_table_size_opt = function
     this information. *)
 
 (** Values that can be substituted for loop parameters *)
+
+type atom = AtomVar of variable | AtomLiteral of literal
+
 type set_value_loop =
-  | Single of literal Pos.marked
-  | Range of literal Pos.marked * literal Pos.marked
-  | Interval of literal Pos.marked * literal Pos.marked
+  | Single of atom Pos.marked
+  | Range of atom Pos.marked * atom Pos.marked
+  | Interval of atom Pos.marked * atom Pos.marked
 
 type loop_variable = char Pos.marked * set_value_loop list
 (** A loop variable is the character that should be substituted in variable
@@ -108,54 +111,27 @@ type loop_variables =
 
 (**{2 Expressions}*)
 
-(** Comparison operators *)
-type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
-
-(** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
-
-let precedence = function
-  | Add -> 2
-  | Sub -> 2
-  | Mul -> 1
-  | Div -> 1
-  | And -> 3
-  | Or -> 4
-
-let has_priority op op' = precedence op' < precedence op
-
-let is_right_associative = function _ -> false
-
-let is_left_associative = function Sub | Div -> true | _ -> false
-
-(** Unary operators *)
-type unop = Not | Minus
-
-type 'v set_value_ =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v
-  | Interval of int Pos.marked * int Pos.marked
-
 (** The main type of the M language *)
 type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
+  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Comparison of comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
       (** Compares two expressions and produce a boolean *)
-  | Binop of binop Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Unop of unop * 'v m_expression_
-  | Index of 'v * 'v m_expression_  (** Access a cell in a table *)
+  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Unop of Com.unop * 'v m_expression_
+  | Index of 'v Pos.marked * 'v m_expression_  (** Access a cell in a table *)
   | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_ option
       (** Classic conditional with an optional else clause ([None] only for
           verification conditions) *)
-  | FunctionCall of func_name Pos.marked * 'v func_args_
+  | FunctionCall of Com.func Pos.marked * 'v func_args_
   | Literal of literal
+  | Var of 'v
   | Loop of loop_variables Pos.marked * 'v m_expression_
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of string Pos.marked list Pos.marked
-  | Attribut of 'v * string Pos.marked
-  | Size of 'v
+  | Attribut of 'v Pos.marked * string Pos.marked
+  | Size of 'v Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -169,11 +145,11 @@ and 'v func_args_ =
 
 and 'v m_expression_ = 'v expression_ Pos.marked
 
-type set_value = variable Pos.marked set_value_
+type set_value = variable Com.set_value
 
-type func_args = variable Pos.marked func_args_
+type func_args = variable func_args_
 
-type expression = variable Pos.marked expression_
+type expression = variable expression_
 
 (**{1 Toplevel clauses}*)
 
@@ -312,7 +288,7 @@ type computed_variable = {
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of variable_name Pos.marked * literal Pos.marked
+  | ConstVar of variable_name Pos.marked * atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 

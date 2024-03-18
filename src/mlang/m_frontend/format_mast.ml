@@ -41,8 +41,6 @@ let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
 let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
 
-let format_func_name fmt (f : func_name) = Format.fprintf fmt "%s" f
-
 let format_variable_generic_name fmt (v : variable_generic_name) =
   Format.fprintf fmt "%s" v.base
 
@@ -55,49 +53,26 @@ let format_error_name fmt (e : error_name) = Format.fprintf fmt "%s" e
 
 let format_literal fmt (l : literal) =
   match l with
-  | Variable v -> format_variable fmt v
   | Float f -> Format.fprintf fmt "%f" f
   | Undefined -> Format.fprintf fmt "indefini"
 
 let format_set_value fmt (sv : set_value) =
-  match sv with
-  | VarValue v -> format_variable fmt (Pos.unmark v)
-  | Interval (i1, i2) ->
-      Format.fprintf fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | FloatValue i -> Format.fprintf fmt "%f" (Pos.unmark i)
+  Com.format_set_value format_variable fmt sv
+
+let format_atom fmt vl =
+  match vl with
+  | AtomVar v -> format_variable fmt v
+  | AtomLiteral l -> format_literal fmt l
 
 let format_set_value_loop fmt (sv : set_value_loop) =
   match sv with
-  | Single l -> Format.fprintf fmt "%a" format_literal (Pos.unmark l)
+  | Single l -> Format.fprintf fmt "%a" format_atom (Pos.unmark l)
   | Range (i1, i2) ->
-      Format.fprintf fmt "%a..%a" format_literal (Pos.unmark i1) format_literal
+      Format.fprintf fmt "%a..%a" format_atom (Pos.unmark i1) format_atom
         (Pos.unmark i2)
   | Interval (i1, i2) ->
-      Format.fprintf fmt "%a-%a" format_literal (Pos.unmark i1) format_literal
+      Format.fprintf fmt "%a-%a" format_atom (Pos.unmark i1) format_atom
         (Pos.unmark i2)
-
-let format_comp_op fmt (op : comp_op) =
-  Format.pp_print_string fmt
-    (match op with
-    | Gt -> ">"
-    | Gte -> ">="
-    | Lt -> "<"
-    | Lte -> "<="
-    | Eq -> "="
-    | Neq -> "!=")
-
-let format_binop fmt (op : binop) =
-  Format.pp_print_string fmt
-    (match op with
-    | And -> "et"
-    | Or -> "ou"
-    | Add -> "+"
-    | Sub -> "-"
-    | Mul -> "*"
-    | Div -> "/")
-
-let format_unop fmt (op : unop) =
-  Format.pp_print_string fmt (match op with Not -> "non" | Minus -> "-")
 
 let format_loop_variable_ranges fmt ((v, vs) : loop_variable) =
   Format.fprintf fmt "un %c dans %a" (Pos.unmark v)
@@ -133,12 +108,13 @@ let rec format_expression fmt (e : expression) =
         values
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" format_expression (Pos.unmark e1)
-        format_comp_op (Pos.unmark op) format_expression (Pos.unmark e2)
+        Com.format_comp_op (Pos.unmark op) format_expression (Pos.unmark e2)
   | Binop (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" format_expression (Pos.unmark e1)
-        format_binop (Pos.unmark op) format_expression (Pos.unmark e2)
+        Com.format_binop (Pos.unmark op) format_expression (Pos.unmark e2)
   | Unop (op, e) ->
-      Format.fprintf fmt "%a %a" format_unop op format_expression (Pos.unmark e)
+      Format.fprintf fmt "%a %a" Com.format_unop op format_expression
+        (Pos.unmark e)
   | Index (v, i) ->
       Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark v)
         format_expression (Pos.unmark i)
@@ -148,9 +124,10 @@ let rec format_expression fmt (e : expression) =
         (option_print format_expression)
         (option_bind Pos.unmark e3)
   | FunctionCall (f, args) ->
-      Format.fprintf fmt "%a(%a)" format_func_name (Pos.unmark f)
+      Format.fprintf fmt "%a(%a)" Com.format_func (Pos.unmark f)
         format_func_args args
   | Literal l -> format_literal fmt l
+  | Var v -> format_variable fmt v
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a" format_loop_variables (Pos.unmark lvs)
         format_expression (Pos.unmark e)
@@ -360,7 +337,7 @@ let format_variable_decl fmt (v : variable_decl) =
   | ComputedVar v -> format_computed_variable fmt (Pos.unmark v)
   | ConstVar (name, value) ->
       Format.fprintf fmt "%a : const = %a" format_variable_name
-        (Pos.unmark name) format_literal (Pos.unmark value)
+        (Pos.unmark name) format_atom (Pos.unmark value)
   | InputVar v -> format_input_variable fmt (Pos.unmark v)
 
 let format_verification_condition fmt (vc : verification_condition) =

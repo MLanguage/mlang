@@ -30,26 +30,28 @@ import static com.mlang.MValue.*;
 
 let none_value = "MValue.mUndefined"
 
-let generate_comp_op (op : Mast.comp_op) : string =
+let generate_comp_op (op : Com.comp_op) : string =
+  let open Com in
   match op with
-  | Mast.Gt -> "mGreaterThan"
-  | Mast.Gte -> "mGreaterThanEqual"
-  | Mast.Lt -> "mLessThan"
-  | Mast.Lte -> "mLessThanEqual"
-  | Mast.Eq -> "mEqual"
-  | Mast.Neq -> "mNotEqual"
+  | Gt -> "mGreaterThan"
+  | Gte -> "mGreaterThanEqual"
+  | Lt -> "mLessThan"
+  | Lte -> "mLessThanEqual"
+  | Eq -> "mEqual"
+  | Neq -> "mNotEqual"
 
-let generate_binop (op : Mast.binop) : string =
+let generate_binop (op : Com.binop) : string =
+  let open Com in
   match op with
-  | Mast.And -> "mAnd"
-  | Mast.Or -> "mOr"
-  | Mast.Add -> "mAdd"
-  | Mast.Sub -> "mSubtract"
-  | Mast.Mul -> "mMultiply"
-  | Mast.Div -> "mDivide"
+  | And -> "mAnd"
+  | Or -> "mOr"
+  | Add -> "mAdd"
+  | Sub -> "mSubtract"
+  | Mul -> "mMultiply"
+  | Div -> "mDivide"
 
-let generate_unop (op : Mast.unop) : string =
-  match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
+let generate_unop (op : Com.unop) : string =
+  match op with Com.Not -> "mNot" | Com.Minus -> "mNeg"
 
 let generate_var_name (var : Mir.Variable.t) : string =
   let v = Pos.unmark var.name in
@@ -110,37 +112,37 @@ let rec generate_java_expr (e : Mir.expression Pos.marked) :
         (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
       in
       (se4, s4)
-  | FunctionCall (PresentFunc, [ arg ]) ->
+  | FunctionCall ((PresentFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "mPresent(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (NullFunc, [ arg ]) ->
+  | FunctionCall ((NullFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_null(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (ArrFunc, [ arg ]) ->
+  | FunctionCall ((ArrFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_round(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (InfFunc, [ arg ]) ->
+  | FunctionCall ((InfFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (AbsFunc, [ arg ]) ->
+  | FunctionCall ((AbsFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_abs(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (MaxFunc, [ e1; e2 ]) ->
+  | FunctionCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall (MinFunc, [ e1; e2 ]) ->
+  | FunctionCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+  | FunctionCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 =
         ( Format.asprintf "m_multimax(%s, tgv, %d)" se1
