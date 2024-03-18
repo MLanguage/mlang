@@ -108,7 +108,7 @@ module type S = sig
 
   val raise_runtime_as_structured : run_error -> 'a
 
-  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
 
   val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
@@ -318,13 +318,14 @@ struct
 
   let compare_numbers op i1 i2 =
     let epsilon = N.of_float !Cli.comparison_error_margin in
+    let open Com in
     match op with
-    | Mast.Gt -> N.(i1 >. i2 +. epsilon)
-    | Mast.Gte -> N.(i1 >. i2 -. epsilon)
-    | Mast.Lt -> N.(i1 +. epsilon <. i2)
-    | Mast.Lte -> N.(i1 -. epsilon <. i2)
-    | Mast.Eq -> N.(N.abs (i1 -. i2) <. epsilon)
-    | Mast.Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
+    | Gt -> N.(i1 >. i2 +. epsilon)
+    | Gte -> N.(i1 >. i2 -. epsilon)
+    | Lt -> N.(i1 +. epsilon <. i2)
+    | Lte -> N.(i1 -. epsilon <. i2)
+    | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
+    | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
   let rec evaluate_expr (ctx : ctx) (p : Mir.program)
       (e : Mir.expression Pos.marked) : value =
@@ -344,45 +345,47 @@ struct
           (Pos.get_position e)
     in
     let comparison op new_e1 new_e2 =
+      let open Com in
       match (op, new_e1, new_e2) with
-      | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-      | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-      | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-      | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-      | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-      | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
+      | Gt, _, Undefined | Gt, Undefined, _ -> Undefined
+      | Gte, _, Undefined | Gte, Undefined, _ -> Undefined
+      | Lt, _, Undefined | Lt, Undefined, _ -> Undefined
+      | Lte, _, Undefined | Lte, Undefined, _ -> Undefined
+      | Eq, _, Undefined | Eq, Undefined, _ -> Undefined
+      | Neq, _, Undefined | Neq, Undefined, _ -> Undefined
       | op, Number i1, Number i2 ->
           Number (real_of_bool (compare_numbers op i1 i2))
     in
     let unop op new_e1 =
+      let open Com in
       match (op, new_e1) with
-      | Mast.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
-      | Mast.Minus, Number f1 -> Number N.(zero () -. f1)
-      | Mast.Not, Undefined -> Undefined
-      | Mast.Minus, Undefined -> Undefined
+      | Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
+      | Minus, Number f1 -> Number N.(zero () -. f1)
+      | Not, Undefined -> Undefined
+      | Minus, Undefined -> Undefined
     in
     let binop op new_e1 new_e2 =
+      let open Com in
       match (op, new_e1, new_e2) with
-      | Mast.Add, Number i1, Number i2 -> Number N.(i1 +. i2)
-      | Mast.Add, Number i1, Undefined -> Number N.(i1 +. zero ())
-      | Mast.Add, Undefined, Number i2 -> Number N.(zero () +. i2)
-      | Mast.Add, Undefined, Undefined -> Undefined
-      | Mast.Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
-      | Mast.Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
-      | Mast.Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
-      | Mast.Sub, Undefined, Undefined -> Undefined
-      | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
-      | Mast.Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
-      | Mast.Div, Undefined, _ | Mast.Div, _, Undefined ->
-          Undefined (* yes... *)
-      | Mast.Div, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Mast.Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-      | Mast.And, Undefined, _ | Mast.And, _, Undefined -> Undefined
-      | Mast.Or, Undefined, Undefined -> Undefined
-      | Mast.Or, Undefined, Number i | Mast.Or, Number i, Undefined -> Number i
-      | Mast.And, Number i1, Number i2 ->
+      | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+      | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+      | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
+      | Add, Undefined, Undefined -> Undefined
+      | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+      | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+      | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
+      | Sub, Undefined, Undefined -> Undefined
+      | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
+      | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
+      | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
+      | Div, _, l2 when is_zero l2 -> Number (N.zero ())
+      | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+      | And, Undefined, _ | And, _, Undefined -> Undefined
+      | Or, Undefined, Undefined -> Undefined
+      | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
+      | And, Number i1, Number i2 ->
           Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
-      | Mast.Or, Number i1, Number i2 ->
+      | Or, Number i1, Number i2 ->
           Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
     in
     let out =
@@ -395,27 +398,27 @@ struct
                 (fun or_chain set_value ->
                   let equal_test =
                     match set_value with
-                    | Mir.VarValue set_var ->
+                    | Com.VarValue set_var ->
                         let new_set_var = var_value (Pos.unmark set_var) in
-                        comparison Mast.Eq new_e0 new_set_var
-                    | Mir.FloatValue i ->
+                        comparison Com.Eq new_e0 new_set_var
+                    | Com.FloatValue i ->
                         let val_i = Number (N.of_float (Pos.unmark i)) in
-                        comparison Mast.Eq new_e0 val_i
-                    | Mir.Interval (bn, en) ->
+                        comparison Com.Eq new_e0 val_i
+                    | Com.Interval (bn, en) ->
                         let val_bn =
                           Number (N.of_float (float_of_int (Pos.unmark bn)))
                         in
                         let val_en =
                           Number (N.of_float (float_of_int (Pos.unmark en)))
                         in
-                        binop Mast.And
-                          (comparison Mast.Gte new_e0 val_bn)
-                          (comparison Mast.Lte new_e0 val_en)
+                        binop Com.And
+                          (comparison Com.Gte new_e0 val_bn)
+                          (comparison Com.Lte new_e0 val_en)
                   in
-                  binop Mast.Or or_chain equal_test)
+                  binop Com.Or or_chain equal_test)
                 Undefined values
             in
-            if positive then or_chain else unop Mast.Not or_chain
+            if positive then or_chain else unop Com.Not or_chain
         | Comparison (op, e1, e2) ->
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
@@ -458,44 +461,44 @@ struct
               | TableVar (size, values) ->
                   evaluate_array_index new_e1 size values)
         | Var var -> var_value (Pos.unmark var)
-        | FunctionCall (ArrFunc, [ arg ]) -> (
+        | FunctionCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (roundf x)
             | Undefined -> Undefined
             (*nope:Float 0.*))
-        | FunctionCall (InfFunc, [ arg ]) -> (
+        | FunctionCall ((InfFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (truncatef x)
             | Undefined -> Undefined
             (*Float 0.*))
-        | FunctionCall (PresentFunc, [ arg ]) -> (
+        | FunctionCall ((PresentFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
-        | FunctionCall (Supzero, [ arg ]) -> (
+        | FunctionCall ((Supzero, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f as n ->
-                if compare_numbers Mast.Lte f (N.zero ()) then Undefined else n)
-        | FunctionCall (AbsFunc, [ arg ]) -> (
+                if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
+        | FunctionCall ((AbsFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f -> Number (N.abs f))
-        | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
+        | FunctionCall ((MinFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.min (N.zero ()) f)
             | Number fl, Number fr -> Number (N.min fl fr))
-        | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
+        | FunctionCall ((MaxFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))
-        | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
+        | FunctionCall ((Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx p arg1 with
             | Undefined -> Undefined
             | Number f -> (

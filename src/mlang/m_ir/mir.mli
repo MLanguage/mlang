@@ -81,38 +81,16 @@ type typ = Real
 
 type literal = Float of float | Undefined
 
-(** MIR only supports a restricted set of functions *)
-type func =
-  | SumFunc  (** Sums the arguments *)
-  | AbsFunc  (** Absolute value *)
-  | MinFunc  (** Minimum of a list of values *)
-  | MaxFunc  (** Maximum of a list of values *)
-  | GtzFunc  (** Greater than zero (strict) ? *)
-  | GtezFunc  (** Greater or equal than zero ? *)
-  | NullFunc  (** Equal to zero ? *)
-  | ArrFunc  (** Round to nearest integer *)
-  | InfFunc  (** Truncate to integer *)
-  | PresentFunc  (** Different than zero ? *)
-  | Multimax  (** ??? *)
-  | Supzero  (** ??? *)
-  | VerifNumber
-  | ComplNumber
-
-type 'v set_value_ =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
-
 type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
+  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Unop of Mast.unop * 'v m_expression_
-  | Comparison of Mast.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Binop of Mast.binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Unop of Com.unop * 'v m_expression_
+  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
   | Index of 'v Pos.marked * 'v m_expression_
   | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
-  | FunctionCall of func * 'v m_expression_ list
+  | FunctionCall of Com.func Pos.marked * 'v m_expression_ list
   | Literal of literal
   | Var of 'v Pos.marked
   | NbCategory of CatVarSet.t
@@ -125,7 +103,7 @@ type 'v expression_ =
 
 and 'v m_expression_ = 'v expression_ Pos.marked
 
-type set_value = Variable.t set_value_
+type set_value = Variable.t Com.set_value
 
 type expression = Variable.t expression_
 

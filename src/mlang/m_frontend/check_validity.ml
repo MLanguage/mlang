@@ -270,14 +270,10 @@ module Err = struct
 
   let wrong_arity_of_function func_name arity pos =
     let msg =
-      Format.sprintf "wrong arity: function \"%s\" expect %d argument%s"
-        func_name arity
+      Format.asprintf "wrong arity: function \"%a\" expect %d argument%s"
+        Com.format_func func_name arity
         (if arity = 1 then "" else "s")
     in
-    Errors.raise_spanned_error msg pos
-
-  let unknown_function func_name pos =
-    let msg = Format.sprintf "unknown function \"%s\"" func_name in
     Errors.raise_spanned_error msg pos
 
   let variable_with_forbidden_category pos =
@@ -941,12 +937,12 @@ let rec fold_var_expr
       List.fold_left
         (fun res set_value ->
           match set_value with
-          | Mast.VarValue v ->
+          | Com.VarValue v ->
               if is_filter then
                 Err.forbidden_expresion_in_filter (Pos.get_position v);
               fold_var v (OneOf None) env res
-          | Mast.FloatValue _ -> res
-          | Mast.Interval (bn, en) ->
+          | Com.FloatValue _ -> res
+          | Com.Interval (bn, en) ->
               if Pos.unmark bn > Pos.unmark en then
                 Err.wrong_interval_bounds (Pos.get_position bn);
               res)
@@ -980,38 +976,36 @@ let rec fold_var_expr
         | Mast.LoopList _ -> assert false
       in
       match func_name with
-      | "multimax" -> (
+      | Com.Multimax -> (
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           match args with
           | Mast.ArgList [ expr; var_expr ] -> (
               match var_expr with
-              | Mast.Literal (Mast.Variable var), var_pos ->
+              | Mast.Var var, var_pos ->
                   let acc = fold_var_expr fold_var is_filter acc expr env in
                   fold_var (var, var_pos) Both env acc
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
           | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
           | Mast.LoopList _ -> assert false)
-      | "somme" -> check_func (-1)
-      | "numero_verif" -> check_func 0
-      | "abs" -> check_func 1
-      | "min" -> check_func 2
-      | "max" -> check_func 2
-      | "positif" -> check_func 1
-      | "positif_ou_nul" -> check_func 1
-      | "null" -> check_func 1
-      | "arr" -> check_func 1
-      | "inf" -> check_func 1
-      | "supzero" -> check_func 1
-      | "present" ->
+      | Com.SumFunc -> check_func (-1)
+      | Com.VerifNumber -> check_func 0
+      | Com.ComplNumber -> check_func 0
+      | Com.AbsFunc -> check_func 1
+      | Com.MinFunc -> check_func 2
+      | Com.MaxFunc -> check_func 2
+      | Com.GtzFunc -> check_func 1
+      | Com.GtezFunc -> check_func 1
+      | Com.NullFunc -> check_func 1
+      | Com.ArrFunc -> check_func 1
+      | Com.InfFunc -> check_func 1
+      | Com.Supzero -> check_func 1
+      | Com.PresentFunc ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-          check_func 1
-      | _ -> Err.unknown_function func_name expr_pos)
-  | Mast.Literal l -> (
-      match l with
-      | Mast.Variable var ->
-          if is_filter then Err.variable_forbidden_in_filter expr_pos;
-          fold_var (var, expr_pos) (OneOf None) env acc
-      | Mast.Float _ | Mast.Undefined -> acc)
+          check_func 1)
+  | Mast.Literal _ -> acc
+  | Mast.Var var ->
+      if is_filter then Err.variable_forbidden_in_filter expr_pos;
+      fold_var (var, expr_pos) (OneOf None) env acc
   | Mast.NbCategory l ->
       if not is_filter then Err.expression_only_in_filter expr_pos;
       let cats = mast_to_catvars l env.prog.prog_var_cats in
@@ -1877,8 +1871,7 @@ let eval_expr_verif (prog : program) (verif : verif)
     match Pos.unmark expr with
     | Mast.Literal (Mast.Float f) -> Some f
     | Mast.Literal Mast.Undefined -> None
-    | Mast.Literal (Mast.Variable _) ->
-        Err.variable_forbidden_in_filter (Pos.get_position expr)
+    | Mast.Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
     | Mast.Attribut (m_var, m_attr) ->
         let var =
           match Pos.unmark m_var with
@@ -1912,9 +1905,7 @@ let eval_expr_verif (prog : program) (verif : verif)
         match aux e0 with
         | None -> None
         | Some f -> (
-            match op with
-            | Mast.Not -> Some (1.0 -. f)
-            | Mast.Minus -> Some ~-.f))
+            match op with Com.Not -> Some (1.0 -. f) | Com.Minus -> Some ~-.f))
     | Mast.FunctionCall (func, Mast.ArgList args) -> (
         let rl = List.map aux args in
         let unFunc f =
@@ -1931,9 +1922,9 @@ let eval_expr_verif (prog : program) (verif : verif)
           | _ -> assert false
         in
         match Pos.unmark func with
-        | "numero_verif" -> Some (float (Pos.unmark verif.verif_id))
-        | "numero_compl" -> assert false
-        | "somme" ->
+        | Com.VerifNumber -> Some (float (Pos.unmark verif.verif_id))
+        | Com.ComplNumber -> assert false
+        | Com.SumFunc ->
             List.fold_left
               (fun res r ->
                 match r with
@@ -1941,60 +1932,61 @@ let eval_expr_verif (prog : program) (verif : verif)
                 | Some f -> (
                     match res with None -> r | Some fr -> Some (f +. fr)))
               None rl
-        | "abs" -> unFunc abs_float
-        | "min" -> biFunc min
-        | "max" -> biFunc max
-        | "positif" -> unFunc (fun x -> if x > 0.0 then 1.0 else 0.0)
-        | "positif_ou_nul" -> unFunc (fun x -> if x >= 0.0 then 1.0 else 0.0)
-        | "null" -> unFunc (fun x -> if x = 0.0 then 1.0 else 0.0)
-        | "arr" -> unFunc my_arr
-        | "inf" -> unFunc my_floor
-        | "supzero" -> (
+        | Com.AbsFunc -> unFunc abs_float
+        | Com.MinFunc -> biFunc min
+        | Com.MaxFunc -> biFunc max
+        | Com.GtzFunc -> unFunc (fun x -> if x > 0.0 then 1.0 else 0.0)
+        | Com.GtezFunc -> unFunc (fun x -> if x >= 0.0 then 1.0 else 0.0)
+        | Com.NullFunc -> unFunc (fun x -> if x = 0.0 then 1.0 else 0.0)
+        | Com.ArrFunc -> unFunc my_arr
+        | Com.InfFunc -> unFunc my_floor
+        | Com.Supzero -> (
             match rl with
             | [ None ] -> None
             | [ Some f ] when f = 0.0 -> None
             | [ r ] -> r
             | _ -> assert false)
-        | _ -> assert false)
+        | Com.PresentFunc | Com.Multimax -> assert false)
     | Mast.FunctionCall (_func, Mast.LoopList _) -> assert false
     | Mast.Comparison (op, e0, e1) -> (
         match (aux e0, aux e1) with
         | None, _ | _, None -> None
         | Some f0, Some f1 -> (
+            let open Com in
             match Pos.unmark op with
-            | Mast.Gt -> Some (if f0 > f1 then 1.0 else 0.0)
-            | Mast.Gte -> Some (if f0 >= f1 then 1.0 else 0.0)
-            | Mast.Lt -> Some (if f0 < f1 then 1.0 else 0.0)
-            | Mast.Lte -> Some (if f0 <= f1 then 1.0 else 0.0)
-            | Mast.Eq -> Some (if f0 = f1 then 1.0 else 0.0)
-            | Mast.Neq -> Some (if f0 <> f1 then 1.0 else 0.0)))
+            | Gt -> Some (if f0 > f1 then 1.0 else 0.0)
+            | Gte -> Some (if f0 >= f1 then 1.0 else 0.0)
+            | Lt -> Some (if f0 < f1 then 1.0 else 0.0)
+            | Lte -> Some (if f0 <= f1 then 1.0 else 0.0)
+            | Eq -> Some (if f0 = f1 then 1.0 else 0.0)
+            | Neq -> Some (if f0 <> f1 then 1.0 else 0.0)))
     | Mast.Binop (op, e0, e1) -> (
         let r0 = aux e0 in
         let r1 = aux e1 in
         match Pos.unmark op with
-        | Mast.And -> (
+        | Com.And -> (
             match r0 with
             | None -> None
             | Some f0 -> if f0 = 0.0 then r0 else r1)
-        | Mast.Or -> (
+        | Com.Or -> (
             match r0 with None -> r1 | Some f0 -> if f0 = 0.0 then r1 else r0)
-        | Mast.Add -> (
+        | Com.Add -> (
             match (r0, r1) with
             | None, None -> None
             | None, Some _ -> r1
             | Some _, None -> r0
             | Some f0, Some f1 -> Some (f0 +. f1))
-        | Mast.Sub -> (
+        | Com.Sub -> (
             match (r0, r1) with
             | None, None -> None
             | None, Some _ -> r1
             | Some _, None -> r0
             | Some f0, Some f1 -> Some (f0 +. f1))
-        | Mast.Mul -> (
+        | Com.Mul -> (
             match (r0, r1) with
             | None, _ | _, None -> None
             | Some f0, Some f1 -> Some (f0 *. f1))
-        | Mast.Div -> (
+        | Com.Div -> (
             match (r0, r1) with
             | None, _ | _, None -> None
             | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1)))
@@ -2011,9 +2003,9 @@ let eval_expr_verif (prog : program) (verif : verif)
               List.fold_left
                 (fun res set_value ->
                   match set_value with
-                  | Mast.VarValue _ -> assert false
-                  | Mast.FloatValue (f, _) -> res || f = v
-                  | Mast.Interval ((bn, _), (en, _)) ->
+                  | Com.VarValue _ -> assert false
+                  | Com.FloatValue (f, _) -> res || f = v
+                  | Com.Interval ((bn, _), (en, _)) ->
                       res || (float bn <= v && v <= float en))
                 false values
             in

@@ -163,38 +163,16 @@ let false_literal = Float 0.
 
 let true_literal = Float 1.
 
-(** MIR only supports a restricted set of functions *)
-type func =
-  | SumFunc  (** Sums the arguments *)
-  | AbsFunc  (** Absolute value *)
-  | MinFunc  (** Minimum of a list of values *)
-  | MaxFunc  (** Maximum of a list of values *)
-  | GtzFunc  (** Greater than zero (strict) ? *)
-  | GtezFunc  (** Greater or equal than zero ? *)
-  | NullFunc  (** Equal to zero ? *)
-  | ArrFunc  (** Round to nearest integer *)
-  | InfFunc  (** Truncate to integer *)
-  | PresentFunc  (** Different than zero ? *)
-  | Multimax  (** ??? *)
-  | Supzero  (** ??? *)
-  | VerifNumber
-  | ComplNumber
-
-type 'v set_value_ =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
-
 type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v set_value_ list
+  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Unop of Mast.unop * 'v m_expression_
-  | Comparison of Mast.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Binop of Mast.binop Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Unop of Com.unop * 'v m_expression_
+  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
+  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
   | Index of 'v Pos.marked * 'v m_expression_
   | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
-  | FunctionCall of func * 'v m_expression_ list
+  | FunctionCall of Com.func Pos.marked * 'v m_expression_ list
   | Literal of literal
   | Var of 'v Pos.marked
   | NbCategory of CatVarSet.t
@@ -207,7 +185,7 @@ type 'v expression_ =
 
 and 'v m_expression_ = 'v expression_ Pos.marked
 
-type set_value = Variable.t set_value_
+type set_value = Variable.t Com.set_value
 
 type expression = Variable.t expression_
 
@@ -216,9 +194,9 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   match (e :> 'v expression_) with
   | TestInSet (positive, e, values) ->
       let map_values = function
-        | FloatValue f -> FloatValue f
-        | VarValue mv -> VarValue (Pos.map_under_mark f mv)
-        | Interval (bv, ev) -> Interval (bv, ev)
+        | Com.FloatValue f -> Com.FloatValue f
+        | Com.VarValue mv -> Com.VarValue (Pos.map_under_mark f mv)
+        | Com.Interval (bv, ev) -> Com.Interval (bv, ev)
       in
       TestInSet (positive, map e, List.map map_values values)
   | Unop (op, e) -> Unop (op, map e)
@@ -243,8 +221,8 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   match (e :> 'v expression_) with
   | TestInSet (_, e, values) ->
       let fold_values acc = function
-        | FloatValue _ | Interval _ -> acc
-        | VarValue (v, _) -> f acc v
+        | Com.FloatValue _ | Com.Interval _ -> acc
+        | Com.VarValue (v, _) -> f acc v
       in
       List.fold_left fold_values (fold acc e) values
   | Unop (_, e) -> fold acc e
@@ -508,7 +486,7 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
       Pos.same_pos_as (Index (var, new_e1)) e
   | Literal _ -> e
   | Var _ -> e
-  | FunctionCall (SumFunc, args) ->
+  | FunctionCall ((SumFunc, _), args) ->
       let expr_opt =
         List.fold_left
           (fun acc_opt arg ->
@@ -517,7 +495,7 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
             | Some acc ->
                 Some
                   (Binop
-                     ( Pos.same_pos_as Mast.Add e,
+                     ( Pos.same_pos_as Com.Add e,
                        Pos.same_pos_as acc e,
                        expand_functions_expr arg )))
           None args
@@ -526,45 +504,51 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
         match expr_opt with None -> Literal (Float 0.0) | Some expr -> expr
       in
       Pos.same_pos_as expr e
-  | FunctionCall (GtzFunc, [ arg ]) ->
+  | FunctionCall ((GtzFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
-           ( Pos.same_pos_as Mast.Gt e,
+           ( Pos.same_pos_as Com.Gt e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall (GtezFunc, [ arg ]) ->
+  | FunctionCall ((GtezFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
-           ( Pos.same_pos_as Mast.Gte e,
+           ( Pos.same_pos_as Com.Gte e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall (((MinFunc | MaxFunc) as f), [ arg1; arg2 ]) ->
+  | FunctionCall ((((MinFunc | MaxFunc) as f), pos), [ arg1; arg2 ]) ->
       let earg1 = expand_functions_expr arg1 in
       let earg2 = expand_functions_expr arg2 in
-      Pos.same_pos_as (FunctionCall (f, [ earg1; earg2 ])) e
-  | FunctionCall (AbsFunc, [ arg ]) ->
-      Pos.same_pos_as (FunctionCall (AbsFunc, [ expand_functions_expr arg ])) e
-  | FunctionCall (NullFunc, [ arg ]) ->
+      Pos.same_pos_as (FunctionCall ((f, pos), [ earg1; earg2 ])) e
+  | FunctionCall ((AbsFunc, pos), [ arg ]) ->
+      Pos.same_pos_as
+        (FunctionCall ((AbsFunc, pos), [ expand_functions_expr arg ]))
+        e
+  | FunctionCall ((NullFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
-           ( Pos.same_pos_as Mast.Eq e,
+           ( Pos.same_pos_as Com.Eq e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall (PresentFunc, [ arg ]) ->
+  | FunctionCall ((PresentFunc, pos), [ arg ]) ->
       (* we do not expand this function as it deals specifically with undefined
          variables *)
       Pos.same_pos_as
-        (FunctionCall (PresentFunc, [ expand_functions_expr arg ]))
+        (FunctionCall ((PresentFunc, pos), [ expand_functions_expr arg ]))
         e
-  | FunctionCall (ArrFunc, [ arg ]) ->
+  | FunctionCall ((ArrFunc, pos), [ arg ]) ->
       (* we do not expand this function as it requires modulo or modf *)
-      Pos.same_pos_as (FunctionCall (ArrFunc, [ expand_functions_expr arg ])) e
-  | FunctionCall (InfFunc, [ arg ]) ->
+      Pos.same_pos_as
+        (FunctionCall ((ArrFunc, pos), [ expand_functions_expr arg ]))
+        e
+  | FunctionCall ((InfFunc, pos), [ arg ]) ->
       (* we do not expand this function as it requires modulo or modf *)
-      Pos.same_pos_as (FunctionCall (InfFunc, [ expand_functions_expr arg ])) e
+      Pos.same_pos_as
+        (FunctionCall ((InfFunc, pos), [ expand_functions_expr arg ]))
+        e
   | _ -> e
 
 let expand_functions (p : program) : program =
