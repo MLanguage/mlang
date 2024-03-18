@@ -305,7 +305,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  let comp (o : Mast.comp_op) =
+  let comp (o : Com.comp_op) =
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
         if
@@ -320,12 +320,12 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
   in
   let e =
     match op with
-    | "==" -> comp Mast.Eq
-    | "!=" -> comp Mast.Neq
-    | "<=" -> comp Mast.Lte
-    | "<" -> comp Mast.Lt
-    | ">=" -> comp Mast.Gte
-    | ">" -> comp Mast.Gt
+    | "==" -> comp Com.Eq
+    | "!=" -> comp Com.Neq
+    | "<=" -> comp Com.Lte
+    | "<" -> comp Com.Lt
+    | ">=" -> comp Com.Gte
+    | ">" -> comp Com.Gt
     | _ -> assert false
   in
   (e, Def, lv2 @ lv1)

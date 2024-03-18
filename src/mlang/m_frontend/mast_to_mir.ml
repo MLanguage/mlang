@@ -57,28 +57,6 @@ let translate_variable (var_data : Mir.Variable.t StrMap.t)
 
 (** {2 Translation of expressions}*)
 
-(** Only accepts functions in {!type: Mir.func}*)
-let translate_function_name (f_name : string Pos.marked) =
-  match Pos.unmark f_name with
-  | "somme" -> Mir.SumFunc
-  | "min" -> Mir.MinFunc
-  | "max" -> Mir.MaxFunc
-  | "abs" -> Mir.AbsFunc
-  | "positif" -> Mir.GtzFunc
-  | "positif_ou_nul" -> Mir.GtezFunc
-  | "null" -> Mir.NullFunc
-  | "arr" -> Mir.ArrFunc
-  | "inf" -> Mir.InfFunc
-  | "present" -> Mir.PresentFunc
-  | "multimax" -> Mir.Multimax
-  | "supzero" -> Mir.Supzero
-  | "numero_verif" -> Mir.VerifNumber
-  | "numero_compl" -> Mir.ComplNumber
-  | x ->
-      Errors.raise_spanned_error
-        (Format.asprintf "unknown function %s" x)
-        (Pos.get_position f_name)
-
 let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) (f : Mast.expression Pos.marked) :
     Mir.expression Pos.marked =
@@ -89,15 +67,15 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         let new_set_values =
           List.map
             (function
-              | Mast.FloatValue f -> Mir.FloatValue f
-              | Mast.VarValue (v, pos) ->
+              | Com.FloatValue f -> Com.FloatValue f
+              | Com.VarValue (v, pos) ->
                   let new_v =
                     match v with
                     | Mast.Normal name -> StrMap.find name var_data
                     | Mast.Generic _ -> assert false
                   in
-                  Mir.VarValue (new_v, pos)
-              | Mast.Interval (bv, ev) -> Mir.Interval (bv, ev))
+                  Com.VarValue (new_v, pos)
+              | Com.Interval (bv, ev) -> Com.Interval (bv, ev))
             values
         in
         Mir.TestInSet (positive, new_e, new_set_values)
@@ -141,16 +119,15 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         in
         Mir.Conditional (new_e1, new_e2, new_e3)
     | Mast.FunctionCall (f_name, args) ->
-        let f_correct = translate_function_name f_name in
         let new_args = translate_func_args cats var_data args in
-        Mir.FunctionCall (f_correct, new_args)
+        Mir.FunctionCall (f_name, new_args)
     | Mast.Literal l -> (
         match l with
-        | Mast.Variable var ->
-            let new_var = translate_variable var_data (Pos.same_pos_as var f) in
-            Pos.unmark new_var
         | Mast.Float f -> Mir.Literal (Mir.Float f)
         | Mast.Undefined -> Mir.Literal Mir.Undefined)
+    | Mast.Var var ->
+        let new_var = translate_variable var_data (Pos.same_pos_as var f) in
+        Pos.unmark new_var
     | Mast.NbCategory l ->
         Mir.NbCategory (Check_validity.mast_to_catvars l cats)
     | Mast.Attribut (v, a) -> (

@@ -129,7 +129,7 @@ module type S = sig
   val raise_runtime_as_structured : run_error -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
-  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
   (** Returns the comparison between two numbers in the rounding and precision
       context of the interpreter. *)
 

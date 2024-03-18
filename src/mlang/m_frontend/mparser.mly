@@ -25,9 +25,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_literal (v: parse_val) : literal = match v with
- | ParseVar v -> Variable v
- | ParseInt v -> Float (float_of_int v)
+ let parse_to_atom (v: parse_val) : atom =
+   match v with
+   | ParseVar v -> AtomVar v
+   | ParseInt v -> AtomLiteral (Float (float_of_int v))
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
@@ -269,7 +270,7 @@ const_variable_name:
 | name = SYMBOL COLON CONST { parse_variable_name $sloc name }
 
 const_value:
-| value = SYMBOL { parse_const_value value }
+| value = SYMBOL { parse_atom $sloc value }
 
 const_variable:
 | name = with_pos(const_variable_name) EQUALS value = with_pos(const_value)
@@ -802,7 +803,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Single (parse_to_literal (parse_variable_or_int $sloc s), pos)
+    Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
   }
 
 range_or_minus:
@@ -812,8 +813,8 @@ range_or_minus:
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), pos in
-    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), pos in
+    let l1 = parse_to_atom (parse_variable_or_int $sloc i1), pos in
+    let l2 = parse_to_atom (parse_variable_or_int $sloc i2), pos in
     match rm with
     | `Range -> Range (l1, l2)
     | `Minus -> Interval (l1, l2)
@@ -828,8 +829,8 @@ enumeration_item:
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> VarValue (v, pos)
-    | ParseInt i -> FloatValue (float_of_int i, pos)
+    | ParseVar v -> Com.VarValue (v, pos)
+    | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
 interval:
@@ -837,7 +838,7 @@ interval:
     let pos = mk_position $sloc in
     let ir1 = parse_int $sloc i1, pos in
     let ir2 = parse_int $sloc i2, pos in
-    Interval (ir1, ir2) : set_value
+    Com.Interval (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
@@ -863,8 +864,8 @@ expression:
 | NOT e = with_pos(expression) { Unop (Not, e) }
 
 %inline logical_binop:
-| AND { And }
-| OR { Or }
+| AND { Com.And }
+| OR { Com.Or }
 
 sum_expression:
 | e = product_expression { e }
@@ -875,8 +876,8 @@ sum_expression:
   }
 
 %inline sum_operator:
-| PLUS { Add }
-| MINUS { Sub }
+| PLUS { Com.Add }
+| MINUS { Com.Sub }
 
 product_expression:
 | e = factor { e }
@@ -887,8 +888,8 @@ product_expression:
   }
 
 %inline product_operator:
-| TIMES { Mul }
-| DIV { Div }
+| TIMES { Com.Mul }
+| DIV { Com.Div }
 
 table_index_name:
 s = SYMBOL { parse_variable $sloc s }
@@ -898,7 +899,11 @@ factor:
 | e = ternary_operator { e }
 | e = function_call { e }
 | s = with_pos(table_index_name) i = with_pos(brackets) { Index (s, i) }
-| l = factor_literal { Literal l }
+| a = factor_atom {
+    match a with
+    | AtomVar v -> Var v
+    | AtomLiteral l -> Literal l
+  }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
@@ -917,9 +922,9 @@ ternary_operator:
 else_branch:
 | ELSE e = with_pos(expression) { e }
 
-factor_literal:
-| UNDEFINED { Mast.Undefined }
-| s = SYMBOL { parse_literal $sloc s }(*
+factor_atom:
+| UNDEFINED { AtomLiteral Undefined }
+| s = SYMBOL { parse_atom $sloc s }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
@@ -941,10 +946,10 @@ function_call:
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
 | s = with_pos(function_name) LPAREN RPAREN {
-    FunctionCall (s, Mast.ArgList [])
+    FunctionCall (parse_function_name s, Mast.ArgList [])
   }
 | s = with_pos(function_name) LPAREN args = function_call_args RPAREN {
-    FunctionCall (s, args)
+    FunctionCall (parse_function_name s, args)
   }
 
 function_call_args:
@@ -956,12 +961,12 @@ function_arguments:
 | e = with_pos(sum_expression) COMMA es = function_arguments { e :: es }
 
 %inline comparison_op:
-| GTE  { Gte }
-| LTE  { Lte }
-| LT { Lt }
-| GT { Gt }
-| NEQ  { Neq }
-| EQUALS { Eq }
+| GTE  { Com.Gte }
+| LTE  { Com.Lte }
+| LT { Com.Lt }
+| GT { Com.Gt }
+| NEQ  { Com.Neq }
+| EQUALS { Com.Eq }
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, symbol_with_pos) { ss }

@@ -55,13 +55,14 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
     let def_test = D.dand se1.D.def_test se2.D.def_test in
     let value_comp =
       let op =
+        let open Com in
         match Pos.unmark op with
-        | Mast.Gt -> ">"
-        | Mast.Gte -> ">="
-        | Mast.Lt -> "<"
-        | Mast.Lte -> "<="
-        | Mast.Eq -> "=="
-        | Mast.Neq -> "!="
+        | Gt -> ">"
+        | Gte -> ">="
+        | Lt -> "<"
+        | Lte -> "<="
+        | Eq -> "=="
+        | Neq -> "!="
       in
       D.comp op se1.value_comp se2.value_comp
     in
@@ -69,7 +70,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   in
   let binop op se1 se2 =
     match op with
-    | Mast.Div, _ ->
+    | Com.Div, _ ->
         let def_test = D.dand se1.D.def_test se2.D.def_test in
         let value_comp =
           D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
@@ -78,19 +79,19 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
     | _ ->
         let def_test =
           match Pos.unmark op with
-          | Mast.And | Mast.Mul -> D.dand se1.def_test se2.def_test
-          | Mast.Or | Mast.Add | Mast.Sub -> D.dor se1.def_test se2.def_test
-          | Mast.Div -> assert false
+          | Com.And | Com.Mul -> D.dand se1.def_test se2.def_test
+          | Com.Or | Com.Add | Com.Sub -> D.dor se1.def_test se2.def_test
+          | Com.Div -> assert false
           (* see above *)
         in
         let op e1 e2 =
           match Pos.unmark op with
-          | Mast.And -> D.dand e1 e2
-          | Mast.Or -> D.dor e1 e2
-          | Mast.Add -> D.plus e1 e2
-          | Mast.Sub -> D.sub e1 e2
-          | Mast.Mul -> D.mult e1 e2
-          | Mast.Div -> assert false
+          | Com.And -> D.dand e1 e2
+          | Com.Or -> D.dor e1 e2
+          | Com.Add -> D.plus e1 e2
+          | Com.Sub -> D.sub e1 e2
+          | Com.Mul -> D.mult e1 e2
+          | Com.Div -> assert false
           (* see above *)
         in
         let value_comp = op se1.value_comp se2.value_comp in
@@ -99,7 +100,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   let unop op se =
     let def_test = se.D.def_test in
     let op, safe_def =
-      match op with Mast.Not -> (D.dnot, false) | Mast.Minus -> (D.minus, true)
+      match op with Com.Not -> (D.dnot, false) | Com.Minus -> (D.minus, true)
     in
     let value_comp = op se.value_comp in
     D.build_transitive_composition ~safe_def { def_test; value_comp }
@@ -117,20 +118,20 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
           (fun or_chain set_value ->
             let equal_test =
               match set_value with
-              | Mir.VarValue set_var ->
+              | Com.VarValue set_var ->
                   let s_set_var =
                     let v = Pos.unmark set_var in
                     let def_test = D.m_var v None Def in
                     let value_comp = D.m_var v None Val in
                     D.{ def_test; value_comp }
                   in
-                  comparison (Mast.Eq, Pos.no_pos) sle0 s_set_var
-              | Mir.FloatValue i ->
+                  comparison (Com.Eq, Pos.no_pos) sle0 s_set_var
+              | Com.FloatValue i ->
                   let s_i =
                     D.{ def_test = dtrue; value_comp = lit (Pos.unmark i) }
                   in
-                  comparison (Mast.Eq, Pos.no_pos) sle0 s_i
-              | Mir.Interval (bn, en) ->
+                  comparison (Com.Eq, Pos.no_pos) sle0 s_i
+              | Com.Interval (bn, en) ->
                   let s_bn =
                     let bn' = float_of_int (Pos.unmark bn) in
                     D.{ def_test = dtrue; value_comp = lit bn' }
@@ -139,15 +140,15 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
                     let en' = float_of_int (Pos.unmark en) in
                     D.{ def_test = dtrue; value_comp = lit en' }
                   in
-                  binop (Mast.And, Pos.no_pos)
-                    (comparison (Mast.Gte, Pos.no_pos) sle0 s_bn)
-                    (comparison (Mast.Lte, Pos.no_pos) sle0 s_en)
+                  binop (Com.And, Pos.no_pos)
+                    (comparison (Com.Gte, Pos.no_pos) sle0 s_bn)
+                    (comparison (Com.Lte, Pos.no_pos) sle0 s_en)
             in
-            binop (Mast.Or, Pos.no_pos) or_chain equal_test)
+            binop (Com.Or, Pos.no_pos) or_chain equal_test)
           D.{ def_test = dfalse; value_comp = lit 0. }
           values
       in
-      let se = if positive then or_chain else unop Mast.Not or_chain in
+      let se = if positive then or_chain else unop Com.Not or_chain in
       D.
         {
           def_test = declare_local se.def_test;
@@ -195,25 +196,25 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
         D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { def_test; value_comp }
-  | FunctionCall (Supzero, [ arg ]) ->
+  | FunctionCall ((Supzero, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
       let def_test = D.ite cond D.dfalse se.def_test in
       let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
       D.build_transitive_composition { def_test; value_comp }
-  | FunctionCall (PresentFunc, [ arg ]) ->
+  | FunctionCall ((PresentFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = D.dtrue in
       let value_comp = se.def_test in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (NullFunc, [ arg ]) ->
+  | FunctionCall ((NullFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp =
         D.dand def_test (D.comp "==" se.value_comp (D.lit 0.0))
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (ArrFunc, [ arg ]) ->
+  | FunctionCall ((ArrFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_arr" [ se.value_comp ] in
@@ -221,30 +222,30 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
          given the invariant. Pretty sure that not true, in case of doubt, turn
          `safe_def` to false *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (InfFunc, [ arg ]) ->
+  | FunctionCall ((InfFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       (* same as above *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (AbsFunc, [ arg ]) ->
+  | FunctionCall ((AbsFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "fabs" [ se.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (MaxFunc, [ e1; e2 ]) ->
+  | FunctionCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (MinFunc, [ e1; e2 ]) ->
+  | FunctionCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+  | FunctionCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
       let def_test =
         D.dfun "multimax_def"

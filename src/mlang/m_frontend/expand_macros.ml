@@ -108,8 +108,9 @@ let add_const (name, name_pos) (cval, cval_pos) const_map =
   | Some (_, old_pos) -> Err.constant_already_defined old_pos name_pos
   | None -> (
       match cval with
-      | Mast.Float f -> ConstMap.add name (f, name_pos) const_map
-      | Mast.Variable (Mast.Normal const) -> (
+      | Mast.AtomLiteral (Mast.Float f) ->
+          ConstMap.add name (f, name_pos) const_map
+      | Mast.AtomVar (Mast.Normal const) -> (
           match ConstMap.find_opt const const_map with
           | Some (value, _) -> ConstMap.add name (value, name_pos) const_map
           | None -> Err.unknown_constant cval_pos)
@@ -133,7 +134,7 @@ let rec expand_variable (const_map : const_context) (loop_map : loop_context)
   | Mast.Normal name -> (
       match ConstMap.find_opt name const_map with
       | Some (f, _) -> (Mast.Literal (Float f), var_pos)
-      | None -> (Mast.Literal (Variable var), var_pos))
+      | None -> (Mast.Var var, var_pos))
   | Mast.Generic gen_name ->
       if List.length gen_name.Mast.parameters == 0 then
         expand_variable const_map loop_map
@@ -210,25 +211,25 @@ type var_or_int_index = VarIndex of Mast.variable | IntIndex of int
     actual value of the bounds to unroll everything, this function queries the
     const value in the context if needed. Otherwise, it might be a dynamic
     index. *)
-let var_or_int_value (const_map : const_context)
-    (m_litt : Mast.literal Pos.marked) : var_or_int_index =
-  match Pos.unmark m_litt with
-  | Mast.Variable v -> (
+let var_or_int_value (const_map : const_context) (m_atom : Mast.atom Pos.marked)
+    : var_or_int_index =
+  match Pos.unmark m_atom with
+  | Mast.AtomVar v -> (
       let name = Mast.get_variable_name v in
       match ConstMap.find_opt name const_map with
       | Some (fvalue, _) -> IntIndex (int_of_float fvalue)
       | None -> VarIndex v)
-  | Mast.Float f -> IntIndex (int_of_float f)
-  | Mast.Undefined -> assert false
+  | Mast.AtomLiteral (Mast.Float f) -> IntIndex (int_of_float f)
+  | Mast.AtomLiteral Mast.Undefined -> assert false
 
-let var_or_int (m_lit : Mast.literal Pos.marked) =
-  let lit, lit_pos = m_lit in
-  match lit with
-  | Mast.Float f -> RangeInt (int_of_float f)
-  | Mast.Variable (Normal v) -> VarName v
-  | Mast.Variable (Generic _) ->
-      Err.generic_variable_not_allowed_in_left_part_of_loop lit_pos
-  | Mast.Undefined -> assert false
+let var_or_int (m_atom : Mast.atom Pos.marked) =
+  let atom, atom_pos = m_atom in
+  match atom with
+  | Mast.AtomVar (Normal v) -> VarName v
+  | Mast.AtomVar (Generic _) ->
+      Err.generic_variable_not_allowed_in_left_part_of_loop atom_pos
+  | Mast.AtomLiteral (Mast.Float f) -> RangeInt (int_of_float f)
+  | Mast.AtomLiteral Mast.Undefined -> assert false
 
 let loop_variables_size (lpvl : loop_param_value list) (pos : Pos.t) =
   let size_err p = Err.loop_variables_have_different_sizes p in
@@ -265,8 +266,8 @@ let make_var_range_list (v1 : string) (v2 : string) : loop_param_value list =
   in
   aux (Char.code v1.[0]) (Char.code v2.[0])
 
-let make_range_list (l1 : Mast.literal Pos.marked)
-    (l2 : Mast.literal Pos.marked) : loop_param_value list =
+let make_range_list (l1 : Mast.atom Pos.marked) (l2 : Mast.atom Pos.marked) :
+    loop_param_value list =
   let length_err p =
     Err.non_numeric_range_bounds_must_be_a_single_character p
   in
@@ -359,13 +360,12 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
         List.map
           (fun set_value ->
             match set_value with
-            | Mast.VarValue set_var -> (
+            | Com.VarValue set_var -> (
                 match expand_variable const_map loop_map set_var with
-                | Mast.Literal (Float f), var_pos -> Mast.FloatValue (f, var_pos)
-                | Mast.Literal (Variable var), var_pos ->
-                    Mast.VarValue (var, var_pos)
+                | Mast.Literal (Float f), var_pos -> Com.FloatValue (f, var_pos)
+                | Mast.Var var, var_pos -> Com.VarValue (var, var_pos)
                 | _ -> assert false)
-            | Mast.FloatValue _ | Mast.Interval _ -> set_value)
+            | Com.FloatValue _ | Com.Interval _ -> set_value)
           values
       in
       (Mast.TestInSet (positive, e', values'), expr_pos)
@@ -383,7 +383,7 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
   | Mast.Index (t, i) ->
       let t' =
         match expand_variable const_map loop_map t with
-        | Mast.Literal (Variable v), v_pos -> (v, v_pos)
+        | Mast.Var v, v_pos -> (v, v_pos)
         | Mast.Literal (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
         | _ -> assert false
       in
@@ -401,10 +401,8 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
   | Mast.FunctionCall (f_name, args) ->
       let args' = expand_func_args const_map loop_map args in
       (Mast.FunctionCall (f_name, args'), expr_pos)
-  | Mast.Literal l -> (
-      match l with
-      | Mast.Variable var -> expand_variable const_map loop_map (var, expr_pos)
-      | _ -> m_expr)
+  | Mast.Literal _ -> m_expr
+  | Mast.Var v -> expand_variable const_map loop_map (v, expr_pos)
   | Mast.Loop (lvs, e) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator lmap =
@@ -416,19 +414,18 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       let loop_exprs = loop_context_provider translator in
       List.fold_left
         (fun res loop_expr ->
-          (Mast.Binop ((Mast.Or, expr_pos), res, loop_expr), expr_pos))
+          (Mast.Binop ((Com.Or, expr_pos), res, loop_expr), expr_pos))
         (Mast.Literal (Float 0.0), expr_pos)
         loop_exprs
   | Mast.Attribut (var, a) -> (
       match expand_variable const_map loop_map var with
-      | Mast.Literal (Variable v), v_pos ->
-          (Mast.Attribut ((v, v_pos), a), expr_pos)
+      | Mast.Var v, v_pos -> (Mast.Attribut ((v, v_pos), a), expr_pos)
       | Mast.Literal (Float _), v_pos ->
           Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
   | Mast.Size var -> (
       match expand_variable const_map loop_map var with
-      | Mast.Literal (Variable v), v_pos -> (Mast.Size (v, v_pos), expr_pos)
+      | Mast.Var v, v_pos -> (Mast.Size (v, v_pos), expr_pos)
       | Mast.Literal (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
       | _ -> assert false)
   | Mast.NbCategory _ | Mast.NbAnomalies | Mast.NbDiscordances
@@ -460,7 +457,7 @@ let expand_lvalue (const_map : const_context) (loop_map : loop_context)
   let lval, lval_pos = m_lval in
   let var =
     match expand_variable const_map loop_map lval.Mast.var with
-    | Mast.Literal (Variable v), v_pos -> (v, v_pos)
+    | Mast.Var v, v_pos -> (v, v_pos)
     | Mast.Literal (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
     | _ -> assert false
   in
