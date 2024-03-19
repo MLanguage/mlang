@@ -41,7 +41,7 @@ type verif = {
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
   verif_is_blocking : bool;
-  verif_cat_var_stats : int Mir.CatVarMap.t;
+  verif_cat_var_stats : int Com.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;
 }
@@ -52,7 +52,7 @@ type program = {
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
-  prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
+  prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
   prog_vars : Mir.Variable.t StrMap.t;
   prog_alias : Mir.Variable.t StrMap.t;
   prog_errors : Mir.Error.t StrMap.t;
@@ -69,10 +69,10 @@ type program = {
 }
 
 val mast_to_catvars :
-  Mast.var_category_id -> 'a Mir.CatVarMap.t -> Mir.CatVarSet.t
+  Com.CatVarSet.t Pos.marked -> 'a Com.CatVarMap.t -> Com.CatVarSet.t Pos.marked
 
 val cats_variable_from_decl_list :
-  Mast.var_category_id list -> 'a Mir.CatVarMap.t -> Mir.CatVarSet.t
+  Mast.var_category_id list -> 'a Com.CatVarMap.t -> Com.CatVarSet.t
 
 val check_domain :
   rule_or_verif -> 'a Mast.domain_decl -> 'b -> 'b doms * syms -> 'b doms * syms

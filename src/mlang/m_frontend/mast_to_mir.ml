@@ -42,7 +42,7 @@ let get_var_from_name (var_data : Mir.Variable.t StrMap.t)
 
 let get_var (var_data : Mir.Variable.t StrMap.t)
     (name : Mast.variable_name Pos.marked) : Mir.expression =
-  Mir.Var (Pos.same_pos_as (get_var_from_name var_data name) name)
+  Com.Var (get_var_from_name var_data name)
 
 (**{2 Preliminary passes}*)
 
@@ -57,33 +57,34 @@ let translate_variable (var_data : Mir.Variable.t StrMap.t)
 
 (** {2 Translation of expressions}*)
 
-let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) (f : Mast.expression Pos.marked) :
     Mir.expression Pos.marked =
+  let open Com in
   let expr =
     match Pos.unmark f with
-    | Mast.TestInSet (positive, e, values) ->
+    | TestInSet (positive, e, values) ->
         let new_e = translate_expression cats var_data e in
         let new_set_values =
           List.map
             (function
-              | Com.FloatValue f -> Com.FloatValue f
-              | Com.VarValue (v, pos) ->
+              | FloatValue f -> FloatValue f
+              | VarValue (v, pos) ->
                   let new_v =
                     match v with
                     | Mast.Normal name -> StrMap.find name var_data
                     | Mast.Generic _ -> assert false
                   in
-                  Com.VarValue (new_v, pos)
-              | Com.Interval (bv, ev) -> Com.Interval (bv, ev))
+                  VarValue (new_v, pos)
+              | Interval (bv, ev) -> Interval (bv, ev))
             values
         in
-        Mir.TestInSet (positive, new_e, new_set_values)
-    | Mast.Comparison (op, e1, e2) ->
+        TestInSet (positive, new_e, new_set_values)
+    | Comparison (op, e1, e2) ->
         let new_e1 = translate_expression cats var_data e1 in
         let new_e2 = translate_expression cats var_data e2 in
-        Mir.Comparison (op, new_e1, new_e2)
-    | Mast.Binop (op, e1, e2) ->
+        Comparison (op, new_e1, new_e2)
+    | Binop (op, e1, e2) ->
         (* if
              Pos.unmark op = Mast.Mul
              && (Pos.unmark e1 = Mast.Literal (Float 0.)
@@ -95,45 +96,37 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
                "Nullifying constant multiplication found." (Pos.get_position f);*)
         let new_e1 = translate_expression cats var_data e1 in
         let new_e2 = translate_expression cats var_data e2 in
-        Mir.Binop (op, new_e1, new_e2)
-    | Mast.Unop (op, e) ->
+        Binop (op, new_e1, new_e2)
+    | Unop (op, e) ->
         let new_e = translate_expression cats var_data e in
-        Mir.Unop (op, new_e)
-    | Mast.Index (t, i) ->
+        Unop (op, new_e)
+    | Index (t, i) ->
         let t_var = translate_variable var_data t in
         let new_i = translate_expression cats var_data i in
-        Mir.Index
+        Index
           ( (match Pos.unmark t_var with
-            | Mir.Var v -> v
+            | Var v -> (v, Pos.get_position f)
             | _ -> assert false (* should not happen *)),
             new_i )
-    | Mast.Conditional (e1, e2, e3) ->
+    | Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression cats var_data e1 in
         let new_e2 = translate_expression cats var_data e2 in
-        let new_e3 =
-          match e3 with
-          | Some e3 -> translate_expression cats var_data e3
-          | None -> Pos.same_pos_as (Mir.Literal Mir.Undefined) e2
-          (* the absence of a else branch for a ternary operators can yield an
-             undefined term *)
+        let new_e3 = Option.map (translate_expression cats var_data) e3 in
+        Conditional (new_e1, new_e2, new_e3)
+    | FuncCall (f_name, args) ->
+        let new_args =
+          List.map (fun arg -> translate_expression cats var_data arg) args
         in
-        Mir.Conditional (new_e1, new_e2, new_e3)
-    | Mast.FunctionCall (f_name, args) ->
-        let new_args = translate_func_args cats var_data args in
-        Mir.FunctionCall (f_name, new_args)
-    | Mast.Literal l -> (
-        match l with
-        | Mast.Float f -> Mir.Literal (Mir.Float f)
-        | Mast.Undefined -> Mir.Literal Mir.Undefined)
-    | Mast.Var var ->
+        FuncCall (f_name, new_args)
+    | Literal l -> Literal l
+    | Var var ->
         let new_var = translate_variable var_data (Pos.same_pos_as var f) in
         Pos.unmark new_var
-    | Mast.NbCategory l ->
-        Mir.NbCategory (Check_validity.mast_to_catvars l cats)
-    | Mast.Attribut (v, a) -> (
+    | NbCategory cs -> NbCategory (Check_validity.mast_to_catvars cs cats)
+    | Attribut (v, a) -> (
         if
-          Mir.CatVarMap.fold
-            (fun _ { Mir.attributs; _ } res ->
+          CatVarMap.fold
+            (fun _ { attributs; _ } res ->
               res
               && StrMap.fold
                    (fun attr _ res -> res && attr <> Pos.unmark a)
@@ -147,47 +140,38 @@ let rec translate_expression (cats : Mir.cat_variable_data Mir.CatVarMap.t)
         in
         match StrMap.find_opt v_name var_data with
         | Some var -> (
-            if var.is_it then Mir.Attribut (Pos.same_pos_as v_name v, var, a)
+            if var.is_it then Attribut (Pos.same_pos_as var v, a)
             else
               match StrMap.find_opt (Pos.unmark a) var.attributes with
-              | Some l -> Mir.Literal (Mir.Float (float (Pos.unmark l)))
-              | None -> Mir.Literal Mir.Undefined)
+              | Some l -> Literal (Float (float (Pos.unmark l)))
+              | None -> Literal Undefined)
         | _ ->
             let msg = Format.sprintf "unknown variable %s" v_name in
             Errors.raise_spanned_error msg (Pos.get_position v))
-    | Mast.Size v -> (
+    | Size v -> (
         let v_name =
           match Pos.unmark v with
           | Mast.Normal v_name -> v_name
           | _ -> assert false
         in
         let var = StrMap.find v_name var_data in
-        if var.is_it then Mir.Size (Pos.same_pos_as var v)
+        if var.is_it then Size (Pos.same_pos_as var v)
         else
           match var.is_table with
-          | Some i -> Mir.Literal (Mir.Float (float_of_int i))
-          | None -> Mir.Literal (Mir.Float 1.0))
-    | Mast.NbAnomalies -> Mir.NbAnomalies
-    | Mast.NbDiscordances -> Mir.NbDiscordances
-    | Mast.NbInformatives -> Mir.NbInformatives
-    | Mast.NbBloquantes -> Mir.NbBloquantes
-    | Mast.Loop _ -> assert false
+          | Some i -> Literal (Float (float_of_int i))
+          | None -> Literal (Float 1.0))
+    | NbAnomalies -> NbAnomalies
+    | NbDiscordances -> NbDiscordances
+    | NbInformatives -> NbInformatives
+    | NbBloquantes -> NbBloquantes
+    | FuncCallLoop _ | Loop _ -> assert false
   in
   Pos.same_pos_as expr f
-
-(** Mutually recursive with {!val: translate_expression} *)
-and translate_func_args (cats : Mir.cat_variable_data Mir.CatVarMap.t)
-    (var_data : Mir.Variable.t StrMap.t) (args : Mast.func_args) :
-    Mir.expression Pos.marked list =
-  match args with
-  | Mast.ArgList args ->
-      List.map (fun arg -> translate_expression cats var_data arg) args
-  | Mast.LoopList _ -> assert false
 
 (** {2 Translation of source file items}*)
 
 let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
-    (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+    (cats : Com.cat_variable_data Com.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) prog =
   let rec aux res = function
     | [] -> List.rev res
@@ -201,7 +185,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                   (translate_variable var_data
                      (Pos.unmark sf.Mast.lvalue).Mast.var)
               with
-              | Mir.Var var -> Pos.unmark var
+              | Com.Var var -> var
               | _ -> assert false
               (* should not happen *)
             in
@@ -377,7 +361,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
   aux [] prog
 
 let get_targets (error_decls : Mir.Error.t StrMap.t)
-    (cats : Mir.cat_variable_data Mir.CatVarMap.t)
+    (cats : Com.cat_variable_data Com.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) (ts : Mast.target StrMap.t) :
     Mir.target_data Mir.TargetMap.t =
   StrMap.fold

@@ -20,79 +20,6 @@
 
 (** Variables are first-class objects *)
 
-type cat_computed = Base | GivenBack
-
-let pp_cat_computed fmt = function
-  | Base -> Format.fprintf fmt "base"
-  | GivenBack -> Format.fprintf fmt "restituee"
-
-module CatCompSet = struct
-  include SetExt.Make (struct
-    type t = cat_computed
-
-    let compare = compare
-  end)
-
-  let pp ?(sep = " ") ?(pp_elt = pp_cat_computed) (_ : unit)
-      (fmt : Format.formatter) (set : t) : unit =
-    pp ~sep ~pp_elt () fmt set
-end
-
-type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
-
-let pp_cat_variable fmt = function
-  | CatInput id ->
-      let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
-      Format.fprintf fmt "saisie%a" pp id
-  | CatComputed id ->
-      let pp fmt set =
-        CatCompSet.iter (Format.fprintf fmt " %a" pp_cat_computed) set
-      in
-      Format.fprintf fmt "calculee%a" pp id
-
-let compare_cat_variable a b =
-  match (a, b) with
-  | CatInput _, CatComputed _ -> 1
-  | CatComputed _, CatInput _ -> -1
-  | CatInput id0, CatInput id1 -> StrSet.compare id0 id1
-  | CatComputed c0, CatComputed c1 -> CatCompSet.compare c0 c1
-
-module CatVarSet = struct
-  include SetExt.Make (struct
-    type t = cat_variable
-
-    let compare = compare_cat_variable
-  end)
-
-  let pp ?(sep = ", ") ?(pp_elt = pp_cat_variable) (_ : unit)
-      (fmt : Format.formatter) (set : t) : unit =
-    pp ~sep ~pp_elt () fmt set
-end
-
-module CatVarMap = struct
-  include MapExt.Make (struct
-    type t = cat_variable
-
-    let compare = compare_cat_variable
-  end)
-
-  let pp ?(sep = "; ") ?(pp_key = pp_cat_variable) ?(assoc = " => ")
-      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-      (map : 'a t) : unit =
-    pp ~sep ~pp_key ~assoc pp_val fmt map
-end
-
-type cat_variable_loc = LocCalculated | LocBase | LocInput
-
-type cat_variable_data = {
-  id : cat_variable;
-  id_str : string;
-  id_int : int;
-  loc : cat_variable_loc;
-  pos : Pos.t;
-  attributs : Pos.t StrMap.t;
-}
-
 type variable_id = string
 (** Each variable has an unique ID *)
 
@@ -106,7 +33,7 @@ module Variable = struct
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attributes : int Pos.marked StrMap.t;
-    cats : cat_variable option;
+    cats : Com.cat_variable option;
     typ : Mast.value_typ option;
     is_table : int option;
     is_temp : bool;
@@ -115,7 +42,7 @@ module Variable = struct
 
   let new_var (name : string Pos.marked) (alias : string Pos.marked option)
       (descr : string Pos.marked) ~(attributes : int Pos.marked StrMap.t)
-      ~(cats : cat_variable option) ~(typ : Mast.value_typ option)
+      ~(cats : Com.cat_variable option) ~(typ : Mast.value_typ option)
       ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
     {
       name;
@@ -157,41 +84,18 @@ end
 (** Type of MIR values *)
 type typ = Real
 
-type literal = Float of float | Undefined
+let false_literal = Com.Float 0.
 
-let false_literal = Float 0.
-
-let true_literal = Float 1.
-
-type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
-      (** Test if an expression is in a set of value (or not in the set if the
-          flag is set to [false]) *)
-  | Unop of Com.unop * 'v m_expression_
-  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Index of 'v Pos.marked * 'v m_expression_
-  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
-  | FunctionCall of Com.func Pos.marked * 'v m_expression_ list
-  | Literal of literal
-  | Var of 'v Pos.marked
-  | NbCategory of CatVarSet.t
-  | Attribut of string Pos.marked * 'v * string Pos.marked
-  | Size of 'v Pos.marked
-  | NbAnomalies
-  | NbDiscordances
-  | NbInformatives
-  | NbBloquantes
-
-and 'v m_expression_ = 'v expression_ Pos.marked
+let true_literal = Com.Float 1.
 
 type set_value = Variable.t Com.set_value
 
-type expression = Variable.t expression_
+type expression = Variable.t Com.expression_
 
-let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
+let rec map_expr_var (f : 'v -> 'v2) (e : 'v Com.expression_) :
+    'v2 Com.expression_ =
   let map = Pos.map_under_mark (map_expr_var f) in
-  match (e :> 'v expression_) with
+  match (e :> 'v Com.expression_) with
   | TestInSet (positive, e, values) ->
       let map_values = function
         | Com.FloatValue f -> Com.FloatValue f
@@ -203,22 +107,23 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v expression_) : 'v2 expression_ =
   | Comparison (op, e1, e2) -> Comparison (op, map e1, map e2)
   | Binop (op, e1, e2) -> Binop (op, map e1, map e2)
   | Index ((v, pos), e) -> Index ((f v, pos), map e)
-  | Conditional (e1, e2, e3) -> Conditional (map e1, map e2, map e3)
-  | FunctionCall (func, es) -> FunctionCall (func, List.map map es)
-  | Var mv -> Var (Pos.map_under_mark f mv)
+  | Conditional (e1, e2, e3) -> Conditional (map e1, map e2, Option.map map e3)
+  | FuncCall (func, es) -> FuncCall (func, List.map map es)
+  | Var v -> Var (f v)
   | Literal l -> Literal l
   | NbCategory l -> NbCategory l
-  | Attribut (v, var, a) -> Attribut (v, f var, a)
+  | Attribut (var, a) -> Attribut (Pos.map_under_mark f var, a)
   | Size mv -> Size (Pos.map_under_mark f mv)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
   | NbBloquantes -> NbBloquantes
+  | FuncCallLoop _ | Loop _ -> assert false
 
-let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
-    =
+let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v Com.expression_) :
+    'a =
   let fold acc e = fold_expr_var f acc (Pos.unmark e) in
-  match (e :> 'v expression_) with
+  match (e :> 'v Com.expression_) with
   | TestInSet (_, e, values) ->
       let fold_values acc = function
         | Com.FloatValue _ | Com.Interval _ -> acc
@@ -228,12 +133,15 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v expression_) : 'a
   | Unop (_, e) -> fold acc e
   | Comparison (_, e1, e2) | Binop (_, e1, e2) -> fold (fold acc e1) e2
   | Index ((v, _), e) -> fold (f acc v) e
-  | Conditional (e1, e2, e3) -> fold (fold (fold acc e1) e2) e3
-  | FunctionCall (_, es) -> List.fold_left fold acc es
-  | Var v -> f acc (Pos.unmark v)
+  | Conditional (e1, e2, e3) ->
+      let acc = fold (fold acc e1) e2 in
+      Option.fold ~none:acc ~some:(fold acc) e3
+  | FuncCall (_, es) -> List.fold_left fold acc es
+  | Var v -> f acc v
   | Literal _ | NbCategory _ | Attribut _ | Size _ | NbAnomalies
   | NbDiscordances | NbInformatives | NbBloquantes ->
       acc
+  | FuncCallLoop _ | Loop _ -> assert false
 
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
@@ -300,8 +208,8 @@ type 'variable print_arg =
   | PrintString of string
   | PrintName of string Pos.marked * Variable.t
   | PrintAlias of string Pos.marked * Variable.t
-  | PrintIndent of 'variable expression_ Pos.marked
-  | PrintExpr of 'variable expression_ Pos.marked * int * int
+  | PrintIndent of 'variable Com.expression_ Pos.marked
+  | PrintExpr of 'variable Com.expression_ Pos.marked * int * int
 
 (** Errors are first-class objects *)
 
@@ -366,12 +274,12 @@ type instruction =
   | Print of Mast.print_std * Variable.t print_arg Pos.marked list
   | Iterate of
       variable_id
-      * CatVarSet.t
+      * Com.CatVarSet.t
       * expression Pos.marked
       * instruction Pos.marked list
   | Restore of
       Pos.t VariableMap.t
-      * (Variable.t * CatVarSet.t * expression Pos.marked) list
+      * (Variable.t * Com.CatVarSet.t * expression Pos.marked) list
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
@@ -390,19 +298,19 @@ type target_data = {
 
 (**{1 Verification conditions}*)
 
-type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
+type verif_domain_data = { vdom_auth : Com.CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
 let cond_cats_to_set cats =
-  CatVarMap.fold
-    (fun cv nb res -> if nb > 0 then CatVarSet.add cv res else res)
-    cats CatVarSet.empty
+  Com.CatVarMap.fold
+    (fun cv nb res -> if nb > 0 then Com.CatVarSet.add cv res else res)
+    cats Com.CatVarSet.empty
 
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
-  program_var_categories : cat_variable_data CatVarMap.t;
+  program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_vars : Variable.t StrMap.t;
@@ -442,28 +350,31 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
-let mast_to_catvar (cats : 'a CatVarMap.t)
-    (l : string Pos.marked list Pos.marked) : cat_variable =
+let mast_to_catvar (cats : 'a Com.CatVarMap.t)
+    (l : string Pos.marked list Pos.marked) : Com.cat_variable =
   match l with
   | ("saisie", _) :: id, pos ->
-      let vcat = CatInput (StrSet.from_marked_list id) in
-      if CatVarMap.mem vcat cats then vcat
+      let vcat = Com.CatInput (StrSet.from_marked_list id) in
+      if Com.CatVarMap.mem vcat cats then vcat
       else Errors.raise_spanned_error "unknown variable category" pos
   | ("calculee", _) :: id, id_pos -> begin
       match id with
-      | [] -> CatComputed CatCompSet.empty
-      | [ ("base", _) ] -> CatComputed (CatCompSet.singleton Base)
-      | [ ("restituee", _) ] -> CatComputed (CatCompSet.singleton GivenBack)
+      | [] -> Com.CatComputed Com.CatCompSet.empty
+      | [ ("base", _) ] -> Com.CatComputed (Com.CatCompSet.singleton Base)
+      | [ ("restituee", _) ] ->
+          Com.CatComputed (Com.CatCompSet.singleton GivenBack)
       | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          CatComputed (CatCompSet.singleton Base |> CatCompSet.add GivenBack)
+          Com.CatComputed
+            (Com.CatCompSet.singleton Base |> Com.CatCompSet.add GivenBack)
       | _ ->
-          Errors.raise_spanned_error "unlnown calculated variable category"
+          Errors.raise_spanned_error "unknown calculated variable category"
             id_pos
     end
   | _, pos -> Errors.raise_spanned_error "unknown variable category" pos
 
-let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
-    'var expression_ Pos.marked =
+let rec expand_functions_expr (e : 'var Com.expression_ Pos.marked) :
+    'var Com.expression_ Pos.marked =
+  let open Com in
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
       let new_e1 = expand_functions_expr e1 in
@@ -479,14 +390,14 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
   | Conditional (e1, e2, e3) ->
       let new_e1 = expand_functions_expr e1 in
       let new_e2 = expand_functions_expr e2 in
-      let new_e3 = expand_functions_expr e3 in
+      let new_e3 = Option.map expand_functions_expr e3 in
       Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
   | Index (var, e1) ->
       let new_e1 = expand_functions_expr e1 in
       Pos.same_pos_as (Index (var, new_e1)) e
   | Literal _ -> e
   | Var _ -> e
-  | FunctionCall ((SumFunc, _), args) ->
+  | FuncCall ((SumFunc, _), args) ->
       let expr_opt =
         List.fold_left
           (fun acc_opt arg ->
@@ -504,50 +415,50 @@ let rec expand_functions_expr (e : 'var expression_ Pos.marked) :
         match expr_opt with None -> Literal (Float 0.0) | Some expr -> expr
       in
       Pos.same_pos_as expr e
-  | FunctionCall ((GtzFunc, _), [ arg ]) ->
+  | FuncCall ((GtzFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
            ( Pos.same_pos_as Com.Gt e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall ((GtezFunc, _), [ arg ]) ->
+  | FuncCall ((GtezFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
            ( Pos.same_pos_as Com.Gte e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall ((((MinFunc | MaxFunc) as f), pos), [ arg1; arg2 ]) ->
+  | FuncCall ((((MinFunc | MaxFunc) as f), pos), [ arg1; arg2 ]) ->
       let earg1 = expand_functions_expr arg1 in
       let earg2 = expand_functions_expr arg2 in
-      Pos.same_pos_as (FunctionCall ((f, pos), [ earg1; earg2 ])) e
-  | FunctionCall ((AbsFunc, pos), [ arg ]) ->
+      Pos.same_pos_as (FuncCall ((f, pos), [ earg1; earg2 ])) e
+  | FuncCall ((AbsFunc, pos), [ arg ]) ->
       Pos.same_pos_as
-        (FunctionCall ((AbsFunc, pos), [ expand_functions_expr arg ]))
+        (FuncCall ((AbsFunc, pos), [ expand_functions_expr arg ]))
         e
-  | FunctionCall ((NullFunc, _), [ arg ]) ->
+  | FuncCall ((NullFunc, _), [ arg ]) ->
       Pos.same_pos_as
         (Comparison
            ( Pos.same_pos_as Com.Eq e,
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FunctionCall ((PresentFunc, pos), [ arg ]) ->
+  | FuncCall ((PresentFunc, pos), [ arg ]) ->
       (* we do not expand this function as it deals specifically with undefined
          variables *)
       Pos.same_pos_as
-        (FunctionCall ((PresentFunc, pos), [ expand_functions_expr arg ]))
+        (FuncCall ((PresentFunc, pos), [ expand_functions_expr arg ]))
         e
-  | FunctionCall ((ArrFunc, pos), [ arg ]) ->
+  | FuncCall ((ArrFunc, pos), [ arg ]) ->
       (* we do not expand this function as it requires modulo or modf *)
       Pos.same_pos_as
-        (FunctionCall ((ArrFunc, pos), [ expand_functions_expr arg ]))
+        (FuncCall ((ArrFunc, pos), [ expand_functions_expr arg ]))
         e
-  | FunctionCall ((InfFunc, pos), [ arg ]) ->
+  | FuncCall ((InfFunc, pos), [ arg ]) ->
       (* we do not expand this function as it requires modulo or modf *)
       Pos.same_pos_as
-        (FunctionCall ((InfFunc, pos), [ expand_functions_expr arg ]))
+        (FuncCall ((InfFunc, pos), [ expand_functions_expr arg ]))
         e
   | _ -> e
 

@@ -76,6 +76,8 @@ let no_pos : t =
   in
   { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
+let mark pos value = (value, pos)
+
 let unmark ((x, _) : 'a marked) : 'a = x
 
 let get_position ((_, x) : 'a marked) : t = x
