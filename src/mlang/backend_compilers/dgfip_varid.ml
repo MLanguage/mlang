@@ -19,20 +19,20 @@ type var_id =
   | VarInput of int
   | VarBase of int
   | VarComputed of int
-  | VarIterate of string * Mir.cat_variable_loc * Mir.cat_variable_data
+  | VarIterate of string * Com.cat_variable_loc * Com.cat_variable_data
 
 (* Map from variables to their TGV ID *)
 type var_id_map = var_id Mir.VariableMap.t
 
 let gen_tab = function
-  | Mir.LocCalculated -> "C_"
-  | Mir.LocBase -> "B_"
-  | Mir.LocInput -> "S_"
+  | Com.LocCalculated -> "C_"
+  | Com.LocBase -> "B_"
+  | Com.LocInput -> "S_"
 
 let gen_loc_type = function
-  | Mir.LocCalculated -> "EST_CALCULEE"
-  | Mir.LocBase -> "EST_BASE"
-  | Mir.LocInput -> "EST_SAISIE"
+  | Com.LocCalculated -> "EST_CALCULEE"
+  | Com.LocBase -> "EST_BASE"
+  | Com.LocInput -> "EST_SAISIE"
 
 let gen_access_def vm (v : Mir.Variable.t) offset =
   let vn = Pos.unmark v.name in

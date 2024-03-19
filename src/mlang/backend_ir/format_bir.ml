@@ -22,20 +22,18 @@ let format_print_arg fmt = function
   | Mir.PrintAlias (v, _) -> Format.fprintf fmt "alias(%s)" (Pos.unmark v)
   | Mir.PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
-        (Format_mast.pp_unmark Format_mir.format_expression)
+        (Pp.unmark Format_mir.format_expression)
         e
   | Mir.PrintExpr (e, min, max) ->
       if min = max_int then
-        Format.fprintf fmt "(%a)"
-          (Format_mast.pp_unmark Format_mir.format_expression)
-          e
+        Format.fprintf fmt "(%a)" (Pp.unmark Format_mir.format_expression) e
       else if max = max_int then
         Format.fprintf fmt "(%a):%d"
-          (Format_mast.pp_unmark Format_mir.format_expression)
+          (Pp.unmark Format_mir.format_expression)
           e min
       else
         Format.fprintf fmt "(%a):%d..%d"
-          (Format_mast.pp_unmark Format_mir.format_expression)
+          (Pp.unmark Format_mir.format_expression)
           e min max
 
 let rec format_stmt fmt (stmt : stmt) =
@@ -69,19 +67,19 @@ let rec format_stmt fmt (stmt : stmt) =
         match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
       in
       Format.fprintf fmt "%s %a;" print_cmd
-        (Format_mast.pp_print_list_space format_print_arg)
+        (Pp.list_space format_print_arg)
         args
   | SIterate (var, vcs, expr, stmts) ->
       Format.fprintf fmt
         "iterate variable %s@\n: categorie %a@\n: avec %a@\n: dans ("
-        (Pos.unmark var.name) (Mir.CatVarSet.pp ()) vcs
+        (Pos.unmark var.name) (Com.CatVarSet.pp ()) vcs
         Format_mir.format_expression expr;
       Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
   | SRestore (vars, var_params, stmts) ->
       let format_var_param fmt (var, vcs, expr) =
         Format.fprintf fmt ": variable %s : categorie %a : avec %a@\n"
           (Pos.unmark var.Mir.Variable.name)
-          (Mir.CatVarSet.pp ()) vcs Format_mir.format_expression expr
+          (Com.CatVarSet.pp ()) vcs Format_mir.format_expression expr
       in
       Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
         (Mir.VariableSet.pp ~sep:", "
@@ -89,7 +87,7 @@ let rec format_stmt fmt (stmt : stmt) =
              Format.fprintf fmt "%s" (Pos.unmark var.Mir.Variable.name))
            ())
         vars
-        (Format_mast.pp_print_list_space format_var_param)
+        (Pp.list_space format_var_param)
         var_params;
       Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" format_stmts stmts
   | SRaiseError (err, var_opt) ->

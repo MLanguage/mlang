@@ -836,7 +836,7 @@ let gen_table_debug fmt flags vars i =
   in
   gen_table fmt flags vars (Debug i) opt
 
-let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
+let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
     stats =
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
@@ -844,7 +844,7 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
     StrMap.fold
       (fun _ (var, idx, size) nb ->
         match var.Mir.Variable.cats with
-        | Some c when Mir.compare_cat_variable c cat = 0 ->
+        | Some c when Com.compare_cat_variable c cat = 0 ->
             Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
               (Pos.unmark var.Mir.Variable.name)
               (match var.Mir.Variable.alias with
@@ -863,7 +863,7 @@ let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Mir.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
+  Com.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
 
 let gen_table_varinfos fmt cprog vars =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
@@ -871,8 +871,8 @@ let gen_table_varinfos fmt cprog vars =
 #include "mlang.h"
 
 |};
-  Mir.CatVarMap.iter
-    (fun _ Mir.{ id_str; attributs; _ } ->
+  Com.CatVarMap.iter
+    (fun _ Com.{ id_str; attributs; _ } ->
       Format.fprintf fmt
         "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
       StrMap.iter
@@ -918,12 +918,12 @@ let gen_table_varinfos fmt cprog vars =
           dict)
       var_dict vars
   in
-  Mir.CatVarMap.fold
+  Com.CatVarMap.fold
     (gen_table_varinfo fmt var_dict)
-    cprog.Bir.mir_program.program_var_categories Mir.CatVarMap.empty
+    cprog.Bir.mir_program.program_var_categories Com.CatVarMap.empty
 
 let gen_decl_varinfos fmt stats =
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, attr_set) ->
       Format.fprintf fmt
         {|typedef struct S_varinfo_%s {
@@ -938,22 +938,22 @@ let gen_decl_varinfos fmt stats =
       Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, nb, _) ->
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, id_int, _, _) ->
       Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt
         "extern char attribut_%s_def(T_varinfo_%s *vi, char *attr);\n" id_str

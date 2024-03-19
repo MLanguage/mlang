@@ -58,8 +58,6 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Float of float | Undefined
-
 (** A table index is used in expressions like [TABLE\[X\]], and can be
     variables, integer or the special [X] variable that stands for a "generic"
     index (to define table values as a function of the index). [X] is contained
@@ -77,79 +75,13 @@ let get_table_size_opt = function
   | None -> None
   | Some (SymbolSize _, _) -> assert false
 
-(**{2 Loops}*)
-
-(** The M language has an extremely odd way to specify looping. Rather than
-    having first-class local mutable variables whose value change at each loop
-    iteration, the M language prefers to use the changing loop parameter to
-    instantiate the variable names inside the loop. For instance,
-
-    {v somme(i=1..10:Xi) v}
-
-    should evaluate to the sum of variables [X1], [X2], etc. Parameters can be
-    number or characters and there can be multiple of them. We have to store all
-    this information. *)
-
-(** Values that can be substituted for loop parameters *)
-
-type atom = AtomVar of variable | AtomLiteral of literal
-
-type set_value_loop =
-  | Single of atom Pos.marked
-  | Range of atom Pos.marked * atom Pos.marked
-  | Interval of atom Pos.marked * atom Pos.marked
-
-type loop_variable = char Pos.marked * set_value_loop list
-(** A loop variable is the character that should be substituted in variable
-    names inside the loop plus the set of value to substitute. *)
-
-(** There are two kind of loop variables declaration, but they are semantically
-    the same though they have different concrete syntax. *)
-type loop_variables =
-  | ValueSets of loop_variable list
-  | Ranges of loop_variable list
-
 (**{2 Expressions}*)
 
-(** The main type of the M language *)
-type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
-      (** Test if an expression is in a set of value (or not in the set if the
-          flag is set to [false]) *)
-  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-      (** Compares two expressions and produce a boolean *)
-  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Unop of Com.unop * 'v m_expression_
-  | Index of 'v Pos.marked * 'v m_expression_  (** Access a cell in a table *)
-  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_ option
-      (** Classic conditional with an optional else clause ([None] only for
-          verification conditions) *)
-  | FunctionCall of Com.func Pos.marked * 'v func_args_
-  | Literal of literal
-  | Var of 'v
-  | Loop of loop_variables Pos.marked * 'v m_expression_
-      (** The loop is prefixed with the loop variables declarations *)
-  | NbCategory of string Pos.marked list Pos.marked
-  | Attribut of 'v Pos.marked * string Pos.marked
-  | Size of 'v Pos.marked
-  | NbAnomalies
-  | NbDiscordances
-  | NbInformatives
-  | NbBloquantes
-
-(** Functions can take a explicit list of argument or a loop expression that
-    expands into a list *)
-and 'v func_args_ =
-  | ArgList of 'v m_expression_ list
-  | LoopList of loop_variables Pos.marked * 'v m_expression_
-
-and 'v m_expression_ = 'v expression_ Pos.marked
+type var_category_id = string Pos.marked list Pos.marked
 
 type set_value = variable Com.set_value
 
-type func_args = variable func_args_
-
-type expression = variable expression_
+type expression = variable Com.expression_
 
 (**{1 Toplevel clauses}*)
 
@@ -175,7 +107,7 @@ type formula_decl = {
     value (e.g [Xi] can depend on [i]). *)
 type formula =
   | SingleFormula of formula_decl
-  | MultipleFormulaes of loop_variables Pos.marked * formula_decl
+  | MultipleFormulaes of variable Com.loop_variables Pos.marked * formula_decl
 
 type print_std = StdOut | StdErr
 
@@ -185,8 +117,6 @@ type print_arg =
   | PrintAlias of variable Pos.marked
   | PrintIndent of expression Pos.marked
   | PrintExpr of expression Pos.marked * int * int
-
-type var_category_id = string Pos.marked list Pos.marked
 
 type restore_vars =
   | VarList of string Pos.marked list
@@ -288,7 +218,7 @@ type computed_variable = {
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of variable_name Pos.marked * atom Pos.marked
+  | ConstVar of variable_name Pos.marked * variable Com.atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 

@@ -20,8 +20,8 @@
 
 (* Type of the values being passed around in the interpreter **)
 type var_literal =
-  | SimpleVar of Mir.literal
-  | TableVar of int * Mir.literal array
+  | SimpleVar of Com.literal
+  | TableVar of int * Com.literal array
 
 (**{1 Instrumentation of the interpreter}*)
 
@@ -106,15 +106,15 @@ module type S = sig
 
   val empty_ctx : ctx
 
-  val literal_to_value : Mir.literal -> value
+  val literal_to_value : Com.literal -> value
 
   val var_literal_to_var_value : var_literal -> var_value
 
-  val value_to_literal : value -> Mir.literal
+  val value_to_literal : value -> Com.literal
 
   val var_value_to_var_literal : var_value -> var_literal
 
-  val update_ctx_with_inputs : ctx -> Mir.literal Mir.VariableMap.t -> ctx
+  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> ctx
 
   val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
@@ -194,7 +194,7 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
   Bir.program ->
-  Mir.literal Mir.VariableMap.t ->
+  Com.literal Mir.VariableMap.t ->
   Cli.value_sort ->
   Cli.round_ops ->
   float option StrMap.t * StrSet.t
@@ -205,5 +205,5 @@ val evaluate_expr :
   Mir.expression Pos.marked ->
   Cli.value_sort ->
   Cli.round_ops ->
-  Mir.literal
+  Com.literal
 (** Interprets only an expression *)

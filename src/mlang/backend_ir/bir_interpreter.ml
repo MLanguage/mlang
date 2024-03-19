@@ -15,8 +15,8 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 type var_literal =
-  | SimpleVar of Mir.literal
-  | TableVar of int * Mir.literal array
+  | SimpleVar of Com.literal
+  | TableVar of int * Com.literal array
 
 type code_location_segment =
   | InsideBlock of int
@@ -87,15 +87,15 @@ module type S = sig
 
   val empty_ctx : ctx
 
-  val literal_to_value : Mir.literal -> value
+  val literal_to_value : Com.literal -> value
 
   val var_literal_to_var_value : var_literal -> var_value
 
-  val value_to_literal : value -> Mir.literal
+  val value_to_literal : value -> Com.literal
 
   val var_value_to_var_literal : var_value -> var_literal
 
-  val update_ctx_with_inputs : ctx -> Mir.literal Mir.VariableMap.t -> ctx
+  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> ctx
 
   val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
@@ -136,13 +136,13 @@ struct
 
   let format_value (fmt : Format.formatter) (x : value) =
     match x with
-    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_t fmt x
 
   let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
       (x : value) =
     match x with
-    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
 
   type var_value = SimpleVar of value | TableVar of int * value array
@@ -221,10 +221,10 @@ struct
       ctx_exported_anos = [];
     }
 
-  let literal_to_value (l : Mir.literal) : value =
+  let literal_to_value (l : Com.literal) : value =
     match l with
-    | Mir.Undefined -> Undefined
-    | Mir.Float f -> Number (N.of_float f)
+    | Com.Undefined -> Undefined
+    | Com.Float f -> Number (N.of_float f)
 
   let var_literal_to_var_value (def : var_literal) : var_value =
     match def with
@@ -232,10 +232,10 @@ struct
     | TableVar (size, defs) ->
         TableVar (size, Array.map (fun v -> literal_to_value v) defs)
 
-  let value_to_literal (l : value) : Mir.literal =
+  let value_to_literal (l : value) : Com.literal =
     match l with
-    | Undefined -> Mir.Undefined
-    | Number f -> Mir.Float (N.to_float f)
+    | Undefined -> Com.Undefined
+    | Number f -> Com.Float (N.to_float f)
 
   let var_value_to_var_literal (def : var_value) : var_literal =
     let l : var_literal =
@@ -247,7 +247,7 @@ struct
     l
 
   let update_ctx_with_inputs (ctx : ctx)
-      (inputs : Mir.literal Mir.VariableMap.t) : ctx =
+      (inputs : Com.literal Mir.VariableMap.t) : ctx =
     {
       ctx with
       ctx_vars =
@@ -257,8 +257,8 @@ struct
           (Mir.VariableMap.mapi
              (fun v l ->
                match l with
-               | Mir.Undefined -> Undefined
-               | Mir.Float f -> Number (N.of_float_input v f))
+               | Com.Undefined -> Undefined
+               | Com.Float f -> Number (N.of_float_input v f))
              inputs)
           ctx.ctx_vars;
     }
@@ -345,14 +345,13 @@ struct
           (Pos.get_position e)
     in
     let comparison op new_e1 new_e2 =
-      let open Com in
       match (op, new_e1, new_e2) with
-      | Gt, _, Undefined | Gt, Undefined, _ -> Undefined
-      | Gte, _, Undefined | Gte, Undefined, _ -> Undefined
-      | Lt, _, Undefined | Lt, Undefined, _ -> Undefined
-      | Lte, _, Undefined | Lte, Undefined, _ -> Undefined
-      | Eq, _, Undefined | Eq, Undefined, _ -> Undefined
-      | Neq, _, Undefined | Neq, Undefined, _ -> Undefined
+      | Com.Gt, _, Undefined | Com.Gt, Undefined, _ -> Undefined
+      | Com.Gte, _, Undefined | Com.Gte, Undefined, _ -> Undefined
+      | Com.Lt, _, Undefined | Com.Lt, Undefined, _ -> Undefined
+      | Com.Lte, _, Undefined | Com.Lte, Undefined, _ -> Undefined
+      | Com.Eq, _, Undefined | Com.Eq, Undefined, _ -> Undefined
+      | Com.Neq, _, Undefined | Com.Neq, Undefined, _ -> Undefined
       | op, Number i1, Number i2 ->
           Number (real_of_bool (compare_numbers op i1 i2))
     in
@@ -391,7 +390,7 @@ struct
     let out =
       try
         match Pos.unmark e with
-        | Mir.TestInSet (positive, e0, values) ->
+        | Com.TestInSet (positive, e0, values) ->
             let new_e0 = evaluate_expr ctx p e0 in
             let or_chain =
               List.fold_left
@@ -430,10 +429,13 @@ struct
         | Unop (op, e1) ->
             let new_e1 = evaluate_expr ctx p e1 in
             unop op new_e1
-        | Conditional (e1, e2, e3) -> (
+        | Conditional (e1, e2, e3_opt) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
-            | Number z when N.(z =. zero ()) -> evaluate_expr ctx p e3
+            | Number z when N.(z =. zero ()) -> (
+                match e3_opt with
+                | None -> Undefined
+                | Some e3 -> evaluate_expr ctx p e3)
             | Number _ -> evaluate_expr ctx p e2 (* the float is not zero *)
             | Undefined -> Undefined)
         | Literal Undefined -> Undefined
@@ -460,51 +462,53 @@ struct
                   else e
               | TableVar (size, values) ->
                   evaluate_array_index new_e1 size values)
-        | Var var -> var_value (Pos.unmark var)
-        | FunctionCall ((ArrFunc, _), [ arg ]) -> (
+        | Var var -> var_value var
+        | FuncCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (roundf x)
             | Undefined -> Undefined
             (*nope:Float 0.*))
-        | FunctionCall ((InfFunc, _), [ arg ]) -> (
+        | FuncCall ((InfFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (truncatef x)
             | Undefined -> Undefined
             (*Float 0.*))
-        | FunctionCall ((PresentFunc, _), [ arg ]) -> (
+        | FuncCall ((PresentFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
-        | FunctionCall ((Supzero, _), [ arg ]) -> (
+        | FuncCall ((Supzero, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f as n ->
                 if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
-        | FunctionCall ((AbsFunc, _), [ arg ]) -> (
+        | FuncCall ((AbsFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f -> Number (N.abs f))
-        | FunctionCall ((MinFunc, _), [ arg1; arg2 ]) -> (
+        | FuncCall ((MinFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.min (N.zero ()) f)
             | Number fl, Number fr -> Number (N.min fl fr))
-        | FunctionCall ((MaxFunc, _), [ arg1; arg2 ]) -> (
+        | FuncCall ((MaxFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))
-        | FunctionCall ((Multimax, _), [ arg1; arg2 ]) -> (
+        | FuncCall ((Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx p arg1 with
             | Undefined -> Undefined
             | Number f -> (
                 let up = N.to_int (roundf f) in
                 let var_arg2 =
-                  match Pos.unmark arg2 with Var v -> v | _ -> assert false
+                  match Pos.unmark arg2 with
+                  | Var v -> (v, Pos.get_position e)
+                  | _ -> assert false
                   (* todo: rte *)
                 in
                 let cast_to_int (v : value) : Int64.t option =
@@ -533,9 +537,9 @@ struct
                 match !maxi with
                 | None -> Undefined
                 | Some f -> Number (N.of_int f)))
-        | FunctionCall (_func, _) -> assert false
-        | Attribut (_v, var, a) -> (
-            match StrMap.find_opt var.id ctx.ctx_it with
+        | FuncCall (_func, _) -> assert false
+        | Attribut (var, a) -> (
+            match StrMap.find_opt (Pos.unmark var).id ctx.ctx_it with
             | Some mvar -> (
                 match StrMap.find_opt (Pos.unmark a) mvar.attributes with
                 | Some l -> Number (N.of_float (float (Pos.unmark l)))
@@ -553,6 +557,7 @@ struct
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
         | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
         | NbCategory _ -> assert false
+        | FuncCallLoop _ | Loop _ -> assert false
       with
       | RuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
@@ -763,7 +768,7 @@ struct
               else ctx)
             p.Bir.mir_program.program_vars ctx
         in
-        Mir.CatVarSet.fold eval vcs ctx
+        Com.CatVarSet.fold eval vcs ctx
     | Bir.SRestore (vars, var_params, stmts) ->
         let backup =
           Mir.VariableSet.fold
@@ -780,7 +785,7 @@ struct
         let backup =
           List.fold_left
             (fun backup ((var : Mir.Variable.t), vcs, expr) ->
-              Mir.CatVarSet.fold
+              Com.CatVarSet.fold
                 (fun vc backup ->
                   StrMap.fold
                     (fun _ v backup ->
@@ -1027,7 +1032,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Bir.program) (inputs : Mir.literal Mir.VariableMap.t)
+let evaluate_program (p : Bir.program) (inputs : Com.literal Mir.VariableMap.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
     float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
@@ -1042,8 +1047,8 @@ let evaluate_program (p : Bir.program) (inputs : Mir.literal Mir.VariableMap.t)
         match value with
         | Interp.SimpleVar litt -> (
             match Interp.value_to_literal litt with
-            | Mir.Float f -> Some f
-            | Mir.Undefined -> None)
+            | Com.Float f -> Some f
+            | Com.Undefined -> None)
         | _ -> None
       in
       StrMap.add name fVal res
@@ -1057,6 +1062,6 @@ let evaluate_program (p : Bir.program) (inputs : Mir.literal Mir.VariableMap.t)
   (varMap, anoSet)
 
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Mir.literal =
+    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
   Interp.value_to_literal (Interp.evaluate_expr Interp.empty_ctx p e)

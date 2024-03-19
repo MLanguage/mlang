@@ -16,8 +16,6 @@
 
 val format_typ : Format.formatter -> Mir.typ -> unit
 
-val format_literal : Format.formatter -> Mir.literal -> unit
-
 val format_expression : Format.formatter -> Mir.expression -> unit
 
 val format_error : Format.formatter -> Mir.Error.t -> unit

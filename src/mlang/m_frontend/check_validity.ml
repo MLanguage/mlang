@@ -53,7 +53,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "Category \"%a\" defined more than once: already defined %a"
-        Mir.pp_cat_variable cat Pos.format_position old_pos
+        Com.pp_cat_variable cat Pos.format_position old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -67,7 +67,7 @@ module Err = struct
 
   let variable_of_unknown_category cat name_pos =
     let msg =
-      Format.asprintf "variable with unknown category %a" Mir.pp_cat_variable
+      Format.asprintf "variable with unknown category %a" Com.pp_cat_variable
         cat
     in
     Errors.raise_spanned_error msg name_pos
@@ -172,7 +172,7 @@ module Err = struct
   let unknown_attribut_for_var cat pos =
     let msg =
       Format.asprintf "unknown attribute for a variable of category \"%a\""
-        Mir.pp_cat_variable cat
+        Com.pp_cat_variable cat
     in
     Errors.raise_spanned_error msg pos
 
@@ -310,7 +310,7 @@ type verif = {
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
   verif_is_blocking : bool;
-  verif_cat_var_stats : int Mir.CatVarMap.t;
+  verif_cat_var_stats : int Com.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;
 }
@@ -321,7 +321,7 @@ type program = {
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
-  prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
+  prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
   prog_vars : Mir.Variable.t StrMap.t;
   prog_alias : Mir.Variable.t StrMap.t;
   prog_errors : Mir.Error.t StrMap.t;
@@ -390,7 +390,7 @@ let empty_program (p : Mast.program) prog_app =
     prog_app;
     prog_apps = StrMap.empty;
     prog_chainings = StrMap.empty;
-    prog_var_cats = Mir.CatVarMap.empty;
+    prog_var_cats = Com.CatVarMap.empty;
     prog_vars = StrMap.empty;
     prog_alias = StrMap.empty;
     prog_errors = StrMap.empty;
@@ -441,17 +441,17 @@ let check_chaining (name : string) (pos : Pos.t)
   let prog_chainings = StrMap.add name chaining prog.prog_chainings in
   { prog with prog_chainings }
 
-let get_var_cat_id_str (var_cat : Mir.cat_variable) : string =
+let get_var_cat_id_str (var_cat : Com.cat_variable) : string =
   let buf = Buffer.create 100 in
   (match var_cat with
-  | Mir.CatComputed ccs ->
+  | Com.CatComputed ccs ->
       Buffer.add_string buf "calculee";
-      Mir.CatCompSet.iter
+      Com.CatCompSet.iter
         (function
-          | Mir.Base -> Buffer.add_string buf "_base"
-          | Mir.GivenBack -> Buffer.add_string buf "_restituee")
+          | Com.Base -> Buffer.add_string buf "_base"
+          | Com.GivenBack -> Buffer.add_string buf "_restituee")
         ccs
-  | Mir.CatInput ss ->
+  | Com.CatInput ss ->
       Buffer.add_string buf "saisie";
       let add buf s =
         String.iter
@@ -466,26 +466,26 @@ let get_var_cat_id_str (var_cat : Mir.cat_variable) : string =
         ss);
   Buffer.contents buf
 
-let get_var_cat_loc (var_cat : Mir.cat_variable) : Mir.cat_variable_loc =
+let get_var_cat_loc (var_cat : Com.cat_variable) : Com.cat_variable_loc =
   match var_cat with
-  | Mir.CatComputed ccs ->
-      if Mir.CatCompSet.mem Mir.Base ccs then Mir.LocBase else Mir.LocCalculated
-  | Mir.CatInput _ -> Mir.LocInput
+  | Com.CatComputed ccs ->
+      if Com.CatCompSet.mem Com.Base ccs then Com.LocBase else Com.LocCalculated
+  | Com.CatInput _ -> Com.LocInput
 
-let get_var_cats (cat_decl : Mast.var_category_decl) : Mir.cat_variable list =
+let get_var_cats (cat_decl : Mast.var_category_decl) : Com.cat_variable list =
   match cat_decl.Mast.var_type with
   | Mast.Input ->
       let id = StrSet.from_marked_list cat_decl.Mast.var_category in
-      [ Mir.CatInput id ]
+      [ Com.CatInput id ]
   | Mast.Computed ->
-      let base = Mir.CatCompSet.singleton Base in
-      let givenBack = Mir.CatCompSet.singleton GivenBack in
-      let baseAndGivenBack = base |> Mir.CatCompSet.add GivenBack in
+      let base = Com.CatCompSet.singleton Base in
+      let givenBack = Com.CatCompSet.singleton GivenBack in
+      let baseAndGivenBack = base |> Com.CatCompSet.add GivenBack in
       [
-        Mir.CatComputed Mir.CatCompSet.empty;
-        Mir.CatComputed base;
-        Mir.CatComputed givenBack;
-        Mir.CatComputed baseAndGivenBack;
+        Com.CatComputed Com.CatCompSet.empty;
+        Com.CatComputed base;
+        Com.CatComputed givenBack;
+        Com.CatComputed baseAndGivenBack;
       ]
 
 let check_var_category (cat_decl : Mast.var_category_decl) (decl_pos : Pos.t)
@@ -499,21 +499,21 @@ let check_var_category (cat_decl : Mast.var_category_decl) (decl_pos : Pos.t)
       StrMap.empty cat_decl.Mast.var_attributes
   in
   let add_cat cats cat =
-    match Mir.CatVarMap.find_opt cat cats with
-    | Some Mir.{ pos; _ } -> Err.var_category_already_definied cat pos decl_pos
+    match Com.CatVarMap.find_opt cat cats with
+    | Some Com.{ pos; _ } -> Err.var_category_already_definied cat pos decl_pos
     | None ->
         let data =
-          Mir.
+          Com.
             {
               id = cat;
               id_str = get_var_cat_id_str cat;
-              id_int = Mir.CatVarMap.cardinal cats;
+              id_int = CatVarMap.cardinal cats;
               loc = get_var_cat_loc cat;
               attributs;
               pos = decl_pos;
             }
         in
-        Mir.CatVarMap.add cat data cats
+        Com.CatVarMap.add cat data cats
   in
   let prog_var_cats =
     List.fold_left add_cat prog.prog_var_cats (get_var_cats cat_decl)
@@ -535,7 +535,7 @@ let check_global_var (var : Mir.Variable.t) (prog : program) : program =
   let name, name_pos = var.name in
   let cat =
     let cats = Option.get var.cats in
-    match Mir.CatVarMap.find_opt cats prog.prog_var_cats with
+    match Com.CatVarMap.find_opt cats prog.prog_var_cats with
     | None -> Err.variable_of_unknown_category cats name_pos
     | Some cat -> cat
   in
@@ -543,7 +543,7 @@ let check_global_var (var : Mir.Variable.t) (prog : program) : program =
     (fun attr _ ->
       if not (StrMap.mem attr var.attributes) then
         Err.attribute_is_not_defined name attr name_pos)
-    cat.Mir.attributs;
+    cat.Com.attributs;
   let prog_vars =
     match StrMap.find_opt name prog.prog_vars with
     | Some (gvar : Mir.Variable.t) ->
@@ -573,7 +573,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
             (fun res (str, _pos) -> StrSet.add str res)
             StrSet.empty input_var.input_category
         in
-        Mir.CatInput input_set
+        Com.CatInput input_set
       in
       let var =
         Mir.Variable.
@@ -598,14 +598,14 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
             (fun res (str, _pos) ->
               let elt =
                 match str with
-                | "base" -> Mir.Base
-                | "restituee" -> Mir.GivenBack
+                | "base" -> Com.Base
+                | "restituee" -> Com.GivenBack
                 | _ -> assert false
               in
-              Mir.CatCompSet.add elt res)
-            Mir.CatCompSet.empty comp_var.comp_category
+              Com.CatCompSet.add elt res)
+            Com.CatCompSet.empty comp_var.comp_category
         in
-        Mir.CatComputed comp_set
+        Com.CatComputed comp_set
       in
       let global_table =
         match comp_var.Mast.comp_table with
@@ -715,57 +715,25 @@ let check_rule_dom_decl (decl : Mast.rule_domain_decl) (prog : program) :
   let doms, syms = check_domain Rule decl dom_data doms_syms in
   { prog with prog_rdoms = doms; prog_rdom_syms = syms }
 
-let mast_to_catvars (l : Mast.var_category_id) (cats : 'a Mir.CatVarMap.t) :
-    Mir.CatVarSet.t =
+let mast_to_catvars (m_cs : Com.CatVarSet.t Pos.marked)
+    (cats : 'a Com.CatVarMap.t) : Com.CatVarSet.t Pos.marked =
+  let cs, pos = m_cs in
   let filter_cats pred =
-    Mir.CatVarMap.fold
-      (fun cv _ res -> if pred cv then Mir.CatVarSet.add cv res else res)
-      cats Mir.CatVarSet.empty
+    Com.CatVarMap.fold
+      (fun cv _ res -> if pred cv then Com.CatVarSet.add cv res else res)
+      cats Com.CatVarSet.empty
   in
-  match l with
-  | [ ("*", _) ], _ -> filter_cats (fun _ -> true)
-  | [ ("saisie", _); ("*", _) ], _ ->
-      filter_cats (fun cv ->
-          match cv with Mir.CatInput _ -> true | _ -> false)
-  | ("saisie", _) :: id, pos ->
-      let vcat = Mir.CatInput (StrSet.from_marked_list id) in
-      if Mir.CatVarMap.mem vcat cats then Mir.CatVarSet.singleton vcat
-      else Err.unknown_variable_category pos
-  | ("calculee", _) :: id, id_pos -> (
-      match id with
-      | [] -> Mir.CatVarSet.singleton (Mir.CatComputed Mir.CatCompSet.empty)
-      | [ ("base", _) ] ->
-          let base = Mir.CatCompSet.singleton Mir.Base in
-          Mir.CatVarSet.singleton (Mir.CatComputed base)
-      | [ ("base", _); ("*", _) ] ->
-          let base = Mir.CatCompSet.singleton Mir.Base in
-          let baseAndGivenBack = base |> Mir.CatCompSet.add Mir.GivenBack in
-          Mir.CatVarSet.singleton (Mir.CatComputed base)
-          |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
-      | [ ("restituee", _) ] ->
-          let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
-          Mir.CatVarSet.singleton (Mir.CatComputed givenBack)
-      | [ ("restituee", _); ("*", _) ] ->
-          let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
-          let baseAndGivenBack = givenBack |> Mir.CatCompSet.add Mir.Base in
-          Mir.CatVarSet.singleton (Mir.CatComputed givenBack)
-          |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
-      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          let baseAndGivenBack =
-            Mir.CatCompSet.singleton Mir.Base
-            |> Mir.CatCompSet.add Mir.GivenBack
-          in
-          Mir.CatVarSet.singleton (Mir.CatComputed baseAndGivenBack)
-      | [ ("*", _) ] ->
-          let base = Mir.CatCompSet.singleton Mir.Base in
-          let givenBack = Mir.CatCompSet.singleton Mir.GivenBack in
-          let baseAndGivenBack = base |> Mir.CatCompSet.add Mir.GivenBack in
-          Mir.CatVarSet.singleton (Mir.CatComputed Mir.CatCompSet.empty)
-          |> Mir.CatVarSet.add (Mir.CatComputed base)
-          |> Mir.CatVarSet.add (Mir.CatComputed givenBack)
-          |> Mir.CatVarSet.add (Mir.CatComputed baseAndGivenBack)
-      | _ -> Err.unknown_variable_category id_pos)
-  | _ -> assert false
+  let fold cv res =
+    match cv with
+    | Com.CatInput set when StrSet.mem "*" set ->
+        filter_cats (function Com.CatInput _ -> true | _ -> false)
+        |> Com.CatVarSet.union res
+    | Com.CatInput _ ->
+        if Com.CatVarMap.mem cv cats then Com.CatVarSet.add cv res
+        else Err.unknown_variable_category pos
+    | _ -> Com.CatVarSet.add cv res
+  in
+  Pos.mark pos (Com.CatVarSet.fold fold cs Com.CatVarSet.empty)
 
 let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
     program =
@@ -773,10 +741,12 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
     let rec aux vdom_auth = function
       | [] -> vdom_auth
       | l :: t ->
-          let vcats = mast_to_catvars l prog.prog_var_cats in
-          aux (Mir.CatVarSet.union vcats vdom_auth) t
+          let vcats =
+            mast_to_catvars (Parse_utils.parse_catvars l) prog.prog_var_cats
+          in
+          aux (Com.CatVarSet.union (Pos.unmark vcats) vdom_auth) t
     in
-    aux Mir.CatVarSet.empty decl.Mast.dom_data.vdom_auth
+    aux Com.CatVarSet.empty decl.Mast.dom_data.vdom_auth
   in
   let vdom_verifiable = decl.Mast.dom_data.vdom_verifiable in
   let dom_data = Mir.{ vdom_auth; vdom_verifiable } in
@@ -932,7 +902,7 @@ let rec fold_var_expr
     (env : var_env) : 'a =
   let expr, expr_pos = m_expr in
   match expr with
-  | Mast.TestInSet (_positive, e, values) ->
+  | TestInSet (_positive, e, values) ->
       let res = fold_var_expr fold_var is_filter acc e env in
       List.fold_left
         (fun res set_value ->
@@ -947,46 +917,42 @@ let rec fold_var_expr
                 Err.wrong_interval_bounds (Pos.get_position bn);
               res)
         res values
-  | Mast.Comparison (_op, e1, e2) ->
+  | Comparison (_op, e1, e2) ->
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
-  | Mast.Binop (_op, e1, e2) ->
+  | Binop (_op, e1, e2) ->
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
-  | Mast.Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
-  | Mast.Index (t, e) ->
+  | Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
+  | Index (t, e) ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       let acc = fold_var_expr fold_var is_filter acc e env in
       fold_var t (OneOf (Some ())) env acc
-  | Mast.Conditional (e1, e2, e3_opt) -> (
+  | Conditional (e1, e2, e3_opt) -> (
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       let acc = fold_var_expr fold_var is_filter acc e2 env in
       match e3_opt with
       | Some e3 -> fold_var_expr fold_var is_filter acc e3 env
       | None -> acc)
-  | Mast.FunctionCall ((func_name, _), args) -> (
+  | FuncCall ((func_name, _), args) -> (
       let check_func arity =
-        match args with
-        | Mast.ArgList args ->
-            if arity > -1 && List.length args <> arity then
-              Err.wrong_arity_of_function func_name arity expr_pos;
-            List.fold_left
-              (fun acc e -> fold_var_expr fold_var is_filter acc e env)
-              acc args
-        | Mast.LoopList _ -> assert false
+        if arity > -1 && List.length args <> arity then
+          Err.wrong_arity_of_function func_name arity expr_pos;
+        List.fold_left
+          (fun acc e -> fold_var_expr fold_var is_filter acc e env)
+          acc args
       in
       match func_name with
       | Com.Multimax -> (
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           match args with
-          | Mast.ArgList [ expr; var_expr ] -> (
+          | [ expr; var_expr ] -> (
               match var_expr with
-              | Mast.Var var, var_pos ->
+              | Var var, var_pos ->
                   let acc = fold_var_expr fold_var is_filter acc expr env in
                   fold_var (var, var_pos) Both env acc
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
-          | Mast.ArgList _ -> Err.multimax_require_two_args expr_pos
-          | Mast.LoopList _ -> assert false)
+          | _ -> Err.multimax_require_two_args expr_pos)
       | Com.SumFunc -> check_func (-1)
       | Com.VerifNumber -> check_func 0
       | Com.ComplNumber -> check_func 0
@@ -1002,20 +968,20 @@ let rec fold_var_expr
       | Com.PresentFunc ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           check_func 1)
-  | Mast.Literal _ -> acc
-  | Mast.Var var ->
+  | Literal _ -> acc
+  | Var var ->
       if is_filter then Err.variable_forbidden_in_filter expr_pos;
       fold_var (var, expr_pos) (OneOf None) env acc
-  | Mast.NbCategory l ->
+  | NbCategory cs ->
       if not is_filter then Err.expression_only_in_filter expr_pos;
-      let cats = mast_to_catvars l env.prog.prog_var_cats in
-      Mir.CatVarSet.iter
+      let cats = mast_to_catvars cs env.prog.prog_var_cats in
+      Com.CatVarSet.iter
         (fun cat ->
-          if not (Mir.CatVarMap.mem cat env.prog.prog_var_cats) then
-            Err.unknown_domain Verif (Pos.get_position l))
-        cats;
+          if not (Com.CatVarMap.mem cat env.prog.prog_var_cats) then
+            Err.unknown_domain Verif (Pos.get_position cs))
+        (Pos.unmark cats);
       acc
-  | Mast.Attribut (v, a) ->
+  | Attribut (v, a) ->
       let name, var_pos =
         match v with
         | Mast.Normal name, var_pos -> (name, var_pos)
@@ -1030,12 +996,11 @@ let rec fold_var_expr
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
           | None -> ()));
       fold_var v Both env acc
-  | Mast.Size v -> fold_var v Both env acc
-  | Mast.NbAnomalies | Mast.NbDiscordances | Mast.NbInformatives
-  | Mast.NbBloquantes ->
+  | Size v -> fold_var v Both env acc
+  | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
-  | Mast.Loop _ -> assert false
+  | FuncCallLoop _ | Loop _ -> assert false
 
 let check_variable (var : Mast.variable Pos.marked)
     (idx_mem : unit var_mem_type) (env : var_env) : string =
@@ -1122,14 +1087,14 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   Buffer.contents buf
 
 let cats_variable_from_decl_list (l : Mast.var_category_id list)
-    (cats : 'a Mir.CatVarMap.t) : Mir.CatVarSet.t =
+    (cats : 'a Com.CatVarMap.t) : Com.CatVarSet.t =
   let rec aux res = function
     | [] -> res
     | l :: t ->
-        let vcats = mast_to_catvars l cats in
-        aux (Mir.CatVarSet.union vcats res) t
+        let vcats = mast_to_catvars (Parse_utils.parse_catvars l) cats in
+        aux (Com.CatVarSet.union (Pos.unmark vcats) res) t
   in
-  aux Mir.CatVarSet.empty l
+  aux Com.CatVarSet.empty l
 
 let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     (is_rule : bool) (env : var_env) :
@@ -1779,14 +1744,14 @@ let check_verif (v : Mast.verification) (prog : program) : program =
               let name = check_variable var idx_mem env in
               let var_data = StrMap.find name env.prog.prog_vars in
               let cats = Option.get var_data.Mir.Variable.cats in
-              if not (Mir.CatVarSet.mem cats verif_domain.dom_data.vdom_auth)
+              if not (Com.CatVarSet.mem cats verif_domain.dom_data.vdom_auth)
               then Err.variable_with_forbidden_category (Pos.get_position var);
               let incr = function None -> Some 1 | Some i -> Some (i + 1) in
-              let vdom_sts = Mir.CatVarMap.update cats incr vdom_sts in
+              let vdom_sts = Com.CatVarMap.update cats incr vdom_sts in
               let var_sts = StrMap.update name incr var_sts in
               (vdom_sts, var_sts)
             in
-            let init = (Mir.CatVarMap.empty, StrMap.empty) in
+            let init = (Com.CatVarMap.empty, StrMap.empty) in
             let env =
               { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty }
             in
@@ -1869,10 +1834,10 @@ let eval_expr_verif (prog : program) (verif : verif)
   in
   let rec aux expr =
     match Pos.unmark expr with
-    | Mast.Literal (Mast.Float f) -> Some f
-    | Mast.Literal Mast.Undefined -> None
-    | Mast.Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
-    | Mast.Attribut (m_var, m_attr) ->
+    | Com.Literal (Com.Float f) -> Some f
+    | Literal Com.Undefined -> None
+    | Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
+    | Attribut (m_var, m_attr) ->
         let var =
           match Pos.unmark m_var with
           | Mast.Normal var -> var
@@ -1881,7 +1846,7 @@ let eval_expr_verif (prog : program) (verif : verif)
         let attrs = (StrMap.find var prog.prog_vars).Mir.Variable.attributes in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
-    | Mast.Size m_var -> (
+    | Size m_var -> (
         let var =
           match Pos.unmark m_var with
           | Mast.Normal var -> var
@@ -1890,23 +1855,23 @@ let eval_expr_verif (prog : program) (verif : verif)
         match (StrMap.find var prog.prog_vars).Mir.Variable.is_table with
         | Some sz -> Some (float sz)
         | None -> Some 1.0)
-    | Mast.NbCategory l ->
-        let cats = mast_to_catvars l prog.prog_var_cats in
+    | NbCategory cs ->
+        let cats = mast_to_catvars cs prog.prog_var_cats in
         let sum =
-          Mir.CatVarSet.fold
+          Com.CatVarSet.fold
             (fun cat sum ->
-              match Mir.CatVarMap.find_opt cat verif.verif_cat_var_stats with
+              match Com.CatVarMap.find_opt cat verif.verif_cat_var_stats with
               | Some i -> sum + i
               | None -> sum)
-            cats 0
+            (Pos.unmark cats) 0
         in
         Some (float sum)
-    | Mast.Unop (op, e0) -> (
+    | Unop (op, e0) -> (
         match aux e0 with
         | None -> None
         | Some f -> (
             match op with Com.Not -> Some (1.0 -. f) | Com.Minus -> Some ~-.f))
-    | Mast.FunctionCall (func, Mast.ArgList args) -> (
+    | FuncCall (func, args) -> (
         let rl = List.map aux args in
         let unFunc f =
           match rl with
@@ -1947,8 +1912,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             | [ r ] -> r
             | _ -> assert false)
         | Com.PresentFunc | Com.Multimax -> assert false)
-    | Mast.FunctionCall (_func, Mast.LoopList _) -> assert false
-    | Mast.Comparison (op, e0, e1) -> (
+    | Comparison (op, e0, e1) -> (
         match (aux e0, aux e1) with
         | None, _ | _, None -> None
         | Some f0, Some f1 -> (
@@ -1960,7 +1924,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             | Lte -> Some (if f0 <= f1 then 1.0 else 0.0)
             | Eq -> Some (if f0 = f1 then 1.0 else 0.0)
             | Neq -> Some (if f0 <> f1 then 1.0 else 0.0)))
-    | Mast.Binop (op, e0, e1) -> (
+    | Binop (op, e0, e1) -> (
         let r0 = aux e0 in
         let r1 = aux e1 in
         match Pos.unmark op with
@@ -1990,12 +1954,12 @@ let eval_expr_verif (prog : program) (verif : verif)
             match (r0, r1) with
             | None, _ | _, None -> None
             | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1)))
-    | Mast.Conditional (e0, e1, e2) -> (
+    | Conditional (e0, e1, e2) -> (
         let r0 = aux e0 in
         let r1 = aux e1 in
         let r2 = match e2 with Some e -> aux e | None -> None in
         match r0 with None -> None | Some f -> if f = 1.0 then r1 else r2)
-    | Mast.TestInSet (positive, e, values) -> (
+    | TestInSet (positive, e, values) -> (
         match aux e with
         | None -> None
         | Some v ->
@@ -2010,8 +1974,8 @@ let eval_expr_verif (prog : program) (verif : verif)
                 false values
             in
             Some (if res = positive then 1.0 else 0.0))
-    | Mast.NbAnomalies | Mast.NbDiscordances | Mast.NbInformatives
-    | Mast.NbBloquantes | Mast.Index _ | Mast.Loop _ ->
+    | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes | Index _
+    | FuncCallLoop _ | Loop _ ->
         assert false
   in
   aux expr

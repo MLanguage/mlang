@@ -19,56 +19,10 @@ open Mir
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
-let format_literal fmt (l : literal) =
-  Format.pp_print_string fmt
-    (match l with Float f -> string_of_float f | Undefined -> "indéfini")
+let format_variable fmt (var : Mir.Variable.t) =
+  Format.fprintf fmt "%s" (Pos.unmark var.name)
 
-let format_set_value fmt (sv : set_value) =
-  match sv with
-  | VarValue v -> Format.fprintf fmt "%s" (Pos.unmark (Pos.unmark v).name)
-  | Interval (i1, i2) ->
-      Format.fprintf fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | FloatValue i -> Format.fprintf fmt "%f" (Pos.unmark i)
-
-let rec format_expression fmt (e : expression) =
-  match e with
-  | TestInSet (belong, e, values) ->
-      Format.fprintf fmt "(%a %sdans %a)" format_expression (Pos.unmark e)
-        (if belong then "" else "non ")
-        (Format_mast.pp_print_list_comma format_set_value)
-        values
-  | Comparison ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1 Com.format_comp_op op
-        format_expression e2
-  | Binop ((op, _), (e1, _), (e2, _)) ->
-      Format.fprintf fmt "(%a %a %a)" format_expression e1 Com.format_binop op
-        format_expression e2
-  | Unop (op, (e, _)) ->
-      Format.fprintf fmt "%a %a" Com.format_unop op format_expression e
-  | Conditional ((e1, _), (e2, _), (e3, _)) ->
-      Format.fprintf fmt "(si %a alors %a sinon %a)" format_expression e1
-        format_expression e2 format_expression e3
-  | FunctionCall (f, args) ->
-      Format.fprintf fmt "%a(%a)" Com.format_func (Pos.unmark f)
-        (Format_mast.pp_print_list_comma
-           (Format_mast.pp_unmark format_expression))
-        args
-  | Literal lit -> format_literal fmt lit
-  | Var var -> Format.fprintf fmt "%s" (Pos.unmark (Pos.unmark var).name)
-  | Index (var, i) ->
-      Format.fprintf fmt "%s[%a]"
-        (Pos.unmark (Pos.unmark var).name)
-        format_expression (Pos.unmark i)
-  | NbCategory cats ->
-      Format.fprintf fmt "nb_categorie(%a)" (Mir.CatVarSet.pp ()) cats
-  | Attribut (v, _, a) ->
-      Format.fprintf fmt "attribut(%s, %s)" (Pos.unmark v) (Pos.unmark a)
-  | Size var ->
-      Format.fprintf fmt "taille(%s)" (Pos.unmark (Pos.unmark var).name)
-  | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
-  | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
-  | NbInformatives -> Format.fprintf fmt "nb_informatives()"
-  | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
+let format_expression = Com.format_expression format_variable
 
 let format_error fmt (e : Error.t) =
   Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)

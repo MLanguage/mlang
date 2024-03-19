@@ -91,13 +91,13 @@ let parse_table_size (s : string) : Mast.table_size =
 
 (**{1 Literal parsing}*)
 
-let parse_literal sloc (s : string) : Mast.literal =
-  try Mast.Float (float_of_string s)
+let parse_literal sloc (s : string) : Com.literal =
+  try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_atom sloc (s : string) : Mast.atom =
-  try Mast.AtomLiteral (Mast.Float (float_of_string s))
-  with Failure _ -> Mast.AtomVar (parse_variable sloc s)
+let parse_atom sloc (s : string) : Mast.variable Com.atom =
+  try Com.AtomLiteral (Com.Float (float_of_string s))
+  with Failure _ -> Com.AtomVar (parse_variable sloc s)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
@@ -197,3 +197,48 @@ let parse_if_then_etc l =
     | _ -> assert false
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false
+
+let parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked =
+  let open Com in
+  let base = CatCompSet.singleton Base in
+  let givenBack = CatCompSet.singleton GivenBack in
+  let baseAndGivenBack = base |> CatCompSet.add GivenBack in
+  function
+  | [ ("*", _) ], id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.singleton "*"))
+      |> CatVarSet.add (CatComputed CatCompSet.empty)
+      |> CatVarSet.add (CatComputed base)
+      |> CatVarSet.add (CatComputed givenBack)
+      |> CatVarSet.add (CatComputed baseAndGivenBack)
+      |> Pos.mark id_pos
+  | [ ("saisie", _); ("*", _) ], id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.singleton "*")) |> Pos.mark id_pos
+  | ("saisie", _) :: id, id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.from_marked_list id))
+      |> Pos.mark id_pos
+  | ("calculee", _) :: id, id_pos -> (
+      match id with
+      | [] ->
+          CatVarSet.singleton (CatComputed CatCompSet.empty) |> Pos.mark id_pos
+      | [ ("base", _) ] ->
+          CatVarSet.singleton (CatComputed base) |> Pos.mark id_pos
+      | [ ("base", _); ("*", _) ] ->
+          CatVarSet.singleton (CatComputed base)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+          |> Pos.mark id_pos
+      | [ ("restituee", _) ] ->
+          CatVarSet.singleton (CatComputed givenBack) |> Pos.mark id_pos
+      | [ ("restituee", _); ("*", _) ] ->
+          CatVarSet.singleton (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+          |> Pos.mark id_pos
+      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
+          CatVarSet.singleton (CatComputed baseAndGivenBack) |> Pos.mark id_pos
+      | [ ("*", _) ] ->
+          CatVarSet.singleton (CatComputed CatCompSet.empty)
+          |> CatVarSet.add (CatComputed base)
+          |> CatVarSet.add (CatComputed givenBack)
+          |> CatVarSet.add (CatComputed baseAndGivenBack)
+          |> Pos.mark id_pos
+      | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
+  | _, id_pos -> Errors.raise_spanned_error "invalid variable category" id_pos

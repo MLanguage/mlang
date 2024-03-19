@@ -27,10 +27,10 @@ and stmt_kind =
   | SVerifBlock of stmt list
   | SFunctionCall of function_name * Mir.Variable.t list
   | SPrint of Mast.print_std * Mir.Variable.t Mir.print_arg list
-  | SIterate of Mir.Variable.t * Mir.CatVarSet.t * Mir.expression * stmt list
+  | SIterate of Mir.Variable.t * Com.CatVarSet.t * Mir.expression * stmt list
   | SRestore of
       Mir.VariableSet.t
-      * (Mir.Variable.t * Mir.CatVarSet.t * Mir.expression) list
+      * (Mir.Variable.t * Com.CatVarSet.t * Mir.expression) list
       * stmt list
   | SRaiseError of Mir.error * string option
   | SCleanErrors

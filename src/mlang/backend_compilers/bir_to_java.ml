@@ -107,61 +107,65 @@ let rec generate_java_expr (e : Mir.expression Pos.marked) :
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
+      let e3 =
+        match e3 with
+        | None -> (Com.Literal Com.Undefined, Pos.no_pos)
+        | Some e -> e
+      in
       let se3, s3 = generate_java_expr e3 in
       let se4, s4 =
         (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
       in
       (se4, s4)
-  | FunctionCall ((PresentFunc, _), [ arg ]) ->
+  | FuncCall ((PresentFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "mPresent(%s)" se, s) in
       (se2, s2)
-  | FunctionCall ((NullFunc, _), [ arg ]) ->
+  | FuncCall ((NullFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_null(%s)" se, s) in
       (se2, s2)
-  | FunctionCall ((ArrFunc, _), [ arg ]) ->
+  | FuncCall ((ArrFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_round(%s)" se, s) in
       (se2, s2)
-  | FunctionCall ((InfFunc, _), [ arg ]) ->
+  | FuncCall ((InfFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
       (se2, s2)
-  | FunctionCall ((AbsFunc, _), [ arg ]) ->
+  | FuncCall ((AbsFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_abs(%s)" se, s) in
       (se2, s2)
-  | FunctionCall ((MaxFunc, _), [ e1; e2 ]) ->
+  | FuncCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall ((MinFunc, _), [ e1; e2 ]) ->
+  | FuncCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
+  | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 =
-        ( Format.asprintf "m_multimax(%s, tgv, %d)" se1
-            (get_var_pos (Pos.unmark v2)),
-          [] )
+        (Format.asprintf "m_multimax(%s, tgv, %d)" se1 (get_var_pos v2), [])
       in
       (se2, s1 @ s2)
-  | FunctionCall _ -> assert false (* should not happen *)
+  | FuncCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
       | 0. -> (Format.asprintf "MValue.zero", [])
       | 1. -> (Format.asprintf "MValue.one", [])
       | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
-  | Var var -> (get_tgv_position (Pos.unmark var), [])
+  | Var var -> (get_tgv_position var, [])
   | Attribut _ | Size _ | NbAnomalies | NbDiscordances | NbInformatives
   | NbBloquantes ->
       Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
+  | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
   let input_methods_count = ref 0 in
