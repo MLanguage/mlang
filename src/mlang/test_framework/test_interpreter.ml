@@ -27,21 +27,21 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
     StrMap.find name p.program_vars
 
 let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
-    float StrMap.t * StrSet.t * Mir.literal Mir.VariableMap.t =
+    float StrMap.t * StrSet.t * Com.literal Mir.VariableMap.t =
   let input_file =
     let ancsded =
       find_var_of_name program.mir_program ("V_ANCSDED", Pos.no_pos)
     in
     let ancsded_val =
-      Mir.Float (float_of_int (Option.get !Cli.income_year + 1))
+      Com.Float (float_of_int (Option.get !Cli.income_year + 1))
     in
     List.fold_left
       (fun in_f (var, value, pos) ->
         let var = find_var_of_name program.mir_program (var, convert_pos pos) in
         let lit =
           match value with
-          | Irj_ast.I i -> Mir.Float (float_of_int i)
-          | F f -> Float f
+          | Irj_ast.I i -> Com.Float (float_of_int i)
+          | F f -> Com.Float f
         in
         Mir.VariableMap.add var lit in_f)
       (Mir.VariableMap.singleton ancsded ancsded_val)

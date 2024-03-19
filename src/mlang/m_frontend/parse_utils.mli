@@ -51,9 +51,10 @@ val parse_func_name : 'a -> string -> string
 val parse_int : Lexing.position * Lexing.position -> string -> int
 (** Checks whether is it actually an integer*)
 
-val parse_literal : Lexing.position * Lexing.position -> string -> Mast.literal
+val parse_literal : Lexing.position * Lexing.position -> string -> Com.literal
 
-val parse_atom : Lexing.position * Lexing.position -> string -> Mast.atom
+val parse_atom :
+  Lexing.position * Lexing.position -> string -> Mast.variable Com.atom
 
 val parse_function_name : string Pos.marked -> Com.func Pos.marked
 
@@ -61,3 +62,5 @@ val parse_if_then_etc :
   (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
   list ->
   Mast.instruction
+
+val parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked

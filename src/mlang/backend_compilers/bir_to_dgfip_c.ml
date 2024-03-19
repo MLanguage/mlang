@@ -106,7 +106,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
     D.build_transitive_composition ~safe_def { def_test; value_comp }
   in
   match Pos.unmark e with
-  | Mir.TestInSet (positive, e0, values) ->
+  | Com.TestInSet (positive, e0, values) ->
       let se0 = generate_c_expr e0 var_indexes in
       let ldef, lval = D.locals_from_m (Mir.LocalVariable.new_var ()) in
       let sle0 = D.{ def_test = local_var ldef; value_comp = local_var lval } in
@@ -184,10 +184,14 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
              (D.access (Pos.unmark var) Val (D.local_var idx_var)))
       in
       D.build_transitive_composition { def_test; value_comp }
-  | Conditional (c, t, f) ->
+  | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr c var_indexes in
       let thenval = generate_c_expr t var_indexes in
-      let elseval = generate_c_expr f var_indexes in
+      let elseval =
+        match f_opt with
+        | None -> D.{ def_test = dfalse; value_comp = lit 0. }
+        | Some f -> generate_c_expr f var_indexes
+      in
       let def_test =
         D.dand cond.def_test
           (D.ite cond.value_comp thenval.def_test elseval.def_test)
@@ -196,25 +200,25 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
         D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { def_test; value_comp }
-  | FunctionCall ((Supzero, _), [ arg ]) ->
+  | FuncCall ((Supzero, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
       let def_test = D.ite cond D.dfalse se.def_test in
       let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
       D.build_transitive_composition { def_test; value_comp }
-  | FunctionCall ((PresentFunc, _), [ arg ]) ->
+  | FuncCall ((PresentFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = D.dtrue in
       let value_comp = se.def_test in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((NullFunc, _), [ arg ]) ->
+  | FuncCall ((NullFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp =
         D.dand def_test (D.comp "==" se.value_comp (D.lit 0.0))
       in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((ArrFunc, _), [ arg ]) ->
+  | FuncCall ((ArrFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_arr" [ se.value_comp ] in
@@ -222,53 +226,50 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
          given the invariant. Pretty sure that not true, in case of doubt, turn
          `safe_def` to false *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((InfFunc, _), [ arg ]) ->
+  | FuncCall ((InfFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       (* same as above *)
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((AbsFunc, _), [ arg ]) ->
+  | FuncCall ((AbsFunc, _), [ arg ]) ->
       let se = generate_c_expr arg var_indexes in
       let def_test = se.def_test in
       let value_comp = D.dfun "fabs" [ se.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((MaxFunc, _), [ e1; e2 ]) ->
+  | FuncCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((MinFunc, _), [ e1; e2 ]) ->
+  | FuncCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 var_indexes in
       let se2 = generate_c_expr e2 var_indexes in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true { def_test; value_comp }
-  | FunctionCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
+  | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 var_indexes in
       let def_test =
-        D.dfun "multimax_def"
-          [ bound.value_comp; D.m_var (Pos.unmark v2) PassPointer Def ]
+        D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
       in
       let value_comp =
-        D.dfun "multimax"
-          [ bound.value_comp; D.m_var (Pos.unmark v2) PassPointer Val ]
+        D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
       in
       D.build_transitive_composition { def_test; value_comp }
-  | FunctionCall _ -> assert false (* should not happen *)
+  | FuncCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> { def_test = D.dtrue; value_comp = D.lit f }
   | Literal Undefined -> { def_test = D.dfalse; value_comp = D.lit 0. }
-  | Var mvar ->
-      let var = Pos.unmark mvar in
+  | Var var ->
       { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
-  | Attribut (_v, var, a) ->
+  | Attribut (var, a) ->
       let ptr, var_cat_data =
-        match Mir.VariableMap.find var var_indexes with
+        match Mir.VariableMap.find (Pos.unmark var) var_indexes with
         | Dgfip_varid.VarIterate (t, _, vcd) -> (t, vcd)
         | _ -> assert false
       in
-      let id_str = var_cat_data.Mir.id_str in
+      let id_str = var_cat_data.Com.id_str in
       let def_test =
         D.dinstr
           (Format.sprintf "attribut_%s_def(%s, \"%s\")" id_str ptr
@@ -305,6 +306,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
       let value_comp = D.dinstr "nb_bloquantes(irdata)" in
       D.build_transitive_composition { def_test; value_comp }
   | NbCategory _ -> assert false
+  | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Variable.t)
@@ -482,22 +484,22 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       Format.fprintf oc "@]@;}@;"
   | SIterate (var, vcs, expr, stmts) ->
       let it_name = fresh_c_local "iterate" in
-      Mir.CatVarSet.iter
+      Com.CatVarSet.iter
         (fun vc ->
           let vcd =
-            Mir.CatVarMap.find vc program.mir_program.Mir.program_var_categories
+            Com.CatVarMap.find vc program.mir_program.Mir.program_var_categories
           in
           let var_indexes =
             Mir.VariableMap.add var
-              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vcd))
+              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
               var_indexes
           in
           Format.fprintf oc "@[<v 2>{@;";
           Format.fprintf oc
             "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
-            vcd.Mir.id_str it_name vcd.Mir.id_str it_name;
+            vcd.Com.id_str it_name vcd.Com.id_str it_name;
           Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
-            vcd.Mir.id_str;
+            vcd.Com.id_str;
           let cond_val = "cond_" ^ it_name in
           let cond_def = cond_val ^ "_d" in
           let locals, def, value =
@@ -532,23 +534,23 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       List.iter
         (fun (var, vcs, expr) ->
           let it_name = fresh_c_local "iterate" in
-          Mir.CatVarSet.iter
+          Com.CatVarSet.iter
             (fun vc ->
               let vcd =
-                Mir.CatVarMap.find vc
+                Com.CatVarMap.find vc
                   program.mir_program.Mir.program_var_categories
               in
               let var_indexes =
                 Mir.VariableMap.add var
-                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Mir.loc, vcd))
+                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
                   var_indexes
               in
               Format.fprintf oc "@[<v 2>{@;";
               Format.fprintf oc
                 "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
-                vcd.Mir.id_str it_name vcd.Mir.id_str it_name;
+                vcd.Com.id_str it_name vcd.Com.id_str it_name;
               Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
-                vcd.Mir.id_str;
+                vcd.Com.id_str;
               let cond_val = "cond_" ^ it_name in
               let cond_def = cond_val ^ "_d" in
               let locals, def, value =

@@ -14,31 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type cat_computed = Base | GivenBack
-
-module CatCompSet : SetExt.T with type elt = cat_computed
-
-type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
-
-val pp_cat_variable : Format.formatter -> cat_variable -> unit
-
-val compare_cat_variable : cat_variable -> cat_variable -> int
-
-module CatVarSet : SetExt.T with type elt = cat_variable
-
-module CatVarMap : MapExt.T with type key = cat_variable
-
-type cat_variable_loc = LocCalculated | LocBase | LocInput
-
-type cat_variable_data = {
-  id : cat_variable;
-  id_str : string;
-  id_int : int;
-  loc : cat_variable_loc;
-  pos : Pos.t;
-  attributs : Pos.t StrMap.t;
-}
-
 type variable_id = string
 (** Each variable has an unique ID *)
 
@@ -52,7 +27,7 @@ module Variable : sig
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attributes : int Pos.marked StrMap.t;
-    cats : cat_variable option;
+    cats : Com.cat_variable option;
     typ : Mast.value_typ option;
     is_table : int option;
     is_temp : bool;
@@ -64,7 +39,7 @@ module Variable : sig
     string Pos.marked option ->
     string Pos.marked ->
     attributes:int Pos.marked StrMap.t ->
-    cats:cat_variable option ->
+    cats:Com.cat_variable option ->
     typ:Mast.value_typ option ->
     is_table:int option ->
     is_temp:bool ->
@@ -79,33 +54,9 @@ type local_variable = { id : int }
 (** Type of MIR values *)
 type typ = Real
 
-type literal = Float of float | Undefined
-
-type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v Com.set_value list
-      (** Test if an expression is in a set of value (or not in the set if the
-          flag is set to [false]) *)
-  | Unop of Com.unop * 'v m_expression_
-  | Comparison of Com.comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Binop of Com.binop Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Index of 'v Pos.marked * 'v m_expression_
-  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_
-  | FunctionCall of Com.func Pos.marked * 'v m_expression_ list
-  | Literal of literal
-  | Var of 'v Pos.marked
-  | NbCategory of CatVarSet.t
-  | Attribut of string Pos.marked * 'v * string Pos.marked
-  | Size of 'v Pos.marked
-  | NbAnomalies
-  | NbDiscordances
-  | NbInformatives
-  | NbBloquantes
-
-and 'v m_expression_ = 'v expression_ Pos.marked
-
 type set_value = Variable.t Com.set_value
 
-type expression = Variable.t expression_
+type expression = Variable.t Com.expression_
 
 module VariableMap : MapExt.T with type key = Variable.t
 (** MIR programs are just mapping from variables to their definitions, and make
@@ -140,8 +91,8 @@ type 'variable print_arg =
   | PrintString of string
   | PrintName of string Pos.marked * Variable.t
   | PrintAlias of string Pos.marked * Variable.t
-  | PrintIndent of 'variable expression_ Pos.marked
-  | PrintExpr of 'variable expression_ Pos.marked * int * int
+  | PrintIndent of 'variable Com.expression_ Pos.marked
+  | PrintExpr of 'variable Com.expression_ Pos.marked * int * int
 
 (** Errors are first-class objects *)
 
@@ -183,12 +134,12 @@ type instruction =
   | Print of Mast.print_std * Variable.t print_arg Pos.marked list
   | Iterate of
       variable_id
-      * CatVarSet.t
+      * Com.CatVarSet.t
       * expression Pos.marked
       * instruction Pos.marked list
   | Restore of
       Pos.t VariableMap.t
-      * (Variable.t * CatVarSet.t * expression Pos.marked) list
+      * (Variable.t * Com.CatVarSet.t * expression Pos.marked) list
       * instruction Pos.marked list
   | RaiseError of error * string option
   | CleanErrors
@@ -203,14 +154,14 @@ type target_data = {
   target_prog : instruction Pos.marked list;
 }
 
-type verif_domain_data = { vdom_auth : CatVarSet.t; vdom_verifiable : bool }
+type verif_domain_data = { vdom_auth : Com.CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
-  program_var_categories : cat_variable_data CatVarMap.t;
+  program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_vars : Variable.t StrMap.t;
@@ -230,17 +181,17 @@ module LocalVariable : sig
   val compare : t -> t -> int
 end
 
-val false_literal : literal
+val false_literal : Com.literal
 
-val true_literal : literal
+val true_literal : Com.literal
 
 val find_var_name_by_alias : program -> string Pos.marked -> string
 
-val map_expr_var : ('v -> 'v2) -> 'v expression_ -> 'v2 expression_
+val map_expr_var : ('v -> 'v2) -> 'v Com.expression_ -> 'v2 Com.expression_
 
-val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v expression_ -> 'a
+val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v Com.expression_ -> 'a
 
-val cond_cats_to_set : int CatVarMap.t -> CatVarSet.t
+val cond_cats_to_set : int Com.CatVarMap.t -> Com.CatVarSet.t
 
 val find_var_by_name : program -> string Pos.marked -> Variable.t
 (** Get a variable for a given name or alias, because of SSA multiple variables
@@ -249,7 +200,7 @@ val find_var_by_name : program -> string Pos.marked -> Variable.t
     variable with the highest execution number is returned. *)
 
 val mast_to_catvar :
-  'a CatVarMap.t -> string Pos.marked list Pos.marked -> cat_variable
+  'a Com.CatVarMap.t -> string Pos.marked list Pos.marked -> Com.cat_variable
 
 val expand_functions : program -> program
 (** Calls [expand_functions_expr] on the whole program *)

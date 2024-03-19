@@ -27,13 +27,6 @@ val get_var_from_name :
     the variable with the same name and highest rule number that is below the
     current rule number from where this variable is requested *)
 
-val translate_expression :
-  Mir.cat_variable_data Mir.CatVarMap.t ->
-  Mir.Variable.t StrMap.t ->
-  Mast.expression Pos.marked ->
-  Mir.expression Pos.marked
-(** Main translation function for expressions *)
-
 (** {1 Main translation function}*)
 
 val translate : Mast.program -> Mir.program

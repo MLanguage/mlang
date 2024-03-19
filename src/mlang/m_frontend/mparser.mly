@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) : atom =
+ let parse_to_atom (v: parse_val) : variable Com.atom =
    match v with
    | ParseVar v -> AtomVar v
    | ParseInt v -> AtomLiteral (Float (float_of_int v))
@@ -504,7 +504,7 @@ instruction:
 | COMPUTE TARGET target = symbol_with_pos SEMICOLON { ComputeTarget target }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
     {
-      let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in
+      let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
       ComputeVerifs (dom, expr)
     }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON
@@ -546,7 +546,7 @@ instruction:
       let expr =
         match exo with
         | Some expr -> expr
-        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+        | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
       in
       Iterate (var, vcats, expr, List.rev instrs)
     }
@@ -646,7 +646,7 @@ rest_param:
     let expr =
       match expr_opt with
       | Some expr -> expr
-      | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
     VarCats (var, vcats, expr)
   }
@@ -772,8 +772,8 @@ brackets:
 | LBRACKET i = expression RBRACKET { i }
 
 loop_variables:
-| lrs = loop_variables_ranges { Ranges lrs }
-| lvs = loop_variables_values { ValueSets lvs }
+| lrs = loop_variables_ranges { Com.Ranges lrs }
+| lvs = loop_variables_values { Com.ValueSets lvs }
 
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
@@ -803,7 +803,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
+    Com.Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
   }
 
 range_or_minus:
@@ -816,8 +816,8 @@ interval_loop:
     let l1 = parse_to_atom (parse_variable_or_int $sloc i1), pos in
     let l2 = parse_to_atom (parse_variable_or_int $sloc i2), pos in
     match rm with
-    | `Range -> Range (l1, l2)
-    | `Minus -> Interval (l1, l2)
+    | `Range -> Com.Range (l1, l2)
+    | `Minus -> Com.Interval (l1, l2)
   }
 
 enumeration:
@@ -872,7 +872,7 @@ sum_expression:
 | e1 = with_pos(sum_expression)
   op = with_pos(sum_operator)
   e2 = with_pos(product_expression) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline sum_operator:
@@ -884,7 +884,7 @@ product_expression:
 | e1 = with_pos(product_expression)
   op = with_pos(product_operator)
   e2 = with_pos(factor) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline product_operator:
@@ -895,14 +895,14 @@ table_index_name:
 s = SYMBOL { parse_variable $sloc s }
 
 factor:
-| MINUS e = with_pos(factor) { Unop (Minus, e) }
+| MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = with_pos(table_index_name) i = with_pos(brackets) { Index (s, i) }
-| a = factor_atom {
-    match a with
-    | AtomVar v -> Var v
-    | AtomLiteral l -> Literal l
+| s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
+| a = with_pos(factor_atom) {
+    match Pos.unmark a with
+    | Com.AtomVar v -> Com.Var v
+    | Com.AtomLiteral l -> Com.Literal l
   }
 | LPAREN e = expression RPAREN { e }
 
@@ -916,7 +916,7 @@ ternary_operator:
   THEN e2 = with_pos(expression)
   e3 = else_branch?
   ENDIF {
-    Conditional (e1, e2, e3)
+    Com.Conditional (e1, e2, e3)
   }
 
 else_branch:
@@ -934,7 +934,9 @@ function_name:
 | s = SYMBOL { parse_func_name $sloc s }
 
 function_call:
-| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN { NbCategory cats }
+| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
+    NbCategory (parse_catvars cats)
+  }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
   }
@@ -946,15 +948,18 @@ function_call:
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
 | s = with_pos(function_name) LPAREN RPAREN {
-    FunctionCall (parse_function_name s, Mast.ArgList [])
+    FuncCall (parse_function_name s, [])
   }
-| s = with_pos(function_name) LPAREN args = function_call_args RPAREN {
-    FunctionCall (parse_function_name s, args)
+| s = with_pos(function_name) LPAREN call_args = function_call_args RPAREN {
+    let f_name = parse_function_name s in
+    match call_args with
+    | `CallArgs args -> Com.FuncCall (f_name, args)
+    | `CallLoop (l1, l2) -> Com.FuncCallLoop (f_name, l1, l2)
   }
 
 function_call_args:
-| l = loop_expression { let l1, l2 = l in LoopList (l1, l2) }
-| args = function_arguments { ArgList (args) }
+| l = loop_expression { let l1, l2 = l in `CallLoop (l1, l2) }
+| args = function_arguments { `CallArgs args }
 
 function_arguments:
 | e = with_pos(sum_expression) { [e] }
