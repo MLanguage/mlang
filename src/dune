@@ -1,7 +1,4 @@
 (env
- (static
-  (flags
-   (:standard -cclib -static -cclib -no-pie)))
  (dev
   (flags
    (:standard -warn-error -A))))
@@ -10,4 +7,9 @@
  (name main)
  (package mlang)
  (public_name mlang)
- (libraries mlang))
+ (libraries mlang)
+ (flags
+  (:standard -verbose -noautolink -cclib -Wl,-Bstatic -cclib -lgmp_caml
+    -cclib -lmpfr -cclib -lgmp -cclib -lcamlidl -cclib -lnums -cclib
+    -lthreadsnat -cclib -lparmap_stubs -cclib -lANSITerminal_stubs -cclib
+    -Wl,-Bdynamic -cclib -lpthread -cclib -lunix -cclib -ldl)))
