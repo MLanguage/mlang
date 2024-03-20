@@ -14,28 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type function_name = string
-
-and stmt = stmt_kind Pos.marked
-
-and stmt_kind =
-  | SAssign of
-      Mir.Variable.t
-      * (int * Mir.expression Pos.marked) option
-      * Mir.expression Pos.marked
-  | SConditional of Mir.expression * stmt list * stmt list
-  | SVerifBlock of stmt list
-  | SFunctionCall of function_name * Mir.Variable.t list
-  | SPrint of Mast.print_std * Mir.Variable.t Mir.print_arg list
-  | SIterate of Mir.Variable.t * Com.CatVarSet.t * Mir.expression * stmt list
-  | SRestore of
-      Mir.VariableSet.t
-      * (Mir.Variable.t * Com.CatVarSet.t * Mir.expression) list
-      * stmt list
-  | SRaiseError of Mir.error * string option
-  | SCleanErrors
-  | SExportErrors
-  | SFinalizeErrors
+type stmt = Mir.Variable.t Com.m_instruction
 
 type target_function = {
   file : string option;
@@ -45,11 +24,13 @@ type target_function = {
 
 type program = {
   targets : target_function Mir.TargetMap.t;
-  main_function : function_name;
+  main_function : string;
   mir_program : Mir.program;
 }
 
 val main_statements : program -> stmt list
+
+val format_program : Format.formatter -> program -> unit
 
 val remove_empty_conditionals : stmt list -> stmt list
 

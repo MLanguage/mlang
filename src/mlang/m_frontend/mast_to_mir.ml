@@ -170,7 +170,7 @@ let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
 
 (** {2 Translation of source file items}*)
 
-let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
+let rec translate_prog (error_decls : Com.Error.t StrMap.t)
     (cats : Com.cat_variable_data Com.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) prog =
   let rec aux res = function
@@ -198,19 +198,19 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                   | None -> (None, var_e))
               | None -> (None, var_e)
             in
-            aux ((Mir.Affectation (var.id, var_idx, var_e), pos) :: res) il
+            aux ((Com.Affectation (var, var_idx, var_e), pos) :: res) il
         | Mast.MultipleFormulaes _, _ -> assert false
       end
     | (Mast.IfThenElse (e, ilt, ile), pos) :: il ->
-        let expr, _ = translate_expression cats var_data e in
+        let expr = translate_expression cats var_data e in
         let prog_then = aux [] ilt in
         let prog_else = aux [] ile in
-        aux ((Mir.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
+        aux ((Com.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
     | (Mast.ComputeTarget tn, pos) :: il ->
-        aux ((Mir.ComputeTarget tn, pos) :: res) il
+        aux ((Com.ComputeTarget tn, pos) :: res) il
     | (Mast.VerifBlock instrs, pos) :: il ->
         let instrs' = aux [] instrs in
-        aux ((Mir.VerifBlock instrs', pos) :: res) il
+        aux ((Com.VerifBlock instrs', pos) :: res) il
     | (Mast.Print (std, args), pos) :: il ->
         let mir_args =
           List.rev
@@ -218,7 +218,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                (fun res arg ->
                  let mir_arg =
                    match Pos.unmark arg with
-                   | Mast.PrintString s -> Mir.PrintString s
+                   | Mast.PrintString s -> Com.PrintString s
                    | Mast.PrintName v -> (
                        let name =
                          match Pos.unmark v with
@@ -228,8 +228,8 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                        match StrMap.find_opt name var_data with
                        | Some var ->
                            if var.is_it then
-                             Mir.PrintName (Pos.same_pos_as name v, var)
-                           else Mir.PrintString (Pos.unmark var.name)
+                             Com.PrintName (Pos.same_pos_as var v)
+                           else Com.PrintString (Pos.unmark var.name)
                        | _ ->
                            let msg =
                              Format.sprintf "unknown variable %s" name
@@ -244,9 +244,9 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                        match StrMap.find_opt name var_data with
                        | Some var ->
                            if var.is_it then
-                             Mir.PrintAlias (Pos.same_pos_as name v, var)
+                             Com.PrintAlias (Pos.same_pos_as var v)
                            else
-                             Mir.PrintString
+                             Com.PrintString
                                (match var.alias with
                                | Some a -> Pos.unmark a
                                | None -> "")
@@ -256,15 +256,15 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
                    | Mast.PrintIndent e ->
-                       Mir.PrintIndent (translate_expression cats var_data e)
+                       Com.PrintIndent (translate_expression cats var_data e)
                    | Mast.PrintExpr (e, min, max) ->
-                       Mir.PrintExpr
+                       Com.PrintExpr
                          (translate_expression cats var_data e, min, max)
                  in
                  Pos.same_pos_as mir_arg arg :: res)
                [] args)
         in
-        aux ((Mir.Print (std, mir_args), pos) :: res) il
+        aux ((Com.Print (std, mir_args), pos) :: res) il
     | (Mast.Iterate (vn, vcats, expr, instrs), pos) :: il ->
         let var_name = Pos.unmark vn in
         let var_pos = Pos.get_position vn in
@@ -285,10 +285,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
         let catSet = Check_validity.cats_variable_from_decl_list vcats cats in
         let mir_expr = translate_expression cats var_data expr in
         let prog_it = translate_prog error_decls cats var_data instrs in
-        aux
-          ((Mir.Iterate (var.Mir.Variable.id, catSet, mir_expr, prog_it), pos)
-          :: res)
-          il
+        aux ((Com.Iterate (var, catSet, mir_expr, prog_it), pos) :: res) il
     | (Mast.Restore (rest_params, instrs), pos) :: il ->
         let vars, var_params =
           List.fold_left
@@ -298,22 +295,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                   let vars =
                     List.fold_left
                       (fun vars vn ->
-                        let var_name = Pos.unmark vn in
-                        let var_pos = Pos.get_position vn in
-                        match StrMap.find_opt var_name var_data with
-                        | Some v -> begin
-                            match Mir.VariableMap.find_opt v vars with
-                            | None -> Mir.VariableMap.add v var_pos vars
-                            | Some old_pos ->
-                                Errors.raise_spanned_error
-                                  (Format.asprintf
-                                     "variable already specified %a"
-                                     Pos.format_position old_pos)
-                                  var_pos
-                          end
-                        | None ->
-                            Errors.raise_spanned_error "unknown variable"
-                              var_pos)
+                        StrMap.find (Pos.unmark vn) var_data :: vars)
                       vars vl
                   in
                   (vars, var_params)
@@ -340,19 +322,18 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
                   let mir_expr = translate_expression cats var_data expr in
                   let var_params = (var, catSet, mir_expr) :: var_params in
                   (vars, var_params))
-            (Mir.VariableMap.empty, [])
-            rest_params
+            ([], []) rest_params
         in
         let prog_rest = translate_prog error_decls cats var_data instrs in
-        aux ((Mir.Restore (vars, var_params, prog_rest), pos) :: res) il
+        aux ((Com.Restore (vars, var_params, prog_rest), pos) :: res) il
     | (Mast.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) error_decls in
         let var_res = Option.map Pos.unmark var_opt in
-        aux ((Mir.RaiseError (err_decl, var_res), pos) :: res) il
-    | (Mast.CleanErrors, pos) :: il -> aux ((Mir.CleanErrors, pos) :: res) il
-    | (Mast.ExportErrors, pos) :: il -> aux ((Mir.ExportErrors, pos) :: res) il
+        aux ((Com.RaiseError (err_decl, var_res), pos) :: res) il
+    | (Mast.CleanErrors, pos) :: il -> aux ((Com.CleanErrors, pos) :: res) il
+    | (Mast.ExportErrors, pos) :: il -> aux ((Com.ExportErrors, pos) :: res) il
     | (Mast.FinalizeErrors, pos) :: il ->
-        aux ((Mir.FinalizeErrors, pos) :: res) il
+        aux ((Com.FinalizeErrors, pos) :: res) il
     | (Mast.ComputeDomain _, _) :: _
     | (Mast.ComputeChaining _, _) :: _
     | (Mast.ComputeVerifs (_, _), _) :: _ ->
@@ -360,7 +341,7 @@ let rec translate_prog (error_decls : Mir.Error.t StrMap.t)
   in
   aux [] prog
 
-let get_targets (error_decls : Mir.Error.t StrMap.t)
+let get_targets (error_decls : Com.Error.t StrMap.t)
     (cats : Com.cat_variable_data Com.CatVarMap.t)
     (var_data : Mir.Variable.t StrMap.t) (ts : Mast.target StrMap.t) :
     Mir.target_data Mir.TargetMap.t =

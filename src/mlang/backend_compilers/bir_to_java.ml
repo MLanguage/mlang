@@ -208,8 +208,8 @@ let rec generate_stmts (program : program) (oc : Format.formatter)
 and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
     unit =
   match Pos.unmark stmt with
-  | SAssign (_var, _vi, _ve) -> assert false
-  | SConditional (cond, tt, ff) ->
+  | Affectation (_var, _vi, _ve) -> assert false
+  | IfThenElse (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
         String.map
@@ -225,41 +225,39 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
       Format.fprintf oc
         "MValue %s = %s;@,@[<hv 2>if (m_is_defined_true(%s)) {@,%a@]@,}"
         cond_name
-        (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) in
+        (let s, _ = generate_java_expr cond in
          s)
         cond_name (generate_stmts program) tt;
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
-  | SVerifBlock s -> generate_stmts program oc s
-  | SFunctionCall (f, _) ->
+  | VerifBlock s -> generate_stmts program oc s
+  | ComputeTarget (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
-  | SPrint (std, args) ->
+  | Print (std, args) ->
       let print_std =
-        match std with
-        | Mast.StdOut -> "System.out"
-        | Mast.StdErr -> "System.err"
+        match std with StdOut -> "System.out" | StdErr -> "System.err"
       in
       List.iter
         (function
-          | Mir.PrintString s ->
+          | Com.PrintString s ->
               Format.fprintf oc "%s(\"%%s\", %s);@," print_std s
-          | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
+          | Com.PrintName (_, pos) | Com.PrintAlias (_, pos) ->
               Errors.raise_spanned_error "not implemented yet !!!" pos
-          | Mir.PrintIndent _e ->
+          | Com.PrintIndent _e ->
               Errors.raise_spanned_error "not implemented yet !!!"
                 (Pos.get_position stmt)
-          | Mir.PrintExpr (e, _, _) ->
+          | Com.PrintExpr (e, _, _) ->
               Format.fprintf oc "cond = %s;@,%s(\"%%s\", cond.toString());@,"
                 (fst (generate_java_expr e))
                 print_std)
-        args
-  | SIterate _ ->
+        (List.map Pos.unmark args)
+  | Iterate _ ->
       Errors.raise_spanned_error "iterators not implemented in Java"
         (Pos.get_position stmt)
-  | SRestore _ ->
+  | Restore _ ->
       Errors.raise_spanned_error "restorators not implemented in Java"
         (Pos.get_position stmt)
-  | SRaiseError _ | SCleanErrors | SExportErrors | SFinalizeErrors ->
+  | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
       Errors.raise_spanned_error "errors not implemented in Java"
         (Pos.get_position stmt)
 

@@ -380,17 +380,16 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
     =
   match Pos.unmark stmt with
-  | SAssign (var, vidx_opt, vexpr) ->
+  | Affectation (var, vidx_opt, vexpr) ->
       Format.fprintf oc "@[<v 2>{@,";
       generate_var_def dgfip_flags var_indexes var vidx_opt vexpr oc;
       Format.fprintf oc "@]@,}"
-  | SConditional (cond, iftrue, iffalse) ->
+  | IfThenElse (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
       let cond_val = fresh_c_local "mpp_cond" in
       let cond_def = cond_val ^ "_d" in
       let locals, def, value =
-        D.build_expression
-        @@ generate_c_expr (Pos.same_pos_as cond stmt) var_indexes
+        D.build_expression @@ generate_c_expr cond var_indexes
       in
       Format.fprintf oc "char %s;@;double %s;@;%a%a@;%a" cond_def cond_val
         D.format_local_declarations locals
@@ -406,7 +405,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           (generate_stmts dgfip_flags program var_indexes)
           iffalse;
       Format.fprintf oc "@]@,}"
-  | SVerifBlock stmts ->
+  | VerifBlock stmts ->
       let goto_label = fresh_c_local "verif_block" in
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@\n";
@@ -421,36 +420,37 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       pr "#endif@\n";
       pr "%a@\n" (generate_stmts dgfip_flags program var_indexes) stmts;
       pr "%s:;@]@\n}@\n" goto_label
-  | SFunctionCall (f, _) -> Format.fprintf oc "%s(irdata);" f
-  | SPrint (std, args) ->
+  | ComputeTarget (f, _) -> Format.fprintf oc "%s(irdata);" f
+  | Print (std, args) ->
       let print_std, pr_ctx =
         match std with
-        | Mast.StdOut -> ("stdout", "&(irdata->ctx_pr_out)")
-        | Mast.StdErr -> ("stderr", "&(irdata->ctx_pr_err)")
+        | StdOut -> ("stdout", "&(irdata->ctx_pr_out)")
+        | StdErr -> ("stderr", "&(irdata->ctx_pr_err)")
       in
       let print_val = fresh_c_local "mpp_print" in
       let print_def = print_val ^ "_d" in
       Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
-        (function
-          | Mir.PrintString s ->
+        (fun (arg : Mir.Variable.t Com.print_arg Pos.marked) ->
+          match Pos.unmark arg with
+          | PrintString s ->
               Format.fprintf oc "print_string(%s, %s, \"%s\");@;" print_std
                 pr_ctx (str_escape s)
-          | Mir.PrintName (_, var) -> begin
+          | PrintName (var, _) -> begin
               match Mir.VariableMap.find var var_indexes with
               | Dgfip_varid.VarIterate (t, _, _) ->
                   Format.fprintf oc "print_string(%s, %s, %s->name);@;"
                     print_std pr_ctx t
               | _ -> assert false
             end
-          | Mir.PrintAlias (_, var) -> begin
+          | PrintAlias (var, _) -> begin
               match Mir.VariableMap.find var var_indexes with
               | Dgfip_varid.VarIterate (t, _, _) ->
                   Format.fprintf oc "print_string(%s, %s, %s->alias);@;"
                     print_std pr_ctx t
               | _ -> assert false
             end
-          | Mir.PrintIndent e ->
+          | PrintIndent e ->
               let locals, def, value =
                 D.build_expression @@ generate_c_expr e var_indexes
               in
@@ -464,7 +464,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
               Format.fprintf oc "set_print_indent(%s, %s, %s);@]@;" print_std
                 pr_ctx print_val;
               Format.fprintf oc "}@;"
-          | Mir.PrintExpr (e, min, max) ->
+          | PrintExpr (e, min, max) ->
               let locals, def, value =
                 D.build_expression @@ generate_c_expr e var_indexes
               in
@@ -482,7 +482,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
                 print_std pr_ctx)
         args;
       Format.fprintf oc "@]@;}@;"
-  | SIterate (var, vcs, expr, stmts) ->
+  | Iterate (var, vcs, expr, stmts) ->
       let it_name = fresh_c_local "iterate" in
       Com.CatVarSet.iter
         (fun vc ->
@@ -503,8 +503,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           let cond_val = "cond_" ^ it_name in
           let cond_def = cond_val ^ "_d" in
           let locals, def, value =
-            D.build_expression
-            @@ generate_c_expr (Pos.same_pos_as expr stmt) var_indexes
+            D.build_expression @@ generate_c_expr expr var_indexes
           in
           Format.fprintf oc "char %s;@;double %s;@;@[<v 2>{@;%a%a@;%a@]@;}@;"
             cond_def cond_val D.format_local_declarations locals
@@ -520,11 +519,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           Format.fprintf oc "@]}@;";
           Format.fprintf oc "@]}@;")
         vcs
-  | SRestore (vars, var_params, stmts) ->
+  | Restore (vars, var_params, stmts) ->
       Format.fprintf oc "@[<v 2>{@;";
       let rest_name = fresh_c_local "restore" in
       Format.fprintf oc "T_env_sauvegarde *%s = NULL;@;" rest_name;
-      Mir.VariableSet.iter
+      List.iter
         (fun v ->
           Format.fprintf oc "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name
             (Dgfip_varid.gen_access_def_pointer var_indexes v)
@@ -554,8 +553,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
               let cond_val = "cond_" ^ it_name in
               let cond_def = cond_val ^ "_d" in
               let locals, def, value =
-                D.build_expression
-                @@ generate_c_expr (Pos.same_pos_as expr stmt) var_indexes
+                D.build_expression @@ generate_c_expr expr var_indexes
               in
               Format.fprintf oc
                 "char %s;@;double %s;@;@[<v 2>{@;%a%a@;%a@]@;}@;" cond_def
@@ -580,17 +578,17 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
         stmts;
       Format.fprintf oc "env_restaurer(&%s);@;" rest_name;
       Format.fprintf oc "@]}@;"
-  | SRaiseError (err, var_opt) ->
-      let err_name = Pos.unmark err.Mir.Error.name in
+  | RaiseError (err, var_opt) ->
+      let err_name = Pos.unmark err.Com.Error.name in
       let code =
         match var_opt with
         | Some var -> Format.sprintf "\"%s\"" var
         | None -> "NULL"
       in
       Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
-  | SCleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
-  | SExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
-  | SFinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
+  | CleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
+  | ExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
+  | FinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
@@ -628,8 +626,8 @@ let generate_var_tmp_decls (oc : Format.formatter)
   if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,"
 
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (f : Bir.function_name) =
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (f : string)
+    =
   let { tmp_vars; stmts; _ } = Mir.TargetMap.find f program.targets in
   Format.fprintf oc "@[<v 2>%a{@,%a%s@\n%a%s@\n%s@]@,}@,"
     (generate_target_prototype false)
