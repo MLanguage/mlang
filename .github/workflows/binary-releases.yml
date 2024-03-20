@@ -22,50 +22,50 @@ jobs:
 #          release_name: Release ${{ github.run_number }}
 
 
-  macos-build:
-    runs-on: macos-latest
-    # needs: create-release
-
-    steps:
-     - uses: actions/checkout@v2
-
-     - name: Opam modules cache
-       uses: actions/cache@v1
-       env:
-          cache-name: cache-opam-modules
-       with:
-          path: ~/.opam
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
-     - name: Set up OCaml
-       uses: ocaml/setup-ocaml@v2
-       with:
-          ocaml-compiler: 4.11.2
-
-     - name: Install dependencies
-       run: |
-            brew install gmp mpfr
-            opam update
-            make init-without-switch
-
-     - name: Make mlang binary
-       run: |
-          eval $(opam env)
-          make build
-
-    #  - name: Upload release asset
-    #   uses: actions/upload-release-asset@v1
-    #   env:
-    #      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #      upload_url: ${{ needs.create-release.outputs.upload_url }}
-    #      asset_path: ./_build/default/src/main.exe
-    #      asset_name: mlang-macos-v${{ github.run_number }}.exe
-    #      asset_content_type: application/octet-stream
+#  macos-build:
+#    runs-on: macos-latest
+#    needs: create-release
+#
+#    steps:
+#     - uses: actions/checkout@v2
+#
+#     - name: Opam modules cache
+#       uses: actions/cache@v1
+#       env:
+#          cache-name: cache-opam-modules
+#       with:
+#          path: ~/.opam
+#          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ env.cache-name }}-
+#            ${{ runner.os }}-build-
+#            ${{ runner.os }}-
+#
+#     - name: Set up OCaml
+#       uses: ocaml/setup-ocaml@v2
+#       with:
+#          ocaml-compiler: 4.11.2
+#
+#     - name: Install dependencies
+#       run: |
+#            brew install gmp mpfr
+#            opam update
+#            make init-without-switch
+#
+#     - name: Make mlang binary
+#       run: |
+#          eval $(opam env)
+#          make build
+#
+#     - name: Upload release asset
+#      uses: actions/upload-release-asset@v1
+#      env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      with:
+#         upload_url: ${{ needs.create-release.outputs.upload_url }}
+#         asset_path: ./_build/default/src/main.exe
+#         asset_name: mlang-macos-v${{ github.run_number }}.exe
+#         asset_content_type: application/octet-stream
 
   linux-build:
     # The type of runner that the job will run on
