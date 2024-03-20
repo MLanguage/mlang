@@ -1,3 +1,8 @@
+(env
+ (static
+  (flags
+   (:standard -cclib -static -cclib -no-pie))))
+
 (ocamllex irj_lexer)
 
 (menhir
