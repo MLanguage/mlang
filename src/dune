@@ -3,13 +3,17 @@
   (flags
    (:standard -warn-error -A))))
 
+(rule
+ (with-stdout-to
+  linking-flags-mlang.sexp
+  (run ./gen-linking-flags.sh %{env:LINKING_MODE=dynamic}
+    %{ocaml-config:system})))
+
 (executable
  (name main)
  (package mlang)
  (public_name mlang)
- (libraries mlang)
  (flags
-  (:standard -verbose -noautolink -cclib -Wl,-Bstatic -cclib -lgmp_caml
-    -cclib -lmpfr -cclib -lgmp -cclib -lcamlidl -cclib -lnums -cclib
-    -lthreadsnat -cclib -lparmap_stubs -cclib -lANSITerminal_stubs -cclib
-    -Wl,-Bdynamic -cclib -lpthread -cclib -lunix -cclib -ldl)))
+  (:standard
+   (:include linking-flags-mlang.sexp)))
+ (libraries mlang))

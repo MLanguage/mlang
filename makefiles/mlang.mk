@@ -48,13 +48,12 @@ dune: FORCE
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	dune build $(DUNE_OPTIONS)
+	LINKING_MODE=$(LINKING_MODE) dune build $(DUNE_OPTIONS)
 endif
 
 build: FORCE | format dune
 
-# Run only in an opam switch with musl and static options activated
-build-static: DUNE_OPTIONS+=--profile=static 
+build-static: LINKING_MODE=static
 build-static: FORCE build
 
 ##################################################
