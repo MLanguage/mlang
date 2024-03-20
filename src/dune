@@ -6,8 +6,7 @@
 (rule
  (with-stdout-to
   linking-flags-mlang.sexp
-  (run ./gen-linking-flags.sh %{env:LINKING_MODE=dynamic}
-    %{ocaml-config:system})))
+  (run ./gen-linking-flags.sh %{env:LINKING_MODE=} %{ocaml-config:system})))
 
 (executable
  (name main)
