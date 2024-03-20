@@ -1,7 +1,7 @@
 (env
  (static
-  (ocamlopt_flags
-   (-ccopt -static -O3 -cclib -static -cclib -no-pie)))
+  (flags
+   (:standard -cclib -static)))
  (dev
   (flags
    (:standard -warn-error -A))))
