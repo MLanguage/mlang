@@ -1,7 +1,7 @@
 (env
  (static
   (flags
-   (:standard -cclib -static))))
+   (:standard -cclib -static -cclib -no-pie))))
 
 (include_subdirs unqualified)
 

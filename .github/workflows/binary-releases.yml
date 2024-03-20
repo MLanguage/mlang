@@ -81,10 +81,20 @@ jobs:
         with:
           branch: v3.15
           packages: >
-            findutils 
+            findutils
+            make 
+            curl 
+            git 
+            sudo 
+            patch 
+            rsync 
+            m4
+            gcc 
+            libc-dev 
             gmp-dev 
             mpfr-dev 
             perl
+            coreutils
 
       - name: Opam modules cache
         uses: actions/cache@v1
@@ -99,32 +109,21 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      # TODO : Cache gmp and mpfr builds
-
-      - name: Set up OCaml
-        uses: ocaml/setup-ocaml@v2
-        with:
-          # Version of the OCaml compiler to initialise
-          ocaml-compiler: ocaml-variants.4.11.2+options,ocaml-option-flambda,ocaml-option-musl,ocaml-option-static
-
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install m4 perl python3 clang git build-essential lzip
-          # We pull GMP and MPFR from their sources and build them with MUSL
-          # in order to get a static.
-          wget https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.lz && tar xaf gmp-6.2.1.tar.lz
-          ( cd gmp-6.2.1; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix && make && make install )
-          wget https://www.mpfr.org/mpfr-4.1.0/mpfr-4.1.0.tar.xz && tar xaf mpfr-4.1.0.tar.xz
-          ( cd mpfr-4.1.0; CC=musl-gcc ./configure --prefix /tmp/gmp-prefix -with-gmp=/tmp/gmp-prefix && make && make install )
-          eval $(opam env)
-          opam update
-          CPPFLAGS=-I/tmp/gmp-prefix/include LDFLAGS=-L/tmp/gmp-prefix/lib make init-without-switch
-
+          curl -L https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-x86_64-linux > opam
+          install opam /usr/local/bin/opam
+          rm -rf opam
+          opam init --yes --disable-sandboxing --compiler=4.11.2 --shell-setup
+          eval $(opam env --switch=4.11.2)
+          opam install . --deps-only 
+        shell: alpine.sh {0}
+      
       - name: Make mlang binary
         run: |
           eval $(opam env)
           make build-static
+        shell: alpine.sh {0}
 
     #  - name: Upload release asset
     #    uses: actions/upload-release-asset@v1
