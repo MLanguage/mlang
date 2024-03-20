@@ -80,21 +80,21 @@ type func =
   | VerifNumber
   | ComplNumber
 
-type 'v expression_ =
-  | TestInSet of bool * 'v m_expression_ * 'v set_value list
+type 'v expression =
+  | TestInSet of bool * 'v m_expression * 'v set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Unop of unop * 'v m_expression_
-  | Comparison of comp_op Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Binop of binop Pos.marked * 'v m_expression_ * 'v m_expression_
-  | Index of 'v Pos.marked * 'v m_expression_
-  | Conditional of 'v m_expression_ * 'v m_expression_ * 'v m_expression_ option
-  | FuncCall of func Pos.marked * 'v m_expression_ list
+  | Unop of unop * 'v m_expression
+  | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
+  | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
+  | Index of 'v Pos.marked * 'v m_expression
+  | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
+  | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
-      func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression_
+      func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
   | Literal of literal
   | Var of 'v
-  | Loop of 'v loop_variables Pos.marked * 'v m_expression_
+  | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of CatVarSet.t Pos.marked
   | Attribut of 'v Pos.marked * string Pos.marked
@@ -104,7 +104,55 @@ type 'v expression_ =
   | NbInformatives
   | NbBloquantes
 
-and 'v m_expression_ = 'v expression_ Pos.marked
+and 'v m_expression = 'v expression Pos.marked
+
+module Error : sig
+  type typ = Anomaly | Discordance | Information
+
+  val compare_typ : typ -> typ -> int
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    kind : string Pos.marked;
+    major_code : string Pos.marked;
+    minor_code : string Pos.marked;
+    description : string Pos.marked;
+    isisf : string Pos.marked;
+    typ : typ;
+  }
+
+  val pp_descr : Pp.t -> t -> unit
+
+  val compare : t -> t -> int
+end
+
+type print_std = StdOut | StdErr
+
+type 'v print_arg =
+  | PrintString of string
+  | PrintName of 'v Pos.marked
+  | PrintAlias of 'v Pos.marked
+  | PrintIndent of 'v m_expression
+  | PrintExpr of 'v m_expression * int * int
+
+type 'v instruction =
+  | Affectation of 'v * (int * 'v m_expression) option * 'v m_expression
+  | IfThenElse of
+      'v m_expression * 'v m_instruction list * 'v m_instruction list
+  | ComputeTarget of string Pos.marked
+  | VerifBlock of 'v m_instruction list
+  | Print of print_std * 'v print_arg Pos.marked list
+  | Iterate of 'v * CatVarSet.t * 'v m_expression * 'v m_instruction list
+  | Restore of
+      'v list
+      * ('v * CatVarSet.t * 'v m_expression) list
+      * 'v m_instruction list
+  | RaiseError of Error.t * string option
+  | CleanErrors
+  | ExportErrors
+  | FinalizeErrors
+
+and 'v m_instruction = 'v instruction Pos.marked
 
 val pp_cat_variable : Pp.t -> cat_variable -> unit
 
@@ -127,4 +175,11 @@ val format_set_value : (Pp.t -> 'v -> unit) -> Pp.t -> 'v set_value -> unit
 
 val format_func : Pp.t -> func -> unit
 
-val format_expression : (Pp.t -> 'v -> unit) -> Pp.t -> 'v expression_ -> unit
+val format_expression : (Pp.t -> 'v -> unit) -> Pp.t -> 'v expression -> unit
+
+val format_print_arg : (Pp.t -> 'v -> unit) -> Pp.t -> 'v print_arg -> unit
+
+val format_instruction : (Pp.t -> 'v -> unit) -> Pp.t -> 'v instruction -> unit
+
+val format_instructions :
+  (Pp.t -> 'v -> unit) -> Pp.t -> 'v m_instruction list -> unit

@@ -754,9 +754,9 @@ error_:
   }
 
 type_error:
-| ANOMALY { Anomaly }
-| DISCORDANCE { Discordance }
-| INFORMATIVE { Information }
+| ANOMALY { Com.Error.Anomaly }
+| DISCORDANCE { Com.Error.Discordance }
+| INFORMATIVE { Com.Error.Information }
 
 
 output_etc:
