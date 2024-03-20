@@ -6,95 +6,74 @@ on:
   workflow_dispatch:
 
 jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create-new-release.outputs.upload_url }}
+    steps:
+      - name: Create GitHub release
+        id: create-new-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
 
-#  create-release:
-#    runs-on: ubuntu-latest
-#    outputs:
-#      upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-#    steps:
-#      - name: Create GitHub release
-#        id: create-new-release
-#        uses: actions/create-release@v1
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          tag_name: ${{ github.run_number }}
-#          release_name: Release ${{ github.run_number }}
+  macos-build:
+    runs-on: macos-latest
+    needs: create-release
 
+    steps:
+      - uses: actions/checkout@v2
 
-#  macos-build:
-#    runs-on: macos-latest
-#    needs: create-release
-#
-#    steps:
-#     - uses: actions/checkout@v2
-#
-#     - name: Opam modules cache
-#       uses: actions/cache@v1
-#       env:
-#          cache-name: cache-opam-modules
-#       with:
-#          path: ~/.opam
-#          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
-#          restore-keys: |
-#            ${{ runner.os }}-build-${{ env.cache-name }}-
-#            ${{ runner.os }}-build-
-#            ${{ runner.os }}-
-#
-#     - name: Set up OCaml
-#       uses: ocaml/setup-ocaml@v2
-#       with:
-#          ocaml-compiler: 4.11.2
-#
-#     - name: Install dependencies
-#       run: |
-#            brew install gmp mpfr
-#            opam update
-#            make init-without-switch
-#
-#     - name: Make mlang binary
-#       run: |
-#          eval $(opam env)
-#          make build
-#
-#     - name: Upload release asset
-#      uses: actions/upload-release-asset@v1
-#      env:
-#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#      with:
-#         upload_url: ${{ needs.create-release.outputs.upload_url }}
-#         asset_path: ./_build/default/src/main.exe
-#         asset_name: mlang-macos-v${{ github.run_number }}.exe
-#         asset_content_type: application/octet-stream
+      - name: Opam modules cache
+        uses: actions/cache@v1
+        env:
+          cache-name: cache-opam-modules
+        with:
+          path: ~/.opam
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('mlang.opam', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.11.2
+
+      - name: Install dependencies
+        run: |
+          brew install gmp mpfr
+          opam update
+          make init-without-switch
+
+      - name: Make mlang binary
+        run: |
+          eval $(opam env)
+          make build
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./_build/default/src/main.exe
+          asset_name: mlang-macos-v${{ github.run_number }}.exe
+          asset_content_type: application/octet-stream
 
   linux-build:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    # needs: create-release
+    needs: create-release
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-
-      - uses: jirutka/setup-alpine@v1
-        with:
-          branch: v3.15
-          packages: >
-            findutils
-            make 
-            curl 
-            git 
-            sudo 
-            patch 
-            rsync 
-            m4
-            gcc 
-            libc-dev 
-            gmp-dev 
-            mpfr-dev 
-            perl
-            coreutils
 
       - name: Opam modules cache
         uses: actions/cache@v1
@@ -109,28 +88,33 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
+      # TODO : Cache gmp and mpfr builds
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          # Version of the OCaml compiler to initialise
+          ocaml-compiler: 4.11.2
+
       - name: Install dependencies
         run: |
-          curl -L https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-x86_64-linux > opam
-          install opam /usr/local/bin/opam
-          rm -rf opam
-          opam init --yes --disable-sandboxing --compiler=4.11.2 --shell-setup
-          eval $(opam env --switch=4.11.2)
-          opam install . --deps-only 
-        shell: alpine.sh {0}
-      
+          sudo apt update
+          sudo apt install m4 perl python3 clang git build-essential lzip libgmp-dev libmpfr-dev
+          eval $(opam env)
+          opam update
+          make init-without-switch
+
       - name: Make mlang binary
         run: |
           eval $(opam env)
           make build-static
-        shell: alpine.sh {0}
 
-    #  - name: Upload release asset
-    #    uses: actions/upload-release-asset@v1
-    #    env:
-    #      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #    with:
-    #      upload_url: ${{ needs.create-release.outputs.upload_url }}
-    #      asset_path: ./_build/default/src/main.exe
-    #      asset_name: mlang-linux-v${{ github.run_number }}.exe
-    #      asset_content_type: application/octet-stream
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./_build/default/src/main.exe
+          asset_name: mlang-linux-v${{ github.run_number }}.exe
+          asset_content_type: application/octet-stream
