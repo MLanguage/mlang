@@ -279,6 +279,14 @@ module Err = struct
   let variable_with_forbidden_category pos =
     let msg = Format.sprintf "variable with forbidden category in verif" in
     Errors.raise_spanned_error msg pos
+
+  let variable_already_specified name old_pos pos =
+    let msg =
+      Format.asprintf
+        "variable \"%s\" specified more than once: already specified %a" name
+        Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
@@ -324,7 +332,7 @@ type program = {
   prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
   prog_vars : Mir.Variable.t StrMap.t;
   prog_alias : Mir.Variable.t StrMap.t;
-  prog_errors : Mir.Error.t StrMap.t;
+  prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
@@ -588,6 +596,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
             typ = Option.map Pos.unmark input_var.Mast.input_typ;
             is_temp = false;
             is_it = false;
+            loc = Mir.Variable.init_loc;
           }
       in
       check_global_var var prog
@@ -626,6 +635,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
             typ = Option.map Pos.unmark comp_var.Mast.comp_typ;
             is_temp = false;
             is_it = false;
+            loc = Mir.Variable.init_loc;
           }
       in
       check_global_var var prog
@@ -641,7 +651,7 @@ let check_error (error : Mast.error_) (prog : program) : program =
     | None -> ("", Pos.no_pos)
   in
   let err =
-    Mir.Error.
+    Com.Error.
       {
         name = error.Mast.error_name;
         typ = Pos.unmark error.Mast.error_typ;
@@ -753,6 +763,51 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let doms, syms = check_domain Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
+
+let complete_vars (prog : program) : program =
+  let module CatLoc = struct
+    type t = Com.cat_variable_loc
+
+    let pp fmt (loc : t) =
+      match loc with
+      | Com.LocCalculated -> Format.fprintf fmt "calculee"
+      | Com.LocBase -> Format.fprintf fmt "base"
+      | Com.LocInput -> Format.fprintf fmt "saisie"
+
+    let compare x y = compare x y
+  end in
+  let module CatLocMap = struct
+    include MapExt.Make (CatLoc)
+
+    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end in
+  let loc_vars =
+    let fold _ (var : Mir.Variable.t) (loc_vars, n) =
+      let var = { var with loc = { var.loc with loc_int = n } } in
+      let upd = function
+        | None -> Some (Mir.VariableSet.singleton var)
+        | Some set -> Some (Mir.VariableSet.add var set)
+      in
+      let loc_vars = CatLocMap.update var.loc.loc_cat upd loc_vars in
+      (loc_vars, n + 1)
+    in
+    (CatLocMap.empty, 0) |> StrMap.fold fold prog.prog_vars |> fst
+  in
+  let update_loc loc_cat (var : Mir.Variable.t) (vars, n) =
+    let loc = Mir.{ var.loc with loc_id = var.id; loc_cat; loc_idx = n } in
+    let vars = StrMap.add var.id { var with loc } vars in
+    (vars, n + 1)
+  in
+  let prog_vars =
+    CatLocMap.fold
+      (fun loc_cat vars prog_vars ->
+        (prog_vars, 0) |> Mir.VariableSet.fold (update_loc loc_cat) vars |> fst)
+      loc_vars StrMap.empty
+  in
+  { prog with prog_vars }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1225,39 +1280,49 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Mast.Restore (rest_params, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            List.iter
-              (fun rest_param ->
-                match Pos.unmark rest_param with
-                | Mast.VarList vl ->
-                    List.iter
-                      (fun (vn, vpos) ->
-                        let var = (Mast.Normal vn, vpos) in
-                        ignore (check_variable var Both env))
-                      vl
-                | Mast.VarCats (vn, vcats, expr) ->
-                    let var_name, var_pos = vn in
-                    (match StrMap.find_opt var_name env.prog.prog_vars with
-                    | Some Mir.Variable.{ name = _, old_pos; _ } ->
-                        Err.variable_already_declared var_name old_pos var_pos
-                    | None -> ());
-                    (match StrMap.find_opt var_name env.tmp_vars with
-                    | Some (_, old_pos) ->
-                        Err.variable_already_declared var_name old_pos var_pos
-                    | None -> ());
-                    (match StrMap.find_opt var_name env.it_vars with
-                    | Some old_pos ->
-                        Err.variable_already_declared var_name old_pos var_pos
-                    | None -> ());
-                    ignore
-                      (cats_variable_from_decl_list vcats env.prog.prog_var_cats);
-                    let env =
-                      {
-                        env with
-                        it_vars = StrMap.add var_name var_pos env.it_vars;
-                      }
-                    in
-                    ignore (check_expression false expr env))
-              rest_params;
+            ignore
+              (List.fold_left
+                 (fun seen rest_param ->
+                   match Pos.unmark rest_param with
+                   | Mast.VarList vl ->
+                       List.fold_left
+                         (fun seen (vn, vpos) ->
+                           let var = (Mast.Normal vn, vpos) in
+                           ignore (check_variable var Both env);
+                           match StrMap.find_opt vn seen with
+                           | None -> StrMap.add vn vpos seen
+                           | Some old_pos ->
+                               Err.variable_already_specified vn old_pos vpos)
+                         seen vl
+                   | Mast.VarCats (vn, vcats, expr) ->
+                       let var_name, var_pos = vn in
+                       (match StrMap.find_opt var_name env.prog.prog_vars with
+                       | Some Mir.Variable.{ name = _, old_pos; _ } ->
+                           Err.variable_already_declared var_name old_pos
+                             var_pos
+                       | None -> ());
+                       (match StrMap.find_opt var_name env.tmp_vars with
+                       | Some (_, old_pos) ->
+                           Err.variable_already_declared var_name old_pos
+                             var_pos
+                       | None -> ());
+                       (match StrMap.find_opt var_name env.it_vars with
+                       | Some old_pos ->
+                           Err.variable_already_declared var_name old_pos
+                             var_pos
+                       | None -> ());
+                       ignore
+                         (cats_variable_from_decl_list vcats
+                            env.prog.prog_var_cats);
+                       let env =
+                         {
+                           env with
+                           it_vars = StrMap.add var_name var_pos env.it_vars;
+                         }
+                       in
+                       ignore (check_expression false expr env);
+                       seen)
+                 StrMap.empty rest_params);
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env
             in
@@ -1731,7 +1796,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             match StrMap.find_opt err_name prog.prog_errors with
             | None -> Err.unknown_error err_pos
             | Some err -> (
-                match err.typ with Mast.Anomaly -> true | _ -> false)
+                match err.typ with Com.Error.Anomaly -> true | _ -> false)
           in
           (match verif_var with
           | Some (var_name, var_pos) -> (
@@ -2118,6 +2183,6 @@ let proceed (p : Mast.program) : program =
           prog source_file)
       (empty_program p app) p
   in
-  prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
-  |> complete_rule_domains |> complete_chainings |> convert_verifs
-  |> complete_verif_calls
+  prog |> complete_vars |> complete_rdom_decls |> complete_vdom_decls
+  |> convert_rules |> complete_rule_domains |> complete_chainings
+  |> convert_verifs |> complete_verif_calls

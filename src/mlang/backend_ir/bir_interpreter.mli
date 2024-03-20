@@ -32,7 +32,7 @@ type var_literal =
 type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
-  | InsideFunction of Bir.function_name
+  | InsideFunction of string
   | InsideIterate of Mir.Variable.t
 
 val format_code_location_segment :
@@ -88,23 +88,23 @@ module type S = sig
   type print_ctx = { indent : int; is_newline : bool }
 
   type ctx = {
-    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
+    ctx_tgv : var_value Array.t;
     ctx_vars : var_value Mir.VariableMap.t;
     ctx_it : Mir.Variable.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
-    ctx_anos : (Mir.error * string option) list;
+    ctx_anos : (Com.Error.t * string option) list;
     ctx_old_anos : StrSet.t;
     ctx_nb_anos : int;
     ctx_nb_discos : int;
     ctx_nb_infos : int;
     ctx_nb_bloquantes : int;
-    ctx_finalized_anos : (Mir.error * string option) list;
-    ctx_exported_anos : (Mir.error * string option) list;
+    ctx_finalized_anos : (Com.Error.t * string option) list;
+    ctx_exported_anos : (Com.Error.t * string option) list;
   }
   (** Interpretation context *)
 
-  val empty_ctx : ctx
+  val empty_ctx : Mir.program -> ctx
 
   val literal_to_value : Com.literal -> value
 

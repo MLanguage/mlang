@@ -55,7 +55,7 @@ type program = {
   prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
   prog_vars : Mir.Variable.t StrMap.t;
   prog_alias : Mir.Variable.t StrMap.t;
-  prog_errors : Mir.Error.t StrMap.t;
+  prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;

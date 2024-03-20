@@ -24,9 +24,9 @@ let format_variable fmt (var : Mir.Variable.t) =
 
 let format_expression = Com.format_expression format_variable
 
-let format_error fmt (e : Error.t) =
-  Format.fprintf fmt "erreur %s (%s)" (Pos.unmark e.Error.name)
-    (Error.err_descr_string e |> Pos.unmark)
+let format_error fmt (err : Com.Error.t) =
+  Format.fprintf fmt "erreur %s (%a)" (Pos.unmark err.name) Com.Error.pp_descr
+    err
 
 let format_variable fmt (v : Variable.t) =
   Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Pos.unmark v.descr)

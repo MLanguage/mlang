@@ -14,28 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type function_name = string
-
-and stmt = stmt_kind Pos.marked
-
-and stmt_kind =
-  | SAssign of
-      Mir.Variable.t
-      * (int * Mir.expression Pos.marked) option
-      * Mir.expression Pos.marked
-  | SConditional of Mir.expression * stmt list * stmt list
-  | SVerifBlock of stmt list
-  | SFunctionCall of function_name * Mir.Variable.t list
-  | SPrint of Mast.print_std * Mir.Variable.t Mir.print_arg list
-  | SIterate of Mir.Variable.t * Com.CatVarSet.t * Mir.expression * stmt list
-  | SRestore of
-      Mir.VariableSet.t
-      * (Mir.Variable.t * Com.CatVarSet.t * Mir.expression) list
-      * stmt list
-  | SRaiseError of Mir.error * string option
-  | SCleanErrors
-  | SExportErrors
-  | SFinalizeErrors
+type stmt = Mir.Variable.t Com.m_instruction
 
 type target_function = {
   file : string option;
@@ -45,7 +24,7 @@ type target_function = {
 
 type program = {
   targets : target_function Mir.TargetMap.t;
-  main_function : function_name;
+  main_function : string;
   mir_program : Mir.program;
 }
 
@@ -54,17 +33,21 @@ let main_statements (p : program) : stmt list =
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
 
+let format_program fmt (p : program) =
+  let format_stmts = Com.format_instructions Format_mir.format_variable in
+  Format.fprintf fmt "%a" format_stmts (main_statements p)
+
 let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
   List.rev
     (List.fold_left
        (fun acc stmt ->
          match Pos.unmark stmt with
-         | SConditional (e, b1, b2) ->
+         | Com.IfThenElse (e, b1, b2) ->
              let b1 = remove_empty_conditionals b1 in
              let b2 = remove_empty_conditionals b2 in
              if List.length b1 = 0 && List.length b2 = 0 then acc
                (* empty conditional, we can discard it *)
-             else Pos.same_pos_as (SConditional (e, b1, b2)) stmt :: acc
+             else Pos.same_pos_as (Com.IfThenElse (e, b1, b2)) stmt :: acc
          | _ -> stmt :: acc)
        [] stmts)
 

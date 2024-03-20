@@ -20,16 +20,20 @@
 
 (** Variables are first-class objects *)
 
-type variable_id = string
-(** Each variable has an unique ID *)
+type loc = {
+  loc_id : string;
+  loc_cat : Com.cat_variable_loc;
+  loc_idx : int;
+  loc_int : int;
+}
 
 module Variable = struct
-  type id = variable_id
+  type id = string
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     alias : string Pos.marked option;  (** Input variable have an alias *)
-    id : variable_id;
+    id : id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attributes : int Pos.marked StrMap.t;
@@ -38,7 +42,11 @@ module Variable = struct
     is_table : int option;
     is_temp : bool;
     is_it : bool;
+    loc : loc;
   }
+
+  let init_loc =
+    { loc_id = ""; loc_cat = Com.LocInput; loc_idx = 0; loc_int = 0 }
 
   let new_var (name : string Pos.marked) (alias : string Pos.marked option)
       (descr : string Pos.marked) ~(attributes : int Pos.marked StrMap.t)
@@ -55,6 +63,7 @@ module Variable = struct
       is_table;
       is_temp;
       is_it;
+      loc = init_loc;
     }
 
   let compare (var1 : t) (var2 : t) = compare var1.id var2.id
@@ -90,12 +99,12 @@ let true_literal = Com.Float 1.
 
 type set_value = Variable.t Com.set_value
 
-type expression = Variable.t Com.expression_
+type expression = Variable.t Com.expression
 
-let rec map_expr_var (f : 'v -> 'v2) (e : 'v Com.expression_) :
-    'v2 Com.expression_ =
+let rec map_expr_var (f : 'v -> 'v2) (e : 'v Com.expression) :
+    'v2 Com.expression =
   let map = Pos.map_under_mark (map_expr_var f) in
-  match (e :> 'v Com.expression_) with
+  match e with
   | TestInSet (positive, e, values) ->
       let map_values = function
         | Com.FloatValue f -> Com.FloatValue f
@@ -120,10 +129,10 @@ let rec map_expr_var (f : 'v -> 'v2) (e : 'v Com.expression_) :
   | NbBloquantes -> NbBloquantes
   | FuncCallLoop _ | Loop _ -> assert false
 
-let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v Com.expression_) :
+let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v Com.expression) :
     'a =
   let fold acc e = fold_expr_var f acc (Pos.unmark e) in
-  match (e :> 'v Com.expression_) with
+  match e with
   | TestInSet (_, e, values) ->
       let fold_values acc = function
         | Com.FloatValue _ | Com.Interval _ -> acc
@@ -204,87 +213,7 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type 'variable print_arg =
-  | PrintString of string
-  | PrintName of string Pos.marked * Variable.t
-  | PrintAlias of string Pos.marked * Variable.t
-  | PrintIndent of 'variable Com.expression_ Pos.marked
-  | PrintExpr of 'variable Com.expression_ Pos.marked * int * int
-
-(** Errors are first-class objects *)
-
-type error = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  kind : string Pos.marked;
-  major_code : string Pos.marked;
-  minor_code : string Pos.marked;
-  description : string Pos.marked;
-  isisf : string Pos.marked;
-  typ : Mast.error_typ;
-}
-
-module Error = struct
-  type t = error = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    kind : string Pos.marked;
-    major_code : string Pos.marked;
-    minor_code : string Pos.marked;
-    description : string Pos.marked;
-    isisf : string Pos.marked;
-    typ : Mast.error_typ;
-  }
-
-  let new_error (name : string Pos.marked) (error : Mast.error_)
-      (error_typ : Mast.error_typ) : t =
-    {
-      name;
-      kind = List.nth error.error_descr 0;
-      major_code = List.nth error.error_descr 1;
-      minor_code = List.nth error.error_descr 2;
-      description = List.nth error.error_descr 3;
-      isisf =
-        (match List.nth_opt error.error_descr 4 with
-        | Some s -> s
-        | None -> ("", Pos.no_pos));
-      typ = error_typ;
-    }
-
-  let err_descr_string (err : t) =
-    Pos.same_pos_as
-      (String.concat ":"
-         [
-           err.kind |> Pos.unmark;
-           err.major_code |> Pos.unmark;
-           err.minor_code |> Pos.unmark;
-           err.description |> Pos.unmark;
-           err.isisf |> Pos.unmark;
-         ])
-      err.name
-
-  let compare (var1 : t) (var2 : t) = compare var1.name var2.name
-end
-
-type instruction =
-  | Affectation of
-      variable_id * (int * expression Pos.marked) option * expression Pos.marked
-  | IfThenElse of
-      expression * instruction Pos.marked list * instruction Pos.marked list
-  | ComputeTarget of string Pos.marked
-  | VerifBlock of instruction Pos.marked list
-  | Print of Mast.print_std * Variable.t print_arg Pos.marked list
-  | Iterate of
-      variable_id
-      * Com.CatVarSet.t
-      * expression Pos.marked
-      * instruction Pos.marked list
-  | Restore of
-      Pos.t VariableMap.t
-      * (Variable.t * Com.CatVarSet.t * expression Pos.marked) list
-      * instruction Pos.marked list
-  | RaiseError of error * string option
-  | CleanErrors
-  | ExportErrors
-  | FinalizeErrors
+type instruction = Variable.t Com.instruction
 
 module TargetMap = StrMap
 
@@ -350,30 +279,8 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
 
-let mast_to_catvar (cats : 'a Com.CatVarMap.t)
-    (l : string Pos.marked list Pos.marked) : Com.cat_variable =
-  match l with
-  | ("saisie", _) :: id, pos ->
-      let vcat = Com.CatInput (StrSet.from_marked_list id) in
-      if Com.CatVarMap.mem vcat cats then vcat
-      else Errors.raise_spanned_error "unknown variable category" pos
-  | ("calculee", _) :: id, id_pos -> begin
-      match id with
-      | [] -> Com.CatComputed Com.CatCompSet.empty
-      | [ ("base", _) ] -> Com.CatComputed (Com.CatCompSet.singleton Base)
-      | [ ("restituee", _) ] ->
-          Com.CatComputed (Com.CatCompSet.singleton GivenBack)
-      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          Com.CatComputed
-            (Com.CatCompSet.singleton Base |> Com.CatCompSet.add GivenBack)
-      | _ ->
-          Errors.raise_spanned_error "unknown calculated variable category"
-            id_pos
-    end
-  | _, pos -> Errors.raise_spanned_error "unknown variable category" pos
-
-let rec expand_functions_expr (e : 'var Com.expression_ Pos.marked) :
-    'var Com.expression_ Pos.marked =
+let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
+    'var Com.expression Pos.marked =
   let open Com in
   match Pos.unmark e with
   | Comparison (op, e1, e2) ->
@@ -463,6 +370,7 @@ let rec expand_functions_expr (e : 'var Com.expression_ Pos.marked) :
   | _ -> e
 
 let expand_functions (p : program) : program =
+  let open Com in
   let program_targets =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
@@ -476,7 +384,7 @@ let expand_functions (p : program) : program =
           let m_expr = expand_functions_expr v_expr in
           (Affectation (v_id, m_idx_opt, m_expr), instr_pos)
       | IfThenElse (i, t, e) ->
-          let i' = Pos.unmark (expand_functions_expr (i, Pos.no_pos)) in
+          let i' = expand_functions_expr i in
           let t' = List.map map_instr t in
           let e' = List.map map_instr e in
           (IfThenElse (i', t', e'), instr_pos)
@@ -490,13 +398,14 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 let arg, arg_pos = m_arg in
                 match arg with
-                | PrintIndent e ->
+                | Com.PrintIndent e ->
                     let e' = expand_functions_expr e in
-                    (PrintIndent e', arg_pos)
-                | PrintExpr (e, mi, ma) ->
+                    (Com.PrintIndent e', arg_pos)
+                | Com.PrintExpr (e, mi, ma) ->
                     let e' = expand_functions_expr e in
-                    (PrintExpr (e', mi, ma), arg_pos)
-                | PrintString _ | PrintName _ | PrintAlias _ -> m_arg)
+                    (Com.PrintExpr (e', mi, ma), arg_pos)
+                | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
+                    m_arg)
               pr_args
           in
           (Print (out, pr_args'), instr_pos)

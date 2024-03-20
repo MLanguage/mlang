@@ -112,26 +112,25 @@ type code_locs = Mir.Variable.t CodeLocationMap.t
 let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
     (loc : Bir_interpreter.code_location) : code_locs =
   match Pos.unmark stmt with
-  | Bir.SConditional (_, t, f) ->
+  | Com.IfThenElse (_, t, f) ->
       CodeLocationMap.union
         (fun _ _ _ -> assert false)
         (get_code_locs_stmts p t
            (Bir_interpreter.ConditionalBranch true :: loc))
         (get_code_locs_stmts p f
            (Bir_interpreter.ConditionalBranch false :: loc))
-  | Bir.SVerifBlock s ->
+  | VerifBlock s ->
       get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
-  | Bir.SAssign (var, _, _) -> CodeLocationMap.singleton loc var
-  | Bir.SFunctionCall (f, _) ->
+  | Affectation (var, _, _) -> CodeLocationMap.singleton loc var
+  | ComputeTarget (f, _) ->
       get_code_locs_stmts p (Mir.TargetMap.find f p.targets).stmts
         (Bir_interpreter.InsideFunction f :: loc)
-  | Bir.SPrint _ -> CodeLocationMap.empty
-  | Bir.SIterate (var, _, _, s) ->
+  | Print _ -> CodeLocationMap.empty
+  | Iterate (var, _, _, s) ->
       get_code_locs_stmts p s (Bir_interpreter.InsideIterate var :: loc)
-  | Bir.SRestore (_, _, s) ->
+  | Restore (_, _, s) ->
       get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
-  | Bir.SRaiseError _ | Bir.SCleanErrors | Bir.SExportErrors
-  | Bir.SFinalizeErrors ->
+  | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
       CodeLocationMap.empty
 
 and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)

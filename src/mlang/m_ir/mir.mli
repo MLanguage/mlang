@@ -14,16 +14,20 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type variable_id = string
-(** Each variable has an unique ID *)
+type loc = {
+  loc_id : string;
+  loc_cat : Com.cat_variable_loc;
+  loc_idx : int;
+  loc_int : int;
+}
 
 module Variable : sig
-  type id = variable_id
+  type id = string
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     alias : string Pos.marked option;  (** Input variable have an alias *)
-    id : variable_id;
+    id : id;
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attributes : int Pos.marked StrMap.t;
@@ -32,7 +36,10 @@ module Variable : sig
     is_table : int option;
     is_temp : bool;
     is_it : bool;
+    loc : loc;
   }
+
+  val init_loc : loc
 
   val new_var :
     string Pos.marked ->
@@ -56,7 +63,7 @@ type typ = Real
 
 type set_value = Variable.t Com.set_value
 
-type expression = Variable.t Com.expression_
+type expression = Variable.t Com.expression
 
 module VariableMap : MapExt.T with type key = Variable.t
 (** MIR programs are just mapping from variables to their definitions, and make
@@ -87,64 +94,7 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type 'variable print_arg =
-  | PrintString of string
-  | PrintName of string Pos.marked * Variable.t
-  | PrintAlias of string Pos.marked * Variable.t
-  | PrintIndent of 'variable Com.expression_ Pos.marked
-  | PrintExpr of 'variable Com.expression_ Pos.marked * int * int
-
-(** Errors are first-class objects *)
-
-type error = {
-  name : string Pos.marked;  (** The position is the variable declaration *)
-  kind : string Pos.marked;
-  major_code : string Pos.marked;
-  minor_code : string Pos.marked;
-  description : string Pos.marked;
-  isisf : string Pos.marked;
-  typ : Mast.error_typ;
-}
-
-module Error : sig
-  type t = error = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    kind : string Pos.marked;
-    major_code : string Pos.marked;
-    minor_code : string Pos.marked;
-    description : string Pos.marked;
-    isisf : string Pos.marked;
-    typ : Mast.error_typ;
-  }
-
-  val new_error : string Pos.marked -> Mast.error_ -> Mast.error_typ -> error
-
-  val err_descr_string : t -> string Pos.marked
-
-  val compare : t -> t -> int
-end
-
-type instruction =
-  | Affectation of
-      variable_id * (int * expression Pos.marked) option * expression Pos.marked
-  | IfThenElse of
-      expression * instruction Pos.marked list * instruction Pos.marked list
-  | ComputeTarget of string Pos.marked
-  | VerifBlock of instruction Pos.marked list
-  | Print of Mast.print_std * Variable.t print_arg Pos.marked list
-  | Iterate of
-      variable_id
-      * Com.CatVarSet.t
-      * expression Pos.marked
-      * instruction Pos.marked list
-  | Restore of
-      Pos.t VariableMap.t
-      * (Variable.t * Com.CatVarSet.t * expression Pos.marked) list
-      * instruction Pos.marked list
-  | RaiseError of error * string option
-  | CleanErrors
-  | ExportErrors
-  | FinalizeErrors
+type instruction = Variable.t Com.instruction
 
 type target_data = {
   target_name : string Pos.marked;
@@ -187,9 +137,9 @@ val true_literal : Com.literal
 
 val find_var_name_by_alias : program -> string Pos.marked -> string
 
-val map_expr_var : ('v -> 'v2) -> 'v Com.expression_ -> 'v2 Com.expression_
+val map_expr_var : ('v -> 'v2) -> 'v Com.expression -> 'v2 Com.expression
 
-val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v Com.expression_ -> 'a
+val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v Com.expression -> 'a
 
 val cond_cats_to_set : int Com.CatVarMap.t -> Com.CatVarSet.t
 
@@ -198,9 +148,6 @@ val find_var_by_name : program -> string Pos.marked -> Variable.t
     share a name or alias. If an alias is provided, the variable returned is
     that with the lowest execution number. When a name is provided, then the
     variable with the highest execution number is returned. *)
-
-val mast_to_catvar :
-  'a Com.CatVarMap.t -> string Pos.marked list Pos.marked -> Com.cat_variable
 
 val expand_functions : program -> program
 (** Calls [expand_functions_expr] on the whole program *)

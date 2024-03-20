@@ -230,12 +230,12 @@ let format_verification fmt (v : verification) =
     (Pp.list_space (Pp.unmark format_verification_condition))
     v.verif_conditions
 
-let format_error_typ fmt (e : error_typ) =
+let format_error_typ fmt (e : Com.Error.typ) =
   Pp.string fmt
     (match e with
-    | Anomaly -> "anomalie"
-    | Discordance -> "discordance"
-    | Information -> "information")
+    | Com.Error.Anomaly -> "anomalie"
+    | Com.Error.Discordance -> "discordance"
+    | Com.Error.Information -> "information")
 
 let format_error_ fmt (e : error_) =
   Format.fprintf fmt "%a : %a : %a;" format_error_name (Pos.unmark e.error_name)

@@ -81,7 +81,7 @@ type var_category_id = string Pos.marked list Pos.marked
 
 type set_value = variable Com.set_value
 
-type expression = variable Com.expression_
+type expression = variable Com.expression
 
 (**{1 Toplevel clauses}*)
 
@@ -109,8 +109,6 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of variable Com.loop_variables Pos.marked * formula_decl
 
-type print_std = StdOut | StdErr
-
 type print_arg =
   | PrintString of string
   | PrintName of variable Pos.marked
@@ -133,7 +131,7 @@ type instruction =
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | VerifBlock of instruction Pos.marked list
-  | Print of print_std * print_arg Pos.marked list
+  | Print of Com.print_std * print_arg Pos.marked list
   | Iterate of
       string Pos.marked
       * var_category_id list
@@ -265,19 +263,9 @@ type verif_domain_data = {
 
 type verif_domain_decl = verif_domain_data domain_decl
 
-type error_typ = Anomaly | Discordance | Information
-
-let compare_error_type e1 e2 =
-  match (e1, e2) with
-  | Anomaly, (Discordance | Information) -> -1
-  | (Discordance | Information), Anomaly -> 1
-  | Information, Discordance -> -1
-  | Discordance, Information -> 1
-  | _ -> 0
-
 type error_ = {
   error_name : error_name Pos.marked;
-  error_typ : error_typ Pos.marked;
+  error_typ : Com.Error.typ Pos.marked;
   error_descr : string Pos.marked list;
 }
 
