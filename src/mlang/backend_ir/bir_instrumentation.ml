@@ -107,7 +107,7 @@ let merge_code_coverage_acc (acc1 : code_coverage_acc)
            defs1 defs2))
     acc1 acc2
 
-type code_locs = Mir.Variable.t CodeLocationMap.t
+type code_locs = Mir.Var.t CodeLocationMap.t
 
 let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
     (loc : Bir_interpreter.code_location) : code_locs =

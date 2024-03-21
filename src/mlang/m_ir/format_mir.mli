@@ -20,4 +20,4 @@ val format_expression : Format.formatter -> Mir.expression -> unit
 
 val format_error : Format.formatter -> Com.Error.t -> unit
 
-val format_variable : Format.formatter -> Mir.Variable.t -> unit
+val format_variable : Format.formatter -> Mir.Var.t -> unit

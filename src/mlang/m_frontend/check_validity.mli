@@ -53,8 +53,8 @@ type program = {
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
-  prog_vars : Mir.Variable.t StrMap.t;
-  prog_alias : Mir.Variable.t StrMap.t;
+  prog_vars : Mir.Var.t StrMap.t;
+  prog_alias : Mir.Var.t StrMap.t;
   prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;
@@ -66,6 +66,7 @@ type program = {
   prog_vdom_calls :
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
+  prog_stats : Mir.stats;
 }
 
 val mast_to_catvars :

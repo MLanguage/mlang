@@ -14,44 +14,82 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type loc = {
+type loc_tgv = {
   loc_id : string;
   loc_cat : Com.cat_variable_loc;
   loc_idx : int;
   loc_int : int;
 }
 
-module Variable : sig
+type loc =
+  | LocTgv of string * loc_tgv
+  | LocTmp of string * int
+  | LocIt of string * int
+
+val set_loc_int : loc -> int -> loc
+
+val set_loc_tgv : loc -> Com.cat_variable_loc -> int -> loc
+
+module Var : sig
   type id = string
+
+  type tgv = {
+    alias : string Pos.marked option;  (** Input variable have an alias *)
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attrs : int Pos.marked StrMap.t;
+    cat : Com.cat_variable option;
+    typ : Mast.value_typ option;
+  }
+
+  type scope = Tgv of tgv | Temp | It
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    alias : string Pos.marked option;  (** Input variable have an alias *)
     id : id;
-    descr : string Pos.marked;
-        (** Description taken from the variable declaration *)
-    attributes : int Pos.marked StrMap.t;
-    cats : Com.cat_variable option;
-    typ : Mast.value_typ option;
     is_table : int option;
-    is_temp : bool;
-    is_it : bool;
     loc : loc;
+    scope : scope;
   }
 
-  val init_loc : loc
+  val tgv : t -> tgv
 
-  val new_var :
-    string Pos.marked ->
-    string Pos.marked option ->
-    string Pos.marked ->
-    attributes:int Pos.marked StrMap.t ->
-    cats:Com.cat_variable option ->
-    typ:Mast.value_typ option ->
+  val alias : t -> string Pos.marked option
+
+  val alias_str : t -> string
+
+  val descr : t -> string Pos.marked
+
+  val descr_str : t -> string
+
+  val attrs : t -> int Pos.marked StrMap.t
+
+  val cat : t -> Com.cat_variable option
+
+  val loc_tgv : t -> loc_tgv
+
+  val loc_int : t -> int
+
+  val is_temp : t -> bool
+
+  val is_it : t -> bool
+
+  val init_loc : loc_tgv
+
+  val new_tgv :
+    name:string Pos.marked ->
     is_table:int option ->
-    is_temp:bool ->
-    is_it:bool ->
+    alias:string Pos.marked option ->
+    descr:string Pos.marked ->
+    attrs:int Pos.marked StrMap.t ->
+    cat:Com.cat_variable option ->
+    typ:Mast.value_typ option ->
     t
+
+  val new_temp :
+    name:string Pos.marked -> is_table:int option -> loc_int:int -> t
+
+  val new_it : name:string Pos.marked -> is_table:int option -> loc_int:int -> t
 
   val compare : t -> t -> int
 end
@@ -61,15 +99,15 @@ type local_variable = { id : int }
 (** Type of MIR values *)
 type typ = Real
 
-type set_value = Variable.t Com.set_value
+type set_value = Var.t Com.set_value
 
-type expression = Variable.t Com.expression
+type expression = Var.t Com.expression
 
-module VariableMap : MapExt.T with type key = Variable.t
+module VariableMap : MapExt.T with type key = Var.t
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
 
-module VariableSet : SetExt.T with type elt = Variable.t
+module VariableSet : SetExt.T with type elt = Var.t
 
 module LocalVariableMap : sig
   include MapExt.T with type key = local_variable
@@ -94,13 +132,13 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type instruction = Variable.t Com.instruction
+type instruction = Var.t Com.instruction
 
 type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
+  target_tmp_vars : (Var.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 
@@ -108,16 +146,24 @@ type verif_domain_data = { vdom_auth : Com.CatVarSet.t; vdom_verifiable : bool }
 
 type verif_domain = verif_domain_data domain
 
+type stats = {
+  nb_calculated : int;
+  nb_base : int;
+  nb_input : int;
+  nb_vars : int;
+}
+
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
   program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
-  program_vars : Variable.t StrMap.t;
+  program_vars : Var.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_targets : target_data TargetMap.t;
+  program_stats : stats;
 }
 
 (** Local variables don't appear in the M source program but can be introduced
@@ -143,7 +189,7 @@ val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v Com.expression -> 'a
 
 val cond_cats_to_set : int Com.CatVarMap.t -> Com.CatVarSet.t
 
-val find_var_by_name : program -> string Pos.marked -> Variable.t
+val find_var_by_name : program -> string Pos.marked -> Var.t
 (** Get a variable for a given name or alias, because of SSA multiple variables
     share a name or alias. If an alias is provided, the variable returned is
     that with the lowest execution number. When a name is provided, then the
