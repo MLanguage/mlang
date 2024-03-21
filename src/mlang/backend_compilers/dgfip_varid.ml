@@ -34,9 +34,9 @@ let gen_loc_type = function
   | Com.LocBase -> "EST_BASE"
   | Com.LocInput -> "EST_SAISIE"
 
-let gen_access_def vm (v : Mir.Variable.t) offset =
+let gen_access_def vm (v : Mir.Var.t) offset =
   let vn = Pos.unmark v.name in
-  if v.is_temp then Printf.sprintf "%s_def[0%s]" vn offset
+  if Mir.Var.is_temp v then Printf.sprintf "%s_def[0%s]" vn offset
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "DS_[%d/*%s*/%s]" i vn offset
@@ -45,9 +45,9 @@ let gen_access_def vm (v : Mir.Variable.t) offset =
     | VarIterate (t, l, _) ->
         Printf.sprintf "D%s[%s->idx/*%s*/%s]" (gen_tab l) t vn offset
 
-let gen_access_val vm (v : Mir.Variable.t) offset =
+let gen_access_val vm (v : Mir.Var.t) offset =
   let vn = Pos.unmark v.name in
-  if v.is_temp then Printf.sprintf "%s_val[0%s]" vn offset
+  if Mir.Var.is_temp v then Printf.sprintf "%s_val[0%s]" vn offset
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "S_[%d/*%s*/%s]" i vn offset
@@ -56,9 +56,9 @@ let gen_access_val vm (v : Mir.Variable.t) offset =
     | VarIterate (t, l, _) ->
         Printf.sprintf "%s[%s->idx/*%s*/%s]" (gen_tab l) t vn offset
 
-let gen_access_pointer vm (v : Mir.Variable.t) =
+let gen_access_pointer vm (v : Mir.Var.t) =
   let vn = Pos.unmark v.name in
-  if v.is_temp then Printf.sprintf "(%s_val)" vn
+  if Mir.Var.is_temp v then Printf.sprintf "(%s_val)" vn
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
@@ -67,9 +67,9 @@ let gen_access_pointer vm (v : Mir.Variable.t) =
     | VarIterate (t, l, _) ->
         Printf.sprintf "(%s + %s->idx/*%s*/)" (gen_tab l) t vn
 
-let gen_access_def_pointer vm (v : Mir.Variable.t) =
+let gen_access_def_pointer vm (v : Mir.Var.t) =
   let vn = Pos.unmark v.name in
-  if v.is_temp then Printf.sprintf "(%s_def)" vn
+  if Mir.Var.is_temp v then Printf.sprintf "(%s_def)" vn
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "(DS_ + %d/*%s*/)" i vn
@@ -78,8 +78,8 @@ let gen_access_def_pointer vm (v : Mir.Variable.t) =
     | VarIterate (t, l, _) ->
         Printf.sprintf "(D%s + %s->idx/*%s*/)" (gen_tab l) t vn
 
-let gen_access_pos_from_start vm (v : Mir.Variable.t) =
-  if v.is_temp then assert false
+let gen_access_pos_from_start vm (v : Mir.Var.t) =
+  if Mir.Var.is_temp v then assert false
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "EST_SAISIE | %d" i
@@ -87,11 +87,11 @@ let gen_access_pos_from_start vm (v : Mir.Variable.t) =
     | VarComputed i -> Printf.sprintf "EST_CALCULEE | %d" i
     | VarIterate (t, l, _) -> Printf.sprintf "%s | %s->idx" (gen_loc_type l) t
 
-let gen_size vm (v : Mir.Variable.t) =
-  let get_size (v : Mir.Variable.t) =
+let gen_size vm (v : Mir.Var.t) =
+  let get_size (v : Mir.Var.t) =
     match v.is_table with Some i -> Format.sprintf "%d" i | None -> "1"
   in
-  if v.is_temp then get_size v
+  if Mir.Var.is_temp v then get_size v
   else
     match Mir.VariableMap.find v vm with
     | VarInput _ | VarBase _ | VarComputed _ -> get_size v

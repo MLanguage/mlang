@@ -14,11 +14,11 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type stmt = Mir.Variable.t Com.m_instruction
+type stmt = Mir.Var.t Com.m_instruction
 
 type target_function = {
   file : string option;
-  tmp_vars : (Mir.Variable.t * Pos.t * int option) StrMap.t;
+  tmp_vars : (Mir.Var.t * Pos.t * int option) StrMap.t;
   stmts : stmt list;
 }
 

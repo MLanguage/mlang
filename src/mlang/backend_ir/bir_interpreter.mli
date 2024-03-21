@@ -33,7 +33,7 @@ type code_location_segment =
   | InsideBlock of int
   | ConditionalBranch of bool
   | InsideFunction of string
-  | InsideIterate of Mir.Variable.t
+  | InsideIterate of Mir.Var.t
 
 val format_code_location_segment :
   Format.formatter -> code_location_segment -> unit
@@ -44,7 +44,7 @@ type code_location = code_location_segment list
 val format_code_location : Format.formatter -> code_location -> unit
 
 val assign_hook :
-  (Mir.Variable.t -> (unit -> var_literal) -> code_location -> unit) ref
+  (Mir.Var.t -> (unit -> var_literal) -> code_location -> unit) ref
 (** The instrumentation of the interpreter is done through this reference. The
     function that you assign to this reference will be called each time a
     variable assignment is executed *)
@@ -83,14 +83,14 @@ module type S = sig
     int -> int -> Format.formatter -> var_value -> unit
 
   val format_var_value_with_var :
-    Format.formatter -> Mir.Variable.t * var_value -> unit
+    Format.formatter -> Mir.Var.t * var_value -> unit
 
   type print_ctx = { indent : int; is_newline : bool }
 
   type ctx = {
     ctx_tgv : var_value Array.t;
-    ctx_vars : var_value Mir.VariableMap.t;
-    ctx_it : Mir.Variable.t StrMap.t;
+    mutable ctx_tmps : var_value Array.t list;
+    ctx_it : Mir.Var.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     ctx_anos : (Com.Error.t * string option) list;
@@ -115,8 +115,6 @@ module type S = sig
   val var_value_to_var_literal : var_value -> var_literal
 
   val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> ctx
-
-  val complete_ctx : ctx -> Mir.Variable.t StrMap.t -> ctx
 
   (** Interpreter runtime errors *)
   type run_error =

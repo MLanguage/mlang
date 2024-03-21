@@ -1,12 +1,12 @@
 type offset =
   | GetValueConst of int
   | GetValueExpr of string
-  | GetValueVar of Mir.Variable.t
+  | GetValueVar of Mir.Var.t
   | PassPointer
   | None
 
 let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
-    ?(def_flag = false) ?(trace_flag = false) (var : Mir.Variable.t) : string =
+    ?(def_flag = false) ?(trace_flag = false) (var : Mir.Var.t) : string =
   try
     match offset with
     | PassPointer ->
@@ -26,8 +26,8 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           let access_val = Dgfip_varid.gen_access_val vm var offset in
           (* When the trace flag is present, we print the value of the
              non-temporary variable being used *)
-          if trace_flag && not var.Mir.Variable.is_temp then
-            let vn = Pos.unmark var.Mir.Variable.name in
+          if trace_flag && not var.Mir.Var.is_temp then
+            let vn = Pos.unmark var.Mir.Var.name in
             let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm var in
             Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
               access_val
@@ -35,7 +35,7 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
   with Not_found ->
     Errors.raise_error
       (Format.asprintf "Variable %s not found in TGV"
-         (Pos.unmark var.Mir.Variable.name))
+         (Pos.unmark var.Mir.Var.name))
 
 type local_var =
   | Anon (* inlined sub-expression, not intended for reuse *)
@@ -67,11 +67,11 @@ and expr =
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
-  | Daccess of Mir.Variable.t * dflag * expr
+  | Daccess of Mir.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
 
-and expr_var = Local of stack_slot | M of Mir.Variable.t * offset * dflag
+and expr_var = Local of stack_slot | M of Mir.Var.t * offset * dflag
 
 and t = expr * dflag * local_vars
 
@@ -198,7 +198,7 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (v : Mir.Variable.t) (offset : offset) (df : dflag) _stacks _lv : t =
+let m_var (v : Mir.Var.t) (offset : offset) (df : dflag) _stacks _lv : t =
   (Dvar (M (v, offset, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
@@ -345,8 +345,8 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
-let access (var : Mir.Variable.t) (df : dflag) (e : constr)
-    (stacks : local_stacks) (ctx : local_vars) : t =
+let access (var : Mir.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
+    (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Val e in
   (Daccess (var, df, e), df, lv)
 

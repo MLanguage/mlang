@@ -843,17 +843,14 @@ let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        match var.Mir.Variable.cats with
+        match Mir.Var.cat var with
         | Some c when Com.compare_cat_variable c cat = 0 ->
             Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-              (Pos.unmark var.Mir.Variable.name)
-              (match var.Mir.Variable.alias with
-              | Some s -> Pos.unmark s
-              | None -> "")
-              idx size id_int;
+              (Pos.unmark var.Mir.Var.name)
+              (Mir.Var.alias_str var) idx size id_int;
             StrMap.iter
               (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-              var.Mir.Variable.attributes;
+              (Mir.Var.attrs var);
             Format.fprintf fmt " },\n";
             nb + 1
         | _ -> nb)
@@ -894,9 +891,8 @@ let gen_table_varinfos fmt cprog vars =
   let var_dict =
     StrMap.fold
       (fun _ var dict ->
-        match var.Mir.Variable.cats with
-        | Some _ ->
-            StrMap.add (Pos.unmark var.Mir.Variable.name) (var, -1, -1) dict
+        match Mir.Var.cat var with
+        | Some _ -> StrMap.add (Pos.unmark var.Mir.Var.name) (var, -1, -1) dict
         | None -> dict)
       cprog.Bir.mir_program.program_vars StrMap.empty
   in
@@ -2211,7 +2207,7 @@ let extract_var_ids (cprog : Bir.program) vars =
   let open Mir in
   (* let open Dgfip_varid in *)
   let pvars = cprog.mir_program.program_vars in
-  let add vn (v : Variable.t) vm =
+  let add vn (v : Var.t) vm =
     let vs =
       match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
@@ -2223,9 +2219,9 @@ let extract_var_ids (cprog : Bir.program) vars =
      ids) *)
   let vars_map =
     StrMap.fold
-      (fun _ (v : Variable.t) vm ->
+      (fun _ (v : Var.t) vm ->
         let vm = add (Pos.unmark v.name) v vm in
-        match v.Variable.alias with
+        match Mir.Var.alias v with
         | Some a -> add (Pos.unmark a) v vm
         | None -> vm)
       pvars StrMap.empty

@@ -309,9 +309,8 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Variable.t)
-    (offset : D.offset) (oc : Format.formatter) (se : D.expression_composition)
-    : unit =
+    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Var.t) (offset : D.offset)
+    (oc : Format.formatter) (se : D.expression_composition) : unit =
   let def_var = D.generate_variable ~def_flag:true var_indexes offset var in
   let val_var = D.generate_variable var_indexes offset var in
   let locals, def, value = D.build_expression se in
@@ -332,17 +331,17 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
   (* If the trace flag is set, we print the value of all non-temp variables *)
   if dgfip_flags.flg_trace && not var.Mir.Variable.is_temp then
     Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
-      (Pos.unmark var.Mir.Variable.name)
+      (Pos.unmark var.Mir.Var.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Variable.t)
+    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Var.t)
     (vidx_opt : (int * Mir.expression Pos.marked) option)
     (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
   match vidx_opt with
   | None ->
       let se = generate_c_expr vexpr var_indexes in
-      if var.is_it then (
+      if Mir.Var.is_it var then (
         let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
         let idx = fresh_c_local "idxPROUT" in
@@ -431,7 +430,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       let print_def = print_val ^ "_d" in
       Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
-        (fun (arg : Mir.Variable.t Com.print_arg Pos.marked) ->
+        (fun (arg : Mir.Var.t Com.print_arg Pos.marked) ->
           match Pos.unmark arg with
           | PrintString s ->
               Format.fprintf oc "print_string(%s, %s, \"%s\");@;" print_std
@@ -603,7 +602,7 @@ let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
     (if add_semicolon then ";" else "")
 
 let generate_var_tmp_decls (oc : Format.formatter)
-    (tmp_vars : (Mir.Variable.t * Pos.t * int option) StrMap.t) =
+    (tmp_vars : (Mir.Var.t * Pos.t * int option) StrMap.t) =
   StrMap.iter
     (fun vn (_, _, size) ->
       let sz = match size with Some i -> i | None -> 1 in

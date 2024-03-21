@@ -19,7 +19,7 @@ open Mir
 let format_typ fmt (t : typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
-let format_variable fmt (var : Mir.Variable.t) =
+let format_variable fmt (var : Var.t) =
   Format.fprintf fmt "%s" (Pos.unmark var.name)
 
 let format_expression = Com.format_expression format_variable
@@ -28,5 +28,5 @@ let format_error fmt (err : Com.Error.t) =
   Format.fprintf fmt "erreur %s (%a)" (Pos.unmark err.name) Com.Error.pp_descr
     err
 
-let format_variable fmt (v : Variable.t) =
-  Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Pos.unmark v.descr)
+let format_variable fmt (v : Var.t) =
+  Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Var.descr_str v)

@@ -20,53 +20,117 @@
 
 (** Variables are first-class objects *)
 
-type loc = {
+type loc_tgv = {
   loc_id : string;
   loc_cat : Com.cat_variable_loc;
   loc_idx : int;
   loc_int : int;
 }
 
-module Variable = struct
+type loc =
+  | LocTgv of string * loc_tgv
+  | LocTmp of string * int
+  | LocIt of string * int
+
+let set_loc_int loc loc_int =
+  match loc with
+  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
+  | LocTmp (id, _) -> LocTmp (id, loc_int)
+  | LocIt (id, _) -> LocIt (id, loc_int)
+
+let set_loc_tgv loc loc_cat loc_idx =
+  match loc with
+  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_cat; loc_idx })
+  | LocTmp (id, _) | LocIt (id, _) ->
+      Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
+
+module Var = struct
   type id = string
+
+  type tgv = {
+    alias : string Pos.marked option;  (** Input variable have an alias *)
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attrs : int Pos.marked StrMap.t;
+    cat : Com.cat_variable option;
+    typ : Mast.value_typ option;
+  }
+
+  type scope = Tgv of tgv | Temp | It
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    alias : string Pos.marked option;  (** Input variable have an alias *)
     id : id;
-    descr : string Pos.marked;
-        (** Description taken from the variable declaration *)
-    attributes : int Pos.marked StrMap.t;
-    cats : Com.cat_variable option;
-    typ : Mast.value_typ option;
     is_table : int option;
-    is_temp : bool;
-    is_it : bool;
     loc : loc;
+    scope : scope;
   }
+
+  let tgv v =
+    match v.scope with
+    | Tgv s -> s
+    | _ ->
+        Errors.raise_error
+          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let alias v = (tgv v).alias
+
+  let alias_str v = Option.fold ~none:"" ~some:Pos.unmark (tgv v).alias
+
+  let descr v = (tgv v).descr
+
+  let descr_str v = Pos.unmark (tgv v).descr
+
+  let attrs v = (tgv v).attrs
+
+  let cat v = (tgv v).cat
+
+  let loc_tgv v =
+    match v.loc with
+    | LocTgv (_, l) -> l
+    | _ ->
+        Errors.raise_error
+          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let loc_int v =
+    match v.loc with
+    | LocTgv (_, tgv) -> tgv.loc_int
+    | LocTmp (_, li) | LocIt (_, li) -> li
+
+  let is_temp v = v.scope = Temp
+
+  let is_it v = v.scope = It
 
   let init_loc =
     { loc_id = ""; loc_cat = Com.LocInput; loc_idx = 0; loc_int = 0 }
 
-  let new_var (name : string Pos.marked) (alias : string Pos.marked option)
-      (descr : string Pos.marked) ~(attributes : int Pos.marked StrMap.t)
-      ~(cats : Com.cat_variable option) ~(typ : Mast.value_typ option)
-      ~(is_table : int option) ~(is_temp : bool) ~(is_it : bool) : t =
+  let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
+      ~(alias : string Pos.marked option) ~(descr : string Pos.marked)
+      ~(attrs : int Pos.marked StrMap.t) ~(cat : Com.cat_variable option)
+      ~(typ : Mast.value_typ option) : t =
     {
       name;
       id = Pos.unmark name;
-      descr;
-      alias;
-      attributes;
-      cats;
-      typ;
       is_table;
-      is_temp;
-      is_it;
-      loc = init_loc;
+      loc = LocTgv (Pos.unmark name, init_loc);
+      scope = Tgv { alias; descr; attrs; cat; typ };
     }
 
-  let compare (var1 : t) (var2 : t) = compare var1.id var2.id
+  let new_temp ~(name : string Pos.marked) ~(is_table : int option)
+      ~(loc_int : int) : t =
+    let loc = LocTmp (Pos.unmark name, loc_int) in
+    { name; id = Pos.unmark name; is_table; loc; scope = Temp }
+
+  let new_it ~(name : string Pos.marked) ~(is_table : int option)
+      ~(loc_int : int) : t =
+    let loc = LocIt (Pos.unmark name, loc_int) in
+    { name; id = Pos.unmark name; is_table; loc; scope = It }
+
+  let int_of_scope = function Tgv _ -> 0 | Temp -> 1 | It -> 2
+
+  let compare (var1 : t) (var2 : t) =
+    let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
+    if c <> 0 then c else compare var1.id var2.id
 end
 
 (** Local variables don't appear in the M source program but can be introduced
@@ -97,9 +161,9 @@ let false_literal = Com.Float 0.
 
 let true_literal = Com.Float 1.
 
-type set_value = Variable.t Com.set_value
+type set_value = Var.t Com.set_value
 
-type expression = Variable.t Com.expression
+type expression = Var.t Com.expression
 
 let rec map_expr_var (f : 'v -> 'v2) (e : 'v Com.expression) :
     'v2 Com.expression =
@@ -155,12 +219,11 @@ let rec fold_expr_var (f : 'a -> 'v -> 'a) (acc : 'a) (e : 'v Com.expression) :
 (** MIR programs are just mapping from variables to their definitions, and make
     a massive use of [VariableMap]. *)
 module VariableMap = struct
-  include MapExt.Make (Variable)
+  include MapExt.Make (Var)
 
   let pp_key fmt key =
-    Format.fprintf fmt "Variable %s%s"
-      (Pos.unmark key.Variable.name)
-      (match key.alias with
+    Format.fprintf fmt "Variable %s%s" (Pos.unmark key.Var.name)
+      (match Var.alias key with
       | Some x -> " (alias " ^ Pos.unmark x ^ ")"
       | None -> "")
 
@@ -170,7 +233,7 @@ module VariableMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
-module VariableSet = SetExt.Make (Variable)
+module VariableSet = SetExt.Make (Var)
 
 module LocalVariableMap = struct
   include MapExt.Make (LocalVariable)
@@ -213,7 +276,7 @@ type rule_domain_data = { rdom_computable : bool }
 
 type rule_domain = rule_domain_data domain
 
-type instruction = Variable.t Com.instruction
+type instruction = Var.t Com.instruction
 
 module TargetMap = StrMap
 
@@ -221,7 +284,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_tmp_vars : (Variable.t * Pos.t * int option) StrMap.t;
+  target_tmp_vars : (Var.t * Pos.t * int option) StrMap.t;
   target_prog : instruction Pos.marked list;
 }
 
@@ -236,16 +299,24 @@ let cond_cats_to_set cats =
     (fun cv nb res -> if nb > 0 then Com.CatVarSet.add cv res else res)
     cats Com.CatVarSet.empty
 
+type stats = {
+  nb_calculated : int;
+  nb_base : int;
+  nb_input : int;
+  nb_vars : int;
+}
+
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
   program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
-  program_vars : Variable.t StrMap.t;
+  program_vars : Var.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
   program_targets : target_data TargetMap.t;
+  program_stats : stats;
 }
 
 (** {1 Helpers}*)
@@ -255,7 +326,7 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   let v =
     StrMap.fold
       (fun _ v acc ->
-        match (acc, v.Variable.alias) with
+        match (acc, Var.alias v) with
         | Some _, _ | None, None -> acc
         | None, Some v_alias ->
             if Pos.unmark v_alias = Pos.unmark alias then
@@ -270,7 +341,7 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
         (Pos.get_position alias)
 
-let find_var_by_name (p : program) (name : string Pos.marked) : Variable.t =
+let find_var_by_name (p : program) (name : string Pos.marked) : Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found -> (
     try
