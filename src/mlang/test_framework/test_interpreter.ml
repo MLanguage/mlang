@@ -19,8 +19,7 @@ let convert_pos (pos : Irj_ast.pos) =
 (* enforces type compatibility (the type Irj_ast.pos is defined in exactly the
    same way as Pos.t) *)
 
-let find_var_of_name (p : Mir.program) (name : string Pos.marked) :
-    Mir.Variable.t =
+let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Mir.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found ->
     let name = Mir.find_var_name_by_alias p name in

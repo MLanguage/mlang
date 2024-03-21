@@ -61,7 +61,7 @@ val merge_code_coverage_acc :
 
 (** {1 Code locations}*)
 
-type code_locs = Mir.Variable.t CodeLocationMap.t
+type code_locs = Mir.Var.t CodeLocationMap.t
 
 val get_code_locs : Bir.program -> code_locs
 (** Returns all code locations in a program *)

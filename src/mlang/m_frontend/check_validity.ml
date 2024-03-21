@@ -330,8 +330,8 @@ type program = {
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
-  prog_vars : Mir.Variable.t StrMap.t;
-  prog_alias : Mir.Variable.t StrMap.t;
+  prog_vars : Mir.Var.t StrMap.t;
+  prog_alias : Mir.Var.t StrMap.t;
   prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;
@@ -343,6 +343,7 @@ type program = {
   prog_vdom_calls :
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
+  prog_stats : Mir.stats;
 }
 
 let get_target_file (pos : Pos.t) : string =
@@ -411,6 +412,7 @@ let empty_program (p : Mast.program) prog_app =
     prog_verifs = IntMap.empty;
     prog_vdom_calls = StrMap.empty;
     prog_targets = StrMap.empty;
+    prog_stats = { nb_calculated = 0; nb_base = 0; nb_input = 0; nb_vars = 0 };
   }
 
 let get_seq (prog : program) : int * program =
@@ -539,32 +541,32 @@ let get_attributes (attr_list : Mast.variable_attribute list) :
       | None -> StrMap.add attr (value, attr_pos) attributes)
     StrMap.empty attr_list
 
-let check_global_var (var : Mir.Variable.t) (prog : program) : program =
+let check_global_var (var : Mir.Var.t) (prog : program) : program =
   let name, name_pos = var.name in
   let cat =
-    let cats = Option.get var.cats in
-    match Com.CatVarMap.find_opt cats prog.prog_var_cats with
-    | None -> Err.variable_of_unknown_category cats name_pos
+    let cat = Option.get (Mir.Var.cat var) in
+    match Com.CatVarMap.find_opt cat prog.prog_var_cats with
+    | None -> Err.variable_of_unknown_category cat name_pos
     | Some cat -> cat
   in
   StrMap.iter
     (fun attr _ ->
-      if not (StrMap.mem attr var.attributes) then
+      if not (StrMap.mem attr (Mir.Var.attrs var)) then
         Err.attribute_is_not_defined name attr name_pos)
     cat.Com.attributs;
   let prog_vars =
     match StrMap.find_opt name prog.prog_vars with
-    | Some (gvar : Mir.Variable.t) ->
+    | Some (gvar : Mir.Var.t) ->
         let old_pos = Pos.get_position gvar.name in
         Err.variable_already_declared name old_pos name_pos
     | None -> StrMap.add name var prog.prog_vars
   in
   let prog_alias =
-    match var.alias with
+    match Mir.Var.alias var with
     | Some (alias, alias_pos) -> (
         match StrMap.find_opt alias prog.prog_alias with
-        | Some (gvar : Mir.Variable.t) ->
-            let old_pos = Pos.get_position (Option.get gvar.alias) in
+        | Some (gvar : Mir.Var.t) ->
+            let old_pos = Pos.get_position (Option.get (Mir.Var.alias gvar)) in
             Err.alias_already_declared alias old_pos alias_pos
         | None -> StrMap.add alias var prog.prog_alias)
     | None -> prog.prog_alias
@@ -584,20 +586,12 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         Com.CatInput input_set
       in
       let var =
-        Mir.Variable.
-          {
-            id = Pos.unmark input_var.Mast.input_name;
-            name = input_var.Mast.input_name;
-            cats = Some global_category;
-            attributes = get_attributes input_var.Mast.input_attributes;
-            alias = Some input_var.Mast.input_alias;
-            is_table = None;
-            descr = input_var.Mast.input_description;
-            typ = Option.map Pos.unmark input_var.Mast.input_typ;
-            is_temp = false;
-            is_it = false;
-            loc = Mir.Variable.init_loc;
-          }
+        Mir.Var.new_tgv ~name:input_var.Mast.input_name ~is_table:None
+          ~alias:(Some input_var.Mast.input_alias)
+          ~descr:input_var.Mast.input_description
+          ~attrs:(get_attributes input_var.Mast.input_attributes)
+          ~cat:(Some global_category)
+          ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
       in
       check_global_var var prog
   | Mast.ComputedVar (comp_var, _decl_pos) ->
@@ -623,20 +617,11 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         | None -> None
       in
       let var =
-        Mir.Variable.
-          {
-            id = Pos.unmark comp_var.Mast.comp_name;
-            name = comp_var.Mast.comp_name;
-            cats = Some global_category;
-            attributes = get_attributes comp_var.Mast.comp_attributes;
-            alias = None;
-            is_table = global_table;
-            descr = comp_var.Mast.comp_description;
-            typ = Option.map Pos.unmark comp_var.Mast.comp_typ;
-            is_temp = false;
-            is_it = false;
-            loc = Mir.Variable.init_loc;
-          }
+        Mir.Var.new_tgv ~name:comp_var.Mast.comp_name ~is_table:global_table
+          ~alias:None ~descr:comp_var.Mast.comp_description
+          ~attrs:(get_attributes comp_var.Mast.comp_attributes)
+          ~cat:(Some global_category)
+          ~typ:(Option.map Pos.unmark comp_var.Mast.comp_typ)
       in
       check_global_var var prog
 
@@ -785,20 +770,27 @@ let complete_vars (prog : program) : program =
       pp ~sep ~pp_key ~assoc pp_val fmt map
   end in
   let loc_vars =
-    let fold _ (var : Mir.Variable.t) (loc_vars, n) =
-      let var = { var with loc = { var.loc with loc_int = n } } in
+    let fold _ (var : Mir.Var.t) (loc_vars, n) =
+      let var = Mir.Var.{ var with loc = Mir.set_loc_int var.loc n } in
+      let loc_cat =
+        match Mir.Var.cat var with
+        | Some cat ->
+            let data = Com.CatVarMap.find cat prog.prog_var_cats in
+            data.Com.loc
+        | None -> assert false
+      in
       let upd = function
         | None -> Some (Mir.VariableSet.singleton var)
         | Some set -> Some (Mir.VariableSet.add var set)
       in
-      let loc_vars = CatLocMap.update var.loc.loc_cat upd loc_vars in
+      let loc_vars = CatLocMap.update loc_cat upd loc_vars in
       (loc_vars, n + 1)
     in
     (CatLocMap.empty, 0) |> StrMap.fold fold prog.prog_vars |> fst
   in
-  let update_loc loc_cat (var : Mir.Variable.t) (vars, n) =
-    let loc = Mir.{ var.loc with loc_id = var.id; loc_cat; loc_idx = n } in
-    let vars = StrMap.add var.id { var with loc } vars in
+  let update_loc loc_cat (var : Mir.Var.t) (vars, n) =
+    let loc = Mir.set_loc_tgv var.loc loc_cat n in
+    let vars = StrMap.add var.id Mir.Var.{ var with loc } vars in
     (vars, n + 1)
   in
   let prog_vars =
@@ -807,7 +799,21 @@ let complete_vars (prog : program) : program =
         (prog_vars, 0) |> Mir.VariableSet.fold (update_loc loc_cat) vars |> fst)
       loc_vars StrMap.empty
   in
-  { prog with prog_vars }
+  let nb_loc loc_cat =
+    match CatLocMap.find_opt loc_cat loc_vars with
+    | Some set -> Mir.VariableSet.cardinal set
+    | None -> 0
+  in
+  let prog_stats =
+    Mir.
+      {
+        nb_calculated = nb_loc Com.LocCalculated;
+        nb_input = nb_loc Com.LocInput;
+        nb_base = nb_loc Com.LocBase;
+        nb_vars = StrMap.cardinal prog_vars;
+      }
+  in
+  { prog with prog_vars; prog_stats }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1043,9 +1049,10 @@ let rec fold_var_expr
         | Mast.Generic _, _ -> assert false
       in
       (match StrMap.find_opt name env.prog.prog_vars with
-      | Some Mir.Variable.{ attributes; cats; _ } ->
-          if not (StrMap.mem (Pos.unmark a) attributes) then
-            Err.unknown_attribut_for_var (Option.get cats) (Pos.get_position a)
+      | Some var ->
+          let cat = Mir.Var.cat var in
+          if not (StrMap.mem (Pos.unmark a) (Mir.Var.attrs var)) then
+            Err.unknown_attribut_for_var (Option.get cat) (Pos.get_position a)
       | None -> (
           match StrMap.find_opt name env.tmp_vars with
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
@@ -1064,7 +1071,7 @@ let check_variable (var : Mast.variable Pos.marked)
     match var_data with
     | Normal vn -> (
         match StrMap.find_opt vn env.prog.prog_vars with
-        | Some Mir.Variable.{ name = _, decl_pos; is_table; _ } ->
+        | Some Mir.Var.{ name = _, decl_pos; is_table; _ } ->
             (vn, OneOf is_table, decl_pos)
         | None -> (
             match StrMap.find_opt vn env.tmp_vars with
@@ -1256,7 +1263,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let var_name, var_pos = var in
             (match StrMap.find_opt var_name env.prog.prog_vars with
-            | Some Mir.Variable.{ name = _, old_pos; _ } ->
+            | Some Mir.Var.{ name = _, old_pos; _ } ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
             (match StrMap.find_opt var_name env.tmp_vars with
@@ -1297,7 +1304,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                    | Mast.VarCats (vn, vcats, expr) ->
                        let var_name, var_pos = vn in
                        (match StrMap.find_opt var_name env.prog.prog_vars with
-                       | Some Mir.Variable.{ name = _, old_pos; _ } ->
+                       | Some Mir.Var.{ name = _, old_pos; _ } ->
                            Err.variable_already_declared var_name old_pos
                              var_pos
                        | None -> ());
@@ -1374,7 +1381,7 @@ let check_target (t : Mast.target) (prog : program) : program =
     StrMap.iter
       (fun _ ((vn, vpos), _) ->
         match StrMap.find_opt vn prog.prog_vars with
-        | Some Mir.Variable.{ name = _, old_pos; _ } ->
+        | Some Mir.Var.{ name = _, old_pos; _ } ->
             Err.variable_already_declared vn old_pos vpos
         | None -> ())
       target_tmp_vars;
@@ -1808,7 +1815,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             let fold_var var idx_mem env (vdom_sts, var_sts) =
               let name = check_variable var idx_mem env in
               let var_data = StrMap.find name env.prog.prog_vars in
-              let cats = Option.get var_data.Mir.Variable.cats in
+              let cats = Option.get (Mir.Var.cat var_data) in
               if not (Com.CatVarSet.mem cats verif_domain.dom_data.vdom_auth)
               then Err.variable_with_forbidden_category (Pos.get_position var);
               let incr = function None -> Some 1 | Some i -> Some (i + 1) in
@@ -1908,7 +1915,7 @@ let eval_expr_verif (prog : program) (verif : verif)
           | Mast.Normal var -> var
           | _ -> assert false
         in
-        let attrs = (StrMap.find var prog.prog_vars).Mir.Variable.attributes in
+        let attrs = Mir.Var.attrs (StrMap.find var prog.prog_vars) in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
     | Size m_var -> (
@@ -1917,7 +1924,7 @@ let eval_expr_verif (prog : program) (verif : verif)
           | Mast.Normal var -> var
           | _ -> assert false
         in
-        match (StrMap.find var prog.prog_vars).Mir.Variable.is_table with
+        match (StrMap.find var prog.prog_vars).Mir.Var.is_table with
         | Some sz -> Some (float sz)
         | None -> Some 1.0)
     | NbCategory cs ->

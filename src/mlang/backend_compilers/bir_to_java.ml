@@ -53,25 +53,27 @@ let generate_binop (op : Com.binop) : string =
 let generate_unop (op : Com.unop) : string =
   match op with Com.Not -> "mNot" | Com.Minus -> "mNeg"
 
-let generate_var_name (var : Mir.Variable.t) : string =
+let generate_var_name (var : Mir.Var.t) : string =
   let v = Pos.unmark var.name in
   String.uppercase_ascii v
 
-let format_var_name (fmt : Format.formatter) (var : Mir.Variable.t) : unit =
+let format_var_name (fmt : Format.formatter) (var : Mir.Var.t) : unit =
   Format.fprintf fmt "%s" (generate_var_name var)
 
-let generate_name (v : Mir.Variable.t) : string =
-  match v.alias with Some v -> Pos.unmark v | None -> Pos.unmark v.name
+let generate_name (v : Mir.Var.t) : string =
+  match Mir.Var.alias v with
+  | Some v -> Pos.unmark v
+  | None -> Pos.unmark v.name
 
 let print_double_cut oc () = Format.fprintf oc "@,@,"
 
-let get_var_pos (_var : Mir.Variable.t) : int = 0 (* var.Bir.offset *)
+let get_var_pos (_var : Mir.Var.t) : int = 0 (* var.Bir.offset *)
 
-let get_tgv_position (var : Mir.Variable.t) : string =
+let get_tgv_position (var : Mir.Var.t) : string =
   Format.asprintf "tgv[%d /* %s */]" (get_var_pos var) (generate_var_name var)
 
 let rec generate_java_expr (e : Mir.expression Pos.marked) :
-    string * (Mir.LocalVariable.t * Mir.expression Pos.marked) list =
+    string * (Mir.Var.t * Mir.expression Pos.marked) list =
   match Pos.unmark e with
   | TestInSet _ -> assert false
   | Comparison (op, e1, e2) ->
