@@ -109,7 +109,7 @@ let merge_code_coverage_acc (acc1 : code_coverage_acc)
 
 type code_locs = Mir.Var.t CodeLocationMap.t
 
-let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
+let rec get_code_locs_stmt (p : Bir.program) (stmt : Mir.m_instruction)
     (loc : Bir_interpreter.code_location) : code_locs =
   match Pos.unmark stmt with
   | Com.IfThenElse (_, t, f) ->
@@ -123,7 +123,7 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
       get_code_locs_stmts p s (Bir_interpreter.InsideBlock 0 :: loc)
   | Affectation (var, _, _) -> CodeLocationMap.singleton loc var
   | ComputeTarget (f, _) ->
-      get_code_locs_stmts p (Mir.TargetMap.find f p.targets).stmts
+      get_code_locs_stmts p (Mir.TargetMap.find f p.targets).target_prog
         (Bir_interpreter.InsideFunction f :: loc)
   | Print _ -> CodeLocationMap.empty
   | Iterate (var, _, _, s) ->
@@ -133,7 +133,7 @@ let rec get_code_locs_stmt (p : Bir.program) (stmt : Bir.stmt)
   | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
       CodeLocationMap.empty
 
-and get_code_locs_stmts (p : Bir.program) (stmts : Bir.stmt list)
+and get_code_locs_stmts (p : Bir.program) (stmts : Mir.m_instruction list)
     (loc : Bir_interpreter.code_location) : code_locs =
   let locs, _ =
     List.fold_left

@@ -204,11 +204,11 @@ let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
 let fresh_cond_counter = ref 0
 
 let rec generate_stmts (program : program) (oc : Format.formatter)
-    (stmts : stmt list) =
+    (stmts : Mir.m_instruction list) =
   Format.pp_print_list (generate_stmt program) oc stmts
 
-and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
-    unit =
+and generate_stmt (program : program) (oc : Format.formatter)
+    (stmt : Mir.m_instruction) : unit =
   match Pos.unmark stmt with
   | Affectation (_var, _vi, _ve) -> assert false
   | IfThenElse (cond, tt, ff) ->
