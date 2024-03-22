@@ -18,11 +18,6 @@
 
 (**{1 Program values}*)
 
-(* Type of the values being passed around in the interpreter **)
-type var_literal =
-  | SimpleVar of Com.literal
-  | TableVar of int * Com.literal array
-
 (**{1 Instrumentation of the interpreter}*)
 
 (** The BIR interpreter can be instrumented to record which program locations
@@ -42,12 +37,6 @@ type code_location = code_location_segment list
 (** A program location is simply the path inside the program *)
 
 val format_code_location : Format.formatter -> code_location -> unit
-
-val assign_hook :
-  (Mir.Var.t -> (unit -> var_literal) -> code_location -> unit) ref
-(** The instrumentation of the interpreter is done through this reference. The
-    function that you assign to this reference will be called each time a
-    variable assignment is executed *)
 
 val exit_on_rte : bool ref
 (** If set to true, the interpreter exits the whole process in case of runtime
@@ -74,22 +63,11 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  (** Functor-specific variable values *)
-  type var_value = SimpleVar of value | TableVar of int * value array
-
-  val format_var_value : Format.formatter -> var_value -> unit
-
-  val format_var_value_prec :
-    int -> int -> Format.formatter -> var_value -> unit
-
-  val format_var_value_with_var :
-    Format.formatter -> Mir.Var.t * var_value -> unit
-
   type print_ctx = { indent : int; is_newline : bool }
 
   type ctx = {
-    ctx_tgv : var_value Array.t;
-    mutable ctx_tmps : var_value Array.t list;
+    ctx_tgv : value Array.t;
+    mutable ctx_tmps : value Array.t list;
     ctx_it : Mir.Var.t StrMap.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
@@ -108,11 +86,7 @@ module type S = sig
 
   val literal_to_value : Com.literal -> value
 
-  val var_literal_to_var_value : var_literal -> var_value
-
   val value_to_literal : value -> Com.literal
-
-  val var_value_to_var_literal : var_value -> var_literal
 
   val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> ctx
 

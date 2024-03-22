@@ -79,10 +79,9 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (output : string option) (run_all_tests : string option)
     (dgfip_test_filter : bool) (run_test : string option)
     (mpp_function : string) (optimize_unsafe_float : bool)
-    (code_coverage : bool) (precision : string option)
-    (roundops : string option) (comparison_error_margin : float option)
-    (income_year : int option) (m_clean_calls : bool)
-    (dgfip_options : string list option) =
+    (precision : string option) (roundops : string option)
+    (comparison_error_margin : float option) (income_year : int option)
+    (m_clean_calls : bool) (dgfip_options : string list option) =
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -197,19 +196,15 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         | false -> fun _ -> true
         | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
       in
-      Test_interpreter.check_all_tests combined_program tests code_coverage
-        value_sort round_ops filter_function
+      Test_interpreter.check_all_tests combined_program tests value_sort
+        round_ops filter_function
     else if run_test <> None then begin
       Bir_interpreter.repl_debug := true;
-      if code_coverage then
-        Cli.warning_print
-          "The code coverage flag is ignored when running a single test";
       let test : string =
         match run_test with Some s -> s | _ -> assert false
       in
       ignore
-        (Test_interpreter.check_test combined_program test false value_sort
-           round_ops);
+        (Test_interpreter.check_test combined_program test value_sort round_ops);
       Cli.result_print "Test passed!"
     end
     else begin

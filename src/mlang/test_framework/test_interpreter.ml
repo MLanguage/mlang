@@ -62,8 +62,7 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
 exception InterpError of int
 
 let check_test (combined_program : Bir.program) (test_name : string)
-    (code_coverage : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) : Bir_instrumentation.code_coverage_result =
+    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) : unit =
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -73,7 +72,6 @@ let check_test (combined_program : Bir.program) (test_name : string)
   Cli.debug_print "Executing program";
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program combined_program; *)
-  if code_coverage then Bir_instrumentation.code_coverage_init ();
   let varMap, anoSet =
     Bir_interpreter.evaluate_program combined_program input_file value_sort
       round_ops
@@ -99,25 +97,13 @@ let check_test (combined_program : Bir.program) (test_name : string)
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
   let nbErrs = check_vars expVars varMap + check_anos expAnos anoSet in
-  if nbErrs > 0 then raise (InterpError nbErrs);
-  if code_coverage then Bir_instrumentation.code_coverage_result ()
-  else Bir_instrumentation.empty_code_coverage_result
+  if nbErrs > 0 then raise (InterpError nbErrs)
 
-type process_acc =
-  string list * int StrMap.t * Bir_instrumentation.code_coverage_acc
-
-type coverage_kind =
-  | NotCovered
-  | Covered of int  (** The int is the number of different values *)
-
-let incr_int_key (m : int IntMap.t) (key : int) : int IntMap.t =
-  match IntMap.find_opt key m with
-  | None -> IntMap.add key 0 m
-  | Some i -> IntMap.add key (i + 1) m
+type process_acc = string list * int StrMap.t
 
 let check_all_tests (p : Bir.program) (test_dir : string)
-    (code_coverage_activated : bool) (value_sort : Cli.value_sort)
-    (round_ops : Cli.round_ops) (filter_function : string -> bool) =
+    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops)
+    (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
   let arr =
     Array.of_list
@@ -132,43 +118,35 @@ let check_all_tests (p : Bir.program) (test_dir : string)
   Cli.warning_flag := false;
   Cli.display_time := false;
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
-  let process (name : string)
-      ((successes, failures, code_coverage_acc) : process_acc) : process_acc =
+  let process (name : string) ((successes, failures) : process_acc) :
+      process_acc =
     let module Interp = (val Bir_interpreter.get_interp value_sort round_ops
                            : Bir_interpreter.S)
     in
     try
       Cli.debug_flag := false;
-      let code_coverage_result =
-        check_test p (test_dir ^ name) code_coverage_activated value_sort
-          round_ops
-      in
+      check_test p (test_dir ^ name) value_sort round_ops;
       Cli.debug_flag := true;
-      let code_coverage_acc =
-        Bir_instrumentation.merge_code_coverage_single_results_with_acc
-          code_coverage_result code_coverage_acc
-      in
       Cli.result_print "%s" name;
-      (name :: successes, failures, code_coverage_acc)
+      (name :: successes, failures)
     with
-    | InterpError nbErr ->
-        (successes, StrMap.add name nbErr failures, code_coverage_acc)
+    | InterpError nbErr -> (successes, StrMap.add name nbErr failures)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
-        (successes, failures, code_coverage_acc)
+        (successes, failures)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
         | Interp.StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
-            (successes, failures, code_coverage_acc)
+            (successes, failures)
         | Interp.NanOrInf (msg, (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format_position pos;
-            (successes, failures, code_coverage_acc))
+            (successes, failures))
     | Irj_ast.TestParsingError (msg, pos) as e ->
         Cli.error_print "Parsing error: %s %a" msg Pos.format_position
           (convert_pos pos);
@@ -177,15 +155,10 @@ let check_all_tests (p : Bir.program) (test_dir : string)
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e
   in
-  let s, f, code_coverage =
-    Parmap.parfold ~chunksize:5 process (Parmap.A arr)
-      ([], StrMap.empty, Mir.VariableMap.empty)
-      (fun (old_s, old_f, old_code_coverage) (new_s, new_f, new_code_coverage)
-      ->
-        ( new_s @ old_s,
-          StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f,
-          Bir_instrumentation.merge_code_coverage_acc old_code_coverage
-            new_code_coverage ))
+  let s, f =
+    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], StrMap.empty)
+      (fun (old_s, old_f) (new_s, new_f) ->
+        (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))
   in
   (* finish "done!"; *)
   Cli.warning_flag := true;
@@ -197,77 +170,4 @@ let check_all_tests (p : Bir.program) (test_dir : string)
     Cli.warning_print "Failures:";
     StrMap.iter
       (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
-      f);
-  if code_coverage_activated then begin
-    let all_code_locs = Bir_instrumentation.get_code_locs p in
-    let all_code_locs_with_coverage =
-      Bir_instrumentation.CodeLocationMap.mapi
-        (fun code_loc var ->
-          match Mir.VariableMap.find_opt var code_coverage with
-          | None -> NotCovered
-          | Some used_code_locs -> (
-              match
-                Bir_instrumentation.CodeLocationMap.find_opt code_loc
-                  used_code_locs
-              with
-              | None -> NotCovered
-              | Some def ->
-                  Covered (Bir_instrumentation.VarLiteralSet.cardinal def)))
-        all_code_locs
-    in
-    let all_code_locs_num =
-      Bir_instrumentation.CodeLocationMap.cardinal all_code_locs_with_coverage
-    in
-    let number_of_values_to_number_of_statements =
-      Bir_instrumentation.CodeLocationMap.fold
-        (fun _ cov number_of_values_to_number_of_statements ->
-          match cov with
-          | NotCovered ->
-              incr_int_key number_of_values_to_number_of_statements 0
-          | Covered i -> incr_int_key number_of_values_to_number_of_statements i)
-        all_code_locs_with_coverage IntMap.empty
-    in
-    Cli.result_print
-      "Here is the estimated code coverage of this set of test runs, broke down";
-    Cli.result_print "by the number of values statements are covered with:";
-    let number_of_values_to_number_of_statements =
-      List.sort
-        (fun x y -> compare (fst x) (fst y))
-        (IntMap.bindings number_of_values_to_number_of_statements)
-    in
-    let number_of_values_to_number_of_statements =
-      let rec build_list (i : int) (input : (int * int) list) =
-        match input with
-        | [] -> []
-        | (i', n) :: tl ->
-            if i' = i then (i', n) :: build_list (i + 1) tl
-            else (i, 0) :: build_list (i + 1) input
-      in
-      build_list 0 number_of_values_to_number_of_statements
-    in
-    let number_zero, number_one, number_two_or_more =
-      match number_of_values_to_number_of_statements with
-      | (0, number_zero) :: (1, number_one) :: rest ->
-          ( number_zero,
-            number_one,
-            List.fold_left (fun acc (_, n) -> acc + n) 0 rest )
-      | _ -> assert false
-    in
-    let number_of_values_to_number_of_statements =
-      [
-        ("zero", number_zero);
-        ("one", number_one);
-        ("two or more", number_two_or_more);
-      ]
-    in
-    List.iter
-      (fun (number_of_values, number_of_statements) ->
-        Cli.result_print "%s values → %d (%s of statements)"
-          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%s" number_of_values)
-          number_of_statements
-          (ANSITerminal.sprintf [ ANSITerminal.blue ] "%.4f%%"
-             (float_of_int number_of_statements
-             /. float_of_int all_code_locs_num
-             *. 100.)))
-      number_of_values_to_number_of_statements
-  end
+      f)
