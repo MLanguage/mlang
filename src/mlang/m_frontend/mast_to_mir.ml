@@ -384,7 +384,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
       Mir.TargetMap.add (Pos.unmark target_name) target_data targets)
     ts Mir.TargetMap.empty
 
-let translate (p : Mast.program) : Mir.program =
+let translate (p : Mast.program) (main_target : string) : Mir.program =
   let p = Expand_macros.proceed p in
   let prog = Check_validity.proceed p in
   let prog_targets = prog.prog_targets in
@@ -392,6 +392,9 @@ let translate (p : Mast.program) : Mir.program =
   let var_data = prog.prog_vars in
   let errs = prog.prog_errors in
   let targets = get_targets errs var_category_map var_data prog_targets in
+  if not (Mir.TargetMap.mem main_target targets) then
+    Errors.raise_error
+      (Format.asprintf "M target %s not found in M file!" main_target);
   Mir.
     {
       program_safe_prefix = prog.prog_prefix;
@@ -401,5 +404,6 @@ let translate (p : Mast.program) : Mir.program =
       program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
       program_targets = targets;
+      program_main_target = main_target;
       program_stats = prog.prog_stats;
     }
