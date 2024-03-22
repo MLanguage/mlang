@@ -17,25 +17,13 @@
 let create_combined_program (m_program : Mir.program)
     (mpp_function_to_extract : string) : Bir.program =
   try
-    let targets =
-      Mir.TargetMap.fold
-        (fun n t targets ->
-          Mir.TargetMap.add n
-            Bir.
-              {
-                file = t.Mir.target_file;
-                tmp_vars = t.Mir.target_tmp_vars;
-                stmts = t.Mir.target_prog;
-              }
-            targets)
-        m_program.program_targets Mir.TargetMap.empty
-    in
-    if not (Mir.TargetMap.mem mpp_function_to_extract targets) then
+    if not (Mir.TargetMap.mem mpp_function_to_extract m_program.program_targets)
+    then
       Errors.raise_error
         (Format.asprintf "M target %s not found in M file!"
            mpp_function_to_extract);
     {
-      targets;
+      targets = m_program.program_targets;
       main_function = mpp_function_to_extract;
       mir_program = m_program;
     }

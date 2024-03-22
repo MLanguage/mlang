@@ -14,25 +14,17 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type stmt = Mir.Var.t Com.m_instruction
-
-type target_function = {
-  file : string option;
-  tmp_vars : (Mir.Var.t * Pos.t * int option) StrMap.t;
-  stmts : stmt list;
-}
-
 type program = {
-  targets : target_function Mir.TargetMap.t;
+  targets : Mir.target_data Mir.TargetMap.t;
   main_function : string;
   mir_program : Mir.program;
 }
 
-val main_statements : program -> stmt list
+val main_statements : program -> Mir.m_instruction list
 
 val format_program : Format.formatter -> program -> unit
 
-val remove_empty_conditionals : stmt list -> stmt list
+val remove_empty_conditionals : Mir.m_instruction list -> Mir.m_instruction list
 
 val get_used_variables_ :
   Mir.expression Pos.marked -> Mir.VariableSet.t -> Mir.VariableSet.t

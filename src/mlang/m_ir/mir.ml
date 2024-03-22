@@ -278,6 +278,8 @@ type rule_domain = rule_domain_data domain
 
 type instruction = Var.t Com.instruction
 
+type m_instruction = instruction Pos.marked
+
 module TargetMap = StrMap
 
 type target_data = {
@@ -285,7 +287,9 @@ type target_data = {
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
   target_tmp_vars : (Var.t * Pos.t * int option) StrMap.t;
-  target_prog : instruction Pos.marked list;
+  target_nb_vars : int;
+  target_sz_vars : int;
+  target_prog : m_instruction list;
 }
 
 (**{1 Verification conditions}*)
@@ -304,6 +308,10 @@ type stats = {
   nb_base : int;
   nb_input : int;
   nb_vars : int;
+  sz_calculated : int;
+  sz_base : int;
+  sz_input : int;
+  sz_vars : int;
 }
 
 type program = {
