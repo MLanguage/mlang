@@ -412,7 +412,17 @@ let empty_program (p : Mast.program) prog_app =
     prog_verifs = IntMap.empty;
     prog_vdom_calls = StrMap.empty;
     prog_targets = StrMap.empty;
-    prog_stats = { nb_calculated = 0; nb_base = 0; nb_input = 0; nb_vars = 0 };
+    prog_stats =
+      {
+        nb_calculated = 0;
+        nb_base = 0;
+        nb_input = 0;
+        nb_vars = 0;
+        sz_calculated = 0;
+        sz_base = 0;
+        sz_input = 0;
+        sz_vars = 0;
+      };
   }
 
 let get_seq (prog : program) : int * program =
@@ -769,8 +779,8 @@ let complete_vars (prog : program) : program =
         (map : 'a t) : unit =
       pp ~sep ~pp_key ~assoc pp_val fmt map
   end in
-  let loc_vars =
-    let fold _ (var : Mir.Var.t) (loc_vars, n) =
+  let loc_vars, sz_loc_vars, sz_vars =
+    let fold _ (var : Mir.Var.t) (loc_vars, sz_loc_vars, n) =
       let var = Mir.Var.{ var with loc = Mir.set_loc_int var.loc n } in
       let loc_cat =
         match Mir.Var.cat var with
@@ -779,19 +789,30 @@ let complete_vars (prog : program) : program =
             data.Com.loc
         | None -> assert false
       in
-      let upd = function
-        | None -> Some (Mir.VariableSet.singleton var)
-        | Some set -> Some (Mir.VariableSet.add var set)
+      let loc_vars =
+        let upd = function
+          | None -> Some (Mir.VariableSet.singleton var)
+          | Some set -> Some (Mir.VariableSet.add var set)
+        in
+        CatLocMap.update loc_cat upd loc_vars
       in
-      let loc_vars = CatLocMap.update loc_cat upd loc_vars in
-      (loc_vars, n + 1)
+      let sz = match var.is_table with None -> 1 | Some sz -> sz in
+      let sz_loc_vars =
+        let upd = function
+          | None -> Some sz
+          | Some n_loc -> Some (n_loc + sz)
+        in
+        CatLocMap.update loc_cat upd sz_loc_vars
+      in
+      (loc_vars, sz_loc_vars, n + sz)
     in
-    (CatLocMap.empty, 0) |> StrMap.fold fold prog.prog_vars |> fst
+    StrMap.fold fold prog.prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
   in
   let update_loc loc_cat (var : Mir.Var.t) (vars, n) =
     let loc = Mir.set_loc_tgv var.loc loc_cat n in
     let vars = StrMap.add var.id Mir.Var.{ var with loc } vars in
-    (vars, n + 1)
+    let sz = match var.is_table with None -> 1 | Some sz -> sz in
+    (vars, n + sz)
   in
   let prog_vars =
     CatLocMap.fold
@@ -804,6 +825,11 @@ let complete_vars (prog : program) : program =
     | Some set -> Mir.VariableSet.cardinal set
     | None -> 0
   in
+  let sz_loc loc_cat =
+    match CatLocMap.find_opt loc_cat sz_loc_vars with
+    | Some sz -> sz
+    | None -> 0
+  in
   let prog_stats =
     Mir.
       {
@@ -811,6 +837,10 @@ let complete_vars (prog : program) : program =
         nb_input = nb_loc Com.LocInput;
         nb_base = nb_loc Com.LocBase;
         nb_vars = StrMap.cardinal prog_vars;
+        sz_calculated = sz_loc Com.LocCalculated;
+        sz_input = sz_loc Com.LocInput;
+        sz_base = sz_loc Com.LocBase;
+        sz_vars;
       }
   in
   { prog with prog_vars; prog_stats }

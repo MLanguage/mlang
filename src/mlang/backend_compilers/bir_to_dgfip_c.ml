@@ -376,8 +376,8 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
       Format.fprintf fmt "@]@,}"
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (stmt : stmt)
-    =
+    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
+    (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
   | Affectation (var, vidx_opt, vexpr) ->
       Format.fprintf oc "@[<v 2>{@,";
@@ -591,7 +591,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (stmts : stmt list) =
+    (stmts : Mir.m_instruction list) =
   Format.fprintf oc "@[<v>";
   Format.pp_print_list (generate_stmt dgfip_flags program var_indexes) oc stmts;
   Format.fprintf oc "@]"
@@ -627,13 +627,15 @@ let generate_var_tmp_decls (oc : Format.formatter)
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (f : string)
     =
-  let { tmp_vars; stmts; _ } = Mir.TargetMap.find f program.targets in
+  let Mir.{ target_tmp_vars; target_prog; _ } =
+    Mir.TargetMap.find f program.targets
+  in
   Format.fprintf oc "@[<v 2>%a{@,%a%s@\n%a%s@\n%s@]@,}@,"
     (generate_target_prototype false)
-    f generate_var_tmp_decls tmp_vars
+    f generate_var_tmp_decls target_tmp_vars
     (if dgfip_flags.flg_trace then "aff1(\"debut " ^ f ^ "\\n\") ;" else "")
     (generate_stmts dgfip_flags program var_indexes)
-    stmts
+    target_prog
     (if dgfip_flags.flg_trace then "aff1(\"fin " ^ f ^ "\\n\") ;" else "")
     {|
 #ifdef FLG_MULTITHREAD
@@ -648,8 +650,8 @@ let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
     (var_indexes : Dgfip_varid.var_id_map) =
   let targets = Mir.TargetMap.bindings program.Bir.targets in
   List.iter
-    (fun (name, { file; _ }) ->
-      let file_str = match file with Some s -> s | None -> "" in
+    (fun (name, Mir.{ target_file; _ }) ->
+      let file_str = match target_file with Some s -> s | None -> "" in
       let _, fmt = StrMap.find file_str filemap in
       generate_target
         (dgfip_flags : Dgfip_options.flags)
@@ -680,8 +682,8 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
   Format.fprintf oc "%a@\n@." generate_implem_header Prelude.message;
   let filemap =
     Mir.TargetMap.fold
-      (fun _ t filemap ->
-        let file_str = match t.Bir.file with Some s -> s | None -> "" in
+      (fun _ (t : Mir.target_data) filemap ->
+        let file_str = match t.target_file with Some s -> s | None -> "" in
         let update = function
           | Some fmt -> Some fmt
           | None ->

@@ -346,7 +346,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
       let target_tmp_vars =
         StrMap.map (fun ((_, pos), size) -> (pos, size)) t.Mast.target_tmp_vars
       in
-      let tmp_var_data, _ =
+      let tmp_var_data, target_sz_vars =
         StrMap.fold
           (fun name (pos, size) (tmp_var_data, n) ->
             let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
@@ -354,7 +354,8 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
               Mir.Var.new_temp ~name:(name, pos) ~is_table:size' ~loc_int:n
             in
             let tmp_var_data = StrMap.add name var tmp_var_data in
-            (tmp_var_data, n + 1))
+            let sz = match var.is_table with None -> 1 | Some sz -> sz in
+            (tmp_var_data, n + sz))
           target_tmp_vars (var_data, 0)
       in
       let target_tmp_vars =
@@ -376,6 +377,8 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             target_apps;
             target_tmp_vars;
             target_prog;
+            target_nb_vars = StrMap.cardinal target_tmp_vars;
+            target_sz_vars;
           }
       in
       Mir.TargetMap.add (Pos.unmark target_name) target_data targets)

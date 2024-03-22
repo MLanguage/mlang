@@ -14,22 +14,14 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type stmt = Mir.Var.t Com.m_instruction
-
-type target_function = {
-  file : string option;
-  tmp_vars : (Mir.Var.t * Pos.t * int option) StrMap.t;
-  stmts : stmt list;
-}
-
 type program = {
-  targets : target_function Mir.TargetMap.t;
+  targets : Mir.target_data Mir.TargetMap.t;
   main_function : string;
   mir_program : Mir.program;
 }
 
-let main_statements (p : program) : stmt list =
-  try (Mir.TargetMap.find p.main_function p.targets).stmts
+let main_statements (p : program) : Mir.m_instruction list =
+  try (Mir.TargetMap.find p.main_function p.targets).target_prog
   with Not_found ->
     Errors.raise_error "Unable to find main function of Bir program"
 
@@ -37,7 +29,8 @@ let format_program fmt (p : program) =
   let format_stmts = Com.format_instructions Format_mir.format_variable in
   Format.fprintf fmt "%a" format_stmts (main_statements p)
 
-let rec remove_empty_conditionals (stmts : stmt list) : stmt list =
+let rec remove_empty_conditionals (stmts : Mir.m_instruction list) :
+    Mir.m_instruction list =
   List.rev
     (List.fold_left
        (fun acc stmt ->
