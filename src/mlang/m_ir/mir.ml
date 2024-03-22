@@ -324,6 +324,7 @@ type program = {
       (** A static register of all variables that can be used during a
           calculation *)
   program_targets : target_data TargetMap.t;
+  program_main_target : string;
   program_stats : stats;
 }
 

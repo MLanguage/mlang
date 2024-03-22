@@ -107,7 +107,7 @@ module type S = sig
 
   val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Bir.program -> ctx -> int -> ctx
+  val evaluate_program : Mir.program -> ctx -> int -> ctx
 end
 
 module FloatDefInterp :
@@ -165,7 +165,7 @@ module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
 val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
-  Bir.program ->
+  Mir.program ->
   Com.literal Mir.VariableMap.t ->
   Cli.value_sort ->
   Cli.round_ops ->

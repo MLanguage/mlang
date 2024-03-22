@@ -87,7 +87,7 @@ module type S = sig
 
   val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Bir.program -> ctx -> int -> ctx
+  val evaluate_program : Mir.program -> ctx -> int -> ctx
 end
 
 module Make (N : Bir_number.NumberInterface) (RF : Bir_roundops.RoundOpsFunctor) =
@@ -477,12 +477,12 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let set_var_value (p : Bir.program) (ctx : ctx) (var : Mir.Var.t)
+  let set_var_value (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
       (vexpr : Mir.expression Pos.marked) : unit =
     let tab =
       if Mir.Var.is_temp var then List.hd ctx.ctx_tmps else ctx.ctx_tgv
     in
-    let value = evaluate_expr ctx p.mir_program vexpr in
+    let value = evaluate_expr ctx p vexpr in
     match var.is_table with
     | None -> tab.(Mir.Var.loc_int var) <- value
     | Some sz ->
@@ -490,24 +490,24 @@ struct
           tab.(Mir.Var.loc_int var + i) <- value
         done
 
-  let set_var_value_tab (p : Bir.program) (ctx : ctx) (var : Mir.Var.t)
+  let set_var_value_tab (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
       (ei : Mir.expression Pos.marked) (vexpr : Mir.expression Pos.marked) :
       unit =
     let tab =
       if Mir.Var.is_temp var then List.hd ctx.ctx_tmps else ctx.ctx_tgv
     in
-    match evaluate_expr ctx p.mir_program ei with
+    match evaluate_expr ctx p ei with
     | Undefined -> ()
     | Number f ->
         let i = int_of_float (N.to_float f) in
         let sz = match var.is_table with None -> 1 | Some sz -> sz in
         if 0 <= i && i < sz then
-          let value = evaluate_expr ctx p.mir_program vexpr in
+          let value = evaluate_expr ctx p vexpr in
           tab.(Mir.Var.loc_int var + i) <- value
 
   exception BlockingError of ctx
 
-  let rec evaluate_stmt (canBlock : bool) (p : Bir.program) (ctx : ctx)
+  let rec evaluate_stmt (canBlock : bool) (p : Mir.program) (ctx : ctx)
       (stmt : Mir.m_instruction) (loc : code_location) =
     match Pos.unmark stmt with
     | Com.Affectation (var, vidx_opt, vexpr) ->
@@ -521,7 +521,7 @@ struct
         | Some (_, ei) -> set_var_value_tab p ctx var ei vexpr);
         ctx
     | Com.IfThenElse (b, t, f) -> (
-        match evaluate_expr ctx p.mir_program b with
+        match evaluate_expr ctx p b with
         | Number z when N.(z =. zero ()) ->
             evaluate_stmts canBlock p ctx f (ConditionalBranch false :: loc) 0
         | Number _ ->
@@ -530,7 +530,7 @@ struct
     | Com.VerifBlock stmts ->
         evaluate_stmts true p ctx stmts (InsideBlock 0 :: loc) 0
     | Com.ComputeTarget (f, _args) ->
-        let tf = Mir.TargetMap.find f p.targets in
+        let tf = Mir.TargetMap.find f p.program_targets in
         evaluate_target canBlock p ctx loc f tf
     | Com.Print (std, args) -> (
         let std_fmt, ctx_pr =
@@ -577,13 +577,13 @@ struct
                   | None -> assert false)
               | PrintIndent e ->
                   let diff =
-                    match evaluate_expr ctx p.mir_program e with
+                    match evaluate_expr ctx p e with
                     | Undefined -> 0
                     | Number x -> Int64.to_int (N.to_int (roundf x))
                   in
                   { ctx_pr with indent = max 0 (ctx_pr.indent + diff) }
               | PrintExpr (e, mi, ma) ->
-                  let value = evaluate_expr ctx p.mir_program e in
+                  let value = evaluate_expr ctx p e in
                   let ctx_pr = pr_indent ctx_pr in
                   format_value_prec mi ma std_fmt value;
                   ctx_pr)
@@ -600,14 +600,14 @@ struct
                 let ctx =
                   { ctx with ctx_it = StrMap.add var.id v ctx.ctx_it }
                 in
-                match evaluate_expr ctx p.mir_program expr with
+                match evaluate_expr ctx p expr with
                 | Number z when N.(z =. one ()) ->
                     evaluate_stmts canBlock p ctx stmts
                       (ConditionalBranch true :: loc)
                       0
                 | _ -> ctx
               else ctx)
-            p.Bir.mir_program.program_vars ctx
+            p.program_vars ctx
         in
         Com.CatVarSet.fold eval vcs ctx
     | Com.Restore (vars, var_params, stmts) ->
@@ -643,7 +643,7 @@ struct
                         let ctx =
                           { ctx with ctx_it = StrMap.add var.id v ctx.ctx_it }
                         in
-                        match evaluate_expr ctx p.mir_program expr with
+                        match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
                             let tab =
                               if Mir.Var.is_temp v then List.hd ctx.ctx_tmps
@@ -661,7 +661,7 @@ struct
                             aux backup 0
                         | _ -> backup
                       else backup)
-                    p.Bir.mir_program.program_vars backup)
+                    p.program_vars backup)
                 vcs backup)
             backup var_params
         in
@@ -750,7 +750,7 @@ struct
            err.Mir.name)) ctx.ctx_finalized_anos;*)
         { ctx with ctx_exported_anos; ctx_finalized_anos = [] }
 
-  and evaluate_stmts canBlock (p : Bir.program) (ctx : ctx)
+  and evaluate_stmts canBlock (p : Mir.program) (ctx : ctx)
       (stmts : Mir.m_instruction list) (loc : code_location) (start_value : int)
       : ctx =
     let ctx, _ =
@@ -764,7 +764,7 @@ struct
     in
     ctx
 
-  and evaluate_target canBlock (p : Bir.program) (ctx : ctx)
+  and evaluate_target canBlock (p : Mir.program) (ctx : ctx)
       (loc : code_location) (_tn : string) (tf : Mir.target_data) =
     let env = Array.make tf.target_sz_vars Undefined in
     ctx.ctx_tmps <- env :: ctx.ctx_tmps;
@@ -772,17 +772,21 @@ struct
     ctx.ctx_tmps <- List.tl ctx.ctx_tmps;
     ctx
 
-  let evaluate_program (p : Bir.program) (ctx : ctx)
+  let evaluate_program (p : Mir.program) (ctx : ctx)
       (code_loc_start_value : int) : ctx =
     try
       let main_target =
-        match Mir.TargetMap.find_opt p.main_function p.targets with
+        match
+          Mir.TargetMap.find_opt p.program_main_target p.program_targets
+        with
         | Some t -> t
         | None ->
             Errors.raise_error "Unable to find main function of Bir program"
       in
       let loc = [ InsideBlock code_loc_start_value ] in
-      let ctx = evaluate_target false p ctx loc p.main_function main_target in
+      let ctx =
+        evaluate_target false p ctx loc p.program_main_target main_target
+      in
       evaluate_stmt false p ctx (Com.ExportErrors, Pos.no_pos) loc
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e
@@ -882,14 +886,12 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Bir.program) (inputs : Com.literal Mir.VariableMap.t)
+let evaluate_program (p : Mir.program) (inputs : Com.literal Mir.VariableMap.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
     float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
-  let ctx =
-    Interp.update_ctx_with_inputs (Interp.empty_ctx p.mir_program) inputs
-  in
+  let ctx = Interp.update_ctx_with_inputs (Interp.empty_ctx p) inputs in
   let ctx = Interp.evaluate_program p ctx 0 in
   let varMap =
     let fold name (var : Mir.Var.t) res =
@@ -901,7 +903,7 @@ let evaluate_program (p : Bir.program) (inputs : Com.literal Mir.VariableMap.t)
       in
       StrMap.add name fVal res
     in
-    StrMap.fold fold p.mir_program.program_vars StrMap.empty
+    StrMap.fold fold p.program_vars StrMap.empty
   in
   let anoSet =
     let fold res (e, _) = StrSet.add (Pos.unmark e.Com.Error.name) res in
