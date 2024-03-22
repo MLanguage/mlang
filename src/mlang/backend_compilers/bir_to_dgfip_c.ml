@@ -14,7 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Bir
 module D = DecoupledExpr
 
 let str_escape str =
@@ -375,9 +374,9 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
         (generate_c_expr vexpr var_indexes);
       Format.fprintf fmt "@]@,}"
 
-let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
-    (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
-    (stmt : Mir.m_instruction) =
+let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
+    (program : Mir.program) (var_indexes : Dgfip_varid.var_id_map)
+    (oc : Format.formatter) (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
   | Affectation (var, vidx_opt, vexpr) ->
       Format.fprintf oc "@[<v 2>{@,";
@@ -485,9 +484,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
       let it_name = fresh_c_local "iterate" in
       Com.CatVarSet.iter
         (fun vc ->
-          let vcd =
-            Com.CatVarMap.find vc program.mir_program.Mir.program_var_categories
-          in
+          let vcd = Com.CatVarMap.find vc program.program_var_categories in
           let var_indexes =
             Mir.VariableMap.add var
               (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
@@ -534,10 +531,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
           let it_name = fresh_c_local "iterate" in
           Com.CatVarSet.iter
             (fun vc ->
-              let vcd =
-                Com.CatVarMap.find vc
-                  program.mir_program.Mir.program_var_categories
-              in
+              let vcd = Com.CatVarMap.find vc program.program_var_categories in
               let var_indexes =
                 Mir.VariableMap.add var
                   (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
@@ -589,7 +583,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (program : program)
   | ExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
   | FinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
 
-and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : program)
+and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)
     (stmts : Mir.m_instruction list) =
   Format.fprintf oc "@[<v>";
@@ -624,11 +618,11 @@ let generate_var_tmp_decls (oc : Format.formatter)
     tmp_vars;
   if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,"
 
-let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
+let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (f : string)
     =
   let Mir.{ target_tmp_vars; target_prog; _ } =
-    Mir.TargetMap.find f program.targets
+    Mir.TargetMap.find f program.program_targets
   in
   Format.fprintf oc "@[<v 2>%a{@,%a%s@\n%a%s@\n%s@]@,}@,"
     (generate_target_prototype false)
@@ -645,10 +639,10 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
 #endif
 |}
 
-let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Bir.program)
+let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t)
     (var_indexes : Dgfip_varid.var_id_map) =
-  let targets = Mir.TargetMap.bindings program.Bir.targets in
+  let targets = Mir.TargetMap.bindings program.program_targets in
   List.iter
     (fun (name, Mir.{ target_file; _ }) ->
       let file_str = match target_file with Some s -> s | None -> "" in
@@ -670,8 +664,9 @@ let generate_implem_header oc msg =
 |}
     msg
 
-let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
-    (filename : string) (vm : Dgfip_varid.var_id_map) : unit =
+let generate_c_program (dgfip_flags : Dgfip_options.flags)
+    (program : Mir.program) (filename : string) (vm : Dgfip_varid.var_id_map) :
+    unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
@@ -694,7 +689,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (program : program)
               Some (oc, fmt)
         in
         StrMap.update file_str update filemap)
-      program.Bir.targets
+      program.program_targets
       (StrMap.singleton "" (_oc, oc))
   in
   generate_targets dgfip_flags program filemap vm;

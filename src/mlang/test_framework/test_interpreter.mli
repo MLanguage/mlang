@@ -14,14 +14,14 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 val check_test :
-  Bir.program ->
+  Mir.program ->
   (* test file name *) string ->
   Cli.value_sort ->
   Cli.round_ops ->
   unit
 
 val check_all_tests :
-  Bir.program ->
+  Mir.program ->
   string ->
   Cli.value_sort ->
   Cli.round_ops ->

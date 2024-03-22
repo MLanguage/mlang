@@ -14,8 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Bir
-
 let java_imports : string =
   {|
 package com.mlang;
@@ -203,11 +201,11 @@ let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
 
 let fresh_cond_counter = ref 0
 
-let rec generate_stmts (program : program) (oc : Format.formatter)
+let rec generate_stmts (program : Mir.program) (oc : Format.formatter)
     (stmts : Mir.m_instruction list) =
   Format.pp_print_list (generate_stmt program) oc stmts
 
-and generate_stmt (program : program) (oc : Format.formatter)
+and generate_stmt (program : Mir.program) (oc : Format.formatter)
     (stmt : Mir.m_instruction) : unit =
   match Pos.unmark stmt with
   | Affectation (_var, _vi, _ve) -> assert false
@@ -283,7 +281,11 @@ let generate_return (oc : Format.formatter) (_x : 'a) =
     print_outputs returned_variables
 
 let generate_calculateTax_method (calculation_vars_len : int)
-    (program : program) (locals_size : int) (oc : Format.formatter) () =
+    (program : Mir.program) (locals_size : int) (oc : Format.formatter) () =
+  let main_statements =
+    (Mir.TargetMap.find program.program_main_target program.program_targets)
+      .target_prog
+  in
   Format.fprintf oc
     "@[<v 0>/**@,\
      * Main calculation method for determining tax @,\
@@ -317,9 +319,9 @@ let generate_calculateTax_method (calculation_vars_len : int)
      @,"
     print_double_cut () calculation_vars_len locals_size print_double_cut ()
     print_double_cut () print_double_cut () (generate_stmts program)
-    (Bir.main_statements program)
+    main_statements
 
-let generate_main_class (program : program) (var_table_size : int)
+let generate_main_class (program : Mir.program) (var_table_size : int)
     (locals_size : int) (fmt : Format.formatter) (filename : string) =
   let class_name =
     String.split_on_char '.' filename |> List.hd |> String.split_on_char '/'
@@ -339,7 +341,7 @@ let generate_main_class (program : program) (var_table_size : int)
     (generate_calculateTax_method var_table_size program locals_size)
     () generate_return []
 
-let generate_java_program (program : program) 
+let generate_java_program (program : Mir.program) 
     (filename : string) : unit =
   let split_treshold = 100 in
   let _oc = open_out filename in

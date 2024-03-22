@@ -25,18 +25,16 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Mir.Var.t =
     let name = Mir.find_var_name_by_alias p name in
     StrMap.find name p.program_vars
 
-let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
+let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     float StrMap.t * StrSet.t * Com.literal Mir.VariableMap.t =
   let input_file =
-    let ancsded =
-      find_var_of_name program.mir_program ("V_ANCSDED", Pos.no_pos)
-    in
+    let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
     let ancsded_val =
       Com.Float (float_of_int (Option.get !Cli.income_year + 1))
     in
     List.fold_left
       (fun in_f (var, value, pos) ->
-        let var = find_var_of_name program.mir_program (var, convert_pos pos) in
+        let var = find_var_of_name program (var, convert_pos pos) in
         let lit =
           match value with
           | Irj_ast.I i -> Com.Float (float_of_int i)
@@ -61,20 +59,17 @@ let to_MIR_function_and_inputs (program : Bir.program) (t : Irj_ast.irj_file) :
 
 exception InterpError of int
 
-let check_test (combined_program : Bir.program) (test_name : string)
+let check_test (program : Mir.program) (test_name : string)
     (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) : unit =
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let expVars, expAnos, input_file =
-    to_MIR_function_and_inputs combined_program t
-  in
+  let expVars, expAnos, input_file = to_MIR_function_and_inputs program t in
   Cli.debug_print "Executing program";
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
-     Format_bir.format_program combined_program; *)
+     Format_bir.format_program program; *)
   let varMap, anoSet =
-    Bir_interpreter.evaluate_program combined_program input_file value_sort
-      round_ops
+    Bir_interpreter.evaluate_program program input_file value_sort round_ops
   in
   let check_vars exp vars =
     let test_error_margin = 0.01 in
@@ -101,7 +96,7 @@ let check_test (combined_program : Bir.program) (test_name : string)
 
 type process_acc = string list * int StrMap.t
 
-let check_all_tests (p : Bir.program) (test_dir : string)
+let check_all_tests (p : Mir.program) (test_dir : string)
     (value_sort : Cli.value_sort) (round_ops : Cli.round_ops)
     (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
