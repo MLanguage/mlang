@@ -112,14 +112,6 @@ let run_test =
     & info [ "run_test"; "r" ] ~docv:"TESTS"
         ~doc:"Run specific test passed as argument")
 
-let code_coverage =
-  Arg.(
-    value & flag
-    & info [ "code_coverage" ]
-        ~doc:
-          "Instruments the interpreter to retrieve the code coverage (use with \
-           --run_all_tests)")
-
 let precision =
   Arg.(
     value
@@ -191,8 +183,8 @@ let mlang_t f =
     const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
     $ dep_graph_file $ no_print_cycles $ backend $ output $ run_all_tests
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
-    $ code_coverage $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
+    $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
