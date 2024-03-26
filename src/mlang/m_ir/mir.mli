@@ -38,7 +38,7 @@ module Var : sig
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
-    cat : Com.cat_variable option;
+    cat : Com.cat_variable;
     typ : Mast.value_typ option;
   }
 
@@ -48,6 +48,7 @@ module Var : sig
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
     is_table : int option;
+    is_given_back : bool;
     loc : loc;
     scope : scope;
   }
@@ -64,7 +65,7 @@ module Var : sig
 
   val attrs : t -> int Pos.marked StrMap.t
 
-  val cat : t -> Com.cat_variable option
+  val cat : t -> Com.cat_variable
 
   val loc_tgv : t -> loc_tgv
 
@@ -79,10 +80,11 @@ module Var : sig
   val new_tgv :
     name:string Pos.marked ->
     is_table:int option ->
+    is_given_back:bool ->
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
     attrs:int Pos.marked StrMap.t ->
-    cat:Com.cat_variable option ->
+    cat:Com.cat_variable ->
     typ:Mast.value_typ option ->
     t
 
@@ -141,8 +143,9 @@ type target_data = {
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
   target_tmp_vars : (Var.t * Pos.t * int option) StrMap.t;
-  target_nb_vars : int;
-  target_sz_vars : int;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_its : int;
   target_prog : m_instruction list;
 }
 
@@ -155,10 +158,13 @@ type stats = {
   nb_base : int;
   nb_input : int;
   nb_vars : int;
+  nb_all_tmps : int;
+  nb_all_its : int;
   sz_calculated : int;
   sz_base : int;
   sz_input : int;
   sz_vars : int;
+  sz_all_tmps : int;
 }
 
 type program = {

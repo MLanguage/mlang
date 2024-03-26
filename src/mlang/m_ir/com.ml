@@ -1,39 +1,18 @@
-type cat_computed = Base | GivenBack
-
-let pp_cat_computed fmt = function
-  | Base -> Format.fprintf fmt "base"
-  | GivenBack -> Format.fprintf fmt "restituee"
-
-module CatCompSet = struct
-  include SetExt.Make (struct
-    type t = cat_computed
-
-    let compare = compare
-  end)
-
-  let pp ?(sep = " ") ?(pp_elt = pp_cat_computed) (_ : unit)
-      (fmt : Format.formatter) (set : t) : unit =
-    pp ~sep ~pp_elt () fmt set
-end
-
-type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+type cat_variable = CatInput of StrSet.t | CatComputed of { is_base : bool }
 
 let pp_cat_variable fmt = function
   | CatInput id ->
       let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
       Format.fprintf fmt "saisie%a" pp id
   | CatComputed id ->
-      let pp fmt set =
-        CatCompSet.iter (Format.fprintf fmt " %a" pp_cat_computed) set
-      in
-      Format.fprintf fmt "calculee%a" pp id
+      Format.fprintf fmt "calculee%s" (if id.is_base then " base" else "")
 
 let compare_cat_variable a b =
   match (a, b) with
   | CatInput _, CatComputed _ -> 1
   | CatComputed _, CatInput _ -> -1
   | CatInput id0, CatInput id1 -> StrSet.compare id0 id1
-  | CatComputed c0, CatComputed c1 -> CatCompSet.compare c0 c1
+  | CatComputed c0, CatComputed c1 -> compare c0.is_base c1.is_base
 
 module CatVarSet = struct
   include SetExt.Make (struct

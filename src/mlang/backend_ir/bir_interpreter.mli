@@ -23,21 +23,6 @@
 (** The BIR interpreter can be instrumented to record which program locations
     have been executed. *)
 
-(** Representation of each program location segment *)
-type code_location_segment =
-  | InsideBlock of int
-  | ConditionalBranch of bool
-  | InsideFunction of string
-  | InsideIterate of Mir.Var.t
-
-val format_code_location_segment :
-  Format.formatter -> code_location_segment -> unit
-
-type code_location = code_location_segment list
-(** A program location is simply the path inside the program *)
-
-val format_code_location : Format.formatter -> code_location -> unit
-
 val exit_on_rte : bool ref
 (** If set to true, the interpreter exits the whole process in case of runtime
     error *)
@@ -63,22 +48,24 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  type print_ctx = { indent : int; is_newline : bool }
+  type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx = {
     ctx_tgv : value Array.t;
-    mutable ctx_tmps : value Array.t list;
-    ctx_it : Mir.Var.t StrMap.t;
+    ctx_tmps : value Array.t;
+    mutable ctx_tmps_org : int;
+    ctx_it : Mir.Var.t Array.t;
+    mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
-    ctx_anos : (Com.Error.t * string option) list;
-    ctx_old_anos : StrSet.t;
-    ctx_nb_anos : int;
-    ctx_nb_discos : int;
-    ctx_nb_infos : int;
-    ctx_nb_bloquantes : int;
-    ctx_finalized_anos : (Com.Error.t * string option) list;
-    ctx_exported_anos : (Com.Error.t * string option) list;
+    mutable ctx_anos : (Com.Error.t * string option) list;
+    mutable ctx_old_anos : StrSet.t;
+    mutable ctx_nb_anos : int;
+    mutable ctx_nb_discos : int;
+    mutable ctx_nb_infos : int;
+    mutable ctx_nb_bloquantes : int;
+    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
+    mutable ctx_exported_anos : (Com.Error.t * string option) list;
   }
   (** Interpretation context *)
 
@@ -88,7 +75,7 @@ module type S = sig
 
   val value_to_literal : value -> Com.literal
 
-  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> ctx
+  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> unit
 
   (** Interpreter runtime errors *)
   type run_error =
@@ -107,7 +94,7 @@ module type S = sig
 
   val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Mir.program -> ctx -> int -> ctx
+  val evaluate_program : Mir.program -> ctx -> unit
 end
 
 module FloatDefInterp :

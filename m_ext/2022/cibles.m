@@ -289,7 +289,7 @@ application : iliad;
 calculer cible trace_in;
 iterer
 : variable ITBASE
-: categorie calculee base *
+: categorie calculee base
 : dans (
   ITBASE = indefini;
 )
@@ -302,7 +302,7 @@ application : iliad;
 calculer cible trace_in;
 iterer
 : variable ITCAL
-: categorie calculee, calculee restituee
+: categorie calculee
 : dans (
   ITCAL = indefini;
 )

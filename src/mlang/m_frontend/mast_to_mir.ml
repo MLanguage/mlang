@@ -172,7 +172,7 @@ let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
 
 let rec translate_prog (error_decls : Com.Error.t StrMap.t)
     (cats : Com.cat_variable_data Com.CatVarMap.t)
-    (var_data : Mir.Var.t StrMap.t) prog =
+    (var_data : Mir.Var.t StrMap.t) (it_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
     | (Mast.Formula f, pos) :: il -> begin
@@ -273,12 +273,15 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             Errors.raise_spanned_error msg pos
         | _ -> ());
         let var =
-          Mir.Var.new_it ~name:(var_name, var_pos) ~is_table:None ~loc_int:(-1)
+          Mir.Var.new_it ~name:(var_name, var_pos) ~is_table:None
+            ~loc_int:it_depth
         in
         let var_data = StrMap.add var_name var var_data in
         let catSet = Check_validity.cats_variable_from_decl_list vcats cats in
         let mir_expr = translate_expression cats var_data expr in
-        let prog_it = translate_prog error_decls cats var_data instrs in
+        let prog_it =
+          translate_prog error_decls cats var_data (it_depth - 1) instrs
+        in
         aux ((Com.Iterate (var, catSet, mir_expr, prog_it), pos) :: res) il
     | (Mast.Restore (rest_params, instrs), pos) :: il ->
         let vars, var_params =
@@ -306,7 +309,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                   | _ -> ());
                   let var =
                     Mir.Var.new_it ~name:(var_name, var_pos) ~is_table:None
-                      ~loc_int:(-1)
+                      ~loc_int:it_depth
                   in
                   let var_data = StrMap.add var_name var var_data in
                   let catSet =
@@ -317,7 +320,9 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                   (vars, var_params))
             ([], []) rest_params
         in
-        let prog_rest = translate_prog error_decls cats var_data instrs in
+        let prog_rest =
+          translate_prog error_decls cats var_data it_depth instrs
+        in
         aux ((Com.Restore (vars, var_params, prog_rest), pos) :: res) il
     | (Mast.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) error_decls in
@@ -339,14 +344,15 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
     (var_data : Mir.Var.t StrMap.t) (ts : Mast.target StrMap.t) :
     Mir.target_data Mir.TargetMap.t =
   StrMap.fold
-    (fun _ t targets ->
-      let target_name = t.Mast.target_name in
-      let target_file = t.Mast.target_file in
-      let target_apps = t.Mast.target_apps in
+    (fun _ (t : Mast.target) targets ->
+      let target_name = t.target_name in
+      let target_file = t.target_file in
+      let target_apps = t.target_apps in
       let target_tmp_vars =
-        StrMap.map (fun ((_, pos), size) -> (pos, size)) t.Mast.target_tmp_vars
+        StrMap.map (fun ((_, pos), size) -> (pos, size)) t.target_tmp_vars
       in
-      let tmp_var_data, target_sz_vars =
+      let target_sz_tmps = t.target_sz_tmps in
+      let tmp_var_data, _ =
         StrMap.fold
           (fun name (pos, size) (tmp_var_data, n) ->
             let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
@@ -356,7 +362,8 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             let tmp_var_data = StrMap.add name var tmp_var_data in
             let sz = match var.is_table with None -> 1 | Some sz -> sz in
             (tmp_var_data, n + sz))
-          target_tmp_vars (var_data, 0)
+          target_tmp_vars
+          (var_data, -target_sz_tmps)
       in
       let target_tmp_vars =
         StrMap.mapi
@@ -367,7 +374,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
           target_tmp_vars
       in
       let target_prog =
-        translate_prog error_decls cats tmp_var_data t.Mast.target_prog
+        translate_prog error_decls cats tmp_var_data (-1) t.target_prog
       in
       let target_data =
         Mir.
@@ -377,8 +384,9 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             target_apps;
             target_tmp_vars;
             target_prog;
-            target_nb_vars = StrMap.cardinal target_tmp_vars;
-            target_sz_vars;
+            target_nb_tmps = t.target_nb_tmps;
+            target_sz_tmps;
+            target_nb_its = t.target_nb_its;
           }
       in
       Mir.TargetMap.add (Pos.unmark target_name) target_data targets)
@@ -386,15 +394,12 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
 
 let translate (p : Mast.program) (main_target : string) : Mir.program =
   let p = Expand_macros.proceed p in
-  let prog = Check_validity.proceed p in
+  let prog = Check_validity.proceed p main_target in
   let prog_targets = prog.prog_targets in
   let var_category_map = prog.prog_var_cats in
   let var_data = prog.prog_vars in
   let errs = prog.prog_errors in
   let targets = get_targets errs var_category_map var_data prog_targets in
-  if not (Mir.TargetMap.mem main_target targets) then
-    Errors.raise_error
-      (Format.asprintf "M target %s not found in M file!" main_target);
   Mir.
     {
       program_safe_prefix = prog.prog_prefix;
@@ -404,6 +409,6 @@ let translate (p : Mast.program) (main_target : string) : Mir.program =
       program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
       program_targets = targets;
-      program_main_target = main_target;
+      program_main_target = prog.prog_main_target;
       program_stats = prog.prog_stats;
     }

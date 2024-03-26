@@ -200,16 +200,11 @@ let parse_if_then_etc l =
 
 let parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked =
   let open Com in
-  let base = CatCompSet.singleton Base in
-  let givenBack = CatCompSet.singleton GivenBack in
-  let baseAndGivenBack = base |> CatCompSet.add GivenBack in
   function
   | [ ("*", _) ], id_pos ->
       CatVarSet.singleton (CatInput (StrSet.singleton "*"))
-      |> CatVarSet.add (CatComputed CatCompSet.empty)
-      |> CatVarSet.add (CatComputed base)
-      |> CatVarSet.add (CatComputed givenBack)
-      |> CatVarSet.add (CatComputed baseAndGivenBack)
+      |> CatVarSet.add (CatComputed { is_base = false })
+      |> CatVarSet.add (CatComputed { is_base = true })
       |> Pos.mark id_pos
   | [ ("saisie", _); ("*", _) ], id_pos ->
       CatVarSet.singleton (CatInput (StrSet.singleton "*")) |> Pos.mark id_pos
@@ -219,26 +214,14 @@ let parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked =
   | ("calculee", _) :: id, id_pos -> (
       match id with
       | [] ->
-          CatVarSet.singleton (CatComputed CatCompSet.empty) |> Pos.mark id_pos
+          CatVarSet.singleton (CatComputed { is_base = false })
+          |> Pos.mark id_pos
       | [ ("base", _) ] ->
-          CatVarSet.singleton (CatComputed base) |> Pos.mark id_pos
-      | [ ("base", _); ("*", _) ] ->
-          CatVarSet.singleton (CatComputed base)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
+          CatVarSet.singleton (CatComputed { is_base = true })
           |> Pos.mark id_pos
-      | [ ("restituee", _) ] ->
-          CatVarSet.singleton (CatComputed givenBack) |> Pos.mark id_pos
-      | [ ("restituee", _); ("*", _) ] ->
-          CatVarSet.singleton (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
-          |> Pos.mark id_pos
-      | [ ("base", _); ("restituee", _) ] | [ ("restituee", _); ("base", _) ] ->
-          CatVarSet.singleton (CatComputed baseAndGivenBack) |> Pos.mark id_pos
       | [ ("*", _) ] ->
-          CatVarSet.singleton (CatComputed CatCompSet.empty)
-          |> CatVarSet.add (CatComputed base)
-          |> CatVarSet.add (CatComputed givenBack)
-          |> CatVarSet.add (CatComputed baseAndGivenBack)
+          CatVarSet.singleton (CatComputed { is_base = false })
+          |> CatVarSet.add (CatComputed { is_base = true })
           |> Pos.mark id_pos
       | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
   | _, id_pos -> Errors.raise_spanned_error "invalid variable category" id_pos

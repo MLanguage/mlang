@@ -52,7 +52,7 @@ module Var = struct
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
-    cat : Com.cat_variable option;
+    cat : Com.cat_variable;
     typ : Mast.value_typ option;
   }
 
@@ -62,6 +62,7 @@ module Var = struct
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
     is_table : int option;
+    is_given_back : bool;
     loc : loc;
     scope : scope;
   }
@@ -105,13 +106,14 @@ module Var = struct
     { loc_id = ""; loc_cat = Com.LocInput; loc_idx = 0; loc_int = 0 }
 
   let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
-      ~(alias : string Pos.marked option) ~(descr : string Pos.marked)
-      ~(attrs : int Pos.marked StrMap.t) ~(cat : Com.cat_variable option)
-      ~(typ : Mast.value_typ option) : t =
+      ~(is_given_back : bool) ~(alias : string Pos.marked option)
+      ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
+      ~(cat : Com.cat_variable) ~(typ : Mast.value_typ option) : t =
     {
       name;
       id = Pos.unmark name;
       is_table;
+      is_given_back;
       loc = LocTgv (Pos.unmark name, init_loc);
       scope = Tgv { alias; descr; attrs; cat; typ };
     }
@@ -119,12 +121,26 @@ module Var = struct
   let new_temp ~(name : string Pos.marked) ~(is_table : int option)
       ~(loc_int : int) : t =
     let loc = LocTmp (Pos.unmark name, loc_int) in
-    { name; id = Pos.unmark name; is_table; loc; scope = Temp }
+    {
+      name;
+      id = Pos.unmark name;
+      is_table;
+      is_given_back = false;
+      loc;
+      scope = Temp;
+    }
 
   let new_it ~(name : string Pos.marked) ~(is_table : int option)
       ~(loc_int : int) : t =
     let loc = LocIt (Pos.unmark name, loc_int) in
-    { name; id = Pos.unmark name; is_table; loc; scope = It }
+    {
+      name;
+      id = Pos.unmark name;
+      is_table;
+      is_given_back = false;
+      loc;
+      scope = It;
+    }
 
   let int_of_scope = function Tgv _ -> 0 | Temp -> 1 | It -> 2
 
@@ -287,8 +303,9 @@ type target_data = {
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
   target_tmp_vars : (Var.t * Pos.t * int option) StrMap.t;
-  target_nb_vars : int;
-  target_sz_vars : int;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_its : int;
   target_prog : m_instruction list;
 }
 
@@ -308,10 +325,13 @@ type stats = {
   nb_base : int;
   nb_input : int;
   nb_vars : int;
+  nb_all_tmps : int;
+  nb_all_its : int;
   sz_calculated : int;
   sz_base : int;
   sz_input : int;
   sz_vars : int;
+  sz_all_tmps : int;
 }
 
 type program = {

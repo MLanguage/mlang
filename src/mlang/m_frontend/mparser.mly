@@ -215,15 +215,12 @@ verif_domain_decl:
     VerifDomDecl decl
   }
 
-var_comp_category:
-| BASE { "base" }
-| GIVEN_BACK { "restituee" }
-| TIMES { "*" }
-
 var_category_id:
 | INPUT TIMES { ["saisie", Pos.no_pos; "*", Pos.no_pos] }
 | INPUT l = symbol_with_pos+ { ("saisie", Pos.no_pos) :: l }
-| COMPUTED l = with_pos(var_comp_category)* { ("calculee", Pos.no_pos) :: l }
+| COMPUTED TIMES { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED BASE { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED { ["calculee", Pos.no_pos] }
 | TIMES { ["*", Pos.no_pos] }
 
 vdom_param:
@@ -305,7 +302,7 @@ comp_variable:
     in
     let comp_category =
       subtyp
-      |> List.filter (function CompSubTyp _ -> true | _ -> false) 
+      |> List.filter (function CompSubTyp ("base", _) -> true | _ -> false) 
       |> List.map (function CompSubTyp x -> x | _ -> assert false)
     in
     let comp_is_givenback =
@@ -464,6 +461,9 @@ target_etc:
       target_file = None;
       target_apps;
       target_tmp_vars;
+      target_nb_tmps = -1;
+      target_sz_tmps = -1;
+      target_nb_its = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l

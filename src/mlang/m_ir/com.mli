@@ -1,8 +1,4 @@
-type cat_computed = Base | GivenBack
-
-module CatCompSet : SetExt.T with type elt = cat_computed
-
-type cat_variable = CatInput of StrSet.t | CatComputed of CatCompSet.t
+type cat_variable = CatInput of StrSet.t | CatComputed of { is_base : bool }
 
 module CatVarSet : SetExt.T with type elt = cat_variable
 
