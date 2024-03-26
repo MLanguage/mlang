@@ -157,6 +157,9 @@ type target = {
   target_file : string option;
   target_apps : application Pos.marked StrMap.t;
   target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_its : int;
   target_prog : instruction Pos.marked list;
 }
 
