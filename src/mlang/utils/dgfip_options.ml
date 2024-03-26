@@ -187,8 +187,7 @@ let handler (income_year : int) (application_name : string) (iliad_pro : bool)
     annee_revenu = income_year;
     flg_correctif = not primitive_only;
     flg_iliad =
-      ((iliad_pro && (not cfir))
-      || application_name = "iliad" )
+      ((iliad_pro && not cfir) || application_name = "iliad")
       && not (Option.is_some batch);
     flg_pro = (application_name = "pro" || iliad_pro) && not cfir;
     flg_cfir = cfir && not iliad_pro;
