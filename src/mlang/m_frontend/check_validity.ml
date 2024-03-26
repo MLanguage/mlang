@@ -287,6 +287,10 @@ module Err = struct
         Pos.format_position old_pos
     in
     Errors.raise_spanned_error msg pos
+
+  let main_target_not_found main_target =
+    Errors.raise_error
+      (Format.sprintf "main target \"%s\" not found" main_target)
 end
 
 type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
@@ -343,6 +347,7 @@ type program = {
   prog_vdom_calls :
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
+  prog_main_target : string;
   prog_stats : Mir.stats;
 }
 
@@ -392,7 +397,7 @@ let safe_prefix (p : Mast.program) : string =
   in
   make_prefix sorted_names
 
-let empty_program (p : Mast.program) prog_app =
+let empty_program (p : Mast.program) prog_app main_target =
   {
     prog_prefix = safe_prefix p;
     prog_seq = 0;
@@ -412,16 +417,20 @@ let empty_program (p : Mast.program) prog_app =
     prog_verifs = IntMap.empty;
     prog_vdom_calls = StrMap.empty;
     prog_targets = StrMap.empty;
+    prog_main_target = main_target;
     prog_stats =
       {
         nb_calculated = 0;
         nb_base = 0;
         nb_input = 0;
         nb_vars = 0;
+        nb_all_tmps = 0;
+        nb_all_its = 0;
         sz_calculated = 0;
         sz_base = 0;
         sz_input = 0;
         sz_vars = 0;
+        sz_all_tmps = 0;
       };
   }
 
@@ -464,13 +473,9 @@ let check_chaining (name : string) (pos : Pos.t)
 let get_var_cat_id_str (var_cat : Com.cat_variable) : string =
   let buf = Buffer.create 100 in
   (match var_cat with
-  | Com.CatComputed ccs ->
+  | Com.CatComputed { is_base } ->
       Buffer.add_string buf "calculee";
-      Com.CatCompSet.iter
-        (function
-          | Com.Base -> Buffer.add_string buf "_base"
-          | Com.GivenBack -> Buffer.add_string buf "_restituee")
-        ccs
+      if is_base then Buffer.add_string buf "_base"
   | Com.CatInput ss ->
       Buffer.add_string buf "saisie";
       let add buf s =
@@ -488,8 +493,8 @@ let get_var_cat_id_str (var_cat : Com.cat_variable) : string =
 
 let get_var_cat_loc (var_cat : Com.cat_variable) : Com.cat_variable_loc =
   match var_cat with
-  | Com.CatComputed ccs ->
-      if Com.CatCompSet.mem Com.Base ccs then Com.LocBase else Com.LocCalculated
+  | Com.CatComputed { is_base } ->
+      if is_base then Com.LocBase else Com.LocCalculated
   | Com.CatInput _ -> Com.LocInput
 
 let get_var_cats (cat_decl : Mast.var_category_decl) : Com.cat_variable list =
@@ -498,14 +503,8 @@ let get_var_cats (cat_decl : Mast.var_category_decl) : Com.cat_variable list =
       let id = StrSet.from_marked_list cat_decl.Mast.var_category in
       [ Com.CatInput id ]
   | Mast.Computed ->
-      let base = Com.CatCompSet.singleton Base in
-      let givenBack = Com.CatCompSet.singleton GivenBack in
-      let baseAndGivenBack = base |> Com.CatCompSet.add GivenBack in
       [
-        Com.CatComputed Com.CatCompSet.empty;
-        Com.CatComputed base;
-        Com.CatComputed givenBack;
-        Com.CatComputed baseAndGivenBack;
+        Com.CatComputed { is_base = false }; Com.CatComputed { is_base = true };
       ]
 
 let check_var_category (cat_decl : Mast.var_category_decl) (decl_pos : Pos.t)
@@ -554,7 +553,7 @@ let get_attributes (attr_list : Mast.variable_attribute list) :
 let check_global_var (var : Mir.Var.t) (prog : program) : program =
   let name, name_pos = var.name in
   let cat =
-    let cat = Option.get (Mir.Var.cat var) in
+    let cat = Mir.Var.cat var in
     match Com.CatVarMap.find_opt cat prog.prog_var_cats with
     | None -> Err.variable_of_unknown_category cat name_pos
     | Some cat -> cat
@@ -597,28 +596,22 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       in
       let var =
         Mir.Var.new_tgv ~name:input_var.Mast.input_name ~is_table:None
+          ~is_given_back:input_var.input_is_givenback
           ~alias:(Some input_var.Mast.input_alias)
           ~descr:input_var.Mast.input_description
           ~attrs:(get_attributes input_var.Mast.input_attributes)
-          ~cat:(Some global_category)
+          ~cat:global_category
           ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
       in
       check_global_var var prog
   | Mast.ComputedVar (comp_var, _decl_pos) ->
       let global_category =
-        let comp_set =
+        let is_base =
           List.fold_left
-            (fun res (str, _pos) ->
-              let elt =
-                match str with
-                | "base" -> Com.Base
-                | "restituee" -> Com.GivenBack
-                | _ -> assert false
-              in
-              Com.CatCompSet.add elt res)
-            Com.CatCompSet.empty comp_var.comp_category
+            (fun res (str, _pos) -> match str with "base" -> true | _ -> res)
+            false comp_var.comp_category
         in
-        Com.CatComputed comp_set
+        Com.CatComputed { is_base }
       in
       let global_table =
         match comp_var.Mast.comp_table with
@@ -628,9 +621,10 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       in
       let var =
         Mir.Var.new_tgv ~name:comp_var.Mast.comp_name ~is_table:global_table
-          ~alias:None ~descr:comp_var.Mast.comp_description
+          ~is_given_back:comp_var.comp_is_givenback ~alias:None
+          ~descr:comp_var.Mast.comp_description
           ~attrs:(get_attributes comp_var.Mast.comp_attributes)
-          ~cat:(Some global_category)
+          ~cat:global_category
           ~typ:(Option.map Pos.unmark comp_var.Mast.comp_typ)
       in
       check_global_var var prog
@@ -783,11 +777,7 @@ let complete_vars (prog : program) : program =
     let fold _ (var : Mir.Var.t) (loc_vars, sz_loc_vars, n) =
       let var = Mir.Var.{ var with loc = Mir.set_loc_int var.loc n } in
       let loc_cat =
-        match Mir.Var.cat var with
-        | Some cat ->
-            let data = Com.CatVarMap.find cat prog.prog_var_cats in
-            data.Com.loc
-        | None -> assert false
+        (Com.CatVarMap.find (Mir.Var.cat var) prog.prog_var_cats).loc
       in
       let loc_vars =
         let upd = function
@@ -830,6 +820,101 @@ let complete_vars (prog : program) : program =
     | Some sz -> sz
     | None -> 0
   in
+  let prog_targets =
+    let rec aux nbIt = function
+      | [] -> nbIt
+      | (instr, _) :: il -> (
+          match instr with
+          | Mast.IfThenElse (_, ilt, ile) ->
+              aux (nbIt + max (aux 0 ilt) (aux 0 ile)) il
+          | Mast.VerifBlock instrs -> aux (nbIt + aux 0 instrs) il
+          | Mast.Iterate (_, _, _, instrs) -> aux (nbIt + 1 + aux 0 instrs) il
+          | Mast.Restore (_, instrs) -> aux (nbIt + max 1 (aux 0 instrs)) il
+          | Mast.ComputeTarget _ | Mast.Formula _ | Mast.Print _
+          | Mast.RaiseError _ | Mast.CleanErrors | Mast.ExportErrors
+          | Mast.FinalizeErrors ->
+              aux nbIt il
+          | Mast.ComputeDomain _ | Mast.ComputeChaining _ | Mast.ComputeVerifs _
+            ->
+              assert false)
+    in
+    let map (t : Mast.target) =
+      let target_nb_tmps = StrMap.cardinal t.target_tmp_vars in
+      let target_sz_tmps =
+        let fold _ (_, tsz_opt) sz =
+          match tsz_opt with
+          | None -> sz + 1
+          | Some (tsz, _) -> sz + Mast.get_table_size tsz
+        in
+        StrMap.fold fold t.target_tmp_vars 0
+      in
+      let target_nb_its = aux 0 t.target_prog in
+      { t with target_nb_tmps; target_sz_tmps; target_nb_its }
+    in
+    StrMap.map map prog.prog_targets
+  in
+  let nb_all_tmps, sz_all_tmps, nb_all_its =
+    let rec aux (nb, sz, nbIt, tdata) = function
+      | [] -> (nb, sz, nbIt, tdata)
+      | (instr, _) :: il -> (
+          match instr with
+          | Mast.ComputeTarget tn ->
+              let name = Pos.unmark tn in
+              let target = StrMap.find name prog_targets in
+              let nb1, sz1 = (target.target_nb_tmps, target.target_sz_tmps) in
+              let nbt, szt, nbItT, tdata =
+                match StrMap.find_opt name tdata with
+                | None ->
+                    let nbt, szt, nbItT, tdata =
+                      aux (0, 0, 0, tdata) target.target_prog
+                    in
+                    let tdata = StrMap.add name (nbt, szt, nbItT) tdata in
+                    (nbt, szt, nbItT, tdata)
+                | Some (nbt, szt, nbItT) -> (nbt, szt, nbItT, tdata)
+              in
+              let nb = nb + nb1 + nbt in
+              let sz = sz + sz1 + szt in
+              let nbIt = nbIt + nbItT in
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.IfThenElse (_, ilt, ile) ->
+              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) ilt in
+              let nb2, sz2, nbIt2, tdata = aux (0, 0, 0, tdata) ile in
+              let nb = nb + max nb1 nb2 in
+              let sz = sz + max sz1 sz2 in
+              let nbIt = nbIt + max nbIt1 nbIt2 in
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.VerifBlock instrs ->
+              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbIt = nbIt + nbIt1 in
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.Iterate (_, _, _, instrs) ->
+              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbIt = nbIt + 1 + nbIt1 in
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.Restore (_, instrs) ->
+              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbIt = nbIt + max 1 nbIt1 in
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.Formula _ | Mast.Print _ | Mast.RaiseError _ | Mast.CleanErrors
+          | Mast.ExportErrors | Mast.FinalizeErrors ->
+              aux (nb, sz, nbIt, tdata) il
+          | Mast.ComputeDomain _ | Mast.ComputeChaining _ | Mast.ComputeVerifs _
+            ->
+              assert false)
+    in
+    match StrMap.find_opt prog.prog_main_target prog_targets with
+    | None -> Err.main_target_not_found prog.prog_main_target
+    | Some t ->
+        let init_instrs = [ (Mast.ComputeTarget t.target_name, Pos.no_pos) ] in
+        let nb, sz, nbIt, _ = aux (0, 0, 0, StrMap.empty) init_instrs in
+        (nb, sz, nbIt)
+  in
   let prog_stats =
     Mir.
       {
@@ -837,13 +922,16 @@ let complete_vars (prog : program) : program =
         nb_input = nb_loc Com.LocInput;
         nb_base = nb_loc Com.LocBase;
         nb_vars = StrMap.cardinal prog_vars;
+        nb_all_tmps;
+        nb_all_its;
         sz_calculated = sz_loc Com.LocCalculated;
         sz_input = sz_loc Com.LocInput;
         sz_base = sz_loc Com.LocBase;
         sz_vars;
+        sz_all_tmps;
       }
   in
-  { prog with prog_vars; prog_stats }
+  { prog with prog_vars; prog_targets; prog_stats }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1082,7 +1170,7 @@ let rec fold_var_expr
       | Some var ->
           let cat = Mir.Var.cat var in
           if not (StrMap.mem (Pos.unmark a) (Mir.Var.attrs var)) then
-            Err.unknown_attribut_for_var (Option.get cat) (Pos.get_position a)
+            Err.unknown_attribut_for_var cat (Pos.get_position a)
       | None -> (
           match StrMap.find_opt name env.tmp_vars with
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
@@ -1437,7 +1525,14 @@ let check_target (t : Mast.target) (prog : program) : program =
     in
     let target =
       Mast.
-        { target_name; target_file; target_apps; target_tmp_vars; target_prog }
+        {
+          t with
+          target_name;
+          target_file;
+          target_apps;
+          target_tmp_vars;
+          target_prog;
+        }
     in
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets })
@@ -1446,7 +1541,14 @@ let check_target (t : Mast.target) (prog : program) : program =
     let target_prog = [] in
     let target =
       Mast.
-        { target_name; target_file; target_apps; target_tmp_vars; target_prog }
+        {
+          t with
+          target_name;
+          target_file;
+          target_apps;
+          target_tmp_vars;
+          target_prog;
+        }
     in
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets }
@@ -1552,6 +1654,9 @@ let convert_rules (prog : program) : program =
                 StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
               target_tmp_vars = StrMap.empty;
               target_prog = rule.rule_instrs;
+              target_nb_tmps = 0;
+              target_sz_tmps = 0;
+              target_nb_its = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -1696,6 +1801,9 @@ let complete_rule_domains (prog : program) : program =
                   StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
                 target_tmp_vars = StrMap.empty;
                 target_prog;
+                target_nb_tmps = 0;
+                target_sz_tmps = 0;
+                target_nb_its = 0;
               }
           in
           StrMap.add tname target prog_targets
@@ -1791,6 +1899,9 @@ let complete_chainings (prog : program) : program =
                 StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
               target_tmp_vars = StrMap.empty;
               target_prog;
+              target_nb_tmps = 0;
+              target_sz_tmps = 0;
+              target_nb_its = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -1845,11 +1956,11 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             let fold_var var idx_mem env (vdom_sts, var_sts) =
               let name = check_variable var idx_mem env in
               let var_data = StrMap.find name env.prog.prog_vars in
-              let cats = Option.get (Mir.Var.cat var_data) in
-              if not (Com.CatVarSet.mem cats verif_domain.dom_data.vdom_auth)
+              let cat = Mir.Var.cat var_data in
+              if not (Com.CatVarSet.mem cat verif_domain.dom_data.vdom_auth)
               then Err.variable_with_forbidden_category (Pos.get_position var);
               let incr = function None -> Some 1 | Some i -> Some (i + 1) in
-              let vdom_sts = Com.CatVarMap.update cats incr vdom_sts in
+              let vdom_sts = Com.CatVarMap.update cat incr vdom_sts in
               let var_sts = StrMap.update name incr var_sts in
               (vdom_sts, var_sts)
             in
@@ -1916,6 +2027,9 @@ let convert_verifs (prog : program) : program =
                 StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
               target_tmp_vars = StrMap.empty;
               target_prog;
+              target_nb_tmps = 0;
+              target_sz_tmps = 0;
+              target_nb_its = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2156,6 +2270,9 @@ let complete_verif_calls (prog : program) : program =
                     StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
                   target_tmp_vars = StrMap.empty;
                   target_prog;
+                  target_nb_tmps = 0;
+                  target_sz_tmps = 0;
+                  target_nb_its = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -2185,6 +2302,9 @@ let complete_verif_calls (prog : program) : program =
                     StrMap.singleton prog.prog_app (prog.prog_app, Pos.no_pos);
                   target_tmp_vars = StrMap.empty;
                   target_prog;
+                  target_nb_tmps = 0;
+                  target_sz_tmps = 0;
+                  target_nb_its = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -2195,7 +2315,7 @@ let complete_verif_calls (prog : program) : program =
   in
   { prog with prog_targets }
 
-let proceed (p : Mast.program) : program =
+let proceed (p : Mast.program) (main_target : string) : program =
   let app = "iliad" in
   (* à paramétrer *)
   let prog =
@@ -2218,8 +2338,9 @@ let proceed (p : Mast.program) : program =
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)
           prog source_file)
-      (empty_program p app) p
+      (empty_program p app main_target)
+      p
   in
-  prog |> complete_vars |> complete_rdom_decls |> complete_vdom_decls
-  |> convert_rules |> complete_rule_domains |> complete_chainings
-  |> convert_verifs |> complete_verif_calls
+  prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
+  |> complete_rule_domains |> complete_chainings |> convert_verifs
+  |> complete_verif_calls |> complete_vars

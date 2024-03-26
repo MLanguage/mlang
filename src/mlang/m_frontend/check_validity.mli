@@ -66,6 +66,7 @@ type program = {
   prog_vdom_calls :
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
+  prog_main_target : string;
   prog_stats : Mir.stats;
 }
 
@@ -78,4 +79,4 @@ val cats_variable_from_decl_list :
 val check_domain :
   rule_or_verif -> 'a Mast.domain_decl -> 'b -> 'b doms * syms -> 'b doms * syms
 
-val proceed : Mast.program -> program
+val proceed : Mast.program -> string -> program

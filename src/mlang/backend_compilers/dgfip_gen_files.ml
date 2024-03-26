@@ -843,17 +843,16 @@ let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        match Mir.Var.cat var with
-        | Some c when Com.compare_cat_variable c cat = 0 ->
-            Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-              (Pos.unmark var.Mir.Var.name)
-              (Mir.Var.alias_str var) idx size id_int;
-            StrMap.iter
-              (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-              (Mir.Var.attrs var);
-            Format.fprintf fmt " },\n";
-            nb + 1
-        | _ -> nb)
+        if Com.compare_cat_variable (Mir.Var.cat var) cat = 0 then (
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
+            (Pos.unmark var.Mir.Var.name)
+            (Mir.Var.alias_str var) idx size id_int;
+          StrMap.iter
+            (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
+            (Mir.Var.attrs var);
+          Format.fprintf fmt " },\n";
+          nb + 1)
+        else nb)
       var_dict 0
   in
   Format.fprintf fmt "  NULL\n};\n\n";
@@ -891,9 +890,7 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
   let var_dict =
     StrMap.fold
       (fun _ var dict ->
-        match Mir.Var.cat var with
-        | Some _ -> StrMap.add (Pos.unmark var.Mir.Var.name) (var, -1, -1) dict
-        | None -> dict)
+        StrMap.add (Pos.unmark var.Mir.Var.name) (var, -1, -1) dict)
       cprog.program_vars StrMap.empty
   in
   let var_dict =
