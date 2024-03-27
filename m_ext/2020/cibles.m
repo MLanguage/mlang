@@ -236,7 +236,7 @@ cible effacer_base_etc:
 application : iliad;
 iterer
 : variable ITBASE
-: categorie calculee base *
+: categorie calculee base
 : dans (
   ITBASE = indefini;
 )
@@ -245,7 +245,7 @@ cible effacer_calculee_etc:
 application : iliad;
 iterer
 : variable ITCAL
-: categorie calculee, calculee restituee
+: categorie calculee
 : dans (
   ITCAL = indefini;
 )

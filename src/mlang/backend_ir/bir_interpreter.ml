@@ -14,38 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type var_literal =
-  | SimpleVar of Mir.literal
-  | TableVar of int * Mir.literal array
-
-type code_location_segment =
-  | InsideBlock of int
-  | ConditionalBranch of bool
-  | InsideRule of Bir.rov_id
-  | InsideFunction of Bir.function_name
-  | InsideIterate of Bir.variable
-
-let format_code_location_segment (fmt : Format.formatter)
-    (s : code_location_segment) =
-  match s with
-  | InsideBlock i -> Format.fprintf fmt "#%d" i
-  | ConditionalBranch b -> Format.fprintf fmt "?%b" b
-  | InsideRule r -> Format.fprintf fmt "R_%d" (Mir.num_of_rule_or_verif_id r)
-  | InsideFunction f -> Format.fprintf fmt "%s" f
-  | InsideIterate v ->
-      Format.fprintf fmt "IT_%s" (Pos.unmark v.Bir.mir_var.name)
-
-type code_location = code_location_segment list
-
-let format_code_location (fmt : Format.formatter) (l : code_location) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt _ -> Format.fprintf fmt "->")
-    format_code_location_segment fmt l
-
-let assign_hook :
-    (Bir.variable -> (unit -> var_literal) -> code_location -> unit) ref =
-  ref (fun _var _lit _code_loc -> ())
-
 let exit_on_rte = ref true
 
 let repl_debug = ref false
@@ -59,50 +27,36 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  type var_value = SimpleVar of value | TableVar of int * value array
-
-  val format_var_value : Format.formatter -> var_value -> unit
-
-  val format_var_value_prec :
-    int -> int -> Format.formatter -> var_value -> unit
-
-  val format_var_value_with_var :
-    Format.formatter -> Bir.variable * var_value -> unit
-
-  type print_ctx = { indent : int; is_newline : bool }
+  type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx = {
-    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
-    ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_tgv : value Array.t;
+    ctx_tmps : value Array.t;
+    mutable ctx_tmps_org : int;
+    ctx_it : Mir.Var.t Array.t;
+    mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
-    ctx_anos : (Mir.error * string option) list;
-    ctx_old_anos : StrSet.t;
-    ctx_nb_anos : int;
-    ctx_nb_discos : int;
-    ctx_nb_infos : int;
-    ctx_nb_bloquantes : int;
-    ctx_finalized_anos : (Mir.error * string option) list;
-    ctx_exported_anos : (Mir.error * string option) list;
+    mutable ctx_anos : (Com.Error.t * string option) list;
+    mutable ctx_old_anos : StrSet.t;
+    mutable ctx_nb_anos : int;
+    mutable ctx_nb_discos : int;
+    mutable ctx_nb_infos : int;
+    mutable ctx_nb_bloquantes : int;
+    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
+    mutable ctx_exported_anos : (Com.Error.t * string option) list;
   }
 
-  val empty_ctx : ctx
+  val empty_ctx : Mir.program -> ctx
 
-  val literal_to_value : Mir.literal -> value
+  val literal_to_value : Com.literal -> value
 
-  val var_literal_to_var_value : var_literal -> var_value
+  val value_to_literal : value -> Com.literal
 
-  val value_to_literal : value -> Mir.literal
-
-  val var_value_to_var_literal : var_value -> var_literal
-
-  val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
-
-  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> unit
 
   type run_error =
-    | NanOrInf of string * Bir.expression Pos.marked
+    | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -110,11 +64,11 @@ module type S = sig
 
   val raise_runtime_as_structured : run_error -> 'a
 
-  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
 
-  val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
+  val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Bir.program -> ctx -> int -> ctx
+  val evaluate_program : Mir.program -> ctx -> unit
 end
 
 module Make (N : Bir_number.NumberInterface) (RF : Bir_roundops.RoundOpsFunctor) =
@@ -138,80 +92,45 @@ struct
 
   let format_value (fmt : Format.formatter) (x : value) =
     match x with
-    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_t fmt x
 
   let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
       (x : value) =
     match x with
-    | Undefined -> Format_mir.format_literal fmt Mir.Undefined
+    | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
 
-  type var_value = SimpleVar of value | TableVar of int * value array
-
-  let format_var_value (fmt : Format.formatter) (var_lit : var_value) : unit =
-    match var_lit with
-    | SimpleVar e -> Format.fprintf fmt "%a" format_value e
-    | TableVar (_, es) ->
-        Format.fprintf fmt "[%a]"
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-             (fun fmt e -> Format.fprintf fmt "%a" format_value e))
-          (Array.to_list es)
-
-  let format_var_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
-      (var_lit : var_value) : unit =
-    match var_lit with
-    | SimpleVar e -> Format.fprintf fmt "%a" (format_value_prec mi ma) e
-    | TableVar (_, es) ->
-        Format.fprintf fmt "[%a]"
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-             (fun fmt e -> Format.fprintf fmt "%a" (format_value_prec mi ma) e))
-          (Array.to_list es)
-
-  let format_var_value_with_var (fmt : Format.formatter)
-      ((var, vl) : Bir.variable * var_value) =
-    let var = Bir.var_to_mir var in
-    match vl with
-    | SimpleVar value ->
-        Format.fprintf fmt "%s (%s): %a"
-          (Pos.unmark var.Mir.Variable.name)
-          (Pos.unmark var.Mir.Variable.descr)
-          format_value value
-    | TableVar (size, values) ->
-        Format.fprintf fmt "%s (%s): Table (%d values)@\n"
-          (Pos.unmark var.Mir.Variable.name)
-          (Pos.unmark var.Mir.Variable.descr)
-          size;
-        List.iteri
-          (fun idx value ->
-            Format.fprintf fmt "| %d -> %a\n" idx format_value value)
-          (Array.to_list values)
-
-  type print_ctx = { indent : int; is_newline : bool }
+  type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx = {
-    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
-    ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_tgv : value Array.t;
+    ctx_tmps : value Array.t;
+    mutable ctx_tmps_org : int;
+    ctx_it : Mir.Var.t Array.t;
+    mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
-    ctx_anos : (Mir.error * string option) list;
-    ctx_old_anos : StrSet.t;
-    ctx_nb_anos : int;
-    ctx_nb_discos : int;
-    ctx_nb_infos : int;
-    ctx_nb_bloquantes : int;
-    ctx_finalized_anos : (Mir.error * string option) list;
-    ctx_exported_anos : (Mir.error * string option) list;
+    mutable ctx_anos : (Com.Error.t * string option) list;
+    mutable ctx_old_anos : StrSet.t;
+    mutable ctx_nb_anos : int;
+    mutable ctx_nb_discos : int;
+    mutable ctx_nb_infos : int;
+    mutable ctx_nb_bloquantes : int;
+    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
+    mutable ctx_exported_anos : (Com.Error.t * string option) list;
   }
 
-  let empty_ctx : ctx =
+  let empty_ctx (p : Mir.program) : ctx =
+    let dummy_var =
+      Mir.Var.new_it ~name:("", Pos.no_pos) ~is_table:None ~loc_int:(-1)
+    in
     {
-      ctx_local_vars = Mir.LocalVariableMap.empty;
-      ctx_vars = Bir.VariableMap.empty;
-      ctx_it = IntMap.empty;
+      ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
+      ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
+      ctx_tmps_org = 0;
+      ctx_it = Array.make p.program_stats.nb_all_its dummy_var;
+      ctx_it_org = 0;
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
@@ -224,69 +143,33 @@ struct
       ctx_exported_anos = [];
     }
 
-  let literal_to_value (l : Mir.literal) : value =
+  let literal_to_value (l : Com.literal) : value =
     match l with
-    | Mir.Undefined -> Undefined
-    | Mir.Float f -> Number (N.of_float f)
+    | Com.Undefined -> Undefined
+    | Com.Float f -> Number (N.of_float f)
 
-  let var_literal_to_var_value (def : var_literal) : var_value =
-    match def with
-    | SimpleVar v -> SimpleVar (literal_to_value v)
-    | TableVar (size, defs) ->
-        TableVar (size, Array.map (fun v -> literal_to_value v) defs)
-
-  let value_to_literal (l : value) : Mir.literal =
+  let value_to_literal (l : value) : Com.literal =
     match l with
-    | Undefined -> Mir.Undefined
-    | Number f -> Mir.Float (N.to_float f)
-
-  let var_value_to_var_literal (def : var_value) : var_literal =
-    let l : var_literal =
-      match def with
-      | SimpleVar v -> SimpleVar (value_to_literal v)
-      | TableVar (size, defs) ->
-          TableVar (size, Array.map (fun v -> value_to_literal v) defs)
-    in
-    l
+    | Undefined -> Com.Undefined
+    | Number f -> Com.Float (N.to_float f)
 
   let update_ctx_with_inputs (ctx : ctx)
-      (inputs : Mir.literal Bir.VariableMap.t) : ctx =
-    {
-      ctx with
-      ctx_vars =
-        Bir.VariableMap.fold
-          (fun var value ctx_vars ->
-            Bir.VariableMap.add var (SimpleVar value) ctx_vars)
-          (Bir.VariableMap.mapi
-             (fun v l ->
-               match l with
-               | Mir.Undefined -> Undefined
-               | Mir.Float f -> Number (N.of_float_input (Bir.var_to_mir v) f))
-             inputs)
-          ctx.ctx_vars;
-    }
-
-  let complete_ctx (ctx : ctx) (vars : Mir.VariableDict.t) : ctx =
-    {
-      ctx with
-      ctx_vars =
-        Mir.VariableDict.fold
-          (fun mvar ctx_vars ->
-            let var = Bir.(var_from_mir default_tgv) mvar in
-            match Bir.VariableMap.find_opt var ctx.ctx_vars with
-            | Some _ -> ctx_vars
-            | None ->
-                let value =
-                  match (Bir.var_to_mir var).is_table with
-                  | Some size -> TableVar (size, Array.make size Undefined)
-                  | None -> SimpleVar Undefined
-                in
-                Bir.VariableMap.add var value ctx_vars)
-          vars ctx.ctx_vars;
-    }
+      (inputs : Com.literal Mir.VariableMap.t) : unit =
+    let value_inputs =
+      Mir.VariableMap.mapi
+        (fun v l ->
+          match l with
+          | Com.Undefined -> Undefined
+          | Com.Float f -> Number (N.of_float_input v f))
+        inputs
+    in
+    Mir.VariableMap.iter
+      (fun (var : Mir.Var.t) value ->
+        ctx.ctx_tgv.(Mir.Var.loc_int var) <- value)
+      value_inputs
 
   type run_error =
-    | NanOrInf of string * Bir.expression Pos.marked
+    | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -297,7 +180,7 @@ struct
     | NanOrInf (v, e) ->
         Errors.raise_spanned_error
           (Format.asprintf "Expression evaluated to %s: %a" v
-             Format_bir.format_expression (Pos.unmark e))
+             Format_mir.format_expression (Pos.unmark e))
           (Pos.get_position e)
     | StructuredError (msg, pos, kont) ->
         raise (Errors.StructuredError (msg, pos, kont))
@@ -309,188 +192,193 @@ struct
 
   let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
 
-  let evaluate_array_index (index : value) (size : int) (values : value array) :
-      value =
-    let idx =
-      match index with
-      | Undefined -> assert false (* should not happen *)
-      | Number f -> roundf f
-    in
-    if N.(idx >=. N.of_int (Int64.of_int size)) then Undefined
-    else if N.(idx <. N.zero ()) then Number (N.zero ())
-    else values.(Int64.to_int (N.to_int idx))
-
   let compare_numbers op i1 i2 =
     let epsilon = N.of_float !Cli.comparison_error_margin in
+    let open Com in
     match op with
-    | Mast.Gt -> N.(i1 >. i2 +. epsilon)
-    | Mast.Gte -> N.(i1 >. i2 -. epsilon)
-    | Mast.Lt -> N.(i1 +. epsilon <. i2)
-    | Mast.Lte -> N.(i1 -. epsilon <. i2)
-    | Mast.Eq -> N.(N.abs (i1 -. i2) <. epsilon)
-    | Mast.Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
+    | Gt -> N.(i1 >. i2 +. epsilon)
+    | Gte -> N.(i1 >. i2 -. epsilon)
+    | Lt -> N.(i1 +. epsilon <. i2)
+    | Lte -> N.(i1 -. epsilon <. i2)
+    | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
+    | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
+
+  let rec get_var ctx (var : Mir.Var.t) =
+    match var.loc with
+    | LocIt (_, i) -> get_var ctx ctx.ctx_it.(ctx.ctx_it_org + i)
+    | _ -> var
+
+  let get_var_value ctx (var : Mir.Var.t) =
+    let var = get_var ctx var in
+    if Mir.Var.is_temp var then
+      ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var)
+    else ctx.ctx_tgv.(Mir.Var.loc_int var)
+
+  let get_var_tab ctx var idx =
+    match idx with
+    | Undefined -> Undefined
+    | Number f ->
+        let var = get_var ctx (Pos.unmark var) in
+        let idx_f = roundf f in
+        let sz = match var.is_table with None -> 1 | Some sz -> sz in
+        if N.(idx_f >=. N.of_int (Int64.of_int sz)) then Undefined
+        else if N.(idx_f <. N.zero ()) then Number (N.zero ())
+        else
+          let i = Int64.to_int (N.to_int idx_f) in
+          if Mir.Var.is_temp var then
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i)
+          else ctx.ctx_tgv.(Mir.Var.loc_int var + i)
 
   let rec evaluate_expr (ctx : ctx) (p : Mir.program)
-      (e : Bir.expression Pos.marked) : value =
+      (e : Mir.expression Pos.marked) : value =
+    let comparison op new_e1 new_e2 =
+      match (op, new_e1, new_e2) with
+      | Com.Gt, _, Undefined | Com.Gt, Undefined, _ -> Undefined
+      | Com.Gte, _, Undefined | Com.Gte, Undefined, _ -> Undefined
+      | Com.Lt, _, Undefined | Com.Lt, Undefined, _ -> Undefined
+      | Com.Lte, _, Undefined | Com.Lte, Undefined, _ -> Undefined
+      | Com.Eq, _, Undefined | Com.Eq, Undefined, _ -> Undefined
+      | Com.Neq, _, Undefined | Com.Neq, Undefined, _ -> Undefined
+      | op, Number i1, Number i2 ->
+          Number (real_of_bool (compare_numbers op i1 i2))
+    in
+    let unop op new_e1 =
+      let open Com in
+      match (op, new_e1) with
+      | Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
+      | Minus, Number f1 -> Number N.(zero () -. f1)
+      | Not, Undefined -> Undefined
+      | Minus, Undefined -> Undefined
+    in
+    let binop op new_e1 new_e2 =
+      let open Com in
+      match (op, new_e1, new_e2) with
+      | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+      | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+      | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
+      | Add, Undefined, Undefined -> Undefined
+      | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+      | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+      | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
+      | Sub, Undefined, Undefined -> Undefined
+      | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
+      | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
+      | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
+      | Div, _, l2 when is_zero l2 -> Number (N.zero ())
+      | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+      | And, Undefined, _ | And, _, Undefined -> Undefined
+      | Or, Undefined, Undefined -> Undefined
+      | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
+      | And, Number i1, Number i2 ->
+          Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
+      | Or, Number i1, Number i2 ->
+          Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
+    in
     let out =
       try
         match Pos.unmark e with
-        | Comparison (op, e1, e2) -> (
+        | Com.TestInSet (positive, e0, values) ->
+            let new_e0 = evaluate_expr ctx p e0 in
+            let or_chain =
+              List.fold_left
+                (fun or_chain set_value ->
+                  let equal_test =
+                    match set_value with
+                    | Com.VarValue set_var ->
+                        let new_set_var =
+                          get_var_value ctx (Pos.unmark set_var)
+                        in
+                        comparison Com.Eq new_e0 new_set_var
+                    | Com.FloatValue i ->
+                        let val_i = Number (N.of_float (Pos.unmark i)) in
+                        comparison Com.Eq new_e0 val_i
+                    | Com.Interval (bn, en) ->
+                        let val_bn =
+                          Number (N.of_float (float_of_int (Pos.unmark bn)))
+                        in
+                        let val_en =
+                          Number (N.of_float (float_of_int (Pos.unmark en)))
+                        in
+                        binop Com.And
+                          (comparison Com.Gte new_e0 val_bn)
+                          (comparison Com.Lte new_e0 val_en)
+                  in
+                  binop Com.Or or_chain equal_test)
+                Undefined values
+            in
+            if positive then or_chain else unop Com.Not or_chain
+        | Comparison (op, e1, e2) ->
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
-            match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Gt, _, Undefined | Mast.Gt, Undefined, _ -> Undefined
-            | Mast.Gte, _, Undefined | Mast.Gte, Undefined, _ -> Undefined
-            | Mast.Lt, _, Undefined | Mast.Lt, Undefined, _ -> Undefined
-            | Mast.Lte, _, Undefined | Mast.Lte, Undefined, _ -> Undefined
-            | Mast.Eq, _, Undefined | Mast.Eq, Undefined, _ -> Undefined
-            | Mast.Neq, _, Undefined | Mast.Neq, Undefined, _ -> Undefined
-            | op, Number i1, Number i2 ->
-                Number (real_of_bool (compare_numbers op i1 i2)))
-        | Binop (op, e1, e2) -> (
+            comparison (Pos.unmark op) new_e1 new_e2
+        | Binop (op, e1, e2) ->
             let new_e1 = evaluate_expr ctx p e1 in
             let new_e2 = evaluate_expr ctx p e2 in
-            match (Pos.unmark op, new_e1, new_e2) with
-            | Mast.Add, Number i1, Number i2 -> Number N.(i1 +. i2)
-            | Mast.Add, Number i1, Undefined -> Number N.(i1 +. zero ())
-            | Mast.Add, Undefined, Number i2 -> Number N.(zero () +. i2)
-            | Mast.Add, Undefined, Undefined -> Undefined
-            | Mast.Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
-            | Mast.Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
-            | Mast.Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
-            | Mast.Sub, Undefined, Undefined -> Undefined
-            | Mast.Mul, _, Undefined | Mast.Mul, Undefined, _ -> Undefined
-            | Mast.Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
-            | Mast.Div, Undefined, _ | Mast.Div, _, Undefined ->
-                Undefined (* yes... *)
-            | Mast.Div, _, l2 when is_zero l2 -> Number (N.zero ())
-            | Mast.Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-            | Mast.And, Undefined, _ | Mast.And, _, Undefined -> Undefined
-            | Mast.Or, Undefined, Undefined -> Undefined
-            | Mast.Or, Undefined, Number i | Mast.Or, Number i, Undefined ->
-                Number i
-            | Mast.And, Number i1, Number i2 ->
-                Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
-            | Mast.Or, Number i1, Number i2 ->
-                Number (real_of_bool (bool_of_real i1 || bool_of_real i2)))
-        | Unop (op, e1) -> (
+            binop (Pos.unmark op) new_e1 new_e2
+        | Unop (op, e1) ->
             let new_e1 = evaluate_expr ctx p e1 in
-            match (op, new_e1) with
-            | Mast.Not, Number b1 ->
-                Number (real_of_bool (not (bool_of_real b1)))
-            | Mast.Minus, Number f1 -> Number N.(zero () -. f1)
-            | Mast.Not, Undefined -> Undefined
-            | Mast.Minus, Undefined -> Undefined)
-        | Conditional (e1, e2, e3) -> (
+            unop op new_e1
+        | Conditional (e1, e2, e3_opt) -> (
             let new_e1 = evaluate_expr ctx p e1 in
             match new_e1 with
-            | Number z when N.(z =. zero ()) -> evaluate_expr ctx p e3
+            | Number z when N.(z =. zero ()) -> (
+                match e3_opt with
+                | None -> Undefined
+                | Some e3 -> evaluate_expr ctx p e3)
             | Number _ -> evaluate_expr ctx p e2 (* the float is not zero *)
             | Undefined -> Undefined)
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
-        | Index (var, e1) -> (
-            let var = Pos.unmark var in
-            let var =
-              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
-              | Some mvar -> Bir.(var_from_mir default_tgv) mvar
-              | None -> var
-            in
-            let new_e1 = evaluate_expr ctx p e1 in
-            if new_e1 = Undefined then Undefined
-            else
-              match Bir.VariableMap.find var ctx.ctx_vars with
-              | SimpleVar e ->
-                  let idx =
-                    match new_e1 with
-                    | Undefined -> assert false (* should not happen *)
-                    | Number f -> roundf f
-                  in
-                  if N.(idx >=. N.of_int (Int64.of_int 1)) then Undefined
-                  else if N.(idx <. N.zero ()) then Number (N.zero ())
-                  else e
-              | TableVar (size, values) ->
-                  evaluate_array_index new_e1 size values)
-        | LocalVar lvar -> (
-            try Pos.unmark (Mir.LocalVariableMap.find lvar ctx.ctx_local_vars)
-            with Not_found -> assert false (* should not happen*))
-        | Var var ->
-            let var =
-              match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
-              | Some mvar -> Bir.(var_from_mir default_tgv) mvar
-              | None -> var
-            in
-            let r =
-              try
-                match Bir.VariableMap.find var ctx.ctx_vars with
-                | SimpleVar l -> l
-                | TableVar (size, tab) ->
-                    if size > 0 then tab.(0) else Undefined
-              with Not_found ->
-                Errors.raise_spanned_error
-                  ("Var not found (should not happen): "
-                  ^ Pos.unmark (Bir.var_to_mir var).Mir.Variable.name)
-                  (Pos.get_position e)
-            in
-            r
-        | LocalLet (lvar, e1, e2) ->
-            let new_e1 = evaluate_expr ctx p e1 in
-            let new_e2 =
-              evaluate_expr
-                {
-                  ctx with
-                  ctx_local_vars =
-                    Mir.LocalVariableMap.add lvar
-                      (Pos.same_pos_as new_e1 e1)
-                      ctx.ctx_local_vars;
-                }
-                p e2
-            in
-            new_e2
-        | FunctionCall (ArrFunc, [ arg ]) -> (
+        | Index (var, e1) ->
+            let idx = evaluate_expr ctx p e1 in
+            get_var_tab ctx var idx
+        | Var var -> get_var_value ctx var
+        | FuncCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (roundf x)
             | Undefined -> Undefined
             (*nope:Float 0.*))
-        | FunctionCall (InfFunc, [ arg ]) -> (
+        | FuncCall ((InfFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
             | Number x -> Number (truncatef x)
             | Undefined -> Undefined
             (*Float 0.*))
-        | FunctionCall (PresentFunc, [ arg ]) -> (
+        | FuncCall ((PresentFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
-        | FunctionCall (Supzero, [ arg ]) -> (
+        | FuncCall ((Supzero, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f as n ->
-                if compare_numbers Mast.Lte f (N.zero ()) then Undefined else n)
-        | FunctionCall (AbsFunc, [ arg ]) -> (
+                if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
+        | FuncCall ((AbsFunc, _), [ arg ]) -> (
             match evaluate_expr ctx p arg with
             | Undefined -> Undefined
             | Number f -> Number (N.abs f))
-        | FunctionCall (MinFunc, [ arg1; arg2 ]) -> (
+        | FuncCall ((MinFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.min (N.zero ()) f)
             | Number fl, Number fr -> Number (N.min fl fr))
-        | FunctionCall (MaxFunc, [ arg1; arg2 ]) -> (
+        | FuncCall ((MaxFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx p arg1, evaluate_expr ctx p arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))
-        | FunctionCall (Multimax, [ arg1; arg2 ]) -> (
+        | FuncCall ((Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx p arg1 with
             | Undefined -> Undefined
             | Number f -> (
                 let up = N.to_int (roundf f) in
                 let var_arg2 =
-                  match Pos.unmark arg2 with Var v -> v | _ -> assert false
+                  match Pos.unmark arg2 with
+                  | Var v -> (v, Pos.get_position e)
+                  | _ -> assert false
                   (* todo: rte *)
                 in
                 let cast_to_int (v : value) : Int64.t option =
@@ -503,8 +391,7 @@ struct
                   cast_to_int
                   @@ evaluate_expr ctx p
                        ( Index
-                           ( (var_arg2, pos),
-                             (Literal (Float (float_of_int i)), pos) ),
+                           (var_arg2, (Literal (Float (float_of_int i)), pos)),
                          pos )
                 in
                 let maxi = ref (access_index 0) in
@@ -520,30 +407,23 @@ struct
                 match !maxi with
                 | None -> Undefined
                 | Some f -> Number (N.of_int f)))
-        | FunctionCall (_func, _) -> assert false
-        | Attribut (_v, var, a) -> (
-            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
-            | Some mvar -> (
-                match
-                  List.find_opt
-                    (fun (attr, _) -> Pos.unmark a = Pos.unmark attr)
-                    mvar.attributes
-                with
-                | Some (_, l) -> Number (N.of_float (float (Pos.unmark l)))
-                | None -> Undefined)
-            | None -> assert false)
+        | FuncCall (_func, _) -> assert false
+        | Attribut (var, a) -> (
+            let var = get_var ctx (Pos.unmark var) in
+            match StrMap.find_opt (Pos.unmark a) (Mir.Var.attrs var) with
+            | Some l -> Number (N.of_float (float (Pos.unmark l)))
+            | None -> Undefined)
         | Size var -> (
-            match IntMap.find_opt var.mir_var.id ctx.ctx_it with
-            | Some mvar -> (
-                match mvar.is_table with
-                | Some i -> Number (N.of_float (float_of_int i))
-                | None -> Number (N.of_float 1.0))
-            | None -> assert false)
+            let var = get_var ctx (Pos.unmark var) in
+            match var.is_table with
+            | Some i -> Number (N.of_float (float_of_int i))
+            | None -> Number (N.of_float 1.0))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
         | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
         | NbCategory _ -> assert false
+        | FuncCallLoop _ | Loop _ -> assert false
       with
       | RuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
@@ -573,398 +453,254 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let evaluate_simple_variable (p : Bir.program) (ctx : ctx)
-      (expr : Bir.expression) : var_value =
-    SimpleVar (evaluate_expr ctx p.mir_program (expr, Pos.no_pos))
+  let set_var_value (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
+      (vexpr : Mir.expression Pos.marked) : unit =
+    let value = evaluate_expr ctx p vexpr in
+    match var.is_table with
+    | None ->
+        if Mir.Var.is_temp var then
+          ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var) <- value
+        else ctx.ctx_tgv.(Mir.Var.loc_int var) <- value
+    | Some sz ->
+        if Mir.Var.is_temp var then
+          for i = 0 to sz - 1 do
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i) <- value
+          done
+        else
+          for i = 0 to sz - 1 do
+            ctx.ctx_tgv.(Mir.Var.loc_int var + i) <- value
+          done
 
-  let evaluate_variable (p : Bir.program) (ctx : ctx) (var : Bir.variable)
-      (curr_value : var_value) (vdef : Bir.variable Mir.variable_def_) :
-      var_value =
-    match vdef with
-    | Mir.SimpleVar e -> (
-        match var.Bir.mir_var.Mir.is_table with
-        | Some sz ->
-            let value = evaluate_expr ctx p.mir_program e in
-            let tab =
-              match curr_value with
-              | SimpleVar _ -> Array.make sz value
-              | TableVar (size, tab) ->
-                  assert (size = sz);
-                  for i = 0 to size - 1 do
-                    tab.(i) <- value
-                  done;
-                  tab
-            in
-            TableVar (sz, tab)
-        | None -> SimpleVar (evaluate_expr ctx p.mir_program e))
-    | Mir.TableVar (size, es) -> (
-        match es with
-        | IndexGeneric (v, e) -> (
-            let i =
-              match Bir.VariableMap.find_opt v ctx.ctx_vars with
-              | Some (SimpleVar n) -> n
-              | Some (TableVar (s, t)) -> if s > 0 then t.(0) else Undefined
-              | None -> assert false
-            in
-            match var.Bir.mir_var.Mir.is_table with
-            | Some sz ->
-                assert (size = sz);
-                let tab =
-                  match curr_value with
-                  | SimpleVar e -> Array.make sz e
-                  | TableVar (s, vals) ->
-                      assert (s = size);
-                      vals
-                in
-                (match i with
-                | Undefined -> ()
-                | Number f ->
-                    let i' = int_of_float (N.to_float f) in
-                    if 0 <= i' && i' < size then
-                      tab.(i') <- evaluate_expr ctx p.mir_program e);
-                TableVar (size, tab)
-            | None -> (
-                match i with
-                | Undefined -> curr_value
-                | Number f ->
-                    let i' = int_of_float (N.to_float f) in
-                    if i' = 0 then SimpleVar (evaluate_expr ctx p.mir_program e)
-                    else curr_value))
-        | IndexTable it -> (
-            match var.Bir.mir_var.Mir.is_table with
-            | Some sz ->
-                assert (size = sz);
-                let tab =
-                  match curr_value with
-                  | SimpleVar e -> Array.make sz e
-                  | TableVar (s, vals) ->
-                      assert (s = size);
-                      vals
-                in
-                Mir.IndexMap.iter
-                  (fun i e ->
-                    if 0 <= i && i < sz then
-                      tab.(i) <- evaluate_expr ctx p.mir_program e)
-                  it;
-                TableVar (size, tab)
-            | None -> (
-                match Mir.IndexMap.find_opt 0 it with
-                | Some e -> SimpleVar (evaluate_expr ctx p.mir_program e)
-                | None -> curr_value)))
-    | Mir.InputVar -> assert false
+  let set_var_value_tab (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
+      (ei : Mir.expression Pos.marked) (vexpr : Mir.expression Pos.marked) :
+      unit =
+    match evaluate_expr ctx p ei with
+    | Undefined -> ()
+    | Number f ->
+        let i = int_of_float (N.to_float f) in
+        let sz = match var.is_table with None -> 1 | Some sz -> sz in
+        if 0 <= i && i < sz then
+          let value = evaluate_expr ctx p vexpr in
+          if Mir.Var.is_temp var then
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i) <- value
+          else ctx.ctx_tgv.(Mir.Var.loc_int var + i) <- value
 
-  exception BlockingError of ctx
+  exception BlockingError
 
-  let rec evaluate_stmt (canBlock : bool) (p : Bir.program) (ctx : ctx)
-      (stmt : Bir.stmt) (loc : code_location) =
+  let rec evaluate_stmt (canBlock : bool) (p : Mir.program) (ctx : ctx)
+      (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
-    | Bir.SAssign (var, vdef) ->
-        let var =
-          match IntMap.find_opt var.Bir.mir_var.id ctx.ctx_it with
-          | Some mvar -> Bir.(var_from_mir default_tgv) mvar
-          | None -> var
-        in
-        let value =
-          try Bir.VariableMap.find var ctx.ctx_vars
-          with Not_found -> (
-            match (Bir.var_to_mir var).is_table with
-            | Some size -> TableVar (size, Array.make size Undefined)
-            | None -> SimpleVar Undefined)
-        in
-        let res = evaluate_variable p ctx var value vdef in
-        !assign_hook var (fun _ -> var_value_to_var_literal res) loc;
-        { ctx with ctx_vars = Bir.VariableMap.add var res ctx.ctx_vars }
-    | Bir.SConditional (b, t, f) -> (
-        match evaluate_simple_variable p ctx b with
-        | SimpleVar (Number z) when N.(z =. zero ()) ->
-            evaluate_stmts canBlock p ctx f (ConditionalBranch false :: loc) 0
-        | SimpleVar (Number _) ->
-            evaluate_stmts canBlock p ctx t (ConditionalBranch true :: loc) 0
-        | SimpleVar Undefined -> ctx
-        | _ -> assert false)
-    | Bir.SVerifBlock stmts ->
-        evaluate_stmts true p ctx stmts (InsideBlock 0 :: loc) 0
-    | Bir.SRovCall r ->
-        let rule = Bir.ROVMap.find r p.rules_and_verifs in
-        evaluate_stmts canBlock p ctx
-          (Bir.rule_or_verif_as_statements rule)
-          (InsideRule r :: loc) 0
-    | Bir.SFunctionCall (f, _args) -> (
-        match Mir.TargetMap.find_opt f p.targets with
-        | Some tf -> evaluate_target canBlock p ctx loc tf
-        | None ->
-            evaluate_stmts canBlock p ctx
-              (Bir.FunctionMap.find f p.mpp_functions).mppf_stmts loc 0)
-    (* Mpp_function arguments seem to be used only to determine which variables
-       are actually output. Does this actually make sense ? *)
-    | Bir.SPrint (std, args) -> (
+    | Com.Affectation (var, vidx_opt, vexpr) -> (
+        let var = get_var ctx var in
+        match vidx_opt with
+        | None -> set_var_value p ctx var vexpr
+        | Some (_, ei) -> set_var_value_tab p ctx var ei vexpr)
+    | Com.IfThenElse (b, t, f) -> (
+        match evaluate_expr ctx p b with
+        | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock p ctx f
+        | Number _ -> evaluate_stmts canBlock p ctx t
+        | Undefined -> ())
+    | Com.VerifBlock stmts -> evaluate_stmts true p ctx stmts
+    | Com.ComputeTarget (f, _args) ->
+        let tf = Mir.TargetMap.find f p.program_targets in
+        evaluate_target canBlock p ctx f tf
+    | Com.Print (std, args) ->
         let std_fmt, ctx_pr =
           match std with
-          | Mast.StdOut -> (Format.std_formatter, ctx.ctx_pr_out)
-          | Mast.StdErr -> (Format.err_formatter, ctx.ctx_pr_err)
+          | Com.StdOut -> (Format.std_formatter, ctx.ctx_pr_out)
+          | Com.StdErr -> (Format.err_formatter, ctx.ctx_pr_err)
         in
         let pr_indent ctx_pr =
           if ctx_pr.is_newline then (
             for _i = 1 to ctx_pr.indent do
               Format.fprintf std_fmt " "
             done;
-            { ctx_pr with is_newline = false })
-          else ctx_pr
+            ctx_pr.is_newline <- false)
         in
         let pr_raw ctx_pr s =
           let len = String.length s in
-          let rec aux ctx_pr = function
-            | n when n >= len -> ctx_pr
+          let rec aux = function
+            | n when n >= len -> ()
             | n -> (
                 match s.[n] with
                 | '\n' ->
                     Format.fprintf std_fmt "\n";
-                    aux { ctx_pr with is_newline = true } (n + 1)
+                    ctx_pr.is_newline <- true;
+                    aux (n + 1)
                 | c ->
-                    let ctx_pr = pr_indent ctx_pr in
+                    pr_indent ctx_pr;
                     Format.fprintf std_fmt "%c" c;
-                    aux ctx_pr (n + 1))
+                    aux (n + 1))
           in
-          aux ctx_pr 0
+          aux 0
         in
-        let ctx_pr =
-          List.fold_left
-            (fun ctx_pr arg ->
-              match arg with
-              | Mir.PrintString s -> pr_raw ctx_pr s
-              | Mir.PrintName (_, var) -> (
-                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
-                  | Some mvar -> pr_raw ctx_pr (Pos.unmark mvar.Mir.name)
-                  | None -> assert false)
-              | Mir.PrintAlias (_, var) -> (
-                  match IntMap.find_opt var.Mir.id ctx.ctx_it with
-                  | Some mvar ->
-                      pr_raw ctx_pr
-                        (match mvar.Mir.alias with Some a -> a | None -> "")
-                  | None -> assert false)
-              | Mir.PrintIndent e ->
-                  let var_value =
-                    evaluate_simple_variable p ctx (Pos.unmark e)
-                  in
-                  let diff =
-                    match var_value with
-                    | SimpleVar e -> (
-                        match e with
-                        | Undefined -> 0
-                        | Number x -> Int64.to_int (N.to_int (roundf x)))
-                    | TableVar (_, es) -> (
-                        if Array.length es = 0 then 0
-                        else
-                          match es.(0) with
-                          | Undefined -> 0
-                          | Number x -> Int64.to_int (N.to_int (roundf x)))
-                  in
-                  { ctx_pr with indent = max 0 (ctx_pr.indent + diff) }
-              | Mir.PrintExpr (e, mi, ma) ->
-                  let var_value =
-                    evaluate_simple_variable p ctx (Pos.unmark e)
-                  in
-                  let ctx_pr = pr_indent ctx_pr in
-                  format_var_value_prec mi ma std_fmt var_value;
-                  ctx_pr)
-            ctx_pr args
-        in
-        match std with
-        | Mast.StdOut -> { ctx with ctx_pr_out = ctx_pr }
-        | Mast.StdErr -> { ctx with ctx_pr_err = ctx_pr })
-    | Bir.SIterate (var, vcs, expr, stmts) ->
-        let eval vc ctx =
-          Mir.VariableDict.fold
-            (fun v ctx ->
-              if v.Mir.cats = Some vc then
-                let ctx =
-                  {
-                    ctx with
-                    ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
-                  }
+        List.iter
+          (fun (arg : Mir.Var.t Com.print_arg Pos.marked) ->
+            match Pos.unmark arg with
+            | PrintString s -> pr_raw ctx_pr s
+            | PrintName (var, _) ->
+                let var = get_var ctx var in
+                pr_raw ctx_pr (Pos.unmark var.name)
+            | PrintAlias (var, _) ->
+                let var = get_var ctx var in
+                pr_raw ctx_pr (Mir.Var.alias_str var)
+            | PrintIndent e ->
+                let diff =
+                  match evaluate_expr ctx p e with
+                  | Undefined -> 0
+                  | Number x -> Int64.to_int (N.to_int (roundf x))
                 in
-                match evaluate_simple_variable p ctx expr with
-                | SimpleVar (Number z) when N.(z =. one ()) ->
-                    evaluate_stmts canBlock p ctx stmts
-                      (ConditionalBranch true :: loc)
-                      0
-                | SimpleVar _ -> ctx
-                | _ -> assert false
-              else ctx)
-            p.Bir.mir_program.program_vars ctx
+                ctx_pr.indent <- max 0 (ctx_pr.indent + diff)
+            | PrintExpr (e, mi, ma) ->
+                let value = evaluate_expr ctx p e in
+                pr_indent ctx_pr;
+                format_value_prec mi ma std_fmt value)
+          args
+    | Com.Iterate ((var : Mir.Var.t), vcs, expr, stmts) ->
+        let var_i =
+          match var.loc with LocIt (_, i) -> i | _ -> assert false
         in
-        Mir.CatVarSet.fold eval vcs ctx
-    | Bir.SRestore (vars, var_params, stmts) ->
+        let eval vc =
+          StrMap.iter
+            (fun _ v ->
+              if Com.compare_cat_variable (Mir.Var.cat v) vc = 0 then (
+                ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
+                match evaluate_expr ctx p expr with
+                | Number z when N.(z =. one ()) ->
+                    evaluate_stmts canBlock p ctx stmts
+                | _ -> ()))
+            p.program_vars
+        in
+        Com.CatVarSet.iter eval vcs
+    | Com.Restore (vars, var_params, stmts) ->
         let backup =
-          Bir.VariableSet.fold
-            (fun v backup ->
-              let v =
-                match IntMap.find_opt v.mir_var.id ctx.ctx_it with
-                | None -> v
-                | Some v -> Bir.(var_from_mir default_tgv) v
+          List.fold_left
+            (fun backup (v : Mir.Var.t) ->
+              let v = get_var ctx v in
+              let sz = match v.is_table with None -> 1 | Some sz -> sz in
+              let rec aux backup i =
+                if i = sz then backup
+                else
+                  let value =
+                    if Mir.Var.is_temp v then
+                      ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int v + i)
+                    else ctx.ctx_tgv.(Mir.Var.loc_int v + i)
+                  in
+                  aux ((v, i, value) :: backup) (i + 1)
               in
-              let value = Bir.VariableMap.find v ctx.ctx_vars in
-              (v, value) :: backup)
-            vars []
+              aux backup 0)
+            [] vars
         in
         let backup =
           List.fold_left
-            (fun backup (var, vcs, expr) ->
-              Mir.CatVarSet.fold
+            (fun backup ((var : Mir.Var.t), vcs, expr) ->
+              let var_i =
+                match var.loc with LocIt (_, i) -> i | _ -> assert false
+              in
+              Com.CatVarSet.fold
                 (fun vc backup ->
-                  Mir.VariableDict.fold
-                    (fun v backup ->
-                      if v.Mir.cats = Some vc then
-                        let ctx =
-                          {
-                            ctx with
-                            ctx_it = IntMap.add var.Bir.mir_var.id v ctx.ctx_it;
-                          }
-                        in
-                        match evaluate_simple_variable p ctx expr with
-                        | SimpleVar (Number z) when N.(z =. one ()) ->
-                            let v = Bir.(var_from_mir default_tgv) v in
-                            let value = Bir.VariableMap.find v ctx.ctx_vars in
-                            (v, value) :: backup
-                        | SimpleVar _ -> backup
-                        | _ -> assert false
+                  StrMap.fold
+                    (fun _ v backup ->
+                      if Com.compare_cat_variable (Mir.Var.cat v) vc = 0 then (
+                        ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
+                        match evaluate_expr ctx p expr with
+                        | Number z when N.(z =. one ()) ->
+                            let sz =
+                              match v.is_table with None -> 1 | Some sz -> sz
+                            in
+                            let rec aux backup i =
+                              if i = sz then backup
+                              else
+                                let value =
+                                  if Mir.Var.is_temp v then
+                                    ctx.ctx_tmps.(ctx.ctx_tmps_org
+                                                  + Mir.Var.loc_int v + i)
+                                  else ctx.ctx_tgv.(Mir.Var.loc_int v + i)
+                                in
+                                aux ((v, i, value) :: backup) (i + 1)
+                            in
+                            aux backup 0
+                        | _ -> backup)
                       else backup)
-                    p.Bir.mir_program.program_vars backup)
+                    p.program_vars backup)
                 vcs backup)
             backup var_params
         in
-        let ctx =
-          evaluate_stmts canBlock p ctx stmts (InsideBlock 0 :: loc) 0
+        evaluate_stmts canBlock p ctx stmts;
+        List.iter
+          (fun ((v : Mir.Var.t), i, value) ->
+            if Mir.Var.is_temp v then
+              ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int v + i) <- value
+            else ctx.ctx_tgv.(Mir.Var.loc_int v + i) <- value)
+          backup
+    | Com.RaiseError (err, var_opt) ->
+        (match err.typ with
+        | Com.Error.Anomaly -> ctx.ctx_nb_anos <- ctx.ctx_nb_anos + 1
+        | Com.Error.Discordance -> ctx.ctx_nb_discos <- ctx.ctx_nb_discos + 1
+        | Com.Error.Information -> ctx.ctx_nb_infos <- ctx.ctx_nb_infos + 1);
+        let is_blocking =
+          err.typ = Com.Error.Anomaly && Pos.unmark err.isisf = "N"
         in
-        let ctx_vars =
-          List.fold_left
-            (fun ctx_vars (v, value) ->
-              Bir.VariableMap.update v (fun _ -> Some value) ctx_vars)
-            ctx.ctx_vars backup
-        in
-        { ctx with ctx_vars }
-    | Bir.SRaiseError (err, var_opt) ->
-        let ctx_nb_anos =
-          if err.typ = Mast.Anomaly then ctx.ctx_nb_anos + 1
-          else ctx.ctx_nb_anos
-        in
-        let ctx_nb_discos =
-          if err.typ = Mast.Discordance then ctx.ctx_nb_discos + 1
-          else ctx.ctx_nb_discos
-        in
-        let ctx_nb_infos =
-          if err.typ = Mast.Information then ctx.ctx_nb_infos + 1
-          else ctx.ctx_nb_infos
-        in
-        let ctx_nb_bloquantes, is_blocking =
-          let is_b =
-            err.typ = Mast.Anomaly && Pos.unmark err.descr.isisf = "N"
-          in
-          ((ctx.ctx_nb_bloquantes + if is_b then 1 else 0), is_b)
-        in
-        let ctx =
-          {
-            ctx with
-            ctx_anos = ctx.ctx_anos @ [ (err, var_opt) ];
-            ctx_nb_anos;
-            ctx_nb_discos;
-            ctx_nb_infos;
-            ctx_nb_bloquantes;
-          }
-        in
-        (* Format.eprintf "leve erreur %s\n" (Pos.unmark err.Mir.name);*)
+        ctx.ctx_nb_bloquantes <-
+          (ctx.ctx_nb_bloquantes + if is_blocking then 1 else 0);
+        ctx.ctx_anos <- ctx.ctx_anos @ [ (err, var_opt) ];
         if is_blocking && ctx.ctx_nb_bloquantes >= 4 && canBlock then
-          raise (BlockingError ctx)
-        else ctx
-    | Bir.SCleanErrors ->
-        (*Format.eprintf "nettoie erreurs\n";*)
-        {
-          ctx with
-          ctx_anos = [];
-          ctx_nb_anos = 0;
-          ctx_nb_discos = 0;
-          ctx_nb_infos = 0;
-          ctx_nb_bloquantes = 0;
-        }
-    | Bir.SFinalizeErrors ->
+          raise BlockingError
+    | Com.CleanErrors ->
+        ctx.ctx_anos <- [];
+        ctx.ctx_nb_anos <- 0;
+        ctx.ctx_nb_discos <- 0;
+        ctx.ctx_nb_infos <- 0;
+        ctx.ctx_nb_bloquantes <- 0
+    | Com.FinalizeErrors ->
         let not_in_old_anos (err, _) =
-          let name = Pos.unmark err.Mir.name in
+          let name = Pos.unmark err.Com.Error.name in
           not (StrSet.mem name ctx.ctx_old_anos)
         in
-        let ctx_finalized_anos =
-          let rec merge_anos old_anos new_anos =
-            match (old_anos, new_anos) with
-            | [], anos | anos, [] -> anos
-            | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
-          in
-          let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
-          (* List.iter (fun (err, _) -> Format.eprintf "finalise: %s\n"
-             (Pos.unmark err.Mir.name)) new_anos;*)
-          merge_anos ctx.ctx_finalized_anos new_anos
+        ctx.ctx_finalized_anos <-
+          (let rec merge_anos old_anos new_anos =
+             match (old_anos, new_anos) with
+             | [], anos | anos, [] -> anos
+             | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
+           in
+           let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
+           merge_anos ctx.ctx_finalized_anos new_anos);
+        let add_ano res (err, _) =
+          StrSet.add (Pos.unmark err.Com.Error.name) res
         in
-        let add_ano res (err, _) = StrSet.add (Pos.unmark err.Mir.name) res in
-        let ctx_old_anos =
-          List.fold_left add_ano ctx.ctx_old_anos ctx.ctx_anos
-        in
-        { ctx with ctx_finalized_anos; ctx_old_anos }
-    | Bir.SExportErrors ->
-        let ctx_exported_anos =
-          ctx.ctx_exported_anos @ ctx.ctx_finalized_anos
-        in
-        (* List.iter (fun (err, _) -> Format.eprintf "sortie: %s\n" (Pos.unmark
-           err.Mir.name)) ctx.ctx_finalized_anos;*)
-        { ctx with ctx_exported_anos; ctx_finalized_anos = [] }
+        ctx.ctx_old_anos <- List.fold_left add_ano ctx.ctx_old_anos ctx.ctx_anos
+    | Com.ExportErrors ->
+        ctx.ctx_exported_anos <- ctx.ctx_exported_anos @ ctx.ctx_finalized_anos;
+        ctx.ctx_finalized_anos <- []
 
-  and evaluate_stmts canBlock (p : Bir.program) (ctx : ctx)
-      (stmts : Bir.stmt list) (loc : code_location) (start_value : int) : ctx =
-    let ctx, _ =
-      try
-        List.fold_left
-          (fun (ctx, i) stmt ->
-            (evaluate_stmt canBlock p ctx stmt (InsideBlock i :: loc), i + 1))
-          (ctx, start_value) stmts
-      with BlockingError ctx as b_err ->
-        if canBlock then raise b_err else (ctx, 0)
-    in
-    ctx
+  and evaluate_stmts canBlock (p : Mir.program) (ctx : ctx)
+      (stmts : Mir.m_instruction list) : unit =
+    try List.iter (evaluate_stmt canBlock p ctx) stmts
+    with BlockingError as b_err -> if canBlock then raise b_err
 
-  and evaluate_target canBlock (p : Bir.program) (ctx : ctx)
-      (loc : code_location) (tf : Bir.target_function) =
-    let ctx =
-      let ctx_vars =
-        StrMap.fold
-          (fun _ (var, _, size) ctx_vars ->
-            match size with
-            | None -> Bir.VariableMap.add var (SimpleVar Undefined) ctx_vars
-            | Some sz ->
-                let values = Array.init sz (fun _ -> Undefined) in
-                Bir.VariableMap.add var (TableVar (sz, values)) ctx_vars)
-          tf.tmp_vars ctx.ctx_vars
-      in
-      { ctx with ctx_vars }
-    in
-    evaluate_stmts canBlock p ctx tf.stmts loc 0
+  and evaluate_target canBlock (p : Mir.program) (ctx : ctx) (_tn : string)
+      (tf : Mir.target_data) : unit =
+    for i = 0 to tf.target_sz_tmps do
+      ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
+    done;
+    ctx.ctx_tmps_org <- ctx.ctx_tmps_org + tf.target_sz_tmps;
+    ctx.ctx_it_org <- ctx.ctx_it_org + tf.target_nb_its;
+    evaluate_stmts canBlock p ctx tf.target_prog;
+    ctx.ctx_it_org <- ctx.ctx_it_org - tf.target_nb_its;
+    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - tf.target_sz_tmps
 
-  let evaluate_program (p : Bir.program) (ctx : ctx)
-      (code_loc_start_value : int) : ctx =
+  let evaluate_program (p : Mir.program) (ctx : ctx) : unit =
     try
-      let ctx =
-        evaluate_stmts false p ctx
-          (Bir.main_statements p @ [ (Bir.SExportErrors, Pos.no_pos) ])
-          [] code_loc_start_value
-        (* For the interpreter to operate properly, all input variables must be
-           declared at some point, even if they aren't used as input (either
-           contextual constants or entered at interpreter prompt). The M program
-           doesn't include default assignation for non-entered input variables,
-           so unused inputs are not declared in the main statements.
-
-           The use of main_statement_with_context_and_tgv_init ensures every
-           variable from the TGV dictionnary is assigned to "undefined" by
-           default, before context statements overload the contextual constants
-           according to the spec file and interpreter prompt assignements
-           overload entered variables. *)
+      let main_target =
+        match
+          Mir.TargetMap.find_opt p.program_main_target p.program_targets
+        with
+        | Some t -> t
+        | None ->
+            Errors.raise_error "Unable to find main function of Bir program"
       in
-      ctx
+      evaluate_target false p ctx p.program_main_target main_target;
+      evaluate_stmt false p ctx (Com.ExportErrors, Pos.no_pos)
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))
@@ -1063,36 +799,35 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Bir.program) (inputs : Mir.literal Bir.VariableMap.t)
+let evaluate_program (p : Mir.program) (inputs : Com.literal Mir.VariableMap.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
     float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
-  let ctx = Interp.update_ctx_with_inputs Interp.empty_ctx inputs in
-  let ctx = Interp.complete_ctx ctx p.Bir.mir_program.Mir.program_vars in
-  let ctx = Interp.evaluate_program p ctx 0 in
+  let ctx = Interp.empty_ctx p in
+  Interp.update_ctx_with_inputs ctx inputs;
+  Interp.evaluate_program p ctx;
   let varMap =
-    let fold var value res =
-      let name = Pos.unmark var.Bir.mir_var.Mir.name in
-      let fVal =
-        match value with
-        | Interp.SimpleVar litt -> (
-            match Interp.value_to_literal litt with
-            | Mir.Float f -> Some f
-            | Mir.Undefined -> None)
-        | _ -> None
-      in
-      StrMap.add name fVal res
+    let fold name (var : Mir.Var.t) res =
+      if var.is_given_back then
+        let fVal =
+          let litt = ctx.ctx_tgv.(Mir.Var.loc_int var) in
+          match Interp.value_to_literal litt with
+          | Com.Float f -> Some f
+          | Com.Undefined -> None
+        in
+        StrMap.add name fVal res
+      else res
     in
-    Bir.VariableMap.fold fold ctx.ctx_vars StrMap.empty
+    StrMap.fold fold p.program_vars StrMap.empty
   in
   let anoSet =
-    let fold res (e, _) = StrSet.add (Pos.unmark e.Mir.name) res in
+    let fold res (e, _) = StrSet.add (Pos.unmark e.Com.Error.name) res in
     List.fold_left fold StrSet.empty ctx.ctx_exported_anos
   in
   (varMap, anoSet)
 
-let evaluate_expr (p : Mir.program) (e : Bir.expression Pos.marked)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Mir.literal =
+let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
+    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
-  Interp.value_to_literal (Interp.evaluate_expr Interp.empty_ctx p e)
+  Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) p e)

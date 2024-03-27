@@ -14,8 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Bir
-
 let java_imports : string =
   {|
 package com.mlang;
@@ -30,48 +28,52 @@ import static com.mlang.MValue.*;
 
 let none_value = "MValue.mUndefined"
 
-let generate_comp_op (op : Mast.comp_op) : string =
+let generate_comp_op (op : Com.comp_op) : string =
+  let open Com in
   match op with
-  | Mast.Gt -> "mGreaterThan"
-  | Mast.Gte -> "mGreaterThanEqual"
-  | Mast.Lt -> "mLessThan"
-  | Mast.Lte -> "mLessThanEqual"
-  | Mast.Eq -> "mEqual"
-  | Mast.Neq -> "mNotEqual"
+  | Gt -> "mGreaterThan"
+  | Gte -> "mGreaterThanEqual"
+  | Lt -> "mLessThan"
+  | Lte -> "mLessThanEqual"
+  | Eq -> "mEqual"
+  | Neq -> "mNotEqual"
 
-let generate_binop (op : Mast.binop) : string =
+let generate_binop (op : Com.binop) : string =
+  let open Com in
   match op with
-  | Mast.And -> "mAnd"
-  | Mast.Or -> "mOr"
-  | Mast.Add -> "mAdd"
-  | Mast.Sub -> "mSubtract"
-  | Mast.Mul -> "mMultiply"
-  | Mast.Div -> "mDivide"
+  | And -> "mAnd"
+  | Or -> "mOr"
+  | Add -> "mAdd"
+  | Sub -> "mSubtract"
+  | Mul -> "mMultiply"
+  | Div -> "mDivide"
 
-let generate_unop (op : Mast.unop) : string =
-  match op with Mast.Not -> "mNot" | Mast.Minus -> "mNeg"
+let generate_unop (op : Com.unop) : string =
+  match op with Com.Not -> "mNot" | Com.Minus -> "mNeg"
 
-let generate_var_name (var : variable) : string =
-  let v = Pos.unmark (Bir.var_to_mir var).Mir.Variable.name in
+let generate_var_name (var : Mir.Var.t) : string =
+  let v = Pos.unmark var.name in
   String.uppercase_ascii v
 
-let format_var_name (fmt : Format.formatter) (var : variable) : unit =
+let format_var_name (fmt : Format.formatter) (var : Mir.Var.t) : unit =
   Format.fprintf fmt "%s" (generate_var_name var)
 
-let generate_name (v : variable) : string =
-  let v = Bir.var_to_mir v in
-  match v.alias with Some v -> v | None -> Pos.unmark v.Mir.Variable.name
+let generate_name (v : Mir.Var.t) : string =
+  match Mir.Var.alias v with
+  | Some v -> Pos.unmark v
+  | None -> Pos.unmark v.name
 
 let print_double_cut oc () = Format.fprintf oc "@,@,"
 
-let get_var_pos (var : variable) : int = var.Bir.offset
+let get_var_pos (_var : Mir.Var.t) : int = 0 (* var.Bir.offset *)
 
-let get_tgv_position (var : variable) : string =
+let get_tgv_position (var : Mir.Var.t) : string =
   Format.asprintf "tgv[%d /* %s */]" (get_var_pos var) (generate_var_name var)
 
-let rec generate_java_expr (e : expression Pos.marked) :
-    string * (Mir.LocalVariable.t * expression Pos.marked) list =
+let rec generate_java_expr (e : Mir.expression Pos.marked) :
+    string * (Mir.Var.t * Mir.expression Pos.marked) list =
   match Pos.unmark e with
+  | TestInSet _ -> assert false
   | Comparison (op, e1, e2) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
@@ -95,9 +97,7 @@ let rec generate_java_expr (e : expression Pos.marked) :
   | Index (var, e) ->
       let se, s = generate_java_expr e in
       let unmarked_var = Pos.unmark var in
-      let size =
-        Option.get (Bir.var_to_mir unmarked_var).Mir.Variable.is_table
-      in
+      let size = Option.get unmarked_var.is_table in
       let se2, s2 =
         ( Format.asprintf "m_array_index(tgv, %d ,%s, %d)"
             (get_var_pos unmarked_var) se size,
@@ -107,48 +107,53 @@ let rec generate_java_expr (e : expression Pos.marked) :
   | Conditional (e1, e2, e3) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
+      let e3 =
+        match e3 with
+        | None -> (Com.Literal Com.Undefined, Pos.no_pos)
+        | Some e -> e
+      in
       let se3, s3 = generate_java_expr e3 in
       let se4, s4 =
         (Format.asprintf "m_cond(%s, %s, %s)" se1 se2 se3, s1 @ s2 @ s3)
       in
       (se4, s4)
-  | FunctionCall (PresentFunc, [ arg ]) ->
+  | FuncCall ((PresentFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "mPresent(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (NullFunc, [ arg ]) ->
+  | FuncCall ((NullFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_null(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (ArrFunc, [ arg ]) ->
+  | FuncCall ((ArrFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_round(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (InfFunc, [ arg ]) ->
+  | FuncCall ((InfFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_floor(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (AbsFunc, [ arg ]) ->
+  | FuncCall ((AbsFunc, _), [ arg ]) ->
       let se, s = generate_java_expr arg in
       let se2, s2 = (Format.asprintf "m_abs(%s)" se, s) in
       (se2, s2)
-  | FunctionCall (MaxFunc, [ e1; e2 ]) ->
+  | FuncCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_max(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall (MinFunc, [ e1; e2 ]) ->
+  | FuncCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 = generate_java_expr e2 in
       let se3, s3 = (Format.asprintf "m_min(%s, %s)" se1 se2, s1 @ s2) in
       (se3, s3)
-  | FunctionCall (Multimax, [ e1; (Var v2, _) ]) ->
+  | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let se1, s1 = generate_java_expr e1 in
       let se2, s2 =
         (Format.asprintf "m_multimax(%s, tgv, %d)" se1 (get_var_pos v2), [])
       in
       (se2, s1 @ s2)
-  | FunctionCall _ -> assert false (* should not happen *)
+  | FuncCall _ -> assert false (* should not happen *)
   | Literal (Float f) -> (
       match f with
       | 0. -> (Format.asprintf "MValue.zero", [])
@@ -156,51 +161,11 @@ let rec generate_java_expr (e : expression Pos.marked) :
       | _ -> (Format.asprintf "new MValue(%s)" (string_of_float f), []))
   | Literal Undefined -> (Format.asprintf "%s" none_value, [])
   | Var var -> (get_tgv_position var, [])
-  | LocalVar lvar ->
-      (Format.asprintf "localVariables[%d]" lvar.Mir.LocalVariable.id, [])
-  | LocalLet (lvar, e1, e2) ->
-      let _, s1 = generate_java_expr e1 in
-      let se2, s2 = generate_java_expr e2 in
-      let se3, s3 = (Format.asprintf "%s" se2, s1 @ ((lvar, e1) :: s2)) in
-      (se3, s3)
   | Attribut _ | Size _ | NbAnomalies | NbDiscordances | NbInformatives
   | NbBloquantes ->
       Errors.raise_spanned_error "not yet implemented !!!" (Pos.get_position e)
   | NbCategory _ -> assert false
-
-let format_local_vars_defs (oc : Format.formatter)
-    (defs : (Mir.LocalVariable.t * expression Pos.marked) list) =
-  Format.pp_print_list
-    (fun fmt (lvar, expr) ->
-      let se, _ = generate_java_expr expr in
-      Format.fprintf fmt "localVariables[%d] = %s;" lvar.Mir.LocalVariable.id se)
-    oc defs
-
-let generate_var_def (var : variable) (def : variable_def)
-    (oc : Format.formatter) =
-  match def with
-  | SimpleVar e ->
-      let se, defs = generate_java_expr e in
-      Format.fprintf oc "%a%s = %s;" format_local_vars_defs defs
-        (get_tgv_position var) se
-  | TableVar (_, IndexTable es) ->
-      Format.fprintf oc "%a"
-        (fun fmt ->
-          Mir.IndexMap.iter (fun i v ->
-              let sv, defs = generate_java_expr v in
-              Format.fprintf fmt "%atgv[%d /* %a */] = %s;"
-                format_local_vars_defs defs
-                (get_var_pos var |> ( + ) i)
-                format_var_name var sv))
-        es
-  | TableVar (_size, IndexGeneric (v, e)) ->
-      let se, s = generate_java_expr e in
-      Format.fprintf oc
-        "if(!%s.isUndefined())@[<hov 2>{@ %atgv[%d/* %a */ + \
-         (int)%s.getValue()] = %s;@] }@,"
-        (get_tgv_position v) format_local_vars_defs s (get_var_pos var)
-        format_var_name var (get_tgv_position v) se
-  | InputVar -> assert false
+  | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
   let input_methods_count = ref 0 in
@@ -236,23 +201,15 @@ let generate_input_handling (oc : Format.formatter) (_split_threshold : int) =
 
 let fresh_cond_counter = ref 0
 
-let generate_rov_header (oc : Format.formatter) (rov : rule_or_verif) =
-  let tname = match rov.rov_code with Rule _ -> "rule" | Verif _ -> "verif" in
-  Format.fprintf oc "Rule.m_%s_%s(mCalculation, calculationErrors);" tname
-    (Pos.unmark rov.rov_name)
-
-let rec generate_stmts (program : program) (oc : Format.formatter)
-    (stmts : stmt list) =
+let rec generate_stmts (program : Mir.program) (oc : Format.formatter)
+    (stmts : Mir.m_instruction list) =
   Format.pp_print_list (generate_stmt program) oc stmts
 
-and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
-    unit =
+and generate_stmt (program : Mir.program) (oc : Format.formatter)
+    (stmt : Mir.m_instruction) : unit =
   match Pos.unmark stmt with
-  | SRovCall r ->
-      let rov = ROVMap.find r program.rules_and_verifs in
-      generate_rov_header oc rov
-  | SAssign (var, vdata) -> generate_var_def var vdata oc
-  | SConditional (cond, tt, ff) ->
+  | Affectation (_var, _vi, _ve) -> assert false
+  | IfThenElse (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
         String.map
@@ -268,41 +225,39 @@ and generate_stmt (program : program) (oc : Format.formatter) (stmt : stmt) :
       Format.fprintf oc
         "MValue %s = %s;@,@[<hv 2>if (m_is_defined_true(%s)) {@,%a@]@,}"
         cond_name
-        (let s, _ = generate_java_expr (Pos.same_pos_as cond stmt) in
+        (let s, _ = generate_java_expr cond in
          s)
         cond_name (generate_stmts program) tt;
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
-  | SVerifBlock s -> generate_stmts program oc s
-  | SFunctionCall (f, _) ->
+  | VerifBlock s -> generate_stmts program oc s
+  | ComputeTarget (f, _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
-  | SPrint (std, args) ->
+  | Print (std, args) ->
       let print_std =
-        match std with
-        | Mast.StdOut -> "System.out"
-        | Mast.StdErr -> "System.err"
+        match std with StdOut -> "System.out" | StdErr -> "System.err"
       in
       List.iter
         (function
-          | Mir.PrintString s ->
+          | Com.PrintString s ->
               Format.fprintf oc "%s(\"%%s\", %s);@," print_std s
-          | Mir.PrintName ((_, pos), _) | Mir.PrintAlias ((_, pos), _) ->
+          | Com.PrintName (_, pos) | Com.PrintAlias (_, pos) ->
               Errors.raise_spanned_error "not implemented yet !!!" pos
-          | Mir.PrintIndent _e ->
+          | Com.PrintIndent _e ->
               Errors.raise_spanned_error "not implemented yet !!!"
                 (Pos.get_position stmt)
-          | Mir.PrintExpr (e, _, _) ->
+          | Com.PrintExpr (e, _, _) ->
               Format.fprintf oc "cond = %s;@,%s(\"%%s\", cond.toString());@,"
                 (fst (generate_java_expr e))
                 print_std)
-        args
-  | SIterate _ ->
+        (List.map Pos.unmark args)
+  | Iterate _ ->
       Errors.raise_spanned_error "iterators not implemented in Java"
         (Pos.get_position stmt)
-  | SRestore _ ->
+  | Restore _ ->
       Errors.raise_spanned_error "restorators not implemented in Java"
         (Pos.get_position stmt)
-  | SRaiseError _ | SCleanErrors | SExportErrors | SFinalizeErrors ->
+  | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
       Errors.raise_spanned_error "errors not implemented in Java"
         (Pos.get_position stmt)
 
@@ -325,34 +280,12 @@ let generate_return (oc : Format.formatter) (_x : 'a) =
      }"
     print_outputs returned_variables
 
-let generate_rov_method (program : program) (oc : Format.formatter)
-    (rov : rule_or_verif) =
-  let tname, stmts =
-    match rov.rov_code with
-    | Rule stmts -> ("rule", stmts)
-    | Verif stmt -> ("verif", [ stmt ])
-  in
-  Format.fprintf oc
-    "@[<v 2>static void m_%s_%s(MCalculation mCalculation, List<MError> \
-     calculationErrors) {@,\
-     MValue cond = MValue.mUndefined;@,\
-     MValue[] tgv = mCalculation.getCalculationVariables();@,\
-     MValue[] localVariables = mCalculation.getLocalVariables();@,\
-     Map<String, List<MValue>> tableVariables = \
-     mCalculation.getTableVariables();@,\
-     %a@]@,\
-     }"
-    tname (Pos.unmark rov.rov_name) (generate_stmts program) stmts
-
-let generate_rov_methods (oc : Format.formatter) (program : program) : unit =
-  let rovs = ROVMap.bindings program.rules_and_verifs in
-  let _, rovs = List.split rovs in
-  Format.pp_print_list ~pp_sep:print_double_cut
-    (generate_rov_method program)
-    oc rovs
-
 let generate_calculateTax_method (calculation_vars_len : int)
-    (program : program) (locals_size : int) (oc : Format.formatter) () =
+    (program : Mir.program) (locals_size : int) (oc : Format.formatter) () =
+  let main_statements =
+    (Mir.TargetMap.find program.program_main_target program.program_targets)
+      .target_prog
+  in
   Format.fprintf oc
     "@[<v 0>/**@,\
      * Main calculation method for determining tax @,\
@@ -386,31 +319,9 @@ let generate_calculateTax_method (calculation_vars_len : int)
      @,"
     print_double_cut () calculation_vars_len locals_size print_double_cut ()
     print_double_cut () print_double_cut () (generate_stmts program)
-    (Bir.main_statements program)
+    main_statements
 
-let generate_mpp_function (program : program) (oc : Format.formatter)
-    (f : function_name) =
-  let { mppf_stmts; _ } = FunctionMap.find f program.mpp_functions in
-  Format.fprintf oc
-    "@[<v 2>static void %s(MCalculation mCalculation, List<MError> \
-     calculationErrors) {@,\
-     MValue cond = MValue.mUndefined;@,\
-     MValue[] tgv = mCalculation.getCalculationVariables();@,\
-     MValue[] localVariables = mCalculation.getLocalVariables();@,\
-     Map<String, List<MValue>> tableVariables = \
-     mCalculation.getTableVariables();@,\
-     %a@]@,\
-     }"
-    f (generate_stmts program) mppf_stmts
-
-let generate_mpp_functions (oc : Format.formatter) (program : program) =
-  let functions = FunctionMap.bindings program.Bir.mpp_functions in
-  let function_names, _ = List.split functions in
-  Format.pp_print_list ~pp_sep:print_double_cut
-    (generate_mpp_function program)
-    oc function_names
-
-let generate_main_class (program : program) (var_table_size : int)
+let generate_main_class (program : Mir.program) (var_table_size : int)
     (locals_size : int) (fmt : Format.formatter) (filename : string) =
   let class_name =
     String.split_on_char '.' filename |> List.hd |> String.split_on_char '/'
@@ -430,24 +341,22 @@ let generate_main_class (program : program) (var_table_size : int)
     (generate_calculateTax_method var_table_size program locals_size)
     () generate_return []
 
-let generate_java_program (program : program) 
+let generate_java_program (program : Mir.program) 
     (filename : string) : unit =
   let split_treshold = 100 in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
-  let locals_size = Bir.get_locals_size program |> ( + ) 1 in
-  let var_table_size = Bir.size_of_tgv () in
-  let program = Bir.squish_statements program split_treshold "java_rule_" in
+  let locals_size = 0 in (* Bir.get_locals_size program |> ( + ) 1 in *)
+  let var_table_size = 0 in (* Bir.size_of_tgv () in *)
+  let program = program in (*Bir.squish_statements program split_treshold "java_rule_" in*)
   Format.fprintf oc
     "@[<v 0>%a%a\
      @[<v 2>class InputHandler {@,%a@]@,}%a\
-     @[<v 2>class MppFunction {@,%a@]@,}%a\
-     @[<hv 2>class Rule {@,%a@]@,}@]@."
+     @[<v 2>class MppFunction {@,@]@,}%a\
+     @,}@]@."
      (generate_main_class program var_table_size locals_size) filename
      print_double_cut ()
      generate_input_handling split_treshold
      print_double_cut ()
-     generate_mpp_functions program
-     print_double_cut ()
-     generate_rov_methods program;
+     print_double_cut ();
   close_out _oc[@@ocamlformat "disable"]

@@ -25,9 +25,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_literal (v: parse_val) : literal = match v with
- | ParseVar v -> Variable v
- | ParseInt v -> Float (float_of_int v)
+ let parse_to_atom (v: parse_val) : variable Com.atom =
+   match v with
+   | ParseVar v -> AtomVar v
+   | ParseInt v -> AtomLiteral (Float (float_of_int v))
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
@@ -214,15 +215,12 @@ verif_domain_decl:
     VerifDomDecl decl
   }
 
-var_comp_category:
-| BASE { "base" }
-| GIVEN_BACK { "restituee" }
-| TIMES { "*" }
-
 var_category_id:
 | INPUT TIMES { ["saisie", Pos.no_pos; "*", Pos.no_pos] }
 | INPUT l = symbol_with_pos+ { ("saisie", Pos.no_pos) :: l }
-| COMPUTED l = with_pos(var_comp_category)* { ("calculee", Pos.no_pos) :: l }
+| COMPUTED TIMES { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED BASE { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED { ["calculee", Pos.no_pos] }
 | TIMES { ["*", Pos.no_pos] }
 
 vdom_param:
@@ -269,7 +267,7 @@ const_variable_name:
 | name = SYMBOL COLON CONST { parse_variable_name $sloc name }
 
 const_value:
-| value = SYMBOL { parse_const_value value }
+| value = SYMBOL { parse_atom $sloc value }
 
 const_variable:
 | name = with_pos(const_variable_name) EQUALS value = with_pos(const_value)
@@ -304,7 +302,7 @@ comp_variable:
     in
     let comp_category =
       subtyp
-      |> List.filter (function CompSubTyp _ -> true | _ -> false) 
+      |> List.filter (function CompSubTyp ("base", _) -> true | _ -> false) 
       |> List.map (function CompSubTyp x -> x | _ -> assert false)
     in
     let comp_is_givenback =
@@ -428,11 +426,44 @@ target_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
+    let target_apps = 
+      List.fold_left (
+        fun res (app, pos) ->
+          match StrMap.find_opt app res with
+          | Some (_, old_pos) ->
+              let msg =
+                Format.asprintf "application %s already declared %a"
+                  app
+                  Pos.format_position old_pos
+              in
+              Errors.raise_spanned_error msg pos
+          | None -> StrMap.add app (app, pos) res)
+        StrMap.empty apps
+    in
+    let target_tmp_vars = 
+      List.fold_left (
+        fun res (vnm, vt) ->
+          let vn, pos = vnm in
+          match StrMap.find_opt vn res with
+          | Some ((_, old_pos), _) ->
+              let msg =
+                Format.asprintf "temporary variable %s already declared %a"
+                  vn
+                  Pos.format_position old_pos
+              in
+              Errors.raise_spanned_error msg pos
+          | None -> StrMap.add vn (vnm, vt) res)
+        StrMap.empty
+        (match tmp_vars with None -> [] | Some l -> l)
+    in
     let target = {
       target_name = name;
       target_file = None;
-      target_applications = apps;
-      target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
+      target_apps;
+      target_tmp_vars;
+      target_nb_tmps = -1;
+      target_sz_tmps = -1;
+      target_nb_its = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
@@ -473,7 +504,7 @@ instruction:
 | COMPUTE TARGET target = symbol_with_pos SEMICOLON { ComputeTarget target }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
     {
-      let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in
+      let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
       ComputeVerifs (dom, expr)
     }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON
@@ -515,7 +546,7 @@ instruction:
       let expr =
         match exo with
         | Some expr -> expr
-        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+        | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
       in
       Iterate (var, vcats, expr, List.rev instrs)
     }
@@ -615,7 +646,7 @@ rest_param:
     let expr =
       match expr_opt with
       | Some expr -> expr
-      | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
     VarCats (var, vcats, expr)
   }
@@ -723,9 +754,9 @@ error_:
   }
 
 type_error:
-| ANOMALY { Anomaly }
-| DISCORDANCE { Discordance }
-| INFORMATIVE { Information }
+| ANOMALY { Com.Error.Anomaly }
+| DISCORDANCE { Com.Error.Discordance }
+| INFORMATIVE { Com.Error.Information }
 
 
 output_etc:
@@ -738,11 +769,11 @@ output_name:
 | s = SYMBOL { parse_variable_name $sloc s }
 
 brackets:
-| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
+| LBRACKET i = expression RBRACKET { i }
 
 loop_variables:
-| lrs = loop_variables_ranges { Ranges lrs }
-| lvs = loop_variables_values { ValueSets lvs }
+| lrs = loop_variables_ranges { Com.Ranges lrs }
+| lvs = loop_variables_values { Com.ValueSets lvs }
 
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
@@ -772,7 +803,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Single (parse_to_literal (parse_variable_or_int $sloc s), pos)
+    Com.Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
   }
 
 range_or_minus:
@@ -782,11 +813,11 @@ range_or_minus:
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), pos in
-    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), pos in
+    let l1 = parse_to_atom (parse_variable_or_int $sloc i1), pos in
+    let l2 = parse_to_atom (parse_variable_or_int $sloc i2), pos in
     match rm with
-    | `Range -> Range (l1, l2)
-    | `Minus -> Interval (l1, l2)
+    | `Range -> Com.Range (l1, l2)
+    | `Minus -> Com.Interval (l1, l2)
   }
 
 enumeration:
@@ -798,8 +829,8 @@ enumeration_item:
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> VarValue (v, pos)
-    | ParseInt i -> FloatValue (float_of_int i, pos)
+    | ParseVar v -> Com.VarValue (v, pos)
+    | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
 interval:
@@ -807,7 +838,7 @@ interval:
     let pos = mk_position $sloc in
     let ir1 = parse_int $sloc i1, pos in
     let ir2 = parse_int $sloc i2, pos in
-    Interval (ir1, ir2) : set_value
+    Com.Interval (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
@@ -833,42 +864,46 @@ expression:
 | NOT e = with_pos(expression) { Unop (Not, e) }
 
 %inline logical_binop:
-| AND { And }
-| OR { Or }
+| AND { Com.And }
+| OR { Com.Or }
 
 sum_expression:
 | e = product_expression { e }
 | e1 = with_pos(sum_expression)
   op = with_pos(sum_operator)
   e2 = with_pos(product_expression) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline sum_operator:
-| PLUS { Add }
-| MINUS { Sub }
+| PLUS { Com.Add }
+| MINUS { Com.Sub }
 
 product_expression:
 | e = factor { e }
 | e1 = with_pos(product_expression)
   op = with_pos(product_operator)
   e2 = with_pos(factor) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline product_operator:
-| TIMES { Mul }
-| DIV { Div }
+| TIMES { Com.Mul }
+| DIV { Com.Div }
 
 table_index_name:
 s = SYMBOL { parse_variable $sloc s }
 
 factor:
-| MINUS e = with_pos(factor) { Unop (Minus, e) }
+| MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = with_pos(table_index_name) i = with_pos(brackets) { Index (s, i) }
-| l = factor_literal { Literal l }
+| s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
+| a = with_pos(factor_atom) {
+    match Pos.unmark a with
+    | Com.AtomVar v -> Com.Var v
+    | Com.AtomLiteral l -> Com.Literal l
+  }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
@@ -881,15 +916,15 @@ ternary_operator:
   THEN e2 = with_pos(expression)
   e3 = else_branch?
   ENDIF {
-    Conditional (e1, e2, e3)
+    Com.Conditional (e1, e2, e3)
   }
 
 else_branch:
 | ELSE e = with_pos(expression) { e }
 
-factor_literal:
-| UNDEFINED { Mast.Undefined }
-| s = SYMBOL { parse_literal $sloc s }(*
+factor_atom:
+| UNDEFINED { AtomLiteral Undefined }
+| s = SYMBOL { parse_atom $sloc s }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
@@ -899,7 +934,9 @@ function_name:
 | s = SYMBOL { parse_func_name $sloc s }
 
 function_call:
-| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN { NbCategory cats }
+| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
+    NbCategory (parse_catvars cats)
+  }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
   }
@@ -911,27 +948,30 @@ function_call:
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
 | s = with_pos(function_name) LPAREN RPAREN {
-    FunctionCall (s, Mast.ArgList [])
+    FuncCall (parse_function_name s, [])
   }
-| s = with_pos(function_name) LPAREN args = function_call_args RPAREN {
-    FunctionCall (s, args)
+| s = with_pos(function_name) LPAREN call_args = function_call_args RPAREN {
+    let f_name = parse_function_name s in
+    match call_args with
+    | `CallArgs args -> Com.FuncCall (f_name, args)
+    | `CallLoop (l1, l2) -> Com.FuncCallLoop (f_name, l1, l2)
   }
 
 function_call_args:
-| l = loop_expression { let l1, l2 = l in LoopList (l1, l2) }
-| args = function_arguments { ArgList (args) }
+| l = loop_expression { let l1, l2 = l in `CallLoop (l1, l2) }
+| args = function_arguments { `CallArgs args }
 
 function_arguments:
 | e = with_pos(sum_expression) { [e] }
 | e = with_pos(sum_expression) COMMA es = function_arguments { e :: es }
 
 %inline comparison_op:
-| GTE  { Gte }
-| LTE  { Lte }
-| LT { Lt }
-| GT { Gt }
-| NEQ  { Neq }
-| EQUALS { Eq }
+| GTE  { Com.Gte }
+| LTE  { Com.Lte }
+| LT { Com.Lt }
+| GT { Com.Gt }
+| NEQ  { Com.Neq }
+| EQUALS { Com.Eq }
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, symbol_with_pos) { ss }

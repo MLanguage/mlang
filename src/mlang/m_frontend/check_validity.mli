@@ -12,26 +12,6 @@
 
 type rule_or_verif = Rule | Verif
 
-type global_variable = {
-  global_name : string Pos.marked;
-  global_category : Mir.cat_variable;
-  global_attrs : int Pos.marked StrMap.t;
-  global_alias : string Pos.marked option;
-  global_table : int option;
-  global_description : string Pos.marked;
-  global_typ : Mast.value_typ option;
-}
-
-type error = {
-  name : string Pos.marked;
-  typ : Mast.error_typ;
-  kind : string Pos.marked;
-  major_code : string Pos.marked;
-  minor_code : string Pos.marked;
-  isisf : string Pos.marked;
-  description : string;
-}
-
 type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
 
 type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
@@ -40,14 +20,6 @@ type chaining = {
   chain_name : string Pos.marked;
   chain_apps : Pos.t StrMap.t;
   chain_rules : Mir.rule_domain Pos.marked IntMap.t;
-}
-
-type target = {
-  target_name : string Pos.marked;
-  target_file : string option;
-  target_apps : Pos.t StrMap.t;
-  target_tmp_vars : int option Pos.marked StrMap.t;
-  target_prog : Mast.instruction Pos.marked list;
 }
 
 type rule = {
@@ -69,7 +41,7 @@ type verif = {
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
   verif_is_blocking : bool;
-  verif_cat_var_stats : int Mir.CatVarMap.t;
+  verif_cat_var_stats : int Com.CatVarMap.t;
   verif_var_stats : int StrMap.t;
   verif_seq : int;
 }
@@ -80,10 +52,10 @@ type program = {
   prog_app : string;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
-  prog_var_cats : Mir.cat_variable_data Mir.CatVarMap.t;
-  prog_vars : global_variable StrMap.t;
-  prog_alias : global_variable StrMap.t;
-  prog_errors : error StrMap.t;
+  prog_var_cats : Com.cat_variable_data Com.CatVarMap.t;
+  prog_vars : Mir.Var.t StrMap.t;
+  prog_alias : Mir.Var.t StrMap.t;
+  prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
@@ -93,16 +65,18 @@ type program = {
   prog_verifs : verif IntMap.t;
   prog_vdom_calls :
     (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
-  prog_targets : target StrMap.t;
+  prog_targets : Mast.target StrMap.t;
+  prog_main_target : string;
+  prog_stats : Mir.stats;
 }
 
 val mast_to_catvars :
-  Mast.var_category_id -> 'a Mir.CatVarMap.t -> Mir.CatVarSet.t
+  Com.CatVarSet.t Pos.marked -> 'a Com.CatVarMap.t -> Com.CatVarSet.t Pos.marked
 
 val cats_variable_from_decl_list :
-  Mast.var_category_id list -> 'a Mir.CatVarMap.t -> Mir.CatVarSet.t
+  Mast.var_category_id list -> 'a Com.CatVarMap.t -> Com.CatVarSet.t
 
 val check_domain :
   rule_or_verif -> 'a Mast.domain_decl -> 'b -> 'b doms * syms -> 'b doms * syms
 
-val proceed : Mast.program -> program
+val proceed : Mast.program -> string -> program

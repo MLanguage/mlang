@@ -1,18 +1,17 @@
 type offset =
   | GetValueConst of int
   | GetValueExpr of string
-  | GetValueVar of Bir.variable
+  | GetValueVar of Mir.Var.t
   | PassPointer
   | None
 
 let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
-    ?(def_flag = false) ?(debug_flag = false) (var : Bir.variable) : string =
-  let mvar = Bir.var_to_mir var in
+    ?(def_flag = false) ?(debug_flag = false) (var : Mir.Var.t) : string =
   try
     match offset with
     | PassPointer ->
-        if def_flag then Dgfip_varid.gen_access_def_pointer vm mvar
-        else Dgfip_varid.gen_access_pointer vm mvar
+        if def_flag then Dgfip_varid.gen_access_def_pointer vm var
+        else Dgfip_varid.gen_access_pointer vm var
     | _ ->
         let offset =
           match offset with
@@ -22,19 +21,19 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           | GetValueExpr offset -> Format.sprintf " + (%s)" offset
           | PassPointer -> assert false
         in
-        if def_flag then Dgfip_varid.gen_access_def vm mvar offset
+        if def_flag then Dgfip_varid.gen_access_def vm var offset
         else
-          let access_val = Dgfip_varid.gen_access_val vm mvar offset in
+          let access_val = Dgfip_varid.gen_access_val vm var offset in
           if debug_flag then
-            let vn = Pos.unmark mvar.Mir.Variable.name in
-            let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm mvar in
+            let vn = Pos.unmark var.Mir.Var.name in
+            let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm var in
             Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
               access_val
           else access_val
   with Not_found ->
     Errors.raise_error
       (Format.asprintf "Variable %s not found in TGV"
-         (Pos.unmark mvar.Mir.Variable.name))
+         (Pos.unmark var.Mir.Var.name))
 
 type local_var =
   | Anon (* inlined sub-expression, not intended for reuse *)
@@ -66,11 +65,11 @@ and expr =
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
-  | Daccess of Bir.variable * dflag * expr
+  | Daccess of Mir.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
 
-and expr_var = Local of stack_slot | M of Bir.variable * offset * dflag
+and expr_var = Local of stack_slot | M of Mir.Var.t * offset * dflag
 
 and t = expr * dflag * local_vars
 
@@ -197,7 +196,7 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (v : Bir.variable) (offset : offset) (df : dflag) _stacks _lv : t =
+let m_var (v : Mir.Var.t) (offset : offset) (df : dflag) _stacks _lv : t =
   (Dvar (M (v, offset, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
@@ -304,7 +303,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  let comp (o : Mast.comp_op) =
+  let comp (o : Com.comp_op) =
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
         if
@@ -319,12 +318,12 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
   in
   let e =
     match op with
-    | "==" -> comp Mast.Eq
-    | "!=" -> comp Mast.Neq
-    | "<=" -> comp Mast.Lte
-    | "<" -> comp Mast.Lt
-    | ">=" -> comp Mast.Gte
-    | ">" -> comp Mast.Gt
+    | "==" -> comp Com.Eq
+    | "!=" -> comp Com.Neq
+    | "<=" -> comp Com.Lte
+    | "<" -> comp Com.Lt
+    | ">=" -> comp Com.Gte
+    | ">" -> comp Com.Gt
     | _ -> assert false
   in
   (e, Def, lv2 @ lv1)
@@ -344,8 +343,8 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
-let access (var : Bir.variable) (df : dflag) (e : constr)
-    (stacks : local_stacks) (ctx : local_vars) : t =
+let access (var : Mir.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
+    (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Val e in
   (Daccess (var, df, e), df, lv)
 

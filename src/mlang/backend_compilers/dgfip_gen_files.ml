@@ -836,47 +836,39 @@ let gen_table_debug fmt flags vars i =
   in
   gen_table fmt flags vars (Debug i) opt
 
-let gen_table_varinfo fmt var_dict cat Mir.{ id_int; id_str; attributs; _ }
+let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
     stats =
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        match var.Mir.cats with
-        | Some c when Mir.compare_cat_variable c cat = 0 ->
-            Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-              (Pos.unmark var.Mir.name)
-              (match var.Mir.alias with Some s -> s | None -> "")
-              idx size id_int;
-            let attr_map =
-              List.fold_left
-                (fun res (an, al) ->
-                  let vn = Pos.unmark an in
-                  let vl = Pos.unmark al in
-                  StrMap.add vn vl res)
-                StrMap.empty var.Mir.attributes
-            in
-            StrMap.iter (fun _ av -> Format.fprintf fmt ", %d" av) attr_map;
-            Format.fprintf fmt " },\n";
-            nb + 1
-        | _ -> nb)
+        if Com.compare_cat_variable (Mir.Var.cat var) cat = 0 then (
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
+            (Pos.unmark var.Mir.Var.name)
+            (Mir.Var.alias_str var) idx size id_int;
+          StrMap.iter
+            (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
+            (Mir.Var.attrs var);
+          Format.fprintf fmt " },\n";
+          nb + 1)
+        else nb)
       var_dict 0
   in
   Format.fprintf fmt "  NULL\n};\n\n";
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Mir.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
+  Com.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
 
-let gen_table_varinfos fmt cprog vars =
+let gen_table_varinfos fmt (cprog : Mir.program) vars =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
 |};
-  Mir.CatVarMap.iter
-    (fun _ Mir.{ id_str; attributs; _ } ->
+  Com.CatVarMap.iter
+    (fun _ Com.{ id_str; attributs; _ } ->
       Format.fprintf fmt
         "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
       StrMap.iter
@@ -894,14 +886,12 @@ let gen_table_varinfos fmt cprog vars =
         attributs;
       Format.fprintf fmt "  return 0.0;\n";
       Format.fprintf fmt "}\n\n")
-    cprog.Bir.mir_program.program_var_categories;
+    cprog.program_var_categories;
   let var_dict =
-    Mir.VariableDict.fold
-      (fun var dict ->
-        match var.Mir.cats with
-        | Some _ -> StrMap.add (Pos.unmark var.Mir.name) (var, -1, -1) dict
-        | None -> dict)
-      cprog.Bir.mir_program.program_vars StrMap.empty
+    StrMap.fold
+      (fun _ var dict ->
+        StrMap.add (Pos.unmark var.Mir.Var.name) (var, -1, -1) dict)
+      cprog.program_vars StrMap.empty
   in
   let var_dict =
     List.fold_left
@@ -921,12 +911,12 @@ let gen_table_varinfos fmt cprog vars =
           dict)
       var_dict vars
   in
-  Mir.CatVarMap.fold
+  Com.CatVarMap.fold
     (gen_table_varinfo fmt var_dict)
-    cprog.Bir.mir_program.program_var_categories Mir.CatVarMap.empty
+    cprog.program_var_categories Com.CatVarMap.empty
 
 let gen_decl_varinfos fmt stats =
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, attr_set) ->
       Format.fprintf fmt
         {|typedef struct S_varinfo_%s {
@@ -941,22 +931,22 @@ let gen_decl_varinfos fmt stats =
       Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, nb, _) ->
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, id_int, _, _) ->
       Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
     stats;
   Format.fprintf fmt "\n";
-  Mir.CatVarMap.iter
+  Com.CatVarMap.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt
         "extern char attribut_%s_def(T_varinfo_%s *vi, char *attr);\n" id_str
@@ -1637,7 +1627,7 @@ extern void init_erreur(void);
 #endif /* FLG_MULTITHREAD */
 |}
 
-let gen_decl_targets fmt cprog =
+let gen_decl_targets fmt (cprog : Mir.program) =
   Format.fprintf fmt
     {|#ifndef FLG_MULTITHREAD
 extern T_discord *discords;
@@ -1652,7 +1642,7 @@ extern jmp_buf jmp_bloq;
 
 |};
 
-  let targets = Mir.TargetMap.bindings cprog.Bir.targets in
+  let targets = Mir.TargetMap.bindings cprog.program_targets in
   Format.fprintf fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (name, _) ->
          Format.fprintf fmt "extern struct S_discord *%s(T_irdata* irdata);"
@@ -2169,25 +2159,27 @@ T_irdata *irdata;
 |}
 
 (* Generate a map from variables to array indices *)
-let extract_var_ids (cprog : Bir.program) vars =
+let extract_var_ids (cprog : Mir.program) vars =
   let open Mir in
   (* let open Dgfip_varid in *)
-  let pvars = cprog.mir_program.program_vars in
-  let add vn v vm =
+  let pvars = cprog.program_vars in
+  let add vn (v : Var.t) vm =
     let vs =
       match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
       | Some vs -> vs
     in
-    StrMap.add (Pos.unmark v.Variable.name) (VariableSet.add v vs) vm
+    StrMap.add (Pos.unmark v.name) (VariableSet.add v vs) vm
   in
   (* Build a map from variable names to all their definitions (with different
      ids) *)
   let vars_map =
-    VariableDict.fold
-      (fun v vm ->
-        let vm = add (Pos.unmark v.Variable.name) v vm in
-        match v.Variable.alias with Some a -> add a v vm | None -> vm)
+    StrMap.fold
+      (fun _ (v : Var.t) vm ->
+        let vm = add (Pos.unmark v.name) v vm in
+        match Mir.Var.alias v with
+        | Some a -> add (Pos.unmark a) v vm
+        | None -> vm)
       pvars StrMap.empty
   in
   let process_var ~alias
@@ -2233,7 +2225,8 @@ let open_file filename =
 
 (* Generate the auxiliary files AND return the map of variables names to TGV
    ids *)
-let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
+let generate_auxiliary_files flags prog (cprog : Mir.program) :
+    Dgfip_varid.var_id_map =
   let folder = Filename.dirname !Cli.output_file in
 
   let vars = get_vars prog Dgfip_options.(flags.flg_tri_ebcdic) in
@@ -2297,7 +2290,7 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
   close_out oc;
 
   let rules, verifs, errors, chainings = get_rules_verif_etc prog in
-  let prefix = cprog.Bir.mir_program.Mir.program_safe_prefix in
+  let prefix = cprog.program_safe_prefix in
 
   let oc, fmt = open_file (Filename.concat folder "compir_tableg.c") in
   gen_table_call fmt flags vars_debug prefix rules chainings errors;

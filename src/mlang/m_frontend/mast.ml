@@ -58,8 +58,6 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Variable of variable | Float of float | Undefined
-
 (** A table index is used in expressions like [TABLE\[X\]], and can be
     variables, integer or the special [X] variable that stands for a "generic"
     index (to define table values as a function of the index). [X] is contained
@@ -77,100 +75,13 @@ let get_table_size_opt = function
   | None -> None
   | Some (SymbolSize _, _) -> assert false
 
-type set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of variable Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
-
-(**{2 Loops}*)
-
-(** The M language has an extremely odd way to specify looping. Rather than
-    having first-class local mutable variables whose value change at each loop
-    iteration, the M language prefers to use the changing loop parameter to
-    instantiate the variable names inside the loop. For instance,
-
-    {v somme(i=1..10:Xi) v}
-
-    should evaluate to the sum of variables [X1], [X2], etc. Parameters can be
-    number or characters and there can be multiple of them. We have to store all
-    this information. *)
-
-(** Values that can be substituted for loop parameters *)
-type set_value_loop =
-  | Single of literal Pos.marked
-  | Range of literal Pos.marked * literal Pos.marked
-  | Interval of literal Pos.marked * literal Pos.marked
-
-type loop_variable = char Pos.marked * set_value_loop list
-(** A loop variable is the character that should be substituted in variable
-    names inside the loop plus the set of value to substitute. *)
-
-(** There are two kind of loop variables declaration, but they are semantically
-    the same though they have different concrete syntax. *)
-type loop_variables =
-  | ValueSets of loop_variable list
-  | Ranges of loop_variable list
-
 (**{2 Expressions}*)
 
-(** Comparison operators *)
-type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
+type var_category_id = string Pos.marked list Pos.marked
 
-(** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
+type set_value = variable Com.set_value
 
-let precedence = function
-  | Add -> 2
-  | Sub -> 2
-  | Mul -> 1
-  | Div -> 1
-  | And -> 3
-  | Or -> 4
-
-let has_priority op op' = precedence op' < precedence op
-
-let is_right_associative = function _ -> false
-
-let is_left_associative = function Sub | Div -> true | _ -> false
-
-(** Unary operators *)
-type unop = Not | Minus
-
-(** The main type of the M language *)
-type expression =
-  | TestInSet of bool * expression Pos.marked * set_value list
-      (** Test if an expression is in a set of value (or not in the set if the
-          flag is set to [false]) *)
-  | Comparison of
-      comp_op Pos.marked * expression Pos.marked * expression Pos.marked
-      (** Compares two expressions and produce a boolean *)
-  | Binop of binop Pos.marked * expression Pos.marked * expression Pos.marked
-  | Unop of unop * expression Pos.marked
-  | Index of variable Pos.marked * table_index Pos.marked
-      (** Access a cell in a table *)
-  | Conditional of
-      expression Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked option
-      (** Classic conditional with an optional else clause ([None] only for
-          verification conditions) *)
-  | FunctionCall of func_name Pos.marked * func_args
-  | Literal of literal
-  | Loop of loop_variables Pos.marked * expression Pos.marked
-      (** The loop is prefixed with the loop variables declarations *)
-  | NbCategory of string Pos.marked list Pos.marked
-  | Attribut of variable Pos.marked * string Pos.marked
-  | Size of variable Pos.marked
-  | NbAnomalies
-  | NbDiscordances
-  | NbInformatives
-  | NbBloquantes
-
-(** Functions can take a explicit list of argument or a loop expression that
-    expands into a list *)
-and func_args =
-  | ArgList of expression Pos.marked list
-  | LoopList of loop_variables Pos.marked * expression Pos.marked
+type expression = variable Com.expression
 
 (**{1 Toplevel clauses}*)
 
@@ -181,7 +92,7 @@ and func_args =
 
 type lvalue = {
   var : variable Pos.marked;
-  index : table_index Pos.marked option; (* [None] if not a table *)
+  index : expression Pos.marked option; (* [None] if not a table *)
 }
 (** An lvalue (left value) is a variable being assigned. It can be a table or a
     non-table variable *)
@@ -196,9 +107,7 @@ type formula_decl = {
     value (e.g [Xi] can depend on [i]). *)
 type formula =
   | SingleFormula of formula_decl
-  | MultipleFormulaes of loop_variables Pos.marked * formula_decl
-
-type print_std = StdOut | StdErr
+  | MultipleFormulaes of variable Com.loop_variables Pos.marked * formula_decl
 
 type print_arg =
   | PrintString of string
@@ -206,8 +115,6 @@ type print_arg =
   | PrintAlias of variable Pos.marked
   | PrintIndent of expression Pos.marked
   | PrintExpr of expression Pos.marked * int * int
-
-type var_category_id = string Pos.marked list Pos.marked
 
 type restore_vars =
   | VarList of string Pos.marked list
@@ -224,7 +131,7 @@ type instruction =
   | ComputeTarget of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
   | VerifBlock of instruction Pos.marked list
-  | Print of print_std * print_arg Pos.marked list
+  | Print of Com.print_std * print_arg Pos.marked list
   | Iterate of
       string Pos.marked
       * var_category_id list
@@ -248,8 +155,11 @@ type rule = {
 type target = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_applications : application Pos.marked list;
-  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
+  target_apps : application Pos.marked StrMap.t;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_its : int;
   target_prog : instruction Pos.marked list;
 }
 
@@ -309,7 +219,7 @@ type computed_variable = {
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of variable_name Pos.marked * literal Pos.marked
+  | ConstVar of variable_name Pos.marked * variable Com.atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 
@@ -356,19 +266,9 @@ type verif_domain_data = {
 
 type verif_domain_decl = verif_domain_data domain_decl
 
-type error_typ = Anomaly | Discordance | Information
-
-let compare_error_type e1 e2 =
-  match (e1, e2) with
-  | Anomaly, (Discordance | Information) -> -1
-  | (Discordance | Information), Anomaly -> 1
-  | Information, Discordance -> -1
-  | Discordance, Information -> 1
-  | _ -> 0
-
 type error_ = {
   error_name : error_name Pos.marked;
-  error_typ : error_typ Pos.marked;
+  error_typ : Com.Error.typ Pos.marked;
   error_descr : string Pos.marked list;
 }
 

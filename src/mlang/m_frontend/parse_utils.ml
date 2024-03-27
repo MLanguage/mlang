@@ -91,13 +91,13 @@ let parse_table_size (s : string) : Mast.table_size =
 
 (**{1 Literal parsing}*)
 
-let parse_literal sloc (s : string) : Mast.literal =
-  try Mast.Float (float_of_string s)
-  with Failure _ -> Mast.Variable (parse_variable sloc s)
+let parse_literal sloc (s : string) : Com.literal =
+  try Com.Float (float_of_string s)
+  with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_const_value (s : string) : Mast.literal =
-  try Mast.Float (float_of_string s)
-  with Failure _ -> Mast.Variable (Mast.Normal s)
+let parse_atom sloc (s : string) : Mast.variable Com.atom =
+  try Com.AtomLiteral (Com.Float (float_of_string s))
+  with Failure _ -> Com.AtomVar (parse_variable sloc s)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
@@ -105,6 +105,31 @@ let parse_int sloc (s : string) : int =
   try int_of_string s
   with Failure _ ->
     E.raise_spanned_error "should be an integer" (mk_position sloc)
+
+(** Parse function name *)
+let parse_function_name f_name =
+  let open Com in
+  let map = function
+    | "somme" -> SumFunc
+    | "min" -> MinFunc
+    | "max" -> MaxFunc
+    | "abs" -> AbsFunc
+    | "positif" -> GtzFunc
+    | "positif_ou_nul" -> GtezFunc
+    | "null" -> NullFunc
+    | "arr" -> ArrFunc
+    | "inf" -> InfFunc
+    | "present" -> PresentFunc
+    | "multimax" -> Multimax
+    | "supzero" -> Supzero
+    | "numero_verif" -> VerifNumber
+    | "numero_compl" -> ComplNumber
+    | x ->
+        Errors.raise_spanned_error
+          (Format.asprintf "unknown function %s" x)
+          (Pos.get_position f_name)
+  in
+  Pos.map_under_mark map f_name
 
 (* # parse_string #
  * Takes a litteral string and produces a String.t of the corresponding chars
@@ -172,3 +197,31 @@ let parse_if_then_etc l =
     | _ -> assert false
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false
+
+let parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked =
+  let open Com in
+  function
+  | [ ("*", _) ], id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.singleton "*"))
+      |> CatVarSet.add (CatComputed { is_base = false })
+      |> CatVarSet.add (CatComputed { is_base = true })
+      |> Pos.mark id_pos
+  | [ ("saisie", _); ("*", _) ], id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.singleton "*")) |> Pos.mark id_pos
+  | ("saisie", _) :: id, id_pos ->
+      CatVarSet.singleton (CatInput (StrSet.from_marked_list id))
+      |> Pos.mark id_pos
+  | ("calculee", _) :: id, id_pos -> (
+      match id with
+      | [] ->
+          CatVarSet.singleton (CatComputed { is_base = false })
+          |> Pos.mark id_pos
+      | [ ("base", _) ] ->
+          CatVarSet.singleton (CatComputed { is_base = true })
+          |> Pos.mark id_pos
+      | [ ("*", _) ] ->
+          CatVarSet.singleton (CatComputed { is_base = false })
+          |> CatVarSet.add (CatComputed { is_base = true })
+          |> Pos.mark id_pos
+      | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
+  | _, id_pos -> Errors.raise_spanned_error "invalid variable category" id_pos

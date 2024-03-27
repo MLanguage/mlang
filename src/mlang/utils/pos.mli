@@ -35,6 +35,8 @@ type 'a marked = 'a * t
 val no_pos : t
 (** Placeholder t *)
 
+val mark : t -> 'a -> 'a marked
+
 val unmark : 'a marked -> 'a
 
 val get_position : 'a marked -> t
@@ -44,8 +46,6 @@ val map_under_mark : ('a -> 'b) -> 'a marked -> 'b marked
 val same_pos_as : 'a -> 'b marked -> 'a marked
 
 val unmark_option : 'a marked option -> 'a option
-
-module VarNameToID : StrMap.T
 
 val get_start_line : t -> int
 

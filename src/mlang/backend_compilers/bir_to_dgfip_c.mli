@@ -22,7 +22,7 @@
 
 val generate_c_program :
   Dgfip_options.flags ->
-  Bir.program ->
+  Mir.program ->
   (* filename *) string ->
   Dgfip_varid.var_id_map ->
   unit
