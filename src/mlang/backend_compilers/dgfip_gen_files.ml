@@ -836,14 +836,14 @@ let gen_table_debug fmt flags vars i =
   in
   gen_table fmt flags vars (Debug i) opt
 
-let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
-    stats =
+let gen_table_varinfo fmt var_dict cat
+    Com.CatVar.{ id_int; id_str; attributs; _ } stats =
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        if Com.compare_cat_variable (Mir.Var.cat var) cat = 0 then (
+        if Com.CatVar.compare (Mir.Var.cat var) cat = 0 then (
           Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
             (Pos.unmark var.Mir.Var.name)
             (Mir.Var.alias_str var) idx size id_int;
@@ -859,7 +859,7 @@ let gen_table_varinfo fmt var_dict cat Com.{ id_int; id_str; attributs; _ }
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Com.CatVarMap.add cat (id_str, id_int, nb, attr_set) stats
+  Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
 
 let gen_table_varinfos fmt (cprog : Mir.program) vars =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
@@ -867,8 +867,8 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
 #include "mlang.h"
 
 |};
-  Com.CatVarMap.iter
-    (fun _ Com.{ id_str; attributs; _ } ->
+  Com.CatVar.Map.iter
+    (fun _ Com.CatVar.{ id_str; attributs; _ } ->
       Format.fprintf fmt
         "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
       StrMap.iter
@@ -911,12 +911,12 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
           dict)
       var_dict vars
   in
-  Com.CatVarMap.fold
+  Com.CatVar.Map.fold
     (gen_table_varinfo fmt var_dict)
-    cprog.program_var_categories Com.CatVarMap.empty
+    cprog.program_var_categories Com.CatVar.Map.empty
 
 let gen_decl_varinfos fmt stats =
-  Com.CatVarMap.iter
+  Com.CatVar.Map.iter
     (fun _ (id_str, _, _, attr_set) ->
       Format.fprintf fmt
         {|typedef struct S_varinfo_%s {
@@ -931,22 +931,22 @@ let gen_decl_varinfos fmt stats =
       Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVarMap.iter
+  Com.CatVar.Map.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVarMap.iter
+  Com.CatVar.Map.iter
     (fun _ (id_str, _, nb, _) ->
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVarMap.iter
+  Com.CatVar.Map.iter
     (fun _ (id_str, id_int, _, _) ->
       Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVarMap.iter
+  Com.CatVar.Map.iter
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt
         "extern char attribut_%s_def(T_varinfo_%s *vi, char *attr);\n" id_str

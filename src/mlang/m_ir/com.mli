@@ -1,19 +1,25 @@
-type cat_variable = CatInput of StrSet.t | CatComputed of { is_base : bool }
+module CatVar : sig
+  type t = Input of StrSet.t | Computed of { is_base : bool }
 
-module CatVarSet : SetExt.T with type elt = cat_variable
+  val pp : Format.formatter -> t -> unit
 
-module CatVarMap : MapExt.T with type key = cat_variable
+  val compare : t -> t -> int
 
-type cat_variable_loc = LocCalculated | LocBase | LocInput
+  module Set : SetExt.T with type elt = t
 
-type cat_variable_data = {
-  id : cat_variable;
-  id_str : string;
-  id_int : int;
-  loc : cat_variable_loc;
-  pos : Pos.t;
-  attributs : Pos.t StrMap.t;
-}
+  module Map : MapExt.T with type key = t
+
+  type loc = LocCalculated | LocBase | LocInput
+
+  type data = {
+    id : t;
+    id_str : string;
+    id_int : int;
+    loc : loc;
+    pos : Pos.t;
+    attributs : Pos.t StrMap.t;
+  }
+end
 
 type literal = Float of float | Undefined
 
@@ -92,7 +98,7 @@ type 'v expression =
   | Var of 'v
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
-  | NbCategory of CatVarSet.t Pos.marked
+  | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v Pos.marked * string Pos.marked
   | Size of 'v Pos.marked
   | NbAnomalies
@@ -138,21 +144,17 @@ type 'v instruction =
   | ComputeTarget of string Pos.marked
   | VerifBlock of 'v m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
-  | Iterate of 'v * CatVarSet.t * 'v m_expression * 'v m_instruction list
+  | Iterate of 'v * Pos.t CatVar.Map.t * 'v m_expression * 'v m_instruction list
   | Restore of
       'v list
-      * ('v * CatVarSet.t * 'v m_expression) list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_instruction list
-  | RaiseError of Error.t * string option
+  | RaiseError of Error.t * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
 
 and 'v m_instruction = 'v instruction Pos.marked
-
-val pp_cat_variable : Pp.t -> cat_variable -> unit
-
-val compare_cat_variable : cat_variable -> cat_variable -> int
 
 val format_literal : Pp.t -> literal -> unit
 

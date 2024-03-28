@@ -1,54 +1,62 @@
-type cat_variable = CatInput of StrSet.t | CatComputed of { is_base : bool }
+module CatVar = struct
+  type t = Input of StrSet.t | Computed of { is_base : bool }
 
-let pp_cat_variable fmt = function
-  | CatInput id ->
-      let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
-      Format.fprintf fmt "saisie%a" pp id
-  | CatComputed id ->
-      Format.fprintf fmt "calculee%s" (if id.is_base then " base" else "")
+  let pp fmt = function
+    | Input id ->
+        let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
+        Format.fprintf fmt "saisie%a" pp id
+    | Computed id ->
+        Format.fprintf fmt "calculee%s" (if id.is_base then " base" else "")
 
-let compare_cat_variable a b =
-  match (a, b) with
-  | CatInput _, CatComputed _ -> 1
-  | CatComputed _, CatInput _ -> -1
-  | CatInput id0, CatInput id1 -> StrSet.compare id0 id1
-  | CatComputed c0, CatComputed c1 -> compare c0.is_base c1.is_base
+  let compare a b =
+    match (a, b) with
+    | Input _, Computed _ -> 1
+    | Computed _, Input _ -> -1
+    | Input id0, Input id1 -> StrSet.compare id0 id1
+    | Computed c0, Computed c1 -> compare c0.is_base c1.is_base
 
-module CatVarSet = struct
-  include SetExt.Make (struct
-    type t = cat_variable
+  type cat_var_t = t
 
-    let compare = compare_cat_variable
-  end)
+  let cat_var_pp = pp
 
-  let pp ?(sep = ", ") ?(pp_elt = pp_cat_variable) (_ : unit)
-      (fmt : Format.formatter) (set : t) : unit =
-    pp ~sep ~pp_elt () fmt set
+  let cat_var_compare = compare
+
+  module Set = struct
+    include SetExt.Make (struct
+      type t = cat_var_t
+
+      let compare = cat_var_compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = cat_var_pp) (_ : unit)
+        (fmt : Format.formatter) (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type t = cat_var_t
+
+      let compare = cat_var_compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = cat_var_pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
+
+  type loc = LocCalculated | LocBase | LocInput
+
+  type data = {
+    id : t;
+    id_str : string;
+    id_int : int;
+    loc : loc;
+    pos : Pos.t;
+    attributs : Pos.t StrMap.t;
+  }
 end
-
-module CatVarMap = struct
-  include MapExt.Make (struct
-    type t = cat_variable
-
-    let compare = compare_cat_variable
-  end)
-
-  let pp ?(sep = "; ") ?(pp_key = pp_cat_variable) ?(assoc = " => ")
-      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-      (map : 'a t) : unit =
-    pp ~sep ~pp_key ~assoc pp_val fmt map
-end
-
-type cat_variable_loc = LocCalculated | LocBase | LocInput
-
-type cat_variable_data = {
-  id : cat_variable;
-  id_str : string;
-  id_int : int;
-  loc : cat_variable_loc;
-  pos : Pos.t;
-  attributs : Pos.t StrMap.t;
-}
 
 type literal = Float of float | Undefined
 
@@ -111,7 +119,7 @@ type 'v expression =
   | Var of 'v
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
-  | NbCategory of CatVarSet.t Pos.marked
+  | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v Pos.marked * string Pos.marked
   | Size of 'v Pos.marked
   | NbAnomalies
@@ -168,12 +176,12 @@ type 'v instruction =
   | ComputeTarget of string Pos.marked
   | VerifBlock of 'v m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
-  | Iterate of 'v * CatVarSet.t * 'v m_expression * 'v m_instruction list
+  | Iterate of 'v * Pos.t CatVar.Map.t * 'v m_expression * 'v m_instruction list
   | Restore of
       'v list
-      * ('v * CatVarSet.t * 'v m_expression) list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_instruction list
-  | RaiseError of Error.t * string option
+  | RaiseError of Error.t * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
@@ -311,7 +319,7 @@ let rec format_expression form_var fmt =
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | NbCategory cs ->
-      Format.fprintf fmt "nb_categorie(%a)" (Pp.unmark (CatVarSet.pp ())) cs
+      Format.fprintf fmt "nb_categorie(%a)" (CatVar.Map.pp_keys ()) cs
   | Attribut (v, a) ->
       Format.fprintf fmt "attribut(%a, %s)" form_var (Pos.unmark v)
         (Pos.unmark a)
@@ -375,12 +383,12 @@ let rec format_instruction form_var =
     | Iterate (var, vcs, expr, itb) ->
         Format.fprintf fmt
           "iterate variable %a@\n: categorie %a@\n: avec %a@\n: dans (" form_var
-          var (CatVarSet.pp ()) vcs form_expr (Pos.unmark expr);
+          var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr);
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | Restore (vars, var_params, rb) ->
         let format_var_param fmt (var, vcs, expr) =
           Format.fprintf fmt ": variable %a : categorie %a : avec %a@\n"
-            form_var var (CatVarSet.pp ()) vcs form_expr (Pos.unmark expr)
+            form_var var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
         in
         Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
           (Pp.list_comma form_var) vars
@@ -389,7 +397,7 @@ let rec format_instruction form_var =
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs rb
     | RaiseError (err, var_opt) ->
         Format.fprintf fmt "leve_erreur %s %s\n" (Pos.unmark err.name)
-          (match var_opt with Some var -> " " ^ var | None -> "")
+          (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
     | CleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"

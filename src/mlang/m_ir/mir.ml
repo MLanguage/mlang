@@ -22,7 +22,7 @@
 
 type loc_tgv = {
   loc_id : string;
-  loc_cat : Com.cat_variable_loc;
+  loc_cat : Com.CatVar.loc;
   loc_idx : int;
   loc_int : int;
 }
@@ -52,7 +52,7 @@ module Var = struct
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
-    cat : Com.cat_variable;
+    cat : Com.CatVar.t;
     typ : Mast.value_typ option;
   }
 
@@ -103,12 +103,12 @@ module Var = struct
   let is_it v = v.scope = It
 
   let init_loc =
-    { loc_id = ""; loc_cat = Com.LocInput; loc_idx = 0; loc_int = 0 }
+    { loc_id = ""; loc_cat = Com.CatVar.LocInput; loc_idx = 0; loc_int = 0 }
 
   let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
-      ~(cat : Com.cat_variable) ~(typ : Mast.value_typ option) : t =
+      ~(cat : Com.CatVar.t) ~(typ : Mast.value_typ option) : t =
     {
       name;
       id = Pos.unmark name;
@@ -311,14 +311,17 @@ type target_data = {
 
 (**{1 Verification conditions}*)
 
-type verif_domain_data = { vdom_auth : Com.CatVarSet.t; vdom_verifiable : bool }
+type verif_domain_data = {
+  vdom_auth : Pos.t Com.CatVar.Map.t;
+  vdom_verifiable : bool;
+}
 
 type verif_domain = verif_domain_data domain
 
 let cond_cats_to_set cats =
-  Com.CatVarMap.fold
-    (fun cv nb res -> if nb > 0 then Com.CatVarSet.add cv res else res)
-    cats Com.CatVarSet.empty
+  Com.CatVar.Map.fold
+    (fun cv nb res -> if nb > 0 then Com.CatVar.Set.add cv res else res)
+    cats Com.CatVar.Set.empty
 
 type stats = {
   nb_calculated : int;
@@ -337,7 +340,7 @@ type stats = {
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
-  program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
+  program_var_categories : Com.CatVar.data Com.CatVar.Map.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_vars : Var.t StrMap.t;
