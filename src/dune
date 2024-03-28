@@ -1,13 +1,18 @@
 (env
- (static
-  (ocamlopt_flags
-   (-ccopt -static -O3)))
  (dev
   (flags
    (:standard -warn-error -A))))
+
+(rule
+ (with-stdout-to
+  linking-flags-mlang.sexp
+  (run ./gen-linking-flags.sh %{env:LINKING_MODE=} %{ocaml-config:system})))
 
 (executable
  (name main)
  (package mlang)
  (public_name mlang)
+ (flags
+  (:standard
+   (:include linking-flags-mlang.sexp)))
  (libraries mlang))

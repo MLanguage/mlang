@@ -6,7 +6,7 @@ type offset =
   | None
 
 let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
-    ?(def_flag = false) ?(debug_flag = false) (var : Bir.variable) : string =
+    ?(def_flag = false) ?(trace_flag = false) (var : Bir.variable) : string =
   let mvar = Bir.var_to_mir var in
   try
     match offset with
@@ -25,7 +25,9 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
         if def_flag then Dgfip_varid.gen_access_def vm mvar offset
         else
           let access_val = Dgfip_varid.gen_access_val vm mvar offset in
-          if debug_flag then
+          (* When the trace flag is present, we print the value of the
+             non-temporary variable being used *)
+          if trace_flag && not mvar.Mir.Variable.is_temp then
             let vn = Pos.unmark mvar.Mir.Variable.name in
             let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm mvar in
             Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
@@ -429,7 +431,7 @@ let format_expr_var (dgfip_flags : Dgfip_options.flags)
   | M (var, offset, df) ->
       let def_flag = df = Def in
       Format.fprintf fmt "%s"
-        (generate_variable ~debug_flag:dgfip_flags.flg_trace vm offset ~def_flag
+        (generate_variable ~trace_flag:dgfip_flags.flg_trace vm offset ~def_flag
            var)
 
 let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
@@ -488,7 +490,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
   | Daccess (var, dflag, de) ->
       Format.fprintf fmt "(%s[(int)%a])"
         (generate_variable ~def_flag:(dflag = Def)
-           ~debug_flag:dgfip_flags.flg_trace vm PassPointer var)
+           ~trace_flag:dgfip_flags.flg_trace vm PassPointer var)
         format_dexpr de
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec

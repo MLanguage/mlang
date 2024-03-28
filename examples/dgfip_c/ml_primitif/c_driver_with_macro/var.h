@@ -45,8 +45,5 @@ extern int nb_verif;
 
 extern T_discord *une_verif _PROTS((T_irdata *irdata, struct S_discord *(*proc)(T_irdata *irdata)));
 
-extern int change_couleur(int couleur, int typographie);
-extern int get_couleur(void);
-
 #endif
 
