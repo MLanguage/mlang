@@ -83,6 +83,8 @@ type set_value = variable Com.set_value
 
 type expression = variable Com.expression
 
+type m_expression = expression Pos.marked
+
 (**{1 Toplevel clauses}*)
 
 (**{2 Rules}*)
@@ -92,15 +94,12 @@ type expression = variable Com.expression
 
 type lvalue = {
   var : variable Pos.marked;
-  index : expression Pos.marked option; (* [None] if not a table *)
+  index : m_expression option; (* [None] if not a table *)
 }
 (** An lvalue (left value) is a variable being assigned. It can be a table or a
     non-table variable *)
 
-type formula_decl = {
-  lvalue : lvalue Pos.marked;
-  formula : expression Pos.marked;
-}
+type formula_decl = { lvalue : lvalue Pos.marked; formula : m_expression }
 
 (** In the M language, you can define multiple variables at once. This is the
     way they do looping since the definition can depend on the loop variable
@@ -109,39 +108,34 @@ type formula =
   | SingleFormula of formula_decl
   | MultipleFormulaes of variable Com.loop_variables Pos.marked * formula_decl
 
-type print_arg =
-  | PrintString of string
-  | PrintName of variable Pos.marked
-  | PrintAlias of variable Pos.marked
-  | PrintIndent of expression Pos.marked
-  | PrintExpr of expression Pos.marked * int * int
-
 type restore_vars =
   | VarList of string Pos.marked list
-  | VarCats of string Pos.marked * var_category_id list * expression Pos.marked
+  | VarCats of string Pos.marked * var_category_id list * m_expression
 
 type instruction =
   | Formula of formula Pos.marked
-  | IfThenElse of
-      expression Pos.marked
-      * instruction Pos.marked list
-      * instruction Pos.marked list
+  | IfThenElse of m_expression * m_instruction list * m_instruction list
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
-  | VerifBlock of instruction Pos.marked list
-  | Print of Com.print_std * print_arg Pos.marked list
+  | ComputeVerifs of string Pos.marked list Pos.marked * m_expression
+  | VerifBlock of m_instruction list
+  | Print of Com.print_std * variable Com.print_arg Pos.marked list
   | Iterate of
       string Pos.marked
       * var_category_id list
-      * expression Pos.marked
-      * instruction Pos.marked list
-  | Restore of restore_vars Pos.marked list * instruction Pos.marked list
+      * m_expression
+      * m_instruction list
+  | Restore of
+      string Pos.marked list
+      * (string Pos.marked * var_category_id list * m_expression) list
+      * m_instruction list
   | RaiseError of error_name Pos.marked * variable_name Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
+
+and m_instruction = instruction Pos.marked
 
 type rule = {
   rule_number : int Pos.marked;

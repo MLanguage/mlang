@@ -560,10 +560,10 @@ struct
         let var_i =
           match var.loc with LocIt (_, i) -> i | _ -> assert false
         in
-        let eval vc =
+        let eval vc _ =
           StrMap.iter
             (fun _ v ->
-              if Com.compare_cat_variable (Mir.Var.cat v) vc = 0 then (
+              if Com.CatVar.compare (Mir.Var.cat v) vc = 0 then (
                 ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
                 match evaluate_expr ctx p expr with
                 | Number z when N.(z =. one ()) ->
@@ -571,7 +571,7 @@ struct
                 | _ -> ()))
             p.program_vars
         in
-        Com.CatVarSet.iter eval vcs
+        Com.CatVar.Map.iter eval vcs
     | Com.Restore (vars, var_params, stmts) ->
         let backup =
           List.fold_left
@@ -597,11 +597,11 @@ struct
               let var_i =
                 match var.loc with LocIt (_, i) -> i | _ -> assert false
               in
-              Com.CatVarSet.fold
-                (fun vc backup ->
+              Com.CatVar.Map.fold
+                (fun vc _ backup ->
                   StrMap.fold
                     (fun _ v backup ->
-                      if Com.compare_cat_variable (Mir.Var.cat v) vc = 0 then (
+                      if Com.CatVar.compare (Mir.Var.cat v) vc = 0 then (
                         ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
                         match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
@@ -643,7 +643,8 @@ struct
         in
         ctx.ctx_nb_bloquantes <-
           (ctx.ctx_nb_bloquantes + if is_blocking then 1 else 0);
-        ctx.ctx_anos <- ctx.ctx_anos @ [ (err, var_opt) ];
+        let v_opt = Option.map Pos.unmark var_opt in
+        ctx.ctx_anos <- ctx.ctx_anos @ [ (err, v_opt) ];
         if is_blocking && ctx.ctx_nb_bloquantes >= 4 && canBlock then
           raise BlockingError
     | Com.CleanErrors ->

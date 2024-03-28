@@ -268,7 +268,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
         | Dgfip_varid.VarIterate (t, _, vcd) -> (t, vcd)
         | _ -> assert false
       in
-      let id_str = var_cat_data.Com.id_str in
+      let id_str = var_cat_data.id_str in
       let def_test =
         D.dinstr
           (Format.sprintf "attribut_%s_def(%s, \"%s\")" id_str ptr
@@ -482,20 +482,20 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       Format.fprintf oc "@]@;}@;"
   | Iterate (var, vcs, expr, stmts) ->
       let it_name = fresh_c_local "iterate" in
-      Com.CatVarSet.iter
-        (fun vc ->
-          let vcd = Com.CatVarMap.find vc program.program_var_categories in
+      Com.CatVar.Map.iter
+        (fun vc _ ->
+          let vcd = Com.CatVar.Map.find vc program.program_var_categories in
           let var_indexes =
             Mir.VariableMap.add var
-              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
+              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.loc, vcd))
               var_indexes
           in
           Format.fprintf oc "@[<v 2>{@;";
           Format.fprintf oc
-            "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
-            vcd.Com.id_str it_name vcd.Com.id_str it_name;
+            "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;" vcd.id_str
+            it_name vcd.id_str it_name;
           Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
-            vcd.Com.id_str;
+            vcd.id_str;
           let cond_val = "cond_" ^ it_name in
           let cond_def = cond_val ^ "_d" in
           let locals, def, value =
@@ -529,20 +529,20 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       List.iter
         (fun (var, vcs, expr) ->
           let it_name = fresh_c_local "iterate" in
-          Com.CatVarSet.iter
-            (fun vc ->
-              let vcd = Com.CatVarMap.find vc program.program_var_categories in
+          Com.CatVar.Map.iter
+            (fun vc _ ->
+              let vcd = Com.CatVar.Map.find vc program.program_var_categories in
               let var_indexes =
                 Mir.VariableMap.add var
-                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.Com.loc, vcd))
+                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.loc, vcd))
                   var_indexes
               in
               Format.fprintf oc "@[<v 2>{@;";
               Format.fprintf oc
                 "T_varinfo_%s *tab_%s = varinfo_%s;@;int nb_%s = 0;@;"
-                vcd.Com.id_str it_name vcd.Com.id_str it_name;
+                vcd.id_str it_name vcd.id_str it_name;
               Format.fprintf oc "@[<v 2>while (nb_%s < NB_%s) {@;" it_name
-                vcd.Com.id_str;
+                vcd.id_str;
               let cond_val = "cond_" ^ it_name in
               let cond_def = cond_val ^ "_d" in
               let locals, def, value =
@@ -575,7 +575,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let err_name = Pos.unmark err.Com.Error.name in
       let code =
         match var_opt with
-        | Some var -> Format.sprintf "\"%s\"" var
+        | Some var -> Format.sprintf "\"%s\"" (Pos.unmark var)
         | None -> "NULL"
       in
       Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
@@ -690,7 +690,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags)
         in
         StrMap.update file_str update filemap)
       program.program_targets
-      (StrMap.singleton "" (_oc, oc))
+      (StrMap.one "" (_oc, oc))
   in
   generate_targets dgfip_flags program filemap vm;
   StrMap.iter

@@ -63,4 +63,4 @@ val parse_if_then_etc :
   list ->
   Mast.instruction
 
-val parse_catvars : Mast.var_category_id -> Com.CatVarSet.t Pos.marked
+val parse_catvars : Mast.var_category_id -> Pos.t Com.CatVar.Map.t
