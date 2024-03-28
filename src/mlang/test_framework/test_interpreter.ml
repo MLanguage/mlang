@@ -41,7 +41,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           | F f -> Com.Float f
         in
         Mir.VariableMap.add var lit in_f)
-      (Mir.VariableMap.singleton ancsded ancsded_val)
+      (Mir.VariableMap.one ancsded ancsded_val)
       t.prim.entrees
   in
   let expectedVars =

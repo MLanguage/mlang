@@ -290,7 +290,7 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
     | [ hd ] ->
         let new_ld = ParamsMap.remove param ld in
         let all_contexts = iterate_all_combinations new_ld in
-        if List.length all_contexts = 0 then [ ParamsMap.singleton param hd ]
+        if List.length all_contexts = 0 then [ ParamsMap.one param hd ]
         else List.map (fun c -> ParamsMap.add param hd c) all_contexts
     | hd :: tl ->
         let new_ld = ParamsMap.add param tl ld in
@@ -508,13 +508,13 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
-            | Mast.PrintIndent expr ->
+            | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Mast.PrintIndent expr', Pos.get_position arg)
-            | Mast.PrintExpr (expr, mi, ma) ->
+                (Com.PrintIndent expr', Pos.get_position arg)
+            | Com.PrintExpr (expr, mi, ma) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Mast.PrintExpr (expr', mi, ma), Pos.get_position arg)
-            | Mast.PrintString _ | Mast.PrintName _ | Mast.PrintAlias _ -> arg)
+                (Com.PrintExpr (expr', mi, ma), Pos.get_position arg)
+            | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ -> arg)
           pr_args
       in
       (Mast.Print (std, pr_args'), instr_pos) :: prev
@@ -522,9 +522,9 @@ let rec expand_instruction (const_map : const_context)
       let expr' = expand_expression const_map ParamsMap.empty expr in
       let instrs' = expand_instructions const_map instrs in
       (Mast.Iterate (name, cats, expr', instrs'), instr_pos) :: prev
-  | Mast.Restore (vars, instrs) ->
+  | Mast.Restore (vars, var_params, instrs) ->
       let instrs' = expand_instructions const_map instrs in
-      (Mast.Restore (vars, instrs'), instr_pos) :: prev
+      (Mast.Restore (vars, var_params, instrs'), instr_pos) :: prev
   | Mast.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       (Mast.VerifBlock instrs', instr_pos) :: prev

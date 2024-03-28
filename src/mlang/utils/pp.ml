@@ -1,5 +1,7 @@
 type t = Format.formatter
 
+let nil _ _ = ()
+
 let string = Format.pp_print_string
 
 let option pp_elt fmt opt = Format.pp_print_option pp_elt fmt opt

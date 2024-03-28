@@ -57,13 +57,14 @@ let format_formula fmt (f : formula) =
         format_formula_decl f
 
 let format_print_arg fmt = function
-  | PrintString s -> Format.fprintf fmt "\"%s\"" s
-  | PrintName v -> Format.fprintf fmt "nom(%a)" format_variable (Pos.unmark v)
-  | PrintAlias v ->
+  | Com.PrintString s -> Format.fprintf fmt "\"%s\"" s
+  | Com.PrintName v ->
+      Format.fprintf fmt "nom(%a)" format_variable (Pos.unmark v)
+  | Com.PrintAlias v ->
       Format.fprintf fmt "alias(%a)" format_variable (Pos.unmark v)
-  | PrintIndent e ->
+  | Com.PrintIndent e ->
       Format.fprintf fmt "indenter(%a)" (Pp.unmark format_expression) e
-  | PrintExpr (e, min, max) ->
+  | Com.PrintExpr (e, min, max) ->
       if min = max_int then
         Format.fprintf fmt "(%a)" (Pp.unmark format_expression) e
       else if max = max_int then
@@ -121,21 +122,20 @@ let rec format_instruction fmt (i : instruction) =
         vcats
         (Pp.unmark format_expression)
         expr format_instruction_list instrs
-  | Restore (rest_params, instrs) ->
-      let pp_rest_param fmt = function
-        | VarList l ->
-            Format.fprintf fmt ": %a " (Pp.list_comma (Pp.unmark Pp.string)) l
-        | VarCats (var, vcats, expr) ->
-            Format.fprintf fmt ": variable %s : categorie %a : avec %a "
-              (Pos.unmark var)
-              (Pp.list_comma format_var_category_id)
-              vcats
-              (Pp.unmark format_expression)
-              expr
+  | Restore (vars, var_params, instrs) ->
+      let pp_var_param fmt (var, vcats, expr) =
+        Format.fprintf fmt ": variable %s : categorie %a : avec %a "
+          (Pos.unmark var)
+          (Pp.list_comma format_var_category_id)
+          vcats
+          (Pp.unmark format_expression)
+          expr
       in
-      Format.fprintf fmt "restaurer %a : dans ( %a )"
-        (Pp.list_space (Pp.unmark pp_rest_param))
-        rest_params format_instruction_list instrs
+      Format.fprintf fmt "restaurer %a%a : dans ( %a )"
+        (Pp.list_space (Pp.unmark Pp.string))
+        vars
+        (Pp.list_space pp_var_param)
+        var_params format_instruction_list instrs
   | RaiseError (err, var_opt) ->
       Format.fprintf fmt "leve_erreur %s%s;" (Pos.unmark err)
         (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
@@ -167,9 +167,9 @@ let format_target fmt (t : target) =
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
     (Pos.unmark t.target_name)
-    (StrMap.pp ~pp_key:(fun _ _ -> ()) ~sep:"," (Pp.unmark Pp.string))
+    (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
     t.target_apps
-    (StrMap.pp ~pp_key:(fun _ _ -> ()) ~sep:"," format_tmp_var)
+    (StrMap.pp ~pp_key:Pp.nil ~sep:"," format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_value_typ fmt (t : value_typ) =

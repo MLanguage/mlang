@@ -16,7 +16,7 @@
 
 type loc_tgv = {
   loc_id : string;
-  loc_cat : Com.cat_variable_loc;
+  loc_cat : Com.CatVar.loc;
   loc_idx : int;
   loc_int : int;
 }
@@ -28,7 +28,7 @@ type loc =
 
 val set_loc_int : loc -> int -> loc
 
-val set_loc_tgv : loc -> Com.cat_variable_loc -> int -> loc
+val set_loc_tgv : loc -> Com.CatVar.loc -> int -> loc
 
 module Var : sig
   type id = string
@@ -38,7 +38,7 @@ module Var : sig
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
-    cat : Com.cat_variable;
+    cat : Com.CatVar.t;
     typ : Mast.value_typ option;
   }
 
@@ -65,7 +65,7 @@ module Var : sig
 
   val attrs : t -> int Pos.marked StrMap.t
 
-  val cat : t -> Com.cat_variable
+  val cat : t -> Com.CatVar.t
 
   val loc_tgv : t -> loc_tgv
 
@@ -84,7 +84,7 @@ module Var : sig
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
     attrs:int Pos.marked StrMap.t ->
-    cat:Com.cat_variable ->
+    cat:Com.CatVar.t ->
     typ:Mast.value_typ option ->
     t
 
@@ -149,7 +149,10 @@ type target_data = {
   target_prog : m_instruction list;
 }
 
-type verif_domain_data = { vdom_auth : Com.CatVarSet.t; vdom_verifiable : bool }
+type verif_domain_data = {
+  vdom_auth : Pos.t Com.CatVar.Map.t;
+  vdom_verifiable : bool;
+}
 
 type verif_domain = verif_domain_data domain
 
@@ -170,7 +173,7 @@ type stats = {
 type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
-  program_var_categories : Com.cat_variable_data Com.CatVarMap.t;
+  program_var_categories : Com.CatVar.data Com.CatVar.Map.t;
   program_rule_domains : rule_domain Mast.DomainIdMap.t;
   program_verif_domains : verif_domain Mast.DomainIdMap.t;
   program_vars : Var.t StrMap.t;
@@ -202,7 +205,7 @@ val map_expr_var : ('v -> 'v2) -> 'v Com.expression -> 'v2 Com.expression
 
 val fold_expr_var : ('a -> 'v -> 'a) -> 'a -> 'v Com.expression -> 'a
 
-val cond_cats_to_set : int Com.CatVarMap.t -> Com.CatVarSet.t
+val cond_cats_to_set : int Com.CatVar.Map.t -> Com.CatVar.Set.t
 
 val find_var_by_name : program -> string Pos.marked -> Var.t
 (** Get a variable for a given name or alias, because of SSA multiple variables

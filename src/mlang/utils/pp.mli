@@ -2,6 +2,8 @@ open Format
 
 type t = formatter
 
+val nil : t -> 'a -> unit
+
 val string : t -> string -> unit
 
 val option : (t -> 'a -> unit) -> t -> 'a option -> unit

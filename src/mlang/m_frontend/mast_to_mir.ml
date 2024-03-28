@@ -57,7 +57,7 @@ let translate_variable (var_data : Mir.Var.t StrMap.t)
 
 (** {2 Translation of expressions}*)
 
-let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
+let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
     (var_data : Mir.Var.t StrMap.t) (f : Mast.expression Pos.marked) :
     Mir.expression Pos.marked =
   let open Com in
@@ -125,8 +125,8 @@ let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
     | NbCategory cs -> NbCategory (Check_validity.mast_to_catvars cs cats)
     | Attribut (v, a) -> (
         if
-          CatVarMap.fold
-            (fun _ { attributs; _ } res ->
+          CatVar.Map.fold
+            (fun _ CatVar.{ attributs; _ } res ->
               res
               && StrMap.fold
                    (fun attr _ res -> res && attr <> Pos.unmark a)
@@ -171,8 +171,8 @@ let rec translate_expression (cats : Com.cat_variable_data Com.CatVarMap.t)
 (** {2 Translation of source file items}*)
 
 let rec translate_prog (error_decls : Com.Error.t StrMap.t)
-    (cats : Com.cat_variable_data Com.CatVarMap.t)
-    (var_data : Mir.Var.t StrMap.t) (it_depth : int) prog =
+    (cats : Com.CatVar.data Com.CatVar.Map.t) (var_data : Mir.Var.t StrMap.t)
+    (it_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
     | (Mast.Formula f, pos) :: il -> begin
@@ -218,8 +218,8 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                (fun res arg ->
                  let mir_arg =
                    match Pos.unmark arg with
-                   | Mast.PrintString s -> Com.PrintString s
-                   | Mast.PrintName v -> (
+                   | Com.PrintString s -> Com.PrintString s
+                   | Com.PrintName v -> (
                        let name =
                          match Pos.unmark v with
                          | Mast.Normal name -> name
@@ -235,7 +235,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                              Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
-                   | Mast.PrintAlias v -> (
+                   | Com.PrintAlias v -> (
                        let name =
                          match Pos.unmark v with
                          | Mast.Normal name -> name
@@ -251,9 +251,9 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                              Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
-                   | Mast.PrintIndent e ->
+                   | Com.PrintIndent e ->
                        Com.PrintIndent (translate_expression cats var_data e)
-                   | Mast.PrintExpr (e, min, max) ->
+                   | Com.PrintExpr (e, min, max) ->
                        Com.PrintExpr
                          (translate_expression cats var_data e, min, max)
                  in
@@ -283,42 +283,26 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
           translate_prog error_decls cats var_data (it_depth - 1) instrs
         in
         aux ((Com.Iterate (var, catSet, mir_expr, prog_it), pos) :: res) il
-    | (Mast.Restore (rest_params, instrs), pos) :: il ->
-        let vars, var_params =
-          List.fold_left
-            (fun (vars, var_params) rest_param ->
-              match Pos.unmark rest_param with
-              | Mast.VarList vl ->
-                  let vars =
-                    List.fold_left
-                      (fun vars vn ->
-                        StrMap.find (Pos.unmark vn) var_data :: vars)
-                      vars vl
-                  in
-                  (vars, var_params)
-              | Mast.VarCats (vn, vcats, expr) ->
-                  let var_name = Pos.unmark vn in
-                  let var_pos = Pos.get_position vn in
-                  (match StrMap.find_opt var_name var_data with
-                  | Some v ->
-                      let msg =
-                        Format.asprintf "variable already declared %a"
-                          Pos.format_position (Pos.get_position v.name)
-                      in
-                      Errors.raise_spanned_error msg pos
-                  | _ -> ());
-                  let var =
-                    Mir.Var.new_it ~name:(var_name, var_pos) ~is_table:None
-                      ~loc_int:it_depth
-                  in
-                  let var_data = StrMap.add var_name var var_data in
-                  let catSet =
-                    Check_validity.cats_variable_from_decl_list vcats cats
-                  in
-                  let mir_expr = translate_expression cats var_data expr in
-                  let var_params = (var, catSet, mir_expr) :: var_params in
-                  (vars, var_params))
-            ([], []) rest_params
+    | (Mast.Restore (vars, var_params, instrs), pos) :: il ->
+        let vars =
+          List.map (fun vn -> StrMap.find (Pos.unmark vn) var_data) vars
+        in
+        let var_params =
+          List.map
+            (fun (vn, vcats, expr) ->
+              let var_name = Pos.unmark vn in
+              let var_pos = Pos.get_position vn in
+              let var =
+                Mir.Var.new_it ~name:(var_name, var_pos) ~is_table:None
+                  ~loc_int:it_depth
+              in
+              let var_data = StrMap.add var_name var var_data in
+              let catSet =
+                Check_validity.cats_variable_from_decl_list vcats cats
+              in
+              let mir_expr = translate_expression cats var_data expr in
+              (var, catSet, mir_expr))
+            var_params
         in
         let prog_rest =
           translate_prog error_decls cats var_data it_depth instrs
@@ -326,8 +310,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         aux ((Com.Restore (vars, var_params, prog_rest), pos) :: res) il
     | (Mast.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) error_decls in
-        let var_res = Option.map Pos.unmark var_opt in
-        aux ((Com.RaiseError (err_decl, var_res), pos) :: res) il
+        aux ((Com.RaiseError (err_decl, var_opt), pos) :: res) il
     | (Mast.CleanErrors, pos) :: il -> aux ((Com.CleanErrors, pos) :: res) il
     | (Mast.ExportErrors, pos) :: il -> aux ((Com.ExportErrors, pos) :: res) il
     | (Mast.FinalizeErrors, pos) :: il ->
@@ -340,9 +323,8 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
   aux [] prog
 
 let get_targets (error_decls : Com.Error.t StrMap.t)
-    (cats : Com.cat_variable_data Com.CatVarMap.t)
-    (var_data : Mir.Var.t StrMap.t) (ts : Mast.target StrMap.t) :
-    Mir.target_data Mir.TargetMap.t =
+    (cats : Com.CatVar.data Com.CatVar.Map.t) (var_data : Mir.Var.t StrMap.t)
+    (ts : Mast.target StrMap.t) : Mir.target_data Mir.TargetMap.t =
   StrMap.fold
     (fun _ (t : Mast.target) targets ->
       let target_name = t.target_name in

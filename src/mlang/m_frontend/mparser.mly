@@ -550,9 +550,16 @@ instruction:
       in
       Iterate (var, vcats, expr, List.rev instrs)
     }
-| RESTORE COLON rest_params = with_pos(rest_param)*
+| RESTORE COLON rest_params = rest_param*
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    Restore (rest_params, List.rev instrs)
+    let var_list, var_cats =
+      let fold (var_list, var_cats) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats
+      | `VarCats vc -> var_list, vc :: var_cats
+      in
+      List.fold_left fold ([], []) rest_params
+    in
+    Restore (List.rev var_list, List.rev var_cats, List.rev instrs)
   }
 | RAISE_ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
     RaiseError (e_name, var)
@@ -573,20 +580,20 @@ instruction_else_branch:
 | ENDIF { [] }
 
 print_argument:
-| s = STRING { PrintString (parse_string s) }
+| s = STRING { Com.PrintString (parse_string s) }
 | f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
     {
       match Pos.unmark f with
-      | "nom" -> PrintName (parse_variable $sloc (fst v), snd v)
-      | "alias" -> PrintAlias (parse_variable $sloc (fst v), snd v)
+      | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
+      | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
       | _ -> assert false
     }
-| INDENT LPAREN e = with_pos(expression) RPAREN { PrintIndent e }
+| INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
 | LPAREN e = with_pos(expression) RPAREN prec = print_precision?
     {
       match prec with
-      | Some (min, max) -> PrintExpr (e, min, max)
-      | None -> PrintExpr (e, 0, 20)
+      | Some (min, max) -> Com.PrintExpr (e, min, max)
+      | None -> Com.PrintExpr (e, 0, 20)
     }
 
 print_function:
@@ -639,7 +646,7 @@ it_param:
     { None, None, Some expr }
 
 rest_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { VarList vars }
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { `VarList vars }
 | VARIABLE var = symbol_with_pos COLON
   CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
   COLON expr_opt = rest_param_with_expr? { 
@@ -648,7 +655,7 @@ rest_param:
       | Some expr -> expr
       | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
-    VarCats (var, vcats, expr)
+    `VarCats (var, vcats, expr)
   }
 
 rest_param_with_expr:
