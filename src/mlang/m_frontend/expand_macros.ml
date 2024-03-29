@@ -444,40 +444,36 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
     ->
       m_expr
 
-(** Translates lvalues into the assigning variable as well as the type of
-    assignment *)
-let expand_lvalue (const_map : const_context) (loop_map : loop_context)
-    (m_lval : Mast.lvalue Pos.marked) : Mast.lvalue Pos.marked =
-  let lval, lval_pos = m_lval in
-  let var =
-    match expand_variable const_map loop_map lval.Mast.var with
-    | Com.Var v, v_pos -> (v, v_pos)
-    | Com.Literal (Com.Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
-    | _ -> assert false
-  in
-  let index =
-    Option.map (expand_expression const_map loop_map) lval.Mast.index
-  in
-  (Mast.{ var; index }, lval_pos)
-
 let expand_formula (const_map : const_context)
     (prev : Mast.formula Pos.marked list) (m_form : Mast.formula Pos.marked) :
     Mast.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
-  | Mast.SingleFormula f ->
-      let lvalue = expand_lvalue const_map ParamsMap.empty f.Mast.lvalue in
-      let formula =
-        expand_expression const_map ParamsMap.empty f.Mast.formula
+  | Mast.SingleFormula (v, idx, e) ->
+      let v' =
+        match expand_variable const_map ParamsMap.empty v with
+        | Com.Var v, v_pos -> (v, v_pos)
+        | Com.Literal (Com.Float _), v_pos ->
+            Err.constant_forbidden_as_lvalue v_pos
+        | _ -> assert false
       in
-      (Mast.SingleFormula { lvalue; formula }, form_pos) :: prev
-  | Mast.MultipleFormulaes (lvs, f) ->
+      let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
+      let e' = expand_expression const_map ParamsMap.empty e in
+      (Mast.SingleFormula (v', idx', e'), form_pos) :: prev
+  | Mast.MultipleFormulaes (lvs, (v, idx, e)) ->
       (* Format.eprintf "%a\n\n" Format_mast.format_formula form;*)
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
-        let lvalue = expand_lvalue const_map loop_map f.Mast.lvalue in
-        let formula = expand_expression const_map loop_map f.Mast.formula in
-        (Mast.SingleFormula { lvalue; formula }, form_pos)
+        let v' =
+          match expand_variable const_map loop_map v with
+          | Com.Var v, v_pos -> (v, v_pos)
+          | Com.Literal (Com.Float _), v_pos ->
+              Err.constant_forbidden_as_lvalue v_pos
+          | _ -> assert false
+        in
+        let idx' = Option.map (expand_expression const_map loop_map) idx in
+        let e' = expand_expression const_map loop_map e in
+        (Mast.SingleFormula (v', idx', e'), form_pos)
       in
       let res = loop_context_provider translator in
       (* List.iter (fun (f, _) -> Format.eprintf "res %a\n"
@@ -493,10 +489,10 @@ let rec expand_instruction (const_map : const_context)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
   let instr, instr_pos = m_instr in
   match instr with
-  | Mast.Formula m_form ->
+  | Mast.Affectation m_form ->
       let m_forms = expand_formula const_map [] m_form in
       List.fold_left
-        (fun res f -> (Mast.Formula f, instr_pos) :: res)
+        (fun res f -> (Mast.Affectation f, instr_pos) :: res)
         prev m_forms
   | Mast.IfThenElse (expr, ithen, ielse) ->
       let expr' = expand_expression const_map ParamsMap.empty expr in

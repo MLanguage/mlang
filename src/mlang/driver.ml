@@ -43,10 +43,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let mk_assign var val_ =
     let v = if val_ then 1.0 else 0.0 in
     ( SingleFormula
-        {
-          lvalue = ({ var = (Normal var, Pos.no_pos); index = None }, Pos.no_pos);
-          formula = (Literal (Float v), Pos.no_pos);
-        },
+        ((Normal var, Pos.no_pos), None, (Literal (Float v), Pos.no_pos)),
       Pos.no_pos )
   in
   let oceans, batch, iliad =

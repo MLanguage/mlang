@@ -481,7 +481,7 @@ let expand_functions (p : program) : program =
       | Affectation (v_id, v_idx_opt, v_expr) ->
           let m_idx_opt =
             match v_idx_opt with
-            | Some (sz, v_idx) -> Some (sz, expand_functions_expr v_idx)
+            | Some v_idx -> Some (expand_functions_expr v_idx)
             | None -> None
           in
           let m_expr = expand_functions_expr v_expr in

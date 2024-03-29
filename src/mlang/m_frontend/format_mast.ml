@@ -38,16 +38,12 @@ let format_loop_variables = Com.format_loop_variables format_variable
 
 let format_expression = Com.format_expression format_variable
 
-let format_lvalue fmt (lv : lvalue) =
-  match lv.index with
-  | Some vi ->
-      Format.fprintf fmt "%a[%a]" format_variable (Pos.unmark lv.var)
-        format_expression (Pos.unmark vi)
-  | None -> Format.fprintf fmt "%a" format_variable (Pos.unmark lv.var)
-
-let format_formula_decl fmt (f : formula_decl) =
-  Format.fprintf fmt "%a = %a" format_lvalue (Pos.unmark f.lvalue)
-    format_expression (Pos.unmark f.formula)
+let format_formula_decl fmt ((v, idx, e) : formula_decl) =
+  Format.fprintf fmt "%a" format_variable (Pos.unmark v);
+  (match idx with
+  | Some vi -> Format.fprintf fmt "[%a]" format_expression (Pos.unmark vi)
+  | None -> ());
+  Format.fprintf fmt " = %a" format_expression (Pos.unmark e)
 
 let format_formula fmt (f : formula) =
   match f with
@@ -83,7 +79,7 @@ let format_var_category_id fmt (vd : var_category_id) =
 
 let rec format_instruction fmt (i : instruction) =
   match i with
-  | Formula f -> Pp.unmark format_formula fmt f
+  | Affectation f -> Pp.unmark format_formula fmt f
   | IfThenElse (e, il, []) ->
       Format.fprintf fmt "si %a alors %a finsi"
         (Pp.unmark format_expression)
@@ -118,7 +114,7 @@ let rec format_instruction fmt (i : instruction) =
       Format.fprintf fmt
         "iterer : variable %s : categorie %a : avec %a : dans ( %a )"
         (Pos.unmark var)
-        (Pp.list_comma format_var_category_id)
+        (Com.CatVar.Map.pp_keys ~sep:"," ())
         vcats
         (Pp.unmark format_expression)
         expr format_instruction_list instrs
@@ -126,7 +122,7 @@ let rec format_instruction fmt (i : instruction) =
       let pp_var_param fmt (var, vcats, expr) =
         Format.fprintf fmt ": variable %s : categorie %a : avec %a "
           (Pos.unmark var)
-          (Pp.list_comma format_var_category_id)
+          (Com.CatVar.Map.pp_keys ~sep:"," ())
           vcats
           (Pp.unmark format_expression)
           expr

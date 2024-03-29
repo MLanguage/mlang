@@ -335,7 +335,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Var.t)
-    (vidx_opt : (int * Mir.expression Pos.marked) option)
+    (vidx_opt : Mir.expression Pos.marked option)
     (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
   match vidx_opt with
   | None ->
@@ -354,7 +354,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
         pr "@]@;}";
         pr "@]@;}@;")
       else generate_m_assign dgfip_flags var_indexes var None fmt se
-  | Some (_size, ei) ->
+  | Some ei ->
       Format.fprintf fmt "@[<v 2>{@,";
       let idx_val = fresh_c_local "mpp_idx" in
       let idx_def = idx_val ^ "_d" in

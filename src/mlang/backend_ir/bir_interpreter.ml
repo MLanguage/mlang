@@ -494,7 +494,7 @@ struct
         let var = get_var ctx var in
         match vidx_opt with
         | None -> set_var_value p ctx var vexpr
-        | Some (_, ei) -> set_var_value_tab p ctx var ei vexpr)
+        | Some ei -> set_var_value_tab p ctx var ei vexpr)
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx p b with
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock p ctx f

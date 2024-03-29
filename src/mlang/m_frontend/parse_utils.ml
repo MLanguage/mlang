@@ -197,24 +197,3 @@ let parse_if_then_etc l =
     | _ -> assert false
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false
-
-let parse_catvars : Mast.var_category_id -> Pos.t Com.CatVar.Map.t =
-  let module CV = Com.CatVar in
-  function
-  | [ ("*", _) ], id_pos ->
-      CV.Map.one (CV.Input (StrSet.one "*")) id_pos
-      |> CV.Map.add (CV.Computed { is_base = false }) id_pos
-      |> CV.Map.add (CV.Computed { is_base = true }) id_pos
-  | [ ("saisie", _); ("*", _) ], id_pos ->
-      CV.Map.one (CV.Input (StrSet.one "*")) id_pos
-  | ("saisie", _) :: id, id_pos ->
-      CV.Map.one (CV.Input (StrSet.from_marked_list id)) id_pos
-  | ("calculee", _) :: id, id_pos -> (
-      match id with
-      | [] -> CV.Map.one (CV.Computed { is_base = false }) id_pos
-      | [ ("base", _) ] -> CV.Map.one (CV.Computed { is_base = true }) id_pos
-      | [ ("*", _) ] ->
-          CV.Map.one (CV.Computed { is_base = false }) id_pos
-          |> CV.Map.add (CV.Computed { is_base = true }) id_pos
-      | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
-  | _, id_pos -> Errors.raise_spanned_error "invalid variable category" id_pos

@@ -175,29 +175,17 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
     (it_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
-    | (Mast.Formula f, pos) :: il -> begin
+    | (Mast.Affectation f, pos) :: il -> begin
         match f with
-        | Mast.SingleFormula sf, _ ->
-            let var_e = translate_expression cats var_data sf.Mast.formula in
+        | Mast.SingleFormula (v, idx, e), _ ->
             let var =
-              match
-                Pos.unmark
-                  (translate_variable var_data
-                     (Pos.unmark sf.Mast.lvalue).Mast.var)
-              with
+              match Pos.unmark (translate_variable var_data v) with
               | Com.Var var -> var
               | _ -> assert false
               (* should not happen *)
             in
-            let var_idx, var_e =
-              match (Pos.unmark sf.Mast.lvalue).Mast.index with
-              | Some ti -> (
-                  let ei = translate_expression cats var_data ti in
-                  match var.Mir.Var.is_table with
-                  | Some size -> (Some (size, ei), var_e)
-                  | None -> (None, var_e))
-              | None -> (None, var_e)
-            in
+            let var_idx = Option.map (translate_expression cats var_data) idx in
+            let var_e = translate_expression cats var_data e in
             aux ((Com.Affectation (var, var_idx, var_e), pos) :: res) il
         | Mast.MultipleFormulaes _, _ -> assert false
       end
@@ -277,7 +265,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             ~loc_int:it_depth
         in
         let var_data = StrMap.add var_name var var_data in
-        let catSet = Check_validity.cats_variable_from_decl_list vcats cats in
+        let catSet = Check_validity.mast_to_catvars vcats cats in
         let mir_expr = translate_expression cats var_data expr in
         let prog_it =
           translate_prog error_decls cats var_data (it_depth - 1) instrs
@@ -297,9 +285,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                   ~loc_int:it_depth
               in
               let var_data = StrMap.add var_name var var_data in
-              let catSet =
-                Check_validity.cats_variable_from_decl_list vcats cats
-              in
+              let catSet = Check_validity.mast_to_catvars vcats cats in
               let mir_expr = translate_expression cats var_data expr in
               (var, catSet, mir_expr))
             var_params

@@ -44,6 +44,26 @@ module CatVar = struct
         (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
         (map : 'a t) : unit =
       pp ~sep ~pp_key ~assoc pp_val fmt map
+
+    let from_string_list = function
+      | [ ("*", _) ], id_pos ->
+          one (Input (StrSet.one "*")) id_pos
+          |> add (Computed { is_base = false }) id_pos
+          |> add (Computed { is_base = true }) id_pos
+      | [ ("saisie", _); ("*", _) ], id_pos ->
+          one (Input (StrSet.one "*")) id_pos
+      | ("saisie", _) :: id, id_pos ->
+          one (Input (StrSet.from_marked_list id)) id_pos
+      | ("calculee", _) :: id, id_pos -> (
+          match id with
+          | [] -> one (Computed { is_base = false }) id_pos
+          | [ ("base", _) ] -> one (Computed { is_base = true }) id_pos
+          | [ ("*", _) ] ->
+              one (Computed { is_base = false }) id_pos
+              |> add (Computed { is_base = true }) id_pos
+          | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
+      | _, id_pos ->
+          Errors.raise_spanned_error "invalid variable category" id_pos
   end
 
   type loc = LocCalculated | LocBase | LocInput
@@ -170,7 +190,7 @@ type 'v print_arg =
   | PrintExpr of 'v m_expression * int * int
 
 type 'v instruction =
-  | Affectation of 'v * (int * 'v m_expression) option * 'v m_expression
+  | Affectation of 'v * 'v m_expression option * 'v m_expression
   | IfThenElse of
       'v m_expression * 'v m_instruction list * 'v m_instruction list
   | ComputeTarget of string Pos.marked
@@ -356,7 +376,7 @@ let rec format_instruction form_var =
     match instr with
     | Affectation (v, vi_opt, ve) ->
         let pr_idx fmt = function
-          | Some (_, vi) -> Format.fprintf fmt "[%a]" form_expr (Pos.unmark vi)
+          | Some vi -> Format.fprintf fmt "[%a]" form_expr (Pos.unmark vi)
           | None -> ()
         in
         Format.fprintf fmt "%a%a = %a" form_var v pr_idx vi_opt form_expr
