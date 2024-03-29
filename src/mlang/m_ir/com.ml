@@ -189,10 +189,21 @@ type 'v print_arg =
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
+type 'v formula_loop = 'v loop_variables Pos.marked
+
+type 'v formula_decl = 'v * 'v m_expression option * 'v m_expression
+
+type 'v formula =
+  | SingleFormula of 'v formula_decl
+  | MultipleFormulaes of 'v formula_loop * 'v formula_decl
+
 type 'v instruction =
-  | Affectation of 'v * 'v m_expression option * 'v m_expression
+  | Affectation of 'v formula Pos.marked
   | IfThenElse of
       'v m_expression * 'v m_instruction list * 'v m_instruction list
+  | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
   | ComputeTarget of string Pos.marked
   | VerifBlock of 'v m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
@@ -369,18 +380,30 @@ let format_print_arg form_var fmt = function
           (Pp.unmark (format_expression form_var))
           e min max
 
+let format_formula_decl form_var fmt (v, idx, e) =
+  Format.fprintf fmt "%a" form_var v;
+  (match idx with
+  | Some vi ->
+      Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
+  | None -> ());
+  Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+
+let format_formula form_var fmt f =
+  match f with
+  | SingleFormula f -> format_formula_decl form_var fmt f
+  | MultipleFormulaes (lvs, f) ->
+      Format.fprintf fmt "pour %a\n%a"
+        (format_loop_variables form_var)
+        (Pos.unmark lvs)
+        (format_formula_decl form_var)
+        f
+
 let rec format_instruction form_var =
   let form_expr = format_expression form_var in
   let form_instrs = format_instructions form_var in
   fun fmt instr ->
     match instr with
-    | Affectation (v, vi_opt, ve) ->
-        let pr_idx fmt = function
-          | Some vi -> Format.fprintf fmt "[%a]" form_expr (Pos.unmark vi)
-          | None -> ()
-        in
-        Format.fprintf fmt "%a%a = %a" form_var v pr_idx vi_opt form_expr
-          (Pos.unmark ve)
+    | Affectation f -> Pp.unmark (format_formula form_var) fmt f
     | IfThenElse (cond, t, []) ->
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" form_expr
           (Pos.unmark cond) form_instrs t
@@ -391,6 +414,16 @@ let rec format_instruction form_var =
         Format.fprintf fmt
           "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" form_instrs
           vb
+    | ComputeDomain l ->
+        Format.fprintf fmt "calculer domaine %a;"
+          (Pp.list_space (Pp.unmark Pp.string))
+          (Pos.unmark l)
+    | ComputeChaining ch ->
+        Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
+    | ComputeVerifs (l, expr) ->
+        Format.fprintf fmt "verifier %a : avec %a;"
+          (Pp.list_space (Pp.unmark Pp.string))
+          (Pos.unmark l) (Pp.unmark form_expr) expr
     | ComputeTarget tname ->
         Format.fprintf fmt "call_target: %s@," (Pos.unmark tname)
     | Print (std, args) ->

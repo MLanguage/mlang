@@ -141,10 +141,21 @@ type 'v print_arg =
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
+type 'v formula_loop = 'v loop_variables Pos.marked
+
+type 'v formula_decl = 'v * 'v m_expression option * 'v m_expression
+
+type 'v formula =
+  | SingleFormula of 'v formula_decl
+  | MultipleFormulaes of 'v formula_loop * 'v formula_decl
+
 type 'v instruction =
-  | Affectation of 'v * 'v m_expression option * 'v m_expression
+  | Affectation of 'v formula Pos.marked
   | IfThenElse of
       'v m_expression * 'v m_instruction list * 'v m_instruction list
+  | ComputeDomain of string Pos.marked list Pos.marked
+  | ComputeChaining of string Pos.marked
+  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
   | ComputeTarget of string Pos.marked
   | VerifBlock of 'v m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
