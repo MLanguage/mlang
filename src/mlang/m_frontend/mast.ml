@@ -92,28 +92,20 @@ type m_expression = expression Pos.marked
 (** The rule is the main feature of the M language. It defines the expression of
     one or several variables. *)
 
-type lvalue = {
-  var : variable Pos.marked;
-  index : m_expression option; (* [None] if not a table *)
-}
-(** An lvalue (left value) is a variable being assigned. It can be a table or a
-    non-table variable *)
-
-type formula_decl = { lvalue : lvalue Pos.marked; formula : m_expression }
-
 (** In the M language, you can define multiple variables at once. This is the
     way they do looping since the definition can depend on the loop variable
     value (e.g [Xi] can depend on [i]). *)
+
+type formula_loop = variable Com.loop_variables Pos.marked
+
+type formula_decl = variable Pos.marked * m_expression option * m_expression
+
 type formula =
   | SingleFormula of formula_decl
-  | MultipleFormulaes of variable Com.loop_variables Pos.marked * formula_decl
-
-type restore_vars =
-  | VarList of string Pos.marked list
-  | VarCats of string Pos.marked * var_category_id list * m_expression
+  | MultipleFormulaes of formula_loop * formula_decl
 
 type instruction =
-  | Formula of formula Pos.marked
+  | Affectation of formula Pos.marked
   | IfThenElse of m_expression * m_instruction list * m_instruction list
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
@@ -123,12 +115,12 @@ type instruction =
   | Print of Com.print_std * variable Com.print_arg Pos.marked list
   | Iterate of
       string Pos.marked
-      * var_category_id list
+      * Pos.t Com.CatVar.Map.t
       * m_expression
       * m_instruction list
   | Restore of
       string Pos.marked list
-      * (string Pos.marked * var_category_id list * m_expression) list
+      * (string Pos.marked * Pos.t Com.CatVar.Map.t * m_expression) list
       * m_instruction list
   | RaiseError of error_name Pos.marked * variable_name Pos.marked option
   | CleanErrors

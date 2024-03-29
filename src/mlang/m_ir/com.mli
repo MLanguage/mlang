@@ -7,7 +7,11 @@ module CatVar : sig
 
   module Set : SetExt.T with type elt = t
 
-  module Map : MapExt.T with type key = t
+  module Map : sig
+    include MapExt.T with type key = t
+
+    val from_string_list : string Pos.marked list Pos.marked -> Pos.t t
+  end
 
   type loc = LocCalculated | LocBase | LocInput
 
@@ -138,7 +142,7 @@ type 'v print_arg =
   | PrintExpr of 'v m_expression * int * int
 
 type 'v instruction =
-  | Affectation of 'v * (int * 'v m_expression) option * 'v m_expression
+  | Affectation of 'v * 'v m_expression option * 'v m_expression
   | IfThenElse of
       'v m_expression * 'v m_instruction list * 'v m_instruction list
   | ComputeTarget of string Pos.marked

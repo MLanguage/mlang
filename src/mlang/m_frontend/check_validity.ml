@@ -742,7 +742,9 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
       | [] -> vdom_auth
       | l :: t ->
           let vcats =
-            mast_to_catvars (Parse_utils.parse_catvars l) prog.prog_var_cats
+            mast_to_catvars
+              (Com.CatVar.Map.from_string_list l)
+              prog.prog_var_cats
           in
           aux (Com.CatVar.Map.union (fun _ p _ -> Some p) vcats vdom_auth) t
     in
@@ -831,7 +833,7 @@ let complete_vars (prog : program) : program =
           | Mast.VerifBlock instrs -> aux (nbIt + aux 0 instrs) il
           | Mast.Iterate (_, _, _, instrs) -> aux (nbIt + 1 + aux 0 instrs) il
           | Mast.Restore (_, _, instrs) -> aux (nbIt + max 1 (aux 0 instrs)) il
-          | Mast.ComputeTarget _ | Mast.Formula _ | Mast.Print _
+          | Mast.ComputeTarget _ | Mast.Affectation _ | Mast.Print _
           | Mast.RaiseError _ | Mast.CleanErrors | Mast.ExportErrors
           | Mast.FinalizeErrors ->
               aux nbIt il
@@ -902,8 +904,8 @@ let complete_vars (prog : program) : program =
               let sz = sz + sz1 in
               let nbIt = nbIt + max 1 nbIt1 in
               aux (nb, sz, nbIt, tdata) il
-          | Mast.Formula _ | Mast.Print _ | Mast.RaiseError _ | Mast.CleanErrors
-          | Mast.ExportErrors | Mast.FinalizeErrors ->
+          | Mast.Affectation _ | Mast.Print _ | Mast.RaiseError _
+          | Mast.CleanErrors | Mast.ExportErrors | Mast.FinalizeErrors ->
               aux (nb, sz, nbIt, tdata) il
           | Mast.ComputeDomain _ | Mast.ComputeChaining _ | Mast.ComputeVerifs _
             ->
@@ -1272,7 +1274,7 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
   let rec aux res = function
     | [] -> res
     | l :: t ->
-        let vcats = mast_to_catvars (Parse_utils.parse_catvars l) cats in
+        let vcats = mast_to_catvars (Com.CatVar.Map.from_string_list l) cats in
         aux (Com.CatVar.Map.union (fun _ p _ -> Some p) vcats res) t
   in
   aux Com.CatVar.Map.empty l
@@ -1285,20 +1287,19 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     | m_instr :: il -> (
         let instr, instr_pos = m_instr in
         match instr with
-        | Mast.Formula (f, _) -> (
+        | Mast.Affectation (f, _) -> (
             match f with
-            | Mast.SingleFormula sf ->
-                let lval = Pos.unmark sf.lvalue in
+            | Mast.SingleFormula (v, idx, e) ->
                 let out_var =
-                  let idx_mem = OneOf (Option.map (fun _ -> ()) lval.index) in
-                  check_variable lval.var idx_mem env
+                  let idx_mem = OneOf (Option.map (fun _ -> ()) idx) in
+                  check_variable v idx_mem env
                 in
                 let in_vars_index =
-                  match lval.index with
+                  match idx with
                   | Some ei -> check_expression false ei env
                   | None -> StrSet.empty
                 in
-                let in_vars_expr = check_expression false sf.formula env in
+                let in_vars_expr = check_expression false e env in
                 if is_rule then
                   let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
                   let in_vars =
@@ -1393,7 +1394,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Some old_pos ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            ignore (cats_variable_from_decl_list vcats env.prog.prog_var_cats);
+            ignore (mast_to_catvars vcats env.prog.prog_var_cats);
             let env' =
               { env with it_vars = StrMap.add var_name var_pos env.it_vars }
             in
@@ -1431,8 +1432,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Some old_pos ->
                     Err.variable_already_declared var_name old_pos var_pos
                 | None -> ());
-                ignore
-                  (cats_variable_from_decl_list vcats env.prog.prog_var_cats);
+                ignore (mast_to_catvars vcats env.prog.prog_var_cats);
                 let env =
                   { env with it_vars = StrMap.add var_name var_pos env.it_vars }
                 in
@@ -1598,7 +1598,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     let rule_instrs =
       List.map
-        (fun f -> Pos.same_pos_as (Mast.Formula f) f)
+        (fun f -> Pos.same_pos_as (Mast.Affectation f) f)
         r.Mast.rule_formulaes
     in
     let prog, rule_instrs, rule_in_vars, rule_out_vars =

@@ -492,7 +492,7 @@ instruction_list_rev:
 | il = instruction_list_rev i = with_pos(instruction) { i :: il }
 
 instruction:
-| f = with_pos(formula_kind) SEMICOLON { Formula f }
+| f = with_pos(formula_kind) SEMICOLON { Affectation f }
 | IF e = with_pos(expression)
   THEN ilt = instruction_list_rev
   ilel = instruction_else_branch {
@@ -540,7 +540,12 @@ instruction:
       in
       let vcats =
         match vco with
-        | Some vcats -> vcats
+        | Some vcat_list ->
+            let fold res vc =
+              let vcm = Com.CatVar.Map.from_string_list vc in
+              Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
+            in
+            List.fold_left fold Com.CatVar.Map.empty vcat_list
         | None -> err "variable category must be defined" (mk_position $sloc)
       in
       let expr =
@@ -648,8 +653,15 @@ it_param:
 rest_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { `VarList vars }
 | VARIABLE var = symbol_with_pos COLON
-  CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON expr_opt = rest_param_with_expr? { 
+  CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON expr_opt = rest_param_with_expr? {
+    let vcats =
+      let fold res vc =
+        let vcm = Com.CatVar.Map.from_string_list vc in
+        Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
+      in
+      List.fold_left fold Com.CatVar.Map.empty vcat_list
+    in
     let expr =
       match expr_opt with
       | Some expr -> expr
@@ -679,11 +691,12 @@ lvalue_name:
 | s = SYMBOL { parse_variable $sloc s }
 
 lvalue:
-| s = with_pos(lvalue_name) i = with_pos(brackets)? { { var = s; index = i} }
+| s = with_pos(lvalue_name) i = with_pos(brackets)? { (s, i) }
 
 formula:
-| lvalue = with_pos(lvalue) EQUALS formula = with_pos(expression) {
-    { lvalue; formula }
+| lvalue = lvalue EQUALS e = with_pos(expression) {
+    let v, idx = lvalue in
+    (v, idx, e)
   }
 
 verification_etc:
@@ -942,7 +955,7 @@ function_name:
 
 function_call:
 | NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
-    NbCategory (parse_catvars cats)
+    NbCategory (Com.CatVar.Map.from_string_list cats)
   }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
