@@ -490,11 +490,12 @@ struct
   let rec evaluate_stmt (canBlock : bool) (p : Mir.program) (ctx : ctx)
       (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
-    | Com.Affectation (var, vidx_opt, vexpr) -> (
+    | Com.Affectation (Com.SingleFormula (var, vidx_opt, vexpr), _) -> (
         let var = get_var ctx var in
         match vidx_opt with
         | None -> set_var_value p ctx var vexpr
         | Some ei -> set_var_value_tab p ctx var ei vexpr)
+    | Com.Affectation _ -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx p b with
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock p ctx f
@@ -673,6 +674,8 @@ struct
     | Com.ExportErrors ->
         ctx.ctx_exported_anos <- ctx.ctx_exported_anos @ ctx.ctx_finalized_anos;
         ctx.ctx_finalized_anos <- []
+    | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
+        assert false
 
   and evaluate_stmts canBlock (p : Mir.program) (ctx : ctx)
       (stmts : Mir.m_instruction list) : unit =

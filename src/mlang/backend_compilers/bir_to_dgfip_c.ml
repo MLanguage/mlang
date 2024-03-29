@@ -378,10 +378,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
-  | Affectation (var, vidx_opt, vexpr) ->
+  | Affectation (SingleFormula (var, vidx_opt, vexpr), _) ->
       Format.fprintf oc "@[<v 2>{@,";
       generate_var_def dgfip_flags var_indexes var vidx_opt vexpr oc;
       Format.fprintf oc "@]@,}"
+  | Affectation _ -> assert false
   | IfThenElse (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
       let cond_val = fresh_c_local "mpp_cond" in
@@ -582,6 +583,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
   | CleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
   | ExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
   | FinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
+  | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter)

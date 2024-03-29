@@ -478,14 +478,15 @@ let expand_functions (p : program) : program =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
-      | Affectation (v_id, v_idx_opt, v_expr) ->
+      | Affectation (SingleFormula (v_id, v_idx_opt, v_expr), pos) ->
           let m_idx_opt =
             match v_idx_opt with
             | Some v_idx -> Some (expand_functions_expr v_idx)
             | None -> None
           in
           let m_expr = expand_functions_expr v_expr in
-          (Affectation (v_id, m_idx_opt, m_expr), instr_pos)
+          (Affectation (SingleFormula (v_id, m_idx_opt, m_expr), pos), instr_pos)
+      | Affectation _ -> assert false
       | IfThenElse (i, t, e) ->
           let i' = expand_functions_expr i in
           let t' = List.map map_instr t in
@@ -525,6 +526,7 @@ let expand_functions (p : program) : program =
           let instrs' = List.map map_instr instrs in
           (Restore (vars, filters', instrs'), instr_pos)
       | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+      | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in
     TargetMap.map
       (fun t ->

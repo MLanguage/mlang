@@ -208,7 +208,7 @@ let rec generate_stmts (program : Mir.program) (oc : Format.formatter)
 and generate_stmt (program : Mir.program) (oc : Format.formatter)
     (stmt : Mir.m_instruction) : unit =
   match Pos.unmark stmt with
-  | Affectation (_var, _vi, _ve) -> assert false
+  | Affectation _f -> assert false
   | IfThenElse (cond, tt, ff) ->
       let pos = Pos.get_position stmt in
       let fname =
@@ -260,6 +260,7 @@ and generate_stmt (program : Mir.program) (oc : Format.formatter)
   | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors ->
       Errors.raise_spanned_error "errors not implemented in Java"
         (Pos.get_position stmt)
+  | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 let generate_return (oc : Format.formatter) (_x : 'a) =
   let returned_variables = [] in
