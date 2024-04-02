@@ -308,7 +308,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Var.t) (offset : D.offset)
+    (var_indexes : Dgfip_varid.var_id_map) (var : Com.Var.t) (offset : D.offset)
     (oc : Format.formatter) (se : D.expression_composition) : unit =
   let def_var = D.generate_variable ~def_flag:true var_indexes offset var in
   let val_var = D.generate_variable var_indexes offset var in
@@ -330,17 +330,17 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
   (* If the trace flag is set, we print the value of all non-temp variables *)
   if dgfip_flags.flg_trace && not var.Mir.Variable.is_temp then
     Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
-      (Pos.unmark var.Mir.Var.name)
+      (Pos.unmark var.Com.Var.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : Mir.Var.t)
+    (var_indexes : Dgfip_varid.var_id_map) (var : Com.Var.t)
     (vidx_opt : Mir.expression Pos.marked option)
     (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
   match vidx_opt with
   | None ->
       let se = generate_c_expr vexpr var_indexes in
-      if Mir.Var.is_it var then (
+      if Com.Var.is_it var then (
         let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
         let idx = fresh_c_local "idxPROUT" in
@@ -378,9 +378,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
-  | Affectation (SingleFormula (var, vidx_opt, vexpr), _) ->
+  | Affectation (SingleFormula (m_var, vidx_opt, vexpr), _) ->
       Format.fprintf oc "@[<v 2>{@,";
-      generate_var_def dgfip_flags var_indexes var vidx_opt vexpr oc;
+      generate_var_def dgfip_flags var_indexes (Pos.unmark m_var) vidx_opt vexpr
+        oc;
       Format.fprintf oc "@]@,}"
   | Affectation _ -> assert false
   | IfThenElse (cond, iftrue, iffalse) ->
@@ -430,7 +431,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let print_def = print_val ^ "_d" in
       Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
-        (fun (arg : Mir.Var.t Com.print_arg Pos.marked) ->
+        (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
           match Pos.unmark arg with
           | PrintString s ->
               Format.fprintf oc "print_string(%s, %s, \"%s\");@;" print_std
@@ -481,7 +482,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                 print_std pr_ctx)
         args;
       Format.fprintf oc "@]@;}@;"
-  | Iterate (var, vcs, expr, stmts) ->
+  | Iterate (m_var, vcs, expr, stmts) ->
+      let var = Pos.unmark m_var in
       let it_name = fresh_c_local "iterate" in
       Com.CatVar.Map.iter
         (fun vc _ ->
@@ -521,14 +523,16 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let rest_name = fresh_c_local "restore" in
       Format.fprintf oc "T_env_sauvegarde *%s = NULL;@;" rest_name;
       List.iter
-        (fun v ->
+        (fun m_v ->
+          let v = Pos.unmark m_v in
           Format.fprintf oc "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name
             (Dgfip_varid.gen_access_def_pointer var_indexes v)
             (Dgfip_varid.gen_access_pointer var_indexes v)
             (Dgfip_varid.gen_size var_indexes v))
         vars;
       List.iter
-        (fun (var, vcs, expr) ->
+        (fun (m_var, vcs, expr) ->
+          let var = Pos.unmark m_var in
           let it_name = fresh_c_local "iterate" in
           Com.CatVar.Map.iter
             (fun vc _ ->
@@ -572,7 +576,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
         stmts;
       Format.fprintf oc "env_restaurer(&%s);@;" rest_name;
       Format.fprintf oc "@]}@;"
-  | RaiseError (err, var_opt) ->
+  | RaiseError (m_err, var_opt) ->
+      let err = Pos.unmark m_err in
       let err_name = Pos.unmark err.Com.Error.name in
       let code =
         match var_opt with
@@ -598,7 +603,7 @@ let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
     (if add_semicolon then ";" else "")
 
 let generate_var_tmp_decls (oc : Format.formatter)
-    (tmp_vars : (Mir.Var.t * Pos.t * int option) StrMap.t) =
+    (tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t) =
   StrMap.iter
     (fun vn (_, _, size) ->
       let sz = match size with Some i -> i | None -> 1 in

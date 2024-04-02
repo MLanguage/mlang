@@ -42,7 +42,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let open Mast in
   let mk_assign var val_ =
     let v = if val_ then 1.0 else 0.0 in
-    ( SingleFormula
+    ( Com.SingleFormula
         ((Normal var, Pos.no_pos), None, (Literal (Float v), Pos.no_pos)),
       Pos.no_pos )
   in

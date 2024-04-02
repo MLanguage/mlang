@@ -38,10 +38,6 @@ val parse_string : string -> string
 val parse_variable_or_int :
   Lexing.position * Lexing.position -> string -> parse_val
 
-val parse_table_index :
-  Lexing.position * Lexing.position -> string -> Mast.table_index
-(** Table index can be integer or [X], the generic table index variable *)
-
 val parse_table_size : string -> Mast.table_size
 
 val parse_func_name : 'a -> string -> string

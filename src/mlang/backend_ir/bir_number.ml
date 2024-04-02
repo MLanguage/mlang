@@ -34,7 +34,7 @@ module type NumberInterface = sig
 
   val of_float : float -> t
 
-  val of_float_input : Mir.Var.t -> float -> t
+  val of_float_input : Com.Var.t -> float -> t
 
   val to_float : t -> float
   (** Warning: lossy *)
@@ -237,7 +237,7 @@ module IntervalNumber : NumberInterface = struct
 
   let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
-  let of_float_input (_v : Mir.Var.t) (f : float) =
+  let of_float_input (_v : Com.Var.t) (f : float) =
     v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
   let to_float (f : t) : float =

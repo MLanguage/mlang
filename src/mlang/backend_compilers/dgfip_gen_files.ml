@@ -447,7 +447,6 @@ let split_list lst cnt =
 (* Print a variable's description *)
 let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
     ~desc ~alias_opt =
-  let open Mast in
   let var_name = if opt.with_alias then get_name name alias_opt else name in
 
   (* TODO if flg_compact is used, then handle flat representation of TGV *)
@@ -458,11 +457,11 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
     | _ -> ("EST_SAISIE", true)
   in
 
-  let typ = match typ_opt with None -> Real | Some ct -> Pos.unmark ct in
+  let typ = match typ_opt with None -> Com.Real | Some ct -> Pos.unmark ct in
 
   Format.fprintf fmt "    { \"%s\", %s | %d" var_name kind idx;
   if opt.with_type_donnee then
-    Format.fprintf fmt ", %a" Format_mast.format_value_typ typ;
+    Format.fprintf fmt ", %a" Com.format_value_typ typ;
   if opt.with_verif then
     if is_input && false then Format.fprintf fmt ", err_%s" name
       (* Note: no alias *)
@@ -843,13 +842,13 @@ let gen_table_varinfo fmt var_dict cat
   let nb =
     StrMap.fold
       (fun _ (var, idx, size) nb ->
-        if Com.CatVar.compare (Mir.Var.cat var) cat = 0 then (
+        if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
           Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
-            (Pos.unmark var.Mir.Var.name)
-            (Mir.Var.alias_str var) idx size id_int;
+            (Pos.unmark var.Com.Var.name)
+            (Com.Var.alias_str var) idx size id_int;
           StrMap.iter
             (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-            (Mir.Var.attrs var);
+            (Com.Var.attrs var);
           Format.fprintf fmt " },\n";
           nb + 1)
         else nb)
@@ -890,7 +889,7 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
   let var_dict =
     StrMap.fold
       (fun _ var dict ->
-        StrMap.add (Pos.unmark var.Mir.Var.name) (var, -1, -1) dict)
+        StrMap.add (Pos.unmark var.Com.Var.name) (var, -1, -1) dict)
       cprog.program_vars StrMap.empty
   in
   let var_dict =
@@ -2204,7 +2203,7 @@ let extract_var_ids (cprog : Mir.program) vars =
   let open Mir in
   (* let open Dgfip_varid in *)
   let pvars = cprog.program_vars in
-  let add vn (v : Var.t) vm =
+  let add vn (v : Com.Var.t) vm =
     let vs =
       match StrMap.find_opt vn vm with
       | None -> VariableSet.empty
@@ -2216,9 +2215,9 @@ let extract_var_ids (cprog : Mir.program) vars =
      ids) *)
   let vars_map =
     StrMap.fold
-      (fun _ (v : Var.t) vm ->
+      (fun _ (v : Com.Var.t) vm ->
         let vm = add (Pos.unmark v.name) v vm in
-        match Mir.Var.alias v with
+        match Com.Var.alias v with
         | Some a -> add (Pos.unmark a) v vm
         | None -> vm)
       pvars StrMap.empty

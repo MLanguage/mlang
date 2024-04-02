@@ -34,39 +34,7 @@ let format_variable fmt (v : variable) =
 
 let format_error_name fmt (e : error_name) = Format.fprintf fmt "%s" e
 
-let format_loop_variables = Com.format_loop_variables format_variable
-
 let format_expression = Com.format_expression format_variable
-
-let format_formula_decl fmt ((v, idx, e) : formula_decl) =
-  Format.fprintf fmt "%a" format_variable (Pos.unmark v);
-  (match idx with
-  | Some vi -> Format.fprintf fmt "[%a]" format_expression (Pos.unmark vi)
-  | None -> ());
-  Format.fprintf fmt " = %a" format_expression (Pos.unmark e)
-
-let format_formula fmt (f : formula) =
-  match f with
-  | SingleFormula f -> format_formula_decl fmt f
-  | MultipleFormulaes (lvs, f) ->
-      Format.fprintf fmt "pour %a\n%a" format_loop_variables (Pos.unmark lvs)
-        format_formula_decl f
-
-let format_print_arg fmt = function
-  | Com.PrintString s -> Format.fprintf fmt "\"%s\"" s
-  | Com.PrintName v ->
-      Format.fprintf fmt "nom(%a)" format_variable (Pos.unmark v)
-  | Com.PrintAlias v ->
-      Format.fprintf fmt "alias(%a)" format_variable (Pos.unmark v)
-  | Com.PrintIndent e ->
-      Format.fprintf fmt "indenter(%a)" (Pp.unmark format_expression) e
-  | Com.PrintExpr (e, min, max) ->
-      if min = max_int then
-        Format.fprintf fmt "(%a)" (Pp.unmark format_expression) e
-      else if max = max_int then
-        Format.fprintf fmt "(%a):%d" (Pp.unmark format_expression) e min
-      else
-        Format.fprintf fmt "(%a):%d..%d" (Pp.unmark format_expression) e min max
 
 let format_var_category_id fmt (vd : var_category_id) =
   match Pos.unmark vd with
@@ -77,69 +45,10 @@ let format_var_category_id fmt (vd : var_category_id) =
   | [ ("*", _) ] -> Format.fprintf fmt "*"
   | _ -> assert false
 
-let rec format_instruction fmt (i : instruction) =
-  match i with
-  | Affectation f -> Pp.unmark format_formula fmt f
-  | IfThenElse (e, il, []) ->
-      Format.fprintf fmt "si %a alors %a finsi"
-        (Pp.unmark format_expression)
-        e format_instruction_list il
-  | IfThenElse (e, ilt, ile) ->
-      Format.fprintf fmt "si %a alors %a sinon %a finsi"
-        (Pp.unmark format_expression)
-        e format_instruction_list ilt format_instruction_list ile
-  | ComputeDomain l ->
-      Format.fprintf fmt "calculer domaine %a;"
-        (Pp.list_space (Pp.unmark Pp.string))
-        (Pos.unmark l)
-  | ComputeChaining ch ->
-      Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
-  | ComputeTarget tn -> Format.fprintf fmt "calculer cible %s;" (Pos.unmark tn)
-  | ComputeVerifs (l, expr) ->
-      Format.fprintf fmt "verifier %a : avec %a;"
-        (Pp.list_space (Pp.unmark Pp.string))
-        (Pos.unmark l)
-        (Pp.unmark format_expression)
-        expr
-  | VerifBlock instrs ->
-      Format.fprintf fmt "bloc_de_verif ( %a )" format_instruction_list instrs
-  | Print (std, args) ->
-      let print_cmd =
-        match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
-      in
-      Format.fprintf fmt "%s %a;" print_cmd
-        (Pp.list_space (Pp.unmark format_print_arg))
-        args
-  | Iterate (var, vcats, expr, instrs) ->
-      Format.fprintf fmt
-        "iterer : variable %s : categorie %a : avec %a : dans ( %a )"
-        (Pos.unmark var)
-        (Com.CatVar.Map.pp_keys ~sep:"," ())
-        vcats
-        (Pp.unmark format_expression)
-        expr format_instruction_list instrs
-  | Restore (vars, var_params, instrs) ->
-      let pp_var_param fmt (var, vcats, expr) =
-        Format.fprintf fmt ": variable %s : categorie %a : avec %a "
-          (Pos.unmark var)
-          (Com.CatVar.Map.pp_keys ~sep:"," ())
-          vcats
-          (Pp.unmark format_expression)
-          expr
-      in
-      Format.fprintf fmt "restaurer %a%a : dans ( %a )"
-        (Pp.list_space (Pp.unmark Pp.string))
-        vars
-        (Pp.list_space pp_var_param)
-        var_params format_instruction_list instrs
-  | RaiseError (err, var_opt) ->
-      Format.fprintf fmt "leve_erreur %s%s;" (Pos.unmark err)
-        (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
-  | CleanErrors -> Format.fprintf fmt "nettoie_erreurs;"
-  | ExportErrors -> Format.fprintf fmt "exporte_erreurs;"
-  | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs;"
+let format_instruction fmt i =
+  Com.format_instruction format_variable Pp.string fmt i
 
-and format_instruction_list fmt (il : instruction Pos.marked list) =
+let format_instruction_list fmt (il : instruction Pos.marked list) =
   (Pp.list "" (Pp.unmark format_instruction)) fmt il
 
 let format_rule fmt (r : rule) =
@@ -147,7 +56,7 @@ let format_rule fmt (r : rule) =
     (Pos.unmark r.rule_number)
     (Pp.list_comma (Pp.unmark Pp.string))
     r.rule_applications
-    (Pp.list ";\n" (Pp.unmark format_formula))
+    (Pp.list ";\n" (Pp.unmark (Com.format_formula format_variable)))
     r.rule_formulaes
 
 let format_table_size fmt = function
@@ -168,16 +77,6 @@ let format_target fmt (t : target) =
     (StrMap.pp ~pp_key:Pp.nil ~sep:"," format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
-let format_value_typ fmt (t : value_typ) =
-  Pp.string fmt
-    (match t with
-    | Boolean -> "BOOLEEN"
-    | DateYear -> "DATE_AAAA"
-    | DateDayMonthYear -> "DATE_JJMMAAAA"
-    | DateMonth -> "DATE_MM"
-    | Integer -> "ENTIER"
-    | Real -> "REEL")
-
 let format_input_attribute fmt ((n, v) : variable_attribute) =
   Format.fprintf fmt "%s = %d" (Pos.unmark n) (Pos.unmark v)
 
@@ -188,7 +87,7 @@ let format_input_variable fmt (v : input_variable) =
     (Pp.list_space format_input_attribute)
     v.input_attributes format_variable_name (Pos.unmark v.input_alias)
     (Pos.unmark v.input_description)
-    (Pp.option (Pp.unmark format_value_typ))
+    (Pp.option (Pp.unmark Com.format_value_typ))
     v.input_typ
 
 let format_computed_variable fmt (v : computed_variable) =
@@ -196,7 +95,7 @@ let format_computed_variable fmt (v : computed_variable) =
     format_table_size v.comp_table computed_category
     (Pp.list_space (Pp.unmark Pp.string))
     v.comp_category
-    (Pp.option (Pp.unmark format_value_typ))
+    (Pp.option (Pp.unmark Com.format_value_typ))
     v.comp_typ
     (Pos.unmark v.comp_description)
 

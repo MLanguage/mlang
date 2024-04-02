@@ -78,14 +78,6 @@ let parse_variable_or_int sloc (s : string) : parse_val =
       with E.StructuredError _ ->
         E.raise_spanned_error "invalid variable name" (mk_position sloc)))
 
-let parse_table_index sloc (s : string) : Mast.table_index =
-  try Mast.LiteralIndex (int_of_string s)
-  with Failure _ -> (
-    try Mast.SymbolIndex (parse_variable sloc s)
-    with E.StructuredError _ ->
-      E.raise_spanned_error "table index should be an integer"
-        (mk_position sloc))
-
 let parse_table_size (s : string) : Mast.table_size =
   try Mast.LiteralSize (int_of_string s) with Failure _ -> Mast.SymbolSize s
 
@@ -191,9 +183,9 @@ let parse_string (s : string) : string =
 
 let parse_if_then_etc l =
   let rec aux = function
-    | [ (Some e, ilt, pos) ] -> [ (Mast.IfThenElse (e, ilt, []), pos) ]
+    | [ (Some e, ilt, pos) ] -> [ (Com.IfThenElse (e, ilt, []), pos) ]
     | [ (None, ile, _pos) ] -> ile
-    | (Some e, ilt, pos) :: le -> [ (Mast.IfThenElse (e, ilt, aux le), pos) ]
+    | (Some e, ilt, pos) :: le -> [ (Com.IfThenElse (e, ilt, aux le), pos) ]
     | _ -> assert false
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false

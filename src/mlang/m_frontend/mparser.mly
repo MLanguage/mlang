@@ -343,12 +343,12 @@ variable_attribute:
 { (attr, lit) }
 
 value_type_prim:
-| BOOLEAN { Boolean }
-| DATE_YEAR { DateYear }
-| DATE_DAY_MONTH_YEAR { DateDayMonthYear }
-| DATE_MONTH { DateMonth }
-| INTEGER { Integer }
-| REAL { Real }
+| BOOLEAN { Com.Boolean }
+| DATE_YEAR { Com.DateYear }
+| DATE_DAY_MONTH_YEAR { Com.DateDayMonthYear }
+| DATE_MONTH { Com.DateMonth }
+| INTEGER { Com.Integer }
+| REAL { Com.Real }
 
 value_type:
 | TYPE typ = with_pos(value_type_prim) { typ }
@@ -533,7 +533,7 @@ instruction:
       in
       let init = None, None, None in
       let vno, vco, exo = List.fold_left fold init it_params in
-      let var =
+      let vname, vpos =
         match vno with
         | Some var -> var
         | None -> err "iterator variable must be defined" (mk_position $sloc)
@@ -553,7 +553,7 @@ instruction:
         | Some expr -> expr
         | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
       in
-      Iterate (var, vcats, expr, List.rev instrs)
+      Iterate (Pos.mark vpos (Normal vname), vcats, expr, List.rev instrs)
     }
 | RESTORE COLON rest_params = rest_param*
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
@@ -651,8 +651,13 @@ it_param:
     { None, None, Some expr }
 
 rest_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { `VarList vars }
-| VARIABLE var = symbol_with_pos COLON
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+    let vl =
+      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+    in
+    `VarList vl
+  }
+| VARIABLE vn = symbol_with_pos COLON
   CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
   COLON expr_opt = rest_param_with_expr? {
     let vcats =
@@ -667,7 +672,7 @@ rest_param:
       | Some expr -> expr
       | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
-    `VarCats (var, vcats, expr)
+    `VarCats (Pos.same_pos_as (Normal (Pos.unmark vn)) vn, vcats, expr)
   }
 
 rest_param_with_expr:

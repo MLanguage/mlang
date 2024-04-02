@@ -445,11 +445,12 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       m_expr
 
 let expand_formula (const_map : const_context)
-    (prev : Mast.formula Pos.marked list) (m_form : Mast.formula Pos.marked) :
-    Mast.formula Pos.marked list =
+    (prev : Mast.variable Com.formula Pos.marked list)
+    (m_form : Mast.variable Com.formula Pos.marked) :
+    Mast.variable Com.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
-  | Mast.SingleFormula (v, idx, e) ->
+  | Com.SingleFormula (v, idx, e) ->
       let v' =
         match expand_variable const_map ParamsMap.empty v with
         | Com.Var v, v_pos -> (v, v_pos)
@@ -459,9 +460,8 @@ let expand_formula (const_map : const_context)
       in
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Mast.SingleFormula (v', idx', e'), form_pos) :: prev
-  | Mast.MultipleFormulaes (lvs, (v, idx, e)) ->
-      (* Format.eprintf "%a\n\n" Format_mast.format_formula form;*)
+      (Com.SingleFormula (v', idx', e'), form_pos) :: prev
+  | Com.MultipleFormulaes (lvs, (v, idx, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
         let v' =
@@ -473,15 +473,14 @@ let expand_formula (const_map : const_context)
         in
         let idx' = Option.map (expand_expression const_map loop_map) idx in
         let e' = expand_expression const_map loop_map e in
-        (Mast.SingleFormula (v', idx', e'), form_pos)
+        (Com.SingleFormula (v', idx', e'), form_pos)
       in
       let res = loop_context_provider translator in
-      (* List.iter (fun (f, _) -> Format.eprintf "res %a\n"
-         Format_mast.format_formula f) res; Format.eprintf "\n";*)
       List.rev res @ prev
 
 let expand_formulaes (const_map : const_context)
-    (forms : Mast.formula Pos.marked list) : Mast.formula Pos.marked list =
+    (forms : Mast.variable Com.formula Pos.marked list) :
+    Mast.variable Com.formula Pos.marked list =
   List.fold_left (expand_formula const_map) [] (List.rev forms)
 
 let rec expand_instruction (const_map : const_context)
@@ -489,17 +488,17 @@ let rec expand_instruction (const_map : const_context)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
   let instr, instr_pos = m_instr in
   match instr with
-  | Mast.Affectation m_form ->
+  | Com.Affectation m_form ->
       let m_forms = expand_formula const_map [] m_form in
       List.fold_left
-        (fun res f -> (Mast.Affectation f, instr_pos) :: res)
+        (fun res f -> (Com.Affectation f, instr_pos) :: res)
         prev m_forms
-  | Mast.IfThenElse (expr, ithen, ielse) ->
+  | Com.IfThenElse (expr, ithen, ielse) ->
       let expr' = expand_expression const_map ParamsMap.empty expr in
       let ithen' = expand_instructions const_map ithen in
       let ielse' = expand_instructions const_map ielse in
-      (Mast.IfThenElse (expr', ithen', ielse'), instr_pos) :: prev
-  | Mast.Print (std, pr_args) ->
+      (Com.IfThenElse (expr', ithen', ielse'), instr_pos) :: prev
+  | Com.Print (std, pr_args) ->
       let pr_args' =
         List.map
           (fun arg ->
@@ -513,20 +512,20 @@ let rec expand_instruction (const_map : const_context)
             | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ -> arg)
           pr_args
       in
-      (Mast.Print (std, pr_args'), instr_pos) :: prev
-  | Mast.Iterate (name, cats, expr, instrs) ->
+      (Com.Print (std, pr_args'), instr_pos) :: prev
+  | Com.Iterate (name, cats, expr, instrs) ->
       let expr' = expand_expression const_map ParamsMap.empty expr in
       let instrs' = expand_instructions const_map instrs in
-      (Mast.Iterate (name, cats, expr', instrs'), instr_pos) :: prev
-  | Mast.Restore (vars, var_params, instrs) ->
+      (Com.Iterate (name, cats, expr', instrs'), instr_pos) :: prev
+  | Com.Restore (vars, var_params, instrs) ->
       let instrs' = expand_instructions const_map instrs in
-      (Mast.Restore (vars, var_params, instrs'), instr_pos) :: prev
-  | Mast.VerifBlock instrs ->
+      (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev
+  | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
-      (Mast.VerifBlock instrs', instr_pos) :: prev
-  | Mast.ComputeVerifs _ | Mast.ComputeDomain _ | Mast.ComputeChaining _
-  | Mast.ComputeTarget _ | Mast.RaiseError _ | Mast.CleanErrors
-  | Mast.ExportErrors | Mast.FinalizeErrors ->
+      (Com.VerifBlock instrs', instr_pos) :: prev
+  | Com.ComputeVerifs _ | Com.ComputeDomain _ | Com.ComputeChaining _
+  | Com.ComputeTarget _ | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
+  | Com.FinalizeErrors ->
       (instr, instr_pos) :: prev
 
 and expand_instructions (const_map : const_context)

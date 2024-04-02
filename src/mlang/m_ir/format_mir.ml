@@ -14,12 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-open Mir
-
-let format_typ fmt (t : typ) =
+let format_typ fmt (t : Mir.typ) =
   Format.pp_print_string fmt (match t with Real -> "real")
 
-let format_variable fmt (var : Var.t) =
+let format_variable fmt (var : Com.Var.t) =
   Format.fprintf fmt "%s" (Pos.unmark var.name)
 
 let format_expression = Com.format_expression format_variable
@@ -28,5 +26,5 @@ let format_error fmt (err : Com.Error.t) =
   Format.fprintf fmt "erreur %s (%a)" (Pos.unmark err.name) Com.Error.pp_descr
     err
 
-let format_variable fmt (v : Var.t) =
-  Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Var.descr_str v)
+let format_variable fmt (v : Com.Var.t) =
+  Format.fprintf fmt "%s: %s" (Pos.unmark v.name) (Com.Var.descr_str v)
