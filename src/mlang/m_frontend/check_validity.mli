@@ -53,8 +53,8 @@ type program = {
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
-  prog_vars : Mir.Var.t StrMap.t;
-  prog_alias : Mir.Var.t StrMap.t;
+  prog_vars : Com.Var.t StrMap.t;
+  prog_alias : Com.Var.t StrMap.t;
   prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Mir.rule_domain_data doms;
   prog_rdom_syms : syms;

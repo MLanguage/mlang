@@ -14,10 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val format_typ : Format.formatter -> Mir.typ -> unit
+val format_typ : Pp.t -> Mir.typ -> unit
 
-val format_expression : Format.formatter -> Mir.expression -> unit
+val format_expression : Pp.t -> Mir.expression -> unit
 
-val format_error : Format.formatter -> Com.Error.t -> unit
+val format_error : Pp.t -> Com.Error.t -> unit
 
-val format_variable : Format.formatter -> Mir.Var.t -> unit
+val format_variable : Pp.t -> Com.Var.t -> unit

@@ -78,6 +78,133 @@ module CatVar = struct
   }
 end
 
+(** Here are all the types a value can have. Date types don't seem to be used at
+    all though. *)
+type value_typ =
+  | Boolean
+  | DateYear
+  | DateDayMonthYear
+  | DateMonth
+  | Integer
+  | Real
+
+type loc_tgv = {
+  loc_id : string;
+  loc_cat : CatVar.loc;
+  loc_idx : int;
+  loc_int : int;
+}
+
+type loc =
+  | LocTgv of string * loc_tgv
+  | LocTmp of string * int
+  | LocIt of string * int
+
+module Var = struct
+  type id = string
+
+  type tgv = {
+    alias : string Pos.marked option;  (** Input variable have an alias *)
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attrs : int Pos.marked StrMap.t;
+    cat : CatVar.t;
+    typ : value_typ option;
+  }
+
+  type scope = Tgv of tgv | Temp | It
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    id : id;
+    is_table : int option;
+    is_given_back : bool;
+    loc : loc;
+    scope : scope;
+  }
+
+  let tgv v =
+    match v.scope with
+    | Tgv s -> s
+    | _ ->
+        Errors.raise_error
+          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let alias v = (tgv v).alias
+
+  let alias_str v = Option.fold ~none:"" ~some:Pos.unmark (tgv v).alias
+
+  let descr v = (tgv v).descr
+
+  let descr_str v = Pos.unmark (tgv v).descr
+
+  let attrs v = (tgv v).attrs
+
+  let cat v = (tgv v).cat
+
+  let loc_tgv v =
+    match v.loc with
+    | LocTgv (_, l) -> l
+    | _ ->
+        Errors.raise_error
+          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let loc_int v =
+    match v.loc with
+    | LocTgv (_, tgv) -> tgv.loc_int
+    | LocTmp (_, li) | LocIt (_, li) -> li
+
+  let is_temp v = v.scope = Temp
+
+  let is_it v = v.scope = It
+
+  let init_loc =
+    { loc_id = ""; loc_cat = CatVar.LocInput; loc_idx = 0; loc_int = 0 }
+
+  let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
+      ~(is_given_back : bool) ~(alias : string Pos.marked option)
+      ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
+      ~(cat : CatVar.t) ~(typ : value_typ option) : t =
+    {
+      name;
+      id = Pos.unmark name;
+      is_table;
+      is_given_back;
+      loc = LocTgv (Pos.unmark name, init_loc);
+      scope = Tgv { alias; descr; attrs; cat; typ };
+    }
+
+  let new_temp ~(name : string Pos.marked) ~(is_table : int option)
+      ~(loc_int : int) : t =
+    let loc = LocTmp (Pos.unmark name, loc_int) in
+    {
+      name;
+      id = Pos.unmark name;
+      is_table;
+      is_given_back = false;
+      loc;
+      scope = Temp;
+    }
+
+  let new_it ~(name : string Pos.marked) ~(is_table : int option)
+      ~(loc_int : int) : t =
+    let loc = LocIt (Pos.unmark name, loc_int) in
+    {
+      name;
+      id = Pos.unmark name;
+      is_table;
+      is_given_back = false;
+      loc;
+      scope = It;
+    }
+
+  let int_of_scope = function Tgv _ -> 0 | Temp -> 1 | It -> 2
+
+  let compare (var1 : t) (var2 : t) =
+    let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
+    if c <> 0 then c else compare var1.id var2.id
+end
+
 type literal = Float of float | Undefined
 
 type 'v atom = AtomVar of 'v | AtomLiteral of literal
@@ -191,33 +318,61 @@ type 'v print_arg =
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl = 'v * 'v m_expression option * 'v m_expression
+type 'v formula_decl = 'v Pos.marked * 'v m_expression option * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
   | MultipleFormulaes of 'v formula_loop * 'v formula_decl
 
-type 'v instruction =
+type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
-      'v m_expression * 'v m_instruction list * 'v m_instruction list
+      'v m_expression
+      * ('v, 'e) m_instruction list
+      * ('v, 'e) m_instruction list
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
   | ComputeTarget of string Pos.marked
-  | VerifBlock of 'v m_instruction list
+  | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
-  | Iterate of 'v * Pos.t CatVar.Map.t * 'v m_expression * 'v m_instruction list
+  | Iterate of
+      'v Pos.marked
+      * Pos.t CatVar.Map.t
+      * 'v m_expression
+      * ('v, 'e) m_instruction list
   | Restore of
-      'v list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
-      * 'v m_instruction list
-  | RaiseError of Error.t * string Pos.marked option
+      'v Pos.marked list
+      * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v, 'e) m_instruction list
+  | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
 
-and 'v m_instruction = 'v instruction Pos.marked
+and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+
+let set_loc_int loc loc_int =
+  match loc with
+  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
+  | LocTmp (id, _) -> LocTmp (id, loc_int)
+  | LocIt (id, _) -> LocIt (id, loc_int)
+
+let set_loc_tgv loc loc_cat loc_idx =
+  match loc with
+  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_cat; loc_idx })
+  | LocTmp (id, _) | LocIt (id, _) ->
+      Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
+
+let format_value_typ fmt t =
+  Pp.string fmt
+    (match t with
+    | Boolean -> "BOOLEEN"
+    | DateYear -> "DATE_AAAA"
+    | DateDayMonthYear -> "DATE_JJMMAAAA"
+    | DateMonth -> "DATE_MM"
+    | Integer -> "ENTIER"
+    | Real -> "REEL")
 
 let format_literal fmt l =
   Format.pp_print_string fmt
@@ -381,7 +536,7 @@ let format_print_arg form_var fmt = function
           e min max
 
 let format_formula_decl form_var fmt (v, idx, e) =
-  Format.fprintf fmt "%a" form_var v;
+  Format.fprintf fmt "%a" form_var (Pos.unmark v);
   (match idx with
   | Some vi ->
       Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
@@ -398,9 +553,9 @@ let format_formula form_var fmt f =
         (format_formula_decl form_var)
         f
 
-let rec format_instruction form_var =
+let rec format_instruction form_var form_err =
   let form_expr = format_expression form_var in
-  let form_instrs = format_instructions form_var in
+  let form_instrs = format_instructions form_var form_err in
   fun fmt instr ->
     match instr with
     | Affectation f -> Pp.unmark (format_formula form_var) fmt f
@@ -436,24 +591,27 @@ let rec format_instruction form_var =
     | Iterate (var, vcs, expr, itb) ->
         Format.fprintf fmt
           "iterate variable %a@\n: categorie %a@\n: avec %a@\n: dans (" form_var
-          var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr);
+          (Pos.unmark var) (CatVar.Map.pp_keys ()) vcs form_expr
+          (Pos.unmark expr);
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | Restore (vars, var_params, rb) ->
         let format_var_param fmt (var, vcs, expr) =
           Format.fprintf fmt ": variable %a : categorie %a : avec %a@\n"
-            form_var var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
+            (Pp.unmark form_var) var (CatVar.Map.pp_keys ()) vcs form_expr
+            (Pos.unmark expr)
         in
         Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
-          (Pp.list_comma form_var) vars
+          (Pp.list_comma (Pp.unmark form_var))
+          vars
           (Pp.list_space format_var_param)
           var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs rb
     | RaiseError (err, var_opt) ->
-        Format.fprintf fmt "leve_erreur %s %s\n" (Pos.unmark err.name)
+        Format.fprintf fmt "leve_erreur %a %s\n" form_err (Pos.unmark err)
           (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
     | CleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
 
-and format_instructions form_var fmt instrs =
-  Pp.list "" (Pp.unmark (format_instruction form_var)) fmt instrs
+and format_instructions form_var form_err fmt instrs =
+  Pp.list "" (Pp.unmark (format_instruction form_var form_err)) fmt instrs

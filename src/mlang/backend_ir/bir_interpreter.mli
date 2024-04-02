@@ -54,7 +54,7 @@ module type S = sig
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_it : Mir.Var.t Array.t;
+    ctx_it : Com.Var.t Array.t;
     mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;

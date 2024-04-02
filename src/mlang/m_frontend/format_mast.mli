@@ -14,16 +14,12 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val format_value_typ : Format.formatter -> Mast.value_typ -> unit
-
 val format_var_type : Mast.var_type -> string
 
-val format_variable : Format.formatter -> Mast.variable -> unit
+val format_variable : Pp.t -> Mast.variable -> unit
 
-val format_formula : Format.formatter -> Mast.formula -> unit
+val format_rule_domain : Pp.t -> Mast.rule_domain_decl -> unit
 
-val format_rule_domain : Format.formatter -> Mast.rule_domain_decl -> unit
+val format_verif_domain : Pp.t -> Mast.verif_domain_decl -> unit
 
-val format_verif_domain : Format.formatter -> Mast.verif_domain_decl -> unit
-
-val format_source_file : Format.formatter -> Mast.source_file -> unit
+val format_source_file : Pp.t -> Mast.source_file -> unit

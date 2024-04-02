@@ -25,6 +25,94 @@ module CatVar : sig
   }
 end
 
+(** Here are all the types a value can have. Date types don't seem to be used at
+    all though. *)
+type value_typ =
+  | Boolean
+  | DateYear
+  | DateDayMonthYear
+  | DateMonth
+  | Integer
+  | Real
+
+type loc_tgv = {
+  loc_id : string;
+  loc_cat : CatVar.loc;
+  loc_idx : int;
+  loc_int : int;
+}
+
+type loc =
+  | LocTgv of string * loc_tgv
+  | LocTmp of string * int
+  | LocIt of string * int
+
+module Var : sig
+  type id = string
+
+  type tgv = {
+    alias : string Pos.marked option;  (** Input variable have an alias *)
+    descr : string Pos.marked;
+        (** Description taken from the variable declaration *)
+    attrs : int Pos.marked StrMap.t;
+    cat : CatVar.t;
+    typ : value_typ option;
+  }
+
+  type scope = Tgv of tgv | Temp | It
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    id : id;
+    is_table : int option;
+    is_given_back : bool;
+    loc : loc;
+    scope : scope;
+  }
+
+  val tgv : t -> tgv
+
+  val alias : t -> string Pos.marked option
+
+  val alias_str : t -> string
+
+  val descr : t -> string Pos.marked
+
+  val descr_str : t -> string
+
+  val attrs : t -> int Pos.marked StrMap.t
+
+  val cat : t -> CatVar.t
+
+  val loc_tgv : t -> loc_tgv
+
+  val loc_int : t -> int
+
+  val is_temp : t -> bool
+
+  val is_it : t -> bool
+
+  val init_loc : loc_tgv
+
+  val new_tgv :
+    name:string Pos.marked ->
+    is_table:int option ->
+    is_given_back:bool ->
+    alias:string Pos.marked option ->
+    descr:string Pos.marked ->
+    attrs:int Pos.marked StrMap.t ->
+    cat:CatVar.t ->
+    typ:value_typ option ->
+    t
+
+  val new_temp :
+    name:string Pos.marked -> is_table:int option -> loc_int:int -> t
+
+  val new_it : name:string Pos.marked -> is_table:int option -> loc_int:int -> t
+
+  val compare : t -> t -> int
+end
+
 type literal = Float of float | Undefined
 
 (** The M language has an extremely odd way to specify looping. Rather than
@@ -141,35 +229,51 @@ type 'v print_arg =
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
+(** In the M language, you can define multiple variables at once. This is the
+    way they do looping since the definition can depend on the loop variable
+    value (e.g [Xi] can depend on [i]). *)
+
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl = 'v * 'v m_expression option * 'v m_expression
+type 'v formula_decl = 'v Pos.marked * 'v m_expression option * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
   | MultipleFormulaes of 'v formula_loop * 'v formula_decl
 
-type 'v instruction =
+type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
-      'v m_expression * 'v m_instruction list * 'v m_instruction list
+      'v m_expression
+      * ('v, 'e) m_instruction list
+      * ('v, 'e) m_instruction list
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
   | ComputeTarget of string Pos.marked
-  | VerifBlock of 'v m_instruction list
+  | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
-  | Iterate of 'v * Pos.t CatVar.Map.t * 'v m_expression * 'v m_instruction list
+  | Iterate of
+      'v Pos.marked
+      * Pos.t CatVar.Map.t
+      * 'v m_expression
+      * ('v, 'e) m_instruction list
   | Restore of
-      'v list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
-      * 'v m_instruction list
-  | RaiseError of Error.t * string Pos.marked option
+      'v Pos.marked list
+      * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v, 'e) m_instruction list
+  | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
 
-and 'v m_instruction = 'v instruction Pos.marked
+and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+
+val set_loc_int : loc -> int -> loc
+
+val set_loc_tgv : loc -> CatVar.loc -> int -> loc
+
+val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
 
@@ -192,7 +296,18 @@ val format_expression : (Pp.t -> 'v -> unit) -> Pp.t -> 'v expression -> unit
 
 val format_print_arg : (Pp.t -> 'v -> unit) -> Pp.t -> 'v print_arg -> unit
 
-val format_instruction : (Pp.t -> 'v -> unit) -> Pp.t -> 'v instruction -> unit
+val format_formula : (Pp.t -> 'v -> unit) -> Pp.t -> 'v formula -> unit
+
+val format_instruction :
+  (Pp.t -> 'v -> unit) ->
+  (Pp.t -> 'e -> unit) ->
+  Pp.t ->
+  ('v, 'e) instruction ->
+  unit
 
 val format_instructions :
-  (Pp.t -> 'v -> unit) -> Pp.t -> 'v m_instruction list -> unit
+  (Pp.t -> 'v -> unit) ->
+  (Pp.t -> 'e -> unit) ->
+  Pp.t ->
+  ('v, 'e) m_instruction list ->
+  unit

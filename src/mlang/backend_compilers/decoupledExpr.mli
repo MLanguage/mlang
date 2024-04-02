@@ -1,7 +1,7 @@
 type offset =
   | GetValueConst of int
   | GetValueExpr of string
-  | GetValueVar of Mir.Var.t
+  | GetValueVar of Com.Var.t
   | PassPointer
   | None
 
@@ -10,7 +10,7 @@ val generate_variable :
   offset ->
   ?def_flag:bool ->
   ?trace_flag:bool ->
-  Mir.Var.t ->
+  Com.Var.t ->
   string
 
 type dflag = Def | Val
@@ -67,7 +67,7 @@ val dfalse : constr
 val lit : float -> constr
 (** Float literal *)
 
-val m_var : Mir.Var.t -> offset -> dflag -> constr
+val m_var : Com.Var.t -> offset -> dflag -> constr
 (** Value from TGV. [m_var v off df] represents an access to the TGV variable
     [v] with [df] to read defineness or valuation. [off] is the access type for
     M array, and should be [None] most of the time. For array access, see
@@ -114,7 +114,7 @@ val dfun : string -> constr list -> constr
 val dinstr : string -> constr
 (** Direct instruction *)
 
-val access : Mir.Var.t -> dflag -> constr -> constr
+val access : Com.Var.t -> dflag -> constr -> constr
 (** Arbitrary access to M TGV variable. Either defineness of valuation *)
 
 val ite : constr -> constr -> constr -> constr

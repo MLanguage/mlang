@@ -33,7 +33,7 @@ module type S = sig
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_it : Mir.Var.t Array.t;
+    ctx_it : Com.Var.t Array.t;
     mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
@@ -107,7 +107,7 @@ struct
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_it : Mir.Var.t Array.t;
+    ctx_it : Com.Var.t Array.t;
     mutable ctx_it_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
@@ -123,7 +123,7 @@ struct
 
   let empty_ctx (p : Mir.program) : ctx =
     let dummy_var =
-      Mir.Var.new_it ~name:("", Pos.no_pos) ~is_table:None ~loc_int:(-1)
+      Com.Var.new_it ~name:("", Pos.no_pos) ~is_table:None ~loc_int:(-1)
     in
     {
       ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
@@ -164,8 +164,8 @@ struct
         inputs
     in
     Mir.VariableMap.iter
-      (fun (var : Mir.Var.t) value ->
-        ctx.ctx_tgv.(Mir.Var.loc_int var) <- value)
+      (fun (var : Com.Var.t) value ->
+        ctx.ctx_tgv.(Com.Var.loc_int var) <- value)
       value_inputs
 
   type run_error =
@@ -203,16 +203,16 @@ struct
     | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
     | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
-  let rec get_var ctx (var : Mir.Var.t) =
+  let rec get_var ctx (var : Com.Var.t) =
     match var.loc with
     | LocIt (_, i) -> get_var ctx ctx.ctx_it.(ctx.ctx_it_org + i)
     | _ -> var
 
-  let get_var_value ctx (var : Mir.Var.t) =
+  let get_var_value ctx (var : Com.Var.t) =
     let var = get_var ctx var in
-    if Mir.Var.is_temp var then
-      ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var)
-    else ctx.ctx_tgv.(Mir.Var.loc_int var)
+    if Com.Var.is_temp var then
+      ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var)
+    else ctx.ctx_tgv.(Com.Var.loc_int var)
 
   let get_var_tab ctx var idx =
     match idx with
@@ -225,9 +225,9 @@ struct
         else if N.(idx_f <. N.zero ()) then Number (N.zero ())
         else
           let i = Int64.to_int (N.to_int idx_f) in
-          if Mir.Var.is_temp var then
-            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i)
-          else ctx.ctx_tgv.(Mir.Var.loc_int var + i)
+          if Com.Var.is_temp var then
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var + i)
+          else ctx.ctx_tgv.(Com.Var.loc_int var + i)
 
   let rec evaluate_expr (ctx : ctx) (p : Mir.program)
       (e : Mir.expression Pos.marked) : value =
@@ -410,7 +410,7 @@ struct
         | FuncCall (_func, _) -> assert false
         | Attribut (var, a) -> (
             let var = get_var ctx (Pos.unmark var) in
-            match StrMap.find_opt (Pos.unmark a) (Mir.Var.attrs var) with
+            match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
             | Some l -> Number (N.of_float (float (Pos.unmark l)))
             | None -> Undefined)
         | Size var -> (
@@ -453,25 +453,25 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  let set_var_value (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
+  let set_var_value (p : Mir.program) (ctx : ctx) (var : Com.Var.t)
       (vexpr : Mir.expression Pos.marked) : unit =
     let value = evaluate_expr ctx p vexpr in
     match var.is_table with
     | None ->
-        if Mir.Var.is_temp var then
-          ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var) <- value
-        else ctx.ctx_tgv.(Mir.Var.loc_int var) <- value
+        if Com.Var.is_temp var then
+          ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var) <- value
+        else ctx.ctx_tgv.(Com.Var.loc_int var) <- value
     | Some sz ->
-        if Mir.Var.is_temp var then
+        if Com.Var.is_temp var then
           for i = 0 to sz - 1 do
-            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i) <- value
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var + i) <- value
           done
         else
           for i = 0 to sz - 1 do
-            ctx.ctx_tgv.(Mir.Var.loc_int var + i) <- value
+            ctx.ctx_tgv.(Com.Var.loc_int var + i) <- value
           done
 
-  let set_var_value_tab (p : Mir.program) (ctx : ctx) (var : Mir.Var.t)
+  let set_var_value_tab (p : Mir.program) (ctx : ctx) (var : Com.Var.t)
       (ei : Mir.expression Pos.marked) (vexpr : Mir.expression Pos.marked) :
       unit =
     match evaluate_expr ctx p ei with
@@ -481,17 +481,17 @@ struct
         let sz = match var.is_table with None -> 1 | Some sz -> sz in
         if 0 <= i && i < sz then
           let value = evaluate_expr ctx p vexpr in
-          if Mir.Var.is_temp var then
-            ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int var + i) <- value
-          else ctx.ctx_tgv.(Mir.Var.loc_int var + i) <- value
+          if Com.Var.is_temp var then
+            ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var + i) <- value
+          else ctx.ctx_tgv.(Com.Var.loc_int var + i) <- value
 
   exception BlockingError
 
   let rec evaluate_stmt (canBlock : bool) (p : Mir.program) (ctx : ctx)
       (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
-    | Com.Affectation (Com.SingleFormula (var, vidx_opt, vexpr), _) -> (
-        let var = get_var ctx var in
+    | Com.Affectation (Com.SingleFormula (m_var, vidx_opt, vexpr), _) -> (
+        let var = get_var ctx (Pos.unmark m_var) in
         match vidx_opt with
         | None -> set_var_value p ctx var vexpr
         | Some ei -> set_var_value_tab p ctx var ei vexpr)
@@ -536,7 +536,7 @@ struct
           aux 0
         in
         List.iter
-          (fun (arg : Mir.Var.t Com.print_arg Pos.marked) ->
+          (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
             | PrintString s -> pr_raw ctx_pr s
             | PrintName (var, _) ->
@@ -544,7 +544,7 @@ struct
                 pr_raw ctx_pr (Pos.unmark var.name)
             | PrintAlias (var, _) ->
                 let var = get_var ctx var in
-                pr_raw ctx_pr (Mir.Var.alias_str var)
+                pr_raw ctx_pr (Com.Var.alias_str var)
             | PrintIndent e ->
                 let diff =
                   match evaluate_expr ctx p e with
@@ -557,14 +557,15 @@ struct
                 pr_indent ctx_pr;
                 format_value_prec mi ma std_fmt value)
           args
-    | Com.Iterate ((var : Mir.Var.t), vcs, expr, stmts) ->
+    | Com.Iterate ((m_var : Com.Var.t Pos.marked), vcs, expr, stmts) ->
+        let var = Pos.unmark m_var in
         let var_i =
           match var.loc with LocIt (_, i) -> i | _ -> assert false
         in
         let eval vc _ =
           StrMap.iter
             (fun _ v ->
-              if Com.CatVar.compare (Mir.Var.cat v) vc = 0 then (
+              if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
                 ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
                 match evaluate_expr ctx p expr with
                 | Number z when N.(z =. one ()) ->
@@ -576,16 +577,16 @@ struct
     | Com.Restore (vars, var_params, stmts) ->
         let backup =
           List.fold_left
-            (fun backup (v : Mir.Var.t) ->
-              let v = get_var ctx v in
+            (fun backup (m_v : Com.Var.t Pos.marked) ->
+              let v = m_v |> Pos.unmark |> get_var ctx in
               let sz = match v.is_table with None -> 1 | Some sz -> sz in
               let rec aux backup i =
                 if i = sz then backup
                 else
                   let value =
-                    if Mir.Var.is_temp v then
-                      ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int v + i)
-                    else ctx.ctx_tgv.(Mir.Var.loc_int v + i)
+                    if Com.Var.is_temp v then
+                      ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int v + i)
+                    else ctx.ctx_tgv.(Com.Var.loc_int v + i)
                   in
                   aux ((v, i, value) :: backup) (i + 1)
               in
@@ -594,7 +595,8 @@ struct
         in
         let backup =
           List.fold_left
-            (fun backup ((var : Mir.Var.t), vcs, expr) ->
+            (fun backup ((m_var : Com.Var.t Pos.marked), vcs, expr) ->
+              let var = Pos.unmark m_var in
               let var_i =
                 match var.loc with LocIt (_, i) -> i | _ -> assert false
               in
@@ -602,7 +604,7 @@ struct
                 (fun vc _ backup ->
                   StrMap.fold
                     (fun _ v backup ->
-                      if Com.CatVar.compare (Mir.Var.cat v) vc = 0 then (
+                      if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
                         ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
                         match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
@@ -613,10 +615,10 @@ struct
                               if i = sz then backup
                               else
                                 let value =
-                                  if Mir.Var.is_temp v then
+                                  if Com.Var.is_temp v then
                                     ctx.ctx_tmps.(ctx.ctx_tmps_org
-                                                  + Mir.Var.loc_int v + i)
-                                  else ctx.ctx_tgv.(Mir.Var.loc_int v + i)
+                                                  + Com.Var.loc_int v + i)
+                                  else ctx.ctx_tgv.(Com.Var.loc_int v + i)
                                 in
                                 aux ((v, i, value) :: backup) (i + 1)
                             in
@@ -629,12 +631,13 @@ struct
         in
         evaluate_stmts canBlock p ctx stmts;
         List.iter
-          (fun ((v : Mir.Var.t), i, value) ->
-            if Mir.Var.is_temp v then
-              ctx.ctx_tmps.(ctx.ctx_tmps_org + Mir.Var.loc_int v + i) <- value
-            else ctx.ctx_tgv.(Mir.Var.loc_int v + i) <- value)
+          (fun ((v : Com.Var.t), i, value) ->
+            if Com.Var.is_temp v then
+              ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int v + i) <- value
+            else ctx.ctx_tgv.(Com.Var.loc_int v + i) <- value)
           backup
-    | Com.RaiseError (err, var_opt) ->
+    | Com.RaiseError (m_err, var_opt) ->
+        let err = Pos.unmark m_err in
         (match err.typ with
         | Com.Error.Anomaly -> ctx.ctx_nb_anos <- ctx.ctx_nb_anos + 1
         | Com.Error.Discordance -> ctx.ctx_nb_discos <- ctx.ctx_nb_discos + 1
@@ -812,10 +815,10 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Mir.VariableMap.t)
   Interp.update_ctx_with_inputs ctx inputs;
   Interp.evaluate_program p ctx;
   let varMap =
-    let fold name (var : Mir.Var.t) res =
+    let fold name (var : Com.Var.t) res =
       if var.is_given_back then
         let fVal =
-          let litt = ctx.ctx_tgv.(Mir.Var.loc_int var) in
+          let litt = ctx.ctx_tgv.(Com.Var.loc_int var) in
           match Interp.value_to_literal litt with
           | Com.Float f -> Some f
           | Com.Undefined -> None

@@ -58,11 +58,7 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-(** A table index is used in expressions like [TABLE\[X\]], and can be
-    variables, integer or the special [X] variable that stands for a "generic"
-    index (to define table values as a function of the index). [X] is contained
-    here in [SymbolIndex] because there can also be a variable named ["X"]... *)
-type table_index = LiteralIndex of int | SymbolIndex of variable
+let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
 type table_size = LiteralSize of int | SymbolSize of string
 
@@ -92,49 +88,16 @@ type m_expression = expression Pos.marked
 (** The rule is the main feature of the M language. It defines the expression of
     one or several variables. *)
 
-(** In the M language, you can define multiple variables at once. This is the
-    way they do looping since the definition can depend on the loop variable
-    value (e.g [Xi] can depend on [i]). *)
+type instruction = (variable, error_name) Com.instruction
 
-type formula_loop = variable Com.loop_variables Pos.marked
-
-type formula_decl = variable Pos.marked * m_expression option * m_expression
-
-type formula =
-  | SingleFormula of formula_decl
-  | MultipleFormulaes of formula_loop * formula_decl
-
-type instruction =
-  | Affectation of formula Pos.marked
-  | IfThenElse of m_expression * m_instruction list * m_instruction list
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
-  | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * m_expression
-  | VerifBlock of m_instruction list
-  | Print of Com.print_std * variable Com.print_arg Pos.marked list
-  | Iterate of
-      string Pos.marked
-      * Pos.t Com.CatVar.Map.t
-      * m_expression
-      * m_instruction list
-  | Restore of
-      string Pos.marked list
-      * (string Pos.marked * Pos.t Com.CatVar.Map.t * m_expression) list
-      * m_instruction list
-  | RaiseError of error_name Pos.marked * variable_name Pos.marked option
-  | CleanErrors
-  | ExportErrors
-  | FinalizeErrors
-
-and m_instruction = instruction Pos.marked
+type m_instruction = instruction Pos.marked
 
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
   rule_applications : application Pos.marked list;
   rule_chaining : chaining Pos.marked option;
-  rule_formulaes : formula Pos.marked list;
+  rule_formulaes : variable Com.formula Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
 
@@ -172,16 +135,6 @@ type rule_domain_decl = rule_domain_data domain_decl
 
 type variable_attribute = string Pos.marked * int Pos.marked
 
-(** Here are all the types a value can have. Date types don't seem to be used at
-    all though. *)
-type value_typ =
-  | Boolean
-  | DateYear
-  | DateDayMonthYear
-  | DateMonth
-  | Integer
-  | Real
-
 type input_variable = {
   input_name : variable_name Pos.marked;
   input_category : string Pos.marked list;
@@ -189,7 +142,7 @@ type input_variable = {
   input_alias : variable_name Pos.marked;  (** Unused for now *)
   input_is_givenback : bool;
   input_description : string Pos.marked;
-  input_typ : value_typ Pos.marked option;
+  input_typ : Com.value_typ Pos.marked option;
 }
 
 type computed_variable = {
@@ -198,7 +151,7 @@ type computed_variable = {
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
   comp_category : string Pos.marked list;
-  comp_typ : value_typ Pos.marked option;
+  comp_typ : Com.value_typ Pos.marked option;
   comp_is_givenback : bool;
   comp_description : string Pos.marked;
 }
