@@ -20,7 +20,8 @@ ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	opam install . --deps-only
-	git submodule update --init
+	git submodule init ir-calcul
+	git submodule update ir-calcul
 endif
 
 init: FORCE create-switch init-without-switch
@@ -30,7 +31,7 @@ ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	opam switch reinstall --deps-only
-	git submodule update
+	git submodule update ir-calcul
 endif
 
 ##################################################
