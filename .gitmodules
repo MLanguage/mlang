@@ -1,3 +1,6 @@
 [submodule "ir-calcul"]
 	path = ir-calcul
 	url = https://gitlab.adullact.net/dgfip/ir-calcul.git
+[submodule "mlang-deps"]
+	path = mlang-deps
+	url = https://forge.dgfip.finances.rie.gouv.fr/dgfip/si-1e/firsth/ir/calculette/mlang-deps.git
