@@ -43,8 +43,8 @@ else ifeq ($(YEAR), 2019)
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else
-	$(warning WARNING: there is no default configuration for year: $(YEAR))
-	$(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+    $(warning WARNING: there is no default configuration for year: $(YEAR))
+    $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
 ##################################################
