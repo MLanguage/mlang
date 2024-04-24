@@ -13,7 +13,14 @@ MUSL_HOME?=/usr/local/musl
 # Tax computation configuration
 ##################################################
 
-ifeq ($(YEAR), 2022)
+ifeq ($(YEAR), 2023)
+    $(warning WARNING: the source M files and fuzzer tests have not yet been published for year: 2023)
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2023/)
+# Add a TESTS_DIR when available
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
+else ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2022/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
