@@ -14,7 +14,14 @@ MUSL_HOME?=/usr/local/musl
 # Tax computation configuration
 ##################################################
 
-ifeq ($(YEAR), 2022)
+ifeq ($(YEAR), 2023)
+	$(warning WARNING: there is no default configuration for year: 2023, you have to provide your own source files)
+    $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+	SOURCE_FILES=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2023/)
+	MPP_FUNCTION_BACKEND?=enchainement_primitif
+	MPP_FUNCTION?=enchainement_primitif_interpreteur
+else ifeq ($(YEAR), 2022)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources2022m_6_1/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2022/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/2022/fuzzing
@@ -46,7 +53,7 @@ else
     $(warning WARNING: there is no default configuration for year: $(YEAR), you have to provide your own source files)
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 	SOURCE_FILES=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2022/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/default/)
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 endif
