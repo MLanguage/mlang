@@ -328,7 +328,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
       (D.format_assign dgfip_flags var_indexes val_var)
       value val_var;
   (* If the trace flag is set, we print the value of all non-temp variables *)
-  if dgfip_flags.flg_trace && not var.Mir.Variable.is_temp then
+  if dgfip_flags.flg_trace && not (Com.Var.is_temp var) then
     Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
       (Pos.unmark var.Com.Var.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)

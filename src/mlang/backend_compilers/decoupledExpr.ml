@@ -26,7 +26,7 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
           let access_val = Dgfip_varid.gen_access_val vm var offset in
           (* When the trace flag is present, we print the value of the
              non-temporary variable being used *)
-          if trace_flag && not var.Mir.Var.is_temp then
+          if trace_flag && not (Com.Var.is_temp var) then
             let vn = Pos.unmark var.Com.Var.name in
             let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm var in
             Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
