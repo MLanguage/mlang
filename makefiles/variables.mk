@@ -15,8 +15,7 @@ MUSL_HOME?=/usr/local/musl
 ##################################################
 
 ifeq ($(YEAR), 2023)
-    $(warning WARNING: there is no default configuration for year: 2023, you have to provide your own source files)
-    $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+    $(warning WARNING: the source M files and fuzzer tests have not yet been published for year: 2023)
 	SOURCE_FILES=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/2023/)
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
@@ -50,7 +49,7 @@ else ifeq ($(YEAR), 2019)
 	MPP_FUNCTION_BACKEND?=enchainement_primitif
 	MPP_FUNCTION?=enchainement_primitif_interpreteur
 else
-    $(warning WARNING: there is no default configuration for year: $(YEAR), you have to provide your own source files)
+    $(warning WARNING: there is no default configuration for year: $(YEAR))
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 	SOURCE_FILES=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/default/)
