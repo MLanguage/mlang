@@ -94,34 +94,6 @@ type gen_type =
   | Debug of int
 (* can be of any subtype *)
 
-let default_flags =
-  Dgfip_options.
-    {
-      nom_application = "";
-      annee_revenu = 0;
-      flg_correctif = true;
-      flg_iliad = false;
-      flg_pro = false;
-      flg_cfir = false;
-      flg_gcos = false;
-      flg_tri_ebcdic = false;
-      flg_multithread = false;
-      flg_short = false;
-      flg_register = false;
-      flg_optim_min_max = false;
-      flg_extraction = false;
-      flg_genere_libelle_restituee = false;
-      flg_controle_separe = false;
-      flg_controle_immediat = false;
-      flg_overlays = false;
-      flg_colors = false;
-      flg_ticket = false;
-      flg_trace = false;
-      flg_debug = false;
-      nb_debug_c = 0;
-      xflg = false;
-    }
-
 let is_input st = match st with Base | Computed -> false | _ -> true
 
 let is_computed st = match st with Base | Computed -> true | _ -> false
@@ -449,7 +421,6 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
     ~desc ~alias_opt =
   let var_name = if opt.with_alias then get_name name alias_opt else name in
 
-  (* TODO if flg_compact is used, then handle flat representation of TGV *)
   let kind, is_input =
     match (tvar : var_subtype) with
     | Computed -> ("EST_CALCULEE", false)
@@ -1363,9 +1334,7 @@ let gen_conf_h fmt flags vars =
   if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
   if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
-  if flags.flg_multithread then Format.fprintf fmt "#define FLG_MULTITHREAD\n";
   (* flag is not used *)
-  (*if flags.flg_compact then Format.fprintf fmt "#define FLG_COMPACT\n"; *)
   if flags.flg_short then Format.fprintf fmt "#define FLG_SHORT\n";
   if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
@@ -1432,24 +1401,6 @@ struct S_print_context {
 
 typedef struct S_print_context T_print_context;
 
-#ifdef FLG_COMPACT
-
-struct S_irdata {
-  double valeurs[NB_VARS];
-  char defs[NB_VARS];
-  T_print_context ctx_pr_out;
-  T_print_context ctx_pr_err;
-};
-
-#define S_ irdata->valeurs
-#define C_ irdata->valeurs
-#define B_ irdata->valeurs
-#define DS_ irdata->defs
-#define DC_ irdata->defs
-#define DB_ irdata->defs
-
-#else
-
 typedef void *T_var_irdata;
 
 struct S_erreur
@@ -1480,16 +1431,24 @@ struct S_irdata
   char *def_saisie;
   char *def_calculee;
   char *def_base;
-#ifdef FLG_MULTITHREAD
   T_discord *discords;
   T_discord *tas_discord;
   T_discord **p_discord;
   int nb_anos;
-  int nb_dicos;
+  int nb_discos;
   int nb_infos;
-  int nb_bloqus;
+  int nb_bloqs;
+  int max_bloqs;
   jmp_buf jmp_bloq;
-#endif /* FLG_MULTITHREAD */
+  int sz_err_finalise;
+  char **err_finalise;
+  int nb_err_finalise;
+  int sz_err_sortie;
+  char **err_sortie;
+  int nb_err_sortie;
+  int sz_err_archive;
+  char **err_archive;
+  int nb_err_archive;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
 };
@@ -1508,8 +1467,6 @@ typedef struct S_irdata T_irdata;
 #define EST_BASE      0x8000
 #define EST_MASQUE    0xc000
 #define INDICE_VAL    0x3fff
-
-#endif /* FLG_COMPACT */
 
 #define RESTITUEE    5
 #define RESTITUEE_P  6
@@ -1627,28 +1584,10 @@ extern int nb_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
 extern void finalise_erreur _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
-#ifdef FLG_MULTITHREAD
 extern void init_erreur(T_irdata *irdata);
-#else
-extern void init_erreur(void);
-#endif /* FLG_MULTITHREAD */
 |}
 
 let gen_decl_targets fmt (cprog : Mir.program) =
-  Format.fprintf fmt
-    {|#ifndef FLG_MULTITHREAD
-extern T_discord *discords;
-extern T_discord *tas_discord;
-extern T_discord **p_discord;
-extern int nb_anos;
-extern int nb_discos;
-extern int nb_infos;
-extern int nb_bloqs;
-extern jmp_buf jmp_bloq;
-#endif
-
-|};
-
   let targets = Mir.TargetMap.bindings cprog.program_targets in
   Format.fprintf fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (name, _) ->
@@ -1758,10 +1697,8 @@ static void add_erreur_code(T_erreur *erreur, const char *code) {
   }
 }
 
-#ifdef FLG_MULTITHREAD
-
 void init_erreur(T_irdata *irdata) {
-//  IRDATA_reset_erreur(irdata);
+/*  IRDATA_reset_erreur(irdata); */
   *irdata->p_discord = irdata->tas_discord;
   irdata->tas_discord = irdata->discords;
   irdata->discords = 0;
@@ -1770,6 +1707,7 @@ void init_erreur(T_irdata *irdata) {
   irdata->nb_discos = 0;
   irdata->nb_infos = 0;
   irdata->nb_bloqs = 0;
+  irdata->max_bloqs = 4;
 }
 
 void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
@@ -1794,8 +1732,8 @@ void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
   if (erreur->type == INFORMATIVE) irdata->nb_infos++;
 
   if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
-    irdata->nb_bloqus++;
-    if (irdata->nb_bloqus >= 4) {
+    irdata->nb_bloqs++;
+    if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
     }
   }
@@ -1816,97 +1754,8 @@ int nb_informatives(T_irdata *irdata) {
 }
 
 int nb_bloquantes(T_irdata *irdata) {
-  return irdata->nb_bloqus;
+  return irdata->nb_bloqs;
 }
-
-#else
-
-T_discord *discords = 0;
-T_discord *tas_discord = 0;
-T_discord **p_discord = &discords;
-int nb_anos = 0;
-int nb_discos = 0;
-int nb_infos = 0;
-int nb_bloqus = 0;
-jmp_buf jmp_bloq;
-
-
-void init_erreur(void) {
-  *p_discord = tas_discord;
-  tas_discord = discords;
-  discords = 0;
-  p_discord = &discords;
-  nb_anos = 0;
-  nb_discos = 0;
-  nb_infos = 0;
-  nb_bloqus = 0;
-}
-
-void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
-  T_discord *new_discord = NULL;
-
-  if (tas_discord == 0) {
-    new_discord = (T_discord *)malloc(sizeof(T_discord));
-  } else {
-    new_discord = tas_discord;
-    tas_discord = new_discord->suivant;
-  }
-
-  add_erreur_code(erreur, code);
-
-  new_discord->erreur = erreur;
-  new_discord->suivant = 0;
-  *p_discord = new_discord;
-  p_discord = &new_discord->suivant;
-
-  if (erreur->type == ANOMALIE) nb_anos++;
-  if (erreur->type == DISCORDANCE) nb_discos++;
-  if (erreur->type == INFORMATIVE) nb_infos++;
-
-  if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
-    nb_bloqus++;
-    if (nb_bloqus >= 4) {
-      longjmp(jmp_bloq, 1);
-    }
-  }
-}
-
-void free_erreur() {
-  T_discord *temp_discords = discords;
-  T_discord *dd = NULL;
-  char *debut = NULL;
-  int i = 0;
-
-  while (temp_discords != NULL) {
-    dd = temp_discords;
-    temp_discords = temp_discords->suivant;
-    if (dd->erreur->message != NULL) {
-      debut = strstr(dd->erreur->message, " ((");
-      if (debut != NULL) {
-        free(dd->erreur->message);
-      }
-      dd->erreur->message = NULL;
-    }
-  }
-}
-
-int nb_anomalies(T_irdata *irdata) {
-  return nb_anos;
-}
-
-int nb_discordances(T_irdata *irdata) {
-  return nb_discos;
-}
-
-int nb_informatives(T_irdata *irdata) {
-  return nb_infos;
-}
-
-int nb_bloquantes(T_irdata *irdata) {
-  return nb_bloqus;
-}
-
-#endif /* FLG_MULTITHREAD */
 
 #ifdef FLG_TRACE
 
@@ -1952,10 +1801,6 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
 #endif /* FLG_COLORS */
     expr = 0;
   }
-#ifdef FLG_COMPACT
-  valeur = irdata->valeurs[indice + expr];
-  def = irdata->defs[indice + expr];
-#else
   switch (indice & EST_MASQUE) {
     case EST_SAISIE:
       valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
@@ -1970,7 +1815,6 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
       def = irdata->def_base[(indice & INDICE_VAL) + expr];
       break;
   }
-#endif /* FLG_COMPACT */
   if (is_tab) {
     if (def == 0) {
       if (valeur != 0) {
@@ -2190,11 +2034,7 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
 void nettoie_erreur(irdata)
 T_irdata *irdata;
 {
-#ifdef FLG_MULTITHREAD
   init_erreur(irdata);
-#else
-  init_erreur();
-#endif /* FLG_MULTITHREAD */
 }
 |}
 
