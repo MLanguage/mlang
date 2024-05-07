@@ -409,15 +409,9 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let goto_label = fresh_c_local "verif_block" in
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@\n";
-      pr "#ifdef FLG_MULTITHREAD@\n";
       pr "  if (setjmp(irdata->jmp_bloq) != 0) {@\n";
       pr "    goto %s;@\n" goto_label;
       pr "  }@\n";
-      pr "#else@\n";
-      pr "  if (setjmp(jmp_bloq) != 0) {@\n";
-      pr "    goto %s;@\n" goto_label;
-      pr "  }@\n";
-      pr "#endif@\n";
       pr "%a@\n" (generate_stmts dgfip_flags program var_indexes) stmts;
       pr "%s:;@]@\n}@\n" goto_label
   | ComputeTarget (f, _) -> Format.fprintf oc "%s(irdata);" f
@@ -639,11 +633,7 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     target_prog
     (if dgfip_flags.flg_trace then "aff1(\"fin " ^ f ^ "\\n\") ;" else "")
     {|
-#ifdef FLG_MULTITHREAD
       return irdata->discords;
-#else
-      return discords;
-#endif
 |}
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)

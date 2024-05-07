@@ -612,22 +612,23 @@ cherche_var(
 }
 
 CAMLprim value
-ml_init_errs(value unit)
+ml_init_errs(value mlTgv)
 {
-  CAMLparam1(unit);
-  for (int i = 0; i < sz_err_finalise; i++) {
-    err_finalise[i] = NULL;
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  for (int i = 0; i < tgv->sz_err_finalise; i++) {
+    tgv->err_finalise[i] = NULL;
   }
-  nb_err_finalise = 0;
-  for (int i = 0; i < sz_err_sortie; i++) {
-    err_sortie[i] = NULL;
+  tgv->nb_err_finalise = 0;
+  for (int i = 0; i < tgv->sz_err_sortie; i++) {
+    tgv->err_sortie[i] = NULL;
   }
-  nb_err_sortie = 0;
-  for (int i = 0; i < sz_err_archive; i++) {
-    err_archive[i] = NULL;
+  tgv->nb_err_sortie = 0;
+  for (int i = 0; i < tgv->sz_err_archive; i++) {
+    tgv->err_archive[i] = NULL;
   }
-  nb_err_archive = 0;
-  CAMLreturn(unit);
+  tgv->nb_err_archive = 0;
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value
@@ -640,14 +641,15 @@ ml_export_errs(value mlTgv)
 }
 
 CAMLprim value
-ml_get_err_list(value unit)
+ml_get_err_list(value mlTgv)
 {
-  CAMLparam1(unit);
+  CAMLparam1(mlTgv);
   CAMLlocal2(res, cons);
   res = Val_emptylist;
-  for (int i = 0; i < nb_err_sortie; ++i) {
+  T_irdata *tgv = Tgv_val(mlTgv);
+  for (int i = 0; i < tgv->nb_err_sortie; ++i) {
     cons = caml_alloc_small(2, Tag_cons);
-    Field(cons, 0) = caml_copy_string(err_sortie[i]);
+    Field(cons, 0) = caml_copy_string(tgv->err_sortie[i]);
     Field(cons, 1) = res;
     res = cons;
   }
@@ -655,19 +657,20 @@ ml_get_err_list(value unit)
 }
 
 CAMLprim value
-ml_free_errs(value unit)
+ml_free_errs(value mlTgv)
 {
-  CAMLparam1(unit);
-  if (err_finalise != NULL) {
-    free(err_finalise);
+  CAMLparam1(mlTgv);
+  T_irdata *tgv = Tgv_val(mlTgv);
+  if (tgv->err_finalise != NULL) {
+    free(tgv->err_finalise);
   }
-  if (err_sortie  != NULL) {
-    free(err_sortie);
+  if (tgv->err_sortie  != NULL) {
+    free(tgv->err_sortie);
   }
-  if (err_archive  != NULL) {
-    free(err_archive);
+  if (tgv->err_archive  != NULL) {
+    free(tgv->err_archive);
   }
-  CAMLreturn(unit);
+  CAMLreturn(Val_unit);
 }
 
 CAMLprim value
