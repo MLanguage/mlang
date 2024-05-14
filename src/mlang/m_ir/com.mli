@@ -48,29 +48,37 @@ type loc =
   | LocIt of string * int
 
 module Var : sig
-  type id = string
+  type id = int
 
   type tgv = {
+    is_table : int option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
     cat : CatVar.t;
+    is_given_back : bool;
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp | It
+  type scope = Tgv of tgv | Temp of int option | It
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
-    is_table : int option;
-    is_given_back : bool;
     loc : loc;
     scope : scope;
   }
 
   val tgv : t -> tgv
+
+  val name : t -> string Pos.marked
+
+  val name_str : t -> string
+
+  val is_table : t -> int option
+
+  val size : t -> int
 
   val alias : t -> string Pos.marked option
 
@@ -83,6 +91,8 @@ module Var : sig
   val attrs : t -> int Pos.marked StrMap.t
 
   val cat : t -> CatVar.t
+
+  val is_given_back : t -> bool
 
   val loc_tgv : t -> loc_tgv
 
@@ -108,9 +118,17 @@ module Var : sig
   val new_temp :
     name:string Pos.marked -> is_table:int option -> loc_int:int -> t
 
-  val new_it : name:string Pos.marked -> is_table:int option -> loc_int:int -> t
+  val new_it : name:string Pos.marked -> loc_int:int -> t
+
+  val pp : Format.formatter -> t -> unit
 
   val compare : t -> t -> int
+
+  module Set : SetExt.T with type elt = t
+
+  module Map : sig
+    include MapExt.T with type key = t
+  end
 end
 
 type literal = Float of float | Undefined

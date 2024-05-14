@@ -97,7 +97,7 @@ let rec generate_java_expr (e : Mir.expression Pos.marked) :
   | Index (var, e) ->
       let se, s = generate_java_expr e in
       let unmarked_var = Pos.unmark var in
-      let size = Option.get unmarked_var.is_table in
+      let size = Option.get (Com.Var.is_table unmarked_var) in
       let se2, s2 =
         ( Format.asprintf "m_array_index(tgv, %d ,%s, %d)"
             (get_var_pos unmarked_var) se size,

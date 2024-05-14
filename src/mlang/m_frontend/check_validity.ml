@@ -791,7 +791,7 @@ let complete_vars (prog : program) : program =
         in
         CatLocMap.update loc_cat upd loc_vars
       in
-      let sz = match var.is_table with None -> 1 | Some sz -> sz in
+      let sz = Com.Var.size var in
       let sz_loc_vars =
         let upd = function
           | None -> Some sz
@@ -805,9 +805,10 @@ let complete_vars (prog : program) : program =
   in
   let update_loc loc_cat (var : Com.Var.t) (vars, n) =
     let loc = Com.set_loc_tgv var.loc loc_cat n in
-    let vars = StrMap.add var.id Com.Var.{ var with loc } vars in
-    let sz = match var.is_table with None -> 1 | Some sz -> sz in
-    (vars, n + sz)
+    let vars =
+      StrMap.add (Com.Var.name_str var) Com.Var.{ var with loc } vars
+    in
+    (vars, n + Com.Var.size var)
   in
   let prog_vars =
     CatLocMap.fold
@@ -1192,8 +1193,8 @@ let check_variable (var : Mast.variable Pos.marked)
     match var_data with
     | Normal vn -> (
         match StrMap.find_opt vn env.prog.prog_vars with
-        | Some Com.Var.{ name = _, decl_pos; is_table; _ } ->
-            (vn, OneOf is_table, decl_pos)
+        | Some v ->
+            (vn, OneOf (Com.Var.is_table v), Pos.get_position (Com.Var.name v))
         | None -> (
             match StrMap.find_opt vn env.tmp_vars with
             | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
@@ -2080,7 +2081,7 @@ let eval_expr_verif (prog : program) (verif : verif)
           | Mast.Normal var -> var
           | _ -> assert false
         in
-        match (StrMap.find var prog.prog_vars).Com.Var.is_table with
+        match Com.Var.is_table (StrMap.find var prog.prog_vars) with
         | Some sz -> Some (float sz)
         | None -> Some 1.0)
     | NbCategory cs ->

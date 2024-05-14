@@ -157,7 +157,7 @@ let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
         let var = StrMap.find v_name var_data in
         if Com.Var.is_it var then Size (Pos.same_pos_as var v)
         else
-          match var.is_table with
+          match Com.Var.is_table var with
           | Some i -> Literal (Float (float_of_int i))
           | None -> Literal (Float 1.0))
     | NbAnomalies -> NbAnomalies
@@ -262,10 +262,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             in
             Errors.raise_spanned_error msg pos
         | _ -> ());
-        let var =
-          Com.Var.new_it ~name:(var_name, var_pos) ~is_table:None
-            ~loc_int:it_depth
-        in
+        let var = Com.Var.new_it ~name:(var_name, var_pos) ~loc_int:it_depth in
         let var_data = StrMap.add var_name var var_data in
         let catSet = Check_validity.mast_to_catvars vcats cats in
         let mir_expr = translate_expression cats var_data expr in
@@ -289,8 +286,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
               let var_pos = Pos.get_position vn in
               let var_name = Mast.get_normal_var (Pos.unmark vn) in
               let var =
-                Com.Var.new_it ~name:(var_name, var_pos) ~is_table:None
-                  ~loc_int:it_depth
+                Com.Var.new_it ~name:(var_name, var_pos) ~loc_int:it_depth
               in
               let var_data = StrMap.add var_name var var_data in
               let catSet = Check_validity.mast_to_catvars vcats cats in
@@ -337,8 +333,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
               Com.Var.new_temp ~name:(name, pos) ~is_table:size' ~loc_int:n
             in
             let tmp_var_data = StrMap.add name var tmp_var_data in
-            let sz = match var.is_table with None -> 1 | Some sz -> sz in
-            (tmp_var_data, n + sz))
+            (tmp_var_data, n + Com.Var.size var))
           target_tmp_vars
           (var_data, -target_sz_tmps)
       in

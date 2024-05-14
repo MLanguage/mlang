@@ -89,7 +89,9 @@ let gen_access_pos_from_start vm (v : Com.Var.t) =
 
 let gen_size vm (v : Com.Var.t) =
   let get_size (v : Com.Var.t) =
-    match v.is_table with Some i -> Format.sprintf "%d" i | None -> "1"
+    match Com.Var.is_table v with
+    | Some i -> Format.sprintf "%d" i
+    | None -> "1"
   in
   if Com.Var.is_temp v then get_size v
   else

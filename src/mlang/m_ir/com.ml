@@ -101,24 +101,31 @@ type loc =
   | LocIt of string * int
 
 module Var = struct
-  type id = string
+  type id = int
+
+  let id_cpt = ref 0
+
+  let new_id () =
+    let id = !id_cpt in
+    incr id_cpt;
+    id
 
   type tgv = {
+    is_table : int option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
     attrs : int Pos.marked StrMap.t;
     cat : CatVar.t;
+    is_given_back : bool;
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp | It
+  type scope = Tgv of tgv | Temp of int option | It
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
-    is_table : int option;
-    is_given_back : bool;
     loc : loc;
     scope : scope;
   }
@@ -129,6 +136,18 @@ module Var = struct
     | _ ->
         Errors.raise_error
           (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let name v = v.name
+
+  let name_str v = Pos.unmark v.name
+
+  let is_table v =
+    match v.scope with
+    | Tgv tgv -> tgv.is_table
+    | Temp is_table -> is_table
+    | It -> None
+
+  let size v = match is_table v with None -> 1 | Some sz -> sz
 
   let alias v = (tgv v).alias
 
@@ -142,6 +161,8 @@ module Var = struct
 
   let cat v = (tgv v).cat
 
+  let is_given_back v = (tgv v).is_given_back
+
   let loc_tgv v =
     match v.loc with
     | LocTgv (_, l) -> l
@@ -154,7 +175,7 @@ module Var = struct
     | LocTgv (_, tgv) -> tgv.loc_int
     | LocTmp (_, li) | LocIt (_, li) -> li
 
-  let is_temp v = v.scope = Temp
+  let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
   let is_it v = v.scope = It
 
@@ -167,42 +188,58 @@ module Var = struct
       ~(cat : CatVar.t) ~(typ : value_typ option) : t =
     {
       name;
-      id = Pos.unmark name;
-      is_table;
-      is_given_back;
+      id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc);
-      scope = Tgv { alias; descr; attrs; cat; typ };
+      scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
     }
 
   let new_temp ~(name : string Pos.marked) ~(is_table : int option)
       ~(loc_int : int) : t =
     let loc = LocTmp (Pos.unmark name, loc_int) in
-    {
-      name;
-      id = Pos.unmark name;
-      is_table;
-      is_given_back = false;
-      loc;
-      scope = Temp;
-    }
+    { name; id = new_id (); loc; scope = Temp is_table }
 
-  let new_it ~(name : string Pos.marked) ~(is_table : int option)
-      ~(loc_int : int) : t =
+  let new_it ~(name : string Pos.marked) ~(loc_int : int) : t =
     let loc = LocIt (Pos.unmark name, loc_int) in
-    {
-      name;
-      id = Pos.unmark name;
-      is_table;
-      is_given_back = false;
-      loc;
-      scope = It;
-    }
+    { name; id = new_id (); loc; scope = It }
 
-  let int_of_scope = function Tgv _ -> 0 | Temp -> 1 | It -> 2
+  let int_of_scope = function Tgv _ -> 0 | Temp _ -> 1 | It -> 2
 
   let compare (var1 : t) (var2 : t) =
     let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
     if c <> 0 then c else compare var1.id var2.id
+
+  let pp fmt (v : t) = Format.fprintf fmt "(%d)%s" v.id (Pos.unmark v.name)
+
+  type t_var = t
+
+  let pp_var = pp
+
+  let compare_var = compare
+
+  module Set = struct
+    include SetExt.Make (struct
+      type t = t_var
+
+      let compare = compare_var
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = pp_var) (_ : unit) (fmt : Format.formatter)
+        (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type t = t_var
+
+      let compare = compare_var
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = pp_var) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
 end
 
 type literal = Float of float | Undefined
