@@ -98,7 +98,7 @@ type rule = {
   rule_apps : application Pos.marked StrMap.t;
   rule_chaining : chaining Pos.marked option;
   rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
-  rule_formulaes : variable Com.formula Pos.marked list;
+  rule_formulaes : instruction Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
 

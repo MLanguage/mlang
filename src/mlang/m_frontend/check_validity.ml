@@ -1624,11 +1624,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
           (sz, vpos))
         rule_tmp_vars
     in
-    let rule_instrs =
-      List.map
-        (fun f -> Pos.same_pos_as (Com.Affectation f) f)
-        r.Mast.rule_formulaes
-    in
+    let rule_instrs = r.Mast.rule_formulaes in
     let prog, rule_instrs, rule_in_vars, rule_out_vars =
       let env = { prog; tmp_vars; it_vars = StrMap.empty } in
       check_instructions rule_instrs true env

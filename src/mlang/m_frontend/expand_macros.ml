@@ -478,11 +478,6 @@ let expand_formula (const_map : const_context)
       let res = loop_context_provider translator in
       List.rev res @ prev
 
-let expand_formulaes (const_map : const_context)
-    (forms : Mast.variable Com.formula Pos.marked list) :
-    Mast.variable Com.formula Pos.marked list =
-  List.fold_left (expand_formula const_map) [] (List.rev forms)
-
 let rec expand_instruction (const_map : const_context)
     (prev : Mast.instruction Pos.marked list)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
@@ -562,10 +557,18 @@ let proceed (p : Mast.program) : Mast.program =
                       (const_map, prog_file)
                   | _ -> (const_map, source_item :: prog_file))
               | Mast.Rule rule ->
-                  let rule_formulaes =
-                    expand_formulaes const_map rule.Mast.rule_formulaes
+                  let rule_tmp_vars =
+                    StrMap.map
+                      (fun (name, tsz) ->
+                        (name, expand_table_size const_map tsz))
+                      rule.Mast.rule_tmp_vars
                   in
-                  let rule' = { rule with Mast.rule_formulaes } in
+                  let rule_formulaes =
+                    expand_instructions const_map rule.Mast.rule_formulaes
+                  in
+                  let rule' =
+                    { rule with Mast.rule_tmp_vars; Mast.rule_formulaes }
+                  in
                   let prog_file = (Mast.Rule rule', pos_item) :: prog_file in
                   (const_map, prog_file)
               | Mast.Verification verif ->

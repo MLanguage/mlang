@@ -383,7 +383,7 @@ input_variable:
 rule_etc:
 | RULE name = symbol_list_with_pos COLON
   header = nonempty_list(with_pos(rule_header_elt))
-  formulaes_etc = formula_list_etc
+  formulaes_etc = instruction_list_etc
   {
     let num, rule_tag_names =
       let uname = Pos.unmark name in
@@ -806,13 +806,6 @@ rest_param:
 
 rest_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
-
-formula_list_etc:
-| f = with_pos(formula_kind) SEMICOLON l = with_pos(symbol_colon_etc)* { [f], l }
-| f = with_pos(formula_kind) SEMICOLON fs = formula_list_etc {
-    let fl, l = fs in
-    f :: fl, l
-  }
 
 formula_kind:
 | f = formula { SingleFormula f }

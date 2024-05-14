@@ -55,9 +55,7 @@ let format_rule fmt (r : rule) =
   Format.fprintf fmt "regle %d:\napplication %a;\n%a;\n"
     (Pos.unmark r.rule_number)
     (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
-    r.rule_apps
-    (Pp.list ";\n" (Pp.unmark (Com.format_formula format_variable)))
-    r.rule_formulaes
+    r.rule_apps format_instruction_list r.rule_formulaes
 
 let format_table_size fmt = function
   | Some (Mast.LiteralSize i, _) -> Format.fprintf fmt "[%d]" i

@@ -57,11 +57,13 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
       match Pos.unmark item with
       | Rule r when Pos.unmark r.rule_number = 1 ->
           let fl =
-            [
-              mk_assign "APPLI_OCEANS" oceans;
-              mk_assign "APPLI_BATCH" batch;
-              mk_assign "APPLI_ILIAD" iliad;
-            ]
+            List.map
+              (fun f -> Pos.same_pos_as (Com.Affectation f) f)
+              [
+                mk_assign "APPLI_OCEANS" oceans;
+                mk_assign "APPLI_BATCH" batch;
+                mk_assign "APPLI_ILIAD" iliad;
+              ]
           in
           ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
             Pos.get_position item )
