@@ -926,8 +926,8 @@ let gen_decl_varinfos fmt stats =
         id_str)
     stats
 
-let is_valid_app al =
-  List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al
+let is_valid_app apps = StrMap.mem "iliad" apps
+(*  List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al *)
 
 (* Retrieve rules, verifications, errors and chainings from a program *)
 let get_rules_verif_etc prog =
@@ -940,7 +940,7 @@ let get_rules_verif_etc prog =
             match Pos.unmark item with
             | Rule r ->
                 let rules, chainings =
-                  if is_valid_app r.rule_applications then
+                  if is_valid_app r.rule_apps then
                     ( Pos.unmark r.rule_number :: rules,
                       match r.rule_chaining with
                       | None -> chainings
@@ -950,7 +950,7 @@ let get_rules_verif_etc prog =
                 (rules, verifs, errors, chainings)
             | Verification v ->
                 let verifs =
-                  if is_valid_app v.verif_applications then
+                  if is_valid_app v.verif_apps then
                     fst
                     @@ List.fold_left
                          (fun (verifs, vn) _vc -> (vn :: verifs, vn + 1))

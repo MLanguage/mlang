@@ -54,8 +54,8 @@ let format_instruction_list fmt (il : instruction Pos.marked list) =
 let format_rule fmt (r : rule) =
   Format.fprintf fmt "regle %d:\napplication %a;\n%a;\n"
     (Pos.unmark r.rule_number)
-    (Pp.list_comma (Pp.unmark Pp.string))
-    r.rule_applications
+    (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
+    r.rule_apps
     (Pp.list ";\n" (Pp.unmark (Com.format_formula format_variable)))
     r.rule_formulaes
 
@@ -120,8 +120,8 @@ let format_verification_condition fmt (vc : verification_condition) =
 let format_verification fmt (v : verification) =
   Format.fprintf fmt "verif %d : %a;\n%a"
     (Pos.unmark v.verif_number)
-    (Pp.list_space (Pp.unmark format_application))
-    v.verif_applications
+    (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
+    v.verif_apps
     (Pp.list_space (Pp.unmark format_verification_condition))
     v.verif_conditions
 

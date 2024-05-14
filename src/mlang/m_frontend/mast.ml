@@ -95,8 +95,9 @@ type m_instruction = instruction Pos.marked
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
-  rule_applications : application Pos.marked list;
+  rule_apps : application Pos.marked StrMap.t;
   rule_chaining : chaining Pos.marked option;
+  rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
   rule_formulaes : variable Com.formula Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
@@ -193,7 +194,7 @@ type verification_condition = {
 type verification = {
   verif_number : int Pos.marked;
   verif_tag_names : string Pos.marked list Pos.marked;
-  verif_applications : application Pos.marked list;
+  verif_apps : application Pos.marked StrMap.t;
       (** Verification conditions are application-specific *)
   verif_conditions : verification_condition Pos.marked list;
 }

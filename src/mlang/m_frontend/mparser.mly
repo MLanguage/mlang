@@ -81,6 +81,9 @@ symbol_with_pos:
 symbol_list_with_pos:
 | sl = with_pos(symbol_with_pos+) { sl }
 
+variable_name:
+| s = SYMBOL { parse_variable_name $sloc s }
+
 source_file:
 | vl = with_pos(symbol_colon_etc)* is = source_file_rev EOF {
     List.flatten (vl :: List.rev is)
@@ -255,9 +258,6 @@ chaining:
     Chaining (s, aps)
   }
 
-chaining_reference:
-| CHAINING COLON c = with_pos(SYMBOL) SEMICOLON { c }
-
 variable_decl:
 | v = with_pos(comp_variable) { VariableDecl (ComputedVar v) }
 | cv = const_variable { let n, v = cv in VariableDecl (ConstVar (n, v)) }
@@ -381,8 +381,8 @@ input_variable:
   }
 
 rule_etc:
-| RULE name = symbol_list_with_pos COLON apps = application_reference
-  SEMICOLON c = chaining_reference?
+| RULE name = symbol_list_with_pos COLON
+  header = nonempty_list(with_pos(rule_header_elt))
   formulaes_etc = formula_list_etc
   {
     let num, rule_tag_names =
@@ -408,53 +408,181 @@ rule_etc:
           "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
-    let formulaes, l = formulaes_etc in 
+    let rule_apps, rule_chaining, rule_tmp_vars =
+      let rec aux apps_opt ch_opt vars_opt = function
+      | (`Applications apps', pos) :: h ->
+          let apps_opt' =
+            match apps_opt with
+            | None -> Some (apps', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "application list already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt' ch_opt vars_opt h
+      | (`Chaining ch', pos) :: h ->
+          let ch_opt' =
+            match ch_opt with
+            | None -> Some ch'
+            | Some ch ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "this rule already belong to chaining %s %a"
+                    (Pos.unmark ch)
+                    Pos.format_position (Pos.get_position ch))
+                  pos
+          in
+          aux apps_opt ch_opt' vars_opt h
+      | (`TmpVars vars', pos) :: h ->
+          let vars_opt' =
+            match vars_opt with
+            | None -> Some (vars', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "temporary variables already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt ch_opt vars_opt' h
+      | [] ->
+          let apps =
+            match apps_opt with
+            | Some (apps, _) ->
+                List.fold_left
+                  (fun res (app, pos) ->
+                    match StrMap.find_opt app res with
+                    | Some (_, old_pos) ->
+                        let msg =
+                          Format.asprintf "application %s already declared %a"
+                            app
+                            Pos.format_position old_pos
+                        in
+                        Errors.raise_spanned_error msg pos
+                    | None -> StrMap.add app (app, pos) res)
+                  StrMap.empty
+                  apps
+            | None ->
+                Errors.raise_spanned_error
+                "this rule doesn't belong to an application"
+                (Pos.get_position num)
+          in
+          let vars =
+            List.fold_left
+              (fun res (vnm, vt) ->
+                let vn, pos = vnm in
+                match StrMap.find_opt vn res with
+                | Some ((_, old_pos), _) ->
+                    let msg =
+                      Format.asprintf
+                        "temporary variable %s already declared %a"
+                        vn
+                        Pos.format_position old_pos
+                    in
+                    Errors.raise_spanned_error msg pos
+                | None -> StrMap.add vn (vnm, vt) res)
+              StrMap.empty
+              (match vars_opt with None -> [] | Some (l, _) -> l)
+          in
+          apps, ch_opt, vars
+      in
+      aux None None None header
+    in
+    let rule_formulaes, l = formulaes_etc in 
     let rule = {
       rule_number;
       rule_tag_names;
-      rule_applications = apps;
-      rule_chaining = c;
-      rule_formulaes =  formulaes;
+      rule_apps;
+      rule_chaining;
+      rule_tmp_vars;
+      rule_formulaes;
     } in
     Pos.same_pos_as (Rule rule) name :: l
   }
 
+rule_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
+| CHAINING COLON ch = with_pos(SYMBOL) SEMICOLON { `Chaining ch }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { `TmpVars tmp_vars }
+
 target_etc:
 | TARGET name = symbol_with_pos COLON
-  apps = application_reference SEMICOLON
-  tmp_vars = temporary_variables_decl?
+  header = nonempty_list(with_pos(target_header_elt))
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
-    let target_apps = 
-      List.fold_left (
-        fun res (app, pos) ->
-          match StrMap.find_opt app res with
-          | Some (_, old_pos) ->
-              let msg =
-                Format.asprintf "application %s already declared %a"
-                  app
-                  Pos.format_position old_pos
-              in
-              Errors.raise_spanned_error msg pos
-          | None -> StrMap.add app (app, pos) res)
-        StrMap.empty apps
-    in
-    let target_tmp_vars = 
-      List.fold_left (
-        fun res (vnm, vt) ->
-          let vn, pos = vnm in
-          match StrMap.find_opt vn res with
-          | Some ((_, old_pos), _) ->
-              let msg =
-                Format.asprintf "temporary variable %s already declared %a"
-                  vn
-                  Pos.format_position old_pos
-              in
-              Errors.raise_spanned_error msg pos
-          | None -> StrMap.add vn (vnm, vt) res)
-        StrMap.empty
-        (match tmp_vars with None -> [] | Some l -> l)
+    let target_apps, target_tmp_vars =
+      let rec aux apps_opt vars_opt = function
+      | (`Applications apps', pos) :: h ->
+          let apps_opt' =
+            match apps_opt with
+            | None -> Some (apps', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "application list already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt' vars_opt h
+      | (`TmpVars vars', pos) :: h ->
+          let vars_opt' =
+            match vars_opt with
+            | None -> Some (vars', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "temporary variables already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt vars_opt' h
+      | [] ->
+          let apps =
+            match apps_opt with
+            | Some (apps, _) ->
+                List.fold_left
+                  (fun res (app, pos) ->
+                    match StrMap.find_opt app res with
+                    | Some (_, old_pos) ->
+                        let msg =
+                          Format.asprintf "application %s already declared %a"
+                            app
+                            Pos.format_position old_pos
+                        in
+                        Errors.raise_spanned_error msg pos
+                    | None -> StrMap.add app (app, pos) res)
+                  StrMap.empty
+                  apps
+            | None ->
+                Errors.raise_spanned_error
+                "this target doesn't belong to an application"
+                (Pos.get_position name)
+          in
+          let vars =
+            List.fold_left
+              (fun res (vnm, vt) ->
+                let vn, pos = vnm in
+                match StrMap.find_opt vn res with
+                | Some ((_, old_pos), _) ->
+                    let msg =
+                      Format.asprintf
+                        "temporary variable %s already declared %a"
+                        vn
+                        Pos.format_position old_pos
+                    in
+                    Errors.raise_spanned_error msg pos
+                | None -> StrMap.add vn (vnm, vt) res)
+              StrMap.empty
+              (match vars_opt with None -> [] | Some (l, _) -> l)
+          in
+          apps, vars
+      in
+      aux None None header
     in
     let target = {
       target_name = name;
@@ -469,16 +597,17 @@ target_etc:
     Pos.same_pos_as (Target target) name :: l
   }
 
+target_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { `TmpVars tmp_vars }
+
 temporary_variable_name:
 | name = symbol_with_pos size = with_pos(comp_variable_table)? {
     let name_str, name_pos = name in
     (parse_variable_name $sloc name_str, name_pos), size
   }
-
-temporary_variables_decl:
-| VARIABLE TEMPORARY COLON
-  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
-    { tmp_vars }
 
 instruction_list_etc:
 | i = with_pos(instruction) l = with_pos(symbol_colon_etc)* { [i], l }
@@ -566,7 +695,7 @@ instruction:
     in
     Restore (List.rev var_list, List.rev var_cats, List.rev instrs)
   }
-| RAISE_ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
+| RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     RaiseError (e_name, var)
   }
 | CLEAN_ERRORS SEMICOLON { CleanErrors }
@@ -708,8 +837,8 @@ verification_etc:
 | v = with_pos(verification) l = with_pos(symbol_colon_etc)* { v :: l }
 
 verification:
-| VERIFICATION name = symbol_list_with_pos
-  COLON verif_applications = application_reference SEMICOLON
+| VERIFICATION name = symbol_list_with_pos COLON
+  APPLICATION COLON apps = symbol_enumeration SEMICOLON
   verif_conditions = with_pos(verification_condition)+ {
     let num, verif_tag_names =
       let uname = Pos.unmark name in
@@ -734,10 +863,31 @@ verification:
           "this verification doesn't have an execution number"
           (Pos.get_position num)
     in
+    let verif_apps =
+      match apps with
+      | [] ->
+          Errors.raise_spanned_error
+            "this verification doesn't belong to an application"
+            (Pos.get_position verif_number)
+      | _ ->
+        List.fold_left
+          (fun res (app, pos) ->
+            match StrMap.find_opt app res with
+            | Some (_, old_pos) ->
+                let msg =
+                  Format.asprintf "application %s already declared %a"
+                    app
+                    Pos.format_position old_pos
+                in
+                Errors.raise_spanned_error msg pos
+            | None -> StrMap.add app (app, pos) res)
+          StrMap.empty
+          apps
+    in
     let verif = {
       verif_number;
       verif_tag_names;
-      verif_applications;
+      verif_apps;
       verif_conditions
     } in
     Verification verif
@@ -745,7 +895,7 @@ verification:
 
 verification_condition:
 | IF e = with_pos(expression) THEN
-  ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
+  ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     {
       verif_cond_expr = e;
       verif_cond_error = e_name, var;
@@ -788,10 +938,7 @@ output_etc:
 | o = with_pos(output) l = with_pos(symbol_colon_etc)* { o :: l }
 
 output:
-| OUTPUT LPAREN s = with_pos(output_name) RPAREN SEMICOLON { Output s }
-
-output_name:
-| s = SYMBOL { parse_variable_name $sloc s }
+| OUTPUT LPAREN s = with_pos(variable_name) RPAREN SEMICOLON { Output s }
 
 brackets:
 | LBRACKET i = expression RBRACKET { i }
