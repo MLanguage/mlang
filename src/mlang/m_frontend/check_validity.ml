@@ -307,6 +307,8 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Mir.rule_domain;
   rule_chain : string option;
+  rule_tmp_vars :
+    (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : StrSet.t;
@@ -1552,12 +1554,12 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   let id, id_pos = r.Mast.rule_number in
   let rule_id = (id, id_pos) in
   let rule_apps =
-    List.fold_left
-      (fun rule_apps (app, app_pos) ->
+    StrMap.fold
+      (fun _ (app, app_pos) rule_apps ->
         match StrMap.find_opt app prog.prog_apps with
         | None -> Err.unknown_application app_pos
         | Some _ -> StrMap.add app app_pos rule_apps)
-      StrMap.empty r.Mast.rule_applications
+      r.Mast.rule_apps StrMap.empty
   in
   if StrMap.mem prog.prog_app rule_apps then (
     let rdom_id =
@@ -1601,13 +1603,34 @@ let check_rule (r : Mast.rule) (prog : program) : program =
                 (Some ch_name, prog_chainings)
               else (None, prog.prog_chainings))
     in
+    let rule_tmp_vars = r.Mast.rule_tmp_vars in
+    StrMap.iter
+      (fun _ ((vn, vpos), _) ->
+        match StrMap.find_opt vn prog.prog_vars with
+        | Some Com.Var.{ name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      rule_tmp_vars;
+    let tmp_vars =
+      StrMap.map
+        (fun (var, size) ->
+          let vpos = Pos.get_position var in
+          let sz =
+            match size with
+            | None -> None
+            | Some (Mast.LiteralSize i, _) -> Some i
+            | Some (Mast.SymbolSize _, _) -> assert false
+          in
+          (sz, vpos))
+        rule_tmp_vars
+    in
     let rule_instrs =
       List.map
         (fun f -> Pos.same_pos_as (Com.Affectation f) f)
         r.Mast.rule_formulaes
     in
     let prog, rule_instrs, rule_in_vars, rule_out_vars =
-      let env = { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty } in
+      let env = { prog; tmp_vars; it_vars = StrMap.empty } in
       check_instructions rule_instrs true env
     in
     let rule_seq, prog = get_seq prog in
@@ -1617,6 +1640,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
         rule_apps;
         rule_domain;
         rule_chain;
+        rule_tmp_vars;
         rule_instrs;
         rule_in_vars;
         rule_out_vars;
@@ -1646,7 +1670,7 @@ let convert_rules (prog : program) : program =
               target_name = (tname, Pos.no_pos);
               target_file;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
-              target_tmp_vars = StrMap.empty;
+              target_tmp_vars = rule.rule_tmp_vars;
               target_prog = rule.rule_instrs;
               target_nb_tmps = 0;
               target_sz_tmps = 0;
@@ -1904,12 +1928,12 @@ let complete_chainings (prog : program) : program =
 
 let check_verif (v : Mast.verification) (prog : program) : program =
   let verif_apps =
-    List.fold_left
-      (fun verif_apps (app, app_pos) ->
+    StrMap.fold
+      (fun _ (app, app_pos) verif_apps ->
         match StrMap.find_opt app prog.prog_apps with
         | None -> Err.unknown_application app_pos
         | Some _ -> StrMap.add app app_pos verif_apps)
-      StrMap.empty v.Mast.verif_applications
+      v.Mast.verif_apps StrMap.empty
   in
   if StrMap.mem prog.prog_app verif_apps then
     let vdom_id =

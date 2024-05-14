@@ -27,6 +27,8 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Mir.rule_domain;
   rule_chain : string option;
+  rule_tmp_vars :
+    (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : StrSet.t;
