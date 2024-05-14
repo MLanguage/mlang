@@ -122,9 +122,7 @@ struct
   }
 
   let empty_ctx (p : Mir.program) : ctx =
-    let dummy_var =
-      Com.Var.new_it ~name:("", Pos.no_pos) ~is_table:None ~loc_int:(-1)
-    in
+    let dummy_var = Com.Var.new_it ~name:("", Pos.no_pos) ~loc_int:(-1) in
     {
       ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
@@ -220,7 +218,7 @@ struct
     | Number f ->
         let var = get_var ctx (Pos.unmark var) in
         let idx_f = roundf f in
-        let sz = match var.is_table with None -> 1 | Some sz -> sz in
+        let sz = Com.Var.size var in
         if N.(idx_f >=. N.of_int (Int64.of_int sz)) then Undefined
         else if N.(idx_f <. N.zero ()) then Number (N.zero ())
         else
@@ -415,7 +413,7 @@ struct
             | None -> Undefined)
         | Size var -> (
             let var = get_var ctx (Pos.unmark var) in
-            match var.is_table with
+            match Com.Var.is_table var with
             | Some i -> Number (N.of_float (float_of_int i))
             | None -> Number (N.of_float 1.0))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
@@ -456,7 +454,7 @@ struct
   let set_var_value (p : Mir.program) (ctx : ctx) (var : Com.Var.t)
       (vexpr : Mir.expression Pos.marked) : unit =
     let value = evaluate_expr ctx p vexpr in
-    match var.is_table with
+    match Com.Var.is_table var with
     | None ->
         if Com.Var.is_temp var then
           ctx.ctx_tmps.(ctx.ctx_tmps_org + Com.Var.loc_int var) <- value
@@ -478,7 +476,7 @@ struct
     | Undefined -> ()
     | Number f ->
         let i = int_of_float (N.to_float f) in
-        let sz = match var.is_table with None -> 1 | Some sz -> sz in
+        let sz = Com.Var.size var in
         if 0 <= i && i < sz then
           let value = evaluate_expr ctx p vexpr in
           if Com.Var.is_temp var then
@@ -579,9 +577,8 @@ struct
           List.fold_left
             (fun backup (m_v : Com.Var.t Pos.marked) ->
               let v = m_v |> Pos.unmark |> get_var ctx in
-              let sz = match v.is_table with None -> 1 | Some sz -> sz in
               let rec aux backup i =
-                if i = sz then backup
+                if i = Com.Var.size v then backup
                 else
                   let value =
                     if Com.Var.is_temp v then
@@ -608,11 +605,8 @@ struct
                         ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
                         match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
-                            let sz =
-                              match v.is_table with None -> 1 | Some sz -> sz
-                            in
                             let rec aux backup i =
-                              if i = sz then backup
+                              if i = Com.Var.size v then backup
                               else
                                 let value =
                                   if Com.Var.is_temp v then
@@ -816,7 +810,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Mir.VariableMap.t)
   Interp.evaluate_program p ctx;
   let varMap =
     let fold name (var : Com.Var.t) res =
-      if var.is_given_back then
+      if Com.Var.is_given_back var then
         let fVal =
           let litt = ctx.ctx_tgv.(Com.Var.loc_int var) in
           match Interp.value_to_literal litt with
