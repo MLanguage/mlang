@@ -937,7 +937,6 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
     (fun _ (id_str, id_int, _, _) ->
       Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
     stats;
-  Format.fprintf fmt "\n";
 
   let attrs =
     Com.CatVar.Map.fold
@@ -947,8 +946,8 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   in
   StrSet.iter
     (fun attr ->
-      Format.fprintf fmt "extern char attribut_%s_def(T_varinfo *vi);\n" attr;
-      Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n\n" attr)
+      Format.fprintf fmt "\nextern char attribut_%s_def(T_varinfo *vi);\n" attr;
+      Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
     attrs
 
 let is_valid_app apps = StrMap.mem "iliad" apps
@@ -1537,8 +1536,7 @@ let gen_lib fmt flags vars rules verifs chainings errors =
   let nb_verif = List.length verifs in
 
   Format.fprintf fmt
-    {|
-#define TAILLE_SAISIE %d
+    {|#define TAILLE_SAISIE %d
 #define TAILLE_CALCULEE %d
 #define TAILLE_BASE %d
 #define TAILLE_TOTALE %d
