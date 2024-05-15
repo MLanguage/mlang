@@ -837,26 +837,38 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
 #include "mlang.h"
 
 |};
-  Com.CatVar.Map.iter
-    (fun _ Com.CatVar.{ id_str; attributs; _ } ->
-      Format.fprintf fmt
-        "char attribut_%s_def(T_varinfo_%s *vi, char *attr) {\n" id_str id_str;
-      StrMap.iter
-        (fun attr _ ->
-          Format.fprintf fmt "  if (strcmp(attr, \"%s\") == 0) return 1;\n" attr)
-        attributs;
+  let attrs =
+    Com.CatVar.Map.fold
+      (fun _ Com.CatVar.{ attributs; _ } res ->
+        StrMap.fold (fun attr _ res -> StrSet.add attr res) attributs res)
+      cprog.program_var_categories StrSet.empty
+  in
+  StrSet.iter
+    (fun attr ->
+      Format.fprintf fmt "char attribut_%s_def(T_varinfo *vi) {\n" attr;
+      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Com.CatVar.Map.iter
+        (fun _ Com.CatVar.{ id_str; attributs; _ } ->
+          if StrMap.mem attr attributs then
+            Format.fprintf fmt "    case ID_%s: return 1;\n" id_str)
+        cprog.program_var_categories;
+      Format.fprintf fmt "  }\n";
       Format.fprintf fmt "  return 0;\n";
       Format.fprintf fmt "}\n\n";
-      Format.fprintf fmt "double attribut_%s(T_varinfo_%s *vi, char *attr) {\n"
-        id_str id_str;
-      StrMap.iter
-        (fun attr _ ->
-          Format.fprintf fmt "  if (strcmp(attr, \"%s\") == 0) return vi->%s;\n"
-            attr attr)
-        attributs;
+      Format.fprintf fmt "double attribut_%s(T_varinfo *vi) {\n" attr;
+      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Com.CatVar.Map.iter
+        (fun _ Com.CatVar.{ id_str; attributs; _ } ->
+          if StrMap.mem attr attributs then (
+            Format.fprintf fmt "    case ID_%s:\n" id_str;
+            Format.fprintf fmt "      return ((T_varinfo_%s *)vi)->attr_%s;\n"
+              id_str attr))
+        cprog.program_var_categories;
+      Format.fprintf fmt "  }\n";
       Format.fprintf fmt "  return 0.0;\n";
       Format.fprintf fmt "}\n\n")
-    cprog.program_var_categories;
+    attrs;
+
   let var_dict =
     StrMap.fold
       (fun _ var dict ->
@@ -885,7 +897,17 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
     (gen_table_varinfo fmt var_dict)
     cprog.program_var_categories Com.CatVar.Map.empty
 
-let gen_decl_varinfos fmt stats =
+let gen_decl_varinfos fmt (cprog : Mir.program) stats =
+  Format.fprintf fmt
+    {|typedef struct S_varinfo {
+  char *name;
+  char *alias;
+  int idx;
+  int size;
+  int cat;
+} T_varinfo;
+
+|};
   Com.CatVar.Map.iter
     (fun _ (id_str, _, _, attr_set) ->
       Format.fprintf fmt
@@ -897,7 +919,7 @@ let gen_decl_varinfos fmt stats =
   int cat;
 |}
         id_str;
-      StrSet.iter (fun an -> Format.fprintf fmt "  int %s;\n" an) attr_set;
+      StrSet.iter (fun an -> Format.fprintf fmt "  int attr_%s;\n" an) attr_set;
       Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
   Format.fprintf fmt "\n";
@@ -916,18 +938,20 @@ let gen_decl_varinfos fmt stats =
       Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVar.Map.iter
-    (fun _ (id_str, _, _, _) ->
-      Format.fprintf fmt
-        "extern char attribut_%s_def(T_varinfo_%s *vi, char *attr);\n" id_str
-        id_str;
-      Format.fprintf fmt
-        "extern double attribut_%s(T_varinfo_%s *vi, char *attr);\n" id_str
-        id_str)
-    stats
+
+  let attrs =
+    Com.CatVar.Map.fold
+      (fun _ Com.CatVar.{ attributs; _ } res ->
+        StrMap.fold (fun attr _ res -> StrSet.add attr res) attributs res)
+      cprog.program_var_categories StrSet.empty
+  in
+  StrSet.iter
+    (fun attr ->
+      Format.fprintf fmt "extern char attribut_%s_def(T_varinfo *vi);\n" attr;
+      Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n\n" attr)
+    attrs
 
 let is_valid_app apps = StrMap.mem "iliad" apps
-(*  List.exists (fun a -> String.equal (Pos.unmark a) "iliad") al *)
 
 (* Retrieve rules, verifications, errors and chainings from a program *)
 let get_rules_verif_etc prog =
@@ -1620,7 +1644,7 @@ let gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
   pr "\n";
-  gen_decl_varinfos fmt stats_varinfos;
+  gen_decl_varinfos fmt cprog stats_varinfos;
   pr "\n";
   gen_lib fmt flags vars rules verifs chainings errors;
   pr "\n";

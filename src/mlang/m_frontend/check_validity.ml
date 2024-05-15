@@ -426,7 +426,7 @@ let empty_program (p : Mast.program) prog_app main_target =
         nb_input = 0;
         nb_vars = 0;
         nb_all_tmps = 0;
-        nb_all_its = 0;
+        nb_all_refs = 0;
         sz_calculated = 0;
         sz_base = 0;
         sz_input = 0;
@@ -853,12 +853,12 @@ let complete_vars (prog : program) : program =
         in
         StrMap.fold fold t.target_tmp_vars 0
       in
-      let target_nb_its = aux 0 t.target_prog in
-      { t with target_nb_tmps; target_sz_tmps; target_nb_its }
+      let target_nb_refs = aux 0 t.target_prog in
+      { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
     in
     StrMap.map map prog.prog_targets
   in
-  let nb_all_tmps, sz_all_tmps, nb_all_its =
+  let nb_all_tmps, sz_all_tmps, nb_all_refs =
     let rec aux (nb, sz, nbIt, tdata) = function
       | [] -> (nb, sz, nbIt, tdata)
       | (instr, _) :: il -> (
@@ -927,7 +927,7 @@ let complete_vars (prog : program) : program =
         nb_base = nb_loc Com.CatVar.LocBase;
         nb_vars = StrMap.cardinal prog_vars;
         nb_all_tmps;
-        nb_all_its;
+        nb_all_refs;
         sz_calculated = sz_loc Com.CatVar.LocCalculated;
         sz_input = sz_loc Com.CatVar.LocInput;
         sz_base = sz_loc Com.CatVar.LocBase;
@@ -1671,7 +1671,7 @@ let convert_rules (prog : program) : program =
               target_prog = rule.rule_instrs;
               target_nb_tmps = 0;
               target_sz_tmps = 0;
-              target_nb_its = 0;
+              target_nb_refs = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -1818,7 +1818,7 @@ let complete_rule_domains (prog : program) : program =
                 target_prog;
                 target_nb_tmps = 0;
                 target_sz_tmps = 0;
-                target_nb_its = 0;
+                target_nb_refs = 0;
               }
           in
           StrMap.add tname target prog_targets
@@ -1915,7 +1915,7 @@ let complete_chainings (prog : program) : program =
               target_prog;
               target_nb_tmps = 0;
               target_sz_tmps = 0;
-              target_nb_its = 0;
+              target_nb_refs = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2042,7 +2042,7 @@ let convert_verifs (prog : program) : program =
               target_prog;
               target_nb_tmps = 0;
               target_sz_tmps = 0;
-              target_nb_its = 0;
+              target_nb_refs = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2285,7 +2285,7 @@ let complete_verif_calls (prog : program) : program =
                   target_prog;
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
-                  target_nb_its = 0;
+                  target_nb_refs = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -2317,7 +2317,7 @@ let complete_verif_calls (prog : program) : program =
                   target_prog;
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
-                  target_nb_its = 0;
+                  target_nb_refs = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in

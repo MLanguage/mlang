@@ -109,7 +109,7 @@ type target = {
   target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
-  target_nb_its : int;
+  target_nb_refs : int;
   target_prog : instruction Pos.marked list;
 }
 

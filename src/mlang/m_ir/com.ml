@@ -98,7 +98,7 @@ type loc_tgv = {
 type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * int
-  | LocIt of string * int
+  | LocRef of string * int
 
 module Var = struct
   type id = int
@@ -121,7 +121,7 @@ module Var = struct
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp of int option | It
+  type scope = Tgv of tgv | Temp of int option | Ref
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
@@ -145,7 +145,7 @@ module Var = struct
     match v.scope with
     | Tgv tgv -> tgv.is_table
     | Temp is_table -> is_table
-    | It -> None
+    | Ref -> None
 
   let size v = match is_table v with None -> 1 | Some sz -> sz
 
@@ -173,11 +173,11 @@ module Var = struct
   let loc_int v =
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_int
-    | LocTmp (_, li) | LocIt (_, li) -> li
+    | LocTmp (_, li) | LocRef (_, li) -> li
 
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
-  let is_it v = v.scope = It
+  let is_ref v = v.scope = Ref
 
   let init_loc =
     { loc_id = ""; loc_cat = CatVar.LocInput; loc_idx = 0; loc_int = 0 }
@@ -198,11 +198,11 @@ module Var = struct
     let loc = LocTmp (Pos.unmark name, loc_int) in
     { name; id = new_id (); loc; scope = Temp is_table }
 
-  let new_it ~(name : string Pos.marked) ~(loc_int : int) : t =
-    let loc = LocIt (Pos.unmark name, loc_int) in
-    { name; id = new_id (); loc; scope = It }
+  let new_ref ~(name : string Pos.marked) ~(loc_int : int) : t =
+    let loc = LocRef (Pos.unmark name, loc_int) in
+    { name; id = new_id (); loc; scope = Ref }
 
-  let int_of_scope = function Tgv _ -> 0 | Temp _ -> 1 | It -> 2
+  let int_of_scope = function Tgv _ -> 0 | Temp _ -> 1 | Ref -> 2
 
   let compare (var1 : t) (var2 : t) =
     let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
@@ -393,12 +393,12 @@ let set_loc_int loc loc_int =
   match loc with
   | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
   | LocTmp (id, _) -> LocTmp (id, loc_int)
-  | LocIt (id, _) -> LocIt (id, loc_int)
+  | LocRef (id, _) -> LocRef (id, loc_int)
 
 let set_loc_tgv loc loc_cat loc_idx =
   match loc with
   | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_cat; loc_idx })
-  | LocTmp (id, _) | LocIt (id, _) ->
+  | LocTmp (id, _) | LocRef (id, _) ->
       Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
 
 let format_value_typ fmt t =

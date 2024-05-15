@@ -140,7 +140,7 @@ let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
         in
         match StrMap.find_opt v_name var_data with
         | Some var -> (
-            if Com.Var.is_it var then Attribut (Pos.same_pos_as var v, a)
+            if Com.Var.is_ref var then Attribut (Pos.same_pos_as var v, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
@@ -155,7 +155,7 @@ let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
           | _ -> assert false
         in
         let var = StrMap.find v_name var_data in
-        if Com.Var.is_it var then Size (Pos.same_pos_as var v)
+        if Com.Var.is_ref var then Size (Pos.same_pos_as var v)
         else
           match Com.Var.is_table var with
           | Some i -> Literal (Float (float_of_int i))
@@ -213,7 +213,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                        in
                        match StrMap.find_opt name var_data with
                        | Some var ->
-                           if Com.Var.is_it var then
+                           if Com.Var.is_ref var then
                              Com.PrintName (Pos.same_pos_as var v)
                            else Com.PrintString (Pos.unmark var.name)
                        | _ ->
@@ -229,7 +229,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                        in
                        match StrMap.find_opt name var_data with
                        | Some var ->
-                           if Com.Var.is_it var then
+                           if Com.Var.is_ref var then
                              Com.PrintAlias (Pos.same_pos_as var v)
                            else Com.PrintString (Com.Var.alias_str var)
                        | _ ->
@@ -262,7 +262,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             in
             Errors.raise_spanned_error msg pos
         | _ -> ());
-        let var = Com.Var.new_it ~name:(var_name, var_pos) ~loc_int:it_depth in
+        let var = Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth in
         let var_data = StrMap.add var_name var var_data in
         let catSet = Check_validity.mast_to_catvars vcats cats in
         let mir_expr = translate_expression cats var_data expr in
@@ -286,7 +286,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
               let var_pos = Pos.get_position vn in
               let var_name = Mast.get_normal_var (Pos.unmark vn) in
               let var =
-                Com.Var.new_it ~name:(var_name, var_pos) ~loc_int:it_depth
+                Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth
               in
               let var_data = StrMap.add var_name var var_data in
               let catSet = Check_validity.mast_to_catvars vcats cats in
@@ -358,7 +358,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             target_prog;
             target_nb_tmps = t.target_nb_tmps;
             target_sz_tmps;
-            target_nb_its = t.target_nb_its;
+            target_nb_refs = t.target_nb_refs;
           }
       in
       Mir.TargetMap.add (Pos.unmark target_name) target_data targets)
