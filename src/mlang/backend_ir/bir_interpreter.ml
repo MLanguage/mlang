@@ -33,8 +33,8 @@ module type S = sig
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_it : Com.Var.t Array.t;
-    mutable ctx_it_org : int;
+    ctx_ref : Com.Var.t Array.t;
+    mutable ctx_ref_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
@@ -107,8 +107,8 @@ struct
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_it : Com.Var.t Array.t;
-    mutable ctx_it_org : int;
+    ctx_ref : Com.Var.t Array.t;
+    mutable ctx_ref_org : int;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
@@ -122,13 +122,13 @@ struct
   }
 
   let empty_ctx (p : Mir.program) : ctx =
-    let dummy_var = Com.Var.new_it ~name:("", Pos.no_pos) ~loc_int:(-1) in
+    let dummy_var = Com.Var.new_ref ~name:("", Pos.no_pos) ~loc_int:(-1) in
     {
       ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
       ctx_tmps_org = 0;
-      ctx_it = Array.make p.program_stats.nb_all_its dummy_var;
-      ctx_it_org = 0;
+      ctx_ref = Array.make p.program_stats.nb_all_refs dummy_var;
+      ctx_ref_org = 0;
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
@@ -203,7 +203,7 @@ struct
 
   let rec get_var ctx (var : Com.Var.t) =
     match var.loc with
-    | LocIt (_, i) -> get_var ctx ctx.ctx_it.(ctx.ctx_it_org + i)
+    | LocRef (_, i) -> get_var ctx ctx.ctx_ref.(ctx.ctx_ref_org + i)
     | _ -> var
 
   let get_var_value ctx (var : Com.Var.t) =
@@ -558,13 +558,13 @@ struct
     | Com.Iterate ((m_var : Com.Var.t Pos.marked), vcs, expr, stmts) ->
         let var = Pos.unmark m_var in
         let var_i =
-          match var.loc with LocIt (_, i) -> i | _ -> assert false
+          match var.loc with LocRef (_, i) -> i | _ -> assert false
         in
         let eval vc _ =
           StrMap.iter
             (fun _ v ->
               if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
+                ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- v;
                 match evaluate_expr ctx p expr with
                 | Number z when N.(z =. one ()) ->
                     evaluate_stmts canBlock p ctx stmts
@@ -595,14 +595,14 @@ struct
             (fun backup ((m_var : Com.Var.t Pos.marked), vcs, expr) ->
               let var = Pos.unmark m_var in
               let var_i =
-                match var.loc with LocIt (_, i) -> i | _ -> assert false
+                match var.loc with LocRef (_, i) -> i | _ -> assert false
               in
               Com.CatVar.Map.fold
                 (fun vc _ backup ->
                   StrMap.fold
                     (fun _ v backup ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                        ctx.ctx_it.(ctx.ctx_it_org + var_i) <- v;
+                        ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- v;
                         match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
                             let rec aux backup i =
@@ -685,9 +685,9 @@ struct
       ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
     done;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + tf.target_sz_tmps;
-    ctx.ctx_it_org <- ctx.ctx_it_org + tf.target_nb_its;
+    ctx.ctx_ref_org <- ctx.ctx_ref_org + tf.target_nb_refs;
     evaluate_stmts canBlock p ctx tf.target_prog;
-    ctx.ctx_it_org <- ctx.ctx_it_org - tf.target_nb_its;
+    ctx.ctx_ref_org <- ctx.ctx_ref_org - tf.target_nb_refs;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org - tf.target_sz_tmps
 
   let evaluate_program (p : Mir.program) (ctx : ctx) : unit =

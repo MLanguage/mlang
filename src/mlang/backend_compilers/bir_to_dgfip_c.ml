@@ -263,26 +263,24 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
   | Var var ->
       { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
   | Attribut (var, a) ->
-      let ptr, var_cat_data =
+      let ptr =
         match Mir.VariableMap.find (Pos.unmark var) var_indexes with
-        | Dgfip_varid.VarIterate (t, _, vcd) -> (t, vcd)
+        | Dgfip_varid.VarRef (t, _, _) -> t
         | _ -> assert false
       in
-      let id_str = var_cat_data.id_str in
       let def_test =
         D.dinstr
-          (Format.sprintf "attribut_%s_def(%s, \"%s\")" id_str ptr
-             (Pos.unmark a))
+          (Format.sprintf "attribut_%s_def((T_varinfo *)%s)" (Pos.unmark a) ptr)
       in
       let value_comp =
         D.dinstr
-          (Format.sprintf "attribut_%s(%s, \"%s\")" id_str ptr (Pos.unmark a))
+          (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
       in
       D.build_transitive_composition { def_test; value_comp }
   | Size var ->
       let ptr =
         match Mir.VariableMap.find (Pos.unmark var) var_indexes with
-        | Dgfip_varid.VarIterate (t, _, _) -> t
+        | Dgfip_varid.VarRef (t, _, _) -> t
         | _ -> assert false
       in
       let def_test = D.dinstr "1.0" in
@@ -340,7 +338,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
   match vidx_opt with
   | None ->
       let se = generate_c_expr vexpr var_indexes in
-      if Com.Var.is_it var then (
+      if Com.Var.is_ref var then (
         let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
         let idx = fresh_c_local "idxPROUT" in
@@ -432,14 +430,14 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                 pr_ctx (str_escape s)
           | PrintName (var, _) -> begin
               match Mir.VariableMap.find var var_indexes with
-              | Dgfip_varid.VarIterate (t, _, _) ->
+              | Dgfip_varid.VarRef (t, _, _) ->
                   Format.fprintf oc "print_string(%s, %s, %s->name);@;"
                     print_std pr_ctx t
               | _ -> assert false
             end
           | PrintAlias (var, _) -> begin
               match Mir.VariableMap.find var var_indexes with
-              | Dgfip_varid.VarIterate (t, _, _) ->
+              | Dgfip_varid.VarRef (t, _, _) ->
                   Format.fprintf oc "print_string(%s, %s, %s->alias);@;"
                     print_std pr_ctx t
               | _ -> assert false
@@ -484,7 +482,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           let vcd = Com.CatVar.Map.find vc program.program_var_categories in
           let var_indexes =
             Mir.VariableMap.add var
-              (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.loc, vcd))
+              (Dgfip_varid.VarRef ("tab_" ^ it_name, vcd.loc, vcd))
               var_indexes
           in
           Format.fprintf oc "@[<v 2>{@;";
@@ -533,7 +531,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let vcd = Com.CatVar.Map.find vc program.program_var_categories in
               let var_indexes =
                 Mir.VariableMap.add var
-                  (Dgfip_varid.VarIterate ("tab_" ^ it_name, vcd.loc, vcd))
+                  (Dgfip_varid.VarRef ("tab_" ^ it_name, vcd.loc, vcd))
                   var_indexes
               in
               Format.fprintf oc "@[<v 2>{@;";

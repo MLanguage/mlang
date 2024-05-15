@@ -57,7 +57,7 @@ type target_data = {
   target_tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
-  target_nb_its : int;
+  target_nb_refs : int;
   target_prog : m_instruction list;
 }
 
@@ -74,7 +74,7 @@ type stats = {
   nb_input : int;
   nb_vars : int;
   nb_all_tmps : int;
-  nb_all_its : int;
+  nb_all_refs : int;
   sz_calculated : int;
   sz_base : int;
   sz_input : int;

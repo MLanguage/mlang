@@ -591,7 +591,7 @@ target_etc:
       target_tmp_vars;
       target_nb_tmps = -1;
       target_sz_tmps = -1;
-      target_nb_its = -1;
+      target_nb_refs = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
