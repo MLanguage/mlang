@@ -308,18 +308,18 @@ let rec generate_c_expr (e : Mir.expression Pos.marked)
 let generate_m_assign (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : Com.Var.t) (offset : D.offset)
     (oc : Format.formatter) (se : D.expression_composition) : unit =
+  let pr form = Format.fprintf oc form in
   let def_var = D.generate_variable ~def_flag:true var_indexes offset var in
   let val_var = D.generate_variable var_indexes offset var in
   let locals, def, value = D.build_expression se in
   if D.is_always_true def then
-    Format.fprintf oc "%a%a@,@[<v 2>{@,%a@,@]}" D.format_local_declarations
-      locals
+    pr "%a%a@;@[<v 2>{@;%a@]@;}" D.format_local_declarations locals
       (D.format_assign dgfip_flags var_indexes def_var)
       def
       (D.format_assign dgfip_flags var_indexes val_var)
       value
   else
-    Format.fprintf oc "%a%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
+    pr "%a%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
       D.format_local_declarations locals
       (D.format_assign dgfip_flags var_indexes def_var)
       def def_var
@@ -327,7 +327,7 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags)
       value val_var;
   (* If the trace flag is set, we print the value of all non-temp variables *)
   if dgfip_flags.flg_trace && not (Com.Var.is_temp var) then
-    Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
+    pr "@;aff2(\"%s\", irdata, %s);"
       (Pos.unmark var.Com.Var.name)
       (Dgfip_varid.gen_access_pos_from_start var_indexes var)
 
@@ -335,11 +335,11 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
     (var_indexes : Dgfip_varid.var_id_map) (var : Com.Var.t)
     (vidx_opt : Mir.expression Pos.marked option)
     (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
+  let pr form = Format.fprintf fmt form in
   match vidx_opt with
   | None ->
       let se = generate_c_expr vexpr var_indexes in
       if Com.Var.is_ref var then (
-        let pr form = Format.fprintf fmt form in
         pr "@[<v 2>{";
         let idx = fresh_c_local "idxPROUT" in
         pr "@;int %s;" idx;
@@ -350,37 +350,37 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags)
           (generate_m_assign dgfip_flags var_indexes var (GetValueExpr idx))
           se;
         pr "@]@;}";
-        pr "@]@;}@;")
+        pr "@]@;}")
       else generate_m_assign dgfip_flags var_indexes var None fmt se
   | Some ei ->
-      Format.fprintf fmt "@[<v 2>{@,";
+      pr "@[<v 2>{@,";
       let idx_val = fresh_c_local "mpp_idx" in
       let idx_def = idx_val ^ "_d" in
       let locals_idx, def_idx, value_idx =
         D.build_expression @@ generate_c_expr ei var_indexes
       in
-      Format.fprintf fmt "char %s;@;long %s;@;%a%a@;%a" idx_def idx_val
+      pr "char %s;@;long %s;@;%a%a@;%a" idx_def idx_val
         D.format_local_declarations locals_idx
         (D.format_assign dgfip_flags var_indexes idx_def)
         def_idx
         (D.format_assign dgfip_flags var_indexes idx_val)
         value_idx;
       let size = Dgfip_varid.gen_size var_indexes var in
-      Format.fprintf fmt "@[<hov 2>if(%s && 0 <= %s && %s < %s){@,%a@]@,}"
-        idx_def idx_val idx_val size
+      pr "@[<v 2>if(%s && 0 <= %s && %s < %s){@,%a@]@,}" idx_def idx_val idx_val
+        size
         (generate_m_assign dgfip_flags var_indexes var (GetValueExpr idx_val))
         (generate_c_expr vexpr var_indexes);
-      Format.fprintf fmt "@]@,}"
+      pr "@]@,}"
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (var_indexes : Dgfip_varid.var_id_map)
     (oc : Format.formatter) (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
   | Affectation (SingleFormula (m_var, vidx_opt, vexpr), _) ->
-      Format.fprintf oc "@[<v 2>{@,";
+      Format.fprintf oc "@[<v 2>{@;";
       generate_var_def dgfip_flags var_indexes (Pos.unmark m_var) vidx_opt vexpr
         oc;
-      Format.fprintf oc "@]@,}"
+      Format.fprintf oc "@]@;}"
   | Affectation _ -> assert false
   | IfThenElse (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
@@ -389,29 +389,29 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let locals, def, value =
         D.build_expression @@ generate_c_expr cond var_indexes
       in
-      Format.fprintf oc "char %s;@;double %s;@;%a%a@;%a" cond_def cond_val
+      Format.fprintf oc "char %s;@;double %s;@;%a%a@;%a@;" cond_def cond_val
         D.format_local_declarations locals
         (D.format_assign dgfip_flags var_indexes cond_def)
         def
         (D.format_assign dgfip_flags var_indexes cond_val)
         value;
-      Format.fprintf oc "@[<hov 2>if(%s && %s){@,%a@]@,}" cond_def cond_val
+      Format.fprintf oc "@[<v 2>if(%s && %s) {@,%a@]@,}" cond_def cond_val
         (generate_stmts dgfip_flags program var_indexes)
         iftrue;
       if iffalse <> [] then
-        Format.fprintf oc "@[<hov 2>else if(%s){@,%a@]@,}" cond_def
+        Format.fprintf oc "@[<v 2>else if(%s){@,%a@]@,}" cond_def
           (generate_stmts dgfip_flags program var_indexes)
           iffalse;
       Format.fprintf oc "@]@,}"
   | VerifBlock stmts ->
       let goto_label = fresh_c_local "verif_block" in
       let pr fmt = Format.fprintf oc fmt in
-      pr "@[<v 2>{@\n";
-      pr "  if (setjmp(irdata->jmp_bloq) != 0) {@\n";
-      pr "    goto %s;@\n" goto_label;
-      pr "  }@\n";
-      pr "%a@\n" (generate_stmts dgfip_flags program var_indexes) stmts;
-      pr "%s:;@]@\n}@\n" goto_label
+      pr "@[<v 2>{@;";
+      pr "  if (setjmp(irdata->jmp_bloq) != 0) {@;";
+      pr "    goto %s;@;" goto_label;
+      pr "  }@;";
+      pr "%a@;" (generate_stmts dgfip_flags program var_indexes) stmts;
+      pr "%s:;@]@;}" goto_label
   | ComputeTarget (f, _) -> Format.fprintf oc "%s(irdata);" f
   | Print (std, args) ->
       let print_std, pr_ctx =
@@ -594,45 +594,52 @@ let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
   Format.fprintf oc "struct S_discord * %s(T_irdata* irdata)%s" function_name
     (if add_semicolon then ";" else "")
 
-let generate_var_tmp_decls (oc : Format.formatter)
-    (tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t) =
-  StrMap.iter
-    (fun vn (_, _, size) ->
-      let sz = match size with Some i -> i | None -> 1 in
-      Format.fprintf oc "char %s_def[%d];@,double %s_val[%d];@," vn sz vn sz)
-    tmp_vars;
-  if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,";
-  StrMap.iter
-    (fun vn (_, _, size) ->
-      match size with
-      | Some 1 | None ->
-          Format.fprintf oc "%s_def[0] = 0;@,%s_val[0] = 0.0;@," vn vn
-      | Some i ->
-          Format.fprintf oc "@[<v 2>{@;";
-          Format.fprintf oc "int i;@;";
-          Format.fprintf oc "for (i = 0; i < %d; i++) {@;" i;
-          Format.fprintf oc "%s_def[i] = 0;@,%s_val[i] = 0.0;@," vn vn;
-          Format.fprintf oc "@]@;}@;";
-          Format.fprintf oc "@]@;}@;")
-    tmp_vars;
-  if not (StrMap.is_empty tmp_vars) then Format.fprintf oc "@,"
+let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
+  let pr fmt = Format.fprintf oc fmt in
+  if tf.target_sz_tmps > 0 then (
+    pr "@[<v 2>{";
+    pr "@;int i;";
+    pr "@;T_varinfo *info;";
+    pr "@;@[<v 2>for (i = 0; i < %d; i++) {" tf.target_sz_tmps;
+    pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
+    pr "@]@;}";
+    pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
+    StrMap.iter
+      (fun vn (var, _, sz_opt) ->
+        let loc_str =
+          Format.sprintf "irdata->tmps_org + (%d)" (Com.Var.loc_int var)
+        in
+        pr "@;info = &(irdata->info_tmps[%s]);" loc_str;
+        pr "@;info->name = \"%s\";" vn;
+        pr "@;info->alias = \"\";";
+        pr "@;info->idx = %s;" loc_str;
+        (match sz_opt with
+        | None -> pr "@;info->size = 1;"
+        | Some i -> pr "@;info->size = %d;" i);
+        pr "@;info->cat = ID_TMP_VARS;")
+      tf.target_tmp_vars;
+    pr "@]@;}");
+  if tf.target_nb_refs > 0 then
+    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs;
+  pr "@;"
 
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (var_indexes : Dgfip_varid.var_id_map) (oc : Format.formatter) (f : string)
     =
-  let Mir.{ target_tmp_vars; target_prog; _ } =
-    Mir.TargetMap.find f program.program_targets
-  in
-  Format.fprintf oc "@[<v 2>%a{@,%a%s@\n%a%s@\n%s@]@,}@,"
-    (generate_target_prototype false)
-    f generate_var_tmp_decls target_tmp_vars
-    (if dgfip_flags.flg_trace then "aff1(\"debut " ^ f ^ "\\n\") ;" else "")
-    (generate_stmts dgfip_flags program var_indexes)
-    target_prog
-    (if dgfip_flags.flg_trace then "aff1(\"fin " ^ f ^ "\\n\") ;" else "")
-    {|
-      return irdata->discords;
-|}
+  let pr fmt = Format.fprintf oc fmt in
+  let tf = Mir.TargetMap.find f program.program_targets in
+  pr "@[<v 2>%a{@;" (generate_target_prototype false) f;
+  pr "%a@;" generate_var_tmp_decls tf;
+  if dgfip_flags.flg_trace then pr "aff1(\"debut %s\\n\");@;" f;
+  pr "%a@;" (generate_stmts dgfip_flags program var_indexes) tf.target_prog;
+  if dgfip_flags.flg_trace then pr "aff1(\"fin %s\\n\");@;" f;
+  pr "@;";
+  if tf.target_nb_refs > 0 then
+    pr "irdata->ref_org = irdata->ref_org - %d;@;" tf.target_nb_refs;
+  if tf.target_sz_tmps > 0 then
+    pr "irdata->tmps_org = irdata->tmps_org - %d;@;" tf.target_sz_tmps;
+  pr "return irdata->discords;@]@;}@\n@\n"
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t)

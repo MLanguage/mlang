@@ -36,7 +36,9 @@ let gen_loc_type = function
 
 let gen_access_def vm (v : Com.Var.t) offset =
   let vn = Pos.unmark v.name in
-  if Com.Var.is_temp v then Printf.sprintf "%s_def[0%s]" vn offset
+  if Com.Var.is_temp v then
+    Printf.sprintf "irdata->def_tmps[irdata->tmps_org + (%d)%s]"
+      (Com.Var.loc_int v) offset
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "DS_[%d/*%s*/%s]" i vn offset
@@ -47,7 +49,9 @@ let gen_access_def vm (v : Com.Var.t) offset =
 
 let gen_access_val vm (v : Com.Var.t) offset =
   let vn = Pos.unmark v.name in
-  if Com.Var.is_temp v then Printf.sprintf "%s_val[0%s]" vn offset
+  if Com.Var.is_temp v then
+    Printf.sprintf "irdata->tmps[irdata->tmps_org + (%d)%s]" (Com.Var.loc_int v)
+      offset
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "S_[%d/*%s*/%s]" i vn offset
@@ -58,7 +62,9 @@ let gen_access_val vm (v : Com.Var.t) offset =
 
 let gen_access_pointer vm (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
-  if Com.Var.is_temp v then Printf.sprintf "(%s_val)" vn
+  if Com.Var.is_temp v then
+    Printf.sprintf "&(irdata->tmps[irdata->tmps_org + (%d)])"
+      (Com.Var.loc_int v)
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
@@ -68,7 +74,9 @@ let gen_access_pointer vm (v : Com.Var.t) =
 
 let gen_access_def_pointer vm (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
-  if Com.Var.is_temp v then Printf.sprintf "(%s_def)" vn
+  if Com.Var.is_temp v then
+    Printf.sprintf "&(irdata->def_tmps[irdata->tmps_org + (%d)])"
+      (Com.Var.loc_int v)
   else
     match Mir.VariableMap.find v vm with
     | VarInput i -> Printf.sprintf "(DS_ + %d/*%s*/)" i vn

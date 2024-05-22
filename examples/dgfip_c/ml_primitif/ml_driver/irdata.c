@@ -33,11 +33,17 @@ T_irdata * IRDATA_new_irdata(void)
     return NULL;
   }
   irdata->saisie = NULL;
-  irdata->def_saisie = NULL;
   irdata->calculee = NULL;
-  irdata->def_calculee = NULL;
   irdata->base = NULL;
+  irdata->tmps = NULL;
+  irdata->ref = NULL;
+  irdata->def_saisie = NULL;
+  irdata->def_calculee = NULL;
   irdata->def_base = NULL;
+  irdata->def_tmps = NULL;
+  irdata->def_ref = NULL;
+  irdata->info_tmps = NULL;
+  irdata->info_ref = NULL;
   if (alloc_tab(&irdata->saisie, &irdata->def_saisie, TAILLE_SAISIE) == FALSE) {
     IRDATA_delete_irdata(irdata);
     return NULL;
@@ -50,6 +56,32 @@ T_irdata * IRDATA_new_irdata(void)
     IRDATA_delete_irdata(irdata);
     return NULL;
   }
+  if (alloc_tab(&irdata->tmps, &irdata->def_tmps, TAILLE_TMP_VARS) == FALSE) {
+    IRDATA_delete_irdata(irdata);
+    return NULL;
+  }
+  irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
+  if (irdata->ref == NULL) {
+    IRDATA_delete_irdata(irdata);
+    return NULL;
+  }
+  irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
+  if (irdata->def_ref == NULL) {
+    IRDATA_delete_irdata(irdata);
+    return NULL;
+  }
+  irdata->info_tmps = (T_varinfo *)malloc(TAILLE_TMP_VARS * (sizeof (T_varinfo)));
+  if (irdata->info_tmps == NULL) {
+    IRDATA_delete_irdata(irdata);
+    return NULL;
+  }
+  irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
+  if (irdata->info_ref == NULL) {
+    IRDATA_delete_irdata(irdata);
+    return NULL;
+  }
+  irdata->tmps_org = 0;
+  irdata->ref_org = 0;
   irdata->discords = NULL;
   irdata->tas_discord = NULL;
   irdata->p_discord = &irdata->discords;
@@ -78,9 +110,15 @@ void IRDATA_delete_irdata(T_irdata *irdata)
     if (irdata->saisie != NULL) free(irdata->saisie);
     if (irdata->calculee != NULL) free(irdata->calculee);
     if (irdata->base != NULL) free(irdata->base);
+    if (irdata->tmps != NULL) free(irdata->tmps);
+    if (irdata->ref != NULL) free(irdata->ref);
     if (irdata->def_saisie != NULL) free(irdata->def_saisie);
     if (irdata->def_calculee != NULL) free(irdata->def_calculee);
     if (irdata->def_base != NULL) free(irdata->def_base);
+    if (irdata->def_tmps != NULL) free(irdata->def_tmps);
+    if (irdata->def_ref != NULL) free(irdata->def_ref);
+    if (irdata->info_tmps != NULL) free(irdata->info_tmps);
+    if (irdata->info_ref != NULL) free(irdata->info_ref);
     IRDATA_reset_erreur(irdata);
     while (irdata->tas_discord != NULL) {
       *(irdata->p_discord) = irdata->tas_discord;
