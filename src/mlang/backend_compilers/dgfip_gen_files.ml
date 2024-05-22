@@ -933,10 +933,14 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
   Format.fprintf fmt "\n";
-  Com.CatVar.Map.iter
-    (fun _ (id_str, id_int, _, _) ->
-      Format.fprintf fmt "#define ID_%s %d\n" id_str id_int)
-    stats;
+  let id_tmp =
+    Com.CatVar.Map.fold
+      (fun _ (id_str, id_int, _, _) id_tmp ->
+        Format.fprintf fmt "#define ID_%s %d\n" id_str id_int;
+        max (id_int + 1) id_tmp)
+      stats (-1)
+  in
+  Format.fprintf fmt "#define ID_TMP_VARS %d\n" id_tmp;
 
   let attrs =
     Com.CatVar.Map.fold
@@ -1451,9 +1455,17 @@ struct S_irdata
   double *saisie;
   double *calculee;
   double *base;
+  double *tmps;
+  double **ref;
   char *def_saisie;
   char *def_calculee;
   char *def_base;
+  char *def_tmps;
+  char **def_ref;
+  T_varinfo *info_tmps;
+  T_varinfo **info_ref;
+  int tmps_org;
+  int ref_org;
   T_discord *discords;
   T_discord *tas_discord;
   T_discord **p_discord;
@@ -1481,9 +1493,15 @@ typedef struct S_irdata T_irdata;
 #define S_ irdata->saisie
 #define C_ irdata->calculee
 #define B_ irdata->base
+#define T_ irdata->tmps
+#define R_ irdata->ref
 #define DS_ irdata->def_saisie
 #define DC_ irdata->def_calculee
 #define DB_ irdata->def_base
+#define DT_ irdata->def_tmps
+#define DR_ irdata->def_ref
+#define IT_ irdata->info_tmps
+#define IR_ irdata->info_ref
 
 #define EST_SAISIE    0x0000
 #define EST_CALCULEE  0x4000
@@ -1525,7 +1543,7 @@ extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
 
-let gen_lib fmt flags vars rules verifs chainings errors =
+let gen_lib fmt (cprog : Mir.program) flags vars rules verifs chainings errors =
   let taille_saisie = count vars (Input None) in
   let taille_calculee = count vars (Computed (Some Computed)) in
   let taille_base = count vars (Computed (Some Base)) in
@@ -1544,6 +1562,12 @@ let gen_lib fmt flags vars rules verifs chainings errors =
 
 |}
     taille_saisie taille_calculee taille_base taille_totale nb_ench;
+
+  Format.fprintf fmt {|#define TAILLE_TMP_VARS %d
+#define TAILLE_REFS %d
+
+|}
+    cprog.program_stats.sz_all_tmps cprog.program_stats.nb_all_refs;
 
   Format.fprintf fmt
     {|#define ANOMALIE     1
@@ -1637,14 +1661,14 @@ let gen_mlang_h fmt cprog flags vars stats_varinfos rules verifs chainings
   pr "\n";
   gen_annee fmt flags;
   pr "\n";
+  gen_decl_varinfos fmt cprog stats_varinfos;
+  pr "\n";
   gen_const fmt;
   pr "\n";
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
   pr "\n";
-  gen_decl_varinfos fmt cprog stats_varinfos;
-  pr "\n";
-  gen_lib fmt flags vars rules verifs chainings errors;
+  gen_lib fmt cprog flags vars rules verifs chainings errors;
   pr "\n";
   gen_decl_targets fmt cprog;
   pr "\n";
