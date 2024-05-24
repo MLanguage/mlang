@@ -66,7 +66,7 @@ module CatVar = struct
           Errors.raise_spanned_error "invalid variable category" id_pos
   end
 
-  type loc = LocCalculated | LocBase | LocInput
+  type loc = LocComputed | LocBase | LocInput
 
   type data = {
     id : t;
@@ -147,6 +147,15 @@ module Var = struct
     | Temp is_table -> is_table
     | Ref -> None
 
+  let cat_var_loc v =
+    match v.scope with
+    | Tgv tgv -> (
+        match tgv.cat with
+        | CatVar.Input _ -> Some CatVar.LocInput
+        | Computed { is_base } when is_base -> Some CatVar.LocBase
+        | Computed _ -> Some CatVar.LocComputed)
+    | Temp _ | Ref -> None
+
   let size v = match is_table v with None -> 1 | Some sz -> sz
 
   let alias v = (tgv v).alias
@@ -214,7 +223,7 @@ module Var = struct
 
   let pp_var = pp
 
-  let compare_var = compare
+  let compare_var v0 v1 = Int.compare v0.id v1.id
 
   module Set = struct
     include SetExt.Make (struct
@@ -240,6 +249,10 @@ module Var = struct
         (map : 'a t) : unit =
       pp ~sep ~pp_key ~assoc pp_val fmt map
   end
+
+  let compare_name_ref = ref (fun _ _ -> assert false)
+
+  let compare_name n0 n1 = !compare_name_ref n0 n1
 end
 
 type literal = Float of float | Undefined

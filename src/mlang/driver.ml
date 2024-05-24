@@ -81,6 +81,10 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int option)
     (m_clean_calls : bool) (dgfip_options : string list option) =
+  let dgfip_flags = process_dgfip_options backend dgfip_options in
+  Com.Var.compare_name_ref :=
+    if dgfip_flags.flg_tri_ebcdic then Strings.compare_ebcdic
+    else Strings.compare_default;
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -130,7 +134,6 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
     comparison_error_margin income_year value_sort round_ops;
   try
-    let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     let m_program = ref [] in

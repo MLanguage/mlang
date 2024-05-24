@@ -495,7 +495,7 @@ let get_var_cat_id_str (var_cat : Com.CatVar.t) : string =
 let get_var_cat_loc (var_cat : Com.CatVar.t) : Com.CatVar.loc =
   match var_cat with
   | Com.CatVar.Computed { is_base } ->
-      if is_base then Com.CatVar.LocBase else Com.CatVar.LocCalculated
+      if is_base then Com.CatVar.LocBase else Com.CatVar.LocComputed
   | Com.CatVar.Input _ -> Com.CatVar.LocInput
 
 let get_var_cats (cat_decl : Mast.var_category_decl) : Com.CatVar.t list =
@@ -764,7 +764,7 @@ let complete_vars (prog : program) : program =
 
     let pp fmt (loc : t) =
       match loc with
-      | Com.CatVar.LocCalculated -> Format.fprintf fmt "calculee"
+      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
       | Com.CatVar.LocBase -> Format.fprintf fmt "base"
       | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
 
@@ -922,13 +922,13 @@ let complete_vars (prog : program) : program =
   let prog_stats =
     Mir.
       {
-        nb_calculated = nb_loc Com.CatVar.LocCalculated;
+        nb_calculated = nb_loc Com.CatVar.LocComputed;
         nb_input = nb_loc Com.CatVar.LocInput;
         nb_base = nb_loc Com.CatVar.LocBase;
         nb_vars = StrMap.cardinal prog_vars;
         nb_all_tmps;
         nb_all_refs;
-        sz_calculated = sz_loc Com.CatVar.LocCalculated;
+        sz_calculated = sz_loc Com.CatVar.LocComputed;
         sz_input = sz_loc Com.CatVar.LocInput;
         sz_base = sz_loc Com.CatVar.LocBase;
         sz_vars;

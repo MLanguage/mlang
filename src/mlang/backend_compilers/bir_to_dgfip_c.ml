@@ -482,7 +482,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           let vcd = Com.CatVar.Map.find vc program.program_var_categories in
           let var_indexes =
             Mir.VariableMap.add var
-              (Dgfip_varid.VarRef ("tab_" ^ it_name, vcd.loc, vcd))
+              (Dgfip_varid.VarRef
+                 ("tab_" ^ it_name, Some vcd.loc, Com.Var.loc_int var))
               var_indexes
           in
           Format.fprintf oc "@[<v 2>{@;";
@@ -531,7 +532,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let vcd = Com.CatVar.Map.find vc program.program_var_categories in
               let var_indexes =
                 Mir.VariableMap.add var
-                  (Dgfip_varid.VarRef ("tab_" ^ it_name, vcd.loc, vcd))
+                  (Dgfip_varid.VarRef
+                     ("tab_" ^ it_name, Some vcd.loc, Com.Var.loc_int var))
                   var_indexes
               in
               Format.fprintf oc "@[<v 2>{@;";
