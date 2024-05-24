@@ -13,7 +13,7 @@ module CatVar : sig
     val from_string_list : string Pos.marked list Pos.marked -> Pos.t t
   end
 
-  type loc = LocCalculated | LocBase | LocInput
+  type loc = LocComputed | LocBase | LocInput
 
   type data = {
     id : t;
@@ -78,6 +78,8 @@ module Var : sig
 
   val is_table : t -> int option
 
+  val cat_var_loc : t -> CatVar.loc option
+
   val size : t -> int
 
   val alias : t -> string Pos.marked option
@@ -129,6 +131,10 @@ module Var : sig
   module Map : sig
     include MapExt.T with type key = t
   end
+
+  val compare_name_ref : (string -> string -> int) ref
+
+  val compare_name : string -> string -> int
 end
 
 type literal = Float of float | Undefined
