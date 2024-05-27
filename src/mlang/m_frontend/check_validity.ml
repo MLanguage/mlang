@@ -827,19 +827,19 @@ let complete_vars (prog : program) : program =
     | None -> 0
   in
   let prog_targets =
-    let rec aux nbIt = function
-      | [] -> nbIt
+    let rec aux nbRef = function
+      | [] -> nbRef
       | (instr, _) :: il -> (
           match instr with
           | Com.IfThenElse (_, ilt, ile) ->
-              aux (nbIt + max (aux 0 ilt) (aux 0 ile)) il
-          | Com.VerifBlock instrs -> aux (nbIt + aux 0 instrs) il
-          | Com.Iterate (_, _, _, instrs) -> aux (nbIt + 1 + aux 0 instrs) il
-          | Com.Restore (_, _, instrs) -> aux (nbIt + max 1 (aux 0 instrs)) il
+              aux (nbRef + max (aux 0 ilt) (aux 0 ile)) il
+          | Com.VerifBlock instrs -> aux (nbRef + aux 0 instrs) il
+          | Com.Iterate (_, _, _, instrs) -> aux (nbRef + 1 + aux 0 instrs) il
+          | Com.Restore (_, _, instrs) -> aux (nbRef + max 1 (aux 0 instrs)) il
           | Com.ComputeTarget _ | Com.Affectation _ | Com.Print _
           | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
           | Com.FinalizeErrors ->
-              aux nbIt il
+              aux nbRef il
           | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
               assert false)
     in
@@ -859,56 +859,56 @@ let complete_vars (prog : program) : program =
     StrMap.map map prog.prog_targets
   in
   let nb_all_tmps, sz_all_tmps, nb_all_refs =
-    let rec aux (nb, sz, nbIt, tdata) = function
-      | [] -> (nb, sz, nbIt, tdata)
+    let rec aux (nb, sz, nbRef, tdata) = function
+      | [] -> (nb, sz, nbRef, tdata)
       | (instr, _) :: il -> (
           match instr with
           | Com.ComputeTarget tn ->
               let name = Pos.unmark tn in
               let target = StrMap.find name prog_targets in
               let nb1, sz1 = (target.target_nb_tmps, target.target_sz_tmps) in
-              let nbt, szt, nbItT, tdata =
+              let nbt, szt, nbRefT, tdata =
                 match StrMap.find_opt name tdata with
                 | None ->
-                    let nbt, szt, nbItT, tdata =
+                    let nbt, szt, nbRefT, tdata =
                       aux (0, 0, 0, tdata) target.target_prog
                     in
-                    let tdata = StrMap.add name (nbt, szt, nbItT) tdata in
-                    (nbt, szt, nbItT, tdata)
-                | Some (nbt, szt, nbItT) -> (nbt, szt, nbItT, tdata)
+                    let tdata = StrMap.add name (nbt, szt, nbRefT) tdata in
+                    (nbt, szt, nbRefT, tdata)
+                | Some (nbt, szt, nbRefT) -> (nbt, szt, nbRefT, tdata)
               in
               let nb = nb + nb1 + nbt in
               let sz = sz + sz1 + szt in
-              let nbIt = nbIt + nbItT in
-              aux (nb, sz, nbIt, tdata) il
+              let nbRef = nbRef + nbRefT in
+              aux (nb, sz, nbRef, tdata) il
           | Com.IfThenElse (_, ilt, ile) ->
-              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) ilt in
-              let nb2, sz2, nbIt2, tdata = aux (0, 0, 0, tdata) ile in
+              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) ilt in
+              let nb2, sz2, nbRef2, tdata = aux (0, 0, 0, tdata) ile in
               let nb = nb + max nb1 nb2 in
               let sz = sz + max sz1 sz2 in
-              let nbIt = nbIt + max nbIt1 nbIt2 in
-              aux (nb, sz, nbIt, tdata) il
+              let nbRef = nbRef + max nbRef1 nbRef2 in
+              aux (nb, sz, nbRef, tdata) il
           | Com.VerifBlock instrs ->
-              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
               let nb = nb + nb1 in
               let sz = sz + sz1 in
-              let nbIt = nbIt + nbIt1 in
-              aux (nb, sz, nbIt, tdata) il
+              let nbRef = nbRef + nbRef1 in
+              aux (nb, sz, nbRef, tdata) il
           | Com.Iterate (_, _, _, instrs) ->
-              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
               let nb = nb + nb1 in
               let sz = sz + sz1 in
-              let nbIt = nbIt + 1 + nbIt1 in
-              aux (nb, sz, nbIt, tdata) il
+              let nbRef = nbRef + 1 + nbRef1 in
+              aux (nb, sz, nbRef, tdata) il
           | Com.Restore (_, _, instrs) ->
-              let nb1, sz1, nbIt1, tdata = aux (0, 0, 0, tdata) instrs in
+              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
               let nb = nb + nb1 in
               let sz = sz + sz1 in
-              let nbIt = nbIt + max 1 nbIt1 in
-              aux (nb, sz, nbIt, tdata) il
+              let nbRef = nbRef + max 1 nbRef1 in
+              aux (nb, sz, nbRef, tdata) il
           | Com.Affectation _ | Com.Print _ | Com.RaiseError _ | Com.CleanErrors
           | Com.ExportErrors | Com.FinalizeErrors ->
-              aux (nb, sz, nbIt, tdata) il
+              aux (nb, sz, nbRef, tdata) il
           | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
               assert false)
     in
@@ -916,8 +916,8 @@ let complete_vars (prog : program) : program =
     | None -> Err.main_target_not_found prog.prog_main_target
     | Some t ->
         let init_instrs = [ (Com.ComputeTarget t.target_name, Pos.no_pos) ] in
-        let nb, sz, nbIt, _ = aux (0, 0, 0, StrMap.empty) init_instrs in
-        (nb, sz, nbIt)
+        let nb, sz, nbRef, _ = aux (0, 0, 0, StrMap.empty) init_instrs in
+        (nb, sz, nbRef)
   in
   let prog_stats =
     Mir.

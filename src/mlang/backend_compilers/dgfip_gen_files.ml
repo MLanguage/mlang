@@ -776,9 +776,15 @@ let gen_table_varinfo fmt var_dict cat
     StrMap.fold
       (fun _ (var, idx, size) nb ->
         if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d"
+          let loc_cat =
+            match (Com.Var.loc_tgv var).loc_cat with
+            | Com.CatVar.LocComputed -> "EST_CALCULEE"
+            | Com.CatVar.LocBase -> "EST_BASE"
+            | Com.CatVar.LocInput -> "EST_SAISIE"
+          in
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s"
             (Pos.unmark var.Com.Var.name)
-            (Com.Var.alias_str var) idx size id_int;
+            (Com.Var.alias_str var) idx size id_int loc_cat;
           StrMap.iter
             (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
             (Com.Var.attrs var);
@@ -867,6 +873,7 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   int idx;
   int size;
   int cat;
+  int loc_cat;
 } T_varinfo;
 
 |};
@@ -879,6 +886,7 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   int idx;
   int size;
   int cat;
+  int loc_cat;
 |}
         id_str;
       StrSet.iter (fun an -> Format.fprintf fmt "  int attr_%s;\n" an) attr_set;
@@ -1460,15 +1468,15 @@ typedef struct S_irdata T_irdata;
 #define S_ irdata->saisie
 #define C_ irdata->calculee
 #define B_ irdata->base
-#define T_ irdata->tmps
-#define R_ irdata->ref
+/*#define T_ irdata->tmps*/
+/*#define R_ irdata->ref*/
 #define DS_ irdata->def_saisie
 #define DC_ irdata->def_calculee
 #define DB_ irdata->def_base
-#define DT_ irdata->def_tmps
-#define DR_ irdata->def_ref
-#define IT_ irdata->info_tmps
-#define IR_ irdata->info_ref
+/*#define DT_ irdata->def_tmps*/
+/*#define DR_ irdata->def_ref*/
+/*#define IT_ irdata->info_tmps*/
+/*#define IR_ irdata->info_ref*/
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
