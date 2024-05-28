@@ -274,7 +274,7 @@ type ('v, 'e) instruction =
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked
+  | ComputeTarget of string Pos.marked * 'v Pos.marked list
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of

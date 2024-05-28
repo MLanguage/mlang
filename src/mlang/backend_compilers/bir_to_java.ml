@@ -231,7 +231,7 @@ and generate_stmt (program : Mir.program) (oc : Format.formatter)
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
   | VerifBlock s -> generate_stmts program oc s
-  | ComputeTarget (f, _) ->
+  | ComputeTarget ((f, _), _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f
   | Print (std, args) ->
       let print_std =

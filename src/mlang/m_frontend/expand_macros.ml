@@ -71,6 +71,9 @@ module Err = struct
 
   let constant_forbidden_as_lvalue pos =
     Errors.raise_spanned_error "constant forbidden as lvalue" pos
+
+  let constant_forbidden_as_arg pos =
+    Errors.raise_spanned_error "constant forbidden as argument" pos
 end
 
 module ConstMap = StrMap
@@ -518,9 +521,19 @@ let rec expand_instruction (const_map : const_context)
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       (Com.VerifBlock instrs', instr_pos) :: prev
+  | Com.ComputeTarget (tn, targs) ->
+      let map var =
+        match expand_variable const_map ParamsMap.empty var with
+        | Com.Var v, v_pos -> (v, v_pos)
+        | Com.Literal (Com.Float _), v_pos ->
+            Err.constant_forbidden_as_arg v_pos
+        | _ -> assert false
+      in
+      let targs' = List.map map targs in
+      (Com.ComputeTarget (tn, targs'), instr_pos) :: prev
   | Com.ComputeVerifs _ | Com.ComputeDomain _ | Com.ComputeChaining _
-  | Com.ComputeTarget _ | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
-  | Com.FinalizeErrors ->
+  | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors
+    ->
       (instr, instr_pos) :: prev
 
 and expand_instructions (const_map : const_context)

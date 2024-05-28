@@ -67,6 +67,7 @@ rule token = parse
     | "anomalie" -> ANOMALY
     | "application" -> APPLICATION
     | "apres" -> AFTER
+    | "argument" -> INPUT_ARG
     | "attribut" -> ATTRIBUT
     | "autorise" -> AUTHORIZE
     | "avec" -> WITH

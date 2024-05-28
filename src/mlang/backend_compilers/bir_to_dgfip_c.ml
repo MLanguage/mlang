@@ -404,7 +404,6 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       pr "  }@;";
       pr "%a@;" (generate_stmts dgfip_flags program var_indexes) stmts;
       pr "%s:;@]@;}" goto_label
-  | ComputeTarget (f, _) -> Format.fprintf oc "%s(irdata);" f
   | Print (std, args) ->
       let print_std, pr_ctx =
         match std with
@@ -460,6 +459,68 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                 print_std pr_ctx)
         args;
       Format.fprintf oc "@]@;}@;"
+  | ComputeTarget ((tn, _), targs) ->
+      let pr fmt = Format.fprintf oc fmt in
+      ignore
+        (List.fold_left
+           (fun n ((v : Com.Var.t), _) ->
+             match v.loc with
+             | LocTgv (_, loc_tgv) ->
+                 let cat_str =
+                   match v.scope with
+                   | Com.Var.Tgv tgv ->
+                       let vcd =
+                         Com.CatVar.Map.find tgv.cat
+                           program.program_var_categories
+                       in
+                       vcd.id_str
+                   | _ -> assert false
+                 in
+                 let loc_tab =
+                   match loc_tgv.loc_cat with
+                   | Com.CatVar.LocInput -> "S_"
+                   | Com.CatVar.LocBase -> "B_"
+                   | Com.CatVar.LocComputed -> "C_"
+                 in
+                 pr
+                   "irdata->info_ref[irdata->ref_org + %d] = (T_varinfo \
+                    *)&(varinfo_%s[%d]);@;"
+                   n cat_str loc_tgv.loc_idx;
+                 pr "irdata->def_ref[irdata->ref_org + %d] = &(D%s[%d]);@;" n
+                   loc_tab loc_tgv.loc_int;
+                 pr "irdata->ref[irdata->ref_org + %d] = &(%s[%d]);@;" n loc_tab
+                   loc_tgv.loc_int;
+                 n + 1
+             | LocTmp (_, i) ->
+                 pr
+                   "irdata->info_ref[irdata->ref_org + %d] = \
+                    &(irdata->info_tmps[irdata->tmps_org + (%d)]);@;"
+                   n i;
+                 pr
+                   "irdata->def_ref[irdata->ref_org + %d] = \
+                    &(irdata->def_tmps[irdata->tmps_org + (%d)]);@;"
+                   n i;
+                 pr
+                   "irdata->ref[irdata->ref_org + %d] = \
+                    &(irdata->tmps[irdata->tmps_org + (%d)]);@;"
+                   n i;
+                 n + 1
+             | LocRef (_, i) ->
+                 pr
+                   "irdata->info_ref[irdata->ref_org + %d] = \
+                    irdata->info_ref[irdata->ref_org + (%d)];@;"
+                   n i;
+                 pr
+                   "irdata->def_ref[irdata->ref_org + %d] = \
+                    irdata->def_ref[irdata->ref_org + (%d)];@;"
+                   n i;
+                 pr
+                   "irdata->ref[irdata->ref_org + %d] = \
+                    irdata->ref[irdata->ref_org + (%d)];@;"
+                   n i;
+                 n + 1)
+           0 targs);
+      Format.fprintf oc "%s(irdata);" tn
   | Iterate (m_var, vcs, expr, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
       let var = Pos.unmark m_var in
@@ -634,6 +695,13 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
   pr "@[<v 2>%a{@;" (generate_target_prototype false) f;
   pr "%a@;" generate_var_tmp_decls tf;
   if dgfip_flags.flg_trace then pr "aff1(\"debut %s\\n\");@;" f;
+  let var_indexes =
+    List.fold_left
+      (fun var_indexes (var, _) ->
+        let ref_idx = Com.Var.loc_int var in
+        Mir.VariableMap.add var (Dgfip_varid.VarRef ref_idx) var_indexes)
+      var_indexes tf.target_args
+  in
   pr "%a@;" (generate_stmts dgfip_flags program var_indexes) tf.target_prog;
   if dgfip_flags.flg_trace then pr "aff1(\"fin %s\\n\");@;" f;
   pr "@;";
