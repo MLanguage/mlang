@@ -1,5 +1,17 @@
 # compir
 
+cible toto:
+application: iliad;
+argument: A, B, C;
+variable temporaire: D;
+afficher_erreur "toto\n";
+D = A + B + C;
+afficher_erreur nom(A) " = " (A) "\n";
+afficher_erreur nom(B) " = " (B) "\n";
+afficher_erreur nom(C) " = " (C) "\n";
+afficher_erreur nom(D) " = " (D) "\n";
+afficher_erreur "\n";
+
 cible regle_1:
 application: iliad;
 BIDON = 1;
@@ -769,6 +781,16 @@ finsi
 
 cible enchainement_primitif:
 application: iliad;
+variable temporaire: TRUC;
+TRUC = 7;
+iterer
+: variable ARG
+: categorie saisie contexte
+: avec present(ARG) et attribut(ARG, priorite) = 10
+: dans (
+  afficher_erreur "XXXXXXXX\n";
+  calculer cible toto : avec V_IND_TRAIT, TRUC, ARG;
+)
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;

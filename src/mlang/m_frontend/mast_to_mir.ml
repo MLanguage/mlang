@@ -192,8 +192,15 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         let prog_then = aux [] ilt in
         let prog_else = aux [] ile in
         aux ((Com.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
-    | (Com.ComputeTarget tn, pos) :: il ->
-        aux ((Com.ComputeTarget tn, pos) :: res) il
+    | (Com.ComputeTarget (tn, targs), pos) :: il ->
+        let map v =
+          match Pos.unmark (translate_variable var_data v) with
+          | Com.Var var -> Pos.same_pos_as var v
+          | _ -> assert false
+          (* should not happen *)
+        in
+        let targs' = List.map map targs in
+        aux ((Com.ComputeTarget (tn, targs'), pos) :: res) il
     | (Com.VerifBlock instrs, pos) :: il ->
         let instrs' = aux [] instrs in
         aux ((Com.VerifBlock instrs', pos) :: res) il
@@ -321,32 +328,46 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
       let target_name = t.target_name in
       let target_file = t.target_file in
       let target_apps = t.target_apps in
-      let target_tmp_vars =
-        StrMap.map (fun ((_, pos), size) -> (pos, size)) t.target_tmp_vars
+      let target_nb_refs = t.target_nb_refs in
+      let tmp_var_data, _ =
+        List.fold_left
+          (fun (tmp_var_data, n) (name, pos) ->
+            let var = Com.Var.new_ref ~name:(name, pos) ~loc_int:n in
+            let tmp_var_data = StrMap.add name var tmp_var_data in
+            (tmp_var_data, n + 1))
+          (var_data, -target_nb_refs)
+          t.target_args
       in
       let target_sz_tmps = t.target_sz_tmps in
       let tmp_var_data, _ =
         StrMap.fold
-          (fun name (pos, size) (tmp_var_data, n) ->
+          (fun name ((_, pos), size) (tmp_var_data, n) ->
             let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
             let var =
               Com.Var.new_temp ~name:(name, pos) ~is_table:size' ~loc_int:n
             in
             let tmp_var_data = StrMap.add name var tmp_var_data in
             (tmp_var_data, n + Com.Var.size var))
-          target_tmp_vars
-          (var_data, -target_sz_tmps)
+          t.target_tmp_vars
+          (tmp_var_data, -target_sz_tmps)
+      in
+      let target_args =
+        List.map
+          (fun (vn, pos) -> (StrMap.find vn tmp_var_data, pos))
+          t.target_args
       in
       let target_tmp_vars =
         StrMap.mapi
-          (fun vn (pos, size) ->
+          (fun vn ((_, pos), size) ->
             let var = StrMap.find vn tmp_var_data in
             let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
             (var, pos, size'))
-          target_tmp_vars
+          t.target_tmp_vars
       in
       let target_prog =
-        translate_prog error_decls cats tmp_var_data (-1) t.target_prog
+        translate_prog error_decls cats tmp_var_data
+          (-1 - List.length target_args)
+          t.target_prog
       in
       let target_data =
         Mir.
@@ -354,11 +375,12 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             target_name;
             target_file;
             target_apps;
+            target_args;
             target_tmp_vars;
             target_prog;
             target_nb_tmps = t.target_nb_tmps;
             target_sz_tmps;
-            target_nb_refs = t.target_nb_refs;
+            target_nb_refs;
           }
       in
       Mir.TargetMap.add (Pos.unmark target_name) target_data targets)

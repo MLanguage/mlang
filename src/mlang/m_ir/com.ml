@@ -383,7 +383,7 @@ type ('v, 'e) instruction =
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked
+  | ComputeTarget of string Pos.marked * 'v Pos.marked list
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
@@ -629,8 +629,10 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "verifier %a : avec %a;"
           (Pp.list_space (Pp.unmark Pp.string))
           (Pos.unmark l) (Pp.unmark form_expr) expr
-    | ComputeTarget tname ->
-        Format.fprintf fmt "call_target: %s@," (Pos.unmark tname)
+    | ComputeTarget (tname, targs) ->
+        Format.fprintf fmt "calculer cible %s : avec %a@," (Pos.unmark tname)
+          (Pp.list_comma (Pp.unmark form_var))
+          targs
     | Print (std, args) ->
         let print_cmd =
           match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"

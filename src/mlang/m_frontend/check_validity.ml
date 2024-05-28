@@ -290,6 +290,16 @@ module Err = struct
   let main_target_not_found main_target =
     Errors.raise_error
       (Format.sprintf "main target \"%s\" not found" main_target)
+
+  let unknown_target name pos =
+    let msg = Format.asprintf "unknown target %s" name in
+    Errors.raise_spanned_error msg pos
+
+  let wrong_number_of_args nb_args pos =
+    let msg =
+      Format.asprintf "wrong number of arguments, %d required" nb_args
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
@@ -853,7 +863,7 @@ let complete_vars (prog : program) : program =
         in
         StrMap.fold fold t.target_tmp_vars 0
       in
-      let target_nb_refs = aux 0 t.target_prog in
+      let target_nb_refs = List.length t.target_args + aux 0 t.target_prog in
       { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
     in
     StrMap.map map prog.prog_targets
@@ -863,10 +873,11 @@ let complete_vars (prog : program) : program =
       | [] -> (nb, sz, nbRef, tdata)
       | (instr, _) :: il -> (
           match instr with
-          | Com.ComputeTarget tn ->
+          | Com.ComputeTarget (tn, _targs) ->
               let name = Pos.unmark tn in
               let target = StrMap.find name prog_targets in
               let nb1, sz1 = (target.target_nb_tmps, target.target_sz_tmps) in
+              let nbRef1 = List.length target.target_args in
               let nbt, szt, nbRefT, tdata =
                 match StrMap.find_opt name tdata with
                 | None ->
@@ -879,7 +890,7 @@ let complete_vars (prog : program) : program =
               in
               let nb = nb + nb1 + nbt in
               let sz = sz + sz1 + szt in
-              let nbRef = nbRef + nbRefT in
+              let nbRef = nbRef + nbRef1 + nbRefT in
               aux (nb, sz, nbRef, tdata) il
           | Com.IfThenElse (_, ilt, ile) ->
               let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) ilt in
@@ -915,7 +926,9 @@ let complete_vars (prog : program) : program =
     match StrMap.find_opt prog.prog_main_target prog_targets with
     | None -> Err.main_target_not_found prog.prog_main_target
     | Some t ->
-        let init_instrs = [ (Com.ComputeTarget t.target_name, Pos.no_pos) ] in
+        let init_instrs =
+          [ (Com.ComputeTarget (t.target_name, []), Pos.no_pos) ]
+        in
         let nb, sz, nbRef, _ = aux (0, 0, 0, StrMap.empty) init_instrs in
         (nb, sz, nbRef)
   in
@@ -1075,7 +1088,7 @@ type 'a var_mem_type = Both | OneOf of 'a option
 type var_env = {
   prog : program;
   tmp_vars : int option Pos.marked StrMap.t;
-  it_vars : Pos.t StrMap.t;
+  ref_vars : Pos.t StrMap.t;
 }
 
 let rec fold_var_expr
@@ -1199,7 +1212,7 @@ let check_variable (var : Mast.variable Pos.marked)
             match StrMap.find_opt vn env.tmp_vars with
             | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
             | None -> (
-                match StrMap.find_opt vn env.it_vars with
+                match StrMap.find_opt vn env.ref_vars with
                 | Some decl_pos -> (vn, Both, decl_pos)
                 | None -> Err.unknown_variable var_pos)))
     | Generic _ -> assert false
@@ -1333,12 +1346,12 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             in
             let prog = { prog with prog_rdom_calls } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget (tname, Pos.no_pos) in
+            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.ComputeChaining _ ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
-            let res_instr = Com.ComputeTarget (tname, Pos.no_pos) in
+            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.ComputeVerifs ((vdom_list, vdom_pos), expr) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -1355,7 +1368,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             in
             let prog = { prog with prog_vdom_calls } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget (tname, Pos.no_pos) in
+            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.VerifBlock instrs ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -1365,8 +1378,15 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let env = { env with prog } in
             let res_instr = Com.VerifBlock res_instrs in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
-        | Com.ComputeTarget _tn ->
+        | Com.ComputeTarget ((tn, tpos), targs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            (match StrMap.find_opt tn env.prog.prog_targets with
+            | None -> Err.unknown_target tn tpos
+            | Some target ->
+                let nb_args = List.length target.target_args in
+                if List.length targs <> nb_args then
+                  Err.wrong_number_of_args nb_args tpos);
+            List.iter (fun var -> ignore (check_variable var Both env)) targs;
             aux (env, m_instr :: res, in_vars, out_vars) il
         | Com.Print (_std, args) ->
             List.iter
@@ -1396,13 +1416,13 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Some (_, old_pos) ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            (match StrMap.find_opt var_name env.it_vars with
+            (match StrMap.find_opt var_name env.ref_vars with
             | Some old_pos ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
             ignore (mast_to_catvars vcats env.prog.prog_var_cats);
             let env' =
-              { env with it_vars = StrMap.add var_name var_pos env.it_vars }
+              { env with ref_vars = StrMap.add var_name var_pos env.ref_vars }
             in
             ignore (check_expression false expr env');
             let prog, res_instrs, _, _ =
@@ -1436,13 +1456,16 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Some (_, old_pos) ->
                     Err.variable_already_declared var_name old_pos var_pos
                 | None -> ());
-                (match StrMap.find_opt var_name env.it_vars with
+                (match StrMap.find_opt var_name env.ref_vars with
                 | Some old_pos ->
                     Err.variable_already_declared var_name old_pos var_pos
                 | None -> ());
                 ignore (mast_to_catvars vcats env.prog.prog_var_cats);
                 let env =
-                  { env with it_vars = StrMap.add var_name var_pos env.it_vars }
+                  {
+                    env with
+                    ref_vars = StrMap.add var_name var_pos env.ref_vars;
+                  }
                 in
                 ignore (check_expression false expr env))
               var_params;
@@ -1462,7 +1485,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Some (var_name, var_pos) -> (
                 if
                   (not (StrMap.mem var_name env.tmp_vars))
-                  && not (StrMap.mem var_name env.it_vars)
+                  && not (StrMap.mem var_name env.ref_vars)
                 then
                   match StrMap.find_opt var_name env.prog.prog_vars with
                   | None -> Err.unknown_variable var_pos
@@ -1493,6 +1516,14 @@ let check_target (t : Mast.target) (prog : program) : program =
       | Some _ -> ())
     target_apps;
   if StrMap.mem prog.prog_app target_apps then (
+    let target_args = t.Mast.target_args in
+    List.iter
+      (fun (vn, vpos) ->
+        match StrMap.find_opt vn prog.prog_vars with
+        | Some Com.Var.{ name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      target_args;
     let target_tmp_vars = t.Mast.target_tmp_vars in
     StrMap.iter
       (fun _ ((vn, vpos), _) ->
@@ -1501,6 +1532,13 @@ let check_target (t : Mast.target) (prog : program) : program =
             Err.variable_already_declared vn old_pos vpos
         | None -> ())
       target_tmp_vars;
+    List.iter
+      (fun (vn, vpos) ->
+        match StrMap.find_opt vn target_tmp_vars with
+        | Some ((_, old_pos), _) ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      target_args;
     let tmp_vars =
       StrMap.map
         (fun (var, size) ->
@@ -1514,8 +1552,13 @@ let check_target (t : Mast.target) (prog : program) : program =
           (sz, vpos))
         target_tmp_vars
     in
+    let ref_vars =
+      List.fold_left
+        (fun res (vn, vpos) -> StrMap.add vn vpos res)
+        StrMap.empty target_args
+    in
     let prog, target_prog =
-      let env = { prog; tmp_vars; it_vars = StrMap.empty } in
+      let env = { prog; tmp_vars; ref_vars } in
       let prog, target_prog, _, _ =
         check_instructions t.Mast.target_prog false env
       in
@@ -1528,6 +1571,7 @@ let check_target (t : Mast.target) (prog : program) : program =
           target_name;
           target_file;
           target_apps;
+          target_args;
           target_tmp_vars;
           target_prog;
         }
@@ -1535,6 +1579,7 @@ let check_target (t : Mast.target) (prog : program) : program =
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets })
   else
+    let target_args = [] in
     let target_tmp_vars = StrMap.empty in
     let target_prog = [] in
     let target =
@@ -1544,6 +1589,7 @@ let check_target (t : Mast.target) (prog : program) : program =
           target_name;
           target_file;
           target_apps;
+          target_args;
           target_tmp_vars;
           target_prog;
         }
@@ -1627,7 +1673,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     let rule_instrs = r.Mast.rule_formulaes in
     let prog, rule_instrs, rule_in_vars, rule_out_vars =
-      let env = { prog; tmp_vars; it_vars = StrMap.empty } in
+      let env = { prog; tmp_vars; ref_vars = StrMap.empty } in
       check_instructions rule_instrs true env
     in
     let rule_seq, prog = get_seq prog in
@@ -1667,6 +1713,7 @@ let convert_rules (prog : program) : program =
               target_name = (tname, Pos.no_pos);
               target_file;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_args = [];
               target_tmp_vars = rule.rule_tmp_vars;
               target_prog = rule.rule_instrs;
               target_nb_tmps = 0;
@@ -1767,7 +1814,7 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   List.map
     (fun id ->
       let name = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
-      (Com.ComputeTarget (name, Pos.no_pos), Pos.no_pos))
+      (Com.ComputeTarget ((name, Pos.no_pos), []), Pos.no_pos))
     sorted_rules
 
 let rdom_rule_filter (rdom : Mir.rule_domain_data Mir.domain) (rule : rule) :
@@ -1814,6 +1861,7 @@ let complete_rule_domains (prog : program) : program =
                 target_file = None;
                 target_apps =
                   StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                target_args = [];
                 target_tmp_vars = StrMap.empty;
                 target_prog;
                 target_nb_tmps = 0;
@@ -1911,6 +1959,7 @@ let complete_chainings (prog : program) : program =
               target_name = (tname, Pos.no_pos);
               target_file = None;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_args = [];
               target_tmp_vars = StrMap.empty;
               target_prog;
               target_nb_tmps = 0;
@@ -1980,7 +2029,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             in
             let init = (Com.CatVar.Map.empty, StrMap.empty) in
             let env =
-              { prog; tmp_vars = StrMap.empty; it_vars = StrMap.empty }
+              { prog; tmp_vars = StrMap.empty; ref_vars = StrMap.empty }
             in
             fold_var_expr fold_var false init verif_expr env
           in
@@ -2038,6 +2087,7 @@ let convert_verifs (prog : program) : program =
               target_name = (tname, Pos.no_pos);
               target_file;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_args = [];
               target_tmp_vars = StrMap.empty;
               target_prog;
               target_nb_tmps = 0;
@@ -2272,7 +2322,7 @@ let complete_verif_calls (prog : program) : program =
         match OrdVerifSetMap.find_opt verif_set verif_calls with
         | Some tn ->
             let target_prog =
-              [ (Com.ComputeTarget (tn, Pos.no_pos), Pos.no_pos) ]
+              [ (Com.ComputeTarget ((tn, Pos.no_pos), []), Pos.no_pos) ]
             in
             let target =
               Mast.
@@ -2281,6 +2331,7 @@ let complete_verif_calls (prog : program) : program =
                   target_file = None;
                   target_apps =
                     StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                  target_args = [];
                   target_tmp_vars = StrMap.empty;
                   target_prog;
                   target_nb_tmps = 0;
@@ -2299,7 +2350,7 @@ let complete_verif_calls (prog : program) : program =
                     let verif_tn =
                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
                     in
-                    (Com.ComputeTarget (verif_tn, Pos.no_pos), Pos.no_pos)
+                    (Com.ComputeTarget ((verif_tn, Pos.no_pos), []), Pos.no_pos)
                     :: target_prog)
                   verif_set []
               in
@@ -2313,6 +2364,7 @@ let complete_verif_calls (prog : program) : program =
                   target_file = None;
                   target_apps =
                     StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                  target_args = [];
                   target_tmp_vars = StrMap.empty;
                   target_prog;
                   target_nb_tmps = 0;

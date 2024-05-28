@@ -97,6 +97,7 @@ type target_data = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
+  target_args : (Com.Var.t * Pos.t) list;
   target_tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;

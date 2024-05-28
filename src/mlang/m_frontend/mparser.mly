@@ -47,7 +47,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET TEMPORARY SIZE
+%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
@@ -515,8 +515,8 @@ target_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
-    let target_apps, target_tmp_vars =
-      let rec aux apps_opt vars_opt = function
+    let target_apps, target_args, target_tmp_vars =
+      let rec aux apps_opt args_opt vars_opt = function
       | (`Applications apps', pos) :: h ->
           let apps_opt' =
             match apps_opt with
@@ -528,7 +528,19 @@ target_etc:
                     Pos.format_position old_pos)
                   pos
           in
-          aux apps_opt' vars_opt h
+          aux apps_opt' args_opt vars_opt h
+      | (`InputArg vars', pos) :: h ->
+          let args_opt =
+            match args_opt with
+            | None -> Some (vars', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "argument list already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt args_opt vars_opt h
       | (`TmpVars vars', pos) :: h ->
           let vars_opt' =
             match vars_opt with
@@ -536,11 +548,11 @@ target_etc:
             | Some (_, old_pos) ->
                 Errors.raise_spanned_error
                   (Format.asprintf
-                    "temporary variables already declared %a"
+                    "temporary variable list already declared %a"
                     Pos.format_position old_pos)
                   pos
           in
-          aux apps_opt vars_opt' h
+          aux apps_opt args_opt vars_opt' h
       | [] ->
           let apps =
             match apps_opt with
@@ -563,6 +575,7 @@ target_etc:
                 "this target doesn't belong to an application"
                 (Pos.get_position name)
           in
+          let args = match args_opt with None -> [] | Some (l, _) -> l in
           let vars =
             List.fold_left
               (fun res (vnm, vt) ->
@@ -580,14 +593,15 @@ target_etc:
               StrMap.empty
               (match vars_opt with None -> [] | Some (l, _) -> l)
           in
-          apps, vars
+          apps, args, vars
       in
-      aux None None header
+      aux None None None header
     in
     let target = {
       target_name = name;
       target_file = None;
       target_apps;
+      target_args;
       target_tmp_vars;
       target_nb_tmps = -1;
       target_sz_tmps = -1;
@@ -599,6 +613,9 @@ target_etc:
 
 target_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
+| INPUT_ARG COLON
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
+  { `InputArg inputs }
 | VARIABLE TEMPORARY COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { `TmpVars tmp_vars }
@@ -630,7 +647,10 @@ instruction:
   }
 | COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { ComputeDomain dom }
 | COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { ComputeChaining chain }
-| COMPUTE TARGET target = symbol_with_pos SEMICOLON { ComputeTarget target }
+| COMPUTE TARGET target = symbol_with_pos args = target_args? SEMICOLON {
+    let args_list = match args with None -> [] | Some l -> l in
+    ComputeTarget (target, args_list)
+  }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
     {
       let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
@@ -701,6 +721,12 @@ instruction:
 | CLEAN_ERRORS SEMICOLON { CleanErrors }
 | EXPORT_ERRORS SEMICOLON { ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { FinalizeErrors }
+
+target_args:
+| COLON WITH args = separated_nonempty_list(COMMA, arg_variable) { args }
+
+arg_variable:
+| s = with_pos(SYMBOL) { parse_variable $sloc (fst s), snd s }
 
 instruction_else_branch:
 | ELSEIF e = with_pos(expression)

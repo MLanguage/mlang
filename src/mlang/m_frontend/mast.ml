@@ -106,6 +106,7 @@ type target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : application Pos.marked StrMap.t;
+  target_args : string Pos.marked list;
   target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
