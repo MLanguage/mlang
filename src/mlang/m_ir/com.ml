@@ -92,6 +92,9 @@ type loc_tgv = {
   loc_id : string;
   loc_cat : CatVar.loc;
   loc_idx : int;
+  loc_cat_id : CatVar.t;
+  loc_cat_str : string;
+  loc_cat_idx : int;
   loc_int : int;
 }
 
@@ -188,8 +191,16 @@ module Var = struct
 
   let is_ref v = v.scope = Ref
 
-  let init_loc =
-    { loc_id = ""; loc_cat = CatVar.LocInput; loc_idx = 0; loc_int = 0 }
+  let init_loc loc_cat_id =
+    {
+      loc_id = "";
+      loc_cat = CatVar.LocInput;
+      loc_idx = 0;
+      loc_cat_id;
+      loc_cat_str = "";
+      loc_cat_idx = 0;
+      loc_int = 0;
+    }
 
   let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
@@ -198,7 +209,7 @@ module Var = struct
     {
       name;
       id = new_id ();
-      loc = LocTgv (Pos.unmark name, init_loc);
+      loc = LocTgv (Pos.unmark name, init_loc cat);
       scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
     }
 
@@ -408,9 +419,16 @@ let set_loc_int loc loc_int =
   | LocTmp (id, _) -> LocTmp (id, loc_int)
   | LocRef (id, _) -> LocRef (id, loc_int)
 
-let set_loc_tgv loc loc_cat loc_idx =
+let set_loc_tgv_cat loc loc_cat loc_cat_str loc_cat_idx =
   match loc with
-  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_cat; loc_idx })
+  | LocTgv (id, tgv) ->
+      LocTgv (id, { tgv with loc_cat; loc_cat_str; loc_cat_idx })
+  | LocTmp (id, _) | LocRef (id, _) ->
+      Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
+
+let set_loc_tgv_idx loc loc_idx =
+  match loc with
+  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
   | LocTmp (id, _) | LocRef (id, _) ->
       Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
 

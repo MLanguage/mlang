@@ -274,7 +274,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         let catSet = Check_validity.mast_to_catvars vcats cats in
         let mir_expr = translate_expression cats var_data expr in
         let prog_it =
-          translate_prog error_decls cats var_data (it_depth - 1) instrs
+          translate_prog error_decls cats var_data (it_depth + 1) instrs
         in
         let m_var = Pos.same_pos_as var vn in
         aux ((Com.Iterate (m_var, catSet, mir_expr, prog_it), pos) :: res) il
@@ -366,7 +366,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
       in
       let target_prog =
         translate_prog error_decls cats tmp_var_data
-          (-1 - List.length target_args)
+          (List.length target_args - target_nb_refs)
           t.target_prog
       in
       let target_data =

@@ -1,17 +1,5 @@
 # compir
 
-cible toto:
-application: iliad;
-argument: A, B, C;
-variable temporaire: D;
-afficher_erreur "toto\n";
-D = A + B + C;
-afficher_erreur nom(A) " = " (A) "\n";
-afficher_erreur nom(B) " = " (B) "\n";
-afficher_erreur nom(C) " = " (C) "\n";
-afficher_erreur nom(D) " = " (D) "\n";
-afficher_erreur "\n";
-
 cible regle_1:
 application: iliad;
 BIDON = 1;
@@ -346,13 +334,11 @@ cible effacer_avfisc_1:
 application: iliad;
 #afficher_erreur "effacer_avfisc_1[\n";
 calculer cible trace_in;
-VARTMP1 = 0;
 iterer
 : variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
 : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)
 : dans (
-  VARTMP1 = 1;
   REV_AV = indefini;
 )
 calculer cible trace_out;
@@ -360,9 +346,10 @@ calculer cible trace_out;
 
 cible est_code_supp_avfisc:
 application: iliad;
+argument: EXISTE_CODE_SUPP;
 #afficher_erreur "est_code_supp_avfisc[\n";
 calculer cible trace_in;
-VARTMP1 = 0;
+EXISTE_CODE_SUPP = 0;
 #si
 #     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
 #  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
@@ -372,14 +359,14 @@ VARTMP1 = 0;
 #  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
 #  ou present(PINELQO_A)
 #alors
-#  VARTMP1 = 1;
+#  EXISTE_CODE_SUPP = 1;
 #sinon
   iterer
   : variable REV_AV
   : categorie saisie revenu, saisie revenu corrective
   : avec attribut(REV_AV, avfisc) = 2 et present(REV_AV)
   : dans (
-    VARTMP1 = 1;
+    EXISTE_CODE_SUPP = 1;
   )
 #finsi
 calculer cible trace_out;
@@ -387,7 +374,9 @@ calculer cible trace_out;
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
+variable temporaire:
+  EXISTE_AVFISC, EXISTE_CODE_SUPP,
+  SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_avfiscal[\n";
 calculer cible trace_in;
 EXISTE_AVFISC = 0;
@@ -398,8 +387,8 @@ iterer
 : dans (
   EXISTE_AVFISC = 1;
 )
-calculer cible est_code_supp_avfisc;
-si VARTMP1 = 0 alors
+calculer cible est_code_supp_avfisc : avec EXISTE_CODE_SUPP;
+si EXISTE_CODE_SUPP = 0 alors
   EXISTE_AVFISC = 1;
 finsi
 si EXISTE_AVFISC = 1 alors
@@ -474,43 +463,45 @@ calculer cible trace_out;
 
 cible est_calcul_acomptes:
 application: iliad;
+argument: EXISTE_ACOMPTES;
 #afficher_erreur "est_calcul_acomptes[\n";
 calculer cible trace_in;
-VARTMP1 = 0;
+EXISTE_ACOMPTES = 0;
 iterer
 : variable REV_AC
 : categorie saisie revenu, saisie revenu corrective
 : avec attribut(REV_AC, acompte) = 0 et present(REV_AC)
 : dans (
-  VARTMP1 = 1;
+  EXISTE_ACOMPTES = 1;
 )
 calculer cible trace_out;
 #afficher_erreur "]est_calcul_acomptes\n";
 
 cible est_calcul_avfisc:
 application: iliad;
+argument: EXISTE_AVFISC;
 #afficher_erreur "est_calcul_avfisc[\n";
 calculer cible trace_in;
-VARTMP1 = 0;
+EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
 : avec attribut(REV_AV, avfisc) = 1 et present(REV_AV)
 : dans (
-  VARTMP1 = 1;
+  EXISTE_AVFISC = 1;
 )
-si VARTMP1 = 0 alors
-  calculer cible est_code_supp_avfisc; 
+si EXISTE_AVFISC = 0 alors
+  calculer cible est_code_supp_avfisc : avec EXISTE_AVFISC; 
 finsi
 calculer cible trace_out;
 #afficher_erreur "]est_calcul_avfisc\n";
 
 cible traite_double_liquidation3:
 application: iliad;
-variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+argument: P_EST_CALCUL_ACOMPTES;
+variable temporaire: CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 #afficher_erreur "traite_double_liquidation3[\n";
 calculer cible trace_in;
-P_EST_CALCUL_ACOMPTES = VARTMP1;
 FLAG_ACO = 0;
 V_NEGACO = 0;
 V_AVFISCOPBIS = 0;
@@ -519,10 +510,8 @@ si V_IND_TRAIT = 4 alors # primitif
   PREM8_11 = 0;
   calculer cible article_1731_bis;
 finsi
-calculer cible est_calcul_acomptes;
-CALCUL_ACOMPTES = VARTMP1;
-calculer cible est_calcul_avfisc;
-CALCUL_AVFISC = VARTMP1;
+calculer cible est_calcul_acomptes : avec CALCUL_ACOMPTES;
+calculer cible est_calcul_avfisc : avec CALCUL_AVFISC;
 si CALCUL_AVFISC = 1 alors
   SAUV_IRANT = IRANT + 0 ;
   IRANT = indefini;
@@ -576,20 +565,26 @@ finsi
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation3\n";
 
+cible abs_flag:
+application: iliad;
+argument: VAR, ABS, FLAG;
+si present(VAR) alors
+  FLAG = (VAR < 0);
+  ABS = abs(VAR);
+  VAR = ABS;
+finsi
+
 cible traite_double_liquidation_exit_taxe:
 application: iliad;
+variable temporaire: CALCULER_ACOMPTES;
 #afficher_erreur "traite_double_liquidation_exit_taxe[\n";
 calculer cible trace_in;
 si present(PVIMPOS) ou present(CODRWB) alors
   FLAG_3WBNEG = 0;
   FLAG_EXIT = 1;
-  VARTMP1 = 0;
-  calculer cible traite_double_liquidation3;
-  si present(NAPTIR) alors
-    FLAG_3WBNEG = (NAPTIR < 0);
-    V_NAPTIR3WB = abs(NAPTIR);
-    NAPTIR = V_NAPTIR3WB;
-  finsi
+  CALCULER_ACOMPTES = 0;
+  calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
+  calculer cible abs_flag : avec NAPTIR, V_NAPTIR3WB, FLAG_3WBNEG;
   si present(IHAUTREVT) alors
     V_CHR3WB = IHAUTREVT;
   finsi
@@ -601,13 +596,9 @@ finsi
 si present(PVSURSI) ou present(CODRWA) alors
   FLAG_3WANEG = 0;
   FLAG_EXIT = 2;
-  VARTMP1 = 0;
-  calculer cible traite_double_liquidation3;
-  si present(NAPTIR) alors
-    FLAG_3WANEG = (NAPTIR < 0);
-    V_NAPTIR3WA = abs(NAPTIR);
-    NAPTIR = V_NAPTIR3WA;
-  finsi
+  CALCULER_ACOMPTES = 0;
+  calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
+  calculer cible abs_flag : avec NAPTIR, V_NAPTIR3WA, FLAG_3WANEG;  
   si present(IHAUTREVT) alors
     V_CHR3WA = IHAUTREVT;
   finsi
@@ -617,8 +608,8 @@ si present(PVSURSI) ou present(CODRWA) alors
   FLAG_EXIT = 0;
 finsi
 FLAG_BAREM = 1;
-VARTMP1 = 1;
-calculer cible traite_double_liquidation3;
+CALCULER_ACOMPTES = 1;
+calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
 si present(RASTXFOYER) alors
   V_BARTXFOYER = RASTXFOYER;
 finsi
@@ -636,17 +627,13 @@ si present(INDTAZ) alors
 #    leve_erreur A000;
   finsi
 finsi
-si present(IITAZIR) alors
-  FLAG_BARIITANEG = (IITAZIR < 0);
-  V_BARIITAZIR = abs(IITAZIR);
-  IITAZIR = V_BARIITAZIR;
-finsi
+calculer cible abs_flag : avec IITAZIR, V_BARIITAZIR, FLAG_BARIITANEG;  
 si present(IRTOTAL) alors
   V_BARIRTOTAL = IRTOTAL;
 finsi
 FLAG_BAREM = 0;
-VARTMP1 = 1;
-calculer cible traite_double_liquidation3;
+CALCULER_ACOMPTES = 1;
+calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation_exit_taxe\n";
 
@@ -763,6 +750,7 @@ calculer cible traite_double_liquidation_pvro;
 
 cible enchaine_calcul:
 application: iliad;
+# variable temporaire: CALCULER_ACOMPTES;
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible effacer_base_etc;
   calculer cible traite_double_liquidation_2;
@@ -774,23 +762,13 @@ si V_IND_TRAIT = 4 alors # primitif
 sinon
   V_ACO_MTAP = 0;
   V_NEGACO = 0;
-#  VARTMP1 = si (present(FLAGDERNIE)) alors (1) sinon (0) finsi;
-#  calculer cible traite_double_liquidation3;
+#  CALCULER_ACOMPTES = si (present(FLAGDERNIE)) alors (1) sinon (0) finsi;
+#  calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
   calculer cible traite_double_liquidation_pvro;
 finsi
 
 cible enchainement_primitif:
 application: iliad;
-variable temporaire: TRUC;
-TRUC = 7;
-iterer
-: variable ARG
-: categorie saisie contexte
-: avec present(ARG) et attribut(ARG, priorite) = 10
-: dans (
-  afficher_erreur "XXXXXXXX\n";
-  calculer cible toto : avec V_IND_TRAIT, TRUC, ARG;
-)
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
@@ -839,8 +817,3 @@ application: iliad;
 V_IND_TRAIT = 4; # primitif
 calculer cible enchainement_primitif;
 
-#{
-
-
-
-}#

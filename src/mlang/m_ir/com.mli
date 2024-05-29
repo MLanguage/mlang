@@ -39,6 +39,9 @@ type loc_tgv = {
   loc_id : string;
   loc_cat : CatVar.loc;
   loc_idx : int;
+  loc_cat_id : CatVar.t;
+  loc_cat_str : string;
+  loc_cat_idx : int;
   loc_int : int;
 }
 
@@ -104,7 +107,7 @@ module Var : sig
 
   val is_ref : t -> bool
 
-  val init_loc : loc_tgv
+  val init_loc : CatVar.t -> loc_tgv
 
   val new_tgv :
     name:string Pos.marked ->
@@ -295,7 +298,9 @@ and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
 val set_loc_int : loc -> int -> loc
 
-val set_loc_tgv : loc -> CatVar.loc -> int -> loc
+val set_loc_tgv_cat : loc -> CatVar.loc -> string -> int -> loc
+
+val set_loc_tgv_idx : loc -> int -> loc
 
 val format_value_typ : Pp.t -> value_typ -> unit
 
