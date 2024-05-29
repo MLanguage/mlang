@@ -769,6 +769,28 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
 
 let complete_vars (prog : program) : program =
+  let prog_vars = prog.prog_vars in
+  let prog_vars =
+    let incr_cpt cat cpt =
+      let i = Com.CatVar.Map.find cat cpt in
+      let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
+      (cpt, i)
+    in
+    let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
+    let prog_vars, _ =
+      StrMap.fold
+        (fun vn (var : Com.Var.t) (res, cpt) ->
+          let tgv = Com.Var.tgv var in
+          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
+          let cpt, i = incr_cpt tgv.cat cpt in
+          let loc = Com.set_loc_tgv_cat var.loc dcat.loc dcat.id_str i in
+          let var = Com.Var.{ var with loc } in
+          let res = StrMap.add vn var res in
+          (res, cpt))
+        prog_vars (StrMap.empty, cat_cpt)
+    in
+    prog_vars
+  in
   let module CatLoc = struct
     type t = Com.CatVar.loc
 
@@ -811,10 +833,10 @@ let complete_vars (prog : program) : program =
       in
       (loc_vars, sz_loc_vars, n + sz)
     in
-    StrMap.fold fold prog.prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
+    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
   in
-  let update_loc loc_cat (var : Com.Var.t) (vars, n) =
-    let loc = Com.set_loc_tgv var.loc loc_cat n in
+  let update_loc (var : Com.Var.t) (vars, n) =
+    let loc = Com.set_loc_tgv_idx var.loc n in
     let vars =
       StrMap.add (Com.Var.name_str var) Com.Var.{ var with loc } vars
     in
@@ -822,8 +844,8 @@ let complete_vars (prog : program) : program =
   in
   let prog_vars =
     CatLocMap.fold
-      (fun loc_cat vars prog_vars ->
-        (prog_vars, 0) |> Mir.VariableSet.fold (update_loc loc_cat) vars |> fst)
+      (fun _loc_cat vars prog_vars ->
+        (prog_vars, 0) |> Mir.VariableSet.fold update_loc vars |> fst)
       loc_vars StrMap.empty
   in
   let nb_loc loc_cat =

@@ -466,16 +466,6 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
            (fun n ((v : Com.Var.t), _) ->
              match v.loc with
              | LocTgv (_, loc_tgv) ->
-                 let cat_str =
-                   match v.scope with
-                   | Com.Var.Tgv tgv ->
-                       let vcd =
-                         Com.CatVar.Map.find tgv.cat
-                           program.program_var_categories
-                       in
-                       vcd.id_str
-                   | _ -> assert false
-                 in
                  let loc_tab =
                    match loc_tgv.loc_cat with
                    | Com.CatVar.LocInput -> "S_"
@@ -485,11 +475,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                  pr
                    "irdata->info_ref[irdata->ref_org + %d] = (T_varinfo \
                     *)&(varinfo_%s[%d]);@;"
-                   n cat_str loc_tgv.loc_idx;
+                   n loc_tgv.loc_cat_str loc_tgv.loc_cat_idx;
                  pr "irdata->def_ref[irdata->ref_org + %d] = &(D%s[%d]);@;" n
-                   loc_tab loc_tgv.loc_int;
+                   loc_tab loc_tgv.loc_idx;
                  pr "irdata->ref[irdata->ref_org + %d] = &(%s[%d]);@;" n loc_tab
-                   loc_tgv.loc_int;
+                   loc_tgv.loc_idx;
                  n + 1
              | LocTmp (_, i) ->
                  pr

@@ -783,8 +783,8 @@ let gen_table_varinfo fmt var_dict cat
             | Com.CatVar.LocInput -> "EST_SAISIE"
           in
           Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s"
-            (Pos.unmark var.Com.Var.name)
-            (Com.Var.alias_str var) idx size id_int loc_cat;
+            (Com.Var.name_str var) (Com.Var.alias_str var) idx size id_int
+            loc_cat;
           StrMap.iter
             (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
             (Com.Var.attrs var);
