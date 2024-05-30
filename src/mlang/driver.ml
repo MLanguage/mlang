@@ -82,9 +82,6 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (comparison_error_margin : float option) (income_year : int option)
     (m_clean_calls : bool) (dgfip_options : string list option) =
   let dgfip_flags = process_dgfip_options backend dgfip_options in
-  Com.Var.compare_name_ref :=
-    if dgfip_flags.flg_tri_ebcdic then Strings.compare_ebcdic
-    else Strings.compare_default;
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -220,12 +217,10 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            let vm =
-              Dgfip_gen_files.generate_auxiliary_files dgfip_flags
-                source_m_program m_program
-            in
+            Dgfip_gen_files.generate_auxiliary_files dgfip_flags
+              source_m_program m_program;
             Bir_to_dgfip_c.generate_c_program dgfip_flags m_program
-              !Cli.output_file vm;
+              !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else

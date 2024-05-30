@@ -1,3 +1,5 @@
+module VID = Dgfip_varid
+
 type offset =
   | GetValueConst of int
   | GetValueExpr of string
@@ -5,30 +7,29 @@ type offset =
   | PassPointer
   | None
 
-let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
-    ?(def_flag = false) ?(trace_flag = false) (var : Com.Var.t) : string =
+let rec generate_variable (offset : offset) ?(def_flag = false)
+    ?(trace_flag = false) (var : Com.Var.t) : string =
   try
     match offset with
     | PassPointer ->
-        if def_flag then Dgfip_varid.gen_access_def_pointer vm var
-        else Dgfip_varid.gen_access_val_pointer vm var
+        if def_flag then VID.gen_def_ptr var else VID.gen_val_ptr var
     | _ ->
         let offset =
           match offset with
           | None -> ""
-          | GetValueVar offset -> " + (int)" ^ generate_variable vm None offset
+          | GetValueVar offset -> " + (int)" ^ generate_variable None offset
           | GetValueConst offset -> " + " ^ string_of_int offset
           | GetValueExpr offset -> Format.sprintf " + (%s)" offset
           | PassPointer -> assert false
         in
-        if def_flag then Dgfip_varid.gen_access_def vm var offset
+        if def_flag then VID.gen_def var offset
         else
-          let access_val = Dgfip_varid.gen_access_val vm var offset in
+          let access_val = VID.gen_val var offset in
           (* When the trace flag is present, we print the value of the
              non-temporary variable being used *)
           if trace_flag && not (Com.Var.is_temp var) then
             let vn = Pos.unmark var.Com.Var.name in
-            let pos_tgv = Dgfip_varid.gen_access_pos_from_start vm var in
+            let pos_tgv = VID.gen_pos_from_start var in
             Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
               access_val
           else access_val
@@ -423,19 +424,17 @@ let format_slot fmt ({ kind; depth } : stack_slot) =
   let kind = match kind with Def -> "int" | Val -> "real" in
   Format.fprintf fmt "%s%d" kind depth
 
-let format_expr_var (dgfip_flags : Dgfip_options.flags)
-    (vm : Dgfip_varid.var_id_map) fmt (ev : expr_var) =
+let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
   match ev with
   | Local slot -> format_slot fmt slot
   | M (var, offset, df) ->
       let def_flag = df = Def in
       Format.fprintf fmt "%s"
-        (generate_variable ~trace_flag:dgfip_flags.flg_trace vm offset ~def_flag
+        (generate_variable ~trace_flag:dgfip_flags.flg_trace offset ~def_flag
            var)
 
-let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
-    (vm : Dgfip_varid.var_id_map) fmt (de : expr) =
-  let format_dexpr = format_dexpr dgfip_flags vm in
+let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
+  let format_dexpr = format_dexpr dgfip_flags in
   match de with
   | Dtrue -> Format.fprintf fmt "1"
   | Dfalse -> Format.fprintf fmt "0"
@@ -447,7 +446,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
       | _ ->
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
-  | Dvar evar -> format_expr_var dgfip_flags vm fmt evar
+  | Dvar evar -> format_expr_var dgfip_flags fmt evar
   | Dand (de1, de2) ->
       Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1 format_dexpr
         de2
@@ -489,7 +488,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags)
   | Daccess (var, dflag, de) ->
       Format.fprintf fmt "(%s[(int)%a])"
         (generate_variable ~def_flag:(dflag = Def)
-           ~trace_flag:dgfip_flags.flg_trace vm PassPointer var)
+           ~trace_flag:dgfip_flags.flg_trace PassPointer var)
         format_dexpr de
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
@@ -505,21 +504,17 @@ let rec format_local_declarations fmt
     format_local_declarations fmt (def_stk_size, val_stk_size - 1))
   else ()
 
-let format_local_vars_defs (dgfip_flags : Dgfip_options.flags)
-    (vm : Dgfip_varid.var_id_map) fmt (lv : local_vars) =
+let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
+    (lv : local_vars) =
   let lv = List.rev lv in
   let format_one_assign fmt (_, { slot; subexpr }) =
     Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
-      (format_dexpr dgfip_flags vm)
-      subexpr
+      (format_dexpr dgfip_flags) subexpr
   in
   List.iter (format_one_assign fmt) lv
 
-let format_assign (dgfip_flags : Dgfip_options.flags)
-    (var_indexes : Dgfip_varid.var_id_map) (var : string) fmt
+let format_assign (dgfip_flags : Dgfip_options.flags) (var : string) fmt
     ((e, _kind, lv) : t) =
   Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
-    (format_local_vars_defs dgfip_flags var_indexes)
-    lv var
-    (format_dexpr dgfip_flags var_indexes)
-    e
+    (format_local_vars_defs dgfip_flags)
+    lv var (format_dexpr dgfip_flags) e

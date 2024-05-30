@@ -261,9 +261,9 @@ module Var = struct
       pp ~sep ~pp_key ~assoc pp_val fmt map
   end
 
-  let compare_name_ref = ref (fun _ _ -> assert false)
+  (* let compare_name_ref = ref (fun _ _ -> assert false)
 
-  let compare_name n0 n1 = !compare_name_ref n0 n1
+     let compare_name n0 n1 = !compare_name_ref n0 n1*)
 end
 
 type literal = Float of float | Undefined
