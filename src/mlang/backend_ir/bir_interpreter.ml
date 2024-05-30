@@ -565,23 +565,31 @@ struct
         | Com.StdOut -> ()
         | Com.StdErr -> Format.pp_print_flush Format.err_formatter ()
       end
-    | Com.Iterate ((m_var : Com.Var.t Pos.marked), vcs, expr, stmts) ->
+    | Com.Iterate ((m_var : Com.Var.t Pos.marked), vars, var_params, stmts) ->
         let var = Pos.unmark m_var in
         let var_i =
           match var.loc with LocRef (_, i) -> i | _ -> assert false
         in
-        let eval vc _ =
-          StrMap.iter
-            (fun _ v ->
-              if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
-                match evaluate_expr ctx p expr with
-                | Number z when N.(z =. one ()) ->
-                    evaluate_stmts canBlock p ctx stmts
-                | _ -> ()))
-            p.program_vars
-        in
-        Com.CatVar.Map.iter eval vcs
+        List.iter
+          (fun (v, _) ->
+            ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
+            evaluate_stmts canBlock p ctx stmts)
+          vars;
+        List.iter
+          (fun (vcs, expr) ->
+            let eval vc _ =
+              StrMap.iter
+                (fun _ v ->
+                  if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
+                    ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
+                    match evaluate_expr ctx p expr with
+                    | Number z when N.(z =. one ()) ->
+                        evaluate_stmts canBlock p ctx stmts
+                    | _ -> ()))
+                p.program_vars
+            in
+            Com.CatVar.Map.iter eval vcs)
+          var_params
     | Com.Restore (vars, var_params, stmts) ->
         let backup =
           List.fold_left

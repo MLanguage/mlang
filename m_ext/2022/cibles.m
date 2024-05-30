@@ -383,7 +383,7 @@ EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
 : categorie saisie revenu, saisie revenu corrective
-  : avec attribut(REV_AV, avfisc) dans (1, 2) et present(REV_AV)  
+: avec attribut(REV_AV, avfisc) dans (1, 2) et present(REV_AV)  
 : dans (
   EXISTE_AVFISC = 1;
 )

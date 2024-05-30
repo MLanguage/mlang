@@ -1422,7 +1422,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     ignore (check_expression false e env))
               args;
             aux (env, m_instr :: res, in_vars, out_vars) il
-        | Com.Iterate (var, vcats, expr, instrs) ->
+        | Com.Iterate (var, vars, var_params, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let var_pos = Pos.get_position var in
             let var_name =
@@ -1442,16 +1442,30 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             | Some old_pos ->
                 Err.variable_already_declared var_name old_pos var_pos
             | None -> ());
-            ignore (mast_to_catvars vcats env.prog.prog_var_cats);
             let env' =
               { env with ref_vars = StrMap.add var_name var_pos env.ref_vars }
             in
-            ignore (check_expression false expr env');
+            ignore
+              (List.fold_left
+                 (fun seen var ->
+                   let var_pos = Pos.get_position var in
+                   let var_name = Mast.get_normal_var (Pos.unmark var) in
+                   ignore (check_variable var Both env);
+                   match StrMap.find_opt var_name seen with
+                   | None -> StrMap.add var_name var_pos seen
+                   | Some old_pos ->
+                       Err.variable_already_specified var_name old_pos var_pos)
+                 StrMap.empty vars);
+            List.iter
+              (fun (vcats, expr) ->
+                ignore (mast_to_catvars vcats env.prog.prog_var_cats);
+                ignore (check_expression false expr env'))
+              var_params;
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env'
             in
             let env = { env with prog } in
-            let res_instr = Com.Iterate (var, vcats, expr, res_instrs) in
+            let res_instr = Com.Iterate (var, vars, var_params, res_instrs) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.Restore (vars, var_params, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;

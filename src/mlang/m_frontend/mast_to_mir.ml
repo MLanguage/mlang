@@ -254,7 +254,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                [] args)
         in
         aux ((Com.Print (std, mir_args), pos) :: res) il
-    | (Com.Iterate (vn, vcats, expr, instrs), pos) :: il ->
+    | (Com.Iterate (vn, vars, var_params, instrs), pos) :: il ->
         let var_pos = Pos.get_position vn in
         let var_name =
           match Pos.unmark vn with
@@ -271,15 +271,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         | _ -> ());
         let var = Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth in
         let var_data = StrMap.add var_name var var_data in
-        let catSet = Check_validity.mast_to_catvars vcats cats in
-        let mir_expr = translate_expression cats var_data expr in
-        let prog_it =
-          translate_prog error_decls cats var_data (it_depth + 1) instrs
-        in
-        let m_var = Pos.same_pos_as var vn in
-        aux ((Com.Iterate (m_var, catSet, mir_expr, prog_it), pos) :: res) il
-    | (Com.Restore (vars, var_params, instrs), pos) :: il ->
-        let vars =
+        let vars' =
           List.map
             (fun vn ->
               Pos.same_pos_as
@@ -287,7 +279,29 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                 vn)
             vars
         in
-        let var_params =
+        let var_params' =
+          List.map
+            (fun (vcats, expr) ->
+              let catSet = Check_validity.mast_to_catvars vcats cats in
+              let mir_expr = translate_expression cats var_data expr in
+              (catSet, mir_expr))
+            var_params
+        in
+        let prog_it =
+          translate_prog error_decls cats var_data (it_depth + 1) instrs
+        in
+        let m_var = Pos.same_pos_as var vn in
+        aux ((Com.Iterate (m_var, vars', var_params', prog_it), pos) :: res) il
+    | (Com.Restore (vars, var_params, instrs), pos) :: il ->
+        let vars' =
+          List.map
+            (fun vn ->
+              Pos.same_pos_as
+                (StrMap.find (Mast.get_normal_var (Pos.unmark vn)) var_data)
+                vn)
+            vars
+        in
+        let var_params' =
           List.map
             (fun (vn, vcats, expr) ->
               let var_pos = Pos.get_position vn in
@@ -304,7 +318,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         let prog_rest =
           translate_prog error_decls cats var_data it_depth instrs
         in
-        aux ((Com.Restore (vars, var_params, prog_rest), pos) :: res) il
+        aux ((Com.Restore (vars', var_params', prog_rest), pos) :: res) il
     | (Com.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) error_decls in
         let m_err_decl = Pos.same_pos_as err_decl err_name in

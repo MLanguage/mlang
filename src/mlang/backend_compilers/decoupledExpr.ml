@@ -11,7 +11,7 @@ let rec generate_variable (vm : Dgfip_varid.var_id_map) (offset : offset)
     match offset with
     | PassPointer ->
         if def_flag then Dgfip_varid.gen_access_def_pointer vm var
-        else Dgfip_varid.gen_access_pointer vm var
+        else Dgfip_varid.gen_access_val_pointer vm var
     | _ ->
         let offset =
           match offset with
