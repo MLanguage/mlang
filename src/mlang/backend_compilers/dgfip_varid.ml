@@ -71,17 +71,16 @@ let gen_access_val vm (v : Com.Var.t) offset =
     | VarComputed i -> Printf.sprintf "C_[%d/*%s*/%s]" i vn offset
     | VarRef i -> Printf.sprintf "*(%s/*%s*/%s)" (gen_ref "" i) vn offset
 
-let gen_access_pointer vm (v : Com.Var.t) =
+let gen_access_info_pointer _vm (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
-  if Com.Var.is_temp v then
-    Printf.sprintf "&(irdata->tmps[irdata->tmps_org + (%d)/*%s*/])"
-      (Com.Var.loc_int v) vn
-  else
-    match Mir.VariableMap.find v vm with
-    | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
-    | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
-    | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn
-    | VarRef i -> Printf.sprintf "(%s/*%s*/)" (gen_ref "" i) vn
+
+  match v.loc with
+  | LocTgv (_, loc_tgv) ->
+      Printf.sprintf "((T_varinfo *)&(varinfo_%s[%d]/*%s*/))"
+        loc_tgv.loc_cat_str loc_tgv.loc_cat_idx vn
+  | LocTmp (_, i) ->
+      Printf.sprintf "&(irdata->info_tmps[irdata->tmps_org + (%d)/*%s*/])" i vn
+  | LocRef (_, i) -> Printf.sprintf "%s/*%s*/" (gen_ref "info_" i) vn
 
 let gen_access_def_pointer vm (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -94,6 +93,18 @@ let gen_access_def_pointer vm (v : Com.Var.t) =
     | VarBase i -> Printf.sprintf "(DB_ + %d/*%s*/)" i vn
     | VarComputed i -> Printf.sprintf "(DC_ + %d/*%s*/)" i vn
     | VarRef i -> Printf.sprintf "(%s/*%s*/)" (gen_ref "def_" i) vn
+
+let gen_access_val_pointer vm (v : Com.Var.t) =
+  let vn = Pos.unmark v.name in
+  if Com.Var.is_temp v then
+    Printf.sprintf "&(irdata->tmps[irdata->tmps_org + (%d)/*%s*/])"
+      (Com.Var.loc_int v) vn
+  else
+    match Mir.VariableMap.find v vm with
+    | VarInput i -> Printf.sprintf "(S_ + %d/*%s*/)" i vn
+    | VarBase i -> Printf.sprintf "(B_ + %d/*%s*/)" i vn
+    | VarComputed i -> Printf.sprintf "(C_ + %d/*%s*/)" i vn
+    | VarRef i -> Printf.sprintf "(%s/*%s*/)" (gen_ref "" i) vn
 
 let gen_access_pos_from_start vm (v : Com.Var.t) =
   if Com.Var.is_temp v then

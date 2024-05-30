@@ -664,52 +664,27 @@ instruction:
     { Print (StdOut, args) }
 | PRINT_ERR args = with_pos(print_argument)* SEMICOLON
     { Print (StdErr, args) }
-| ITERATE COLON it_params = nonempty_list(with_pos(it_param))
+| ITERATE COLON
+  VARIABLE vn = symbol_with_pos COLON
+  it_params = nonempty_list(it_param)
   IN LPAREN instrs = instruction_list_rev RPAREN
     {
-      let err msg pos = Errors.raise_spanned_error msg pos in
-      let fold (vno, vco, exo) = function
-      | (Some vn, _, _), pos ->
-          if vno = None then Some vn, vco, exo
-          else err "iterator variable is already defined" pos
-      | (_, Some vc, _), pos ->
-          if vco = None then vno, Some vc, exo
-          else err "variable category is already specified" pos
-      | (_, _, Some ex), pos ->
-          if exo = None then vno, vco, Some ex
-          else err "iterator filter is already defined" pos
-      | (_, _, _), _ -> assert false
+      let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+      let var_list, var_cats =
+        let fold (var_list, var_cats) = function
+        | `VarList vl -> (List.rev vl) @ var_list, var_cats
+        | `VarCatsIt vc -> var_list, vc :: var_cats
+        in
+        List.fold_left fold ([], []) it_params
       in
-      let init = None, None, None in
-      let vno, vco, exo = List.fold_left fold init it_params in
-      let vname, vpos =
-        match vno with
-        | Some var -> var
-        | None -> err "iterator variable must be defined" (mk_position $sloc)
-      in
-      let vcats =
-        match vco with
-        | Some vcat_list ->
-            let fold res vc =
-              let vcm = Com.CatVar.Map.from_string_list vc in
-              Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
-            in
-            List.fold_left fold Com.CatVar.Map.empty vcat_list
-        | None -> err "variable category must be defined" (mk_position $sloc)
-      in
-      let expr =
-        match exo with
-        | Some expr -> expr
-        | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
-      in
-      Iterate (Pos.mark vpos (Normal vname), vcats, expr, List.rev instrs)
+      Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs)
     }
-| RESTORE COLON rest_params = rest_param*
+| RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
     let var_list, var_cats =
       let fold (var_list, var_cats) = function
       | `VarList vl -> (List.rev vl) @ var_list, var_cats
-      | `VarCats vc -> var_list, vc :: var_cats
+      | `VarCatsRest vc -> var_list, vc @ var_cats
       in
       List.fold_left fold ([], []) rest_params
     in
@@ -796,14 +771,31 @@ print_precision:
     }
 
 it_param:
-| VARIABLE var = symbol_with_pos COLON
-    { Some var, None, None }
-| CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON {
-    None, Some vcats, None
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+    let vl =
+      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+    in
+    `VarList vl
   }
-| WITH expr = with_pos(expression) COLON
-    { None, None, Some expr }
+| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON expr_opt = it_param_with_expr? {
+    let vcats =
+      let fold res vc =
+        let vcm = Com.CatVar.Map.from_string_list vc in
+        Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
+      in
+      List.fold_left fold Com.CatVar.Map.empty vcat_list
+    in
+    let expr =
+      match expr_opt with
+      | Some expr -> expr
+      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
+    in
+    `VarCatsIt (vcats, expr)
+  }
+
+it_param_with_expr:
+| WITH expr = with_pos(expression) COLON { expr }
 
 rest_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
@@ -813,7 +805,14 @@ rest_param:
     `VarList vl
   }
 | VARIABLE vn = symbol_with_pos COLON
-  CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  vparams = nonempty_list(rest_param_category) {
+    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
+    `VarCatsRest filters
+  }
+
+rest_param_category:
+| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
   COLON expr_opt = rest_param_with_expr? {
     let vcats =
       let fold res vc =
@@ -827,7 +826,7 @@ rest_param:
       | Some expr -> expr
       | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
-    `VarCats (Pos.same_pos_as (Normal (Pos.unmark vn)) vn, vcats, expr)
+    (vcats, expr)
   }
 
 rest_param_with_expr:

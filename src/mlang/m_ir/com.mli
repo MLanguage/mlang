@@ -282,8 +282,8 @@ type ('v, 'e) instruction =
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
       'v Pos.marked
-      * Pos.t CatVar.Map.t
-      * 'v m_expression
+      * 'v Pos.marked list
+      * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list

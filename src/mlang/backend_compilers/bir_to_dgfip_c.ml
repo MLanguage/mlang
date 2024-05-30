@@ -511,50 +511,72 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                  n + 1)
            0 targs);
       Format.fprintf oc "%s(irdata);" tn
-  | Iterate (m_var, vcs, expr, stmts) ->
+  | Iterate (m_var, vars, var_params, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
       let var = Pos.unmark m_var in
       let it_name = fresh_c_local "iterate" in
-      Com.CatVar.Map.iter
-        (fun vc _ ->
-          let vcd = Com.CatVar.Map.find vc program.program_var_categories in
+      List.iter
+        (fun (v, _) ->
           let ref_idx = Com.Var.loc_int var in
-          let ref_tab = Dgfip_varid.gen_tab (Some vcd.loc) in
           let var_indexes =
             Mir.VariableMap.add var (Dgfip_varid.VarRef ref_idx) var_indexes
           in
+          pr "@[<v 2>{@;";
           let ref_info = Dgfip_varid.gen_ref_info var_indexes var in
+          let v_info_p = Dgfip_varid.gen_access_info_pointer var_indexes v in
+          pr "%s = %s;@;" ref_info v_info_p;
           let ref_def = Dgfip_varid.gen_ref_def var_indexes var in
+          let v_def_p = Dgfip_varid.gen_access_def_pointer var_indexes v in
+          pr "%s = %s;@;" ref_def v_def_p;
           let ref_val = Dgfip_varid.gen_ref_val var_indexes var in
-          let cond_val = "cond_" ^ it_name in
-          let cond_def = cond_val ^ "_d" in
-          let locals, def, value =
-            D.build_expression @@ generate_c_expr expr var_indexes
-          in
-          pr "@[<v 2>{@;";
-          pr "T_varinfo_%s *tab_%s = varinfo_%s;@;" vcd.id_str it_name
-            vcd.id_str;
-          pr "int nb_%s = 0;@;" it_name;
-          pr "@[<v 2>while (nb_%s < NB_%s) {@;" it_name vcd.id_str;
-          pr "char %s;@;" cond_def;
-          pr "double %s;@;" cond_val;
-          pr "%s = (T_varinfo *)tab_%s;@;" ref_info it_name;
-          pr "%s = &(D%s[%s->idx]);@;" ref_def ref_tab ref_info;
-          pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
-          pr "@[<v 2>{@;";
-          pr "%a" D.format_local_declarations locals;
-          pr "%a@;" (D.format_assign dgfip_flags var_indexes cond_def) def;
-          pr "%a" (D.format_assign dgfip_flags var_indexes cond_val) value;
-          pr "@]@;";
-          pr "}@;";
-          pr "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
-          pr "%a@]@;" (generate_stmts dgfip_flags program var_indexes) stmts;
-          pr "}@;";
-          pr "tab_%s++;@;" it_name;
-          pr "nb_%s++;" it_name;
-          pr "@]@;}";
+          let v_val_p = Dgfip_varid.gen_access_val_pointer var_indexes v in
+          pr "%s = %s;@;" ref_val v_val_p;
+          pr "%a@;" (generate_stmts dgfip_flags program var_indexes) stmts;
           pr "@]@;}@;")
-        vcs
+        vars;
+      List.iter
+        (fun (vcs, expr) ->
+          Com.CatVar.Map.iter
+            (fun vc _ ->
+              let vcd = Com.CatVar.Map.find vc program.program_var_categories in
+              let ref_idx = Com.Var.loc_int var in
+              let ref_tab = Dgfip_varid.gen_tab (Some vcd.loc) in
+              let var_indexes =
+                Mir.VariableMap.add var (Dgfip_varid.VarRef ref_idx) var_indexes
+              in
+              let ref_info = Dgfip_varid.gen_ref_info var_indexes var in
+              let ref_def = Dgfip_varid.gen_ref_def var_indexes var in
+              let ref_val = Dgfip_varid.gen_ref_val var_indexes var in
+              let cond_val = "cond_" ^ it_name in
+              let cond_def = cond_val ^ "_d" in
+              let locals, def, value =
+                D.build_expression @@ generate_c_expr expr var_indexes
+              in
+              pr "@[<v 2>{@;";
+              pr "T_varinfo_%s *tab_%s = varinfo_%s;@;" vcd.id_str it_name
+                vcd.id_str;
+              pr "int nb_%s = 0;@;" it_name;
+              pr "@[<v 2>while (nb_%s < NB_%s) {@;" it_name vcd.id_str;
+              pr "char %s;@;" cond_def;
+              pr "double %s;@;" cond_val;
+              pr "%s = (T_varinfo *)tab_%s;@;" ref_info it_name;
+              pr "%s = &(D%s[%s->idx]);@;" ref_def ref_tab ref_info;
+              pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
+              pr "@[<v 2>{@;";
+              pr "%a" D.format_local_declarations locals;
+              pr "%a@;" (D.format_assign dgfip_flags var_indexes cond_def) def;
+              pr "%a" (D.format_assign dgfip_flags var_indexes cond_val) value;
+              pr "@]@;";
+              pr "}@;";
+              pr "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
+              pr "%a@]@;" (generate_stmts dgfip_flags program var_indexes) stmts;
+              pr "}@;";
+              pr "tab_%s++;@;" it_name;
+              pr "nb_%s++;" it_name;
+              pr "@]@;}";
+              pr "@]@;}@;")
+            vcs)
+        var_params
   | Restore (vars, var_params, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@;";
@@ -565,7 +587,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           let v = Pos.unmark m_v in
           pr "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name
             (Dgfip_varid.gen_access_def_pointer var_indexes v)
-            (Dgfip_varid.gen_access_pointer var_indexes v)
+            (Dgfip_varid.gen_access_val_pointer var_indexes v)
             (Dgfip_varid.gen_size var_indexes v))
         vars;
       List.iter
@@ -607,7 +629,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
               pr "env_sauvegarder(&%s, %s, %s, %s);" rest_name
                 (Dgfip_varid.gen_access_def_pointer var_indexes var)
-                (Dgfip_varid.gen_access_pointer var_indexes var)
+                (Dgfip_varid.gen_access_val_pointer var_indexes var)
                 (Dgfip_varid.gen_size var_indexes var);
               pr "@]@;";
               pr "}@;";

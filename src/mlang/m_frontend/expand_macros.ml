@@ -511,10 +511,16 @@ let rec expand_instruction (const_map : const_context)
           pr_args
       in
       (Com.Print (std, pr_args'), instr_pos) :: prev
-  | Com.Iterate (name, cats, expr, instrs) ->
-      let expr' = expand_expression const_map ParamsMap.empty expr in
+  | Com.Iterate (name, vars, var_params, instrs) ->
+      let var_params' =
+        List.map
+          (fun (cats, expr) ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            (cats, expr'))
+          var_params
+      in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Iterate (name, cats, expr', instrs'), instr_pos) :: prev
+      (Com.Iterate (name, vars, var_params', instrs'), instr_pos) :: prev
   | Com.Restore (vars, var_params, instrs) ->
       let instrs' = expand_instructions const_map instrs in
       (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev

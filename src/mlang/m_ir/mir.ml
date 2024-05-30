@@ -304,10 +304,16 @@ let expand_functions (p : program) : program =
               pr_args
           in
           (Print (out, pr_args'), instr_pos)
-      | Iterate (v_id, cats, e, instrs) ->
-          let e' = expand_functions_expr e in
+      | Iterate (v_id, vars, var_params, instrs) ->
+          let var_params' =
+            List.map
+              (fun (cats, e) ->
+                let e' = expand_functions_expr e in
+                (cats, e'))
+              var_params
+          in
           let instrs' = List.map map_instr instrs in
-          (Iterate (v_id, cats, e', instrs'), instr_pos)
+          (Iterate (v_id, vars, var_params', instrs'), instr_pos)
       | Restore (vars, filters, instrs) ->
           let filters' =
             List.map

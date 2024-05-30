@@ -399,8 +399,8 @@ type ('v, 'e) instruction =
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
       'v Pos.marked
-      * Pos.t CatVar.Map.t
-      * 'v m_expression
+      * 'v Pos.marked list
+      * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list
@@ -658,11 +658,17 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "%s %a;" print_cmd
           (Pp.list_space (Pp.unmark (format_print_arg form_var)))
           args
-    | Iterate (var, vcs, expr, itb) ->
-        Format.fprintf fmt
-          "iterate variable %a@\n: categorie %a@\n: avec %a@\n: dans (" form_var
-          (Pos.unmark var) (CatVar.Map.pp_keys ()) vcs form_expr
-          (Pos.unmark expr);
+    | Iterate (var, vars, var_params, itb) ->
+        let format_var_param fmt (vcs, expr) =
+          Format.fprintf fmt ": categorie %a : avec %a@\n"
+            (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
+        in
+        Format.fprintf fmt "iterate variable %a@;: %a@;: %a@;: dans (" form_var
+          (Pos.unmark var)
+          (Pp.list_comma (Pp.unmark form_var))
+          vars
+          (Pp.list_space format_var_param)
+          var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | Restore (vars, var_params, rb) ->
         let format_var_param fmt (var, vcs, expr) =
@@ -670,7 +676,7 @@ let rec format_instruction form_var form_err =
             (Pp.unmark form_var) var (CatVar.Map.pp_keys ()) vcs form_expr
             (Pos.unmark expr)
         in
-        Format.fprintf fmt "restaure@;: %a@\n%a: apres ("
+        Format.fprintf fmt "restaure@;: %a@;: %a@;: apres ("
           (Pp.list_comma (Pp.unmark form_var))
           vars
           (Pp.list_space format_var_param)
