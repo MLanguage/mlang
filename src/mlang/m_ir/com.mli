@@ -135,9 +135,9 @@ module Var : sig
     include MapExt.T with type key = t
   end
 
-  val compare_name_ref : (string -> string -> int) ref
+  (* val compare_name_ref : (string -> string -> int) ref
 
-  val compare_name : string -> string -> int
+     val compare_name : string -> string -> int*)
 end
 
 type literal = Float of float | Undefined

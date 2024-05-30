@@ -6,12 +6,7 @@ type offset =
   | None
 
 val generate_variable :
-  Dgfip_varid.var_id_map ->
-  offset ->
-  ?def_flag:bool ->
-  ?trace_flag:bool ->
-  Com.Var.t ->
-  string
+  offset -> ?def_flag:bool -> ?trace_flag:bool -> Com.Var.t -> string
 
 type dflag = Def | Val
 
@@ -154,9 +149,4 @@ val build_expression : expression_composition -> local_decls * t * t
 val format_local_declarations : Format.formatter -> local_decls -> unit
 
 val format_assign :
-  Dgfip_options.flags ->
-  Dgfip_varid.var_id_map ->
-  string ->
-  Format.formatter ->
-  t ->
-  unit
+  Dgfip_options.flags -> string -> Format.formatter -> t -> unit

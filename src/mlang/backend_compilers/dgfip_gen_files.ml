@@ -185,19 +185,25 @@ let get_attr a attributes =
 let get_name name alias_opt =
   match alias_opt with Some alias -> alias | _ -> name
 
-let sort_vars_by_alias vars =
+let sort_vars_by_alias is_ebcdic vars =
+  let compare_name =
+    if is_ebcdic then Strings.compare_ebcdic else Strings.compare_default
+  in
   List.fast_sort
     (fun (_, _, _, _, name1, alias_opt1, _, _, _, _)
          (_, _, _, _, name2, alias_opt2, _, _, _, _) ->
       let var_name1 = get_name name1 alias_opt1 in
       let var_name2 = get_name name2 alias_opt2 in
-      Com.Var.compare_name var_name1 var_name2)
+      compare_name var_name1 var_name2)
     vars
 
-let sort_vars_by_name vars =
+let sort_vars_by_name is_ebcdic vars =
+  let compare_name =
+    if is_ebcdic then Strings.compare_ebcdic else Strings.compare_default
+  in
   List.fast_sort
     (fun (_, _, _, _, name1, _, _, _, _, _) (_, _, _, _, name2, _, _, _, _, _) ->
-      Com.Var.compare_name name1 name2)
+      compare_name name1 name2)
     vars
 
 (* Retrieve all the variables, sorted by alias, and compute their IDs *)
@@ -268,7 +274,7 @@ let get_vars prog is_ebcdic =
       [] prog
   in
 
-  let vars = sort_vars_by_name vars in
+  let vars = sort_vars_by_name is_ebcdic vars in
 
   let idx = new_idx () in
 
@@ -302,7 +308,7 @@ let get_vars prog is_ebcdic =
       vars
   in
 
-  let vars = sort_vars_by_alias vars in
+  let vars = sort_vars_by_alias is_ebcdic vars in
 
   let idx = new_idx () in
 
@@ -334,8 +340,8 @@ let get_vars prog is_ebcdic =
 
 (* Retrieve the variables for the debug array; variables with aliases are
    duplicated *)
-let get_vars_debug vars =
-  sort_vars_by_name
+let get_vars_debug is_ebcdic vars =
+  sort_vars_by_name is_ebcdic
     (List.fold_left
        (fun vars var ->
          let ( tvar,
@@ -459,7 +465,7 @@ let var_matches req_type var_type is_output =
   | Debug _i -> true
 
 (* Print the specified variable table *)
-let gen_table fmt vars req_type opt =
+let gen_table fmt is_ebcdic vars req_type opt =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "compir.h"
@@ -472,7 +478,8 @@ let gen_table fmt vars req_type opt =
      do not seem to be used (for all kind of input vars as well as output vars
      and debug tables) *)
   let vars =
-    if opt.with_alias then sort_vars_by_alias vars else sort_vars_by_name vars
+    if opt.with_alias then sort_vars_by_alias is_ebcdic vars
+    else sort_vars_by_name is_ebcdic vars
   in
   let table_name = req_type_name req_type in
   let table_NAME = String.uppercase_ascii table_name in
@@ -520,8 +527,8 @@ let gen_table fmt vars req_type opt =
 
   Format.fprintf fmt "};\n"
 
-let gen_desc fmt vars ~alias_only =
-  let vars = sort_vars_by_name vars in
+let gen_desc fmt is_ebcdic vars ~alias_only =
+  let vars = sort_vars_by_name is_ebcdic vars in
 
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
@@ -569,6 +576,7 @@ let gen_desc fmt vars ~alias_only =
    desc_verif) although it does not seem to be used anymore *)
 
 let gen_table_output fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = false;
@@ -591,9 +599,10 @@ let gen_table_output fmt flags vars =
       with_primrest = true;
     }
   in
-  gen_table fmt vars Output opt
+  gen_table fmt is_ebcdic vars Output opt
 
-let gen_table_context fmt _flags vars =
+let gen_table_context fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -616,9 +625,10 @@ let gen_table_context fmt _flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some Context)) opt
+  gen_table fmt is_ebcdic vars (Input (Some Context)) opt
 
 let gen_table_family fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -641,9 +651,10 @@ let gen_table_family fmt flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some Family)) opt
+  gen_table fmt is_ebcdic vars (Input (Some Family)) opt
 
 let gen_table_income fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -666,9 +677,10 @@ let gen_table_income fmt flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some Income)) opt
+  gen_table fmt is_ebcdic vars (Input (Some Income)) opt
 
-let gen_table_corrincome fmt _flags vars =
+let gen_table_corrincome fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -691,9 +703,10 @@ let gen_table_corrincome fmt _flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some CorrIncome)) opt
+  gen_table fmt is_ebcdic vars (Input (Some CorrIncome)) opt
 
-let gen_table_variation fmt _flags vars =
+let gen_table_variation fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -716,9 +729,10 @@ let gen_table_variation fmt _flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some Variation)) opt
+  gen_table fmt is_ebcdic vars (Input (Some Variation)) opt
 
-let gen_table_penality fmt _flags vars =
+let gen_table_penality fmt flags vars =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -741,9 +755,10 @@ let gen_table_penality fmt _flags vars =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Input (Some Penality)) opt
+  gen_table fmt is_ebcdic vars (Input (Some Penality)) opt
 
-let gen_table_debug fmt _flags vars i =
+let gen_table_debug fmt flags vars i =
+  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
   let opt =
     {
       with_verif = true;
@@ -766,7 +781,7 @@ let gen_table_debug fmt _flags vars i =
       with_primrest = false;
     }
   in
-  gen_table fmt vars (Debug i) opt
+  gen_table fmt is_ebcdic vars (Debug i) opt
 
 let gen_table_varinfo fmt var_dict cat
     Com.CatVar.{ id_int; id_str; attributs; _ } stats =
@@ -2069,62 +2084,6 @@ T_irdata *irdata;
 }
 |}
 
-(* Generate a map from variables to array indices *)
-let extract_var_ids (cprog : Mir.program) vars =
-  let open Mir in
-  (* let open Dgfip_varid in *)
-  let pvars = cprog.program_vars in
-  let add vn (v : Com.Var.t) vm =
-    let vs =
-      match StrMap.find_opt vn vm with
-      | None -> VariableSet.empty
-      | Some vs -> vs
-    in
-    StrMap.add (Pos.unmark v.name) (VariableSet.add v vs) vm
-  in
-  (* Build a map from variable names to all their definitions (with different
-     ids) *)
-  let vars_map =
-    StrMap.fold
-      (fun _ (v : Com.Var.t) vm ->
-        let vm = add (Pos.unmark v.name) v vm in
-        match Com.Var.alias v with
-        | Some a -> add (Pos.unmark a) v vm
-        | None -> vm)
-      pvars StrMap.empty
-  in
-  let process_var
-      ( tvar,
-        idx1,
-        _idx2,
-        _idxo_opt,
-        name,
-        _alias_opt,
-        _desc,
-        _typ_opt,
-        _attributes,
-        _size ) =
-    let vid =
-      match (tvar : var_subtype) with
-      | Computed -> Dgfip_varid.VarComputed idx1
-      | Base -> VarBase idx1
-      | _ -> VarInput idx1
-    in
-    (name, vid)
-  in
-  (* Build a map from variable definitions (with different ids) to their array
-     indices *)
-  List.fold_left
-    (fun vm vd ->
-      let name, vid = process_var vd in
-      let vs =
-        try StrMap.find name vars_map
-        with Not_found ->
-          Errors.raise_error (Format.asprintf "Variable %s is undeclared" name)
-      in
-      VariableSet.fold (fun v vm -> VariableMap.add v vid vm) vs vm)
-    VariableMap.empty vars
-
 let open_file filename =
   let oc = open_out filename in
   let fmt = Format.formatter_of_out_channel oc in
@@ -2132,8 +2091,7 @@ let open_file filename =
 
 (* Generate the auxiliary files AND return the map of variables names to TGV
    ids *)
-let generate_auxiliary_files flags prog (cprog : Mir.program) :
-    Dgfip_varid.var_id_map =
+let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
   let folder = Filename.dirname !Cli.output_file in
 
   let vars = get_vars prog Dgfip_options.(flags.flg_tri_ebcdic) in
@@ -2170,7 +2128,7 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) :
   let stats_varinfos = gen_table_varinfos fmt cprog vars in
   close_out oc;
 
-  let vars_debug = get_vars_debug vars in
+  let vars_debug = get_vars_debug Dgfip_options.(flags.flg_tri_ebcdic) vars in
   let vars_debug_split = split_list vars_debug flags.nb_debug_c in
   let _ =
     if flags.nb_debug_c > 0 then
@@ -2189,11 +2147,11 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) :
   in
 
   let oc, fmt = open_file (Filename.concat folder "compir_desc.h") in
-  gen_desc fmt vars ~alias_only:true;
+  gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:true;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "compir_desc_inv.h") in
-  gen_desc fmt vars ~alias_only:false;
+  gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:false;
   close_out oc;
 
   let rules, verifs, errors, chainings = get_rules_verif_etc prog in
@@ -2225,6 +2183,4 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) :
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in
   gen_mlang_c fmt;
-  close_out oc;
-
-  extract_var_ids cprog vars
+  close_out oc
