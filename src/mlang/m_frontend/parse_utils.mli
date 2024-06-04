@@ -58,3 +58,19 @@ val parse_if_then_etc :
   (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
   list ->
   Mast.instruction
+
+type target_header =
+  | Target_apps of Mast.application Pos.marked list
+  | Target_input_arg of string Pos.marked list
+  | Target_tmp_vars of
+      (string Pos.marked * Mast.table_size Pos.marked option) list
+  | Function_result of string Pos.marked
+
+val parse_target_or_function_header :
+  string Pos.marked ->
+  bool ->
+  target_header Pos.marked list ->
+  Mast.application Pos.marked StrMap.t
+  * string Pos.marked list
+  * (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t
+  * string Pos.marked option

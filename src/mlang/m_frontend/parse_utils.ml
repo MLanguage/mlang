@@ -189,3 +189,108 @@ let parse_if_then_etc l =
     | _ -> assert false
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false
+
+type target_header =
+  | Target_apps of Mast.application Pos.marked list
+  | Target_input_arg of string Pos.marked list
+  | Target_tmp_vars of
+      (string Pos.marked * Mast.table_size Pos.marked option) list
+  | Function_result of string Pos.marked
+
+let parse_target_or_function_header name is_function header =
+  let rec aux apps_opt args_opt vars_opt res_opt = function
+    | (Target_apps apps', pos) :: h ->
+        let apps_opt' =
+          match apps_opt with
+          | None -> Some (apps', pos)
+          | Some (_, old_pos) ->
+              Errors.raise_spanned_error
+                (Format.asprintf "application list already declared %a"
+                   Pos.format_position old_pos)
+                pos
+        in
+        aux apps_opt' args_opt vars_opt res_opt h
+    | (Target_input_arg vars', pos) :: h ->
+        let args_opt =
+          match args_opt with
+          | None -> Some (vars', pos)
+          | Some (_, old_pos) ->
+              Errors.raise_spanned_error
+                (Format.asprintf "argument list already declared %a"
+                   Pos.format_position old_pos)
+                pos
+        in
+        aux apps_opt args_opt vars_opt res_opt h
+    | (Target_tmp_vars vars', pos) :: h ->
+        let vars_opt' =
+          match vars_opt with
+          | None -> Some (vars', pos)
+          | Some (_, old_pos) ->
+              Errors.raise_spanned_error
+                (Format.asprintf "temporary variable list already declared %a"
+                   Pos.format_position old_pos)
+                pos
+        in
+        aux apps_opt args_opt vars_opt' res_opt h
+    | (Function_result res', pos) :: h ->
+        if is_function then
+          let res_opt' =
+            match res_opt with
+            | None -> Some (res', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf "result variable already declared %a"
+                     Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt args_opt vars_opt res_opt' h
+        else aux apps_opt args_opt vars_opt res_opt h
+    | [] ->
+        let apps =
+          match apps_opt with
+          | Some (apps, _) ->
+              List.fold_left
+                (fun res (app, pos) ->
+                  match StrMap.find_opt app res with
+                  | Some (_, old_pos) ->
+                      let msg =
+                        Format.asprintf "application %s already declared %a" app
+                          Pos.format_position old_pos
+                      in
+                      Errors.raise_spanned_error msg pos
+                  | None -> StrMap.add app (app, pos) res)
+                StrMap.empty apps
+          | None ->
+              let ty = if is_function then "function" else "target" in
+              Errors.raise_spanned_error
+                (Format.sprintf "this %s doesn't belong to an application" ty)
+                (Pos.get_position name)
+        in
+        let args = match args_opt with None -> [] | Some (l, _) -> l in
+        let vars =
+          List.fold_left
+            (fun res (vnm, vt) ->
+              let vn, pos = vnm in
+              match StrMap.find_opt vn res with
+              | Some ((_, old_pos), _) ->
+                  let msg =
+                    Format.asprintf "temporary variable %s already declared %a"
+                      vn Pos.format_position old_pos
+                  in
+                  Errors.raise_spanned_error msg pos
+              | None -> StrMap.add vn (vnm, vt) res)
+            StrMap.empty
+            (match vars_opt with None -> [] | Some (l, _) -> l)
+        in
+        let res =
+          match res_opt with
+          | None ->
+              if is_function then
+                Errors.raise_spanned_error "this function doesn't have a result"
+                  (Pos.get_position name)
+              else None
+          | Some (rvar, _) -> Some rvar
+        in
+        (apps, args, vars, res)
+  in
+  aux None None None None header

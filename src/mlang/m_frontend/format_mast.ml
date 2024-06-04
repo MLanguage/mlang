@@ -191,10 +191,11 @@ let format_source_file_item fmt (i : source_file_item) =
         (Pp.list_space (Pp.unmark format_application))
         apps
   | VariableDecl vd -> format_variable_decl fmt vd
+  | Function t -> format_target fmt t
   | Rule r -> format_rule fmt r
   | Target t -> format_target fmt t
   | Verification v -> format_verification fmt v
-  | Function -> ()
+  | Func -> ()
   | Error e -> format_error_ fmt e
   | Output o ->
       Format.fprintf fmt "sortie(%a);" format_variable_name (Pos.unmark o)

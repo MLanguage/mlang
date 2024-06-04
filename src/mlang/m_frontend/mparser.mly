@@ -47,7 +47,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE
+%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE RESULT
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
@@ -92,7 +92,7 @@ source_file:
 symbol_colon_etc:
 | v = variable_decl { v }
 | e = error_ { e }
-| fonction { Function }
+| fonction { Func }
 
 source_file_rev:
 | is = source_file_rev i = source_file_item { i :: is }
@@ -108,6 +108,7 @@ source_file_item:
 | rl = rule_etc { rl }
 | vl = verification_etc { vl }
 | tl = target_etc { tl }
+| fl = function_etc { fl }
 
 var_typ:
 | INPUT { Input }
@@ -515,87 +516,8 @@ target_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
-    let target_apps, target_args, target_tmp_vars =
-      let rec aux apps_opt args_opt vars_opt = function
-      | (`Applications apps', pos) :: h ->
-          let apps_opt' =
-            match apps_opt with
-            | None -> Some (apps', pos)
-            | Some (_, old_pos) ->
-                Errors.raise_spanned_error
-                  (Format.asprintf
-                    "application list already declared %a"
-                    Pos.format_position old_pos)
-                  pos
-          in
-          aux apps_opt' args_opt vars_opt h
-      | (`InputArg vars', pos) :: h ->
-          let args_opt =
-            match args_opt with
-            | None -> Some (vars', pos)
-            | Some (_, old_pos) ->
-                Errors.raise_spanned_error
-                  (Format.asprintf
-                    "argument list already declared %a"
-                    Pos.format_position old_pos)
-                  pos
-          in
-          aux apps_opt args_opt vars_opt h
-      | (`TmpVars vars', pos) :: h ->
-          let vars_opt' =
-            match vars_opt with
-            | None -> Some (vars', pos)
-            | Some (_, old_pos) ->
-                Errors.raise_spanned_error
-                  (Format.asprintf
-                    "temporary variable list already declared %a"
-                    Pos.format_position old_pos)
-                  pos
-          in
-          aux apps_opt args_opt vars_opt' h
-      | [] ->
-          let apps =
-            match apps_opt with
-            | Some (apps, _) ->
-                List.fold_left
-                  (fun res (app, pos) ->
-                    match StrMap.find_opt app res with
-                    | Some (_, old_pos) ->
-                        let msg =
-                          Format.asprintf "application %s already declared %a"
-                            app
-                            Pos.format_position old_pos
-                        in
-                        Errors.raise_spanned_error msg pos
-                    | None -> StrMap.add app (app, pos) res)
-                  StrMap.empty
-                  apps
-            | None ->
-                Errors.raise_spanned_error
-                "this target doesn't belong to an application"
-                (Pos.get_position name)
-          in
-          let args = match args_opt with None -> [] | Some (l, _) -> l in
-          let vars =
-            List.fold_left
-              (fun res (vnm, vt) ->
-                let vn, pos = vnm in
-                match StrMap.find_opt vn res with
-                | Some ((_, old_pos), _) ->
-                    let msg =
-                      Format.asprintf
-                        "temporary variable %s already declared %a"
-                        vn
-                        Pos.format_position old_pos
-                    in
-                    Errors.raise_spanned_error msg pos
-                | None -> StrMap.add vn (vnm, vt) res)
-              StrMap.empty
-              (match vars_opt with None -> [] | Some (l, _) -> l)
-          in
-          apps, args, vars
-      in
-      aux None None None header
+    let target_apps, target_args, target_tmp_vars, _target_result =
+      parse_target_or_function_header name false header
     in
     let target = {
       target_name = name;
@@ -612,13 +534,46 @@ target_etc:
   }
 
 target_header_elt:
-| APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
 | INPUT_ARG COLON
   inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
-  { `InputArg inputs }
+  { Target_input_arg inputs }
 | VARIABLE TEMPORARY COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
-  { `TmpVars tmp_vars }
+  { Target_tmp_vars tmp_vars }
+
+function_etc:
+| FONCTION name = symbol_with_pos COLON
+  header = nonempty_list(with_pos(function_header_elt))
+  prog_etc = instruction_list_etc
+  {
+    let target_prog, l = prog_etc in
+    let target_apps, target_args, target_tmp_vars, _target_result =
+      parse_target_or_function_header name true header
+    in
+    let target = {
+      target_name = name;
+      target_file = None;
+      target_apps;
+      target_args;
+      target_tmp_vars;
+      target_nb_tmps = -1;
+      target_sz_tmps = -1;
+      target_nb_refs = -1;
+      target_prog;
+    } in
+    Pos.same_pos_as (Function target) name :: l
+  }
+
+function_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
+| INPUT_ARG COLON
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
+  { Target_input_arg inputs }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { Target_tmp_vars tmp_vars }
+| RESULT COLON res = with_pos(variable_name) SEMICOLON { Function_result res }
 
 temporary_variable_name:
 | name = symbol_with_pos size = with_pos(comp_variable_table)? {

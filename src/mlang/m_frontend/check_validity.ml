@@ -2431,10 +2431,11 @@ let proceed (p : Mast.program) (main_target : string) : program =
             | Mast.VarCatDecl (decl, pos) -> check_var_category decl pos prog
             | Mast.VariableDecl var_decl -> check_var_decl var_decl prog
             | Mast.Error error -> check_error error prog
-            | Mast.Function -> prog (* unused *)
+            | Mast.Func -> prog (* unused *)
             | Mast.Output _ -> prog (* unused *)
             | Mast.RuleDomDecl decl -> check_rule_dom_decl decl prog
             | Mast.VerifDomDecl decl -> check_verif_dom_decl decl prog
+            | Mast.Function _t -> prog
             | Mast.Target t -> check_target t prog
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)

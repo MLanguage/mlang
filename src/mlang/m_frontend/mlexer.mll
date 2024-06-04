@@ -108,6 +108,7 @@ rule token = parse
     | "regle" -> RULE
     | "restaurer" -> RESTORE
     | "restituee" -> GIVEN_BACK
+    | "resultat" -> RESULT
     | "saisie" -> INPUT
     | "si" -> IF
     | "sinon_si" -> ELSEIF
