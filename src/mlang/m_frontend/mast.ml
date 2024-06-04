@@ -219,12 +219,13 @@ type source_file_item =
   | Application of application Pos.marked  (** Declares an application *)
   | Chaining of chaining Pos.marked * application Pos.marked list
   | VariableDecl of variable_decl
+  | Function of target
   | Rule of rule
   | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
-  | Function  (** Declares a function, unused *)
+  | Func  (** Declares a function, unused *)
   | VarCatDecl of var_category_decl Pos.marked
   | RuleDomDecl of rule_domain_decl
   | VerifDomDecl of verif_domain_decl
