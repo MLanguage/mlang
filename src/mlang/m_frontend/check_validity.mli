@@ -62,6 +62,7 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
+  prog_functions : Mast.target StrMap.t;
   prog_rules : rule IntMap.t;
   prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;

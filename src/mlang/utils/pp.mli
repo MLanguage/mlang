@@ -2,6 +2,14 @@ open Format
 
 type t = formatter
 
+val fpr : t -> ('a, t, unit) format -> 'a
+
+val spr : ('a, t, unit, string) format4 -> 'a
+
+val pr : ('a, t, unit) format -> 'a
+
+val epr : ('a, t, unit) format -> 'a
+
 val nil : t -> 'a -> unit
 
 val string : t -> string -> unit

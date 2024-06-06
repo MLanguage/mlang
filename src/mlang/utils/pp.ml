@@ -1,5 +1,15 @@
 type t = Format.formatter
 
+let fpr fmt form_str = Format.fprintf fmt form_str
+
+let spr form_str = Format.asprintf form_str
+
+let pr form_str = Format.printf form_str
+
+let epr form_str =
+  let cont fmt = Format.fprintf fmt "@?" in
+  Format.kfprintf cont Format.err_formatter form_str
+
 let nil _ _ = ()
 
 let string = Format.pp_print_string

@@ -56,6 +56,8 @@ module type S = sig
     mutable ctx_tmps_org : int;
     ctx_ref : (Com.Var.t * int) Array.t;
     mutable ctx_ref_org : int;
+    mutable ctx_args : value Array.t list;
+    mutable ctx_res : value list;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;

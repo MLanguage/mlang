@@ -41,6 +41,8 @@ let gen_def (v : Com.Var.t) offset =
   | LocTgv (_, l) -> gen_tgv "D" l vn offset
   | LocTmp (_, i) -> gen_tmp "def_" i vn offset
   | LocRef (_, i) -> gen_ref "def_" i vn offset
+  | LocArg (_, i) -> Pp.spr "def_arg%d" i
+  | LocRes _ -> Pp.spr "(*def_res)"
 
 let gen_val (v : Com.Var.t) offset =
   let vn = Pos.unmark v.name in
@@ -48,6 +50,8 @@ let gen_val (v : Com.Var.t) offset =
   | LocTgv (_, l) -> gen_tgv "" l vn offset
   | LocTmp (_, i) -> gen_tmp "" i vn offset
   | LocRef (_, i) -> gen_ref "" i vn offset
+  | LocArg (_, i) -> Pp.spr "val_arg%d" i
+  | LocRes _ -> Pp.spr "(*val_res)"
 
 let gen_info_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -57,6 +61,7 @@ let gen_info_ptr (v : Com.Var.t) =
         l.loc_cat_idx vn
   | LocTmp (_, i) -> gen_tmp_ptr "info_" i vn
   | LocRef (_, i) -> gen_ref_ptr "info_" i vn
+  | LocArg _ | LocRes _ -> "NULL"
 
 let gen_def_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -64,6 +69,8 @@ let gen_def_ptr (v : Com.Var.t) =
   | LocTgv (_, l) -> gen_tgv_ptr "D" l vn
   | LocTmp (_, i) -> gen_tmp_ptr "def_" i vn
   | LocRef (_, i) -> gen_ref_ptr "def_" i vn
+  | LocArg (_, i) -> Pp.spr "(&def_arg%d)" i
+  | LocRes _ -> Pp.spr "def_res"
 
 let gen_val_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -71,6 +78,8 @@ let gen_val_ptr (v : Com.Var.t) =
   | LocTgv (_, l) -> gen_tgv_ptr "" l vn
   | LocTmp (_, i) -> gen_tmp_ptr "" i vn
   | LocRef (_, i) -> gen_ref_ptr "" i vn
+  | LocArg (_, i) -> Pp.spr "(&val_arg%d)" i
+  | LocRes _ -> Pp.spr "val_res"
 
 let gen_pos_from_start (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -87,9 +96,12 @@ let gen_pos_from_start (v : Com.Var.t) =
   | LocRef (_, i) ->
       let info = gen_ref_ptr "info_" i vn in
       Printf.sprintf "%s->loc_cat | %s->idx" info info
+  | LocArg (_, i) -> Printf.sprintf "EST_ARGUMENT | %d" i
+  | LocRes _ -> Printf.sprintf "EST_RESULTAT | 0"
 
 let gen_size (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
   | LocTgv _ | LocTmp _ -> Format.sprintf "%d" (Com.Var.size v)
   | LocRef (_, i) -> Format.sprintf "(%s->size)" (gen_ref_ptr "info_" i vn)
+  | LocArg _ | LocRes _ -> "1"

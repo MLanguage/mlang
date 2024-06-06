@@ -52,6 +52,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
     D.expression_composition =
   let comparison op se1 se2 =
     let safe_def = false in
+    let set_vars = se1.D.set_vars @ se2.D.set_vars in
     let def_test = D.dand se1.D.def_test se2.D.def_test in
     let value_comp =
       let op =
@@ -66,17 +67,20 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       in
       D.comp op se1.value_comp se2.value_comp
     in
-    D.build_transitive_composition ~safe_def { def_test; value_comp }
+    D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
   in
   let binop op se1 se2 =
     match op with
     | Com.Div, _ ->
+        let set_vars = se1.D.set_vars @ se2.D.set_vars in
         let def_test = D.dand se1.D.def_test se2.D.def_test in
         let value_comp =
           D.ite se2.value_comp (D.div se1.value_comp se2.value_comp) (D.lit 0.)
         in
-        D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+        D.build_transitive_composition ~safe_def:true
+          { set_vars; def_test; value_comp }
     | _ ->
+        let set_vars = se1.D.set_vars @ se2.D.set_vars in
         let def_test =
           match Pos.unmark op with
           | Com.And | Com.Mul -> D.dand se1.def_test se2.def_test
@@ -95,21 +99,30 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           (* see above *)
         in
         let value_comp = op se1.value_comp se2.value_comp in
-        D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+        D.build_transitive_composition ~safe_def:true
+          { set_vars; def_test; value_comp }
   in
   let unop op se =
+    let set_vars = se.D.set_vars in
     let def_test = se.D.def_test in
     let op, safe_def =
       match op with Com.Not -> (D.dnot, false) | Com.Minus -> (D.minus, true)
     in
     let value_comp = op se.value_comp in
-    D.build_transitive_composition ~safe_def { def_test; value_comp }
+    D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
   in
   match Pos.unmark e with
   | Com.TestInSet (positive, e0, values) ->
       let se0 = generate_c_expr e0 in
       let ldef, lval = D.locals_from_m (Mir.LocalVariable.new_var ()) in
-      let sle0 = D.{ def_test = local_var ldef; value_comp = local_var lval } in
+      let sle0 =
+        D.
+          {
+            set_vars = [];
+            def_test = local_var ldef;
+            value_comp = local_var lval;
+          }
+      in
       let declare_local constr =
         D.let_local ldef se0.def_test (D.let_local lval se0.value_comp constr)
       in
@@ -123,34 +136,40 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     let v = Pos.unmark set_var in
                     let def_test = D.m_var v None Def in
                     let value_comp = D.m_var v None Val in
-                    D.{ def_test; value_comp }
+                    D.{ set_vars = []; def_test; value_comp }
                   in
                   comparison (Com.Eq, Pos.no_pos) sle0 s_set_var
               | Com.FloatValue i ->
                   let s_i =
-                    D.{ def_test = dtrue; value_comp = lit (Pos.unmark i) }
+                    D.
+                      {
+                        set_vars = [];
+                        def_test = dtrue;
+                        value_comp = lit (Pos.unmark i);
+                      }
                   in
                   comparison (Com.Eq, Pos.no_pos) sle0 s_i
               | Com.Interval (bn, en) ->
                   let s_bn =
                     let bn' = float_of_int (Pos.unmark bn) in
-                    D.{ def_test = dtrue; value_comp = lit bn' }
+                    D.{ set_vars = []; def_test = dtrue; value_comp = lit bn' }
                   in
                   let s_en =
                     let en' = float_of_int (Pos.unmark en) in
-                    D.{ def_test = dtrue; value_comp = lit en' }
+                    D.{ set_vars = []; def_test = dtrue; value_comp = lit en' }
                   in
                   binop (Com.And, Pos.no_pos)
                     (comparison (Com.Gte, Pos.no_pos) sle0 s_bn)
                     (comparison (Com.Lte, Pos.no_pos) sle0 s_en)
             in
             binop (Com.Or, Pos.no_pos) or_chain equal_test)
-          D.{ def_test = dfalse; value_comp = lit 0. }
+          D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
           values
       in
       let se = if positive then or_chain else unop Com.Not or_chain in
       D.
         {
+          set_vars = se0.set_vars;
           def_test = declare_local se.def_test;
           value_comp = declare_local se.value_comp;
         }
@@ -169,6 +188,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let idx = generate_c_expr e in
       let size = VID.gen_size (Pos.unmark var) in
       let idx_var = D.new_local () in
+      let set_vars = idx.D.set_vars in
       let def_test =
         D.let_local idx_var idx.value_comp
           (D.dand
@@ -183,14 +203,17 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
              (D.lit 0.)
              (D.access (Pos.unmark var) Val (D.local_var idx_var)))
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars; def_test; value_comp }
   | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr c in
       let thenval = generate_c_expr t in
       let elseval =
         match f_opt with
-        | None -> D.{ def_test = dfalse; value_comp = lit 0. }
+        | None -> D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
         | Some f -> generate_c_expr f
+      in
+      let set_vars =
+        cond.D.set_vars @ thenval.D.set_vars @ elseval.D.set_vars
       in
       let def_test =
         D.dand cond.def_test
@@ -199,70 +222,125 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp =
         D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars; def_test; value_comp }
   | FuncCall ((Supzero, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
+      let set_vars = se.D.set_vars in
       let def_test = D.ite cond D.dfalse se.def_test in
       let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars; def_test; value_comp }
   | FuncCall ((PresentFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
+      let set_vars = se.D.set_vars in
       let def_test = D.dtrue in
       let value_comp = se.def_test in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((NullFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
+      let set_vars = se.D.set_vars in
       let def_test = se.def_test in
       let value_comp =
         D.dand def_test (D.comp "==" se.value_comp (D.lit 0.0))
       in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((ArrFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
+      let set_vars = se.D.set_vars in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_arr" [ se.value_comp ] in
       (* Here we boldly assume that rounding value of `undef` will give zero,
          given the invariant. Pretty sure that not true, in case of doubt, turn
          `safe_def` to false *)
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((InfFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
+      let set_vars = se.D.set_vars in
       let def_test = se.def_test in
       let value_comp = D.dfun "my_floor" [ se.value_comp ] in
       (* same as above *)
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((AbsFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
+      let set_vars = se.D.set_vars in
       let def_test = se.def_test in
       let value_comp = D.dfun "fabs" [ se.value_comp ] in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((MaxFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 in
       let se2 = generate_c_expr e2 in
+      let set_vars = se1.D.set_vars @ se2.D.set_vars in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((MinFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 in
       let se2 = generate_c_expr e2 in
+      let set_vars = se1.D.set_vars @ se2.D.set_vars in
       let def_test = D.dor se1.def_test se2.def_test in
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true { def_test; value_comp }
+      D.build_transitive_composition ~safe_def:true
+        { set_vars; def_test; value_comp }
   | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
       let bound = generate_c_expr e1 in
+      let set_vars = bound.D.set_vars in
       let def_test =
         D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
       in
       let value_comp =
         D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | FuncCall ((Func fn, _), args) ->
+      let res = fresh_c_local "result" in
+      let def_res = Pp.spr "def_%s" res in
+      let val_res = Pp.spr "val_%s" res in
+      let def_res_ptr = Pp.spr "&%s" def_res in
+      let val_res_ptr = Pp.spr "&%s" val_res in
+      let set_vars, arg_exprs =
+        let rec aux (set_vars, arg_exprs) = function
+          | [] -> (List.rev set_vars, List.rev arg_exprs)
+          | a :: la ->
+              let e = generate_c_expr a in
+              let set_vars = List.rev e.set_vars @ set_vars in
+              let arg_exprs = e.value_comp :: e.def_test :: arg_exprs in
+              aux (set_vars, arg_exprs) la
+        in
+        aux ([], []) args
+      in
+      let d_fun =
+        D.dfun fn
+          ([
+             D.dlow_level "irdata";
+             D.dlow_level def_res_ptr;
+             D.dlow_level val_res_ptr;
+           ]
+          @ arg_exprs)
+      in
+      let set_vars =
+        set_vars
+        @ [ (D.Def, def_res, d_fun); (D.Val, val_res, D.dlow_level val_res) ]
+      in
+      let def_test = D.dinstr def_res in
+      let value_comp = D.dinstr val_res in
+      D.build_transitive_composition { set_vars; def_test; value_comp }
   | FuncCall _ -> assert false (* should not happen *)
-  | Literal (Float f) -> { def_test = D.dtrue; value_comp = D.lit f }
-  | Literal Undefined -> { def_test = D.dfalse; value_comp = D.lit 0. }
+  | Literal (Float f) ->
+      { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
+  | Literal Undefined ->
+      { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
   | Var var ->
-      { def_test = D.m_var var None Def; value_comp = D.m_var var None Val }
+      {
+        set_vars = [];
+        def_test = D.m_var var None Def;
+        value_comp = D.m_var var None Val;
+      }
   | Attribut (var, a) ->
       let ptr = VID.gen_info_ptr (Pos.unmark var) in
       let def_test =
@@ -273,28 +351,28 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
         D.dinstr
           (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
       in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | Size var ->
       let ptr = VID.gen_info_ptr (Pos.unmark var) in
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbAnomalies ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_anomalies(irdata)" in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbDiscordances ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_discordances(irdata)" in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbInformatives ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_informatives(irdata)" in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbBloquantes ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_bloquantes(irdata)" in
-      D.build_transitive_composition { def_test; value_comp }
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbCategory _ -> assert false
   | FuncCallLoop _ | Loop _ -> assert false
 
@@ -304,9 +382,11 @@ let generate_m_assign (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
   let pr form = Format.fprintf oc form in
   let def_var = D.generate_variable ~def_flag:true offset var in
   let val_var = D.generate_variable offset var in
-  let locals, def, value = D.build_expression se in
+  let locals, set, def, value = D.build_expression se in
   if D.is_always_true def then
-    pr "%a%a@;@[<v 2>{@;%a@]@;}" D.format_local_declarations locals
+    pr "%a%a%a@;@[<v 2>{@;%a@]@;}" D.format_local_declarations locals
+      (D.format_set_vars dgfip_flags)
+      set
       (D.format_assign dgfip_flags def_var)
       def
       (D.format_assign dgfip_flags val_var)
@@ -332,7 +412,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
   | None ->
       let se = generate_c_expr vexpr in
       if Com.Var.is_ref var then (
-        pr "@[<v 2>{";
+        pr "@[<v 2>{@;";
         let idx = fresh_c_local "idxPROUT" in
         pr "@;int %s;" idx;
         pr "@;@[<v 2>for(%s = 0; %s < %s; %s++) {" idx idx (VID.gen_size var)
@@ -342,14 +422,16 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
         pr "@]@;}")
       else generate_m_assign dgfip_flags var None fmt se
   | Some ei ->
-      pr "@[<v 2>{@,";
+      pr "@[<v 2>{@;";
       let idx_val = fresh_c_local "mpp_idx" in
       let idx_def = idx_val ^ "_d" in
-      let locals_idx, def_idx, value_idx =
+      let locals_idx, set_idx, def_idx, value_idx =
         D.build_expression @@ generate_c_expr ei
       in
-      pr "char %s;@;long %s;@;%a%a@;%a" idx_def idx_val
+      pr "char %s;@;long %s;@;%a%a%a@;%a" idx_def idx_val
         D.format_local_declarations locals_idx
+        (D.format_set_vars dgfip_flags)
+        set_idx
         (D.format_assign dgfip_flags idx_def)
         def_idx
         (D.format_assign dgfip_flags idx_val)
@@ -373,9 +455,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       Format.fprintf oc "@[<v 2>{@,";
       let cond_val = fresh_c_local "mpp_cond" in
       let cond_def = cond_val ^ "_d" in
-      let locals, def, value = D.build_expression @@ generate_c_expr cond in
-      Format.fprintf oc "char %s;@;double %s;@;%a%a@;%a@;" cond_def cond_val
+      let locals, set, def, value =
+        D.build_expression @@ generate_c_expr cond
+      in
+      Format.fprintf oc "char %s;@;double %s;@;%a%a%a@;%a@;" cond_def cond_val
         D.format_local_declarations locals
+        (D.format_set_vars dgfip_flags)
+        set
         (D.format_assign dgfip_flags cond_def)
         def
         (D.format_assign dgfip_flags cond_val)
@@ -421,11 +507,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               Format.fprintf oc "print_string(%s, %s, %s->alias);@;" print_std
                 pr_ctx ptr
           | PrintIndent e ->
-              let locals, def, value =
+              let locals, set, def, value =
                 D.build_expression @@ generate_c_expr e
               in
-              Format.fprintf oc "@[<v 2>{%a%a@;%a@;@]}@;"
+              Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
                 D.format_local_declarations locals
+                (D.format_set_vars dgfip_flags)
+                set
                 (D.format_assign dgfip_flags print_def)
                 def
                 (D.format_assign dgfip_flags print_val)
@@ -435,11 +523,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                 pr_ctx print_val;
               Format.fprintf oc "}@;"
           | PrintExpr (e, min, max) ->
-              let locals, def, value =
+              let locals, set, def, value =
                 D.build_expression @@ generate_c_expr e
               in
-              Format.fprintf oc "@[<v 2>{%a%a@;%a@;@]}@;"
+              Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
                 D.format_local_declarations locals
+                (D.format_set_vars dgfip_flags)
+                set
                 (D.format_assign dgfip_flags print_def)
                 def
                 (D.format_assign dgfip_flags print_val)
@@ -497,7 +587,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let ref_tab = VID.gen_tab vcd.loc in
               let cond_val = "cond_" ^ it_name in
               let cond_def = cond_val ^ "_d" in
-              let locals, def, value =
+              let locals, set, def, value =
                 D.build_expression @@ generate_c_expr expr
               in
               pr "@[<v 2>{@;";
@@ -512,6 +602,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
               pr "@[<v 2>{@;";
               pr "%a" D.format_local_declarations locals;
+              pr "%a" (D.format_set_vars dgfip_flags) set;
               pr "%a@;" (D.format_assign dgfip_flags cond_def) def;
               pr "%a" (D.format_assign dgfip_flags cond_val) value;
               pr "@]@;";
@@ -549,7 +640,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let ref_val = VID.gen_val_ptr var in
               let cond_val = "cond_" ^ it_name in
               let cond_def = cond_val ^ "_d" in
-              let locals, def, value =
+              let locals, set, def, value =
                 D.build_expression @@ generate_c_expr expr
               in
               pr "@[<v 2>{@;";
@@ -564,6 +655,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
               pr "@[<v 2>{@;";
               pr "%a" D.format_local_declarations locals;
+              pr "%a" (D.format_set_vars dgfip_flags) set;
               pr "%a@;" (D.format_assign dgfip_flags cond_def) def;
               pr "%a" (D.format_assign dgfip_flags cond_val) value;
               pr "@]@;";
@@ -602,11 +694,6 @@ and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
   Format.pp_print_list (generate_stmt dgfip_flags program) oc stmts;
   Format.fprintf oc "@]"
 
-let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
-    (function_name : string) =
-  Format.fprintf oc "struct S_discord * %s(T_irdata* irdata)%s" function_name
-    (if add_semicolon then ";" else "")
-
 let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
   let pr fmt = Format.fprintf oc fmt in
   if tf.target_sz_tmps > 0 then (
@@ -637,6 +724,51 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
   if tf.target_nb_refs > 0 then
     pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs;
   pr "@;"
+
+let generate_function_prototype (add_semicolon : bool) (oc : Format.formatter)
+    (fd : Mir.target_data) =
+  let fn = Pos.unmark fd.target_name in
+  let pp_args fmt args =
+    List.iteri
+      (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
+      args
+  in
+  Format.fprintf oc
+    "int %s(T_irdata* irdata, char *def_res, double *val_res%a)%s" fn pp_args
+    fd.Mir.target_args
+    (if add_semicolon then ";" else "")
+
+let generate_function (dgfip_flags : Dgfip_options.flags)
+    (program : Mir.program) (oc : Format.formatter) (fn : string) =
+  let pr fmt = Format.fprintf oc fmt in
+  let fd = Mir.TargetMap.find fn program.program_functions in
+  pr "@[<v 2>%a{@;" (generate_function_prototype false) fd;
+  pr "%a@;" generate_var_tmp_decls fd;
+  if dgfip_flags.flg_trace then pr "aff1(\"debut %s\\n\");@;" fn;
+  pr "%a@;" (generate_stmts dgfip_flags program) fd.target_prog;
+  if dgfip_flags.flg_trace then pr "aff1(\"fin %s\\n\");@;" fn;
+  pr "@;";
+  if fd.target_nb_refs > 0 then
+    pr "irdata->ref_org = irdata->ref_org - %d;@;" fd.target_nb_refs;
+  if fd.target_sz_tmps > 0 then
+    pr "irdata->tmps_org = irdata->tmps_org - %d;@;" fd.target_sz_tmps;
+  pr "return 1;@]@;}@\n@\n"
+
+let generate_functions (dgfip_flags : Dgfip_options.flags)
+    (program : Mir.program)
+    (filemap : (out_channel * Format.formatter) StrMap.t) =
+  let functions = Mir.TargetMap.bindings program.program_functions in
+  List.iter
+    (fun (name, Mir.{ target_file; _ }) ->
+      let file_str = match target_file with Some s -> s | None -> "" in
+      let _, fmt = StrMap.find file_str filemap in
+      generate_function (dgfip_flags : Dgfip_options.flags) program fmt name)
+    functions
+
+let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
+    (function_name : string) =
+  Format.fprintf oc "struct S_discord * %s(T_irdata* irdata)%s" function_name
+    (if add_semicolon then ";" else "")
 
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
@@ -703,6 +835,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags)
       program.program_targets
       (StrMap.one "" (_oc, oc))
   in
+  generate_functions dgfip_flags program filemap;
   generate_targets dgfip_flags program filemap;
   StrMap.iter
     (fun _ (oc, fmt) ->

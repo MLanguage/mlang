@@ -334,7 +334,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
   in
   aux [] prog
 
-let get_targets (error_decls : Com.Error.t StrMap.t)
+let get_targets (is_function : bool) (error_decls : Com.Error.t StrMap.t)
     (cats : Com.CatVar.data Com.CatVar.Map.t) (var_data : Com.Var.t StrMap.t)
     (ts : Mast.target StrMap.t) : Mir.target_data Mir.TargetMap.t =
   StrMap.fold
@@ -344,13 +344,21 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
       let target_apps = t.target_apps in
       let target_nb_refs = t.target_nb_refs in
       let tmp_var_data, _ =
-        List.fold_left
-          (fun (tmp_var_data, n) (name, pos) ->
-            let var = Com.Var.new_ref ~name:(name, pos) ~loc_int:n in
-            let tmp_var_data = StrMap.add name var tmp_var_data in
-            (tmp_var_data, n + 1))
-          (var_data, -target_nb_refs)
-          t.target_args
+        if is_function then
+          List.fold_left
+            (fun (tmp_var_data, n) (name, pos) ->
+              let var = Com.Var.new_arg ~name:(name, pos) ~loc_int:n in
+              let tmp_var_data = StrMap.add name var tmp_var_data in
+              (tmp_var_data, n + 1))
+            (var_data, 0) t.target_args
+        else
+          List.fold_left
+            (fun (tmp_var_data, n) (name, pos) ->
+              let var = Com.Var.new_ref ~name:(name, pos) ~loc_int:n in
+              let tmp_var_data = StrMap.add name var tmp_var_data in
+              (tmp_var_data, n + 1))
+            (var_data, -target_nb_refs)
+            t.target_args
       in
       let target_sz_tmps = t.target_sz_tmps in
       let tmp_var_data, _ =
@@ -365,6 +373,13 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
           t.target_tmp_vars
           (tmp_var_data, -target_sz_tmps)
       in
+      let tmp_var_data =
+        if is_function then
+          let vn, vpos = Option.get t.target_result in
+          let var = Com.Var.new_res ~name:(vn, vpos) in
+          StrMap.add vn var tmp_var_data
+        else tmp_var_data
+      in
       let target_args =
         List.map
           (fun (vn, pos) -> (StrMap.find vn tmp_var_data, pos))
@@ -378,6 +393,11 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             (var, pos, size'))
           t.target_tmp_vars
       in
+      let target_result =
+        match t.target_result with
+        | Some (vn, vpos) -> Some (StrMap.find vn tmp_var_data, vpos)
+        | None -> None
+      in
       let target_prog =
         translate_prog error_decls cats tmp_var_data
           (List.length target_args - target_nb_refs)
@@ -390,6 +410,7 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
             target_file;
             target_apps;
             target_args;
+            target_result;
             target_tmp_vars;
             target_prog;
             target_nb_tmps = t.target_nb_tmps;
@@ -403,11 +424,15 @@ let get_targets (error_decls : Com.Error.t StrMap.t)
 let translate (p : Mast.program) (main_target : string) : Mir.program =
   let p = Expand_macros.proceed p in
   let prog = Check_validity.proceed p main_target in
+  let prog_functions = prog.prog_functions in
   let prog_targets = prog.prog_targets in
   let var_category_map = prog.prog_var_cats in
   let var_data = prog.prog_vars in
   let errs = prog.prog_errors in
-  let targets = get_targets errs var_category_map var_data prog_targets in
+  let functions =
+    get_targets true errs var_category_map var_data prog_functions
+  in
+  let targets = get_targets false errs var_category_map var_data prog_targets in
   Mir.
     {
       program_safe_prefix = prog.prog_prefix;
@@ -416,6 +441,7 @@ let translate (p : Mast.program) (main_target : string) : Mir.program =
       program_rule_domains = prog.prog_rdoms;
       program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
+      program_functions = functions;
       program_targets = targets;
       program_main_target = prog.prog_main_target;
       program_stats = prog.prog_stats;

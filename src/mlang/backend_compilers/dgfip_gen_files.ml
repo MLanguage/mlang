@@ -1497,7 +1497,9 @@ typedef struct S_irdata T_irdata;
 #define EST_CALCULEE   0x04000
 #define EST_BASE       0x08000
 #define EST_TEMPORAIRE 0x10000
-#define EST_MASQUE     0x1c000
+#define EST_ARGUMENT   0x20000
+#define EST_RESULTAT   0x40000
+#define EST_MASQUE     0x3c000
 #define INDICE_VAL     0x03fff
 
 #define RESTITUEE    5
@@ -1630,6 +1632,20 @@ extern void exporte_erreur _PROTS((T_irdata *irdata ));
 extern void init_erreur(T_irdata *irdata);
 |}
 
+let gen_decl_functions fmt (cprog : Mir.program) =
+  let functions = Mir.TargetMap.bindings cprog.program_functions in
+  let pp_args fmt args =
+    List.iteri
+      (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
+      args
+  in
+  Format.fprintf fmt "@[<v 0>%a@]@,"
+    (Format.pp_print_list (fun fmt (fn, fd) ->
+         Format.fprintf fmt
+           "extern int %s(T_irdata* irdata, char *def_res, double *val_res%a);"
+           fn pp_args fd.Mir.target_args))
+    functions
+
 let gen_decl_targets fmt (cprog : Mir.program) =
   let targets = Mir.TargetMap.bindings cprog.program_targets in
   Format.fprintf fmt "@[<v 0>%a@]@,"
@@ -1666,8 +1682,9 @@ let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
   pr "\n";
   gen_lib fmt cprog flags rules verifs chainings errors;
   pr "\n";
-  gen_decl_targets fmt cprog;
+  gen_decl_functions fmt cprog;
   pr "\n";
+  gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
 let gen_mlang_c fmt =

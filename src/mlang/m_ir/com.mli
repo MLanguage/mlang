@@ -49,6 +49,8 @@ type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * int
   | LocRef of string * int
+  | LocArg of string * int
+  | LocRes of string
 
 module Var : sig
   type id = int
@@ -64,7 +66,7 @@ module Var : sig
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp of int option | Ref
+  type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
@@ -107,6 +109,10 @@ module Var : sig
 
   val is_ref : t -> bool
 
+  val is_arg : t -> bool
+
+  val is_res : t -> bool
+
   val init_loc : CatVar.t -> loc_tgv
 
   val new_tgv :
@@ -124,6 +130,10 @@ module Var : sig
     name:string Pos.marked -> is_table:int option -> loc_int:int -> t
 
   val new_ref : name:string Pos.marked -> loc_int:int -> t
+
+  val new_arg : name:string Pos.marked -> loc_int:int -> t
+
+  val new_res : name:string Pos.marked -> t
 
   val pp : Format.formatter -> t -> unit
 
@@ -200,6 +210,7 @@ type func =
   | Supzero  (** ??? *)
   | VerifNumber
   | ComplNumber
+  | Func of string
 
 type 'v expression =
   | TestInSet of bool * 'v m_expression * 'v set_value list

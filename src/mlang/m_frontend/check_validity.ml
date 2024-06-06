@@ -300,6 +300,28 @@ module Err = struct
       Format.asprintf "wrong number of arguments, %d required" nb_args
     in
     Errors.raise_spanned_error msg pos
+
+  let target_must_not_have_a_result tn pos =
+    let msg = Format.sprintf "target %s must not have a result" tn in
+    Errors.raise_spanned_error msg pos
+
+  let function_result_missing fn pos =
+    let msg = Format.sprintf "result missing in function %s" fn in
+    Errors.raise_spanned_error msg pos
+
+  let forbidden_out_var_in_function vn fn pos =
+    let msg =
+      Format.sprintf "variable %s cannot be written in function %s" vn fn
+    in
+    Errors.raise_spanned_error msg pos
+
+  let function_does_not_exist fn pos =
+    let msg = Format.sprintf "function %s does not exist" fn in
+    Errors.raise_spanned_error msg pos
+
+  let is_base_function fn pos =
+    let msg = Format.sprintf "function %s already exist as base function" fn in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
@@ -352,6 +374,7 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Mir.verif_domain_data doms;
   prog_vdom_syms : syms;
+  prog_functions : Mast.target StrMap.t;
   prog_rules : rule IntMap.t;
   prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;
@@ -423,6 +446,7 @@ let empty_program (p : Mast.program) prog_app main_target =
     prog_rdom_syms = Mast.DomainIdMap.empty;
     prog_vdoms = Mast.DomainIdMap.empty;
     prog_vdom_syms = Mast.DomainIdMap.empty;
+    prog_functions = StrMap.empty;
     prog_rules = IntMap.empty;
     prog_rdom_calls = StrMap.empty;
     prog_verifs = IntMap.empty;
@@ -1111,6 +1135,7 @@ type var_env = {
   prog : program;
   tmp_vars : int option Pos.marked StrMap.t;
   ref_vars : Pos.t StrMap.t;
+  res_var : string Pos.marked option;
 }
 
 let rec fold_var_expr
@@ -1152,7 +1177,7 @@ let rec fold_var_expr
       match e3_opt with
       | Some e3 -> fold_var_expr fold_var is_filter acc e3 env
       | None -> acc)
-  | FuncCall ((func_name, _), args) -> (
+  | FuncCall ((func_name, fpos), args) -> (
       let check_func arity =
         if arity > -1 && List.length args <> arity then
           Err.wrong_arity_of_function func_name arity expr_pos;
@@ -1185,7 +1210,15 @@ let rec fold_var_expr
       | Com.Supzero -> check_func 1
       | Com.PresentFunc ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-          check_func 1)
+          check_func 1
+      | Com.Func fn ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          let fd =
+            match StrMap.find_opt fn env.prog.prog_functions with
+            | Some fd -> fd
+            | None -> Err.function_does_not_exist fn fpos
+          in
+          check_func (List.length fd.target_args))
   | Literal _ -> acc
   | Var var ->
       if is_filter then Err.variable_forbidden_in_filter expr_pos;
@@ -1236,7 +1269,11 @@ let check_variable (var : Mast.variable Pos.marked)
             | None -> (
                 match StrMap.find_opt vn env.ref_vars with
                 | Some decl_pos -> (vn, Both, decl_pos)
-                | None -> Err.unknown_variable var_pos)))
+                | None -> (
+                    match env.res_var with
+                    | Some (vr, decl_pos) when vr = vn ->
+                        (vn, OneOf None, decl_pos)
+                    | Some _ | None -> Err.unknown_variable var_pos))))
     | Generic _ -> assert false
   in
   match (idx_mem, decl_mem) with
@@ -1319,7 +1356,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     (is_rule : bool) (env : var_env) :
     program * Mast.instruction Pos.marked list * StrSet.t * StrSet.t =
   let rec aux (env, res, in_vars, out_vars) = function
-    | [] -> (env.prog, List.rev res, in_vars, out_vars)
+    | [] -> (env, List.rev res, in_vars, out_vars)
     | m_instr :: il -> (
         let instr, instr_pos = m_instr in
         match instr with
@@ -1532,104 +1569,143 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             aux (env, m_instr :: res, in_vars, out_vars) il)
   in
-  aux (env, [], StrSet.empty, StrSet.empty) instrs
-
-let check_target (t : Mast.target) (prog : program) : program =
-  let tname, tpos = t.Mast.target_name in
-  let target_name =
-    (match StrMap.find_opt tname prog.prog_targets with
-    | Some { target_name = _, old_pos; _ } ->
-        Err.target_already_declared tname old_pos tpos
-    | None -> ());
-    (tname, tpos)
+  let env, res, in_vars, out_vars =
+    aux (env, [], StrSet.empty, StrSet.empty) instrs
   in
+  let tmp_vars =
+    StrMap.fold (fun vn _ s -> StrSet.add vn s) env.tmp_vars StrSet.empty
+  in
+  let in_vars = StrSet.diff in_vars tmp_vars in
+  let out_vars = StrSet.diff out_vars tmp_vars in
+  (env.prog, res, in_vars, out_vars)
+
+let check_target (is_function : bool) (t : Mast.target) (prog : program) :
+    program =
+  let target_name = t.target_name in
+  let tname, tpos = target_name in
+  if Com.Func tname <> Pos.unmark (Parse_utils.parse_function_name target_name)
+  then Err.is_base_function tname tpos;
+  (match StrMap.find_opt tname prog.prog_targets with
+  | Some { target_name = _, old_pos; _ } ->
+      Err.target_already_declared tname old_pos tpos
+  | None -> ());
   let target_file = Some (get_target_file tpos) in
-  let target_apps = t.Mast.target_apps in
+  let target_apps = t.target_apps in
   StrMap.iter
     (fun _ (app, app_pos) ->
       match StrMap.find_opt app prog.prog_apps with
       | None -> Err.unknown_application app_pos
       | Some _ -> ())
     target_apps;
-  if StrMap.mem prog.prog_app target_apps then (
-    let target_args = t.Mast.target_args in
-    List.iter
-      (fun (vn, vpos) ->
-        match StrMap.find_opt vn prog.prog_vars with
-        | Some Com.Var.{ name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_args;
-    let target_tmp_vars = t.Mast.target_tmp_vars in
-    StrMap.iter
-      (fun _ ((vn, vpos), _) ->
-        match StrMap.find_opt vn prog.prog_vars with
-        | Some Com.Var.{ name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_tmp_vars;
-    List.iter
-      (fun (vn, vpos) ->
-        match StrMap.find_opt vn target_tmp_vars with
-        | Some ((_, old_pos), _) ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_args;
-    let tmp_vars =
-      StrMap.map
-        (fun (var, size) ->
-          let vpos = Pos.get_position var in
-          let sz =
-            match size with
-            | None -> None
-            | Some (Mast.LiteralSize i, _) -> Some i
-            | Some (Mast.SymbolSize _, _) -> assert false
-          in
-          (sz, vpos))
-        target_tmp_vars
-    in
-    let ref_vars =
-      List.fold_left
-        (fun res (vn, vpos) -> StrMap.add vn vpos res)
-        StrMap.empty target_args
-    in
-    let prog, target_prog =
-      let env = { prog; tmp_vars; ref_vars } in
-      let prog, target_prog, _, _ =
-        check_instructions t.Mast.target_prog false env
+  let target, prog =
+    if StrMap.mem prog.prog_app target_apps then (
+      let target_args = t.target_args in
+      List.iter
+        (fun (vn, vpos) ->
+          match StrMap.find_opt vn prog.prog_vars with
+          | Some Com.Var.{ name = _, old_pos; _ } ->
+              Err.variable_already_declared vn old_pos vpos
+          | None -> ())
+        target_args;
+      let target_tmp_vars = t.target_tmp_vars in
+      StrMap.iter
+        (fun _ ((vn, vpos), _) ->
+          match StrMap.find_opt vn prog.prog_vars with
+          | Some Com.Var.{ name = _, old_pos; _ } ->
+              Err.variable_already_declared vn old_pos vpos
+          | None -> ())
+        target_tmp_vars;
+      List.iter
+        (fun (vn, vpos) ->
+          match StrMap.find_opt vn target_tmp_vars with
+          | Some ((_, old_pos), _) ->
+              Err.variable_already_declared vn old_pos vpos
+          | None -> ())
+        target_args;
+      let target_result = t.target_result in
+      (match target_result with
+      | Some (vn, vpos) -> (
+          if not is_function then Err.target_must_not_have_a_result tname tpos;
+          (match StrMap.find_opt vn prog.prog_vars with
+          | Some { name = _, old_pos; _ } ->
+              Err.variable_already_declared vn old_pos vpos
+          | None -> ());
+          (match List.find_opt (fun (va, _) -> vn = va) target_args with
+          | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
+          | None -> ());
+          match StrMap.find_opt vn target_tmp_vars with
+          | Some ((_, old_pos), _) ->
+              Err.variable_already_declared vn old_pos vpos
+          | None -> ())
+      | None -> if is_function then Err.function_result_missing tname tpos);
+      let tmp_vars =
+        StrMap.map
+          (fun (var, size) ->
+            let vpos = Pos.get_position var in
+            let sz =
+              match size with
+              | None -> None
+              | Some (Mast.LiteralSize i, _) -> Some i
+              | Some (Mast.SymbolSize _, _) -> assert false
+            in
+            (sz, vpos))
+          target_tmp_vars
       in
-      (prog, target_prog)
-    in
-    let target =
-      Mast.
+      let ref_vars =
+        List.fold_left
+          (fun res (vn, vpos) -> StrMap.add vn vpos res)
+          StrMap.empty target_args
+      in
+      let res_var = target_result in
+      let prog, target_prog =
+        let env = { prog; tmp_vars; ref_vars; res_var } in
+        let prog, target_prog, _in_vars, out_vars =
+          check_instructions t.target_prog is_function env
+        in
+        (if is_function then
+         let vr = Pos.unmark (Option.get target_result) in
+         let bad_out_vars = StrSet.remove vr out_vars in
+         if StrSet.card bad_out_vars > 0 then
+           let vn = StrSet.min_elt bad_out_vars in
+           Err.forbidden_out_var_in_function vn tname tpos);
+        (prog, target_prog)
+      in
+      let target =
         {
           t with
           target_name;
           target_file;
           target_apps;
           target_args;
+          target_result;
           target_tmp_vars;
           target_prog;
         }
-    in
-    let prog_targets = StrMap.add tname target prog.prog_targets in
-    { prog with prog_targets })
+      in
+      (target, prog))
+    else
+      let target_args = [] in
+      let target_result = Option.map (Pos.same_pos_as "") t.target_result in
+      let target_tmp_vars = StrMap.empty in
+      let target_prog = [] in
+      let target =
+        {
+          t with
+          target_name;
+          target_file;
+          target_apps;
+          target_args;
+          target_result;
+          target_tmp_vars;
+          target_prog;
+        }
+      in
+      (target, prog)
+  in
+  if is_function then
+    let prog_functions = StrMap.add tname target prog.prog_functions in
+    { prog with prog_functions }
   else
-    let target_args = [] in
-    let target_tmp_vars = StrMap.empty in
-    let target_prog = [] in
-    let target =
-      Mast.
-        {
-          t with
-          target_name;
-          target_file;
-          target_apps;
-          target_args;
-          target_tmp_vars;
-          target_prog;
-        }
-    in
     let prog_targets = StrMap.add tname target prog.prog_targets in
     { prog with prog_targets }
 
@@ -1709,7 +1785,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     let rule_instrs = r.Mast.rule_formulaes in
     let prog, rule_instrs, rule_in_vars, rule_out_vars =
-      let env = { prog; tmp_vars; ref_vars = StrMap.empty } in
+      let env = { prog; tmp_vars; ref_vars = StrMap.empty; res_var = None } in
       check_instructions rule_instrs true env
     in
     let rule_seq, prog = get_seq prog in
@@ -1750,6 +1826,7 @@ let convert_rules (prog : program) : program =
               target_file;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
               target_args = [];
+              target_result = None;
               target_tmp_vars = rule.rule_tmp_vars;
               target_prog = rule.rule_instrs;
               target_nb_tmps = 0;
@@ -1898,6 +1975,7 @@ let complete_rule_domains (prog : program) : program =
                 target_apps =
                   StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
                 target_args = [];
+                target_result = None;
                 target_tmp_vars = StrMap.empty;
                 target_prog;
                 target_nb_tmps = 0;
@@ -1996,6 +2074,7 @@ let complete_chainings (prog : program) : program =
               target_file = None;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
               target_args = [];
+              target_result = None;
               target_tmp_vars = StrMap.empty;
               target_prog;
               target_nb_tmps = 0;
@@ -2065,7 +2144,12 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             in
             let init = (Com.CatVar.Map.empty, StrMap.empty) in
             let env =
-              { prog; tmp_vars = StrMap.empty; ref_vars = StrMap.empty }
+              {
+                prog;
+                tmp_vars = StrMap.empty;
+                ref_vars = StrMap.empty;
+                res_var = None;
+              }
             in
             fold_var_expr fold_var false init verif_expr env
           in
@@ -2124,6 +2208,7 @@ let convert_verifs (prog : program) : program =
               target_file;
               target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
               target_args = [];
+              target_result = None;
               target_tmp_vars = StrMap.empty;
               target_prog;
               target_nb_tmps = 0;
@@ -2226,7 +2311,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             | [ Some f ] when f = 0.0 -> None
             | [ r ] -> r
             | _ -> assert false)
-        | Com.PresentFunc | Com.Multimax -> assert false)
+        | Com.PresentFunc | Com.Multimax | Com.Func _ -> assert false)
     | Comparison (op, e0, e1) -> (
         match (aux e0, aux e1) with
         | None, _ | _, None -> None
@@ -2368,6 +2453,7 @@ let complete_verif_calls (prog : program) : program =
                   target_apps =
                     StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
                   target_args = [];
+                  target_result = None;
                   target_tmp_vars = StrMap.empty;
                   target_prog;
                   target_nb_tmps = 0;
@@ -2401,6 +2487,7 @@ let complete_verif_calls (prog : program) : program =
                   target_apps =
                     StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
                   target_args = [];
+                  target_result = None;
                   target_tmp_vars = StrMap.empty;
                   target_prog;
                   target_nb_tmps = 0;
@@ -2435,8 +2522,8 @@ let proceed (p : Mast.program) (main_target : string) : program =
             | Mast.Output _ -> prog (* unused *)
             | Mast.RuleDomDecl decl -> check_rule_dom_decl decl prog
             | Mast.VerifDomDecl decl -> check_verif_dom_decl decl prog
-            | Mast.Function _t -> prog
-            | Mast.Target t -> check_target t prog
+            | Mast.Function f -> check_target true f prog
+            | Mast.Target t -> check_target false t prog
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)
           prog source_file)
