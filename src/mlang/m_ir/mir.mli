@@ -55,6 +55,7 @@ type target_data = {
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
   target_args : (Com.Var.t * Pos.t) list;
+  target_result : (Com.Var.t * Pos.t) option;
   target_tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
@@ -92,6 +93,7 @@ type program = {
   program_vars : Com.Var.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
+  program_functions : target_data TargetMap.t;
   program_targets : target_data TargetMap.t;
   program_main_target : string;
   program_stats : stats;

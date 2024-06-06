@@ -766,21 +766,21 @@ sinon
 #  calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
   calculer cible traite_double_liquidation_pvro;
 finsi
-#{
+
 fonction truc:
 application: iliad;
 argument: A, B, C;
 resultat: D;
 variable temporaire: T1, T2, T3;
-B = B * 2;
+T1 = B * 2;
 D = A + B + C + 5000;
 afficher_erreur "truc(" (A) ", " (B) ", " (C) ") = ";
-}#
+
 cible enchainement_primitif:
 application: iliad;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
-#afficher_erreur "# " (truc(1, 2, 3)) "\n";
+afficher_erreur "# " (truc(1, 2, 3)) "\n";
 calculer cible ir_verif_saisie_isf;
 finalise_erreurs;
 si nb_anomalies() > 0 alors

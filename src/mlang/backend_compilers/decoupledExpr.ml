@@ -71,6 +71,7 @@ and expr =
   | Daccess of Com.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
+  | DlowLevel of string
 
 and expr_var = Local of stack_slot | M of Com.Var.t * offset * dflag
 
@@ -78,7 +79,11 @@ and t = expr * dflag * local_vars
 
 and constr = local_stacks -> local_vars -> t
 
-type expression_composition = { def_test : constr; value_comp : constr }
+type expression_composition = {
+  set_vars : (dflag * string * constr) list;
+  def_test : constr;
+  value_comp : constr;
+}
 
 type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
 
@@ -131,6 +136,7 @@ let rec expr_position (expr : expr) (st : local_stacks) =
           (* Needed to bumb the stack to avoid erasing subexpressions *)
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
+  | DlowLevel _ -> Not_to_stack
   | _ -> Must_be_pushed
 
 (* allocate to local variable if necessary *)
@@ -346,6 +352,9 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
+let dlow_level (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
+  (DlowLevel i, Val, [])
+
 let access (var : Com.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Val e in
@@ -385,24 +394,33 @@ let it0 (c : constr) (t : constr) (stacks : local_stacks) (ctx : local_vars) : t
   | _ -> (Dite (c, t, e), tkind, lvt @ lvc)
 
 let build_transitive_composition ?(safe_def = false)
-    ({ def_test; value_comp } : expression_composition) : expression_composition
-    =
+    ({ set_vars; def_test; value_comp } : expression_composition) :
+    expression_composition =
   (* `safe_def` can be set on call when we are sure that `value_comp` will
      always happen to be zero when `def_test` ends up false. E.g. arithmetic
      operation have such semantic property (funny question is what's the
      causality ?). This allows to remove a check to the definition flag when we
      compute the value, avoiding a lot of unnecessary code. *)
   let value_comp = if safe_def then value_comp else it0 def_test value_comp in
-  { def_test; value_comp }
+  { set_vars; def_test; value_comp }
 
 type local_decls = int * int (* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
    further construction. *)
-let build_expression (expr_comp : expression_composition) : local_decls * t * t
-    =
+let build_expression (expr_comp : expression_composition) :
+    local_decls * (dflag * string * t) list * t * t =
   let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
   let empty_locals = [] in
+  let set_tests =
+    List.map
+      (fun (kd, vn, constr) ->
+        (kd, vn, collapse_constr empty_stacks empty_locals constr))
+      expr_comp.set_vars
+  in
+  let set_locals =
+    List.concat (List.map (fun (_, _, (_, _, locals)) -> locals) set_tests)
+  in
   let ((_, _, def_locals) as def_test) =
     collapse_constr empty_stacks empty_locals expr_comp.def_test
   in
@@ -416,9 +434,9 @@ let build_expression (expr_comp : expression_composition) : local_decls * t * t
         | Def -> (max slot.depth def_s, val_s)
         | Val -> (def_s, max slot.depth val_s))
       (-1, -1)
-      (def_locals @ value_locals)
+      (set_locals @ def_locals @ value_locals)
   in
-  (stacks_size, def_test, value_comp)
+  (stacks_size, set_tests, def_test, value_comp)
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
   let kind = match kind with Def -> "int" | Val -> "real" in
@@ -484,7 +502,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
-  | Dinstr instr -> Format.fprintf fmt "%s" instr
+  | Dinstr instr | DlowLevel instr -> Format.fprintf fmt "%s" instr
   | Daccess (var, dflag, de) ->
       Format.fprintf fmt "(%s[(int)%a])"
         (generate_variable ~def_flag:(dflag = Def)
@@ -518,3 +536,14 @@ let format_assign (dgfip_flags : Dgfip_options.flags) (var : string) fmt
   Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
     (format_local_vars_defs dgfip_flags)
     lv var (format_dexpr dgfip_flags) e
+
+let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
+    (set_vars : (dflag * string * t) list) =
+  List.iter
+    (fun ((kd, vn, _expr) : dflag * string * t) ->
+      Pp.fpr fmt "%s %s;@;" (match kd with Def -> "char" | Val -> "double") vn)
+    set_vars;
+  List.iter
+    (fun ((_kd, vn, expr) : dflag * string * t) ->
+      Pp.fpr fmt "%a@;" (format_assign dgfip_flags vn) expr)
+    set_vars

@@ -102,6 +102,8 @@ type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * int
   | LocRef of string * int
+  | LocArg of string * int
+  | LocRes of string
 
 module Var = struct
   type id = int
@@ -124,7 +126,7 @@ module Var = struct
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp of int option | Ref
+  type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
@@ -148,7 +150,7 @@ module Var = struct
     match v.scope with
     | Tgv tgv -> tgv.is_table
     | Temp is_table -> is_table
-    | Ref -> None
+    | Ref | Arg | Res -> None
 
   let cat_var_loc v =
     match v.scope with
@@ -157,7 +159,7 @@ module Var = struct
         | CatVar.Input _ -> Some CatVar.LocInput
         | Computed { is_base } when is_base -> Some CatVar.LocBase
         | Computed _ -> Some CatVar.LocComputed)
-    | Temp _ | Ref -> None
+    | Temp _ | Ref | Arg | Res -> None
 
   let size v = match is_table v with None -> 1 | Some sz -> sz
 
@@ -185,11 +187,18 @@ module Var = struct
   let loc_int v =
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_int
-    | LocTmp (_, li) | LocRef (_, li) -> li
+    | LocTmp (_, li) | LocRef (_, li) | LocArg (_, li) -> li
+    | LocRes id ->
+        Errors.raise_error
+          (Format.sprintf "variable %s doesn't have an index" id)
 
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
   let is_ref v = v.scope = Ref
+
+  let is_arg v = v.scope = Arg
+
+  let is_res v = v.scope = Res
 
   let init_loc loc_cat_id =
     {
@@ -222,7 +231,20 @@ module Var = struct
     let loc = LocRef (Pos.unmark name, loc_int) in
     { name; id = new_id (); loc; scope = Ref }
 
-  let int_of_scope = function Tgv _ -> 0 | Temp _ -> 1 | Ref -> 2
+  let new_arg ~(name : string Pos.marked) ~(loc_int : int) : t =
+    let loc = LocArg (Pos.unmark name, loc_int) in
+    { name; id = new_id (); loc; scope = Arg }
+
+  let new_res ~(name : string Pos.marked) : t =
+    let loc = LocRes (Pos.unmark name) in
+    { name; id = new_id (); loc; scope = Res }
+
+  let int_of_scope = function
+    | Tgv _ -> 0
+    | Temp _ -> 1
+    | Ref -> 2
+    | Arg -> 3
+    | Res -> 4
 
   let compare (var1 : t) (var2 : t) =
     let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
@@ -310,6 +332,7 @@ type func =
   | Supzero  (** ??? *)
   | VerifNumber
   | ComplNumber
+  | Func of string
 
 type 'v expression =
   | TestInSet of bool * 'v m_expression * 'v set_value list
@@ -418,18 +441,21 @@ let set_loc_int loc loc_int =
   | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
   | LocTmp (id, _) -> LocTmp (id, loc_int)
   | LocRef (id, _) -> LocRef (id, loc_int)
+  | LocArg (id, _) -> LocArg (id, loc_int)
+  | LocRes id ->
+      Errors.raise_error (Format.sprintf "variable %s doesn't have an index" id)
 
 let set_loc_tgv_cat loc loc_cat loc_cat_str loc_cat_idx =
   match loc with
   | LocTgv (id, tgv) ->
       LocTgv (id, { tgv with loc_cat; loc_cat_str; loc_cat_idx })
-  | LocTmp (id, _) | LocRef (id, _) ->
+  | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
       Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
 
 let set_loc_tgv_idx loc loc_idx =
   match loc with
   | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
-  | LocTmp (id, _) | LocRef (id, _) ->
+  | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
       Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
 
 let format_value_typ fmt t =
@@ -531,7 +557,8 @@ let format_func fmt f =
     | Multimax -> "multimax"
     | Supzero -> "supzero"
     | VerifNumber -> "numero_verif"
-    | ComplNumber -> "numero_compl")
+    | ComplNumber -> "numero_compl"
+    | Func fn -> fn)
 
 let rec format_expression form_var fmt =
   let form_expr = format_expression form_var in

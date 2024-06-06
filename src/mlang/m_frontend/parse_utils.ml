@@ -116,10 +116,7 @@ let parse_function_name f_name =
     | "supzero" -> Supzero
     | "numero_verif" -> VerifNumber
     | "numero_compl" -> ComplNumber
-    | x ->
-        Errors.raise_spanned_error
-          (Format.asprintf "unknown function %s" x)
-          (Pos.get_position f_name)
+    | fn -> Func fn
   in
   Pos.map_under_mark map f_name
 

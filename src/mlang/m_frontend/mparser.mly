@@ -516,7 +516,7 @@ target_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
-    let target_apps, target_args, target_tmp_vars, _target_result =
+    let target_apps, target_args, target_tmp_vars, _ =
       parse_target_or_function_header name false header
     in
     let target = {
@@ -524,6 +524,7 @@ target_etc:
       target_file = None;
       target_apps;
       target_args;
+      target_result = None;
       target_tmp_vars;
       target_nb_tmps = -1;
       target_sz_tmps = -1;
@@ -548,7 +549,7 @@ function_etc:
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
-    let target_apps, target_args, target_tmp_vars, _target_result =
+    let target_apps, target_args, target_tmp_vars, target_result =
       parse_target_or_function_header name true header
     in
     let target = {
@@ -556,6 +557,7 @@ function_etc:
       target_file = None;
       target_apps;
       target_args;
+      target_result;
       target_tmp_vars;
       target_nb_tmps = -1;
       target_sz_tmps = -1;

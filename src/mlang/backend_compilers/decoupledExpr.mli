@@ -109,6 +109,9 @@ val dfun : string -> constr list -> constr
 val dinstr : string -> constr
 (** Direct instruction *)
 
+val dlow_level : string -> constr
+(** Direct instruction, not pushed *)
+
 val access : Com.Var.t -> dflag -> constr -> constr
 (** Arbitrary access to M TGV variable. Either defineness of valuation *)
 
@@ -121,7 +124,11 @@ val ite : constr -> constr -> constr -> constr
 (** While {!constr} is the expression language for decoupled values, the
     following represents complete and optimized expressions for M computations *)
 
-type expression_composition = { def_test : constr; value_comp : constr }
+type expression_composition = {
+  set_vars : (dflag * string * constr) list;
+  def_test : constr;
+  value_comp : constr;
+}
 (** Representation of an M computation in construction. [def_test] for the
     defineness flag, and [value_comp] for the actual valuation. *)
 
@@ -143,10 +150,14 @@ val is_always_true : t -> bool
 type local_decls
 (** Representation of local variables existing in an expression *)
 
-val build_expression : expression_composition -> local_decls * t * t
+val build_expression :
+  expression_composition -> local_decls * (dflag * string * t) list * t * t
 (** Crush {!constr} values into closed expressions {!t} *)
 
 val format_local_declarations : Format.formatter -> local_decls -> unit
 
 val format_assign :
   Dgfip_options.flags -> string -> Format.formatter -> t -> unit
+
+val format_set_vars :
+  Dgfip_options.flags -> Format.formatter -> (dflag * string * t) list -> unit
