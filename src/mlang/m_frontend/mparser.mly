@@ -49,6 +49,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTED CONST ALIAS INPUT FOR
 %token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE RESULT
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
+%token WHEN DO THEN_WHEN ELSE_DO ENDWHEN NOTHING
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
 %token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS FINALIZE_ERRORS
@@ -584,58 +585,80 @@ temporary_variable_name:
   }
 
 instruction_list_etc:
-| i = with_pos(instruction) l = with_pos(symbol_colon_etc)* { [i], l }
-| i = with_pos(instruction) il_etc = instruction_list_etc {
-    let il, l = il_etc in
-    i :: il, l
+| i_opt = with_pos(instruction) l = with_pos(symbol_colon_etc)* {
+    match Pos.unmark i_opt with
+    | None -> [], l
+    | Some i -> [Pos.same_pos_as i i_opt], l
+  }
+| i_opt = with_pos(instruction) il_etc = instruction_list_etc {
+    match Pos.unmark i_opt with
+    | None -> il_etc
+    | Some i ->
+        let il, l = il_etc in
+        (Pos.same_pos_as i i_opt) :: il, l
   }
 
 instruction_list_rev:
-| i = with_pos(instruction) { [i] }
-| il = instruction_list_rev i = with_pos(instruction) { i :: il }
+| i_opt = with_pos(instruction) {
+    match Pos.unmark i_opt with
+    | None -> []
+    | Some i -> [Pos.same_pos_as i i_opt]
+  }
+| il = instruction_list_rev i_opt = with_pos(instruction) {
+    match Pos.unmark i_opt with
+    | None -> il
+    | Some i -> (Pos.same_pos_as i i_opt) :: il  
+  }
 
 instruction:
-| f = with_pos(formula_kind) SEMICOLON { Affectation f }
+| NOTHING SEMICOLON { None }
+| f = with_pos(formula_kind) SEMICOLON { Some (Affectation f) }
 | IF e = with_pos(expression)
   THEN ilt = instruction_list_rev
   ilel = instruction_else_branch {
-    let ilite = (Some e, List.rev ilt, Pos.no_pos) :: ilel in
-    parse_if_then_etc ilite
+    let ilite = (Some e, List.rev ilt, mk_position $sloc) :: ilel in
+    Some (parse_if_then_etc ilite)
   }
-| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { ComputeDomain dom }
-| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { ComputeChaining chain }
+| WHEN e = with_pos(expression)
+  DO ild = instruction_list_rev
+  iltwe = instruction_then_when_branch {
+    let iltwl, ed = iltwe in
+    Some (parse_when_do_etc ((e, List.rev ild, mk_position $sloc) :: iltwl, ed))
+  }
+| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { Some (ComputeDomain dom) }
+| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { Some (ComputeChaining chain) }
 | COMPUTE TARGET target = symbol_with_pos args = target_args? SEMICOLON {
     let args_list = match args with None -> [] | Some l -> l in
-    ComputeTarget (target, args_list)
+    Some (ComputeTarget (target, args_list))
   }
-| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
-    {
-      let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
-      ComputeVerifs (dom, expr)
-    }
+| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON {
+    let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
+    Some (ComputeVerifs (dom, expr))
+  }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON
   WITH expr = with_pos(expression) SEMICOLON {
-    ComputeVerifs (dom, expr)
+    Some (ComputeVerifs (dom, expr))
   }
-| PRINT args = with_pos(print_argument)* SEMICOLON
-    { Print (StdOut, args) }
-| PRINT_ERR args = with_pos(print_argument)* SEMICOLON
-    { Print (StdErr, args) }
+| PRINT args = with_pos(print_argument)* SEMICOLON {
+    Some (Print (StdOut, args))
+  }
+| PRINT_ERR args = with_pos(print_argument)* SEMICOLON {
+    Some (Print (StdErr, args))
+  }
 | ITERATE COLON
   VARIABLE vn = symbol_with_pos COLON
   it_params = nonempty_list(it_param)
-  IN LPAREN instrs = instruction_list_rev RPAREN
-    {
-      let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
-      let var_list, var_cats =
-        let fold (var_list, var_cats) = function
-        | `VarList vl -> (List.rev vl) @ var_list, var_cats
-        | `VarCatsIt vc -> var_list, vc :: var_cats
-        in
-        List.fold_left fold ([], []) it_params
+  IN LPAREN instrs = instruction_list_rev RPAREN {
+    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let var_list, var_cats =
+      let fold (var_list, var_cats) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats
+      | `VarCatsIt vc -> var_list, vc :: var_cats
       in
-      Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs)
-    }
+      List.fold_left fold ([], []) it_params
+    in
+    Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
+  }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
     let var_list, var_cats =
@@ -645,14 +668,14 @@ instruction:
       in
       List.fold_left fold ([], []) rest_params
     in
-    Restore (List.rev var_list, List.rev var_cats, List.rev instrs)
+    Some (Restore (List.rev var_list, List.rev var_cats, List.rev instrs))
   }
 | RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
-    RaiseError (e_name, var)
+    Some (RaiseError (e_name, var))
   }
-| CLEAN_ERRORS SEMICOLON { CleanErrors }
-| EXPORT_ERRORS SEMICOLON { ExportErrors }
-| FINALIZE_ERRORS SEMICOLON { FinalizeErrors }
+| CLEAN_ERRORS SEMICOLON { Some CleanErrors }
+| EXPORT_ERRORS SEMICOLON { Some ExportErrors }
+| FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
 
 target_args:
 | COLON WITH args = separated_nonempty_list(COMMA, arg_variable) { args }
@@ -670,6 +693,18 @@ instruction_else_branch:
     [None, List.rev il, mk_position $sloc]
   }
 | ENDIF { [] }
+
+instruction_then_when_branch:
+| THEN_WHEN e = with_pos(expression)
+  DO ild = instruction_list_rev
+  iltwe = instruction_then_when_branch {
+    let iltwl, ed = iltwe in
+    ((e, List.rev ild, mk_position $sloc) :: iltwl, ed)
+  }
+| ELSE_DO il = instruction_list_rev ENDWHEN {
+    ([], (List.rev il, mk_position $sloc))
+  }
+| ENDWHEN { ([], ([], Pos.no_pos)) }
 
 print_argument:
 | s = STRING { Com.PrintString (parse_string s) }

@@ -414,6 +414,9 @@ type ('v, 'e) instruction =
       'v m_expression
       * ('v, 'e) m_instruction list
       * ('v, 'e) m_instruction list
+  | WhenDoElse of
+      ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
+      * ('v, 'e) m_instruction list Pos.marked
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
@@ -660,6 +663,24 @@ let rec format_instruction form_var form_err =
     | IfThenElse (cond, t, f) ->
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
           form_expr (Pos.unmark cond) form_instrs t form_instrs f
+    | WhenDoElse (wdl, ed) ->
+        let pp_wd th fmt (expr, dl, _) =
+          Format.fprintf fmt "@[<v 2>%swhen (%a) do@\n%a@;@]" th form_expr
+            (Pos.unmark expr) form_instrs dl
+        in
+        let pp_wdl fmt wdl =
+          let rec aux th = function
+            | wd :: l ->
+                pp_wd th fmt wd;
+                aux "then_" l
+            | [] -> ()
+          in
+          aux "" wdl
+        in
+        let pp_ed fmt (dl, _) =
+          Format.fprintf fmt "@[<v 2>else_do@\n%a@;@]endwhen@;" form_instrs dl
+        in
+        Format.fprintf fmt "%a%a@\n" pp_wdl wdl pp_ed ed
     | VerifBlock vb ->
         Format.fprintf fmt
           "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" form_instrs

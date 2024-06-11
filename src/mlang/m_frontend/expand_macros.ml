@@ -496,6 +496,15 @@ let rec expand_instruction (const_map : const_context)
       let ithen' = expand_instructions const_map ithen in
       let ielse' = expand_instructions const_map ielse in
       (Com.IfThenElse (expr', ithen', ielse'), instr_pos) :: prev
+  | Com.WhenDoElse (wdl, ed) ->
+      let map (expr, dl, pos) =
+        let expr' = expand_expression const_map ParamsMap.empty expr in
+        let dl' = expand_instructions const_map dl in
+        (expr', dl', pos)
+      in
+      let wdl' = List.map map wdl in
+      let ed' = Pos.map_under_mark (expand_instructions const_map) ed in
+      (Com.WhenDoElse (wdl', ed'), instr_pos) :: prev
   | Com.Print (std, pr_args) ->
       let pr_args' =
         List.map
