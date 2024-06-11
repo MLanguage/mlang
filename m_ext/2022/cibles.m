@@ -767,56 +767,62 @@ sinon
   calculer cible traite_double_liquidation_pvro;
 finsi
 
+cible exporte_si_non_bloquantes:
+application: iliad;
+si nb_discordances() + nb_informatives() > 0 alors
+  exporte_erreurs;
+finsi
+
 fonction truc:
 application: iliad;
 argument: A, B, C;
 resultat: D;
 variable temporaire: T1, T2, T3;
 T1 = B * 2;
-D = A + B + C + 5000;
-afficher_erreur "truc(" (A) ", " (B) ", " (C) ") = ";
+si arr(T1 / 2) = B alors
+  D = A + B + C + 2000;
+sinon
+  D = A + B + C + 5000;
+finsi
+#afficher_erreur "truc(" (A) ", " (B) ", " (C) ") = ";
 
 cible enchainement_primitif:
 application: iliad;
+variable temporaire: EXPORTE_ERREUR;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
-afficher_erreur "# " (truc(1, 2, 3)) "\n";
+#si truc(1, 2, 3) != 5006 alors V_IND_TRAIT = 0; finsi
+#afficher_erreur "# " (truc(1, 2, 3)) "\n";
 calculer cible ir_verif_saisie_isf;
 finalise_erreurs;
-si nb_anomalies() > 0 alors
-  exporte_erreurs;
-sinon_si nb_discordances() + nb_informatives() = 0 alors
+EXPORTE_ERREUR = 1;
+quand nb_anomalies() = 0 faire
+  EXPORTE_ERREUR = 0;
+puis_quand nb_discordances() + nb_informatives() = 0 faire
   calculer cible ir_verif_contexte;
   finalise_erreurs;
-  si nb_anomalies() = 0 alors
-    si nb_discordances() + nb_informatives() > 0 alors
-      exporte_erreurs;
-    finsi
-    calculer cible ir_verif_famille;
-    finalise_erreurs;
-    si nb_anomalies() = 0 alors
-      si nb_discordances() + nb_informatives() > 0 alors
-        exporte_erreurs;
-      finsi
-      calculer cible ir_verif_revenu;
-      finalise_erreurs;
-      si nb_anomalies() > 0 alors
-        exporte_erreurs;
-      sinon
-        si nb_discordances() + nb_informatives() > 0 alors
-          exporte_erreurs;
-        finsi
-        calculer cible ir_calcul_primitif_isf;
-        finalise_erreurs;
-        calculer cible enchaine_calcul;
-        finalise_erreurs;
-        si nb_discordances() + nb_informatives() > 0 alors
-          exporte_erreurs;
-        finsi
-      finsi
-    finsi
+  EXPORTE_ERREUR = 0;
+puis_quand nb_anomalies() = 0 faire
+  calculer cible exporte_si_non_bloquantes;
+  calculer cible ir_verif_famille;
+  finalise_erreurs;
+puis_quand nb_anomalies() = 0 faire
+  EXPORTE_ERREUR = 1;
+puis_quand nb_discordances() + nb_informatives() = 0 faire
+  calculer cible ir_verif_revenu;
+  finalise_erreurs;
+puis_quand nb_anomalies() = 0 faire
+  calculer cible exporte_si_non_bloquantes;
+  calculer cible ir_calcul_primitif_isf;
+  finalise_erreurs;
+  calculer cible enchaine_calcul;
+  finalise_erreurs;
+  calculer cible exporte_si_non_bloquantes;
+sinon_faire
+  si EXPORTE_ERREUR = 1 alors
+    exporte_erreurs;
   finsi
-finsi
+finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
 

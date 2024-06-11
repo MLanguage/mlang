@@ -889,6 +889,12 @@ let complete_vars (prog : program) : program =
           match instr with
           | Com.IfThenElse (_, ilt, ile) ->
               aux (nbRef + max (aux 0 ilt) (aux 0 ile)) il
+          | Com.WhenDoElse (wdl, ed) ->
+              let rec wde nbRef = function
+                | (_, dl, _) :: wdl' -> wde (max nbRef (aux 0 dl)) wdl'
+                | [] -> max nbRef (aux 0 (Pos.unmark ed))
+              in
+              aux (wde nbRef wdl) il
           | Com.VerifBlock instrs -> aux (nbRef + aux 0 instrs) il
           | Com.Iterate (_, _, _, instrs) -> aux (nbRef + 1 + aux 0 instrs) il
           | Com.Restore (_, _, instrs) -> aux (nbRef + max 1 (aux 0 instrs)) il
@@ -944,6 +950,28 @@ let complete_vars (prog : program) : program =
               let nb = nb + max nb1 nb2 in
               let sz = sz + max sz1 sz2 in
               let nbRef = nbRef + max nbRef1 nbRef2 in
+              aux (nb, sz, nbRef, tdata) il
+          | Com.WhenDoElse (wdl, ed) ->
+              let rec wde (nb, sz, nbRef, tdata) = function
+                | (_, dl, _) :: wdl' ->
+                    let nb', sz', nbRef', tdata = aux (0, 0, 0, tdata) dl in
+                    let nb = max nb nb' in
+                    let sz = max sz sz' in
+                    let nbRef = max nbRef nbRef' in
+                    wde (nb, sz, nbRef, tdata) wdl'
+                | [] ->
+                    let nb', sz', nbRef', tdata =
+                      aux (0, 0, 0, tdata) (Pos.unmark ed)
+                    in
+                    let nb = max nb nb' in
+                    let sz = max sz sz' in
+                    let nbRef = max nbRef nbRef' in
+                    (nb, sz, nbRef, tdata)
+              in
+              let nb', sz', nbRef', tdata = wde (0, 0, 0, tdata) wdl in
+              let nb = nb + nb' in
+              let sz = sz + sz' in
+              let nbRef = nbRef + nbRef' in
               aux (nb, sz, nbRef, tdata) il
           | Com.VerifBlock instrs ->
               let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
@@ -1383,14 +1411,52 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 else aux (env, m_instr :: res, in_vars, out_vars) il
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            let _ = check_expression false expr env in
-            let prog, res_then, _, _ = check_instructions i_then is_rule env in
+            (* if is_rule then Err.insruction_forbidden_in_rules instr_pos; *)
+            let in_expr = check_expression false expr env in
+            let prog, res_then, in_then, out_then =
+              check_instructions i_then is_rule env
+            in
             let env = { env with prog } in
-            let prog, res_else, _, _ = check_instructions i_else is_rule env in
+            let prog, res_else, in_else, out_else =
+              check_instructions i_else is_rule env
+            in
             let env = { env with prog } in
             let res_instr = Com.IfThenElse (expr, res_then, res_else) in
+            let in_vars =
+              in_vars |> StrSet.union in_expr |> StrSet.union in_then
+              |> StrSet.union in_else
+            in
+            let out_vars =
+              out_vars |> StrSet.union out_then |> StrSet.union out_else
+            in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Com.WhenDoElse (wdl, ed) ->
+            let rec wde (env, res, in_vars, out_vars) = function
+              | (expr, dl, pos) :: l ->
+                  let in_expr = check_expression false expr env in
+                  let prog, res_do, in_do, out_do =
+                    check_instructions dl is_rule env
+                  in
+                  let env = { env with prog } in
+                  let in_vars =
+                    in_vars |> StrSet.union in_expr |> StrSet.union in_do
+                  in
+                  let out_vars = out_vars |> StrSet.union out_do in
+                  wde (env, (expr, res_do, pos) :: res, in_vars, out_vars) l
+              | [] ->
+                  let prog, res_ed, in_ed, out_ed =
+                    check_instructions (Pos.unmark ed) is_rule env
+                  in
+                  let env = { env with prog } in
+                  let ed' = Pos.same_pos_as res_ed ed in
+                  let in_vars = in_vars |> StrSet.union in_ed in
+                  let out_vars = out_vars |> StrSet.union out_ed in
+                  (env, Com.WhenDoElse (List.rev res, ed'), in_vars, out_vars)
+            in
+            let env, wde_res, in_vars, out_vars =
+              wde (env, [], in_vars, out_vars) wdl
+            in
+            aux (env, (wde_res, instr_pos) :: res, in_vars, out_vars) il
         | Com.ComputeDomain (rdom_list, rdom_pos) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in

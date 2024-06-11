@@ -531,6 +531,19 @@ struct
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock p ctx f
         | Number _ -> evaluate_stmts canBlock p ctx t
         | Undefined -> ())
+    | Com.WhenDoElse (wdl, ed) ->
+        let rec aux = function
+          | (expr, dl, _) :: l -> (
+              match evaluate_expr ctx p expr with
+              | Number z when N.(z =. zero ()) ->
+                  evaluate_stmts canBlock p ctx (Pos.unmark ed)
+              | Number _ ->
+                  evaluate_stmts canBlock p ctx dl;
+                  aux l
+              | Undefined -> aux l)
+          | [] -> ()
+        in
+        aux wdl
     | Com.VerifBlock stmts -> evaluate_stmts true p ctx stmts
     | Com.ComputeTarget ((tn, _), args) ->
         let tf = Mir.TargetMap.find tn p.program_targets in

@@ -230,6 +230,7 @@ and generate_stmt (program : Mir.program) (oc : Format.formatter)
         cond_name (generate_stmts program) tt;
       Format.fprintf oc " @[<hv 2>if (m_is_defined_false(%s)) {@,%a@]@,}"
         cond_name (generate_stmts program) ff
+  | WhenDoElse _ -> Errors.raise_error "when-do-else not implemented"
   | VerifBlock s -> generate_stmts program oc s
   | ComputeTarget ((f, _), _) ->
       Format.fprintf oc "MppFunction.%s(mCalculation, calculationErrors);" f

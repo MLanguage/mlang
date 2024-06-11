@@ -285,6 +285,15 @@ let expand_functions (p : program) : program =
           let t' = List.map map_instr t in
           let e' = List.map map_instr e in
           (IfThenElse (i', t', e'), instr_pos)
+      | WhenDoElse (wdl, ed) ->
+          let map_wdl (expr, dl, pos) =
+            let expr' = expand_functions_expr expr in
+            let dl' = List.map map_instr dl in
+            (expr', dl', pos)
+          in
+          let wdl' = List.map map_wdl wdl in
+          let ed' = Pos.map_under_mark (List.map map_instr) ed in
+          (WhenDoElse (wdl', ed'), instr_pos)
       | ComputeTarget _ -> m_instr
       | VerifBlock instrs ->
           let instrs' = List.map map_instr instrs in

@@ -187,6 +187,8 @@ let parse_if_then_etc l =
   in
   match aux l with [ (i, _pos) ] -> i | _ -> assert false
 
+let parse_when_do_etc (twl, ed) = Com.WhenDoElse (twl, ed)
+
 type target_header =
   | Target_apps of Mast.application Pos.marked list
   | Target_input_arg of string Pos.marked list

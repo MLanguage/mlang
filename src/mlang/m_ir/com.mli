@@ -285,6 +285,9 @@ type ('v, 'e) instruction =
       'v m_expression
       * ('v, 'e) m_instruction list
       * ('v, 'e) m_instruction list
+  | WhenDoElse of
+      ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
+      * ('v, 'e) m_instruction list Pos.marked
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression

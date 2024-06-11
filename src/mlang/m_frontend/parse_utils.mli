@@ -59,6 +59,11 @@ val parse_if_then_etc :
   list ->
   Mast.instruction
 
+val parse_when_do_etc :
+  (Mast.expression Pos.marked * Mast.instruction Pos.marked list * Pos.t) list
+  * Mast.instruction Pos.marked list Pos.marked ->
+  Mast.instruction
+
 type target_header =
   | Target_apps of Mast.application Pos.marked list
   | Target_input_arg of string Pos.marked list

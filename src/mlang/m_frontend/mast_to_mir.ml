@@ -192,6 +192,15 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
         let prog_then = aux [] ilt in
         let prog_else = aux [] ile in
         aux ((Com.IfThenElse (expr, prog_then, prog_else), pos) :: res) il
+    | (Com.WhenDoElse (wdl, ed), pos) :: il ->
+        let map_wdl (expr, dl, pos) =
+          let expr' = translate_expression cats var_data expr in
+          let dl' = aux [] dl in
+          (expr', dl', pos)
+        in
+        let wdl' = List.map map_wdl wdl in
+        let ed' = Pos.same_pos_as (aux [] (Pos.unmark ed)) ed in
+        aux ((Com.WhenDoElse (wdl', ed'), pos) :: res) il
     | (Com.ComputeTarget (tn, targs), pos) :: il ->
         let map v =
           match Pos.unmark (translate_variable var_data v) with
