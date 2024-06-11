@@ -56,8 +56,7 @@ irj_file:
   fip?
   prim = primitif
   rapp = rappels
-  endsharp NL
-  EOF {     
+  endmark {     
     let nom =
       match nom with
       | [n] -> n
@@ -66,6 +65,12 @@ irj_file:
     in
     { nom; prim; rapp } }
 | EOF { error $loc "Empty test file" }
+
+endmark:
+| endsharp
+  endline
+  EOF { () }
+| EOF { error $loc "Unexpected end on file, missing ##"}
 
 /* What's the point of this alternative?*/
 name:
@@ -148,4 +153,8 @@ value:
 
 endsharp:
 | ENDSHARP    { () }
-| error       { error $loc "Missing ## at end of file" }
+| error       { error $loc "End case mark is not ##" }
+
+endline:
+| NL          { () }
+| error       { error $loc "No new line at end of file"}
