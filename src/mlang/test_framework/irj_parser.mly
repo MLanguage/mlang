@@ -56,8 +56,7 @@ irj_file:
   fip?
   prim = primitif
   rapp = rappels
-  endsharp NL
-  EOF {     
+  endmark {     
     let nom =
       match nom with
       | [n] -> n
@@ -66,6 +65,12 @@ irj_file:
     in
     { nom; prim; rapp } }
 | EOF { error $loc "Empty test file" }
+
+endmark:
+| endsharp
+  endline
+  EOF { () }
+| EOF { error $loc "Unexpected end on file, missing ##"}
 
 /* What's the point of this alternative?*/
 name:
@@ -78,19 +83,27 @@ fip:
 primitif:
   ENTREESPRIM NL
   entrees = list(variable_and_value)
-  CONTROLESPRIM NL
+  controlesprim NL
   controles_attendus = list(calc_error)
-  RESULTATSPRIM NL
+  resultatsprim NL
   resultats_attendus = list(variable_and_value) 
   {  { entrees; controles_attendus; resultats_attendus } }
 
+controlesprim:
+| CONTROLESPRIM { ( ) }
+| error         { error $loc "Missing part #CONTROLES-PRIMITIF" }
+
+resultatsprim:
+| RESULTATSPRIM { ( ) }
+| error         { error $loc "Missing part #RESULTATS-PRIMITIF" }
+
 rappels:
 /* The two constructions match respectively corrective test files and primary test files */
-| ENTREESRAPP NL
+| entreesrapp NL
   entrees_rappels = list(rappel)
   CONTROLESRAPP NL
   controles_attendus = list(calc_error)
-  RESULTATSRAPP NL
+  resultatsrapp NL
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR NL
@@ -102,15 +115,24 @@ rappels:
   DATES? AVISIR? AVISCSG?
   { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
 
+entreesrapp:
+| ENTREESRAPP { ( ) }
+| error         { error $loc "Missing part #ENTREES-RAPPELS" }
+
+resultatsrapp:
+| RESULTATSRAPP { ( ) }
+| error         { error $loc "Missing part #RESULTATS-RAPPELS" }
+
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
 | SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
 calc_error:
-  error = SYMBOL NL { (error, mk_position $sloc) }
+| error = SYMBOL NL { (error, mk_position $sloc) }
+| variable_and_value { error $loc "Missing a #RESULTATS- header" }
 
 rappel:
-  event_nb = integer SLASH
+| event_nb = integer SLASH
   rappel_nb = integer SLASH
   variable_code = SYMBOL SLASH
   change_value = integer SLASH (* No decimal value was found in existing files *)
@@ -136,6 +158,8 @@ rappel:
      decl_2042_rect; 
      pos = mk_position $sloc }
   }
+| calc_error { error $loc "Missing #CONTROLES-RAPPELS header" }
+| resultatsrapp { error $loc "Missing #CONTROLES-RAPPELS header" }
 
 integer:
 | i = INTEGER { i }
@@ -148,4 +172,8 @@ value:
 
 endsharp:
 | ENDSHARP    { () }
-| error       { error $loc "Missing ## at end of file" }
+| error       { error $loc "End case mark is not ##" }
+
+endline:
+| NL          { () }
+| error       { error $loc "No new line at end of file"}

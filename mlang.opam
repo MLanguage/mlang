@@ -12,8 +12,8 @@ before translating it into various backend languages.
 maintainer: ["denis.merigoux@inria.fr"]
 authors: ["Denis Merigoux" "Raphaël Monat"]
 license: "GPL-3.0-or-later"
-homepage: "https://gitlab.inria.fr/verifisc/mlang"
-bug-reports: "https://gitlab.inria.fr/verifisc/mlang/issues"
+homepage: "https://github.com/MLanguage/mlang"
+bug-reports: "https://github.com/MLanguage/mlang/issues"
 depends: [
   "ocaml" {>= "4.11.2"}
   "dune" {build}
@@ -42,4 +42,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://gitlab.inria.fr/verifisc/mlang.git"
+dev-repo: "git+https://github.com/MLanguage/mlang.git"
