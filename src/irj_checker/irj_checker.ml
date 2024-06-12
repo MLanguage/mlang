@@ -13,6 +13,11 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+(** The Irj_checker Module is a simple entry point to use the Mlang IRJ file
+    parser in order to perform syntactic checks on test files.
+    
+    Usage: irj_checker.exe <test_file.irj>*)
+
 let () =
   if Array.length Sys.argv <> 2 then (
     Printf.eprintf "This program requires a test file as argument\n";
