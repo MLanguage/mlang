@@ -24,9 +24,9 @@ let () =
         let pos_1, pos_2 = pos.pos_loc in
         Printf.eprintf "%s" (Filename.basename f);
         Printf.eprintf ":(%d,%d)-(%d,%d)" pos_1.pos_lnum
-          (pos_1.pos_cnum - pos_1.pos_bol)
+          (pos_1.pos_cnum - pos_1.pos_bol + 1)
           pos_2.pos_lnum
-          (pos_2.pos_cnum - pos_2.pos_bol);
+          (pos_2.pos_cnum - pos_2.pos_bol + 1);
         Printf.eprintf " : %s\n" s;
         exit 1
     | _ ->
