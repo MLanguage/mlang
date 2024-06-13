@@ -67,9 +67,7 @@ irj_file:
 | EOF { error $loc "Empty test file" }
 
 endmark:
-| endsharp
-  endline
-  EOF { () }
+| ENDSHARP NL EOF { () }
 | EOF { error $loc "Unexpected end on file, missing ##"}
 
 /* What's the point of this alternative?*/
@@ -83,25 +81,19 @@ fip:
 primitif:
   ENTREESPRIM NL
   entrees = list(variable_and_value)
-  controlesprim NL
+  CONTROLESPRIM NL
   controles_attendus = list(calc_error)
-  resultatsprim NL
+  RESULTATSPRIM NL
   resultats_attendus = list(variable_and_value) 
   {  { entrees; controles_attendus; resultats_attendus } }
 
-controlesprim:
-| CONTROLESPRIM { ( ) }
-
-resultatsprim:
-| RESULTATSPRIM { ( ) }
-
 rappels:
 /* The two constructions match respectively corrective test files and primary test files */
-| entreesrapp NL
+| ENTREESRAPP NL
   entrees_rappels = list(rappel)
   CONTROLESRAPP NL
   controles_attendus = list(calc_error)
-  resultatsrapp NL
+  RESULTATSRAPP NL
   resultats_attendus = list(variable_and_value) 
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR NL
@@ -112,12 +104,6 @@ rappels:
   resultats_attendus = list(variable_and_value) 
   DATES? AVISIR? AVISCSG?
   { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
-
-entreesrapp:
-| ENTREESRAPP { ( ) }
-
-resultatsrapp:
-| RESULTATSRAPP { ( ) }
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
@@ -159,9 +145,3 @@ integer:
 value:
 | i = INTEGER { I (i) }
 | f = FLOAT   { F (f) }
-
-endsharp:
-| ENDSHARP    { () }
-
-endline:
-| NL          { () }

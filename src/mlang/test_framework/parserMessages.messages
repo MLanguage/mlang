@@ -122,7 +122,7 @@ irj_file: NOM NL ENTREESPRIM SYMBOL
 ##
 ## Ends in an error in state: 16.
 ##
-## primitif -> ENTREESPRIM . NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM . NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
 ## ENTREESPRIM
@@ -134,7 +134,7 @@ irj_file: NOM NL ENTREESPRIM NL SLASH
 ##
 ## Ends in an error in state: 17.
 ##
-## primitif -> ENTREESPRIM NL . list(variable_and_value) controlesprim NL list(calc_error) resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL . list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
 ## ENTREESPRIM NL
@@ -194,7 +194,7 @@ irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT NL EOF
 ##
 ## Ends in an error in state: 26.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) . controlesprim NL list(calc_error) resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) . CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
 ## ENTREESPRIM NL list(variable_and_value)
@@ -211,31 +211,31 @@ irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT NL EOF
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM SYMBOL
 ##
-## Ends in an error in state: 28.
+## Ends in an error in state: 27.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim . NL list(calc_error) resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM . NL list(calc_error) RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
-## ENTREESPRIM NL list(variable_and_value) controlesprim
+## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SLASH
 ##
-## Ends in an error in state: 29.
+## Ends in an error in state: 28.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim NL . list(calc_error) resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL . list(calc_error) RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
-## ENTREESPRIM NL list(variable_and_value) controlesprim NL
+## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL SYMBOL
 ##
-## Ends in an error in state: 30.
+## Ends in an error in state: 29.
 ##
 ## calc_error -> SYMBOL . NL [ SYMBOL RESULTATSRAPP RESULTATSPRIM RESULTATSCORR ]
 ##
@@ -247,50 +247,50 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL SYMBOL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL RESULTATSRAPP
 ##
-## Ends in an error in state: 32.
+## Ends in an error in state: 31.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) . resultatsprim NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) . RESULTATSPRIM NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
-## ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error)
+## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error)
 ##
 ## WARNING: This example involves spurious reductions.
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 37, spurious reduction of production list(calc_error) ->
-## In state 38, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
+## In state 35, spurious reduction of production list(calc_error) ->
+## In state 36, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM SYMBOL
 ##
-## Ends in an error in state: 34.
+## Ends in an error in state: 32.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim . NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM . NL list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
-## ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim
+## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SLASH
 ##
-## Ends in an error in state: 35.
+## Ends in an error in state: 33.
 ##
-## primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim NL . list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
+## primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL . list(variable_and_value) [ ENTREESRAPP ENTREESCORR ]
 ##
 ## The known suffix of the stack is as follows:
-## ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim NL
+## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL SLASH
 ##
-## Ends in an error in state: 37.
+## Ends in an error in state: 35.
 ##
 ## list(calc_error) -> calc_error . list(calc_error) [ RESULTATSRAPP RESULTATSPRIM RESULTATSCORR ]
 ##
@@ -302,7 +302,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL SLASH
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SYMBOL SLASH FLOAT NL EOF
 ##
-## Ends in an error in state: 39.
+## Ends in an error in state: 37.
 ##
 ## irj_file -> NOM NL list(name) option(fip) primitif . rappels endmark [ # ]
 ##
@@ -315,14 +315,340 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SYMBOL SLASH F
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 24, spurious reduction of production list(variable_and_value) ->
 ## In state 25, spurious reduction of production list(variable_and_value) -> variable_and_value list(variable_and_value)
-## In state 36, spurious reduction of production primitif -> ENTREESPRIM NL list(variable_and_value) controlesprim NL list(calc_error) resultatsprim NL list(variable_and_value)
+## In state 34, spurious reduction of production primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL list(variable_and_value)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP SYMBOL
+##
+## Ends in an error in state: 38.
+##
+## rappels -> ENTREESRAPP . NL list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL SYMBOL
+##
+## Ends in an error in state: 39.
+##
+## rappels -> ENTREESRAPP NL . list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH NL SYMBOL
+##
+## Ends in an error in state: 41.
+##
+## list(rappel) -> rappel . list(rappel) [ CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## rappel
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SYMBOL
+##
+## Ends in an error in state: 43.
+##
+## rappel -> integer . SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH SYMBOL
+##
+## Ends in an error in state: 44.
+##
+## rappel -> integer SLASH . integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 45.
+##
+## rappel -> integer SLASH integer . SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SLASH
+##
+## Ends in an error in state: 46.
+##
+## rappel -> integer SLASH integer SLASH . SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SYMBOL
+##
+## Ends in an error in state: 47.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL . SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH SYMBOL
+##
+## Ends in an error in state: 48.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH . integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 49.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer . SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SLASH
+##
+## Ends in an error in state: 50.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH . SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SYMBOL
+##
+## Ends in an error in state: 51.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL . SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SYMBOL
+##
+## Ends in an error in state: 52.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH . option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 54.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) . SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SYMBOL
+##
+## Ends in an error in state: 55.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH . option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 56.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) . SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH SYMBOL
+##
+## Ends in an error in state: 57.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH . integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 58.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer . SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH SYMBOL
+##
+## Ends in an error in state: 59.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH . option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH INTEGER SYMBOL
+##
+## Ends in an error in state: 60.
+##
+## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) . NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
+##
+## The known suffix of the stack is as follows:
+## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH NL CONTROLESCORR
+##
+## Ends in an error in state: 62.
+##
+## rappels -> ENTREESRAPP NL list(rappel) . CONTROLESRAPP NL list(calc_error) RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel)
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 41, spurious reduction of production list(rappel) ->
+## In state 42, spurious reduction of production list(rappel) -> rappel list(rappel)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP SYMBOL
+##
+## Ends in an error in state: 63.
+##
+## rappels -> ENTREESRAPP NL list(rappel) CONTROLESRAPP . NL list(calc_error) RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel) CONTROLESRAPP
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL SLASH
+##
+## Ends in an error in state: 64.
+##
+## rappels -> ENTREESRAPP NL list(rappel) CONTROLESRAPP NL . list(calc_error) RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel) CONTROLESRAPP NL
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL SYMBOL NL RESULTATSPRIM
+##
+## Ends in an error in state: 65.
+##
+## rappels -> ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error) . RESULTATSRAPP NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error)
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 35, spurious reduction of production list(calc_error) ->
+## In state 36, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP SYMBOL
+##
+## Ends in an error in state: 66.
+##
+## rappels -> ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP . NL list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP NL SLASH
+##
+## Ends in an error in state: 67.
+##
+## rappels -> ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP NL . list(variable_and_value) [ EOF ENDSHARP ]
+##
+## The known suffix of the stack is as follows:
+## ENTREESRAPP NL list(rappel) CONTROLESRAPP NL list(calc_error) RESULTATSRAPP NL
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR SYMBOL
 ##
-## Ends in an error in state: 41.
+## Ends in an error in state: 69.
 ##
 ## rappels -> ENTREESCORR . NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -334,7 +660,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR SY
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL SYMBOL
 ##
-## Ends in an error in state: 42.
+## Ends in an error in state: 70.
 ##
 ## rappels -> ENTREESCORR NL . list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -344,225 +670,9 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH NL SYMBOL
-##
-## Ends in an error in state: 44.
-##
-## list(rappel) -> rappel . list(rappel) [ CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## rappel
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SYMBOL
-##
-## Ends in an error in state: 46.
-##
-## rappel -> integer . SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH SYMBOL
-##
-## Ends in an error in state: 47.
-##
-## rappel -> integer SLASH . integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 48.
-##
-## rappel -> integer SLASH integer . SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SLASH
-##
-## Ends in an error in state: 49.
-##
-## rappel -> integer SLASH integer SLASH . SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SYMBOL
-##
-## Ends in an error in state: 50.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL . SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH SYMBOL
-##
-## Ends in an error in state: 51.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH . integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 52.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer . SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SLASH
-##
-## Ends in an error in state: 53.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH . SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SYMBOL
-##
-## Ends in an error in state: 54.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL . SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SYMBOL
-##
-## Ends in an error in state: 55.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH . option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 57.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) . SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER)
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SYMBOL
-##
-## Ends in an error in state: 58.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH . option(INTEGER) SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 59.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) . SLASH integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER)
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH SYMBOL
-##
-## Ends in an error in state: 60.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH . integer SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 61.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer . SLASH option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH SYMBOL
-##
-## Ends in an error in state: 62.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH . option(INTEGER) NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH INTEGER SYMBOL
-##
-## Ends in an error in state: 63.
-##
-## rappel -> integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER) . NL [ INTEGER CONTROLESRAPP CONTROLESCORR ]
-##
-## The known suffix of the stack is as follows:
-## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer SLASH option(INTEGER)
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH NL CONTROLESRAPP
 ##
-## Ends in an error in state: 65.
+## Ends in an error in state: 71.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) . CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -573,15 +683,15 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 44, spurious reduction of production list(rappel) ->
-## In state 45, spurious reduction of production list(rappel) -> rappel list(rappel)
+## In state 41, spurious reduction of production list(rappel) ->
+## In state 42, spurious reduction of production list(rappel) -> rappel list(rappel)
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR SYMBOL
 ##
-## Ends in an error in state: 66.
+## Ends in an error in state: 72.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR . NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -593,7 +703,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL SLASH
 ##
-## Ends in an error in state: 67.
+## Ends in an error in state: 73.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL . list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -605,7 +715,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL SYMBOL NL RESULTATSRAPP
 ##
-## Ends in an error in state: 68.
+## Ends in an error in state: 74.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) . RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -616,15 +726,15 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 37, spurious reduction of production list(calc_error) ->
-## In state 38, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
+## In state 35, spurious reduction of production list(calc_error) ->
+## In state 36, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR SYMBOL
 ##
-## Ends in an error in state: 69.
+## Ends in an error in state: 75.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR . NL list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -636,7 +746,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL SLASH
 ##
-## Ends in an error in state: 70.
+## Ends in an error in state: 76.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL . list(variable_and_value) option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -648,7 +758,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL SYMBOL SLASH FLOAT NL ENTREESRAPP
 ##
-## Ends in an error in state: 71.
+## Ends in an error in state: 77.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) . option(DATES) option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -667,7 +777,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL DATES SYMBOL
 ##
-## Ends in an error in state: 73.
+## Ends in an error in state: 79.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) . option(AVISIR) option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -679,7 +789,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL AVISIR SYMBOL
 ##
-## Ends in an error in state: 75.
+## Ends in an error in state: 81.
 ##
 ## rappels -> ENTREESCORR NL list(rappel) CONTROLESCORR NL list(calc_error) RESULTATSCORR NL list(variable_and_value) option(DATES) option(AVISIR) . option(AVISCSG) [ EOF ENDSHARP ]
 ##
@@ -691,7 +801,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL AVISCSG ENTREESRAPP
 ##
-## Ends in an error in state: 78.
+## Ends in an error in state: 84.
 ##
 ## irj_file -> NOM NL list(name) option(fip) primitif rappels . endmark [ # ]
 ##
@@ -701,136 +811,26 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP NL ENDSHARP SYMBOL
-##
-## Ends in an error in state: 81.
-##
-## endmark -> endsharp . endline EOF [ # ]
-##
-## The known suffix of the stack is as follows:
-## endsharp
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP NL ENDSHARP NL SYMBOL
-##
-## Ends in an error in state: 83.
-##
-## endmark -> endsharp endline . EOF [ # ]
-##
-## The known suffix of the stack is as follows:
-## endsharp endline
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP SYMBOL
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL ENDSHARP SYMBOL
 ##
 ## Ends in an error in state: 86.
 ##
-## rappels -> entreesrapp . NL list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
+## endmark -> ENDSHARP . NL EOF [ # ]
 ##
 ## The known suffix of the stack is as follows:
-## entreesrapp
+## ENDSHARP
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL SYMBOL
+irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL ENDSHARP NL SYMBOL
 ##
 ## Ends in an error in state: 87.
 ##
-## rappels -> entreesrapp NL . list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
+## endmark -> ENDSHARP NL . EOF [ # ]
 ##
 ## The known suffix of the stack is as follows:
-## entreesrapp NL
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH NL CONTROLESCORR
-##
-## Ends in an error in state: 88.
-##
-## rappels -> entreesrapp NL list(rappel) . CONTROLESRAPP NL list(calc_error) resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel)
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 44, spurious reduction of production list(rappel) ->
-## In state 45, spurious reduction of production list(rappel) -> rappel list(rappel)
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP SYMBOL
-##
-## Ends in an error in state: 89.
-##
-## rappels -> entreesrapp NL list(rappel) CONTROLESRAPP . NL list(calc_error) resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel) CONTROLESRAPP
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL SLASH
-##
-## Ends in an error in state: 90.
-##
-## rappels -> entreesrapp NL list(rappel) CONTROLESRAPP NL . list(calc_error) resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel) CONTROLESRAPP NL
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL SYMBOL NL RESULTATSPRIM
-##
-## Ends in an error in state: 91.
-##
-## rappels -> entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error) . resultatsrapp NL list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error)
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 37, spurious reduction of production list(calc_error) ->
-## In state 38, spurious reduction of production list(calc_error) -> calc_error list(calc_error)
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP SYMBOL
-##
-## Ends in an error in state: 93.
-##
-## rappels -> entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp . NL list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP NL CONTROLESRAPP NL RESULTATSRAPP NL SLASH
-##
-## Ends in an error in state: 94.
-##
-## rappels -> entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp NL . list(variable_and_value) [ EOF ENDSHARP ]
-##
-## The known suffix of the stack is as follows:
-## entreesrapp NL list(rappel) CONTROLESRAPP NL list(calc_error) resultatsrapp NL
+## ENDSHARP NL
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
