@@ -91,11 +91,9 @@ primitif:
 
 controlesprim:
 | CONTROLESPRIM { ( ) }
-| error         { error $loc "Missing part #CONTROLES-PRIMITIF" }
 
 resultatsprim:
 | RESULTATSPRIM { ( ) }
-| error         { error $loc "Missing part #RESULTATS-PRIMITIF" }
 
 rappels:
 /* The two constructions match respectively corrective test files and primary test files */
@@ -117,19 +115,15 @@ rappels:
 
 entreesrapp:
 | ENTREESRAPP { ( ) }
-| error         { error $loc "Missing part #ENTREES-RAPPELS" }
 
 resultatsrapp:
 | RESULTATSRAPP { ( ) }
-| error         { error $loc "Missing part #RESULTATS-RAPPELS" }
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
-| SYMBOL error { error $loc "Missing slash in pair variable/value" }
 
 calc_error:
 | error = SYMBOL NL { (error, mk_position $sloc) }
-| variable_and_value { error $loc "Missing a #RESULTATS- header" }
 
 rappel:
 | event_nb = integer SLASH
@@ -158,22 +152,16 @@ rappel:
      decl_2042_rect; 
      pos = mk_position $sloc }
   }
-| calc_error { error $loc "Missing #CONTROLES-RAPPELS header" }
-| resultatsrapp { error $loc "Missing #CONTROLES-RAPPELS header" }
 
 integer:
 | i = INTEGER { i }
-| error       { error $loc "Missing integer" }
 
 value:
 | i = INTEGER { I (i) }
 | f = FLOAT   { F (f) }
-| error       { error $loc "Missing numerical value" }
 
 endsharp:
 | ENDSHARP    { () }
-| error       { error $loc "End case mark is not ##" }
 
 endline:
 | NL          { () }
-| error       { error $loc "No new line at end of file"}
