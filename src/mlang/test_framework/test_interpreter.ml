@@ -174,9 +174,16 @@ let check_all_tests (p : Bir.program) (test_dir : string)
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format_position pos;
             (successes, failures, code_coverage_acc))
+    | Irj_ast.TestLexingError (msg, pos) as e ->
+        Cli.error_print "Lexing error: %s %a" msg Pos.format_position
+          (convert_pos pos);
+        raise e
     | Irj_ast.TestParsingError (msg, pos) as e ->
         Cli.error_print "Parsing error: %s %a" msg Pos.format_position
           (convert_pos pos);
+        raise e
+    | Irj_ast.TestErrorActivating2ndPass as e ->
+        Cli.error_print "Parsing error: check your tests!";
         raise e
     | e ->
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
