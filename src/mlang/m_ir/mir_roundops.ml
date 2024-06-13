@@ -22,10 +22,10 @@ module type RoundOpsInterface = sig
   val roundf : t -> t
 end
 
-module type RoundOpsFunctor = functor (N : Bir_number.NumberInterface) ->
+module type RoundOpsFunctor = functor (N : Mir_number.NumberInterface) ->
   RoundOpsInterface with type t = N.t
 
-module DefaultRoundOps (N : Bir_number.NumberInterface) :
+module DefaultRoundOps (N : Mir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
@@ -41,7 +41,7 @@ module DefaultRoundOps (N : Bir_number.NumberInterface) :
     if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
-module MultiRoundOps (N : Bir_number.NumberInterface) :
+module MultiRoundOps (N : Mir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
@@ -57,7 +57,7 @@ end
 module MainframeRoundOps (L : sig
   val max_long : Int64.t ref
 end)
-(N : Bir_number.NumberInterface) : RoundOpsInterface with type t = N.t = struct
+(N : Mir_number.NumberInterface) : RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
   let epsilon = !Cli.comparison_error_margin

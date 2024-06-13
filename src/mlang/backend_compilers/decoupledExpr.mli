@@ -1,17 +1,12 @@
 type offset =
   | GetValueConst of int
   | GetValueExpr of string
-  | GetValueVar of Bir.variable
+  | GetValueVar of Com.Var.t
   | PassPointer
   | None
 
 val generate_variable :
-  Dgfip_varid.var_id_map ->
-  offset ->
-  ?def_flag:bool ->
-  ?trace_flag:bool ->
-  Bir.variable ->
-  string
+  offset -> ?def_flag:bool -> ?trace_flag:bool -> Com.Var.t -> string
 
 type dflag = Def | Val
 
@@ -33,7 +28,7 @@ type dflag = Def | Val
 type local_var
 (** Variable local to the computed expression *)
 
-val locals_from_m : Mir.LocalVariable.t -> local_var * local_var
+val locals_from_m : unit -> local_var * local_var
 (** Return a couple of local variable from a MIR one, for defineness and
     valuation in this order. *)
 
@@ -67,7 +62,7 @@ val dfalse : constr
 val lit : float -> constr
 (** Float literal *)
 
-val m_var : Bir.variable -> offset -> dflag -> constr
+val m_var : Com.Var.t -> offset -> dflag -> constr
 (** Value from TGV. [m_var v off df] represents an access to the TGV variable
     [v] with [df] to read defineness or valuation. [off] is the access type for
     M array, and should be [None] most of the time. For array access, see
@@ -114,7 +109,10 @@ val dfun : string -> constr list -> constr
 val dinstr : string -> constr
 (** Direct instruction *)
 
-val access : Bir.variable -> dflag -> constr -> constr
+val dlow_level : string -> constr
+(** Direct instruction, not pushed *)
+
+val access : Com.Var.t -> dflag -> constr -> constr
 (** Arbitrary access to M TGV variable. Either defineness of valuation *)
 
 val ite : constr -> constr -> constr -> constr
@@ -126,7 +124,11 @@ val ite : constr -> constr -> constr -> constr
 (** While {!constr} is the expression language for decoupled values, the
     following represents complete and optimized expressions for M computations *)
 
-type expression_composition = { def_test : constr; value_comp : constr }
+type expression_composition = {
+  set_vars : (dflag * string * constr) list;
+  def_test : constr;
+  value_comp : constr;
+}
 (** Representation of an M computation in construction. [def_test] for the
     defineness flag, and [value_comp] for the actual valuation. *)
 
@@ -148,15 +150,14 @@ val is_always_true : t -> bool
 type local_decls
 (** Representation of local variables existing in an expression *)
 
-val build_expression : expression_composition -> local_decls * t * t
+val build_expression :
+  expression_composition -> local_decls * (dflag * string * t) list * t * t
 (** Crush {!constr} values into closed expressions {!t} *)
 
 val format_local_declarations : Format.formatter -> local_decls -> unit
 
 val format_assign :
-  Dgfip_options.flags ->
-  Dgfip_varid.var_id_map ->
-  string ->
-  Format.formatter ->
-  t ->
-  unit
+  Dgfip_options.flags -> string -> Format.formatter -> t -> unit
+
+val format_set_vars :
+  Dgfip_options.flags -> Format.formatter -> (dflag * string * t) list -> unit

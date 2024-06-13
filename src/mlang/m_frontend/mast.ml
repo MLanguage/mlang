@@ -31,15 +31,8 @@ type application = string
     - [bareme]: seems to compute the income tax;
     - [iliad]: usage unkown, much bigger than [bareme]. *)
 
-module DomainId = StrSet
-module DomainIdSet = StrSetSet
-module DomainIdMap = StrSetMap
-
 type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
-
-module ChainingSet = StrSet
-module ChainingMap = StrMap
 
 type variable_name = string
 (** Variables are just strings *)
@@ -58,13 +51,7 @@ type error_name = string
 (** A variable is either generic (with loop parameters) or normal *)
 type variable = Normal of variable_name | Generic of variable_generic_name
 
-type literal = Variable of variable | Float of float | Undefined
-
-(** A table index is used in expressions like [TABLE\[X\]], and can be
-    variables, integer or the special [X] variable that stands for a "generic"
-    index (to define table values as a function of the index). [X] is contained
-    here in [SymbolIndex] because there can also be a variable named ["X"]... *)
-type table_index = LiteralIndex of int | SymbolIndex of variable
+let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
 type table_size = LiteralSize of int | SymbolSize of string
 
@@ -77,100 +64,15 @@ let get_table_size_opt = function
   | None -> None
   | Some (SymbolSize _, _) -> assert false
 
-type set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of variable Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
-
-(**{2 Loops}*)
-
-(** The M language has an extremely odd way to specify looping. Rather than
-    having first-class local mutable variables whose value change at each loop
-    iteration, the M language prefers to use the changing loop parameter to
-    instantiate the variable names inside the loop. For instance,
-
-    {v somme(i=1..10:Xi) v}
-
-    should evaluate to the sum of variables [X1], [X2], etc. Parameters can be
-    number or characters and there can be multiple of them. We have to store all
-    this information. *)
-
-(** Values that can be substituted for loop parameters *)
-type set_value_loop =
-  | Single of literal Pos.marked
-  | Range of literal Pos.marked * literal Pos.marked
-  | Interval of literal Pos.marked * literal Pos.marked
-
-type loop_variable = char Pos.marked * set_value_loop list
-(** A loop variable is the character that should be substituted in variable
-    names inside the loop plus the set of value to substitute. *)
-
-(** There are two kind of loop variables declaration, but they are semantically
-    the same though they have different concrete syntax. *)
-type loop_variables =
-  | ValueSets of loop_variable list
-  | Ranges of loop_variable list
-
 (**{2 Expressions}*)
 
-(** Comparison operators *)
-type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
+type var_category_id = string Pos.marked list Pos.marked
 
-(** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
+type set_value = variable Com.set_value
 
-let precedence = function
-  | Add -> 2
-  | Sub -> 2
-  | Mul -> 1
-  | Div -> 1
-  | And -> 3
-  | Or -> 4
+type expression = variable Com.expression
 
-let has_priority op op' = precedence op' < precedence op
-
-let is_right_associative = function _ -> false
-
-let is_left_associative = function Sub | Div -> true | _ -> false
-
-(** Unary operators *)
-type unop = Not | Minus
-
-(** The main type of the M language *)
-type expression =
-  | TestInSet of bool * expression Pos.marked * set_value list
-      (** Test if an expression is in a set of value (or not in the set if the
-          flag is set to [false]) *)
-  | Comparison of
-      comp_op Pos.marked * expression Pos.marked * expression Pos.marked
-      (** Compares two expressions and produce a boolean *)
-  | Binop of binop Pos.marked * expression Pos.marked * expression Pos.marked
-  | Unop of unop * expression Pos.marked
-  | Index of variable Pos.marked * table_index Pos.marked
-      (** Access a cell in a table *)
-  | Conditional of
-      expression Pos.marked
-      * expression Pos.marked
-      * expression Pos.marked option
-      (** Classic conditional with an optional else clause ([None] only for
-          verification conditions) *)
-  | FunctionCall of func_name Pos.marked * func_args
-  | Literal of literal
-  | Loop of loop_variables Pos.marked * expression Pos.marked
-      (** The loop is prefixed with the loop variables declarations *)
-  | NbCategory of string Pos.marked list Pos.marked
-  | Attribut of variable Pos.marked * string Pos.marked
-  | Size of variable Pos.marked
-  | NbAnomalies
-  | NbDiscordances
-  | NbInformatives
-  | NbBloquantes
-
-(** Functions can take a explicit list of argument or a loop expression that
-    expands into a list *)
-and func_args =
-  | ArgList of expression Pos.marked list
-  | LoopList of loop_variables Pos.marked * expression Pos.marked
+type m_expression = expression Pos.marked
 
 (**{1 Toplevel clauses}*)
 
@@ -179,77 +81,30 @@ and func_args =
 (** The rule is the main feature of the M language. It defines the expression of
     one or several variables. *)
 
-type lvalue = {
-  var : variable Pos.marked;
-  index : table_index Pos.marked option; (* [None] if not a table *)
-}
-(** An lvalue (left value) is a variable being assigned. It can be a table or a
-    non-table variable *)
+type instruction = (variable, error_name) Com.instruction
 
-type formula_decl = {
-  lvalue : lvalue Pos.marked;
-  formula : expression Pos.marked;
-}
-
-(** In the M language, you can define multiple variables at once. This is the
-    way they do looping since the definition can depend on the loop variable
-    value (e.g [Xi] can depend on [i]). *)
-type formula =
-  | SingleFormula of formula_decl
-  | MultipleFormulaes of loop_variables Pos.marked * formula_decl
-
-type print_std = StdOut | StdErr
-
-type print_arg =
-  | PrintString of string
-  | PrintName of variable Pos.marked
-  | PrintAlias of variable Pos.marked
-  | PrintIndent of expression Pos.marked
-  | PrintExpr of expression Pos.marked * int * int
-
-type var_category_id = string Pos.marked list Pos.marked
-
-type restore_vars =
-  | VarList of string Pos.marked list
-  | VarCats of string Pos.marked * var_category_id list * expression Pos.marked
-
-type instruction =
-  | Formula of formula Pos.marked
-  | IfThenElse of
-      expression Pos.marked
-      * instruction Pos.marked list
-      * instruction Pos.marked list
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
-  | ComputeTarget of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * expression Pos.marked
-  | VerifBlock of instruction Pos.marked list
-  | Print of print_std * print_arg Pos.marked list
-  | Iterate of
-      string Pos.marked
-      * var_category_id list
-      * expression Pos.marked
-      * instruction Pos.marked list
-  | Restore of restore_vars Pos.marked list * instruction Pos.marked list
-  | RaiseError of error_name Pos.marked * variable_name Pos.marked option
-  | CleanErrors
-  | ExportErrors
-  | FinalizeErrors
+type m_instruction = instruction Pos.marked
 
 type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
-  rule_applications : application Pos.marked list;
+  rule_apps : application Pos.marked StrMap.t;
   rule_chaining : chaining Pos.marked option;
-  rule_formulaes : formula Pos.marked list;
+  rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
+  rule_formulaes : instruction Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
 
 type target = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_applications : application Pos.marked list;
-  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
+  target_apps : application Pos.marked StrMap.t;
+  target_args : string Pos.marked list;
+  target_result : string Pos.marked option;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_refs : int;
   target_prog : instruction Pos.marked list;
 }
 
@@ -276,16 +131,6 @@ type rule_domain_decl = rule_domain_data domain_decl
 
 type variable_attribute = string Pos.marked * int Pos.marked
 
-(** Here are all the types a value can have. Date types don't seem to be used at
-    all though. *)
-type value_typ =
-  | Boolean
-  | DateYear
-  | DateDayMonthYear
-  | DateMonth
-  | Integer
-  | Real
-
 type input_variable = {
   input_name : variable_name Pos.marked;
   input_category : string Pos.marked list;
@@ -293,7 +138,7 @@ type input_variable = {
   input_alias : variable_name Pos.marked;  (** Unused for now *)
   input_is_givenback : bool;
   input_description : string Pos.marked;
-  input_typ : value_typ Pos.marked option;
+  input_typ : Com.value_typ Pos.marked option;
 }
 
 type computed_variable = {
@@ -302,14 +147,14 @@ type computed_variable = {
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
   comp_category : string Pos.marked list;
-  comp_typ : value_typ Pos.marked option;
+  comp_typ : Com.value_typ Pos.marked option;
   comp_is_givenback : bool;
   comp_description : string Pos.marked;
 }
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of variable_name Pos.marked * literal Pos.marked
+  | ConstVar of variable_name Pos.marked * variable Com.atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 
@@ -344,7 +189,7 @@ type verification_condition = {
 type verification = {
   verif_number : int Pos.marked;
   verif_tag_names : string Pos.marked list Pos.marked;
-  verif_applications : application Pos.marked list;
+  verif_apps : application Pos.marked StrMap.t;
       (** Verification conditions are application-specific *)
   verif_conditions : verification_condition Pos.marked list;
 }
@@ -356,19 +201,9 @@ type verif_domain_data = {
 
 type verif_domain_decl = verif_domain_data domain_decl
 
-type error_typ = Anomaly | Discordance | Information
-
-let compare_error_type e1 e2 =
-  match (e1, e2) with
-  | Anomaly, (Discordance | Information) -> -1
-  | (Discordance | Information), Anomaly -> 1
-  | Information, Discordance -> -1
-  | Discordance, Information -> 1
-  | _ -> 0
-
 type error_ = {
   error_name : error_name Pos.marked;
-  error_typ : error_typ Pos.marked;
+  error_typ : Com.Error.typ Pos.marked;
   error_descr : string Pos.marked list;
 }
 
@@ -378,12 +213,13 @@ type source_file_item =
   | Application of application Pos.marked  (** Declares an application *)
   | Chaining of chaining Pos.marked * application Pos.marked list
   | VariableDecl of variable_decl
+  | Function of target
   | Rule of rule
   | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
   | Output of variable_name Pos.marked  (** Declares an output variable *)
-  | Function  (** Declares a function, unused *)
+  | Func  (** Declares a function, unused *)
   | VarCatDecl of var_category_decl Pos.marked
   | RuleDomDecl of rule_domain_decl
   | VerifDomDecl of verif_domain_decl

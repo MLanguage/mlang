@@ -154,13 +154,13 @@ let run_test test_file annee_exec flag_no_bin_compare =
 
   TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
   TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
-  init_errs ();
+  init_errs tgv;
   let err = M.enchainement_primitif tgv in
   M.export_errs tgv;
   M.dump_raw_tgv_in out tgv err;
 
-  let res_ok = check_result tgv (get_errs ()) res_prim ctl_prim in
-
+  let res_ok = check_result tgv (get_errs tgv) res_prim ctl_prim in
+  free_errs tgv;
   match flag_no_bin_compare with
   | true -> if res_ok then 0 else 1
   | false -> 
@@ -225,11 +225,8 @@ let main () =
 let () =
   Printexc.record_backtrace true;
   try
-    let res = main () in
-    free_errs ();
-    exit res
+    exit (main ())
   with e ->
     Printf.eprintf "%s\n" (Printexc.to_string e);
     Printexc.print_backtrace stderr;
-    free_errs ();
     exit 30

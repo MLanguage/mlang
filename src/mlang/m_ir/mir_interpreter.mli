@@ -18,37 +18,10 @@
 
 (**{1 Program values}*)
 
-(* Type of the values being passed around in the interpreter **)
-type var_literal =
-  | SimpleVar of Mir.literal
-  | TableVar of int * Mir.literal array
-
 (**{1 Instrumentation of the interpreter}*)
 
 (** The BIR interpreter can be instrumented to record which program locations
     have been executed. *)
-
-(** Representation of each program location segment *)
-type code_location_segment =
-  | InsideBlock of int
-  | ConditionalBranch of bool
-  | InsideRule of Bir.rov_id
-  | InsideFunction of Bir.function_name
-  | InsideIterate of Bir.variable
-
-val format_code_location_segment :
-  Format.formatter -> code_location_segment -> unit
-
-type code_location = code_location_segment list
-(** A program location is simply the path inside the program *)
-
-val format_code_location : Format.formatter -> code_location -> unit
-
-val assign_hook :
-  (Bir.variable -> (unit -> var_literal) -> code_location -> unit) ref
-(** The instrumentation of the interpreter is done through this reference. The
-    function that you assign to this reference will be called each time a
-    variable assignment is executed *)
 
 val exit_on_rte : bool ref
 (** If set to true, the interpreter exits the whole process in case of runtime
@@ -75,53 +48,40 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  (** Functor-specific variable values *)
-  type var_value = SimpleVar of value | TableVar of int * value array
-
-  val format_var_value : Format.formatter -> var_value -> unit
-
-  val format_var_value_prec :
-    int -> int -> Format.formatter -> var_value -> unit
-
-  val format_var_value_with_var :
-    Format.formatter -> Bir.variable * var_value -> unit
-
-  type print_ctx = { indent : int; is_newline : bool }
+  type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx = {
-    ctx_local_vars : value Pos.marked Mir.LocalVariableMap.t;
-    ctx_vars : var_value Bir.VariableMap.t;
-    ctx_it : Mir.variable IntMap.t;
+    ctx_tgv : value Array.t;
+    ctx_tmps : value Array.t;
+    mutable ctx_tmps_org : int;
+    ctx_ref : (Com.Var.t * int) Array.t;
+    mutable ctx_ref_org : int;
+    mutable ctx_args : value Array.t list;
+    mutable ctx_res : value list;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
-    ctx_anos : (Mir.error * string option) list;
-    ctx_old_anos : StrSet.t;
-    ctx_nb_anos : int;
-    ctx_nb_discos : int;
-    ctx_nb_infos : int;
-    ctx_nb_bloquantes : int;
-    ctx_finalized_anos : (Mir.error * string option) list;
-    ctx_exported_anos : (Mir.error * string option) list;
+    mutable ctx_anos : (Com.Error.t * string option) list;
+    mutable ctx_old_anos : StrSet.t;
+    mutable ctx_nb_anos : int;
+    mutable ctx_nb_discos : int;
+    mutable ctx_nb_infos : int;
+    mutable ctx_nb_bloquantes : int;
+    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
+    mutable ctx_exported_anos : (Com.Error.t * string option) list;
   }
   (** Interpretation context *)
 
-  val empty_ctx : ctx
+  val empty_ctx : Mir.program -> ctx
 
-  val literal_to_value : Mir.literal -> value
+  val literal_to_value : Com.literal -> value
 
-  val var_literal_to_var_value : var_literal -> var_value
+  val value_to_literal : value -> Com.literal
 
-  val value_to_literal : value -> Mir.literal
-
-  val var_value_to_var_literal : var_value -> var_literal
-
-  val update_ctx_with_inputs : ctx -> Mir.literal Bir.VariableMap.t -> ctx
-
-  val complete_ctx : ctx -> Mir.VariableDict.t -> ctx
+  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   (** Interpreter runtime errors *)
   type run_error =
-    | NanOrInf of string * Bir.expression Pos.marked
+    | NanOrInf of string * Mir.expression Pos.marked
     | StructuredError of
         (string * (string option * Pos.t) list * (unit -> unit) option)
 
@@ -130,17 +90,17 @@ module type S = sig
   val raise_runtime_as_structured : run_error -> 'a
   (** Raises a runtime error with a formatted error message and context *)
 
-  val compare_numbers : Mast.comp_op -> custom_float -> custom_float -> bool
+  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
   (** Returns the comparison between two numbers in the rounding and precision
       context of the interpreter. *)
 
-  val evaluate_expr : ctx -> Mir.program -> Bir.expression Pos.marked -> value
+  val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Bir.program -> ctx -> int -> ctx
+  val evaluate_program : Mir.program -> ctx -> unit
 end
 
 module FloatDefInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 (** The different interpreters, which combine a representation of numbers and
     rounding operations. The first part of the name corresponds to the
     representation of numbers, and is one of the following:
@@ -160,16 +120,16 @@ module FloatDefInterp :
     - Mf: use the rounding operations of the mainframe context *)
 
 module FloatMultInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 
 module FloatMfInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 
-module MPFRDefInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRDefInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
-module MPFRMultInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRMultInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
-module MPFRMfInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRMfInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
 module BigIntDefInterp : S
 
@@ -177,25 +137,25 @@ module BigIntMultInterp : S
 
 module BigIntMfInterp : S
 
-module IntvDefInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvDefInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module IntvMultInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvMultInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module IntvMfInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvMfInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module RatDefInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatDefInterp : S with type custom_float = Mir_number.RationalNumber.t
 
-module RatMultInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatMultInterp : S with type custom_float = Mir_number.RationalNumber.t
 
-module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatMfInterp : S with type custom_float = Mir_number.RationalNumber.t
 
 (** {1 Generic interpretation API}*)
 
 val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
-  Bir.program ->
-  Mir.literal Bir.VariableMap.t ->
+  Mir.program ->
+  Com.literal Com.Var.Map.t ->
   Cli.value_sort ->
   Cli.round_ops ->
   float option StrMap.t * StrSet.t
@@ -203,8 +163,8 @@ val evaluate_program :
 
 val evaluate_expr :
   Mir.program ->
-  Bir.expression Pos.marked ->
+  Mir.expression Pos.marked ->
   Cli.value_sort ->
   Cli.round_ops ->
-  Mir.literal
+  Com.literal
 (** Interprets only an expression *)

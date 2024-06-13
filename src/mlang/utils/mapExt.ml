@@ -1,16 +1,23 @@
 module type T = sig
   include Map.S
 
+  val card : 'a t -> int
+
+  val one : key -> 'a -> 'a t
+
   val from_assoc_list : (key * 'a) list -> 'a t
 
   val pp :
     ?sep:string ->
-    ?pp_key:(Format.formatter -> key -> unit) ->
+    ?pp_key:(Pp.t -> key -> unit) ->
     ?assoc:string ->
-    (Format.formatter -> 'a -> unit) ->
-    Format.formatter ->
+    (Pp.t -> 'a -> unit) ->
+    Pp.t ->
     'a t ->
     unit
+
+  val pp_keys :
+    ?sep:string -> ?pp_key:(Pp.t -> key -> unit) -> unit -> Pp.t -> 'a t -> unit
 end
 
 module Make =
@@ -20,15 +27,16 @@ functor
   struct
     include Map.Make (Ord)
 
+    let card = cardinal
+
+    let one = singleton
+
     let from_assoc_list (l : (key * 'a) list) : 'a t =
       let fold map (k, v) = add k v map in
       List.fold_left fold empty l
 
-    let pp_nil (_ : Format.formatter) (_ : 'b) = ()
-
-    let pp ?(sep = "; ") ?(pp_key = pp_nil) ?(assoc = " => ")
-        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-        (map : 'a t) : unit =
+    let pp ?(sep = "; ") ?(pp_key = Pp.nil) ?(assoc = " => ")
+        (pp_val : Pp.t -> 'a -> unit) (fmt : Pp.t) (map : 'a t) : unit =
       let pp_content fmt map =
         let foldMap k v first =
           let _ =
@@ -40,4 +48,8 @@ functor
         ignore (fold foldMap map true)
       in
       Format.fprintf fmt "{ %a }" pp_content map
+
+    let pp_keys ?(sep = "; ") ?(pp_key = Pp.nil) (_ : unit) (fmt : Pp.t)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc:"" Pp.nil fmt map
   end

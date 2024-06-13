@@ -15,13 +15,6 @@ type type_ = Reel | Booleen | Date
 type domaine = Indefini | Contexte | Famille | Revenu |
                RevenuCorr | Variation | Penalite
 
-external init_errs : unit -> unit = "ml_init_errs"
-external get_err_list : unit -> string list = "ml_get_err_list"
-external free_errs : unit -> unit = "ml_free_errs"
-
-let get_errs () =
-  List.fold_left (fun res e -> StrSet.add e res) StrSet.empty (get_err_list ())
-
 module Var = struct
 
   type t = {
@@ -301,3 +294,11 @@ module TGV = struct
       ) var_list
 
 end
+
+external init_errs : TGV.t -> unit = "ml_init_errs"
+external get_err_list : TGV.t -> string list = "ml_get_err_list"
+external free_errs : TGV.t -> unit = "ml_free_errs"
+
+let get_errs tgv =
+  List.fold_left (fun res e -> StrSet.add e res) StrSet.empty (get_err_list tgv)
+

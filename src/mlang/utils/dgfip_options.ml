@@ -44,9 +44,6 @@ let immediate_controls =
 
 let overlays = Arg.(value & flag & info [ "o" ] ~doc:"Generate overlays")
 
-let multithread =
-  Arg.(value & flag & info [ "M" ] ~doc:"Generate multithread compatible code")
-
 let optim_min_max =
   Arg.(
     value & flag
@@ -81,8 +78,8 @@ let dgfip_t f =
   Term.(
     const f $ income_year $ application_name $ iliad_pro $ cfir $ batch
     $ primitive_only $ extraction $ separate_controls $ immediate_controls
-    $ overlays $ multithread $ optim_min_max $ register $ short $ output_labels
-    $ debug $ nb_debug_c $ trace $ ticket $ colored_output $ cross_references)
+    $ overlays $ optim_min_max $ register $ short $ output_labels $ debug
+    $ nb_debug_c $ trace $ ticket $ colored_output $ cross_references)
 
 let info =
   let doc = "DGFiP-specific options for Mlang." in
@@ -120,7 +117,6 @@ type flags = {
   (* -b0 and -b1 ; disabled by -U and -R *)
   (* -b *) flg_tri_ebcdic : bool;
   (* -b1 only *)
-  (* -M *) flg_multithread : bool;
   (* -s *) flg_short : bool;
   (* -r *) flg_register : bool;
   (* -O *) flg_optim_min_max : bool;
@@ -141,8 +137,8 @@ type flags = {
       (* Flags to deal with in a particular way : -c compilation mode -l link
          mode -v specify the variable file (tgv.m) -e specify the error file
          (err.m) *)
-      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident -C
-         flg_compact -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
+      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident
+         -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
          flag_phase -f flg_ench_init -E cvt_file -g flg_debug -a flg_api -T
          flg_trace_irdata *)
 }
@@ -157,7 +153,6 @@ let default_flags =
     flg_cfir = false;
     flg_gcos = false;
     flg_tri_ebcdic = false;
-    flg_multithread = false;
     flg_short = false;
     flg_register = false;
     flg_optim_min_max = false;
@@ -177,10 +172,9 @@ let default_flags =
 let handler (income_year : int) (application_name : string) (iliad_pro : bool)
     (cfir : bool) (batch : int option) (primitive_only : bool)
     (extraction : bool) (separate_controls : bool) (immediate_controls : bool)
-    (overlays : bool) (multithread : bool) (optim_min_max : bool)
-    (register : bool) (short : bool) (output_labels : bool) (debug : bool)
-    (nb_debug_c : int) (trace : bool) (ticket : bool) (colored_output : bool)
-    (cross_references : bool) : flags =
+    (overlays : bool) (optim_min_max : bool) (register : bool) (short : bool)
+    (output_labels : bool) (debug : bool) (nb_debug_c : int) (trace : bool)
+    (ticket : bool) (colored_output : bool) (cross_references : bool) : flags =
   {
     nom_application = application_name;
     (* iliad, pro, (GP) *)
@@ -193,7 +187,6 @@ let handler (income_year : int) (application_name : string) (iliad_pro : bool)
     flg_cfir = cfir && not iliad_pro;
     flg_gcos = Option.is_some batch && (not iliad_pro) && not cfir;
     flg_tri_ebcdic = (match batch with Some 1 -> true | _ -> false);
-    flg_multithread = multithread;
     flg_short = short;
     flg_register = register;
     flg_optim_min_max = optim_min_max;
