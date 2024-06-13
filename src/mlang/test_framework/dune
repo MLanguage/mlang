@@ -22,4 +22,3 @@
 (menhir
  (modules unitActionsParser)
  (flags --table --external-tokens Irj_parser))
-
