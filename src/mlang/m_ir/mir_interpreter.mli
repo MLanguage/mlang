@@ -77,7 +77,7 @@ module type S = sig
 
   val value_to_literal : value -> Com.literal
 
-  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> unit
+  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   (** Interpreter runtime errors *)
   type run_error =
@@ -100,7 +100,7 @@ module type S = sig
 end
 
 module FloatDefInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 (** The different interpreters, which combine a representation of numbers and
     rounding operations. The first part of the name corresponds to the
     representation of numbers, and is one of the following:
@@ -120,16 +120,16 @@ module FloatDefInterp :
     - Mf: use the rounding operations of the mainframe context *)
 
 module FloatMultInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 
 module FloatMfInterp :
-  S with type custom_float = Bir_number.RegularFloatNumber.t
+  S with type custom_float = Mir_number.RegularFloatNumber.t
 
-module MPFRDefInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRDefInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
-module MPFRMultInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRMultInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
-module MPFRMfInterp : S with type custom_float = Bir_number.MPFRNumber.t
+module MPFRMfInterp : S with type custom_float = Mir_number.MPFRNumber.t
 
 module BigIntDefInterp : S
 
@@ -137,17 +137,17 @@ module BigIntMultInterp : S
 
 module BigIntMfInterp : S
 
-module IntvDefInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvDefInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module IntvMultInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvMultInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module IntvMfInterp : S with type custom_float = Bir_number.IntervalNumber.t
+module IntvMfInterp : S with type custom_float = Mir_number.IntervalNumber.t
 
-module RatDefInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatDefInterp : S with type custom_float = Mir_number.RationalNumber.t
 
-module RatMultInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatMultInterp : S with type custom_float = Mir_number.RationalNumber.t
 
-module RatMfInterp : S with type custom_float = Bir_number.RationalNumber.t
+module RatMfInterp : S with type custom_float = Mir_number.RationalNumber.t
 
 (** {1 Generic interpretation API}*)
 
@@ -155,7 +155,7 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 
 val evaluate_program :
   Mir.program ->
-  Com.literal Mir.VariableMap.t ->
+  Com.literal Com.Var.Map.t ->
   Cli.value_sort ->
   Cli.round_ops ->
   float option StrMap.t * StrSet.t

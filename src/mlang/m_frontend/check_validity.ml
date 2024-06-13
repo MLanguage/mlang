@@ -12,7 +12,7 @@
 
 type rule_or_verif = Rule | Verif
 
-type rdom_or_chain = RuleDomain of Mast.DomainId.t | Chaining of string
+type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
 
 module Err = struct
   let rov_to_str rov = match rov with Rule -> "rule" | Verif -> "verif"
@@ -125,8 +125,8 @@ module Err = struct
   let loop_in_domains rov cycle =
     let pp_cycle fmt cycle =
       let foldCycle first id =
-        if first then Format.fprintf fmt "%a@;" (Mast.DomainId.pp ()) id
-        else Format.fprintf fmt "-> %a@;" (Mast.DomainId.pp ()) id;
+        if first then Format.fprintf fmt "%a@;" (Com.DomainId.pp ()) id
+        else Format.fprintf fmt "-> %a@;" (Com.DomainId.pp ()) id;
         false
       in
       ignore (List.fold_left foldCycle true cycle)
@@ -140,7 +140,7 @@ module Err = struct
   let domain_specialize_itself rov dom_id pos =
     let msg =
       Format.asprintf "%s domain \"%a\" specialize itself" (rov_to_str rov)
-        (Mast.DomainId.pp ()) dom_id
+        (Com.DomainId.pp ()) dom_id
     in
     Errors.raise_spanned_error msg pos
 
@@ -217,7 +217,7 @@ module Err = struct
     let rdom_chain_str =
       match rdom_chain with
       | RuleDomain rdom_id ->
-          Format.asprintf "rule domain \"%a\"" (Mast.DomainId.pp ()) rdom_id
+          Format.asprintf "rule domain \"%a\"" (Com.DomainId.pp ()) rdom_id
       | Chaining ch -> Format.sprintf "chaining \"%s\"" ch
     in
     let pp_cycle fmt cycle =
@@ -324,20 +324,20 @@ module Err = struct
     Errors.raise_spanned_error msg pos
 end
 
-type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
+type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
 
-type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
+type 'a doms = 'a Com.domain Com.DomainIdMap.t
 
 type chaining = {
   chain_name : string Pos.marked;
   chain_apps : Pos.t StrMap.t;
-  chain_rules : Mir.rule_domain Pos.marked IntMap.t;
+  chain_rules : Com.rule_domain Pos.marked IntMap.t;
 }
 
 type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
-  rule_domain : Mir.rule_domain;
+  rule_domain : Com.rule_domain;
   rule_chain : string option;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
@@ -350,7 +350,7 @@ type rule = {
 type verif = {
   verif_id : int Pos.marked;
   verif_apps : Pos.t StrMap.t;
-  verif_domain : Mir.verif_domain;
+  verif_domain : Com.verif_domain;
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
@@ -370,16 +370,16 @@ type program = {
   prog_vars : Com.Var.t StrMap.t;
   prog_alias : Com.Var.t StrMap.t;
   prog_errors : Com.Error.t StrMap.t;
-  prog_rdoms : Mir.rule_domain_data doms;
+  prog_rdoms : Com.rule_domain_data doms;
   prog_rdom_syms : syms;
-  prog_vdoms : Mir.verif_domain_data doms;
+  prog_vdoms : Com.verif_domain_data doms;
   prog_vdom_syms : syms;
   prog_functions : Mast.target StrMap.t;
   prog_rules : rule IntMap.t;
-  prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
+  prog_rdom_calls : (int Pos.marked * Com.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;
   prog_vdom_calls :
-    (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
+    (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
   prog_main_target : string;
   prog_stats : Mir.stats;
@@ -442,10 +442,10 @@ let empty_program (p : Mast.program) prog_app main_target =
     prog_vars = StrMap.empty;
     prog_alias = StrMap.empty;
     prog_errors = StrMap.empty;
-    prog_rdoms = Mast.DomainIdMap.empty;
-    prog_rdom_syms = Mast.DomainIdMap.empty;
-    prog_vdoms = Mast.DomainIdMap.empty;
-    prog_vdom_syms = Mast.DomainIdMap.empty;
+    prog_rdoms = Com.DomainIdMap.empty;
+    prog_rdom_syms = Com.DomainIdMap.empty;
+    prog_vdoms = Com.DomainIdMap.empty;
+    prog_vdom_syms = Com.DomainIdMap.empty;
     prog_functions = StrMap.empty;
     prog_rules = IntMap.empty;
     prog_rdom_calls = StrMap.empty;
@@ -702,19 +702,19 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
   let dom_names =
     List.fold_left
       (fun dom_names (sl, sl_pos) ->
-        let id = Mast.DomainId.from_marked_list sl in
-        Mast.DomainIdMap.add id sl_pos dom_names)
-      Mast.DomainIdMap.empty decl.dom_names
+        let id = Com.DomainId.from_marked_list sl in
+        Com.DomainIdMap.add id sl_pos dom_names)
+      Com.DomainIdMap.empty decl.dom_names
   in
-  let dom_id = Mast.DomainIdMap.min_binding dom_names in
+  let dom_id = Com.DomainIdMap.min_binding dom_names in
   let domain =
-    Mir.
+    Com.
       {
         dom_id;
         dom_names;
         dom_by_default = decl.dom_by_default;
-        dom_min = Mast.DomainIdSet.from_marked_list_list decl.dom_parents;
-        dom_max = Mast.DomainIdSet.empty;
+        dom_min = DomainIdSet.from_marked_list_list decl.dom_parents;
+        dom_max = DomainIdSet.empty;
         dom_rov = IntSet.empty;
         dom_data;
         dom_used = None;
@@ -722,31 +722,31 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
   in
   let dom_id_name, dom_id_pos = dom_id in
   let syms =
-    Mast.DomainIdMap.fold
+    Com.DomainIdMap.fold
       (fun name name_pos syms ->
-        match Mast.DomainIdMap.find_opt name syms with
+        match Com.DomainIdMap.find_opt name syms with
         | Some (_, old_pos) -> Err.domain_already_declared rov old_pos name_pos
         | None ->
             let value = (dom_id_name, name_pos) in
-            Mast.DomainIdMap.add name value syms)
+            Com.DomainIdMap.add name value syms)
       dom_names syms
   in
   let syms =
     if decl.dom_by_default then
-      match Mast.DomainIdMap.find_opt Mast.DomainId.empty syms with
+      match Com.DomainIdMap.find_opt Com.DomainId.empty syms with
       | Some (_, old_pos) ->
           Err.default_domain_already_declared rov old_pos dom_id_pos
       | None ->
           let value = (dom_id_name, Pos.no_pos) in
-          Mast.DomainIdMap.add Mast.DomainId.empty value syms
+          Com.DomainIdMap.add Com.DomainId.empty value syms
     else syms
   in
-  let doms = Mast.DomainIdMap.add dom_id_name domain doms in
+  let doms = Com.DomainIdMap.add dom_id_name domain doms in
   (doms, syms)
 
 let check_rule_dom_decl (decl : Mast.rule_domain_decl) (prog : program) :
     program =
-  let dom_data = Mir.{ rdom_computable = decl.Mast.dom_data.rdom_computable } in
+  let dom_data = Com.{ rdom_computable = decl.Mast.dom_data.rdom_computable } in
   let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
   let doms, syms = check_domain Rule decl dom_data doms_syms in
   { prog with prog_rdoms = doms; prog_rdom_syms = syms }
@@ -787,7 +787,7 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
     aux Com.CatVar.Map.empty decl.Mast.dom_data.vdom_auth
   in
   let vdom_verifiable = decl.Mast.dom_data.vdom_verifiable in
-  let dom_data = Mir.{ vdom_auth; vdom_verifiable } in
+  let dom_data = Com.{ vdom_auth; vdom_verifiable } in
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let doms, syms = check_domain Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
@@ -842,8 +842,8 @@ let complete_vars (prog : program) : program =
       in
       let loc_vars =
         let upd = function
-          | None -> Some (Mir.VariableSet.one var)
-          | Some set -> Some (Mir.VariableSet.add var set)
+          | None -> Some (Com.Var.Set.one var)
+          | Some set -> Some (Com.Var.Set.add var set)
         in
         CatLocMap.update loc_cat upd loc_vars
       in
@@ -869,12 +869,12 @@ let complete_vars (prog : program) : program =
   let prog_vars =
     CatLocMap.fold
       (fun _loc_cat vars prog_vars ->
-        (prog_vars, 0) |> Mir.VariableSet.fold update_loc vars |> fst)
+        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
       loc_vars StrMap.empty
   in
   let nb_loc loc_cat =
     match CatLocMap.find_opt loc_cat loc_vars with
-    | Some set -> Mir.VariableSet.cardinal set
+    | Some set -> Com.Var.Set.cardinal set
     | None -> 0
   in
   let sz_loc loc_cat =
@@ -1026,42 +1026,42 @@ let complete_vars (prog : program) : program =
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
-  let get_id id = Pos.unmark (Mast.DomainIdMap.find id syms) in
-  let get_dom id doms = Mast.DomainIdMap.find (get_id id) doms in
+  let get_id id = Pos.unmark (Com.DomainIdMap.find id syms) in
+  let get_dom id doms = Com.DomainIdMap.find (get_id id) doms in
   let module DomGraph :
     TopologicalSorting.GRAPH
       with type 'a t = 'a doms
-       and type vertex = Mast.DomainId.t
+       and type vertex = Com.DomainId.t
        and type edge = unit = struct
     type 'a t = 'a doms
 
-    type vertex = Mast.DomainId.t
+    type vertex = Com.DomainId.t
 
     type edge = unit
 
-    type 'a vertexMap = 'a Mast.DomainIdMap.t
+    type 'a vertexMap = 'a Com.DomainIdMap.t
 
-    let vertexMapEmpty = Mast.DomainIdMap.empty
+    let vertexMapEmpty = Com.DomainIdMap.empty
 
-    let vertexMapAdd id value map = Mast.DomainIdMap.add (get_id id) value map
+    let vertexMapAdd id value map = Com.DomainIdMap.add (get_id id) value map
 
-    let vertexMapRemove id map = Mast.DomainIdMap.remove (get_id id) map
+    let vertexMapRemove id map = Com.DomainIdMap.remove (get_id id) map
 
-    let vertexMapFindOpt id map = Mast.DomainIdMap.find_opt (get_id id) map
+    let vertexMapFindOpt id map = Com.DomainIdMap.find_opt (get_id id) map
 
     let vertexMapFold fold map res =
-      Mast.DomainIdMap.fold
+      Com.DomainIdMap.fold
         (fun id edge res -> fold (get_id id) edge res)
         map res
 
     let vertices doms =
-      let get_vertex id _ nds = Mast.DomainIdMap.add id None nds in
-      Mast.DomainIdMap.fold get_vertex doms Mast.DomainIdMap.empty
+      let get_vertex id _ nds = Com.DomainIdMap.add id None nds in
+      Com.DomainIdMap.fold get_vertex doms Com.DomainIdMap.empty
 
     let edges doms id =
-      Mast.DomainIdSet.fold
-        (fun id res -> Mast.DomainIdMap.add id None res)
-        (get_dom id doms).Mir.dom_min Mast.DomainIdMap.empty
+      Com.DomainIdSet.fold
+        (fun id res -> Com.DomainIdMap.add id None res)
+        (get_dom id doms).Com.dom_min Com.DomainIdMap.empty
   end in
   let module DomSorting = TopologicalSorting.Make (DomGraph) in
   let sorted_doms =
@@ -1069,7 +1069,7 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     | DomSorting.Cycle cycle -> Err.loop_in_domains rov (List.map fst cycle)
     | DomSorting.AutoCycle (id, _) ->
         let dom = get_dom id doms in
-        let dom_id, dom_id_pos = dom.Mir.dom_id in
+        let dom_id, dom_id_pos = dom.Com.dom_id in
         Err.domain_specialize_itself rov dom_id dom_id_pos
   in
   let doms =
@@ -1078,38 +1078,38 @@ let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
       let dom_min =
         let fold parent_id res =
           let parent_dom = get_dom parent_id doms in
-          let parent_id = Pos.unmark parent_dom.Mir.dom_id in
-          let dom_min = Mast.DomainIdSet.map get_id parent_dom.Mir.dom_min in
-          Mast.DomainIdSet.one parent_id
-          |> Mast.DomainIdSet.union dom_min
-          |> Mast.DomainIdSet.union res
+          let parent_id = Pos.unmark parent_dom.Com.dom_id in
+          let dom_min = Com.DomainIdSet.map get_id parent_dom.Com.dom_min in
+          Com.DomainIdSet.one parent_id
+          |> Com.DomainIdSet.union dom_min
+          |> Com.DomainIdSet.union res
         in
-        Mast.DomainIdSet.fold fold dom.Mir.dom_min Mast.DomainIdSet.empty
+        Com.DomainIdSet.fold fold dom.Com.dom_min Com.DomainIdSet.empty
       in
-      let dom = Mir.{ dom with dom_min } in
-      Mast.DomainIdMap.add id dom doms
+      let dom = Com.{ dom with dom_min } in
+      Com.DomainIdMap.add id dom doms
     in
     List.fold_left set_min doms sorted_doms
   in
   let doms =
     let set_max id dom doms =
       let fold min_id doms =
-        let min_dom = Mast.DomainIdMap.find min_id doms in
-        let dom_max = Mast.DomainIdSet.add id min_dom.Mir.dom_max in
-        let min_dom = Mir.{ min_dom with dom_max } in
-        Mast.DomainIdMap.add min_id min_dom doms
+        let min_dom = Com.DomainIdMap.find min_id doms in
+        let dom_max = Com.DomainIdSet.add id min_dom.Com.dom_max in
+        let min_dom = Com.{ min_dom with dom_max } in
+        Com.DomainIdMap.add min_id min_dom doms
       in
-      Mast.DomainIdSet.fold fold dom.Mir.dom_min doms
+      Com.DomainIdSet.fold fold dom.Com.dom_min doms
     in
-    Mast.DomainIdMap.fold set_max doms doms
+    Com.DomainIdMap.fold set_max doms doms
   in
   let doms =
     let add_sym name (id, _) doms =
-      Mast.DomainIdMap.add name (get_dom id doms) doms
+      Com.DomainIdMap.add name (get_dom id doms) doms
     in
-    Mast.DomainIdMap.fold add_sym syms doms
+    Com.DomainIdMap.fold add_sym syms doms
   in
-  match Mast.DomainIdMap.find_opt Mast.DomainId.empty doms with
+  match Com.DomainIdMap.find_opt Com.DomainId.empty doms with
   | None -> Err.no_default_domain rov
   | Some _ -> doms
 
@@ -1119,17 +1119,17 @@ let complete_rdom_decls (prog : program) : program =
     let prog_rdoms = complete_dom_decls Rule doms_syms in
     StrMap.fold
       (fun _ (m_seq, rdom_id) prog_rdoms ->
-        let rdom = Mast.DomainIdMap.find rdom_id prog_rdoms in
-        Mast.DomainIdSet.fold
+        let rdom = Com.DomainIdMap.find rdom_id prog_rdoms in
+        Com.DomainIdSet.fold
           (fun rid prog_rdoms ->
-            let rd = Mast.DomainIdMap.find rid prog_rdoms in
+            let rd = Com.DomainIdMap.find rid prog_rdoms in
             let rd =
-              match rd.Mir.dom_used with
+              match rd.Com.dom_used with
               | Some _ -> rd
-              | None -> { rd with Mir.dom_used = Some m_seq }
+              | None -> { rd with Com.dom_used = Some m_seq }
             in
-            Mast.DomainIdMap.add rid rd prog_rdoms)
-          (Mast.DomainIdSet.add rdom_id rdom.Mir.dom_min)
+            Com.DomainIdMap.add rid rd prog_rdoms)
+          (Com.DomainIdSet.add rdom_id rdom.Com.dom_min)
           prog_rdoms)
       prog.prog_rdom_calls prog_rdoms
   in
@@ -1141,17 +1141,17 @@ let complete_vdom_decls (prog : program) : program =
     let prog_vdoms = complete_dom_decls Verif doms_syms in
     StrMap.fold
       (fun _ (m_seq, vdom_id, _) prog_vdoms ->
-        let vdom = Mast.DomainIdMap.find vdom_id prog_vdoms in
-        Mast.DomainIdSet.fold
+        let vdom = Com.DomainIdMap.find vdom_id prog_vdoms in
+        Com.DomainIdSet.fold
           (fun vid prog_vdoms ->
-            let vd = Mast.DomainIdMap.find vid prog_vdoms in
+            let vd = Com.DomainIdMap.find vid prog_vdoms in
             let vd =
-              match vd.Mir.dom_used with
+              match vd.Com.dom_used with
               | Some _ -> vd
-              | None -> { vd with Mir.dom_used = Some m_seq }
+              | None -> { vd with Com.dom_used = Some m_seq }
             in
-            Mast.DomainIdMap.add vid vd prog_vdoms)
-          (Mast.DomainIdSet.add vdom_id vdom.Mir.dom_min)
+            Com.DomainIdMap.add vid vd prog_vdoms)
+          (Com.DomainIdSet.add vdom_id vdom.Com.dom_min)
           prog_vdoms)
       prog.prog_vdom_calls prog_vdoms
   in
@@ -1325,14 +1325,14 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   let buf = Buffer.create 100 in
   Buffer.add_string buf prog.prog_prefix;
   let add_sml buf sml =
-    let id = Mast.DomainId.from_marked_list (Pos.unmark sml) in
+    let id = Com.DomainId.from_marked_list (Pos.unmark sml) in
     let add s =
       String.iter
         (function
           | '_' -> Buffer.add_string buf "__" | c -> Buffer.add_char buf c)
         s
     in
-    Mast.DomainId.iter
+    Com.DomainId.iter
       (fun s ->
         Buffer.add_char buf '_';
         add s)
@@ -1343,10 +1343,10 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   | Com.ComputeDomain l -> (
       Buffer.add_string buf "_rules";
       let id = add_sml buf l in
-      match Mast.DomainIdMap.find_opt id prog.prog_rdom_syms with
+      match Com.DomainIdMap.find_opt id prog.prog_rdom_syms with
       | Some (dom_id, _) ->
-          let rdom = Mast.DomainIdMap.find dom_id prog.prog_rdoms in
-          if not rdom.Mir.dom_data.rdom_computable then
+          let rdom = Com.DomainIdMap.find dom_id prog.prog_rdoms in
+          if not rdom.Com.dom_data.rdom_computable then
             Err.rule_domain_not_computable (Pos.get_position l)
       | None -> Err.unknown_domain Rule (Pos.get_position l))
   | Com.ComputeChaining (ch_name, ch_pos) -> (
@@ -1361,10 +1361,10 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       Buffer.add_char buf '_';
       let cpt = StrMap.cardinal prog.prog_vdom_calls in
       Buffer.add_string buf (Format.sprintf "%d" cpt);
-      match Mast.DomainIdMap.find_opt id prog.prog_vdom_syms with
+      match Com.DomainIdMap.find_opt id prog.prog_vdom_syms with
       | Some (dom_id, _) ->
-          let vdom = Mast.DomainIdMap.find dom_id prog.prog_vdoms in
-          if not vdom.Mir.dom_data.vdom_verifiable then
+          let vdom = Com.DomainIdMap.find dom_id prog.prog_vdoms in
+          if not vdom.Com.dom_data.vdom_verifiable then
             Err.verif_domain_not_verifiable (Pos.get_position l)
       | None -> Err.unknown_domain Verif (Pos.get_position l))
   | _ -> assert false);
@@ -1461,8 +1461,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let rdom_id =
-              let id = Mast.DomainId.from_marked_list rdom_list in
-              Pos.unmark (Mast.DomainIdMap.find id env.prog.prog_rdom_syms)
+              let id = Com.DomainId.from_marked_list rdom_list in
+              Pos.unmark (Com.DomainIdMap.find id env.prog.prog_rdom_syms)
             in
             let seq, prog = get_seq env.prog in
             let prog_rdom_calls =
@@ -1482,8 +1482,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let vdom_id =
-              let id = Mast.DomainId.from_marked_list vdom_list in
-              Pos.unmark (Mast.DomainIdMap.find id env.prog.prog_vdom_syms)
+              let id = Com.DomainId.from_marked_list vdom_list in
+              Pos.unmark (Com.DomainIdMap.find id env.prog.prog_vdom_syms)
             in
             let seq, prog = get_seq env.prog in
             ignore (check_expression true expr env);
@@ -1788,16 +1788,16 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   in
   if StrMap.mem prog.prog_app rule_apps then (
     let rdom_id =
-      Mast.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
+      Com.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
     in
     let rule_domain, rule_domain_pos =
       let rid, rid_pos =
-        match Mast.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
+        match Com.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
         | Some m_rid -> m_rid
         | None ->
             Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
       in
-      let rule_domain = Mast.DomainIdMap.find rid prog.prog_rdoms in
+      let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
       (rule_domain, rid_pos)
     in
     let rule_app_set =
@@ -1996,23 +1996,23 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
       (Com.ComputeTarget ((name, Pos.no_pos), []), Pos.no_pos))
     sorted_rules
 
-let rdom_rule_filter (rdom : Mir.rule_domain_data Mir.domain) (rule : rule) :
+let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
     bool =
-  (match rdom.Mir.dom_used with
+  (match rdom.Com.dom_used with
   | Some (rdom_seq, seq_pos) ->
       if rdom_seq <= rule.rule_seq then
         Err.domain_already_used Rule seq_pos (Pos.get_position rule.rule_id)
   | None -> ());
   let rdom_id = Pos.unmark rdom.dom_id in
   let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
-  Mast.DomainId.equal rdom_id rule_rdom_id
-  || Mast.DomainIdSet.mem rule_rdom_id rdom.Mir.dom_min
+  Com.DomainId.equal rdom_id rule_rdom_id
+  || Com.DomainIdSet.mem rule_rdom_id rdom.Com.dom_min
 
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
-    Mast.DomainIdMap.fold
+    Com.DomainIdMap.fold
       (fun rdom_id rdom prog_targets ->
-        if rdom.Mir.dom_data.Mir.rdom_computable then
+        if rdom.Com.dom_data.Com.rdom_computable then
           let rdom_rules =
             IntMap.filter
               (fun _ rule -> rdom_rule_filter rdom rule)
@@ -2029,7 +2029,7 @@ let complete_rule_domains (prog : program) : program =
           in
           let tname =
             let spl =
-              Mast.DomainId.fold (fun s l -> (s, Pos.no_pos) :: l) rdom_id []
+              Com.DomainId.fold (fun s l -> (s, Pos.no_pos) :: l) rdom_id []
             in
             get_compute_id_str (Com.ComputeDomain (spl, Pos.no_pos)) prog
           in
@@ -2055,14 +2055,14 @@ let complete_rule_domains (prog : program) : program =
   in
   { prog with prog_targets }
 
-let rdom_id_rule_filter (prog : program) (rdom_id : Mast.DomainId.t)
+let rdom_id_rule_filter (prog : program) (rdom_id : Com.DomainId.t)
     (rule : rule) : bool =
-  let rdom = Mast.DomainIdMap.find rdom_id prog.prog_rdoms in
+  let rdom = Com.DomainIdMap.find rdom_id prog.prog_rdoms in
   rdom_rule_filter rdom rule
 
-let rdom_ids_rule_filter (prog : program) (rdom_ids : Mast.DomainIdSet.t)
+let rdom_ids_rule_filter (prog : program) (rdom_ids : Com.DomainIdSet.t)
     (rule : rule) : bool =
-  Mast.DomainIdSet.exists
+  Com.DomainIdSet.exists
     (fun rdom_id -> rdom_id_rule_filter prog rdom_id rule)
     rdom_ids
 
@@ -2071,29 +2071,29 @@ let complete_chainings (prog : program) : program =
     StrMap.fold
       (fun ch_name chain prog_targets ->
         let all_ids =
-          Mast.DomainIdMap.fold
+          Com.DomainIdMap.fold
             (fun _ rdom ids ->
-              let uid = Pos.unmark rdom.Mir.dom_id in
-              Mast.DomainIdSet.add uid ids)
-            prog.prog_rdoms Mast.DomainIdSet.empty
+              let uid = Pos.unmark rdom.Com.dom_id in
+              Com.DomainIdSet.add uid ids)
+            prog.prog_rdoms Com.DomainIdSet.empty
         in
         let sup_ids =
           IntMap.fold
             (fun _ (rdom, id_pos) sup_ids ->
-              let uid = Pos.unmark rdom.Mir.dom_id in
-              let rdom_supeq = Mast.DomainIdSet.add uid rdom.Mir.dom_max in
-              let sup_ids = Mast.DomainIdSet.inter sup_ids rdom_supeq in
-              if Mast.DomainIdSet.cardinal sup_ids = 0 then
+              let uid = Pos.unmark rdom.Com.dom_id in
+              let rdom_supeq = Com.DomainIdSet.add uid rdom.Com.dom_max in
+              let sup_ids = Com.DomainIdSet.inter sup_ids rdom_supeq in
+              if Com.DomainIdSet.cardinal sup_ids = 0 then
                 Err.rule_domain_incompatible_with_chaining ch_name id_pos
               else sup_ids)
             chain.chain_rules all_ids
         in
         let min_ids =
-          Mast.DomainIdSet.filter
+          Com.DomainIdSet.filter
             (fun id ->
-              let rdom = Mast.DomainIdMap.find id prog.prog_rdoms in
-              let min_sups = Mast.DomainIdSet.inter sup_ids rdom.Mir.dom_min in
-              Mast.DomainIdSet.is_empty min_sups)
+              let rdom = Com.DomainIdMap.find id prog.prog_rdoms in
+              let min_sups = Com.DomainIdSet.inter sup_ids rdom.Com.dom_min in
+              Com.DomainIdSet.is_empty min_sups)
             sup_ids
         in
         let rdom_rules =
@@ -2164,16 +2164,16 @@ let check_verif (v : Mast.verification) (prog : program) : program =
   in
   if StrMap.mem prog.prog_app verif_apps then
     let vdom_id =
-      Mast.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
+      Com.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
     in
     let verif_domain =
       let vid =
-        match Mast.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
+        match Com.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
         | Some (vid, _) -> vid
         | None ->
             Err.unknown_domain Verif (Pos.get_position v.Mast.verif_tag_names)
       in
-      Mast.DomainIdMap.find vid prog.prog_vdoms
+      Com.DomainIdMap.find vid prog.prog_vdoms
     in
     let prog_verifs, prog, _ =
       List.fold_left
@@ -2446,9 +2446,9 @@ let eval_expr_verif (prog : program) (verif : verif)
   in
   aux expr
 
-let vdom_rule_filter (prog : program) (vdom : Mir.verif_domain_data Mir.domain)
+let vdom_rule_filter (prog : program) (vdom : Com.verif_domain_data Com.domain)
     (expr : Mast.expression Pos.marked) (verif : verif) : bool =
-  (match vdom.Mir.dom_used with
+  (match vdom.Com.dom_used with
   | Some (vdom_seq, seq_pos) ->
       if vdom_seq <= verif.verif_seq then
         Err.domain_already_used Verif seq_pos (Pos.get_position verif.verif_id)
@@ -2459,8 +2459,8 @@ let vdom_rule_filter (prog : program) (vdom : Mir.verif_domain_data Mir.domain)
   let vdom_id = Pos.unmark vdom.dom_id in
   let verif_vdom_id = Pos.unmark verif.verif_domain.dom_id in
   filter_expr
-  && (Mast.DomainId.equal vdom_id verif_vdom_id
-     || Mast.DomainIdSet.mem verif_vdom_id vdom.Mir.dom_min)
+  && (Com.DomainId.equal vdom_id verif_vdom_id
+     || Com.DomainIdSet.mem verif_vdom_id vdom.Com.dom_min)
 
 module OrdVerif = struct
   type t = int * int * int
@@ -2500,7 +2500,7 @@ let complete_verif_calls (prog : program) : program =
         let verif_set =
           IntMap.fold
             (fun _verif_id verif verif_set ->
-              let vdom = Mast.DomainIdMap.find vdom_id prog.prog_vdoms in
+              let vdom = Com.DomainIdMap.find vdom_id prog.prog_vdoms in
               if vdom_rule_filter prog vdom expr verif then
                 OrdVerifSet.add (OrdVerif.make verif) verif_set
               else verif_set)

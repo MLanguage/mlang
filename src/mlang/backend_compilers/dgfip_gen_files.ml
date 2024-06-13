@@ -1633,7 +1633,7 @@ extern void init_erreur(T_irdata *irdata);
 |}
 
 let gen_decl_functions fmt (cprog : Mir.program) =
-  let functions = Mir.TargetMap.bindings cprog.program_functions in
+  let functions = Com.TargetMap.bindings cprog.program_functions in
   let pp_args fmt args =
     List.iteri
       (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
@@ -1647,7 +1647,7 @@ let gen_decl_functions fmt (cprog : Mir.program) =
     functions
 
 let gen_decl_targets fmt (cprog : Mir.program) =
-  let targets = Mir.TargetMap.bindings cprog.program_targets in
+  let targets = Com.TargetMap.bindings cprog.program_targets in
   Format.fprintf fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (name, _) ->
          Format.fprintf fmt "extern struct S_discord *%s(T_irdata* irdata);"

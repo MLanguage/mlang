@@ -12,20 +12,20 @@
 
 type rule_or_verif = Rule | Verif
 
-type syms = Mast.DomainId.t Pos.marked Mast.DomainIdMap.t
+type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
 
-type 'a doms = 'a Mir.domain Mast.DomainIdMap.t
+type 'a doms = 'a Com.domain Com.DomainIdMap.t
 
 type chaining = {
   chain_name : string Pos.marked;
   chain_apps : Pos.t StrMap.t;
-  chain_rules : Mir.rule_domain Pos.marked IntMap.t;
+  chain_rules : Com.rule_domain Pos.marked IntMap.t;
 }
 
 type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
-  rule_domain : Mir.rule_domain;
+  rule_domain : Com.rule_domain;
   rule_chain : string option;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
@@ -38,7 +38,7 @@ type rule = {
 type verif = {
   verif_id : int Pos.marked;
   verif_apps : Pos.t StrMap.t;
-  verif_domain : Mir.verif_domain;
+  verif_domain : Com.verif_domain;
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
   verif_var : Mast.variable_name Pos.marked option;
@@ -58,16 +58,16 @@ type program = {
   prog_vars : Com.Var.t StrMap.t;
   prog_alias : Com.Var.t StrMap.t;
   prog_errors : Com.Error.t StrMap.t;
-  prog_rdoms : Mir.rule_domain_data doms;
+  prog_rdoms : Com.rule_domain_data doms;
   prog_rdom_syms : syms;
-  prog_vdoms : Mir.verif_domain_data doms;
+  prog_vdoms : Com.verif_domain_data doms;
   prog_vdom_syms : syms;
   prog_functions : Mast.target StrMap.t;
   prog_rules : rule IntMap.t;
-  prog_rdom_calls : (int Pos.marked * Mast.DomainId.t) StrMap.t;
+  prog_rdom_calls : (int Pos.marked * Com.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;
   prog_vdom_calls :
-    (int Pos.marked * Mast.DomainId.t * Mast.expression Pos.marked) StrMap.t;
+    (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : Mast.target StrMap.t;
   prog_main_target : string;
   prog_stats : Mir.stats;

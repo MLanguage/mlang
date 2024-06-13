@@ -150,6 +150,37 @@ module Var : sig
      val compare_name : string -> string -> int*)
 end
 
+module DomainId : StrSet.T
+
+module DomainIdSet :
+  SetSetExt.T with type base_elt = string and type elt = DomainId.t
+
+module DomainIdMap : MapExt.T with type key = DomainId.t
+
+type 'a domain = {
+  dom_id : DomainId.t Pos.marked;
+  dom_names : Pos.t DomainIdMap.t;
+  dom_by_default : bool;
+  dom_min : DomainIdSet.t;
+  dom_max : DomainIdSet.t;
+  dom_rov : IntSet.t;
+  dom_data : 'a;
+  dom_used : int Pos.marked option;
+}
+
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
+
+type verif_domain_data = {
+  vdom_auth : Pos.t CatVar.Map.t;
+  vdom_verifiable : bool;
+}
+
+type verif_domain = verif_domain_data domain
+
+module TargetMap : StrMap.T
+
 type literal = Float of float | Undefined
 
 (** The M language has an extremely odd way to specify looping. Rather than

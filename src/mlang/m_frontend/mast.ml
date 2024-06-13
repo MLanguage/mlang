@@ -31,15 +31,8 @@ type application = string
     - [bareme]: seems to compute the income tax;
     - [iliad]: usage unkown, much bigger than [bareme]. *)
 
-module DomainId = StrSet
-module DomainIdSet = StrSetSet
-module DomainIdMap = StrSetMap
-
 type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
-
-module ChainingSet = StrSet
-module ChainingMap = StrMap
 
 type variable_name = string
 (** Variables are just strings *)

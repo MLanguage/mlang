@@ -285,7 +285,7 @@ let generate_return (oc : Format.formatter) (_x : 'a) =
 let generate_calculateTax_method (calculation_vars_len : int)
     (program : Mir.program) (locals_size : int) (oc : Format.formatter) () =
   let main_statements =
-    (Mir.TargetMap.find program.program_main_target program.program_targets)
+    (Com.TargetMap.find program.program_main_target program.program_targets)
       .target_prog
   in
   Format.fprintf oc

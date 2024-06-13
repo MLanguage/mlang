@@ -28,7 +28,7 @@ type dflag = Def | Val
 type local_var
 (** Variable local to the computed expression *)
 
-val locals_from_m : Mir.LocalVariable.t -> local_var * local_var
+val locals_from_m : unit -> local_var * local_var
 (** Return a couple of local variable from a MIR one, for defineness and
     valuation in this order. *)
 

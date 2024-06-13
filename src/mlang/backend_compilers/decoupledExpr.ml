@@ -182,9 +182,16 @@ let push (stacks : local_stacks) (ctx : local_vars) (constr : constr) =
 
 (** smart constructors *)
 
-let locals_from_m (lvar : Mir.local_variable) =
-  ( Refered (-(2 * lvar.Mir.LocalVariable.id)),
-    Refered (-((2 * lvar.Mir.LocalVariable.id) + 1)) )
+let locals_from_m =
+  let counter = ref 0 in
+  let fresh_id () =
+    let v = !counter in
+    counter := !counter + 1;
+    v
+  in
+  fun () ->
+    let lvar_id = fresh_id () in
+    (Refered (-(2 * lvar_id)), Refered (-((2 * lvar_id) + 1)))
 
 let new_local : unit -> local_var =
   let c = ref 0 in
@@ -316,9 +323,9 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
         if
-          Bir_interpreter.FloatDefInterp.compare_numbers o
-            (Bir_number.RegularFloatNumber.of_float f1)
-            (Bir_number.RegularFloatNumber.of_float f2)
+          Mir_interpreter.FloatDefInterp.compare_numbers o
+            (Mir_number.RegularFloatNumber.of_float f1)
+            (Mir_number.RegularFloatNumber.of_float f2)
         then Dtrue
         else Dfalse
     | Dvar v1, Dvar v2 ->

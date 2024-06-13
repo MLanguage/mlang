@@ -26,7 +26,7 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
     StrMap.find name p.program_vars
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
-    float StrMap.t * StrSet.t * Com.literal Mir.VariableMap.t =
+    float StrMap.t * StrSet.t * Com.literal Com.Var.Map.t =
   let input_file =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
     let ancsded_val =
@@ -40,8 +40,8 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           | Irj_ast.I i -> Com.Float (float_of_int i)
           | F f -> Com.Float f
         in
-        Mir.VariableMap.add var lit in_f)
-      (Mir.VariableMap.one ancsded ancsded_val)
+        Com.Var.Map.add var lit in_f)
+      (Com.Var.Map.one ancsded ancsded_val)
       t.prim.entrees
   in
   let expectedVars =
@@ -69,7 +69,7 @@ let check_test (program : Mir.program) (test_name : string)
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program program; *)
   let varMap, anoSet =
-    Bir_interpreter.evaluate_program program input_file value_sort round_ops
+    Mir_interpreter.evaluate_program program input_file value_sort round_ops
   in
   let check_vars exp vars =
     let test_error_margin = 0.01 in
@@ -107,7 +107,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
          (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x))
          (Array.to_list arr)
   in
-  Bir_interpreter.exit_on_rte := false;
+  Mir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
   Cli.warning_flag := false;
@@ -115,8 +115,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
-    let module Interp = (val Bir_interpreter.get_interp value_sort round_ops
-                           : Bir_interpreter.S)
+    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
+                           : Mir_interpreter.S)
     in
     try
       Cli.debug_flag := false;

@@ -14,9 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let format_typ fmt (t : Mir.typ) =
-  Format.pp_print_string fmt (match t with Real -> "real")
-
 let format_variable fmt (var : Com.Var.t) =
   Format.fprintf fmt "%s" (Pos.unmark var.name)
 

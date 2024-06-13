@@ -345,7 +345,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
 
 let get_targets (is_function : bool) (error_decls : Com.Error.t StrMap.t)
     (cats : Com.CatVar.data Com.CatVar.Map.t) (var_data : Com.Var.t StrMap.t)
-    (ts : Mast.target StrMap.t) : Mir.target_data Mir.TargetMap.t =
+    (ts : Mast.target StrMap.t) : Mir.target_data Com.TargetMap.t =
   StrMap.fold
     (fun _ (t : Mast.target) targets ->
       let target_name = t.target_name in
@@ -427,8 +427,8 @@ let get_targets (is_function : bool) (error_decls : Com.Error.t StrMap.t)
             target_nb_refs;
           }
       in
-      Mir.TargetMap.add (Pos.unmark target_name) target_data targets)
-    ts Mir.TargetMap.empty
+      Com.TargetMap.add (Pos.unmark target_name) target_data targets)
+    ts Com.TargetMap.empty
 
 let translate (p : Mast.program) (main_target : string) : Mir.program =
   let p = Expand_macros.proceed p in

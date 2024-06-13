@@ -248,7 +248,10 @@ module Var = struct
 
   let compare (var1 : t) (var2 : t) =
     let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
-    if c <> 0 then c else compare var1.id var2.id
+    if c <> 0 then c
+    else
+      let c = compare (Pos.unmark var1.name) (Pos.unmark var2.name) in
+      if c <> 0 then c else compare var1.id var2.id
 
   let pp fmt (v : t) = Format.fprintf fmt "(%d)%s" v.id (Pos.unmark v.name)
 
@@ -287,6 +290,54 @@ module Var = struct
 
      let compare_name n0 n1 = !compare_name_ref n0 n1*)
 end
+
+module DomainId = StrSet
+
+module DomainIdSet = struct
+  include SetSetExt.Make (DomainId)
+
+  module type T =
+    SetSetExt.T with type base_elt = string and type elt = DomainId.t
+
+  let pp ?(sep1 = ", ") ?(sep2 = " ") ?(pp_elt = Format.pp_print_string)
+      (_ : unit) (fmt : Format.formatter) (setSet : t) : unit =
+    pp ~sep1 ~sep2 ~pp_elt () fmt setSet
+end
+
+module DomainIdMap = struct
+  include MapExt.Make (DomainId)
+
+  module type T = MapExt.T with type key = DomainId.t
+
+  let pp ?(sep = ", ") ?(pp_key = DomainId.pp ()) ?(assoc = " => ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
+end
+
+type 'a domain = {
+  dom_id : DomainId.t Pos.marked;
+  dom_names : Pos.t DomainIdMap.t;
+  dom_by_default : bool;
+  dom_min : DomainIdSet.t;
+  dom_max : DomainIdSet.t;
+  dom_rov : IntSet.t;
+  dom_data : 'a;
+  dom_used : int Pos.marked option;
+}
+
+type rule_domain_data = { rdom_computable : bool }
+
+type rule_domain = rule_domain_data domain
+
+type verif_domain_data = {
+  vdom_auth : Pos.t CatVar.Map.t;
+  vdom_verifiable : bool;
+}
+
+type verif_domain = verif_domain_data domain
+
+module TargetMap = StrMap
 
 type literal = Float of float | Undefined
 

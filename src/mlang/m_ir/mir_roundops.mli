@@ -25,7 +25,7 @@ end
 
 (** The actual implementation of rounding operations depends on the chosen
     representation of numbers, hence we need a functor *)
-module type RoundOpsFunctor = functor (N : Bir_number.NumberInterface) ->
+module type RoundOpsFunctor = functor (N : Mir_number.NumberInterface) ->
   RoundOpsInterface with type t = N.t
 
 module DefaultRoundOps : RoundOpsFunctor

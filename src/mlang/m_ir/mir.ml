@@ -20,78 +20,17 @@
 
 (** Variables are first-class objects *)
 
-(** Local variables don't appear in the M source program but can be introduced
-    by let bindings when translating to MIR. They should be De Bruijn indices
-    but instead are unique globals identifiers out of laziness. *)
-
-type local_variable = { id : int }
-
-module LocalVariable = struct
-  type t = local_variable = { id : int }
-
-  let counter : int ref = ref 0
-
-  let fresh_id () : int =
-    let v = !counter in
-    counter := !counter + 1;
-    v
-
-  let new_var () : t = { id = fresh_id () }
-
-  let compare (var1 : t) (var2 : t) = compare var1.id var2.id
-end
-
-(** Type of MIR values *)
-type typ = Real
-
 type set_value = Com.Var.t Com.set_value
 
 type expression = Com.Var.t Com.expression
-
-(** MIR programs are just mapping from variables to their definitions, and make
-    a massive use of [VariableMap]. *)
-module VariableMap = struct
-  include MapExt.Make (Com.Var)
-
-  let pp_key fmt key =
-    Format.fprintf fmt "Variable %s%s"
-      (Pos.unmark key.Com.Var.name)
-      (match Com.Var.alias key with
-      | Some x -> " (alias " ^ Pos.unmark x ^ ")"
-      | None -> "")
-
-  let pp ?(sep = ", ") ?(pp_key = pp_key) ?(assoc = " -> ")
-      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-      (map : 'a t) : unit =
-    pp ~sep ~pp_key ~assoc pp_val fmt map
-end
-
-module VariableSet = SetExt.Make (Com.Var)
 
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
     model tables. *)
 
-type 'a domain = {
-  dom_id : Mast.DomainId.t Pos.marked;
-  dom_names : Pos.t Mast.DomainIdMap.t;
-  dom_by_default : bool;
-  dom_min : Mast.DomainIdSet.t;
-  dom_max : Mast.DomainIdSet.t;
-  dom_rov : IntSet.t;
-  dom_data : 'a;
-  dom_used : int Pos.marked option;
-}
-
-type rule_domain_data = { rdom_computable : bool }
-
-type rule_domain = rule_domain_data domain
-
 type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
-
-module TargetMap = StrMap
 
 type target_data = {
   target_name : string Pos.marked;
@@ -105,15 +44,6 @@ type target_data = {
   target_nb_refs : int;
   target_prog : m_instruction list;
 }
-
-(**{1 Verification conditions}*)
-
-type verif_domain_data = {
-  vdom_auth : Pos.t Com.CatVar.Map.t;
-  vdom_verifiable : bool;
-}
-
-type verif_domain = verif_domain_data domain
 
 type stats = {
   nb_calculated : int;
@@ -133,13 +63,13 @@ type program = {
   program_safe_prefix : string;
   program_applications : Pos.t StrMap.t;
   program_var_categories : Com.CatVar.data Com.CatVar.Map.t;
-  program_rule_domains : rule_domain Mast.DomainIdMap.t;
-  program_verif_domains : verif_domain Mast.DomainIdMap.t;
+  program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
+  program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
       (** A static register of all variables that can be used during a
           calculation *)
-  program_functions : target_data TargetMap.t;
-  program_targets : target_data TargetMap.t;
+  program_functions : target_data Com.TargetMap.t;
+  program_targets : target_data Com.TargetMap.t;
   program_main_target : string;
   program_stats : stats;
 }
@@ -336,7 +266,7 @@ let expand_functions (p : program) : program =
       | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in
-    TargetMap.map
+    Com.TargetMap.map
       (fun t ->
         let target_prog = List.map map_instr t.target_prog in
         { t with target_prog })

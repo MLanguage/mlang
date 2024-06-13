@@ -195,7 +195,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
       Test_interpreter.check_all_tests m_program tests value_sort round_ops
         filter_function
     else if run_test <> None then begin
-      Bir_interpreter.repl_debug := true;
+      Mir_interpreter.repl_debug := true;
       let test : string =
         match run_test with Some s -> s | _ -> assert false
       in

@@ -55,7 +55,7 @@ module type S = sig
 
   val value_to_literal : value -> Com.literal
 
-  val update_ctx_with_inputs : ctx -> Com.literal Mir.VariableMap.t -> unit
+  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
@@ -73,7 +73,7 @@ module type S = sig
   val evaluate_program : Mir.program -> ctx -> unit
 end
 
-module Make (N : Bir_number.NumberInterface) (RF : Bir_roundops.RoundOpsFunctor) =
+module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) =
 struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
@@ -159,17 +159,17 @@ struct
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
 
-  let update_ctx_with_inputs (ctx : ctx)
-      (inputs : Com.literal Mir.VariableMap.t) : unit =
+  let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
+      unit =
     let value_inputs =
-      Mir.VariableMap.mapi
+      Com.Var.Map.mapi
         (fun v l ->
           match l with
           | Com.Undefined -> Undefined
           | Com.Float f -> Number (N.of_float_input v f))
         inputs
     in
-    Mir.VariableMap.iter
+    Com.Var.Map.iter
       (fun (var : Com.Var.t) value ->
         ctx.ctx_tgv.(Com.Var.loc_int var) <- value)
       value_inputs
@@ -420,7 +420,7 @@ struct
                 | None -> Undefined
                 | Some f -> Number (N.of_int f)))
         | FuncCall ((Func fn, _), args) ->
-            let fd = Mir.TargetMap.find fn p.program_functions in
+            let fd = Com.TargetMap.find fn p.program_functions in
             let atab = Array.of_list (List.map (evaluate_expr ctx p) args) in
             ctx.ctx_args <- atab :: ctx.ctx_args;
             ctx.ctx_res <- Undefined :: ctx.ctx_res;
@@ -546,7 +546,7 @@ struct
         aux wdl
     | Com.VerifBlock stmts -> evaluate_stmts true p ctx stmts
     | Com.ComputeTarget ((tn, _), args) ->
-        let tf = Mir.TargetMap.find tn p.program_targets in
+        let tf = Com.TargetMap.find tn p.program_targets in
         let rec set_args n = function
           | [] -> ()
           | m_a :: al' ->
@@ -754,7 +754,7 @@ struct
     try
       let main_target =
         match
-          Mir.TargetMap.find_opt p.program_main_target p.program_targets
+          Com.TargetMap.find_opt p.program_main_target p.program_targets
         with
         | Some t -> t
         | None ->
@@ -776,52 +776,52 @@ module MainframeLongSize = struct
 end
 
 module FloatDefInterp =
-  Make (Bir_number.RegularFloatNumber) (Bir_roundops.DefaultRoundOps)
+  Make (Mir_number.RegularFloatNumber) (Mir_roundops.DefaultRoundOps)
 module FloatMultInterp =
-  Make (Bir_number.RegularFloatNumber) (Bir_roundops.MultiRoundOps)
+  Make (Mir_number.RegularFloatNumber) (Mir_roundops.MultiRoundOps)
 module FloatMfInterp =
   Make
-    (Bir_number.RegularFloatNumber)
-    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+    (Mir_number.RegularFloatNumber)
+    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 module MPFRDefInterp =
-  Make (Bir_number.MPFRNumber) (Bir_roundops.DefaultRoundOps)
+  Make (Mir_number.MPFRNumber) (Mir_roundops.DefaultRoundOps)
 module MPFRMultInterp =
-  Make (Bir_number.MPFRNumber) (Bir_roundops.MultiRoundOps)
+  Make (Mir_number.MPFRNumber) (Mir_roundops.MultiRoundOps)
 module MPFRMfInterp =
   Make
-    (Bir_number.MPFRNumber)
-    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+    (Mir_number.MPFRNumber)
+    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 module BigIntDefInterp =
   Make
-    (Bir_number.BigIntFixedPointNumber
+    (Mir_number.BigIntFixedPointNumber
        (BigIntPrecision))
-       (Bir_roundops.DefaultRoundOps)
+       (Mir_roundops.DefaultRoundOps)
 module BigIntMultInterp =
   Make
-    (Bir_number.BigIntFixedPointNumber
+    (Mir_number.BigIntFixedPointNumber
        (BigIntPrecision))
-       (Bir_roundops.MultiRoundOps)
+       (Mir_roundops.MultiRoundOps)
 module BigIntMfInterp =
   Make
-    (Bir_number.BigIntFixedPointNumber
+    (Mir_number.BigIntFixedPointNumber
        (BigIntPrecision))
-       (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+       (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 module IntvDefInterp =
-  Make (Bir_number.IntervalNumber) (Bir_roundops.DefaultRoundOps)
+  Make (Mir_number.IntervalNumber) (Mir_roundops.DefaultRoundOps)
 module IntvMultInterp =
-  Make (Bir_number.IntervalNumber) (Bir_roundops.MultiRoundOps)
+  Make (Mir_number.IntervalNumber) (Mir_roundops.MultiRoundOps)
 module IntvMfInterp =
   Make
-    (Bir_number.IntervalNumber)
-    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+    (Mir_number.IntervalNumber)
+    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 module RatDefInterp =
-  Make (Bir_number.RationalNumber) (Bir_roundops.DefaultRoundOps)
+  Make (Mir_number.RationalNumber) (Mir_roundops.DefaultRoundOps)
 module RatMultInterp =
-  Make (Bir_number.RationalNumber) (Bir_roundops.MultiRoundOps)
+  Make (Mir_number.RationalNumber) (Mir_roundops.MultiRoundOps)
 module RatMfInterp =
   Make
-    (Bir_number.RationalNumber)
-    (Bir_roundops.MainframeRoundOps (MainframeLongSize))
+    (Mir_number.RationalNumber)
+    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 
 let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
   match (sort, roundops) with
@@ -860,7 +860,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Mir.program) (inputs : Com.literal Mir.VariableMap.t)
+let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
     float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
