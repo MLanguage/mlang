@@ -17,3 +17,7 @@
 val parse_file : string -> Irj_ast.irj_file
 (** [parse_file file] loads the content of a given IRJ [file] in a simple
     datastructure. *)
+
+val dummy_parse_file_with_incremental : string -> unit
+(** [dummy_parse_file_with_incremental file] check the content of a given IRJ [file] 
+    against parsing errors using Menhir incremental API *)

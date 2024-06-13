@@ -35,6 +35,9 @@ let () =
           (pos_2.pos_cnum - pos_2.pos_bol + 1);
         Printf.eprintf " : %s\n" s;
         exit 1
+    | Mlang.Irj_ast.TestErrorActivating2ndPass ->
+        Mlang.Irj_file.dummy_parse_file_with_incremental f;
+        exit 1
     | _ ->
         Printf.eprintf "%s" (Filename.basename f);
         Printf.eprintf " : Unknown error\n";
