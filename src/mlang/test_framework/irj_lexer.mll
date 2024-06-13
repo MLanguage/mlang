@@ -20,7 +20,7 @@ open Irj_parser
 open Irj_ast
 
 let error lb msg =
-  raise (TestParsingError ("Lexing error : " ^ msg, 
+  raise (TestLexingError ("Lexing error : " ^ msg, 
                           mk_position (Lexing.lexeme_start_p lb, Lexing.lexeme_end_p lb)))
 
 module StrMap = Map.Make (String)

@@ -23,7 +23,13 @@ let mk_position sloc =
   { pos_filename = (fst sloc).Lexing.pos_fname; pos_loc = sloc }
 
 exception TestParsingError of (string * pos)
-(* duplication of some of the utils *)
+(* old style parsing error raised in primary parser *)
+
+exception TestLexingError of (string * pos)
+(* distinct error from the lexer module *)
+
+exception TestErrorActivating2ndPass
+(*  generic parsing error to be handled by secondary parser *)
 
 type literal = I of int | F of float
 

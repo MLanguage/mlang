@@ -25,7 +25,8 @@ let () =
   let f = Sys.argv.(1) in
   let _tf =
     try Mlang.Irj_file.parse_file f with
-    | Mlang.Irj_ast.TestParsingError (s, pos) ->
+    | Mlang.Irj_ast.TestParsingError (s, pos)
+    | Mlang.Irj_ast.TestLexingError (s, pos) ->
         let pos_1, pos_2 = pos.pos_loc in
         Printf.eprintf "%s" (Filename.basename f);
         Printf.eprintf ":(%d,%d)-(%d,%d)" pos_1.pos_lnum
