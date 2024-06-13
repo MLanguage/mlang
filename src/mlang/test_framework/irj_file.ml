@@ -86,9 +86,7 @@ let get text checkpoint i =
    table-based parser is invoked only when we know that there is a
    syntax error in the input file. *)
 
-let succeed _v =
-  Printf.eprintf
-    "Erreur gérée par le parseur primaire, pas plus de détails ici…\n"
+let succeed _v = assert false
 
 (* [fail text buffer checkpoint] is invoked when parser has encountered a
    syntax error. *)
