@@ -773,26 +773,11 @@ si nb_discordances() + nb_informatives() > 0 alors
   exporte_erreurs;
 finsi
 
-fonction truc:
-application: iliad;
-argument: A, B, C;
-resultat: D;
-variable temporaire: T1, T2, T3;
-T1 = B * 2;
-si arr(T1 / 2) = B alors
-  D = A + B + C + 2000;
-sinon
-  D = A + B + C + 5000;
-finsi
-#afficher_erreur "truc(" (A) ", " (B) ", " (C) ") = ";
-
 cible enchainement_primitif:
 application: iliad;
 variable temporaire: EXPORTE_ERREUR;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
-#si truc(1, 2, 3) != 5006 alors V_IND_TRAIT = 0; finsi
-#afficher_erreur "# " (truc(1, 2, 3)) "\n";
 calculer cible ir_verif_saisie_isf;
 finalise_erreurs;
 EXPORTE_ERREUR = 1;
