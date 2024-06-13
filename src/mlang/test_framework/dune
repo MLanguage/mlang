@@ -2,6 +2,8 @@
 
 (menhir
  (modules irj_parser)
+ (flags --dump --explain --automaton-graph))
+
 ;; The following two rules create a copy of the file parser.mly named
 ;; unitActionsParser.mly. This is a copy of the grammar where the semantic
 ;; actions have been removed and replaced with unit values. It is compiled
