@@ -17,25 +17,18 @@
 open Irj_ast
 
 let parse_file (test_name : string) : irj_file =
-  let input = open_in test_name in
-  let filebuf = Lexing.from_channel input in
-  let filebuf =
-    {
-      filebuf with
-      lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
-    }
-  in
+  let _text, filebuf = MenhirLib.LexerUtil.read test_name in
+  (*Je comprends pas bien l’intérêt, pos_fname c’est déjà le nom du fichier.*)
+  (* let filebuf =
+       {
+         filebuf with
+         lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
+       }
+     in *)
   let f =
     try Irj_parser.irj_file Irj_lexer.token filebuf with
-    | TestParsingError e ->
-        close_in input;
-        raise (TestParsingError e)
-    | Irj_parser.Error ->
-        close_in input;
-        raise
-          (TestParsingError
-             ( "Test syntax error",
-               mk_position (filebuf.lex_start_p, filebuf.lex_curr_p) ))
+    | TestLexingError e -> raise (TestLexingError e)
+    | TestParsingError e -> raise (TestParsingError e)
+    | Irj_parser.Error -> raise TestErrorActivating2ndPass
   in
-  close_in input;
   f
