@@ -1,4 +1,4 @@
-open Mlang.Test_ast
+open Mlang.Irj_ast
 
 let open_file filename =
   let oc = open_out filename in
@@ -7,26 +7,27 @@ let open_file filename =
 
 let print_comma oc () = Format.fprintf oc ","
 
-let format_value fmt (value : value) =
+let format_value fmt (value : literal) =
   match value with
-  | Int i -> Format.fprintf fmt "%d" i
-  | Float f -> Format.fprintf fmt "%f" f
+  | I i -> Format.fprintf fmt "%d" i
+  | F f -> Format.fprintf fmt "%f" f
 
-let format_code_revenu fmt ((var, value, _) : input) =
+let format_code_revenu fmt (((var, _), (value, _)) : var_value) =
   Format.fprintf fmt
     {|@;<0 2>{@;<0 4>"code": "%s",@;<0 4>"valeur": "%a"@;<0 2>}|} var
     format_value value
 
-let format_rappel fmt rappel =
+let format_rappel fmt (rappel : rappel) =
   Format.fprintf fmt
     {|@;<0 2>{@;<0 4>"numEvt": "%d",@;<0 4>"numRappel": "%d",@;<0 4>"descripteur": "%s",@;<0 4>"montant": "%d",@;<0 4>"sens": "%s",@;<0 4>"penalite": "%a",@;<0 4>"baseTL": "%a",@;<0 4>"date": "%.6d",@;<0 4>"abatt": "%a"@;<0 2>}|}
-    rappel.num_evt rappel.num_rap rappel.variable rappel.value rappel.sens
+    rappel.event_nb rappel.rappel_nb rappel.variable_code rappel.change_value
+    rappel.direction
     (Format.pp_print_option Format.pp_print_int)
-    rappel.penalite
+    rappel.penalty_code
     (Format.pp_print_option Format.pp_print_int)
-    rappel.base_tl rappel.date_inr
+    rappel.base_tolerance_legale rappel.month_year
     (Format.pp_print_option Format.pp_print_int)
-    rappel.ind20
+    rappel.decl_2042_rect
 
 let format_code_list fmt input_list =
   Format.pp_print_list ~pp_sep:print_comma format_code_revenu fmt input_list
@@ -34,27 +35,31 @@ let format_code_list fmt input_list =
 let format_rappel_list fmt rappels =
   Format.pp_print_list ~pp_sep:print_comma format_rappel fmt rappels
 
-let gen_pas_calc_json_primitif fmt test_data =
+let gen_pas_calc_json_primitif fmt (test_data : prim_data_block) =
   (* let offset = 4 in *)
   Format.fprintf fmt
     {|@[<h 2>{@,"formatAvis": "texte",@,"listeCodes": [%a@,]@]|}
-    format_code_list test_data.ep;
-  Format.fprintf fmt "}\n";
-  Format.pp_print_flush fmt ()
+    format_code_list test_data.resultats_attendus;
+  Format.fprintf fmt "}"
 
-let gen_pas_calc_json_correctif fmt test_data =
+let gen_pas_calc_json_correctif fmt (test_data : corr_data_block) =
   (*Pour l’instant on va se contenter de partir en dur sur du correctif avec avis.*)
-  let rappels : rappel list option =
-    match test_data.rapp with
-    (* | Some (a, _, _) -> Some a *)
-    (* pour remetter les rappels*)
-    | Some _ -> None
-    | None -> None
-  in
   Format.fprintf fmt
     {|@[<h 2>{@,"formatAvis": "texte",@,"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|}
-    format_code_list test_data.ep
+    format_code_list test_data.resultats_attendus
     (Format.pp_print_option format_rappel_list)
-    rappels;
-  Format.fprintf fmt "}\n";
-  Format.pp_print_flush fmt ()
+    (match test_data.entrees_rappels with
+    | [] -> None
+    | _ -> Some test_data.entrees_rappels);
+  Format.fprintf fmt "}"
+
+let gen_pas_calc_json fmt (test_data : irj_file) =
+  Format.fprintf fmt {|@[<h 2>{@,"primitif": %a%a}@]|}
+    gen_pas_calc_json_primitif test_data.prim
+    (fun fmt (corr : corr_data_block option) ->
+      match corr with
+      | None -> ()
+      | Some corr ->
+          Format.fprintf fmt {|,@,"correctif":%a|} gen_pas_calc_json_correctif
+            corr)
+    test_data.rapp

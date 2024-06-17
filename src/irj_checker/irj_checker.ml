@@ -23,12 +23,22 @@ open Mlang
 
 type message_format_enum = Human | GNU
 
-let irj_checker (f : string) (message_format : message_format_enum) : unit =
+type transformation_target = None | PasCalc
+
+let irj_checker (f : string) (message_format : message_format_enum)
+    (transform_target : transformation_target) : unit =
   try
     if not (Sys.file_exists f && not (Sys.is_directory f)) then
       Errors.raise_error
         (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
-    ignore (Mlang.Irj_file.parse_file f)
+    let test_data = Mlang.Irj_file.parse_file f in
+    match transform_target with
+    | None -> ()
+    | PasCalc ->
+        let out_fmt = Format.std_formatter in
+        Pas_calc.gen_pas_calc_json out_fmt test_data;
+        Format.pp_print_newline out_fmt ();
+        Format.pp_print_flush out_fmt ()
   with Errors.StructuredError (msg, pos, kont) ->
     (match message_format with
     | Human -> Cli.error_print "%a" Errors.format_structured_error
@@ -54,7 +64,20 @@ let file =
   let doc = "Test file (usually with the .irj extension)" in
   Arg.(value & pos 0 string "" & info [] ~docv:"FILE" ~doc)
 
-let irj_checker_t = Term.(const irj_checker $ file $ message_format)
+let transformation_target_opt = [ ("none", None); ("pas-calc", PasCalc) ]
+
+let transform_target =
+  let doc =
+    "Transformation target, among the following list: $(i,none) (only checks \
+     test syntax), $(i,pas-calc)."
+  in
+  Arg.(
+    value
+    & pos 1 (enum transformation_target_opt) None
+    & info [] ~docv:"TARGET" ~doc)
+
+let irj_checker_t =
+  Term.(const irj_checker $ file $ message_format $ transform_target)
 
 let cmd =
   let doc = "parses, validates and transforms IRJ test files" in
