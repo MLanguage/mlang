@@ -19,26 +19,14 @@
     Usage: irj_checker.exe <test_file.irj>*)
 
 open Cmdliner
+open Mlang
 
 let irj_checker (f : string) : unit =
-  try ignore (Mlang.Irj_file.parse_file f) with
-  | Mlang.Irj_ast.TestParsingError (s, pos)
-  | Mlang.Irj_ast.TestLexingError (s, pos) ->
-      let pos_1, pos_2 = pos.pos_loc in
-      Printf.eprintf "%s" (Filename.basename f);
-      Printf.eprintf ":(%d,%d)-(%d,%d)" pos_1.pos_lnum
-        (pos_1.pos_cnum - pos_1.pos_bol + 1)
-        pos_2.pos_lnum
-        (pos_2.pos_cnum - pos_2.pos_bol + 1);
-      Printf.eprintf " : %s\n" s;
-      exit 123
-  | Mlang.Irj_ast.TestErrorActivating2ndPass ->
-      Mlang.Irj_file.dummy_parse_file_with_incremental f;
-      exit 123
-  | _ ->
-      Printf.eprintf "%s" (Filename.basename f);
-      Printf.eprintf " : Unknown error\n";
-      exit 123
+  try ignore (Mlang.Irj_file.parse_file f)
+  with Errors.StructuredError (msg, pos, kont) ->
+    Cli.error_print "%a" Errors.format_structured_error (msg, pos);
+    (match kont with None -> () | Some kont -> kont ());
+    exit 123
 
 let file =
   let doc = "Test file (usually with the .irj extension)" in

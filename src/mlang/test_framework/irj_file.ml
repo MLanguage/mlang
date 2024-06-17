@@ -16,41 +16,23 @@
 
 open Irj_ast
 
-let parse_file (test_name : string) : irj_file =
-  let _text, filebuf = MenhirLib.LexerUtil.read test_name in
-  (*Je comprends pas bien l’intérêt, pos_fname c’est déjà le nom du fichier.*)
-  (* let filebuf =
-       {
-         filebuf with
-         lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
-       }
-     in *)
-  let f =
-    try Irj_parser.irj_file Irj_lexer.token filebuf with
-    | TestLexingError e -> raise (TestLexingError e)
-    | TestParsingError e -> raise (TestParsingError e)
-    | Irj_parser.Error -> raise TestErrorActivating2ndPass
-  in
-  f
-
 (* Implement a parsing error handling following François Pottier’s example
    in https://gitlab.inria.fr/fpottier/menhir/blob/master/demos/calc-syntax-errors/calc.ml *)
 
 (* [env checkpoint] extracts a parser environment out of a checkpoint,
    which must be of the form [HandlingError env]. *)
-
 let env checkpoint =
   match checkpoint with
-  | UnitActionsParser.MenhirInterpreter.HandlingError env -> env
+  | Irj_parser.MenhirInterpreter.HandlingError env -> env
   | _ -> assert false
 
 (* [state checkpoint] extracts the number of the current state out of a
    checkpoint. *)
 
 let state checkpoint : int =
-  match UnitActionsParser.MenhirInterpreter.top (env checkpoint) with
-  | Some (UnitActionsParser.MenhirInterpreter.Element (s, _, _, _)) ->
-      UnitActionsParser.MenhirInterpreter.number s
+  match Irj_parser.MenhirInterpreter.top (env checkpoint) with
+  | Some (Irj_parser.MenhirInterpreter.Element (s, _, _, _)) ->
+      Irj_parser.MenhirInterpreter.number s
   | None ->
       (* Hmm... The parser is in its initial state. The incremental API
          currently lacks a way of finding out the number of the initial
@@ -71,67 +53,52 @@ let show text positions =
    corresponds to the [i]-th stack cell. The top stack cell is numbered zero. *)
 
 let get text checkpoint i =
-  match UnitActionsParser.MenhirInterpreter.get i (env checkpoint) with
-  | Some (UnitActionsParser.MenhirInterpreter.Element (_, _, pos1, pos2)) ->
+  match Irj_parser.MenhirInterpreter.get i (env checkpoint) with
+  | Some (Irj_parser.MenhirInterpreter.Element (_, _, pos1, pos2)) ->
       show text (pos1, pos2)
   | None ->
       (* The index is out of range. This should not happen if [$i]
          keywords are correctly inside the syntax error message
          database. The integer [i] should always be a valid offset
          into the known suffix of the stack. *)
-      "???"
+      failwith "should not happen"
 
 (* [succeed v] is invoked when the parser has succeeded and produced a
-   semantic value [v]. In our setting, this cannot happen, since the
-   table-based parser is invoked only when we know that there is a
-   syntax error in the input file. *)
-
-let succeed _v = assert false
+   semantic value [v]. *)
+let succeed v = v
 
 (* [fail text buffer checkpoint] is invoked when parser has encountered a
    syntax error. *)
 
-let fail text buffer
-    (checkpoint : _ UnitActionsParser.MenhirInterpreter.checkpoint) =
-  (* Indicate where in the input file the error occurred. *)
-  let location =
-    MenhirLib.LexerUtil.range (MenhirLib.ErrorReports.last buffer)
-  in
-  (* Show the tokens just before and just after the error. *)
-  let indication =
-    Printf.sprintf "Syntax error %s.\n"
-      (MenhirLib.ErrorReports.show (show text) buffer)
-  in
+let fail text buffer (checkpoint : _ Irj_parser.MenhirInterpreter.checkpoint) =
   (* Fetch an error message from the database. *)
   let message = ParserMessages.message (state checkpoint) in
   (* Expand away the $i keywords that might appear in the message. *)
   let message = MenhirLib.ErrorReports.expand (get text checkpoint) message in
+  (* Show the tokens just before and just after the error. *)
+  let indication =
+    Printf.sprintf "Syntax error at tokens %s. %s\n"
+      (MenhirLib.ErrorReports.show (show text) buffer)
+      message
+  in
   (* Show these three components. *)
-  Printf.eprintf "%s%s%s%!" location indication message;
-  exit 1
+  Errors.raise_spanned_error indication
+    (mk_position (MenhirLib.ErrorReports.last buffer))
 
-let dummy_parse_file_with_incremental (test_name : string) : unit =
+let parse_file (test_name : string) : Irj_ast.irj_file =
   let text, filebuf = MenhirLib.LexerUtil.read test_name in
-  (*Je comprends pas bien l’intérêt, pos_fname c’est déjà le nom du fichier.*)
-  (* let filebuf =
-       {
-         filebuf with
-         lex_curr_p = { filebuf.lex_curr_p with pos_fname = test_name };
-       }
-     in *)
   let supplier =
-    UnitActionsParser.MenhirInterpreter.lexer_lexbuf_to_supplier Irj_lexer.token
+    Irj_parser.MenhirInterpreter.lexer_lexbuf_to_supplier Irj_lexer.token
       filebuf
   in
-
   (* Equip the supplier with a two-place buffer that records the positions
      of the last two tokens. This is useful when a syntax error occurs, as
      these are the token just before and just after the error. *)
   let buffer, supplier = MenhirLib.ErrorReports.wrap_supplier supplier in
   (* Fetch the parser's initial checkpoint. *)
-  let checkpoint = UnitActionsParser.Incremental.irj_file filebuf.lex_curr_p in
+  let checkpoint = Irj_parser.Incremental.irj_file filebuf.lex_curr_p in
   (* Run the parser. *)
   (* We do not handle [Lexer.Error] because we know that we will not
      encounter a lexical error during this second parsing run. *)
-  UnitActionsParser.MenhirInterpreter.loop_handle succeed (fail text buffer)
-    supplier checkpoint
+  Irj_parser.MenhirInterpreter.loop_handle succeed (fail text buffer) supplier
+    checkpoint

@@ -17,8 +17,8 @@
 
 %{ open Irj_ast
 
-  let error (sp, ep) msg =
-    raise (TestParsingError ("Parse error : " ^ msg, mk_position (sp, ep)))
+  let error sloc msg =
+    Errors.raise_spanned_error ("Parse error : " ^ msg) (mk_position sloc)
 %}
 
 %token<string> SYMBOL NAME
@@ -56,7 +56,7 @@ irj_file:
   fip?
   prim = primitif
   rapp = rappels
-  endmark {     
+  endmark {
     let nom =
       match nom with
       | [n] -> n
@@ -84,7 +84,7 @@ primitif:
   CONTROLESPRIM NL
   controles_attendus = list(calc_error)
   RESULTATSPRIM NL
-  resultats_attendus = list(variable_and_value) 
+  resultats_attendus = list(variable_and_value)
   {  { entrees; controles_attendus; resultats_attendus } }
 
 rappels:
@@ -94,19 +94,19 @@ rappels:
   CONTROLESRAPP NL
   controles_attendus = list(calc_error)
   RESULTATSRAPP NL
-  resultats_attendus = list(variable_and_value) 
+  resultats_attendus = list(variable_and_value)
   { Some { entrees_rappels; controles_attendus; resultats_attendus} }
 | ENTREESCORR NL
   entrees_rappels = list(rappel)
   CONTROLESCORR NL
   controles_attendus = list(calc_error)
   RESULTATSCORR NL
-  resultats_attendus = list(variable_and_value) 
+  resultats_attendus = list(variable_and_value)
   DATES? AVISIR? AVISCSG?
   { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
 
 variable_and_value:
-| var = SYMBOL SLASH value = value NL { (var, value, mk_position $sloc) }
+| var = SYMBOL SLASH value = value NL { ((var, mk_position $loc(var)), (value, mk_position $loc(value))) }
 
 calc_error:
 | error = SYMBOL NL { (error, mk_position $sloc) }
@@ -127,7 +127,7 @@ rappel:
     let p = match penalty_code with Some p -> p | _ -> 0 in
     if p < 0 || p > 99 then
       error $loc(direction) ("Invalid value for 'penalty_code' (out of range 0-99) : " ^ (string_of_int p));
-    {event_nb; 
+    {event_nb;
      rappel_nb;
      variable_code;
      change_value;
@@ -135,7 +135,7 @@ rappel:
      penalty_code;
      base_tolerance_legale;
      month_year;
-     decl_2042_rect; 
+     decl_2042_rect;
      pos = mk_position $sloc }
   }
 

@@ -2,26 +2,7 @@
 
 (menhir
  (modules irj_parser)
- (flags --dump --explain --automaton-graph))
-
-;; The following two rules create a copy of the file parser.mly named
-;; unitActionsParser.mly. This is a copy of the grammar where the semantic
-;; actions have been removed and replaced with unit values. It is compiled
-;; by Menhir's table back-end to obtain the module UnitActionsParser.
-
-;; The use of [--external-tokens Parser] is required for the two parsers
-;; to share a single [token] type. This makes them usable with the same
-;; lexer.
-
-(rule
- (action
-  (with-stdout-to
-   unitActionsParser.mly
-   (run menhir %{dep:irj_parser.mly} --only-preprocess-u))))
-
-(menhir
- (modules unitActionsParser)
- (flags --table --external-tokens Irj_parser))
+ (flags --dump --explain --table))
 
 ;; This section deals with the .messages file.
 
@@ -34,8 +15,11 @@
  (action
   (with-stdout-to
    parserMessages.ml
-   (run menhir %{dep:irj_parser.mly} --compile-errors
-     %{dep:parserMessages.messages}))))
+   (run
+    menhir
+    %{dep:irj_parser.mly}
+    --compile-errors
+    %{dep:parserMessages.messages}))))
 
 ;; This rule generates a file "parserMessages.auto.messages" that contains a
 
@@ -54,6 +38,10 @@
 (rule
  (with-stdout-to
   parserMessages.check
-  (run menhir %{dep:irj_parser.mly} --compare-errors
-    %{dep:parserMessages.auto.messages} --compare-errors
-    %{dep:parserMessages.messages})))
+  (run
+   menhir
+   %{dep:irj_parser.mly}
+   --compare-errors
+   %{dep:parserMessages.auto.messages}
+   --compare-errors
+   %{dep:parserMessages.messages})))
