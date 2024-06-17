@@ -77,9 +77,9 @@ let fail text buffer (checkpoint : _ Irj_parser.MenhirInterpreter.checkpoint) =
   let message = MenhirLib.ErrorReports.expand (get text checkpoint) message in
   (* Show the tokens just before and just after the error. *)
   let indication =
-    Printf.sprintf "Syntax error at tokens %s. %s\n"
+    Printf.sprintf "Syntax error %s: %s"
       (MenhirLib.ErrorReports.show (show text) buffer)
-      message
+      (String.trim message)
   in
   (* Show these three components. *)
   Errors.raise_spanned_error indication

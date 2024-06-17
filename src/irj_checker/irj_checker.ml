@@ -21,18 +21,36 @@
 open Cmdliner
 open Mlang
 
-let irj_checker (f : string) : unit =
+type message_format_enum = Human | GNU
+
+let irj_checker (f : string) (message_format : message_format_enum) : unit =
   try ignore (Mlang.Irj_file.parse_file f)
   with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "%a" Errors.format_structured_error (msg, pos);
+    (match message_format with
+    | Human -> Cli.error_print "%a" Errors.format_structured_error
+    | GNU -> Format.eprintf "%a" Errors.format_structured_error_gnu_format)
+      (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit 123
+
+let message_format_opt = [ ("human", Human); ("gnu", GNU) ]
+
+let message_format =
+  Arg.(
+    value
+    & opt (enum message_format_opt) Human
+    & info [ "message-format" ]
+        ~doc:
+          "Selects the format of error and warning messages emitted by the \
+           compiler. If set to $(i,human), the messages will be nicely \
+           displayed and meant to be read by a human. If set to $(i, gnu), the \
+           messages will be rendered according to the GNU coding standards.")
 
 let file =
   let doc = "Test file (usually with the .irj extension)" in
   Arg.(value & pos 0 string "" & info [] ~docv:"FILE" ~doc)
 
-let irj_checker_t = Term.(const irj_checker $ file)
+let irj_checker_t = Term.(const irj_checker $ file $ message_format)
 
 let cmd =
   let doc = "parses, validates and transforms IRJ test files" in

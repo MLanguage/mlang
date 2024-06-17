@@ -36,6 +36,22 @@ let make_position_between (p1 : t) (p2 : t) : t =
     let pos_loc = (b, e) in
     { p1 with pos_loc }
 
+let format_position_gnu fmt pos =
+  let s, e = pos.pos_loc in
+  if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
+    Format.fprintf fmt "%s:%d.%d-%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+  else
+    Format.fprintf fmt "%s:%d.%d-%d.%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      e.Lexing.pos_lnum
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+
 let format_position_short fmt pos =
   let s, e = pos.pos_loc in
   if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
