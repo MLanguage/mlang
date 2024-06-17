@@ -24,7 +24,11 @@ open Mlang
 type message_format_enum = Human | GNU
 
 let irj_checker (f : string) (message_format : message_format_enum) : unit =
-  try ignore (Mlang.Irj_file.parse_file f)
+  try
+    if not (Sys.file_exists f && not (Sys.is_directory f)) then
+      Errors.raise_error
+        (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
+    ignore (Mlang.Irj_file.parse_file f)
   with Errors.StructuredError (msg, pos, kont) ->
     (match message_format with
     | Human -> Cli.error_print "%a" Errors.format_structured_error
