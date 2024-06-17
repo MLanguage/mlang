@@ -86,7 +86,12 @@ let fail text buffer (checkpoint : _ Irj_parser.MenhirInterpreter.checkpoint) =
     (mk_position (MenhirLib.ErrorReports.last buffer))
 
 let parse_file (test_name : string) : Irj_ast.irj_file =
-  let text, filebuf = MenhirLib.LexerUtil.read test_name in
+  let text, filebuf =
+    try MenhirLib.LexerUtil.read test_name
+    with Sys_error msg ->
+      Errors.raise_error
+        (Format.asprintf "Unable to open file %s (%s)" test_name msg)
+  in
   let supplier =
     Irj_parser.MenhirInterpreter.lexer_lexbuf_to_supplier Irj_lexer.token
       filebuf
