@@ -36,7 +36,7 @@ let irj_checker (f : string) (message_format : message_format_enum)
     | None -> ()
     | PasCalc ->
         let out_fmt = Format.std_formatter in
-        Pas_calc.gen_pas_calc_json out_fmt test_data;
+        Pas_calc.gen_pas_calc_json_correctif out_fmt test_data;
         Format.pp_print_newline out_fmt ();
         Format.pp_print_flush out_fmt ()
   with Errors.StructuredError (msg, pos, kont) ->

@@ -35,31 +35,23 @@ let format_code_list fmt input_list =
 let format_rappel_list fmt rappels =
   Format.pp_print_list ~pp_sep:print_comma format_rappel fmt rappels
 
-let gen_pas_calc_json_primitif fmt (test_data : prim_data_block) =
+let gen_pas_calc_json_primitif fmt (prim_data : prim_data_block) =
   (* let offset = 4 in *)
   Format.fprintf fmt
     {|@[<h 2>{@,"formatAvis": "texte",@,"listeCodes": [%a@,]@]|}
-    format_code_list test_data.resultats_attendus;
+    format_code_list prim_data.entrees;
   Format.fprintf fmt "}"
 
-let gen_pas_calc_json_correctif fmt (test_data : corr_data_block) =
+let gen_pas_calc_json_correctif fmt (test_data : irj_file) =
   (*Pour l’instant on va se contenter de partir en dur sur du correctif avec avis.*)
+  let rappels : rappel list option =
+    match test_data.rapp with
+    | None -> None
+    | Some rappels -> Some rappels.entrees_rappels
+  in
   Format.fprintf fmt
     {|@[<h 2>{@,"formatAvis": "texte",@,"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|}
-    format_code_list test_data.resultats_attendus
+    format_code_list test_data.prim.entrees
     (Format.pp_print_option format_rappel_list)
-    (match test_data.entrees_rappels with
-    | [] -> None
-    | _ -> Some test_data.entrees_rappels);
+    rappels;
   Format.fprintf fmt "}"
-
-let gen_pas_calc_json fmt (test_data : irj_file) =
-  Format.fprintf fmt {|@[<h 2>{@,"primitif": %a%a}@]|}
-    gen_pas_calc_json_primitif test_data.prim
-    (fun fmt (corr : corr_data_block option) ->
-      match corr with
-      | None -> ()
-      | Some corr ->
-          Format.fprintf fmt {|,@,"correctif":%a|} gen_pas_calc_json_correctif
-            corr)
-    test_data.rapp
