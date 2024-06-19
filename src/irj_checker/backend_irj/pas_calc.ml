@@ -1,5 +1,7 @@
 open Mlang.Irj_ast
 
+type avis_type = Texte | Gavlir
+
 let open_file filename =
   let oc = open_out filename in
   let fmt = Format.formatter_of_out_channel oc in
@@ -35,11 +37,15 @@ let format_code_list fmt input_list =
 let format_rappel_list fmt rappels =
   Format.pp_print_list ~pp_sep:print_comma format_rappel fmt rappels
 
+let format_avis_element fmt avis_type =
+  Format.fprintf fmt {|"formatAvis": "%s",@,|}
+    (match avis_type with Texte -> "texte" | Gavlir -> "gavlir")
+
 let gen_pas_calc_json_primitif fmt (prim_data : prim_data_block) =
-  (* let offset = 4 in *)
-  Format.fprintf fmt
-    {|@[<h 2>{@,"formatAvis": "texte",@,"listeCodes": [%a@,]@]|}
-    format_code_list prim_data.entrees;
+  let mode = 'v' in
+  let offset = 2 in
+  Format.fprintf fmt {|@[<%c %d>{@,%a"listeCodes": [%a@,]@]|} mode offset
+    format_avis_element Texte format_code_list prim_data.entrees;
   Format.fprintf fmt "}"
 
 let gen_pas_calc_json_correctif fmt (test_data : irj_file) =
@@ -50,8 +56,8 @@ let gen_pas_calc_json_correctif fmt (test_data : irj_file) =
     | Some rappels -> Some rappels.entrees_rappels
   in
   Format.fprintf fmt
-    {|@[<h 2>{@,"formatAvis": "texte",@,"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|}
-    format_code_list test_data.prim.entrees
+    {|@[<h 2>{@,%a"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|}
+    format_avis_element Texte format_code_list test_data.prim.entrees
     (Format.pp_print_option format_rappel_list)
     rappels;
   Format.fprintf fmt "}"
