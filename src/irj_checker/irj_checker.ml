@@ -23,7 +23,13 @@ open Mlang
 
 type message_format_enum = Human | GNU
 
-type transformation_target = None | PasCalc
+type transformation_target = None | PasCalcP | PasCalcC
+
+let gen_file generator test_data =
+  let out_fmt = Format.std_formatter in
+  generator out_fmt test_data;
+  Format.pp_print_newline out_fmt ();
+  Format.pp_print_flush out_fmt ()
 
 let irj_checker (f : string) (message_format : message_format_enum)
     (transform_target : transformation_target) : unit =
@@ -34,11 +40,8 @@ let irj_checker (f : string) (message_format : message_format_enum)
     let test_data = Mlang.Irj_file.parse_file f in
     match transform_target with
     | None -> ()
-    | PasCalc ->
-        let out_fmt = Format.std_formatter in
-        Pas_calc.gen_pas_calc_json_correctif out_fmt test_data;
-        Format.pp_print_newline out_fmt ();
-        Format.pp_print_flush out_fmt ()
+    | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
+    | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
   with Errors.StructuredError (msg, pos, kont) ->
     (match message_format with
     | Human -> Cli.error_print "%a" Errors.format_structured_error
@@ -57,19 +60,20 @@ let message_format =
         ~doc:
           "Selects the format of error and warning messages emitted by the \
            compiler. If set to $(i,human), the messages will be nicely \
-           displayed and meant to be read by a human. If set to $(i, gnu), the \
+           displayed and meant to be read by a human. If set to $(i,gnu), the \
            messages will be rendered according to the GNU coding standards.")
 
 let file =
   let doc = "Test file (usually with the .irj extension)" in
   Arg.(value & pos 0 string "" & info [] ~docv:"FILE" ~doc)
 
-let transformation_target_opt = [ ("none", None); ("pas-calc", PasCalc) ]
+let transformation_target_opt =
+  [ ("none", None); ("pasp", PasCalcP); ("pasc", PasCalcC) ]
 
 let transform_target =
   let doc =
     "Transformation target, among the following list: $(i,none) (only checks \
-     test syntax), $(i,pas-calc)."
+     test syntax), $(i,pasp), $(i,pasc)."
   in
   Arg.(
     value
