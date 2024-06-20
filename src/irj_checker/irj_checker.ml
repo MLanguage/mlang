@@ -24,6 +24,8 @@ open Mlang
 
 type message_format_enum = Human | GNU
 
+type validation_mode_enum = Strict | Corrective | Primitive
+
 type transformation_target = None | PasCalcP | PasCalcC
 
 let gen_file generator test_data =
@@ -35,16 +37,34 @@ let gen_file generator test_data =
   Format.pp_print_flush out_fmt ()
 
 let irj_checker (f : string) (message_format : message_format_enum)
+    (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   try
     if not (Sys.file_exists f && not (Sys.is_directory f)) then
       Errors.raise_error
         (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
     let test_data = Mlang.Irj_file.parse_file f in
+    let test_data =
+      match validation_mode with
+      | Primitive ->
+          if Option.is_some test_data.rapp then
+            Errors.raise_error
+              (Format.asprintf "%s: is a corrective file!" test_data.nom)
+          else test_data
+      | Corrective ->
+          if Option.is_none test_data.rapp then
+            Errors.raise_error
+              (Format.asprintf "%s: is a primitive file!" test_data.nom)
+          else test_data
+      | _ -> test_data
+    in
     match transform_target with
     | None ->
-        Cli.result_print "%s checked as %s with %d primitive codes!" test_data.nom
-          (match test_data.rapp with Some _ -> "corrective" | None -> "primitive")
+        Cli.result_print "%s: checked as %s with %d primitive codes!"
+          test_data.nom
+          (match test_data.rapp with
+          | Some _ -> "corrective"
+          | None -> "primitive")
           (List.length test_data.prim.entrees)
     | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
@@ -55,6 +75,20 @@ let irj_checker (f : string) (message_format : message_format_enum)
       (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit 123
+
+let validation_mode_opt =
+  [ ("strict", Strict); ("corrective", Corrective); ("primitive", Primitive) ]
+
+let validation_mode =
+  Arg.(
+    value
+    & opt (enum validation_mode_opt) Strict
+    & info [ "v"; "validation-mode" ]
+        ~doc:
+          "Select the validation criteria. If set to $(i,strict), the whole \
+           grammar is applied. If set to $(i,corrective) or $(i,primitive), \
+           only the corresponding files are accepted, for instance primitive \
+           file in corrective mode will raise an error.")
 
 let message_format_opt = [ ("human", Human); ("gnu", GNU) ]
 
@@ -79,8 +113,9 @@ let transformation_target_opt =
 let transform_target =
   let doc =
     "Transformation target, among the following list: $(i,none) (only checks \
-     test syntax), $(i,pasp) (API PAS-CALC for primitive computation resources), \
-     $(i,pasc) (API PAS-CALC for corrective computation resources)."
+     test syntax), $(i,pasp) (API PAS-CALC for primitive computation \
+     resources), $(i,pasc) (API PAS-CALC for corrective computation \
+     resources)."
   in
   Arg.(
     value
@@ -88,7 +123,9 @@ let transform_target =
     & info [] ~docv:"TARGET" ~doc)
 
 let irj_checker_t =
-  Term.(const irj_checker $ file $ message_format $ transform_target)
+  Term.(
+    const irj_checker $ file $ message_format $ validation_mode
+    $ transform_target)
 
 let cmd =
   let doc = "parses, validates and transforms IRJ test files" in
