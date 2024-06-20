@@ -41,14 +41,12 @@ let format_avis_element fmt avis_type =
   Format.fprintf fmt {|"formatAvis": "%s",@,|}
     (match avis_type with Texte -> "texte" | Gavlir -> "gavlir")
 
-let gen_pas_calc_json_primitif fmt (prim_data : prim_data_block) =
-  let mode = 'v' in
-  let offset = 2 in
-  Format.fprintf fmt {|@[<%c %d>{@,%a"listeCodes": [%a@,]@]|} mode offset
+let gen_pas_calc_json_primitif fmt (prim_data : prim_data_block) mode =
+  Format.fprintf fmt {|@[<%c 2>{@,%a"listeCodes": [%a@,]@]|} mode
     format_avis_element Texte format_code_list prim_data.entrees;
   Format.fprintf fmt "}"
 
-let gen_pas_calc_json_correctif fmt (test_data : irj_file) =
+let gen_pas_calc_json_correctif fmt (test_data : irj_file) mode =
   (*Pour l’instant on va se contenter de partir en dur sur du correctif avec avis.*)
   let rappels : rappel list option =
     match test_data.rapp with
@@ -56,7 +54,7 @@ let gen_pas_calc_json_correctif fmt (test_data : irj_file) =
     | Some rappels -> Some rappels.entrees_rappels
   in
   Format.fprintf fmt
-    {|@[<h 2>{@,%a"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|}
+    {|@[<%c 2>{@,%a"codesRevenu": [%a@,],@,"lignesRappel": [%a@,]@]|} mode
     format_avis_element Texte format_code_list test_data.prim.entrees
     (Format.pp_print_option format_rappel_list)
     rappels;

@@ -26,8 +26,10 @@ type message_format_enum = Human | GNU
 type transformation_target = None | PasCalcP | PasCalcC
 
 let gen_file generator test_data =
+  let mode = 'v' in
+  (* use h for a monoline json *)
   let out_fmt = Format.std_formatter in
-  generator out_fmt test_data;
+  generator out_fmt test_data mode;
   Format.pp_print_newline out_fmt ();
   Format.pp_print_flush out_fmt ()
 
