@@ -1,14 +1,11 @@
 irj_file: SYMBOL
 ##
 ## Ends in an error in state: 0.
-##
 ## irj_file' -> . irj_file [ # ]
-##
 ## The known suffix of the stack is as follows:
 ##
-##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+File should start by #NOM
 
 irj_file: NOM SYMBOL
 ##
@@ -19,9 +16,6 @@ irj_file: NOM SYMBOL
 ## The known suffix of the stack is as follows:
 ## NOM
 ##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
 irj_file: NOM NL SLASH
 ##
 ## Ends in an error in state: 2.
@@ -32,7 +26,7 @@ irj_file: NOM NL SLASH
 ## NOM NL
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+We read the header #NOM. Expecting the case name on the next line.
 
 irj_file: NOM NL SYMBOL SYMBOL
 ##
@@ -43,9 +37,6 @@ irj_file: NOM NL SYMBOL SYMBOL
 ## The known suffix of the stack is as follows:
 ## SYMBOL
 ##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
 irj_file: NOM NL NAME SYMBOL
 ##
 ## Ends in an error in state: 5.
@@ -55,9 +46,6 @@ irj_file: NOM NL NAME SYMBOL
 ## The known suffix of the stack is as follows:
 ## NAME
 ##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
 irj_file: NOM NL NAME NL SLASH
 ##
 ## Ends in an error in state: 7.
@@ -68,7 +56,7 @@ irj_file: NOM NL NAME NL SLASH
 ## name
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+We read a valid section #NOM. Expecting a header #FIP or #ENTREES-PRIMITIF.
 
 irj_file: NOM NL FIP SYMBOL
 ##
