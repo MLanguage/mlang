@@ -41,7 +41,10 @@ let irj_checker (f : string) (message_format : message_format_enum)
         (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
     let test_data = Mlang.Irj_file.parse_file f in
     match transform_target with
-    | None -> ()
+    | None ->
+        Cli.result_print "%s checked as %s with %d primitive codes!" test_data.nom
+          (match test_data.rapp with Some _ -> "corrective" | None -> "primitive")
+          (List.length test_data.prim.entrees)
     | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
   with Errors.StructuredError (msg, pos, kont) ->
