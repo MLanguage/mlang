@@ -99,7 +99,7 @@ rule token = parse
 
 | "#" ['a'-'z' 'A'-'Z' '0'-'9' '_' '-']+ as s
   { match StrMap.find_opt s keywords with
-    | None -> error lexbuf (Printf.sprintf "Unknown section name: '#%s'" s)
+    | None -> error lexbuf (Printf.sprintf "Unknown section name: '%s'" s)
     | Some t -> t }
 
 | eof
