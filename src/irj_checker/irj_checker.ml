@@ -14,9 +14,10 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 (** The Irj_checker Module is a simple entry point to use the Mlang IRJ file
-    parser in order to perform syntactic checks on test files.
+    parser in order to perform syntactic checks on test files or produce other IR
+    test formats.
 
-    Usage: irj_checker.exe <test_file.irj>*)
+    Usage: irj_checker.exe [--message-format=VAL] <test_file.irj> [transformation-target]*)
 
 open Cmdliner
 open Mlang
@@ -61,7 +62,7 @@ let message_format =
   Arg.(
     value
     & opt (enum message_format_opt) Human
-    & info [ "message-format" ]
+    & info [ "m"; "message-format" ]
         ~doc:
           "Selects the format of error and warning messages emitted by the \
            compiler. If set to $(i,human), the messages will be nicely \
@@ -78,7 +79,8 @@ let transformation_target_opt =
 let transform_target =
   let doc =
     "Transformation target, among the following list: $(i,none) (only checks \
-     test syntax), $(i,pasp), $(i,pasc)."
+     test syntax), $(i,pasp) (API PAS-CALC for primitive computation resources), \
+     $(i,pasc) (API PAS-CALC for corrective computation resources)."
   in
   Arg.(
     value
