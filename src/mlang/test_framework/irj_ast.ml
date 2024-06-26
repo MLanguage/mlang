@@ -14,24 +14,16 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type pos = {
-  pos_filename : string;
-  pos_loc : Lexing.position * Lexing.position;
-}
-
-let mk_position sloc =
-  { pos_filename = (fst sloc).Lexing.pos_fname; pos_loc = sloc }
-
-exception TestParsingError of (string * pos)
-(* duplication of some of the utils *)
+let mk_position sloc : Pos.t =
+  Pos.make_position (fst sloc).Lexing.pos_fname sloc
 
 type literal = I of int | F of float
 
-type var_value = string * literal * pos
+type var_value = string Pos.marked * literal Pos.marked
 
 (* type var_values = var_value list *)
 
-type calc_error = string * pos
+type calc_error = string Pos.marked
 
 (* type calc_errors = calc_error list *)
 
@@ -51,7 +43,7 @@ type rappel = {
   (* MMYYYY *)
   decl_2042_rect : int option;
   (* 0 or 1 *)
-  pos : pos;
+  pos : Pos.t;
 }
 
 type prim_data_block = {
