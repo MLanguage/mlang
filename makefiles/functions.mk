@@ -53,7 +53,7 @@ $(if $(call not,$(call is_in,$(1))), \
 endef
 
 define source_dir
-$(1)tgvI.m $(1)errI.m $(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort)
+$(shell find $(1) -name tgvI.m) $(shell find $(1) -name errI.m) $(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort)
 endef
 
 define source_dir_ext
