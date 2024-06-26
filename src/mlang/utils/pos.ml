@@ -36,6 +36,22 @@ let make_position_between (p1 : t) (p2 : t) : t =
     let pos_loc = (b, e) in
     { p1 with pos_loc }
 
+let format_position_gnu fmt pos =
+  let s, e = pos.pos_loc in
+  if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
+    Format.fprintf fmt "%s:%d.%d-%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+  else
+    Format.fprintf fmt "%s:%d.%d-%d.%d"
+      (Filename.basename pos.pos_filename)
+      s.Lexing.pos_lnum
+      (s.Lexing.pos_cnum - s.Lexing.pos_bol + 1)
+      e.Lexing.pos_lnum
+      (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
+
 let format_position_short fmt pos =
   let s, e = pos.pos_loc in
   if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
@@ -161,26 +177,31 @@ let retrieve_loc_text (pos : t) : string =
     let print_matched_line (line : string) (line_no : int) : string =
       let line_indent = indent_number line in
       let error_indicator_style = [ ANSITerminal.red; ANSITerminal.Bold ] in
+      let line_start_col =
+        if line_no = sline then get_start_column pos else 1
+      in
+      let line_end_col =
+        if line_no = eline then get_end_column pos else String.length line + 1
+      in
+      let line_length = String.length line + 1 in
       line
       ^
       if line_no >= sline && line_no <= eline then
         "\n"
         ^
         if line_no = sline && line_no = eline then
-          Cli.format_with_style error_indicator_style "%*s"
-            (get_end_column pos - 1)
-            (String.make (get_end_column pos - get_start_column pos) '^')
+          Cli.format_with_style error_indicator_style "%*s" (line_end_col - 1)
+            (String.make (line_end_col - line_start_col) '^')
         else if line_no = sline && line_no <> eline then
-          Cli.format_with_style error_indicator_style "%*s"
-            (String.length line - 1)
-            (String.make (String.length line - get_start_column pos) '^')
+          Cli.format_with_style error_indicator_style "%*s" (line_length - 1)
+            (String.make (line_length - line_start_col) '^')
         else if line_no <> sline && line_no <> eline then
           Cli.format_with_style error_indicator_style "%*s%s" line_indent ""
-            (String.make (String.length line - line_indent) '^')
+            (String.make (line_length - line_indent) '^')
         else if line_no <> sline && line_no = eline then
           Cli.format_with_style error_indicator_style "%*s%*s" line_indent ""
-            (get_end_column pos - 1 - line_indent)
-            (String.make (get_end_column pos - line_indent) '^')
+            (line_end_col - 1 - line_indent)
+            (String.make (line_end_col - line_indent) '^')
         else assert false (* should not happen *)
       else ""
     in

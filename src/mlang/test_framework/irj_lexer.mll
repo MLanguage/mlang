@@ -20,8 +20,9 @@ open Irj_parser
 open Irj_ast
 
 let error lb msg =
-  raise (TestParsingError ("Lexing error : " ^ msg, 
-                          mk_position (Lexing.lexeme_start_p lb, Lexing.lexeme_end_p lb)))
+  Errors.raise_spanned_error
+    ("Lexing error : " ^ msg)
+    (mk_position (Lexing.lexeme_start_p lb, Lexing.lexeme_end_p lb))
 
 module StrMap = Map.Make (String)
 
@@ -78,7 +79,7 @@ rule token = parse
 
 | '-'? ['0' - '9']+ as i
   { INTEGER (int_of_string i) }
-  
+
 | '-'? ['0' - '9']+ '.' ['0' - '9']* as f
   { FLOAT (float_of_string f) } (* DONT KEEP THAT *)
   (* Probably in order to write a specific function for our number format *)
@@ -98,7 +99,7 @@ rule token = parse
 
 | "#" ['a'-'z' 'A'-'Z' '0'-'9' '_' '-']+ as s
   { match StrMap.find_opt s keywords with
-    | None -> error lexbuf (Printf.sprintf "Unknown section name: '#%s'" s)
+    | None -> error lexbuf (Printf.sprintf "Unknown section name: '%s'" s)
     | Some t -> t }
 
 | eof
@@ -106,4 +107,4 @@ rule token = parse
 
 | _ as c
   { error lexbuf (Printf.sprintf
-                  "Unexpected character '%c' (%d)" c (Char.code c)) }
+                  "Unexpected character \"%c\"" c) }
