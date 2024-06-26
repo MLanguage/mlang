@@ -59,7 +59,9 @@ irj_file:
   endmark {
     let nom =
       match nom with
-      | [n] -> n
+      | [n] -> if String.length n > 80 then
+               error $loc(nom) "Name too big for autotest"
+               else n
       | [] -> error $loc(nom) "Missing name in section #NOM"
       | _ -> error $loc(nom) "Extra line(s) in section #NOM"
     in
