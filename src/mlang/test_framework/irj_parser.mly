@@ -70,10 +70,8 @@ endmark:
 | ENDSHARP NL EOF { () }
 | EOF { error $loc "Unexpected end on file, missing ##"}
 
-/* What's the point of this alternative?*/
 name:
 | n = NAME NL { n }
-| n = SYMBOL NL { n }
 
 fip:
   FIP SLASH SYMBOL? NL { } (* it is actually allowed to leave it blank *)

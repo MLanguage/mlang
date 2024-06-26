@@ -1,8 +1,11 @@
 irj_file: SYMBOL
 ##
 ## Ends in an error in state: 0.
+##
 ## irj_file' -> . irj_file [ # ]
+##
 ## The known suffix of the stack is as follows:
+##
 ##
 
 File should start by #NOM
@@ -16,7 +19,7 @@ irj_file: NOM SYMBOL
 ## The known suffix of the stack is as follows:
 ## NOM
 ##
-irj_file: NOM NL SLASH
+irj_file: NOM NL SYMBOL
 ##
 ## Ends in an error in state: 2.
 ##
@@ -28,20 +31,11 @@ irj_file: NOM NL SLASH
 
 We read the header #NOM. Expecting the case name on the next line.
 
-irj_file: NOM NL SYMBOL SYMBOL
+irj_file: NOM NL NAME SYMBOL
 ##
 ## Ends in an error in state: 3.
 ##
-## name -> SYMBOL . NL [ SYMBOL NAME FIP ENTREESPRIM ]
-##
-## The known suffix of the stack is as follows:
-## SYMBOL
-##
-irj_file: NOM NL NAME SYMBOL
-##
-## Ends in an error in state: 5.
-##
-## name -> NAME . NL [ SYMBOL NAME FIP ENTREESPRIM ]
+## name -> NAME . NL [ NAME FIP ENTREESPRIM ]
 ##
 ## The known suffix of the stack is as follows:
 ## NAME
