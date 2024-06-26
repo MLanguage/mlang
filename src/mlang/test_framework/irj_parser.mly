@@ -70,8 +70,10 @@ endmark:
 | ENDSHARP NL EOF { () }
 | EOF { error $loc "Unexpected end on file, missing ##"}
 
+/* We need both here to ensure that all strings will be properly matched */
 name:
 | n = NAME NL { n }
+| n = SYMBOL NL { n }
 
 fip:
   FIP SLASH SYMBOL? NL { } (* it is actually allowed to leave it blank *)
