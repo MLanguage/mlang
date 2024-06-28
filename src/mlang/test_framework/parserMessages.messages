@@ -70,9 +70,6 @@ irj_file: NOM NL FIP SYMBOL
 ## The known suffix of the stack is as follows:
 ## FIP
 ##
-
-unspecified error (1)
-
 irj_file: NOM NL FIP SLASH SLASH
 ##
 ## Ends in an error in state: 11.
@@ -83,7 +80,7 @@ irj_file: NOM NL FIP SLASH SLASH
 ## FIP SLASH
 ##
 
-unspecified error (2)
+We read a valid header #FIP. Expecting / followed by a FIP number.
 
 irj_file: NOM NL FIP SLASH SYMBOL SYMBOL
 ##
@@ -95,7 +92,7 @@ irj_file: NOM NL FIP SLASH SYMBOL SYMBOL
 ## FIP SLASH option(SYMBOL)
 ##
 
-unspecified error (3)
+We read a valid line #FIP. Expecting a new line.
 
 irj_file: NOM NL FIP SLASH NL SYMBOL
 ##
@@ -107,7 +104,7 @@ irj_file: NOM NL FIP SLASH NL SYMBOL
 ## NOM NL list(name) option(fip)
 ##
 
-unspecified error (4)
+We read a valid section #FIP. Expecting a header #ENTREES-PRIMITIF.
 
 irj_file: NOM NL ENTREESPRIM SYMBOL
 ##
@@ -167,7 +164,7 @@ irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT SYMBOL
 ## SYMBOL SLASH value
 ##
 
-unspecified error (9)
+wrong value for this variable
 
 irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT NL SLASH
 ##
@@ -179,7 +176,7 @@ irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT NL SLASH
 ## variable_and_value
 ##
 
-wrong next section after the end of end of a list of expected or input values
+wrong next section after the end of a list of expected or input values
 
 irj_file: NOM NL ENTREESPRIM NL SYMBOL SLASH FLOAT NL EOF
 ##
@@ -222,7 +219,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SLASH
 ## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL
 ##
 
-unspecified error (13)
+We read a valid #CONTROLES-PRIMITIF header. Expecting either a Calculette error or a #RESULTATS-PRIMITIF header.
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL SYMBOL
 ##
@@ -234,7 +231,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL SYMBOL
 ## SYMBOL
 ##
 
-expected the name of the control code on one line
+expected the name of the control code on one line (not sure about this one)
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL RESULTATSRAPP
 ##
@@ -277,7 +274,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SLASH
 ## ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL
 ##
 
-unspecified error (17)
+We read a valid header #RESULTATS-PRIMITIF. Expecting a variable name or a header #ENTREES-RAPPELS or #ENTREES-CORRECTIF. Probably you want at least one variable/value pair in this section.
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL SLASH
 ##
@@ -289,7 +286,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL SYMBOL NL SLASH
 ## calc_error
 ##
 
-unspecified error (18)
+We are in the middle of a Calculette error list. Expecting either another error, or at the end of the list a header #RESULTATS-PRIMITIF, #RESULTATS-RAPPELS or #RESULTATS-CORRECTIF.
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SYMBOL SLASH FLOAT NL EOF
 ##
@@ -309,7 +306,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL SYMBOL SLASH F
 ## In state 34, spurious reduction of production primitif -> ENTREESPRIM NL list(variable_and_value) CONTROLESPRIM NL list(calc_error) RESULTATSPRIM NL list(variable_and_value)
 ##
 
-unspecified error (19)
+We read a valid #RESULTATS-PRIMITIF section. Expecting either a #ENTREES-RAPPELS or #ENTREES-CORRECTIF header, or perhaps the #RESULTATS-PRIMITIF section was not properly parsed to its end due to an error in the section.
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESRAPP SYMBOL
 ##
@@ -513,7 +510,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH
 ##
 
-unspecified error (36)
+We read an incomplete rappel. Expecting at this position the date (as an integer), either it is wrong or the rappel fields are mismatched.
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SYMBOL
 ##
@@ -525,7 +522,7 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## integer SLASH integer SLASH SYMBOL SLASH integer SLASH SYMBOL SLASH option(INTEGER) SLASH option(INTEGER) SLASH integer
 ##
 
-unspecified error (37)
+We read an incomplete rappel. Expecting one more / at the end. Not enough fields, which one is missing?
 
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL INTEGER SLASH INTEGER SLASH SYMBOL SLASH INTEGER SLASH SYMBOL SLASH SLASH SLASH INTEGER SLASH SYMBOL
 ##
@@ -811,9 +808,6 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## The known suffix of the stack is as follows:
 ## ENDSHARP
 ##
-
-unspecified error (58)
-
 irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL CONTROLESCORR NL RESULTATSCORR NL ENDSHARP NL SYMBOL
 ##
 ## Ends in an error in state: 87.
@@ -824,5 +818,5 @@ irj_file: NOM NL ENTREESPRIM NL CONTROLESPRIM NL RESULTATSPRIM NL ENTREESCORR NL
 ## ENDSHARP NL
 ##
 
-unspecified error (59)
+We read the end mark. Expecting a new line at end of file then, well, end of file.
 
