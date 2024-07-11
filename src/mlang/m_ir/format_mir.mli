@@ -14,26 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val format_typ : Format.formatter -> Mir.typ -> unit
+val format_expression : Pp.t -> Mir.expression -> unit
 
-val format_func : Format.formatter -> Mir.func -> unit
+val format_error : Pp.t -> Com.Error.t -> unit
 
-val format_literal : Format.formatter -> Mir.literal -> unit
-
-val format_expression : Format.formatter -> Mir.expression -> unit
-
-val format_variable_def : Format.formatter -> Mir.variable_def -> unit
-
-val format_variable_data : Format.formatter -> Mir.variable_data -> unit
-
-val format_variables :
-  Format.formatter -> Mir.variable_data Mir.VariableMap.t -> unit
-
-val format_error : Format.formatter -> Mir.Error.t -> unit
-
-val format_precondition : Format.formatter -> Mir.condition_data -> unit
-
-val format_program_rules :
-  Format.formatter -> Mir.VariableDict.t -> Mir.rule_data Mir.RuleMap.t -> unit
-
-val format_variable : Format.formatter -> Mir.Variable.t -> unit
+val format_variable : Pp.t -> Com.Var.t -> unit

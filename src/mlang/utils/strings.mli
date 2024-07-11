@@ -18,3 +18,7 @@ val sanitize_str : string * Pos.t -> string
 (** DGFiP sources are encoded in iso-8859-1 which is not compatible with some
     backend compilers such as Java and Python, this function transforms illegal
     characters with a space. *)
+
+val compare_default : string -> string -> int
+
+val compare_ebcdic : string -> string -> int

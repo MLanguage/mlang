@@ -16,49 +16,20 @@
 
 (** {!module: Mast} to {!module: Mir} translation of M programs. *)
 
-(** {1 Translation context}*)
-
-(** {2 General translation context} *)
-
-type translating_context = {
-  table_definition : bool;
-      (** [true] if translating an expression susceptible to contain a generic
-          table index *)
-  idmap : Mir.idmap;  (** Current string-to-{!type: Mir.Variable.t} mapping *)
-}
-
 (** {1 Translation helpers} *)
 
 val get_var_from_name :
-  Mir.idmap ->
+  Com.Var.t StrMap.t ->
   (* name of the variable to query *) string Pos.marked ->
-  Mir.Variable.t
+  Com.Var.t
 (** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a
     variable and the rule number from which the variable is requested. Returns
     the variable with the same name and highest rule number that is below the
     current rule number from where this variable is requested *)
 
-val translate_expression :
-  Mir.cat_variable_data Mir.CatVarMap.t ->
-  Mir.idmap ->
-  translating_context ->
-  Mast.expression Pos.marked ->
-  Mir.expression Pos.marked
-(** Main translation function for expressions *)
-
-val get_conds :
-  Mir.verif_domain Mast.DomainIdMap.t ->
-  Mir.cat_variable_data Mir.CatVarMap.t ->
-  Mir.Error.t list ->
-  Mir.idmap ->
-  Mast.program ->
-  Mir.condition_data Mir.RuleMap.t
-(** Returns a map whose keys are dummy variables and whose values are the
-    verification conditions. *)
-
 (** {1 Main translation function}*)
 
-val translate : Mast.program -> Mir.program
+val translate : Mast.program -> string -> Mir.program
 (** Main translation function from the M AST to the M Variable Graph. This
     function performs 6 linear passes on the input code:
 

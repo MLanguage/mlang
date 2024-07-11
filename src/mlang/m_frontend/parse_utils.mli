@@ -38,10 +38,6 @@ val parse_string : string -> string
 val parse_variable_or_int :
   Lexing.position * Lexing.position -> string -> parse_val
 
-val parse_table_index :
-  Lexing.position * Lexing.position -> string -> Mast.table_index
-(** Table index can be integer or [X], the generic table index variable *)
-
 val parse_table_size : string -> Mast.table_size
 
 val parse_func_name : 'a -> string -> string
@@ -51,11 +47,35 @@ val parse_func_name : 'a -> string -> string
 val parse_int : Lexing.position * Lexing.position -> string -> int
 (** Checks whether is it actually an integer*)
 
-val parse_literal : Lexing.position * Lexing.position -> string -> Mast.literal
+val parse_literal : Lexing.position * Lexing.position -> string -> Com.literal
 
-val parse_const_value : string -> Mast.literal
+val parse_atom :
+  Lexing.position * Lexing.position -> string -> Mast.variable Com.atom
+
+val parse_function_name : string Pos.marked -> Com.func Pos.marked
 
 val parse_if_then_etc :
   (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
   list ->
   Mast.instruction
+
+val parse_when_do_etc :
+  (Mast.expression Pos.marked * Mast.instruction Pos.marked list * Pos.t) list
+  * Mast.instruction Pos.marked list Pos.marked ->
+  Mast.instruction
+
+type target_header =
+  | Target_apps of Mast.application Pos.marked list
+  | Target_input_arg of string Pos.marked list
+  | Target_tmp_vars of
+      (string Pos.marked * Mast.table_size Pos.marked option) list
+  | Function_result of string Pos.marked
+
+val parse_target_or_function_header :
+  string Pos.marked ->
+  bool ->
+  target_header Pos.marked list ->
+  Mast.application Pos.marked StrMap.t
+  * string Pos.marked list
+  * (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t
+  * string Pos.marked option

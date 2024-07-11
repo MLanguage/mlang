@@ -42,11 +42,8 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let open Mast in
   let mk_assign var val_ =
     let v = if val_ then 1.0 else 0.0 in
-    ( SingleFormula
-        {
-          lvalue = ({ var = (Normal var, Pos.no_pos); index = None }, Pos.no_pos);
-          formula = (Literal (Float v), Pos.no_pos);
-        },
+    ( Com.SingleFormula
+        ((Normal var, Pos.no_pos), None, (Literal (Float v), Pos.no_pos)),
       Pos.no_pos )
   in
   let oceans, batch, iliad =
@@ -60,11 +57,13 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
       match Pos.unmark item with
       | Rule r when Pos.unmark r.rule_number = 1 ->
           let fl =
-            [
-              mk_assign "APPLI_OCEANS" oceans;
-              mk_assign "APPLI_BATCH" batch;
-              mk_assign "APPLI_ILIAD" iliad;
-            ]
+            List.map
+              (fun f -> Pos.same_pos_as (Com.Affectation f) f)
+              [
+                mk_assign "APPLI_OCEANS" oceans;
+                mk_assign "APPLI_BATCH" batch;
+                mk_assign "APPLI_ILIAD" iliad;
+              ]
           in
           ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
             Pos.get_position item )
@@ -79,10 +78,10 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     (output : string option) (run_all_tests : string option)
     (dgfip_test_filter : bool) (run_test : string option)
     (mpp_function : string) (optimize_unsafe_float : bool)
-    (code_coverage : bool) (precision : string option)
-    (roundops : string option) (comparison_error_margin : float option)
-    (income_year : int option) (m_clean_calls : bool)
-    (dgfip_options : string list option) =
+    (precision : string option) (roundops : string option)
+    (comparison_error_margin : float option) (income_year : int option)
+    (m_clean_calls : bool) (dgfip_options : string list option) =
+  let dgfip_flags = process_dgfip_options backend dgfip_options in
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -132,7 +131,6 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
     comparison_error_margin income_year value_sort round_ops;
   try
-    let dgfip_flags = process_dgfip_options backend dgfip_options in
     Cli.debug_print "Reading M files...";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     let m_program = ref [] in
@@ -182,12 +180,9 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
     finish "completed!";
     Cli.debug_print "Elaborating...";
     let source_m_program = !m_program in
-    let m_program = Mast_to_mir.translate !m_program in
+    let m_program = Mast_to_mir.translate !m_program mpp_function in
     let m_program = Mir.expand_functions m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
-    let combined_program =
-      Mir_to_bir.create_combined_program m_program mpp_function
-    in
     if run_all_tests <> None then
       let tests : string =
         match run_all_tests with Some s -> s | _ -> assert false
@@ -197,19 +192,14 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         | false -> fun _ -> true
         | true -> ( fun x -> match x.[0] with 'A' .. 'Z' -> true | _ -> false)
       in
-      Test_interpreter.check_all_tests combined_program tests code_coverage
-        value_sort round_ops filter_function
+      Test_interpreter.check_all_tests m_program tests value_sort round_ops
+        filter_function
     else if run_test <> None then begin
-      Bir_interpreter.repl_debug := true;
-      if code_coverage then
-        Cli.warning_print
-          "The code coverage flag is ignored when running a single test";
+      Mir_interpreter.repl_debug := true;
       let test : string =
         match run_test with Some s -> s | _ -> assert false
       in
-      ignore
-        (Test_interpreter.check_test combined_program test false value_sort
-           round_ops);
+      ignore (Test_interpreter.check_test m_program test value_sort round_ops);
       Cli.result_print "Test passed!"
     end
     else begin
@@ -217,22 +207,14 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         "Extracting the desired function from the whole program...";
       match backend with
       | Some backend ->
-          if String.lowercase_ascii backend = "java" then begin
-            Cli.debug_print "Compiling codebase to Java...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            Bir_to_java.generate_java_program combined_program !Cli.output_file
-          end
-          else if String.lowercase_ascii backend = "dgfip_c" then begin
+          if String.lowercase_ascii backend = "dgfip_c" then begin
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            let vm =
-              Dgfip_gen_files.generate_auxiliary_files dgfip_flags
-                source_m_program combined_program
-            in
-            Bir_to_dgfip_c.generate_c_program dgfip_flags combined_program
-              !Cli.output_file vm;
+            Dgfip_gen_files.generate_auxiliary_files dgfip_flags
+              source_m_program m_program;
+            Bir_to_dgfip_c.generate_c_program dgfip_flags m_program
+              !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
           end
           else

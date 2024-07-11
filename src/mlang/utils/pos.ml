@@ -92,6 +92,8 @@ let no_pos : t =
   in
   { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
+let mark pos value = (value, pos)
+
 let unmark ((x, _) : 'a marked) : 'a = x
 
 let get_position ((_, x) : 'a marked) : t = x
@@ -102,8 +104,6 @@ let same_pos_as (x : 'a) ((_, y) : 'b marked) : 'a marked = (x, y)
 
 let unmark_option (x : 'a marked option) : 'a option =
   match x with Some x -> Some (unmark x) | None -> None
-
-module VarNameToID = StrMap
 
 let get_start_line (pos : t) : int =
   let s, _ = pos.pos_loc in

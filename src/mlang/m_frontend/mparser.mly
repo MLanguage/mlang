@@ -25,9 +25,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_literal (v: parse_val) : literal = match v with
- | ParseVar v -> Variable v
- | ParseInt v -> Float (float_of_int v)
+ let parse_to_atom (v: parse_val) : variable Com.atom =
+   match v with
+   | ParseVar v -> AtomVar v
+   | ParseInt v -> AtomLiteral (Float (float_of_int v))
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
@@ -46,8 +47,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET TEMPORARY SIZE
+%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE RESULT
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
+%token WHEN DO THEN_WHEN ELSE_DO ENDWHEN NOTHING
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
 %token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS FINALIZE_ERRORS
@@ -80,6 +82,9 @@ symbol_with_pos:
 symbol_list_with_pos:
 | sl = with_pos(symbol_with_pos+) { sl }
 
+variable_name:
+| s = SYMBOL { parse_variable_name $sloc s }
+
 source_file:
 | vl = with_pos(symbol_colon_etc)* is = source_file_rev EOF {
     List.flatten (vl :: List.rev is)
@@ -88,7 +93,7 @@ source_file:
 symbol_colon_etc:
 | v = variable_decl { v }
 | e = error_ { e }
-| fonction { Function }
+| fonction { Func }
 
 source_file_rev:
 | is = source_file_rev i = source_file_item { i :: is }
@@ -104,6 +109,7 @@ source_file_item:
 | rl = rule_etc { rl }
 | vl = verification_etc { vl }
 | tl = target_etc { tl }
+| fl = function_etc { fl }
 
 var_typ:
 | INPUT { Input }
@@ -214,15 +220,12 @@ verif_domain_decl:
     VerifDomDecl decl
   }
 
-var_comp_category:
-| BASE { "base" }
-| GIVEN_BACK { "restituee" }
-| TIMES { "*" }
-
 var_category_id:
 | INPUT TIMES { ["saisie", Pos.no_pos; "*", Pos.no_pos] }
 | INPUT l = symbol_with_pos+ { ("saisie", Pos.no_pos) :: l }
-| COMPUTED l = with_pos(var_comp_category)* { ("calculee", Pos.no_pos) :: l }
+| COMPUTED TIMES { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED BASE { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
+| COMPUTED { ["calculee", Pos.no_pos] }
 | TIMES { ["*", Pos.no_pos] }
 
 vdom_param:
@@ -257,9 +260,6 @@ chaining:
     Chaining (s, aps)
   }
 
-chaining_reference:
-| CHAINING COLON c = with_pos(SYMBOL) SEMICOLON { c }
-
 variable_decl:
 | v = with_pos(comp_variable) { VariableDecl (ComputedVar v) }
 | cv = const_variable { let n, v = cv in VariableDecl (ConstVar (n, v)) }
@@ -269,7 +269,7 @@ const_variable_name:
 | name = SYMBOL COLON CONST { parse_variable_name $sloc name }
 
 const_value:
-| value = SYMBOL { parse_const_value value }
+| value = SYMBOL { parse_atom $sloc value }
 
 const_variable:
 | name = with_pos(const_variable_name) EQUALS value = with_pos(const_value)
@@ -304,7 +304,7 @@ comp_variable:
     in
     let comp_category =
       subtyp
-      |> List.filter (function CompSubTyp _ -> true | _ -> false) 
+      |> List.filter (function CompSubTyp ("base", _) -> true | _ -> false) 
       |> List.map (function CompSubTyp x -> x | _ -> assert false)
     in
     let comp_is_givenback =
@@ -345,12 +345,12 @@ variable_attribute:
 { (attr, lit) }
 
 value_type_prim:
-| BOOLEAN { Boolean }
-| DATE_YEAR { DateYear }
-| DATE_DAY_MONTH_YEAR { DateDayMonthYear }
-| DATE_MONTH { DateMonth }
-| INTEGER { Integer }
-| REAL { Real }
+| BOOLEAN { Com.Boolean }
+| DATE_YEAR { Com.DateYear }
+| DATE_DAY_MONTH_YEAR { Com.DateDayMonthYear }
+| DATE_MONTH { Com.DateMonth }
+| INTEGER { Com.Integer }
+| REAL { Com.Real }
 
 value_type:
 | TYPE typ = with_pos(value_type_prim) { typ }
@@ -383,9 +383,9 @@ input_variable:
   }
 
 rule_etc:
-| RULE name = symbol_list_with_pos COLON apps = application_reference
-  SEMICOLON c = chaining_reference?
-  formulaes_etc = formula_list_etc
+| RULE name = symbol_list_with_pos COLON
+  header = nonempty_list(with_pos(rule_header_elt))
+  formulaes_etc = instruction_list_etc
   {
     let num, rule_tag_names =
       let uname = Pos.unmark name in
@@ -410,33 +410,173 @@ rule_etc:
           "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
-    let formulaes, l = formulaes_etc in 
+    let rule_apps, rule_chaining, rule_tmp_vars =
+      let rec aux apps_opt ch_opt vars_opt = function
+      | (`Applications apps', pos) :: h ->
+          let apps_opt' =
+            match apps_opt with
+            | None -> Some (apps', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "application list already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt' ch_opt vars_opt h
+      | (`Chaining ch', pos) :: h ->
+          let ch_opt' =
+            match ch_opt with
+            | None -> Some ch'
+            | Some ch ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "this rule already belong to chaining %s %a"
+                    (Pos.unmark ch)
+                    Pos.format_position (Pos.get_position ch))
+                  pos
+          in
+          aux apps_opt ch_opt' vars_opt h
+      | (`TmpVars vars', pos) :: h ->
+          let vars_opt' =
+            match vars_opt with
+            | None -> Some (vars', pos)
+            | Some (_, old_pos) ->
+                Errors.raise_spanned_error
+                  (Format.asprintf
+                    "temporary variables already declared %a"
+                    Pos.format_position old_pos)
+                  pos
+          in
+          aux apps_opt ch_opt vars_opt' h
+      | [] ->
+          let apps =
+            match apps_opt with
+            | Some (apps, _) ->
+                List.fold_left
+                  (fun res (app, pos) ->
+                    match StrMap.find_opt app res with
+                    | Some (_, old_pos) ->
+                        let msg =
+                          Format.asprintf "application %s already declared %a"
+                            app
+                            Pos.format_position old_pos
+                        in
+                        Errors.raise_spanned_error msg pos
+                    | None -> StrMap.add app (app, pos) res)
+                  StrMap.empty
+                  apps
+            | None ->
+                Errors.raise_spanned_error
+                "this rule doesn't belong to an application"
+                (Pos.get_position num)
+          in
+          let vars =
+            List.fold_left
+              (fun res (vnm, vt) ->
+                let vn, pos = vnm in
+                match StrMap.find_opt vn res with
+                | Some ((_, old_pos), _) ->
+                    let msg =
+                      Format.asprintf
+                        "temporary variable %s already declared %a"
+                        vn
+                        Pos.format_position old_pos
+                    in
+                    Errors.raise_spanned_error msg pos
+                | None -> StrMap.add vn (vnm, vt) res)
+              StrMap.empty
+              (match vars_opt with None -> [] | Some (l, _) -> l)
+          in
+          apps, ch_opt, vars
+      in
+      aux None None None header
+    in
+    let rule_formulaes, l = formulaes_etc in 
     let rule = {
       rule_number;
       rule_tag_names;
-      rule_applications = apps;
-      rule_chaining = c;
-      rule_formulaes =  formulaes;
+      rule_apps;
+      rule_chaining;
+      rule_tmp_vars;
+      rule_formulaes;
     } in
     Pos.same_pos_as (Rule rule) name :: l
   }
 
+rule_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
+| CHAINING COLON ch = with_pos(SYMBOL) SEMICOLON { `Chaining ch }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { `TmpVars tmp_vars }
+
 target_etc:
 | TARGET name = symbol_with_pos COLON
-  apps = application_reference SEMICOLON
-  tmp_vars = temporary_variables_decl?
+  header = nonempty_list(with_pos(target_header_elt))
   prog_etc = instruction_list_etc
   {
     let target_prog, l = prog_etc in
+    let target_apps, target_args, target_tmp_vars, _ =
+      parse_target_or_function_header name false header
+    in
     let target = {
       target_name = name;
       target_file = None;
-      target_applications = apps;
-      target_tmp_vars = (match tmp_vars with None -> [] | Some l -> l);
+      target_apps;
+      target_args;
+      target_result = None;
+      target_tmp_vars;
+      target_nb_tmps = -1;
+      target_sz_tmps = -1;
+      target_nb_refs = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
   }
+
+target_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
+| INPUT_ARG COLON
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
+  { Target_input_arg inputs }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { Target_tmp_vars tmp_vars }
+
+function_etc:
+| FONCTION name = symbol_with_pos COLON
+  header = nonempty_list(with_pos(function_header_elt))
+  prog_etc = instruction_list_etc
+  {
+    let target_prog, l = prog_etc in
+    let target_apps, target_args, target_tmp_vars, target_result =
+      parse_target_or_function_header name true header
+    in
+    let target = {
+      target_name = name;
+      target_file = None;
+      target_apps;
+      target_args;
+      target_result;
+      target_tmp_vars;
+      target_nb_tmps = -1;
+      target_sz_tmps = -1;
+      target_nb_refs = -1;
+      target_prog;
+    } in
+    Pos.same_pos_as (Function target) name :: l
+  }
+
+function_header_elt:
+| APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
+| INPUT_ARG COLON
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
+  { Target_input_arg inputs }
+| VARIABLE TEMPORARY COLON
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
+  { Target_tmp_vars tmp_vars }
+| RESULT COLON res = with_pos(variable_name) SEMICOLON { Function_result res }
 
 temporary_variable_name:
 | name = symbol_with_pos size = with_pos(comp_variable_table)? {
@@ -444,91 +584,104 @@ temporary_variable_name:
     (parse_variable_name $sloc name_str, name_pos), size
   }
 
-temporary_variables_decl:
-| VARIABLE TEMPORARY COLON
-  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
-    { tmp_vars }
-
 instruction_list_etc:
-| i = with_pos(instruction) l = with_pos(symbol_colon_etc)* { [i], l }
-| i = with_pos(instruction) il_etc = instruction_list_etc {
-    let il, l = il_etc in
-    i :: il, l
+| i_opt = with_pos(instruction) l = with_pos(symbol_colon_etc)* {
+    match Pos.unmark i_opt with
+    | None -> [], l
+    | Some i -> [Pos.same_pos_as i i_opt], l
+  }
+| i_opt = with_pos(instruction) il_etc = instruction_list_etc {
+    match Pos.unmark i_opt with
+    | None -> il_etc
+    | Some i ->
+        let il, l = il_etc in
+        (Pos.same_pos_as i i_opt) :: il, l
   }
 
 instruction_list_rev:
-| i = with_pos(instruction) { [i] }
-| il = instruction_list_rev i = with_pos(instruction) { i :: il }
+| i_opt = with_pos(instruction) {
+    match Pos.unmark i_opt with
+    | None -> []
+    | Some i -> [Pos.same_pos_as i i_opt]
+  }
+| il = instruction_list_rev i_opt = with_pos(instruction) {
+    match Pos.unmark i_opt with
+    | None -> il
+    | Some i -> (Pos.same_pos_as i i_opt) :: il  
+  }
 
 instruction:
-| f = with_pos(formula_kind) SEMICOLON { Formula f }
+| NOTHING SEMICOLON { None }
+| f = with_pos(formula_kind) SEMICOLON { Some (Affectation f) }
 | IF e = with_pos(expression)
   THEN ilt = instruction_list_rev
   ilel = instruction_else_branch {
-    let ilite = (Some e, List.rev ilt, Pos.no_pos) :: ilel in
-    parse_if_then_etc ilite
+    let ilite = (Some e, List.rev ilt, mk_position $sloc) :: ilel in
+    Some (parse_if_then_etc ilite)
   }
-| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { ComputeDomain dom }
-| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { ComputeChaining chain }
-| COMPUTE TARGET target = symbol_with_pos SEMICOLON { ComputeTarget target }
-| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON
-    {
-      let expr = Mast.Literal (Mast.Float 1.0), Pos.no_pos in
-      ComputeVerifs (dom, expr)
-    }
+| WHEN e = with_pos(expression)
+  DO ild = instruction_list_rev
+  iltwe = instruction_then_when_branch {
+    let iltwl, ed = iltwe in
+    Some (parse_when_do_etc ((e, List.rev ild, mk_position $sloc) :: iltwl, ed))
+  }
+| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { Some (ComputeDomain dom) }
+| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { Some (ComputeChaining chain) }
+| COMPUTE TARGET target = symbol_with_pos args = target_args? SEMICOLON {
+    let args_list = match args with None -> [] | Some l -> l in
+    Some (ComputeTarget (target, args_list))
+  }
+| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON {
+    let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
+    Some (ComputeVerifs (dom, expr))
+  }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON
   WITH expr = with_pos(expression) SEMICOLON {
-    ComputeVerifs (dom, expr)
+    Some (ComputeVerifs (dom, expr))
   }
-| PRINT args = with_pos(print_argument)* SEMICOLON
-    { Print (StdOut, args) }
-| PRINT_ERR args = with_pos(print_argument)* SEMICOLON
-    { Print (StdErr, args) }
-| ITERATE COLON it_params = nonempty_list(with_pos(it_param))
-  IN LPAREN instrs = instruction_list_rev RPAREN
-    {
-      let err msg pos = Errors.raise_spanned_error msg pos in
-      let fold (vno, vco, exo) = function
-      | (Some vn, _, _), pos ->
-          if vno = None then Some vn, vco, exo
-          else err "iterator variable is already defined" pos
-      | (_, Some vc, _), pos ->
-          if vco = None then vno, Some vc, exo
-          else err "variable category is already specified" pos
-      | (_, _, Some ex), pos ->
-          if exo = None then vno, vco, Some ex
-          else err "iterator filter is already defined" pos
-      | (_, _, _), _ -> assert false
+| PRINT args = with_pos(print_argument)* SEMICOLON {
+    Some (Print (StdOut, args))
+  }
+| PRINT_ERR args = with_pos(print_argument)* SEMICOLON {
+    Some (Print (StdErr, args))
+  }
+| ITERATE COLON
+  VARIABLE vn = symbol_with_pos COLON
+  it_params = nonempty_list(it_param)
+  IN LPAREN instrs = instruction_list_rev RPAREN {
+    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let var_list, var_cats =
+      let fold (var_list, var_cats) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats
+      | `VarCatsIt vc -> var_list, vc :: var_cats
       in
-      let init = None, None, None in
-      let vno, vco, exo = List.fold_left fold init it_params in
-      let var =
-        match vno with
-        | Some var -> var
-        | None -> err "iterator variable must be defined" (mk_position $sloc)
-      in
-      let vcats =
-        match vco with
-        | Some vcats -> vcats
-        | None -> err "variable category must be defined" (mk_position $sloc)
-      in
-      let expr =
-        match exo with
-        | Some expr -> expr
-        | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
-      in
-      Iterate (var, vcats, expr, List.rev instrs)
-    }
-| RESTORE COLON rest_params = with_pos(rest_param)*
+      List.fold_left fold ([], []) it_params
+    in
+    Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
+  }
+| RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    Restore (rest_params, List.rev instrs)
+    let var_list, var_cats =
+      let fold (var_list, var_cats) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats
+      | `VarCatsRest vc -> var_list, vc @ var_cats
+      in
+      List.fold_left fold ([], []) rest_params
+    in
+    Some (Restore (List.rev var_list, List.rev var_cats, List.rev instrs))
   }
-| RAISE_ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
-    RaiseError (e_name, var)
+| RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
+    Some (RaiseError (e_name, var))
   }
-| CLEAN_ERRORS SEMICOLON { CleanErrors }
-| EXPORT_ERRORS SEMICOLON { ExportErrors }
-| FINALIZE_ERRORS SEMICOLON { FinalizeErrors }
+| CLEAN_ERRORS SEMICOLON { Some CleanErrors }
+| EXPORT_ERRORS SEMICOLON { Some ExportErrors }
+| FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
+
+target_args:
+| COLON WITH args = separated_nonempty_list(COMMA, arg_variable) { args }
+
+arg_variable:
+| s = with_pos(SYMBOL) { parse_variable $sloc (fst s), snd s }
 
 instruction_else_branch:
 | ELSEIF e = with_pos(expression)
@@ -541,21 +694,33 @@ instruction_else_branch:
   }
 | ENDIF { [] }
 
+instruction_then_when_branch:
+| THEN_WHEN e = with_pos(expression)
+  DO ild = instruction_list_rev
+  iltwe = instruction_then_when_branch {
+    let iltwl, ed = iltwe in
+    ((e, List.rev ild, mk_position $sloc) :: iltwl, ed)
+  }
+| ELSE_DO il = instruction_list_rev ENDWHEN {
+    ([], (List.rev il, mk_position $sloc))
+  }
+| ENDWHEN { ([], ([], Pos.no_pos)) }
+
 print_argument:
-| s = STRING { PrintString (parse_string s) }
+| s = STRING { Com.PrintString (parse_string s) }
 | f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
     {
       match Pos.unmark f with
-      | "nom" -> PrintName (parse_variable $sloc (fst v), snd v)
-      | "alias" -> PrintAlias (parse_variable $sloc (fst v), snd v)
+      | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
+      | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
       | _ -> assert false
     }
-| INDENT LPAREN e = with_pos(expression) RPAREN { PrintIndent e }
+| INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
 | LPAREN e = with_pos(expression) RPAREN prec = print_precision?
     {
       match prec with
-      | Some (min, max) -> PrintExpr (e, min, max)
-      | None -> PrintExpr (e, 0, 20)
+      | Some (min, max) -> Com.PrintExpr (e, min, max)
+      | None -> Com.PrintExpr (e, 0, 20)
     }
 
 print_function:
@@ -598,37 +763,66 @@ print_precision:
     }
 
 it_param:
-| VARIABLE var = symbol_with_pos COLON
-    { Some var, None, None }
-| CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON {
-    None, Some vcats, None
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+    let vl =
+      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+    in
+    `VarList vl
   }
-| WITH expr = with_pos(expression) COLON
-    { None, None, Some expr }
-
-rest_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON { VarList vars }
-| VARIABLE var = symbol_with_pos COLON
-  CATEGORY vcats = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON expr_opt = rest_param_with_expr? { 
+| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON expr_opt = it_param_with_expr? {
+    let vcats =
+      let fold res vc =
+        let vcm = Com.CatVar.Map.from_string_list vc in
+        Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
+      in
+      List.fold_left fold Com.CatVar.Map.empty vcat_list
+    in
     let expr =
       match expr_opt with
       | Some expr -> expr
-      | None -> Mast.Literal (Mast.Float 1.0), Pos.no_pos
+      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
-    VarCats (var, vcats, expr)
+    `VarCatsIt (vcats, expr)
+  }
+
+it_param_with_expr:
+| WITH expr = with_pos(expression) COLON { expr }
+
+rest_param:
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+    let vl =
+      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+    in
+    `VarList vl
+  }
+| VARIABLE vn = symbol_with_pos COLON
+  vparams = nonempty_list(rest_param_category) {
+    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
+    `VarCatsRest filters
+  }
+
+rest_param_category:
+| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
+  COLON expr_opt = rest_param_with_expr? {
+    let vcats =
+      let fold res vc =
+        let vcm = Com.CatVar.Map.from_string_list vc in
+        Com.CatVar.Map.union (fun _ p _ -> Some p) vcm res
+      in
+      List.fold_left fold Com.CatVar.Map.empty vcat_list
+    in
+    let expr =
+      match expr_opt with
+      | Some expr -> expr
+      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
+    in
+    (vcats, expr)
   }
 
 rest_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
-
-formula_list_etc:
-| f = with_pos(formula_kind) SEMICOLON l = with_pos(symbol_colon_etc)* { [f], l }
-| f = with_pos(formula_kind) SEMICOLON fs = formula_list_etc {
-    let fl, l = fs in
-    f :: fl, l
-  }
 
 formula_kind:
 | f = formula { SingleFormula f }
@@ -641,19 +835,20 @@ lvalue_name:
 | s = SYMBOL { parse_variable $sloc s }
 
 lvalue:
-| s = with_pos(lvalue_name) i = with_pos(brackets)? { { var = s; index = i} }
+| s = with_pos(lvalue_name) i = with_pos(brackets)? { (s, i) }
 
 formula:
-| lvalue = with_pos(lvalue) EQUALS formula = with_pos(expression) {
-    { lvalue; formula }
+| lvalue = lvalue EQUALS e = with_pos(expression) {
+    let v, idx = lvalue in
+    (v, idx, e)
   }
 
 verification_etc:
 | v = with_pos(verification) l = with_pos(symbol_colon_etc)* { v :: l }
 
 verification:
-| VERIFICATION name = symbol_list_with_pos
-  COLON verif_applications = application_reference SEMICOLON
+| VERIFICATION name = symbol_list_with_pos COLON
+  APPLICATION COLON apps = symbol_enumeration SEMICOLON
   verif_conditions = with_pos(verification_condition)+ {
     let num, verif_tag_names =
       let uname = Pos.unmark name in
@@ -678,10 +873,31 @@ verification:
           "this verification doesn't have an execution number"
           (Pos.get_position num)
     in
+    let verif_apps =
+      match apps with
+      | [] ->
+          Errors.raise_spanned_error
+            "this verification doesn't belong to an application"
+            (Pos.get_position verif_number)
+      | _ ->
+        List.fold_left
+          (fun res (app, pos) ->
+            match StrMap.find_opt app res with
+            | Some (_, old_pos) ->
+                let msg =
+                  Format.asprintf "application %s already declared %a"
+                    app
+                    Pos.format_position old_pos
+                in
+                Errors.raise_spanned_error msg pos
+            | None -> StrMap.add app (app, pos) res)
+          StrMap.empty
+          apps
+    in
     let verif = {
       verif_number;
       verif_tag_names;
-      verif_applications;
+      verif_apps;
       verif_conditions
     } in
     Verification verif
@@ -689,7 +905,7 @@ verification:
 
 verification_condition:
 | IF e = with_pos(expression) THEN
-  ERROR e_name = symbol_with_pos var = with_pos(output_name)? SEMICOLON {
+  ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     {
       verif_cond_expr = e;
       verif_cond_error = e_name, var;
@@ -723,26 +939,23 @@ error_:
   }
 
 type_error:
-| ANOMALY { Anomaly }
-| DISCORDANCE { Discordance }
-| INFORMATIVE { Information }
+| ANOMALY { Com.Error.Anomaly }
+| DISCORDANCE { Com.Error.Discordance }
+| INFORMATIVE { Com.Error.Information }
 
 
 output_etc:
 | o = with_pos(output) l = with_pos(symbol_colon_etc)* { o :: l }
 
 output:
-| OUTPUT LPAREN s = with_pos(output_name) RPAREN SEMICOLON { Output s }
-
-output_name:
-| s = SYMBOL { parse_variable_name $sloc s }
+| OUTPUT LPAREN s = with_pos(variable_name) RPAREN SEMICOLON { Output s }
 
 brackets:
-| LBRACKET i = SYMBOL RBRACKET { parse_table_index $sloc i }
+| LBRACKET i = expression RBRACKET { i }
 
 loop_variables:
-| lrs = loop_variables_ranges { Ranges lrs }
-| lvs = loop_variables_values { ValueSets lvs }
+| lrs = loop_variables_ranges { Com.Ranges lrs }
+| lvs = loop_variables_values { Com.ValueSets lvs }
 
 loop_variables_values:
 | lvs = separated_nonempty_list(SEMICOLON, loop_variables_value) { lvs }
@@ -772,7 +985,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Single (parse_to_literal (parse_variable_or_int $sloc s), pos)
+    Com.Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
   }
 
 range_or_minus:
@@ -782,11 +995,11 @@ range_or_minus:
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let l1 = parse_to_literal (parse_variable_or_int $sloc i1), pos in
-    let l2 = parse_to_literal (parse_variable_or_int $sloc i2), pos in
+    let l1 = parse_to_atom (parse_variable_or_int $sloc i1), pos in
+    let l2 = parse_to_atom (parse_variable_or_int $sloc i2), pos in
     match rm with
-    | `Range -> Range (l1, l2)
-    | `Minus -> Interval (l1, l2)
+    | `Range -> Com.Range (l1, l2)
+    | `Minus -> Com.Interval (l1, l2)
   }
 
 enumeration:
@@ -798,8 +1011,8 @@ enumeration_item:
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> VarValue (v, pos)
-    | ParseInt i -> FloatValue (float_of_int i, pos)
+    | ParseVar v -> Com.VarValue (v, pos)
+    | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
 interval:
@@ -807,7 +1020,7 @@ interval:
     let pos = mk_position $sloc in
     let ir1 = parse_int $sloc i1, pos in
     let ir2 = parse_int $sloc i2, pos in
-    Interval (ir1, ir2) : set_value
+    Com.Interval (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
@@ -833,42 +1046,46 @@ expression:
 | NOT e = with_pos(expression) { Unop (Not, e) }
 
 %inline logical_binop:
-| AND { And }
-| OR { Or }
+| AND { Com.And }
+| OR { Com.Or }
 
 sum_expression:
 | e = product_expression { e }
 | e1 = with_pos(sum_expression)
   op = with_pos(sum_operator)
   e2 = with_pos(product_expression) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline sum_operator:
-| PLUS { Add }
-| MINUS { Sub }
+| PLUS { Com.Add }
+| MINUS { Com.Sub }
 
 product_expression:
 | e = factor { e }
 | e1 = with_pos(product_expression)
   op = with_pos(product_operator)
   e2 = with_pos(factor) {
-    Binop (op, e1, e2)
+    Com.Binop (op, e1, e2)
   }
 
 %inline product_operator:
-| TIMES { Mul }
-| DIV { Div }
+| TIMES { Com.Mul }
+| DIV { Com.Div }
 
 table_index_name:
 s = SYMBOL { parse_variable $sloc s }
 
 factor:
-| MINUS e = with_pos(factor) { Unop (Minus, e) }
+| MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = with_pos(table_index_name) i = with_pos(brackets) { Index (s, i) }
-| l = factor_literal { Literal l }
+| s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
+| a = with_pos(factor_atom) {
+    match Pos.unmark a with
+    | Com.AtomVar v -> Com.Var v
+    | Com.AtomLiteral l -> Com.Literal l
+  }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
@@ -881,15 +1098,15 @@ ternary_operator:
   THEN e2 = with_pos(expression)
   e3 = else_branch?
   ENDIF {
-    Conditional (e1, e2, e3)
+    Com.Conditional (e1, e2, e3)
   }
 
 else_branch:
 | ELSE e = with_pos(expression) { e }
 
-factor_literal:
-| UNDEFINED { Mast.Undefined }
-| s = SYMBOL { parse_literal $sloc s }(*
+factor_atom:
+| UNDEFINED { AtomLiteral Undefined }
+| s = SYMBOL { parse_atom $sloc s }(*
   Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
   *)
 
@@ -899,7 +1116,9 @@ function_name:
 | s = SYMBOL { parse_func_name $sloc s }
 
 function_call:
-| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN { NbCategory cats }
+| NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
+    NbCategory (Com.CatVar.Map.from_string_list cats)
+  }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
   }
@@ -911,27 +1130,30 @@ function_call:
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
 | s = with_pos(function_name) LPAREN RPAREN {
-    FunctionCall (s, Mast.ArgList [])
+    FuncCall (parse_function_name s, [])
   }
-| s = with_pos(function_name) LPAREN args = function_call_args RPAREN {
-    FunctionCall (s, args)
+| s = with_pos(function_name) LPAREN call_args = function_call_args RPAREN {
+    let f_name = parse_function_name s in
+    match call_args with
+    | `CallArgs args -> Com.FuncCall (f_name, args)
+    | `CallLoop (l1, l2) -> Com.FuncCallLoop (f_name, l1, l2)
   }
 
 function_call_args:
-| l = loop_expression { let l1, l2 = l in LoopList (l1, l2) }
-| args = function_arguments { ArgList (args) }
+| l = loop_expression { let l1, l2 = l in `CallLoop (l1, l2) }
+| args = function_arguments { `CallArgs args }
 
 function_arguments:
 | e = with_pos(sum_expression) { [e] }
 | e = with_pos(sum_expression) COMMA es = function_arguments { e :: es }
 
 %inline comparison_op:
-| GTE  { Gte }
-| LTE  { Lte }
-| LT { Lt }
-| GT { Gt }
-| NEQ  { Neq }
-| EQUALS { Eq }
+| GTE  { Com.Gte }
+| LTE  { Com.Lte }
+| LT { Com.Lt }
+| GT { Com.Gt }
+| NEQ  { Com.Neq }
+| EQUALS { Com.Eq }
 
 symbol_enumeration:
 | ss = separated_nonempty_list(COMMA, symbol_with_pos) { ss }

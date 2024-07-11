@@ -14,22 +14,15 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 val check_test :
-  Bir.program ->
+  Mir.program ->
   (* test file name *) string ->
-  (* code coverage *) bool ->
   Cli.value_sort ->
   Cli.round_ops ->
-  Bir_instrumentation.code_coverage_result
-(** [check_test test_file optimize code_coverage value_sort round_ops] runs the
-    BIR interpreter using float kind [value_sort] and rounding operations
-    [round_ops] on a given [test_file]. [optimize] and [code_coverage] are flags
-    that trigger respectively compiler optimizations and code coverage
-    instrumentation for the interpreter run. *)
+  unit
 
 val check_all_tests :
-  Bir.program ->
+  Mir.program ->
   string ->
-  bool ->
   Cli.value_sort ->
   Cli.round_ops ->
   (string -> bool) ->
