@@ -2,7 +2,8 @@
 
 (library
  (public_name mlang)
- (libraries re ANSITerminal parmap cmdliner threads dune-build-info num gmp))
+ (libraries re ANSITerminal parmap cmdliner threads dune-build-info num gmp
+   menhirLib))
 
 (documentation
  (package mlang)

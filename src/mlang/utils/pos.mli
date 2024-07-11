@@ -26,6 +26,9 @@ val make_position_between : t -> t -> t
 
 val format_position_short : Format.formatter -> t -> unit
 
+val format_position_gnu : Format.formatter -> t -> unit
+(** Respects https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages *)
+
 val format_position : Format.formatter -> t -> unit
 
 type 'a marked = 'a * t

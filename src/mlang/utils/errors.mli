@@ -22,6 +22,9 @@ exception
 val format_structured_error :
   Format.formatter -> string * (string option * Pos.t) list -> unit
 
+val format_structured_error_gnu_format :
+  Format.formatter -> string * (string option * Pos.t) list -> unit
+
 (** {2 Raising errors with useful error messages}*)
 
 val raise_spanned_error : string -> ?span_msg:string -> Pos.t -> 'a

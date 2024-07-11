@@ -1,3 +1,5 @@
+(include_subdirs unqualified)
+
 (env
  (dev
   (flags
@@ -7,4 +9,4 @@
  (name irj_checker)
  (package irj_checker)
  (public_name irj_checker)
- (libraries mlang))
+ (libraries mlang cmdliner dune-build-info))

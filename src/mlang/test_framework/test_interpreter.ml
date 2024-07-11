@@ -13,12 +13,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let convert_pos (pos : Irj_ast.pos) =
-  Pos.make_position pos.pos_filename pos.pos_loc
-
-(* enforces type compatibility (the type Irj_ast.pos is defined in exactly the
-   same way as Pos.t) *)
-
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found ->
@@ -33,8 +27,8 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       Com.Float (float_of_int (Option.get !Cli.income_year + 1))
     in
     List.fold_left
-      (fun in_f (var, value, pos) ->
-        let var = find_var_of_name program (var, convert_pos pos) in
+      (fun in_f ((var, var_pos), (value, _value_pos)) ->
+        let var = find_var_of_name program (var, var_pos) in
         let lit =
           match value with
           | Irj_ast.I i -> Com.Float (float_of_int i)
@@ -45,7 +39,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       t.prim.entrees
   in
   let expectedVars =
-    let fold res (var, value, _pos) =
+    let fold res ((var, _), (value, _)) =
       let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
       StrMap.add var fVal res
     in
@@ -142,10 +136,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format_position pos;
             (successes, failures))
-    | Irj_ast.TestParsingError (msg, pos) as e ->
-        Cli.error_print "Parsing error: %s %a" msg Pos.format_position
-          (convert_pos pos);
-        raise e
     | e ->
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e
