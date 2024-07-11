@@ -74,26 +74,6 @@ The interpreter and the C backend in `examples/dgfip_c/` should be usable straig
 as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
 being preferred if available.
 
-The Java backend in `examples/java/` requires Java development environment.
-The generated code targets Java 7, and could be used with OpenJDK 1.7 or more.
-However, the test harness code requires Java 8, so to use the automated backend tests, we ask for
-OpenJDK 1.8 or more.
-
-For Debian-based distributions, you can try:
-
-    sudo apt install default-jdk
-
-For Red Hat-based distributions, depending on your version:
-
-    sudo yum install java-1.8.0-openjdk-devel
-
-or
-
-    sudo yum install java-11-openjdk-devel
-
-NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7
-installed in order to provide the correct version of the base classes.
-
 ## Usage
 
 Mlang also need an M file to know how to run the "liquidations multiples"
@@ -131,8 +111,7 @@ their internal tooling. The `--run_test` and `--run_all_tests` options ease
 the testing process of the interpreter (with or without optimizations) and
 report test errors in a convenient format.
 
-Mlang backends are also tested using the same `FIP` format, see for instance
-`examples/java/backend_test`.
+Mlang backends are also tested using the same `FIP` format.
 
 When running `--run_all_tests`, you can enable code coverage instrumentation
 with the `--code_coverage` option. Another interesting option is `--precision`,

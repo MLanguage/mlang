@@ -207,13 +207,7 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         "Extracting the desired function from the whole program...";
       match backend with
       | Some backend ->
-          if String.lowercase_ascii backend = "java" then begin
-            Cli.debug_print "Compiling codebase to Java...";
-            if !Cli.output_file = "" then
-              Errors.raise_error "an output file must be defined with --output";
-            Bir_to_java.generate_java_program m_program !Cli.output_file
-          end
-          else if String.lowercase_ascii backend = "dgfip_c" then begin
+          if String.lowercase_ascii backend = "dgfip_c" then begin
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
