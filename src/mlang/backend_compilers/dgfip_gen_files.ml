@@ -1103,6 +1103,18 @@ let gen_annee_h fmt flags =
 
   Format.pp_print_flush fmt ()
 
+let gen_struct_h fmt =
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
+
+#ifndef _STRUCT_H_levrai
+#define _STRUCT_H_levrai    
+#include "desc_static.h.inc"
+#include "irdata.h"
+#endif /* _STRUCT_H_levrai */
+
+|}
+
 (* Print #defines corresponding to generation options *)
 let gen_conf_h fmt flags vars =
   let open Dgfip_options in
@@ -1299,6 +1311,10 @@ let generate_auxiliary_files flags prog cprog : Dgfip_varid.var_id_map =
 
   let oc, fmt = open_file (Filename.concat folder "annee.h") in
   gen_annee_h fmt flags;
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "struct.h") in
+  gen_struct_h fmt;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "conf.h") in
