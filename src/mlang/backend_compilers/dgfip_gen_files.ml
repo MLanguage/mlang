@@ -1107,11 +1107,11 @@ let gen_struct_h fmt =
   Format.fprintf fmt
     {|/****** LICENCE CECIL *****/
 
-#ifndef _STRUCT_H_levrai
-#define _STRUCT_H_levrai    
+#ifndef _STRUCT_H_
+#define _STRUCT_H_
 #include "desc_static.h.inc"
 #include "irdata.h"
-#endif /* _STRUCT_H_levrai */
+#endif /* _STRUCT_H_*/
 
 |}
 
