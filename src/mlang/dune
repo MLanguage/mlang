@@ -1,14 +1,9 @@
-(env
- (static
-  (ocamlopt_flags
-   (-O3 -ccopt -static))))
-
 (include_subdirs unqualified)
 
 (library
  (public_name mlang)
- (libraries ocamlgraph re ANSITerminal parmap cmdliner threads
-   dune-build-info num gmp irj_parser))
+ (libraries re ANSITerminal parmap cmdliner threads dune-build-info num gmp
+   menhirLib))
 
 (documentation
  (package mlang)

@@ -3,6 +3,7 @@ let ( => ) x l = List.mem x l
 
 let ( =: ) x (l, u) = x >= l && x <= u
 
+module StrSet = Set.Make(String)
 module StrMap = Map.Make(String)
 
 type nature = Indefinie | Revenu | Charge
@@ -158,9 +159,6 @@ module TGV = struct
   external uget : t -> string -> float option = "ml_tgv_get"
   external uget_array : t -> string -> int -> float option = "ml_tgv_get_array"
   external uset : t -> string -> float -> unit = "ml_tgv_set"
-  external reset_calculee : t -> unit = "ml_tgv_reset_calculee"
-  external reset_base : t -> unit = "ml_tgv_reset_base"
-  external reset_saisie_calculee : t -> unit = "ml_tgv_reset_saisie_calculee"
   external copy_all : t -> t -> unit = "ml_tgv_copy"
 
   let defined tgv var = udefined tgv (VarDict.unalias var)
@@ -268,11 +266,6 @@ module TGV = struct
         set_bool tgv signvar (v < 0.0);
         set tgv dvar (Float.abs v)
 
-  let reset_saisie_calc ~except tgv =
-    let save = get_map_opt tgv except in
-    reset_saisie_calculee tgv;
-    set_map tgv save
-
   type undef_action =
     | UDIgnore
     | UDZero
@@ -301,3 +294,11 @@ module TGV = struct
       ) var_list
 
 end
+
+external init_errs : TGV.t -> unit = "ml_init_errs"
+external get_err_list : TGV.t -> string list = "ml_get_err_list"
+external free_errs : TGV.t -> unit = "ml_free_errs"
+
+let get_errs tgv =
+  List.fold_left (fun res e -> StrSet.add e res) StrSet.empty (get_err_list tgv)
+

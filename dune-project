@@ -7,11 +7,11 @@
 (generate_opam_files true)
 
 (source
- (uri git+https://gitlab.inria.fr/verifisc/mlang.git))
+ (uri git+https://github.com/MLanguage/mlang.git))
 
-(homepage https://gitlab.inria.fr/verifisc/mlang)
+(homepage https://github.com/MLanguage/mlang)
 
-(bug_reports https://gitlab.inria.fr/verifisc/mlang/issues)
+(bug_reports https://github.com/MLanguage/mlang/issues)
 
 (authors "Denis Merigoux" "Rapha\195\171l Monat")
 
@@ -54,10 +54,10 @@
    (= 1.2.3))))
 
 (package
- (name irj_parser)
- (synopsis "Parser for the IRJ tests")
+ (name irj_checker)
+ (synopsis "IRJ test validation tool")
  (description
-  "This parser is aimed for the tests used by la DGFiP to test the calculation of the French income tax")
+  "This standalone module performs a syntactic validation of the DGFiP IRJ test format")
  (depends
   (ocaml
    (and

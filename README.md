@@ -8,8 +8,8 @@ The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
-of the syntax and the semantics of M, from the codebase previously released by the DGFiP on 
-[Framagit forge](https://framagit.org) and now regularly published on 
+of the syntax and the semantics of M, from the codebase previously released by the DGFiP on
+[Framagit forge](https://framagit.org) and now regularly published on
 [Adullact forge](https://gitlab.adullact.net/dgfip/ir-calcul).
 
 ## Disclaimer
@@ -74,69 +74,35 @@ The interpreter and the C backend in `examples/dgfip_c/` should be usable straig
 as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
 being preferred if available.
 
-The Java backend in `examples/java/` requires Java development environment.
-The generated code targets Java 7, and could be used with OpenJDK 1.7 or more.
-However, the test harness code requires Java 8, so to use the automated backend tests, we ask for 
-OpenJDK 1.8 or more.
+## Usage
 
-For Debian-based distributions, you can try:
+Mlang also need an M file to know how to run the "liquidations multiples"
+mechanism that is necessary to compute the income tax correctly. For instance, the file
+`ir_calcul/2022/cible.m` corresponds to the unpublished code of the DGFiP
+for version of the 2022 M sources published in `ir-calcul`.
 
-    sudo apt install default-jdk
+Some of the `Makefile` flags can be permanently configured by modifying the
+file `makefiles/variables.mk`.
 
-For Red Hat-based distributions, depending on your version:
+If you want to generate source files of the ML backend, run the command:
 
-    sudo yum install java-1.8.0-openjdk-devel
+    make YEAR=<2020 or 2022> dgfip_c_backend
 
 or
 
-    sudo yum install java-11-openjdk-devel
+    make dgfip_c_backend
 
-NB : if you are using JDK 1.8, in order to cross-compile the generated code to 1.7, you would also need JDK 1.7 
-installed in order to provide the correct version of the base classes.
+with default year 2022. The files are then generated in `example/dgfip_c/ml_primitif/calc`.
 
-## Usage
+If you want to generate the executable of the ML backend, run the command:
 
-Please read the `m_specs/complex_case_with_ins_outs_2018.m_spec` for a walk-through
-of what happens in this example. You can compare what happens on the
-[official simulator](https://www3.impots.gouv.fr/simulateur/calcul_impot/2019/simplifie/index.htm)
-by entering the exact amounts of the case in the right income codes. Everything should be the same.
+    make YEAR=<2020 or 2022> compile_dgfip_c_backend
 
-The input variables that you want to use have to be declared beforehand in the `.m_spec`
-file, in the `const` section. If you put a variable in the `saisie` section, you will then be
-prompted to input it at interpretation time. You can also change which variables you want the
-interpreter to output in the `sortie` section.
+or
 
-If you invoke `make quick_test`, Make will show you the Mlang options is is
-using to run a simple test of the Mlang interpreter.
+    make compile_dgfip_c_backend
 
-Please refer to the DGFiP's simulator for the meaning of the variables. Important variables are:
-
-* `0AC` and `0AM`, which should be set to 1 for respectively single or married;
-* `1AJ` and `1BJ`, salaried income for individuals number 1 and 2;
-* `0CF`, the number of dependent persons (children);
-* ...
-
-Mlang's run are configured by a specification file (`.m_spec`), see the
-[dedicated README](m_specs/README.md) for more details.
-
-Mlang also need an M++ file to know how to run the "liquidations multiples"
-mechanism that is necessary to compute the income tax correctly. For instance, the file
-`mpp_specs/2018_6_7.mpp` corresponds to the unpublished code of the DGFiP
-for version of the 2018 M sources published in `ir-calcul`.
-
-If you want to test the output of the interpreter on a situation you made up,
-edit your own `.m_spec` and run it with the command:
-
-    YEAR=<2018 or 2019 or 2020> M_SPEC_FILE=<path to .m_spec> make quick_test
-
-For how to produce ready-to-use income tax computation
-source files for your application, see the
-[dedicated README](examples/README.md).
-
-Some of the `Makefile` flags can be permanently configured by creating
-a file `Makefile.config` in the top directory. Check the file
-`Makefile.config.template` to see some of the options that can be
-configured in that way.
+with default year 2022.
 
 ## Testing
 
@@ -145,8 +111,7 @@ their internal tooling. The `--run_test` and `--run_all_tests` options ease
 the testing process of the interpreter (with or without optimizations) and
 report test errors in a convenient format.
 
-Mlang backends are also tested using the same `FIP` format, see for instance
-`examples/java/backend_test`.
+Mlang backends are also tested using the same `FIP` format.
 
 When running `--run_all_tests`, you can enable code coverage instrumentation
 with the `--code_coverage` option. Another interesting option is `--precision`,
@@ -170,6 +135,60 @@ the way the law says taxes should be computed.
 To check that Mlang passes all the randomized tests, simply invoke
 
     make tests
+
+Some tests might fail using non-default precision settings, even if the error
+message shows no difference between the expected value and the computed value.
+This is because we control a difference of 0 between the computed and the
+expected, but when doing computations with a higher precision, a difference
+lower than the smallest representable float value might appear. To pass the test,
+we have provided the command line option `--test_error_margin=0.0000001` to
+let you define how much error margin you want to tolerate when running tests.
+
+If you want to run the `mlang` interpreter on all tests of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> tests
+
+or
+
+    make tests
+
+with default year 2022.
+
+If you want to run the `mlang` interpreter on a specific test of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> TEST_ONE=<test file> test_one
+
+or
+
+    make TEST_ONE=<test file> test_one
+
+with default year 2022. The tests files are stored in `tests/<year>/fuzzing/`.
+
+If you want to test the output of the interpreter on a situation you made up,
+edit your own `.m_test` and run it with the command:
+
+    make YEAR=<2020 or 2022> TEST_FILE=<path to .m_test> make test_file
+
+or
+
+    make TEST_ONE=<test file> test_one
+
+with default year 2022.
+
+If you want to test the output of the ML backend on all tests of an income tax year,
+run the command:
+
+    make YEAR=<2020 or 2022> test_dgfip_c_backend
+
+or
+
+    make TEST_ONE=<test file> test_dgfip_c_backend
+
+with default year 2022.
+
+Please read the `tests/README.md` for a walk-through of what happens in input files.
 
 ## Documentation
 

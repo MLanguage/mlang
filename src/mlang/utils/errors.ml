@@ -31,6 +31,21 @@ let format_structured_error fmt
           pos))
     (if List.length pos = 0 then "" else "\n")
 
+let format_structured_error_gnu_format fmt
+    ((msg, pos) : string * (string option * Pos.t) list) =
+  if pos = [] then Format.fprintf fmt "%s\n" msg
+  else
+    Format.pp_print_list
+      ~pp_sep:(fun fmt () -> Format.pp_print_newline fmt ())
+      (fun fmt (pos_msg, pos) ->
+        Format.fprintf fmt "%a: %s %a\n" Pos.format_position_gnu pos msg
+          (fun fmt pos_msg ->
+            match pos_msg with
+            | None -> ()
+            | Some pos_msg -> Format.fprintf fmt "[%s]" pos_msg)
+          pos_msg)
+      fmt pos
+
 let raise_spanned_error (msg : string) ?(span_msg : string option)
     (span : Pos.t) : 'a =
   raise (StructuredError (msg, [ (span_msg, span) ], None))

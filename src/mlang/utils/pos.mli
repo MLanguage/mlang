@@ -26,6 +26,9 @@ val make_position_between : t -> t -> t
 
 val format_position_short : Format.formatter -> t -> unit
 
+val format_position_gnu : Format.formatter -> t -> unit
+(** Respects https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages *)
+
 val format_position : Format.formatter -> t -> unit
 
 type 'a marked = 'a * t
@@ -34,6 +37,8 @@ type 'a marked = 'a * t
 
 val no_pos : t
 (** Placeholder t *)
+
+val mark : t -> 'a -> 'a marked
 
 val unmark : 'a marked -> 'a
 
@@ -44,8 +49,6 @@ val map_under_mark : ('a -> 'b) -> 'a marked -> 'b marked
 val same_pos_as : 'a -> 'b marked -> 'a marked
 
 val unmark_option : 'a marked option -> 'a option
-
-module VarNameToID : StrMap.T
 
 val get_start_line : t -> int
 

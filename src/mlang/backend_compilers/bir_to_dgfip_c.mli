@@ -21,9 +21,4 @@
     of the output, is built in {!DecoupledExpr}. *)
 
 val generate_c_program :
-  Dgfip_options.flags ->
-  Bir.program ->
-  Bir_interface.bir_function ->
-  (* filename *) string ->
-  Dgfip_varid.var_id_map ->
-  unit
+  Dgfip_options.flags -> Mir.program -> (* filename *) string -> unit

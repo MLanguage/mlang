@@ -1,5 +1,0 @@
-(ocamllex mpp_lexer)
-
-(menhir
- (modules mpp_parser)
- (flags --explain))
