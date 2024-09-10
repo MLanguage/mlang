@@ -394,15 +394,9 @@ let generate_mpp_function (dgfip_flags : Dgfip_options.flags)
     f
     (generate_stmts dgfip_flags program var_indexes)
     mppf_stmts
-    (if ret_type then
-     {|
-#ifdef FLG_MULTITHREAD
-      return irdata->discords;
-#else
-      return discords;
-#endif
-|}
-    else "")
+    (if ret_type then {|
+      return irdata->tEnvDiscord.discords;
+|} else "")
 
 let generate_mpp_functions (dgfip_flags : Dgfip_options.flags)
     (program : Bir.program) (oc : Format.formatter)

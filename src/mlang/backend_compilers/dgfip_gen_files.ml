@@ -972,7 +972,6 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
   let taille_saisie = count vars (Input None) in
   let taille_calculee = count vars (Computed (Some Computed)) in
   let taille_base = count vars (Computed (Some Base)) in
-  let taille_totale = taille_saisie + taille_calculee + taille_base in
   let nb_contexte = count vars (Input (Some Context)) in
   let nb_famille = count vars (Input (Some Family)) in
   let nb_revenu = count vars (Input (Some Income)) in
@@ -988,10 +987,9 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
 
   Format.fprintf fmt
     {|
-#define TAILLE_SAISIE %d
-#define TAILLE_CALCULEE %d
-#define TAILLE_BASE %d
-#define TAILLE_TOTALE %d
+#define NB_SAISIE %d
+#define NB_CALCULEE %d
+#define NB_BASE %d
 #define NB_CONTEXTE %d
 #define NB_FAMILLE %d
 #define NB_REVENU %d
@@ -1000,10 +998,17 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
 #define NB_PENALITE %d
 #define NB_RESTITUEE %d
 #define NB_ENCH %d
+
+extern double arr_g(double);
+extern double floor_g(double);
+extern double ceil_g(double);
+extern int multimax_def(int, char *);
+extern double multimax(double, double *);
+extern int modulo_def(int, int);
+extern double modulo(double, double);
 |}
-    taille_saisie taille_calculee taille_base taille_totale nb_contexte
-    nb_famille nb_revenu nb_revenu_correc nb_variation nb_penalite nb_restituee
-    nb_ench;
+    taille_saisie taille_calculee taille_base nb_contexte nb_famille nb_revenu
+    nb_revenu_correc nb_variation nb_penalite nb_restituee nb_ench;
 
   if flags.Dgfip_options.flg_debug then begin
     Format.fprintf fmt "#define NB_ERR %d\n" nb_err;
@@ -1026,14 +1031,11 @@ let gen_var_h fmt flags vars vars_debug rules verifs chainings errors =
     Format.fprintf fmt "#define NB_VERIF %d\n" nb_verif;
 
   List.iter
-    (fun rn ->
-      Format.fprintf fmt "extern int regle_%d _PROTS((struct S_irdata *));\n" rn)
+    (fun rn -> Format.fprintf fmt "extern int regle_%d (T_irdata *);\n" rn)
     rules;
 
   List.iter
-    (fun vn ->
-      Format.fprintf fmt "extern void verif_%d _PROTS((struct S_irdata *));\n"
-        vn)
+    (fun vn -> Format.fprintf fmt "extern void verif_%d (T_irdata *);\n" vn)
     verifs;
 
   (* TODO external declaration of individual control rules (seems to be no
