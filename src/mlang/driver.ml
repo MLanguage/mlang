@@ -72,16 +72,16 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
-let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
-    (var_info_debug : string list) (display_time : bool)
-    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
-    (output : string option) (run_all_tests : string option)
-    (dgfip_test_filter : bool) (run_test : string option)
-    (mpp_function : string) (optimize_unsafe_float : bool)
-    (precision : string option) (roundops : string option)
-    (comparison_error_margin : float option) (income_year : int option)
-    (m_clean_calls : bool) (dgfip_options : string list option) =
-  let dgfip_flags = process_dgfip_options backend dgfip_options in
+let driver (files : string list) (application_names : string list)
+    (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
+    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
+    (backend : string option) (output : string option)
+    (run_all_tests : string option) (dgfip_test_filter : bool)
+    (run_test : string option) (mpp_function : string)
+    (optimize_unsafe_float : bool) (precision : string option)
+    (roundops : string option) (comparison_error_margin : float option)
+    (income_year : int option) (m_clean_calls : bool)
+    (dgfip_options : string list option) =
   if income_year = None then
     Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
@@ -127,9 +127,11 @@ let driver (files : string list) (without_dgfip_m : bool) (debug : bool)
         Errors.raise_error
           (Format.asprintf "Unkown roundops option: %s" roundops)
   in
-  Cli.set_all_arg_refs files without_dgfip_m debug var_info_debug display_time
-    dep_graph_file print_cycles output optimize_unsafe_float m_clean_calls
-    comparison_error_margin income_year value_sort round_ops;
+  Cli.set_all_arg_refs files application_names without_dgfip_m debug
+    var_info_debug display_time dep_graph_file print_cycles output
+    optimize_unsafe_float m_clean_calls comparison_error_margin income_year
+    value_sort round_ops;
+  let dgfip_flags = process_dgfip_options backend dgfip_options in
   try
     Cli.debug_print "Reading M files...";
     let current_progress, finish = Cli.create_progress_bar "Parsing" in

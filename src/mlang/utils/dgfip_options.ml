@@ -13,9 +13,6 @@ open Cmdliner
 
 let income_year = Arg.(value & opt int 1991 & info [ "m" ] ~doc:"Income year")
 
-let application_name =
-  Arg.(value & opt string "" & info [ "A" ] ~doc:"Application name")
-
 let iliad_pro =
   Arg.(
     value & flag
@@ -76,10 +73,10 @@ let cross_references =
 
 let dgfip_t f =
   Term.(
-    const f $ income_year $ application_name $ iliad_pro $ cfir $ batch
-    $ primitive_only $ extraction $ separate_controls $ immediate_controls
-    $ overlays $ optim_min_max $ register $ short $ output_labels $ debug
-    $ nb_debug_c $ trace $ ticket $ colored_output $ cross_references)
+    const f $ income_year $ iliad_pro $ cfir $ batch $ primitive_only
+    $ extraction $ separate_controls $ immediate_controls $ overlays
+    $ optim_min_max $ register $ short $ output_labels $ debug $ nb_debug_c
+    $ trace $ ticket $ colored_output $ cross_references)
 
 let info =
   let doc = "DGFiP-specific options for Mlang." in
@@ -102,15 +99,13 @@ let info =
 
 (* Flags inherited from the old compiler *)
 type flags = {
-  (* -A *) nom_application : string;
-  (* iliad, pro, oceans, bareme, batch *)
   (* -m *) annee_revenu : int;
   (* -P *) flg_correctif : bool;
   (* flg_correctif true by default, -P makes it false *)
   (* -R *) flg_iliad : bool;
-  (* also implied by nom_application = "iliad"; disabled by -U *)
+  (* also implied by "iliad" in !Cli.application_names; disabled by -U *)
   (* -R *) flg_pro : bool;
-  (* also implied by nom_application = "pro"; disabled by -U *)
+  (* also implied by "pro" in !Cli.application_names; disabled by -U *)
   (* -U *) flg_cfir : bool;
   (* disabled by -R *)
   (* -b *) flg_gcos : bool;
@@ -145,7 +140,6 @@ type flags = {
 
 let default_flags =
   {
-    nom_application = "";
     annee_revenu = 1991;
     flg_correctif = true;
     flg_iliad = false;
@@ -169,21 +163,24 @@ let default_flags =
     xflg = false;
   }
 
-let handler (income_year : int) (application_name : string) (iliad_pro : bool)
-    (cfir : bool) (batch : int option) (primitive_only : bool)
-    (extraction : bool) (separate_controls : bool) (immediate_controls : bool)
-    (overlays : bool) (optim_min_max : bool) (register : bool) (short : bool)
+let handler (income_year : int) (iliad_pro : bool) (cfir : bool)
+    (batch : int option) (primitive_only : bool) (extraction : bool)
+    (separate_controls : bool) (immediate_controls : bool) (overlays : bool)
+    (optim_min_max : bool) (register : bool) (short : bool)
     (output_labels : bool) (debug : bool) (nb_debug_c : int) (trace : bool)
     (ticket : bool) (colored_output : bool) (cross_references : bool) : flags =
+  if iliad_pro && (not cfir) && not (Option.is_some batch) then
+    Cli.application_names := "iliad" :: !Cli.application_names;
+  if iliad_pro && not cfir then
+    Cli.application_names := "pro" :: !Cli.application_names;
   {
-    nom_application = application_name;
     (* iliad, pro, (GP) *)
     annee_revenu = income_year;
     flg_correctif = not primitive_only;
     flg_iliad =
-      ((iliad_pro && not cfir) || application_name = "iliad")
+      ((iliad_pro && not cfir) || List.mem "iliad" !Cli.application_names)
       && not (Option.is_some batch);
-    flg_pro = (application_name = "pro" || iliad_pro) && not cfir;
+    flg_pro = (List.mem "pro" !Cli.application_names || iliad_pro) && not cfir;
     flg_cfir = cfir && not iliad_pro;
     flg_gcos = Option.is_some batch && (not iliad_pro) && not cfir;
     flg_tri_ebcdic = (match batch with Some 1 -> true | _ -> false);

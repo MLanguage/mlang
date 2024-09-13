@@ -556,6 +556,9 @@ and expand_instructions (const_map : const_context)
     Mast.instruction Pos.marked list =
   List.fold_left (expand_instruction const_map) [] (List.rev instrs)
 
+let has_active_apps_in apps =
+  StrMap.exists (fun a _ -> List.mem a !Cli.application_names) apps
+
 (** Eliminates constants and loops *)
 let proceed (p : Mast.program) : Mast.program =
   let _, expanded_prog =
@@ -584,7 +587,7 @@ let proceed (p : Mast.program) : Mast.program =
                       in
                       (const_map, prog_file)
                   | _ -> (const_map, source_item :: prog_file))
-              | Mast.Rule rule ->
+              | Mast.Rule rule when has_active_apps_in rule.rule_apps ->
                   let rule_tmp_vars =
                     StrMap.map
                       (fun (name, tsz) ->
@@ -599,7 +602,8 @@ let proceed (p : Mast.program) : Mast.program =
                   in
                   let prog_file = (Mast.Rule rule', pos_item) :: prog_file in
                   (const_map, prog_file)
-              | Mast.Verification verif ->
+              | Mast.Verification verif when has_active_apps_in verif.verif_apps
+                ->
                   let verif_conditions =
                     List.map
                       (fun (cond, cond_pos) ->
@@ -615,7 +619,7 @@ let proceed (p : Mast.program) : Mast.program =
                     (Mast.Verification verif', pos_item) :: prog_file
                   in
                   (const_map, prog_file)
-              | Mast.Target target ->
+              | Mast.Target target when has_active_apps_in target.target_apps ->
                   let target_tmp_vars =
                     StrMap.map
                       (fun (name, tsz) ->
@@ -631,6 +635,27 @@ let proceed (p : Mast.program) : Mast.program =
                   let prog_file =
                     (Mast.Target target', pos_item) :: prog_file
                   in
+                  (const_map, prog_file)
+              | Mast.Function target when has_active_apps_in target.target_apps
+                ->
+                  let target_tmp_vars =
+                    StrMap.map
+                      (fun (name, tsz) ->
+                        (name, expand_table_size const_map tsz))
+                      target.Mast.target_tmp_vars
+                  in
+                  let target_prog =
+                    expand_instructions const_map target.Mast.target_prog
+                  in
+                  let target' =
+                    { target with Mast.target_tmp_vars; Mast.target_prog }
+                  in
+                  let prog_file =
+                    (Mast.Function target', pos_item) :: prog_file
+                  in
+                  (const_map, prog_file)
+              | Mast.Rule _ | Mast.Verification _ | Mast.Target _
+              | Mast.Function _ ->
                   (const_map, prog_file)
               | _ -> (const_map, source_item :: prog_file))
             (const_map, []) source_file
