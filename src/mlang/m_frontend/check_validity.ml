@@ -17,30 +17,6 @@ type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
 module Err = struct
   let rov_to_str rov = match rov with Rule -> "rule" | Verif -> "verif"
 
-  let application_already_defined name old_pos pos =
-    let msg =
-      Format.asprintf "application %s already defined %a" name
-        Pos.format_position old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
-  let chaining_already_defined name old_pos pos =
-    let msg =
-      Format.asprintf "chaining %s already defined %a" name Pos.format_position
-        old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
-  let unknown_application pos =
-    Errors.raise_spanned_error "unknown application" pos
-
-  let application_already_specified old_pos pos =
-    let msg =
-      Format.asprintf "application already specified %a" Pos.format_position
-        old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
   let attribute_already_declared attr old_pos pos =
     let msg =
       Format.asprintf
@@ -196,9 +172,6 @@ module Err = struct
   let verif_domain_not_verifiable pos =
     Errors.raise_spanned_error "verif domain not verifiable" pos
 
-  let chaining_without_app pos =
-    Errors.raise_spanned_error "chaining without compatible application" pos
-
   let rov_already_defined rov rov_id old_pos pos =
     let msg =
       Format.asprintf "%s %d defined more than once: already defined %a"
@@ -322,12 +295,6 @@ module Err = struct
   let is_base_function fn pos =
     let msg = Format.sprintf "function %s already exist as base function" fn in
     Errors.raise_spanned_error msg pos
-
-  let unknown_app_cmdline app =
-    let msg =
-      Format.sprintf "unknown application on command line: \"%s\"" app
-    in
-    Errors.raise_error msg
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -369,7 +336,7 @@ type verif = {
 type program = {
   prog_prefix : string;
   prog_seq : int;
-  prog_app : StrSet.t;
+  prog_app : Pos.t StrMap.t;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
@@ -390,13 +357,6 @@ type program = {
   prog_main_target : string;
   prog_stats : Mir.stats;
 }
-
-let check_app_in_set apps apps_set =
-  StrSet.exists (fun a -> StrSet.mem a apps_set) apps
-
-let apps_map_of_set s =
-  let fold a m = StrMap.add a (a, Pos.no_pos) m in
-  StrSet.fold fold s StrMap.empty
 
 let get_target_file (pos : Pos.t) : string =
   let file = Pos.get_file pos |> Filename.basename in
@@ -446,8 +406,8 @@ let safe_prefix (p : Mast.program) : string =
 
 let empty_program (p : Mast.program) main_target =
   let prog_app =
-    let fold s a = StrSet.add a s in
-    List.fold_left fold StrSet.empty !Cli.application_names
+    let fold s a = StrMap.add a Pos.no_pos s in
+    List.fold_left fold StrMap.empty !Cli.application_names
   in
   {
     prog_prefix = safe_prefix p;
@@ -492,29 +452,17 @@ let get_seq (prog : program) : int * program =
   (seq, prog)
 
 let check_application (name : string) (pos : Pos.t) (prog : program) : program =
-  match StrMap.find_opt name prog.prog_apps with
-  | Some old_pos -> Err.application_already_defined name old_pos pos
-  | None ->
-      let prog_apps = StrMap.add name pos prog.prog_apps in
-      { prog with prog_apps }
+  (* Already checked during preprocessing *)
+  let prog_apps = StrMap.add name pos prog.prog_apps in
+  { prog with prog_apps }
 
 let check_chaining (name : string) (pos : Pos.t)
     (m_apps : string Pos.marked list) (prog : program) : program =
-  (match StrMap.find_opt name prog.prog_chainings with
-  | Some { chain_name = _, old_pos; _ } ->
-      Err.chaining_already_defined name old_pos pos
-  | None -> ());
+  (* Already checked during preprocessing *)
   let chain_name = (name, pos) in
   let chain_apps =
     List.fold_left
-      (fun apps (app, app_pos) ->
-        (match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> ());
-        (match StrMap.find_opt app apps with
-        | Some old_pos -> Err.application_already_specified old_pos app_pos
-        | None -> ());
-        StrMap.add app app_pos apps)
+      (fun apps (app, app_pos) -> StrMap.add app app_pos apps)
       StrMap.empty m_apps
   in
   let chain_rules = IntMap.empty in
@@ -1673,13 +1621,10 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
       Err.target_already_declared tname old_pos tpos
   | None -> ());
   let target_file = Some (get_target_file tpos) in
-  let target_apps = t.target_apps in
-  StrMap.iter
-    (fun _ (app, app_pos) ->
-      match StrMap.find_opt app prog.prog_apps with
-      | None -> Err.unknown_application app_pos
-      | Some _ -> ())
-    target_apps;
+  let target_apps =
+    (* Already checked during preprocessing *)
+    t.target_apps
+  in
   let target, prog =
     let target_args = t.target_args in
     List.iter
@@ -1777,12 +1722,8 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   let id, id_pos = r.Mast.rule_number in
   let rule_id = (id, id_pos) in
   let rule_apps =
-    StrMap.fold
-      (fun _ (app, app_pos) rule_apps ->
-        match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> StrMap.add app app_pos rule_apps)
-      r.Mast.rule_apps StrMap.empty
+    (* Already checked during preprocessing *)
+    StrMap.map (function _, pos -> pos) r.Mast.rule_apps
   in
   let rdom_id =
     Com.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
@@ -1796,33 +1737,18 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
     (rule_domain, rid_pos)
   in
-  let rule_app_set =
-    StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
-  in
   let rule_chain, prog_chainings =
     match r.Mast.rule_chaining with
     | None -> (None, prog.prog_chainings)
-    | Some (ch_name, ch_pos) -> (
-        match StrMap.find_opt ch_name prog.prog_chainings with
-        | None -> Err.unknown_chaining ch_pos
-        | Some chain ->
-            let app_set =
-              StrMap.fold
-                (fun a _ set -> StrSet.add a set)
-                chain.chain_apps StrSet.empty
-            in
-            if StrSet.cardinal (StrSet.inter app_set rule_app_set) = 0 then
-              Err.chaining_without_app ch_pos
-            else if check_app_in_set prog.prog_app app_set then
-              let chain_rules =
-                IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
-              in
-              let chain = { chain with chain_rules } in
-              let prog_chainings =
-                StrMap.add ch_name chain prog.prog_chainings
-              in
-              (Some ch_name, prog_chainings)
-            else (None, prog.prog_chainings))
+    | Some (ch_name, _) ->
+        (* Already checked during preprocessing *)
+        let chain = StrMap.find ch_name prog.prog_chainings in
+        let chain_rules =
+          IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
+        in
+        let chain = { chain with chain_rules } in
+        let prog_chainings = StrMap.add ch_name chain prog.prog_chainings in
+        (Some ch_name, prog_chainings)
   in
   let rule_tmp_vars = r.Mast.rule_tmp_vars in
   StrMap.iter
@@ -1885,7 +1811,7 @@ let convert_rules (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file;
-              target_apps = apps_map_of_set prog.prog_app;
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = rule.rule_tmp_vars;
@@ -2033,7 +1959,7 @@ let complete_rule_domains (prog : program) : program =
               {
                 target_name = (tname, Pos.no_pos);
                 target_file = None;
-                target_apps = apps_map_of_set prog.prog_app;
+                target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                 target_args = [];
                 target_result = None;
                 target_tmp_vars = StrMap.empty;
@@ -2132,7 +2058,7 @@ let complete_chainings (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file = None;
-              target_apps = apps_map_of_set prog.prog_app;
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = StrMap.empty;
@@ -2149,12 +2075,8 @@ let complete_chainings (prog : program) : program =
 
 let check_verif (v : Mast.verification) (prog : program) : program =
   let verif_apps =
-    StrMap.fold
-      (fun _ (app, app_pos) verif_apps ->
-        match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> StrMap.add app app_pos verif_apps)
-      v.Mast.verif_apps StrMap.empty
+    (* Already checked during preprocessing *)
+    StrMap.map (function _, pos -> pos) v.Mast.verif_apps
   in
   let vdom_id =
     Com.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
@@ -2264,7 +2186,7 @@ let convert_verifs (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file;
-              target_apps = apps_map_of_set prog.prog_app;
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = StrMap.empty;
@@ -2508,7 +2430,7 @@ let complete_verif_calls (prog : program) : program =
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
-                  target_apps = apps_map_of_set prog.prog_app;
+                  target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];
                   target_result = None;
                   target_tmp_vars = StrMap.empty;
@@ -2541,7 +2463,7 @@ let complete_verif_calls (prog : program) : program =
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
-                  target_apps = apps_map_of_set prog.prog_app;
+                  target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];
                   target_result = None;
                   target_tmp_vars = StrMap.empty;
@@ -2585,10 +2507,6 @@ let proceed (p : Mast.program) (main_target : string) : program =
       (empty_program p main_target)
       p
   in
-  let iter a =
-    if not (StrMap.mem a prog.prog_apps) then Err.unknown_app_cmdline a
-  in
-  List.iter iter !Cli.application_names;
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
   |> complete_verif_calls |> complete_vars

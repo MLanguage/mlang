@@ -51,7 +51,7 @@ type verif = {
 type program = {
   prog_prefix : string;
   prog_seq : int;
-  prog_app : StrSet.t;
+  prog_app : Pos.t StrMap.t;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;

@@ -74,7 +74,181 @@ module Err = struct
 
   let constant_forbidden_as_arg pos =
     Errors.raise_spanned_error "constant forbidden as argument" pos
+
+  let unknown_application app pos =
+    let msg = Format.sprintf "application \"%s\" is unknown" app in
+    Errors.raise_spanned_error msg pos
+
+  let unknown_app_on_cmdline app =
+    let msg = Format.sprintf "unknown application \"%s\" on command line" app in
+    Errors.raise_error msg
+
+  let application_already_defined app old_pos pos =
+    let msg =
+      Format.asprintf "application %s already defined %a" app
+        Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let chaining_already_defined ch old_pos pos =
+    let msg =
+      Format.asprintf "chaining %s already defined %a" ch Pos.format_position
+        old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let unknown_chaining ch pos =
+    let msg = Format.sprintf "chaining \"%s\" is unknown" ch in
+    Errors.raise_spanned_error msg pos
 end
+
+(** Eliminates unselected applications *)
+
+type apps_env = {
+  selected_apps : unit StrMap.t;
+  apps : (bool * Pos.t) StrMap.t;
+  chains : (bool * Pos.t) StrMap.t;
+}
+
+let empty_apps_env (cli_apps : string list) : apps_env =
+  let selected_apps =
+    let add_app m a = StrMap.add a () m in
+    List.fold_left add_app StrMap.empty cli_apps
+  in
+  { selected_apps; apps = StrMap.empty; chains = StrMap.empty }
+
+let get_selected_apps (apps_env : apps_env)
+    (apps : Mast.application Pos.marked StrMap.t) :
+    Mast.application Pos.marked StrMap.t =
+  let sel_app _ (a, apos) apps =
+    match StrMap.find_opt a apps_env.apps with
+    | Some (b, _) -> if b then StrMap.add a (a, apos) apps else apps
+    | None -> Err.unknown_application a apos
+  in
+  StrMap.fold sel_app apps StrMap.empty
+
+let get_selected_apps_list (apps_env : apps_env)
+    (apps : Mast.application Pos.marked list) : Mast.application Pos.marked list
+    =
+  let sel_app apps (a, apos) =
+    match StrMap.find_opt a apps_env.apps with
+    | Some (b, _) -> if b then (a, apos) :: apps else apps
+    | None -> Err.unknown_application a apos
+  in
+  List.rev (List.fold_left sel_app [] apps)
+
+(** Eliminates constants and loops *)
+let check_apps_on_cmdline (apps_env : apps_env) : unit =
+  let iter a _ =
+    match StrMap.find_opt a apps_env.apps with
+    | Some _ -> ()
+    | None -> Err.unknown_app_on_cmdline a
+  in
+  StrMap.iter iter apps_env.selected_apps
+
+let elim_unselected_apps (p : Mast.program) : Mast.program =
+  let apps_env, prog =
+    List.fold_left
+      (fun (apps_env, prog) source_file ->
+        let apps_env, prog_file =
+          List.fold_left
+            (fun (apps_env, prog_file) source_item ->
+              let item, pos_item = source_item in
+              match item with
+              | Mast.Application (app, pos) -> (
+                  match StrMap.find_opt app apps_env.apps with
+                  | Some (_, old_pos) ->
+                      Err.application_already_defined app old_pos pos
+                  | None ->
+                      let is_sel = StrMap.mem app apps_env.selected_apps in
+                      let apps = StrMap.add app (is_sel, pos) apps_env.apps in
+                      let apps_env = { apps_env with apps } in
+                      let prog_file =
+                        if is_sel then source_item :: prog_file else prog_file
+                      in
+                      (apps_env, prog_file))
+              | Mast.Chaining (mch, mal) -> (
+                  let ch, pos = mch in
+                  match StrMap.find_opt ch apps_env.chains with
+                  | Some (_, old_pos) ->
+                      Err.chaining_already_defined ch old_pos pos
+                  | None ->
+                      let sel_apps = get_selected_apps_list apps_env mal in
+                      let is_sel = sel_apps <> [] in
+                      let chains =
+                        StrMap.add ch (is_sel, pos) apps_env.chains
+                      in
+                      let apps_env = { apps_env with chains } in
+                      let prog_file =
+                        if is_sel then
+                          let new_item =
+                            (Mast.Chaining (mch, sel_apps), pos_item)
+                          in
+                          new_item :: prog_file
+                        else prog_file
+                      in
+                      (apps_env, prog_file))
+              | Mast.Rule rule ->
+                  let rule_apps = get_selected_apps apps_env rule.rule_apps in
+                  if StrMap.is_empty rule_apps then (apps_env, prog_file)
+                  else
+                    let rule_chaining =
+                      match rule.rule_chaining with
+                      | None -> None
+                      | Some (ch, chpos) -> (
+                          match StrMap.find_opt ch apps_env.chains with
+                          | Some (b, _) -> if b then Some (ch, chpos) else None
+                          | None -> Err.unknown_chaining ch chpos)
+                    in
+                    let rule =
+                      { rule with Mast.rule_apps; Mast.rule_chaining }
+                    in
+                    let prog_file = (Mast.Rule rule, pos_item) :: prog_file in
+                    (apps_env, prog_file)
+              | Mast.Verification verif ->
+                  let verif_apps =
+                    get_selected_apps apps_env verif.verif_apps
+                  in
+                  if StrMap.is_empty verif_apps then (apps_env, prog_file)
+                  else
+                    let verif = { verif with Mast.verif_apps } in
+                    let prog_file =
+                      (Mast.Verification verif, pos_item) :: prog_file
+                    in
+                    (apps_env, prog_file)
+              | Mast.Target target ->
+                  let target_apps =
+                    get_selected_apps apps_env target.target_apps
+                  in
+                  if StrMap.is_empty target_apps then (apps_env, prog_file)
+                  else
+                    let target = { target with Mast.target_apps } in
+                    let prog_file =
+                      (Mast.Target target, pos_item) :: prog_file
+                    in
+                    (apps_env, prog_file)
+              | Mast.Function target ->
+                  let target_apps =
+                    get_selected_apps apps_env target.target_apps
+                  in
+                  if StrMap.is_empty target_apps then (apps_env, prog_file)
+                  else
+                    let target = { target with Mast.target_apps } in
+                    let prog_file =
+                      (Mast.Function target, pos_item) :: prog_file
+                    in
+                    (apps_env, prog_file)
+              | VariableDecl _ | Error _ | Output _ | Func | VarCatDecl _
+              | RuleDomDecl _ | VerifDomDecl _ ->
+                  (apps_env, source_item :: prog_file))
+            (apps_env, []) source_file
+        in
+        (apps_env, List.rev prog_file :: prog))
+      (empty_apps_env !Cli.application_names, [])
+      p
+  in
+  check_apps_on_cmdline apps_env;
+  List.rev prog
 
 module ConstMap = StrMap
 
@@ -556,11 +730,7 @@ and expand_instructions (const_map : const_context)
     Mast.instruction Pos.marked list =
   List.fold_left (expand_instruction const_map) [] (List.rev instrs)
 
-let has_active_apps_in apps =
-  StrMap.exists (fun a _ -> List.mem a !Cli.application_names) apps
-
-(** Eliminates constants and loops *)
-let proceed (p : Mast.program) : Mast.program =
+let elim_constants_and_loops (p : Mast.program) : Mast.program =
   let _, expanded_prog =
     List.fold_left
       (fun (const_map, prog) source_file ->
@@ -587,7 +757,7 @@ let proceed (p : Mast.program) : Mast.program =
                       in
                       (const_map, prog_file)
                   | _ -> (const_map, source_item :: prog_file))
-              | Mast.Rule rule when has_active_apps_in rule.rule_apps ->
+              | Mast.Rule rule ->
                   let rule_tmp_vars =
                     StrMap.map
                       (fun (name, tsz) ->
@@ -602,8 +772,7 @@ let proceed (p : Mast.program) : Mast.program =
                   in
                   let prog_file = (Mast.Rule rule', pos_item) :: prog_file in
                   (const_map, prog_file)
-              | Mast.Verification verif when has_active_apps_in verif.verif_apps
-                ->
+              | Mast.Verification verif ->
                   let verif_conditions =
                     List.map
                       (fun (cond, cond_pos) ->
@@ -619,7 +788,7 @@ let proceed (p : Mast.program) : Mast.program =
                     (Mast.Verification verif', pos_item) :: prog_file
                   in
                   (const_map, prog_file)
-              | Mast.Target target when has_active_apps_in target.target_apps ->
+              | Mast.Target target ->
                   let target_tmp_vars =
                     StrMap.map
                       (fun (name, tsz) ->
@@ -636,8 +805,7 @@ let proceed (p : Mast.program) : Mast.program =
                     (Mast.Target target', pos_item) :: prog_file
                   in
                   (const_map, prog_file)
-              | Mast.Function target when has_active_apps_in target.target_apps
-                ->
+              | Mast.Function target ->
                   let target_tmp_vars =
                     StrMap.map
                       (fun (name, tsz) ->
@@ -654,9 +822,6 @@ let proceed (p : Mast.program) : Mast.program =
                     (Mast.Function target', pos_item) :: prog_file
                   in
                   (const_map, prog_file)
-              | Mast.Rule _ | Mast.Verification _ | Mast.Target _
-              | Mast.Function _ ->
-                  (const_map, prog_file)
               | _ -> (const_map, source_item :: prog_file))
             (const_map, []) source_file
         in
@@ -664,6 +829,10 @@ let proceed (p : Mast.program) : Mast.program =
       (ConstMap.empty, []) p
   in
   List.rev expanded_prog
+
+(** Main preprocessor function *)
+let proceed (p : Mast.program) : Mast.program =
+  p |> elim_unselected_apps |> elim_constants_and_loops
 
 (* Screugneugneuh ! *)
 let _ = ignore (format_loop_context, format_loop_domain)
