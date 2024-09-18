@@ -137,6 +137,16 @@ let get_selected_apps_list (apps_env : apps_env)
   in
   List.rev (List.fold_left sel_app [] apps)
 
+let get_selected_chains (apps_env : apps_env)
+    (chains : Mast.chaining Pos.marked StrMap.t) :
+    Mast.chaining Pos.marked StrMap.t =
+  let sel_chain _ (ch, chpos) chains =
+    match StrMap.find_opt ch apps_env.chains with
+    | Some (b, _) -> if b then StrMap.add ch (ch, chpos) chains else chains
+    | None -> Err.unknown_chaining ch chpos
+  in
+  StrMap.fold sel_chain chains StrMap.empty
+
 (** Eliminates constants and loops *)
 let check_apps_on_cmdline (apps_env : apps_env) : unit =
   let iter a _ =
@@ -192,16 +202,11 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   let rule_apps = get_selected_apps apps_env rule.rule_apps in
                   if StrMap.is_empty rule_apps then (apps_env, prog_file)
                   else
-                    let rule_chaining =
-                      match rule.rule_chaining with
-                      | None -> None
-                      | Some (ch, chpos) -> (
-                          match StrMap.find_opt ch apps_env.chains with
-                          | Some (b, _) -> if b then Some (ch, chpos) else None
-                          | None -> Err.unknown_chaining ch chpos)
+                    let rule_chainings =
+                      get_selected_chains apps_env rule.rule_chainings
                     in
                     let rule =
-                      { rule with Mast.rule_apps; Mast.rule_chaining }
+                      { rule with Mast.rule_apps; Mast.rule_chainings }
                     in
                     let prog_file = (Mast.Rule rule, pos_item) :: prog_file in
                     (apps_env, prog_file)

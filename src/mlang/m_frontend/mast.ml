@@ -89,7 +89,7 @@ type rule = {
   rule_number : int Pos.marked;
   rule_tag_names : string Pos.marked list Pos.marked;
   rule_apps : application Pos.marked StrMap.t;
-  rule_chaining : chaining Pos.marked option;
+  rule_chainings : chaining Pos.marked StrMap.t;
   rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
   rule_formulaes : instruction Pos.marked list;
       (** A rule can contain many variable definitions *)

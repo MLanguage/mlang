@@ -311,7 +311,7 @@ type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
-  rule_chain : string option;
+  rule_chains : Pos.t StrMap.t;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
@@ -1737,18 +1737,19 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
     (rule_domain, rid_pos)
   in
-  let rule_chain, prog_chainings =
-    match r.Mast.rule_chaining with
-    | None -> (None, prog.prog_chainings)
-    | Some (ch_name, _) ->
-        (* Already checked during preprocessing *)
-        let chain = StrMap.find ch_name prog.prog_chainings in
-        let chain_rules =
-          IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
-        in
-        let chain = { chain with chain_rules } in
-        let prog_chainings = StrMap.add ch_name chain prog.prog_chainings in
-        (Some ch_name, prog_chainings)
+  let rule_chains, prog_chainings =
+    let fold _ (ch, chpos) (rule_chains, prog_chainings) =
+      (* Already checked during preprocessing *)
+      let chain = StrMap.find ch prog.prog_chainings in
+      let chain_rules =
+        IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
+      in
+      let chain = { chain with chain_rules } in
+      let rule_chains = StrMap.add ch chpos rule_chains in
+      let prog_chainings = StrMap.add ch chain prog_chainings in
+      (rule_chains, prog_chainings)
+    in
+    StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
   let rule_tmp_vars = r.Mast.rule_tmp_vars in
   StrMap.iter
@@ -1782,7 +1783,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
       rule_id;
       rule_apps;
       rule_domain;
-      rule_chain;
+      rule_chains;
       rule_tmp_vars;
       rule_instrs;
       rule_in_vars;

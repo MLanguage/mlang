@@ -26,7 +26,7 @@ type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
-  rule_chain : string option;
+  rule_chains : Pos.t StrMap.t;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;

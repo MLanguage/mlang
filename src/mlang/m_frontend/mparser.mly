@@ -410,8 +410,8 @@ rule_etc:
           "this rule doesn't have an execution number"
           (Pos.get_position num)
     in
-    let rule_apps, rule_chaining, rule_tmp_vars =
-      let rec aux apps_opt ch_opt vars_opt = function
+    let rule_apps, rule_chainings, rule_tmp_vars =
+      let rec aux apps_opt chs_opt vars_opt = function
       | (`Applications apps', pos) :: h ->
           let apps_opt' =
             match apps_opt with
@@ -423,20 +423,19 @@ rule_etc:
                     Pos.format_position old_pos)
                   pos
           in
-          aux apps_opt' ch_opt vars_opt h
-      | (`Chaining ch', pos) :: h ->
-          let ch_opt' =
-            match ch_opt with
-            | None -> Some ch'
-            | Some ch ->
+          aux apps_opt' chs_opt vars_opt h
+      | (`Chainings chs', pos) :: h ->
+          let chs_opt' =
+            match chs_opt with
+            | None -> Some (chs', pos)
+            | Some (_, old_pos) ->
                 Errors.raise_spanned_error
                   (Format.asprintf
-                    "this rule already belong to chaining %s %a"
-                    (Pos.unmark ch)
-                    Pos.format_position (Pos.get_position ch))
+                    "chaining list already declared %a"
+                    Pos.format_position old_pos)
                   pos
           in
-          aux apps_opt ch_opt' vars_opt h
+          aux apps_opt chs_opt' vars_opt h
       | (`TmpVars vars', pos) :: h ->
           let vars_opt' =
             match vars_opt with
@@ -448,7 +447,7 @@ rule_etc:
                     Pos.format_position old_pos)
                   pos
           in
-          aux apps_opt ch_opt vars_opt' h
+          aux apps_opt chs_opt vars_opt' h
       | [] ->
           let apps =
             match apps_opt with
@@ -471,6 +470,24 @@ rule_etc:
                 "this rule doesn't belong to an application"
                 (Pos.get_position num)
           in
+          let chs =
+            match chs_opt with
+            | Some (chs, _) ->
+                List.fold_left
+                  (fun res (ch, pos) ->
+                    match StrMap.find_opt ch res with
+                    | Some (_, old_pos) ->
+                        let msg =
+                          Format.asprintf "chaining %s already declared %a"
+                            ch
+                            Pos.format_position old_pos
+                        in
+                        Errors.raise_spanned_error msg pos
+                    | None -> StrMap.add ch (ch, pos) res)
+                  StrMap.empty
+                  chs
+            | None -> StrMap.empty
+          in
           let vars =
             List.fold_left
               (fun res (vnm, vt) ->
@@ -488,7 +505,7 @@ rule_etc:
               StrMap.empty
               (match vars_opt with None -> [] | Some (l, _) -> l)
           in
-          apps, ch_opt, vars
+          apps, chs, vars
       in
       aux None None None header
     in
@@ -497,7 +514,7 @@ rule_etc:
       rule_number;
       rule_tag_names;
       rule_apps;
-      rule_chaining;
+      rule_chainings;
       rule_tmp_vars;
       rule_formulaes;
     } in
@@ -506,7 +523,7 @@ rule_etc:
 
 rule_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
-| CHAINING COLON ch = with_pos(SYMBOL) SEMICOLON { `Chaining ch }
+| CHAINING COLON chs = symbol_enumeration SEMICOLON { `Chainings chs }
 | VARIABLE TEMPORARY COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { `TmpVars tmp_vars }
