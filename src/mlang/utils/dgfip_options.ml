@@ -169,18 +169,15 @@ let handler (income_year : int) (iliad_pro : bool) (cfir : bool)
     (optim_min_max : bool) (register : bool) (short : bool)
     (output_labels : bool) (debug : bool) (nb_debug_c : int) (trace : bool)
     (ticket : bool) (colored_output : bool) (cross_references : bool) : flags =
-  if iliad_pro && (not cfir) && not (Option.is_some batch) then
-    Cli.application_names := "iliad" :: !Cli.application_names;
-  if iliad_pro && not cfir then
-    Cli.application_names := "pro" :: !Cli.application_names;
+  let has_iliad = List.mem "iliad" !Cli.application_names in
+  let has_pro = List.mem "pro" !Cli.application_names in
   {
     (* iliad, pro, (GP) *)
     annee_revenu = income_year;
     flg_correctif = not primitive_only;
     flg_iliad =
-      ((iliad_pro && not cfir) || List.mem "iliad" !Cli.application_names)
-      && not (Option.is_some batch);
-    flg_pro = (List.mem "pro" !Cli.application_names || iliad_pro) && not cfir;
+      ((iliad_pro && not cfir) || has_iliad) && not (Option.is_some batch);
+    flg_pro = (has_pro || iliad_pro) && not cfir;
     flg_cfir = cfir && not iliad_pro;
     flg_gcos = Option.is_some batch && (not iliad_pro) && not cfir;
     flg_tri_ebcdic = (match batch with Some 1 -> true | _ -> false);
