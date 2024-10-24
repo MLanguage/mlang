@@ -19,7 +19,7 @@ DGFIP_TARGET_FLAGS?=-g,-O,-k4
 # -m : millésime de calculette compilé (année des revenus taxés)
 # -X : génération de fonctions d'extraction globale dans l'interface,
 #      bouclant sur la table des variables restituables (IN_init_extraction).
-DGFIP_COMMON_FLAGS=-Ailiad,-m$(YEAR),-X
+DGFIP_COMMON_FLAGS=-m$(YEAR),-X
 
 MLANG_DGFIP=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
 
