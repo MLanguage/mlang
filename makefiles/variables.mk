@@ -36,6 +36,7 @@ MLANG_BIN=dune exec $(ROOT_DIR)/_build/default/src/main.exe --
 
 PRECISION?=double
 MLANG_DEFAULT_OPTS=\
+ -A iliad\
  --display_time --debug\
  --precision $(PRECISION)
 

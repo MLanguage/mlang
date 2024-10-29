@@ -26,7 +26,7 @@ type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
-  rule_chain : string option;
+  rule_chains : Pos.t StrMap.t;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
@@ -51,7 +51,7 @@ type verif = {
 type program = {
   prog_prefix : string;
   prog_seq : int;
-  prog_app : string;
+  prog_app : Pos.t StrMap.t;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;

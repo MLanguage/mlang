@@ -17,30 +17,6 @@ type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
 module Err = struct
   let rov_to_str rov = match rov with Rule -> "rule" | Verif -> "verif"
 
-  let application_already_defined name old_pos pos =
-    let msg =
-      Format.asprintf "application %s already defined %a" name
-        Pos.format_position old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
-  let chaining_already_defined name old_pos pos =
-    let msg =
-      Format.asprintf "chaining %s already defined %a" name Pos.format_position
-        old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
-  let unknown_application pos =
-    Errors.raise_spanned_error "unknown application" pos
-
-  let application_already_specified old_pos pos =
-    let msg =
-      Format.asprintf "application already specified %a" Pos.format_position
-        old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
   let attribute_already_declared attr old_pos pos =
     let msg =
       Format.asprintf
@@ -196,9 +172,6 @@ module Err = struct
   let verif_domain_not_verifiable pos =
     Errors.raise_spanned_error "verif domain not verifiable" pos
 
-  let chaining_without_app pos =
-    Errors.raise_spanned_error "chaining without compatible application" pos
-
   let rov_already_defined rov rov_id old_pos pos =
     let msg =
       Format.asprintf "%s %d defined more than once: already defined %a"
@@ -338,7 +311,7 @@ type rule = {
   rule_id : int Pos.marked;
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
-  rule_chain : string option;
+  rule_chains : Pos.t StrMap.t;
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
@@ -363,7 +336,7 @@ type verif = {
 type program = {
   prog_prefix : string;
   prog_seq : int;
-  prog_app : string;
+  prog_app : Pos.t StrMap.t;
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
@@ -431,7 +404,11 @@ let safe_prefix (p : Mast.program) : string =
   in
   make_prefix sorted_names
 
-let empty_program (p : Mast.program) prog_app main_target =
+let empty_program (p : Mast.program) main_target =
+  let prog_app =
+    let fold s a = StrMap.add a Pos.no_pos s in
+    List.fold_left fold StrMap.empty !Cli.application_names
+  in
   {
     prog_prefix = safe_prefix p;
     prog_seq = 0;
@@ -475,29 +452,17 @@ let get_seq (prog : program) : int * program =
   (seq, prog)
 
 let check_application (name : string) (pos : Pos.t) (prog : program) : program =
-  match StrMap.find_opt name prog.prog_apps with
-  | Some old_pos -> Err.application_already_defined name old_pos pos
-  | None ->
-      let prog_apps = StrMap.add name pos prog.prog_apps in
-      { prog with prog_apps }
+  (* Already checked during preprocessing *)
+  let prog_apps = StrMap.add name pos prog.prog_apps in
+  { prog with prog_apps }
 
 let check_chaining (name : string) (pos : Pos.t)
     (m_apps : string Pos.marked list) (prog : program) : program =
-  (match StrMap.find_opt name prog.prog_chainings with
-  | Some { chain_name = _, old_pos; _ } ->
-      Err.chaining_already_defined name old_pos pos
-  | None -> ());
+  (* Already checked during preprocessing *)
   let chain_name = (name, pos) in
   let chain_apps =
     List.fold_left
-      (fun apps (app, app_pos) ->
-        (match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> ());
-        (match StrMap.find_opt app apps with
-        | Some old_pos -> Err.application_already_specified old_pos app_pos
-        | None -> ());
-        StrMap.add app app_pos apps)
+      (fun apps (app, app_pos) -> StrMap.add app app_pos apps)
       StrMap.empty m_apps
   in
   let chain_rules = IntMap.empty in
@@ -1656,117 +1621,95 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
       Err.target_already_declared tname old_pos tpos
   | None -> ());
   let target_file = Some (get_target_file tpos) in
-  let target_apps = t.target_apps in
-  StrMap.iter
-    (fun _ (app, app_pos) ->
-      match StrMap.find_opt app prog.prog_apps with
-      | None -> Err.unknown_application app_pos
-      | Some _ -> ())
-    target_apps;
+  let target_apps =
+    (* Already checked during preprocessing *)
+    t.target_apps
+  in
   let target, prog =
-    if StrMap.mem prog.prog_app target_apps then (
-      let target_args = t.target_args in
-      List.iter
-        (fun (vn, vpos) ->
-          match StrMap.find_opt vn prog.prog_vars with
-          | Some Com.Var.{ name = _, old_pos; _ } ->
-              Err.variable_already_declared vn old_pos vpos
-          | None -> ())
+    let target_args = t.target_args in
+    List.iter
+      (fun (vn, vpos) ->
+        match StrMap.find_opt vn prog.prog_vars with
+        | Some Com.Var.{ name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      target_args;
+    let target_tmp_vars = t.target_tmp_vars in
+    StrMap.iter
+      (fun _ ((vn, vpos), _) ->
+        match StrMap.find_opt vn prog.prog_vars with
+        | Some Com.Var.{ name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      target_tmp_vars;
+    List.iter
+      (fun (vn, vpos) ->
+        match StrMap.find_opt vn target_tmp_vars with
+        | Some ((_, old_pos), _) ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+      target_args;
+    let target_result = t.target_result in
+    (match target_result with
+    | Some (vn, vpos) -> (
+        if not is_function then Err.target_must_not_have_a_result tname tpos;
+        (match StrMap.find_opt vn prog.prog_vars with
+        | Some { name = _, old_pos; _ } ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ());
+        (match List.find_opt (fun (va, _) -> vn = va) target_args with
+        | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
+        | None -> ());
+        match StrMap.find_opt vn target_tmp_vars with
+        | Some ((_, old_pos), _) ->
+            Err.variable_already_declared vn old_pos vpos
+        | None -> ())
+    | None -> if is_function then Err.function_result_missing tname tpos);
+    let tmp_vars =
+      StrMap.map
+        (fun (var, size) ->
+          let vpos = Pos.get_position var in
+          let sz =
+            match size with
+            | None -> None
+            | Some (Mast.LiteralSize i, _) -> Some i
+            | Some (Mast.SymbolSize _, _) -> assert false
+          in
+          (sz, vpos))
+        target_tmp_vars
+    in
+    let ref_vars =
+      List.fold_left
+        (fun res (vn, vpos) -> StrMap.add vn vpos res)
+        StrMap.empty target_args
+    in
+    let res_var = target_result in
+    let prog, target_prog =
+      let env = { prog; tmp_vars; ref_vars; res_var } in
+      let prog, target_prog, _in_vars, out_vars =
+        check_instructions t.target_prog is_function env
+      in
+      (if is_function then
+       let vr = Pos.unmark (Option.get target_result) in
+       let bad_out_vars = StrSet.remove vr out_vars in
+       if StrSet.card bad_out_vars > 0 then
+         let vn = StrSet.min_elt bad_out_vars in
+         Err.forbidden_out_var_in_function vn tname tpos);
+      (prog, target_prog)
+    in
+    let target =
+      {
+        t with
+        target_name;
+        target_file;
+        target_apps;
         target_args;
-      let target_tmp_vars = t.target_tmp_vars in
-      StrMap.iter
-        (fun _ ((vn, vpos), _) ->
-          match StrMap.find_opt vn prog.prog_vars with
-          | Some Com.Var.{ name = _, old_pos; _ } ->
-              Err.variable_already_declared vn old_pos vpos
-          | None -> ())
+        target_result;
         target_tmp_vars;
-      List.iter
-        (fun (vn, vpos) ->
-          match StrMap.find_opt vn target_tmp_vars with
-          | Some ((_, old_pos), _) ->
-              Err.variable_already_declared vn old_pos vpos
-          | None -> ())
-        target_args;
-      let target_result = t.target_result in
-      (match target_result with
-      | Some (vn, vpos) -> (
-          if not is_function then Err.target_must_not_have_a_result tname tpos;
-          (match StrMap.find_opt vn prog.prog_vars with
-          | Some { name = _, old_pos; _ } ->
-              Err.variable_already_declared vn old_pos vpos
-          | None -> ());
-          (match List.find_opt (fun (va, _) -> vn = va) target_args with
-          | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
-          | None -> ());
-          match StrMap.find_opt vn target_tmp_vars with
-          | Some ((_, old_pos), _) ->
-              Err.variable_already_declared vn old_pos vpos
-          | None -> ())
-      | None -> if is_function then Err.function_result_missing tname tpos);
-      let tmp_vars =
-        StrMap.map
-          (fun (var, size) ->
-            let vpos = Pos.get_position var in
-            let sz =
-              match size with
-              | None -> None
-              | Some (Mast.LiteralSize i, _) -> Some i
-              | Some (Mast.SymbolSize _, _) -> assert false
-            in
-            (sz, vpos))
-          target_tmp_vars
-      in
-      let ref_vars =
-        List.fold_left
-          (fun res (vn, vpos) -> StrMap.add vn vpos res)
-          StrMap.empty target_args
-      in
-      let res_var = target_result in
-      let prog, target_prog =
-        let env = { prog; tmp_vars; ref_vars; res_var } in
-        let prog, target_prog, _in_vars, out_vars =
-          check_instructions t.target_prog is_function env
-        in
-        (if is_function then
-         let vr = Pos.unmark (Option.get target_result) in
-         let bad_out_vars = StrSet.remove vr out_vars in
-         if StrSet.card bad_out_vars > 0 then
-           let vn = StrSet.min_elt bad_out_vars in
-           Err.forbidden_out_var_in_function vn tname tpos);
-        (prog, target_prog)
-      in
-      let target =
-        {
-          t with
-          target_name;
-          target_file;
-          target_apps;
-          target_args;
-          target_result;
-          target_tmp_vars;
-          target_prog;
-        }
-      in
-      (target, prog))
-    else
-      let target_args = [] in
-      let target_result = Option.map (Pos.same_pos_as "") t.target_result in
-      let target_tmp_vars = StrMap.empty in
-      let target_prog = [] in
-      let target =
-        {
-          t with
-          target_name;
-          target_file;
-          target_apps;
-          target_args;
-          target_result;
-          target_tmp_vars;
-          target_prog;
-        }
-      in
-      (target, prog)
+        target_prog;
+      }
+    in
+    (target, prog)
   in
   if is_function then
     let prog_functions = StrMap.add tname target prog.prog_functions in
@@ -1779,103 +1722,82 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   let id, id_pos = r.Mast.rule_number in
   let rule_id = (id, id_pos) in
   let rule_apps =
-    StrMap.fold
-      (fun _ (app, app_pos) rule_apps ->
-        match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> StrMap.add app app_pos rule_apps)
-      r.Mast.rule_apps StrMap.empty
+    (* Already checked during preprocessing *)
+    StrMap.map (function _, pos -> pos) r.Mast.rule_apps
   in
-  if StrMap.mem prog.prog_app rule_apps then (
-    let rdom_id =
-      Com.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
+  let rdom_id =
+    Com.DomainId.from_marked_list (Pos.unmark r.Mast.rule_tag_names)
+  in
+  let rule_domain, rule_domain_pos =
+    let rid, rid_pos =
+      match Com.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
+      | Some m_rid -> m_rid
+      | None -> Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
     in
-    let rule_domain, rule_domain_pos =
-      let rid, rid_pos =
-        match Com.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
-        | Some m_rid -> m_rid
-        | None ->
-            Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
+    let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
+    (rule_domain, rid_pos)
+  in
+  let rule_chains, prog_chainings =
+    let fold _ (ch, chpos) (rule_chains, prog_chainings) =
+      (* Already checked during preprocessing *)
+      let chain = StrMap.find ch prog.prog_chainings in
+      let chain_rules =
+        IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
       in
-      let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
-      (rule_domain, rid_pos)
+      let chain = { chain with chain_rules } in
+      let rule_chains = StrMap.add ch chpos rule_chains in
+      let prog_chainings = StrMap.add ch chain prog_chainings in
+      (rule_chains, prog_chainings)
     in
-    let rule_app_set =
-      StrMap.fold (fun a _ set -> StrSet.add a set) rule_apps StrSet.empty
-    in
-    let rule_chain, prog_chainings =
-      match r.Mast.rule_chaining with
-      | None -> (None, prog.prog_chainings)
-      | Some (ch_name, ch_pos) -> (
-          match StrMap.find_opt ch_name prog.prog_chainings with
-          | None -> Err.unknown_chaining ch_pos
-          | Some chain ->
-              let app_set =
-                StrMap.fold
-                  (fun a _ set -> StrSet.add a set)
-                  chain.chain_apps StrSet.empty
-              in
-              if StrSet.cardinal (StrSet.inter app_set rule_app_set) = 0 then
-                Err.chaining_without_app ch_pos
-              else if StrSet.mem prog.prog_app app_set then
-                let chain_rules =
-                  IntMap.add id (rule_domain, rule_domain_pos) chain.chain_rules
-                in
-                let chain = { chain with chain_rules } in
-                let prog_chainings =
-                  StrMap.add ch_name chain prog.prog_chainings
-                in
-                (Some ch_name, prog_chainings)
-              else (None, prog.prog_chainings))
-    in
-    let rule_tmp_vars = r.Mast.rule_tmp_vars in
-    StrMap.iter
-      (fun _ ((vn, vpos), _) ->
-        match StrMap.find_opt vn prog.prog_vars with
-        | Some Com.Var.{ name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
+    StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
+  in
+  let rule_tmp_vars = r.Mast.rule_tmp_vars in
+  StrMap.iter
+    (fun _ ((vn, vpos), _) ->
+      match StrMap.find_opt vn prog.prog_vars with
+      | Some Com.Var.{ name = _, old_pos; _ } ->
+          Err.variable_already_declared vn old_pos vpos
+      | None -> ())
+    rule_tmp_vars;
+  let tmp_vars =
+    StrMap.map
+      (fun (var, size) ->
+        let vpos = Pos.get_position var in
+        let sz =
+          match size with
+          | None -> None
+          | Some (Mast.LiteralSize i, _) -> Some i
+          | Some (Mast.SymbolSize _, _) -> assert false
+        in
+        (sz, vpos))
+      rule_tmp_vars
+  in
+  let rule_instrs = r.Mast.rule_formulaes in
+  let prog, rule_instrs, rule_in_vars, rule_out_vars =
+    let env = { prog; tmp_vars; ref_vars = StrMap.empty; res_var = None } in
+    check_instructions rule_instrs true env
+  in
+  let rule_seq, prog = get_seq prog in
+  let rule =
+    {
+      rule_id;
+      rule_apps;
+      rule_domain;
+      rule_chains;
       rule_tmp_vars;
-    let tmp_vars =
-      StrMap.map
-        (fun (var, size) ->
-          let vpos = Pos.get_position var in
-          let sz =
-            match size with
-            | None -> None
-            | Some (Mast.LiteralSize i, _) -> Some i
-            | Some (Mast.SymbolSize _, _) -> assert false
-          in
-          (sz, vpos))
-        rule_tmp_vars
-    in
-    let rule_instrs = r.Mast.rule_formulaes in
-    let prog, rule_instrs, rule_in_vars, rule_out_vars =
-      let env = { prog; tmp_vars; ref_vars = StrMap.empty; res_var = None } in
-      check_instructions rule_instrs true env
-    in
-    let rule_seq, prog = get_seq prog in
-    let rule =
-      {
-        rule_id;
-        rule_apps;
-        rule_domain;
-        rule_chain;
-        rule_tmp_vars;
-        rule_instrs;
-        rule_in_vars;
-        rule_out_vars;
-        rule_seq;
-      }
-    in
-    (match IntMap.find_opt id prog.prog_rules with
-    | Some r ->
-        let rule_pos = Pos.get_position r.rule_id in
-        Err.rov_already_defined Rule id rule_pos id_pos
-    | None -> ());
-    let prog_rules = IntMap.add id rule prog.prog_rules in
-    { prog with prog_rules; prog_chainings })
-  else prog
+      rule_instrs;
+      rule_in_vars;
+      rule_out_vars;
+      rule_seq;
+    }
+  in
+  (match IntMap.find_opt id prog.prog_rules with
+  | Some r ->
+      let rule_pos = Pos.get_position r.rule_id in
+      Err.rov_already_defined Rule id rule_pos id_pos
+  | None -> ());
+  let prog_rules = IntMap.add id rule prog.prog_rules in
+  { prog with prog_rules; prog_chainings }
 
 let convert_rules (prog : program) : program =
   let prog_targets =
@@ -1890,7 +1812,7 @@ let convert_rules (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file;
-              target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = rule.rule_tmp_vars;
@@ -2038,8 +1960,7 @@ let complete_rule_domains (prog : program) : program =
               {
                 target_name = (tname, Pos.no_pos);
                 target_file = None;
-                target_apps =
-                  StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                 target_args = [];
                 target_result = None;
                 target_tmp_vars = StrMap.empty;
@@ -2138,7 +2059,7 @@ let complete_chainings (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file = None;
-              target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = StrMap.empty;
@@ -2155,97 +2076,91 @@ let complete_chainings (prog : program) : program =
 
 let check_verif (v : Mast.verification) (prog : program) : program =
   let verif_apps =
-    StrMap.fold
-      (fun _ (app, app_pos) verif_apps ->
-        match StrMap.find_opt app prog.prog_apps with
-        | None -> Err.unknown_application app_pos
-        | Some _ -> StrMap.add app app_pos verif_apps)
-      v.Mast.verif_apps StrMap.empty
+    (* Already checked during preprocessing *)
+    StrMap.map (function _, pos -> pos) v.Mast.verif_apps
   in
-  if StrMap.mem prog.prog_app verif_apps then
-    let vdom_id =
-      Com.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
+  let vdom_id =
+    Com.DomainId.from_marked_list (Pos.unmark v.Mast.verif_tag_names)
+  in
+  let verif_domain =
+    let vid =
+      match Com.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
+      | Some (vid, _) -> vid
+      | None ->
+          Err.unknown_domain Verif (Pos.get_position v.Mast.verif_tag_names)
     in
-    let verif_domain =
-      let vid =
-        match Com.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
-        | Some (vid, _) -> vid
-        | None ->
-            Err.unknown_domain Verif (Pos.get_position v.Mast.verif_tag_names)
-      in
-      Com.DomainIdMap.find vid prog.prog_vdoms
-    in
-    let prog_verifs, prog, _ =
-      List.fold_left
-        (fun (prog_verifs, prog, num) (cond, cond_pos) ->
-          let id, id_pos = v.Mast.verif_number in
-          let id = id + num in
-          let verif_id = (id, id_pos) in
-          let verif_expr = cond.Mast.verif_cond_expr in
-          let verif_error, verif_var = cond.Mast.verif_cond_error in
-          let err_name, err_pos = verif_error in
-          let verif_is_blocking =
-            match StrMap.find_opt err_name prog.prog_errors with
-            | None -> Err.unknown_error err_pos
-            | Some err -> (
-                match err.typ with Com.Error.Anomaly -> true | _ -> false)
+    Com.DomainIdMap.find vid prog.prog_vdoms
+  in
+  let prog_verifs, prog, _ =
+    List.fold_left
+      (fun (prog_verifs, prog, num) (cond, cond_pos) ->
+        let id, id_pos = v.Mast.verif_number in
+        let id = id + num in
+        let verif_id = (id, id_pos) in
+        let verif_expr = cond.Mast.verif_cond_expr in
+        let verif_error, verif_var = cond.Mast.verif_cond_error in
+        let err_name, err_pos = verif_error in
+        let verif_is_blocking =
+          match StrMap.find_opt err_name prog.prog_errors with
+          | None -> Err.unknown_error err_pos
+          | Some err -> (
+              match err.typ with Com.Error.Anomaly -> true | _ -> false)
+        in
+        (match verif_var with
+        | Some (var_name, var_pos) -> (
+            match StrMap.find_opt var_name prog.prog_vars with
+            | None -> Err.unknown_variable var_pos
+            | Some _ -> ())
+        | None -> ());
+        let verif_cat_var_stats, verif_var_stats =
+          let fold_var var idx_mem env (vdom_sts, var_sts) =
+            let name = check_variable var idx_mem env in
+            let var_data = StrMap.find name env.prog.prog_vars in
+            let cat = Com.Var.cat var_data in
+            if not (Com.CatVar.Map.mem cat verif_domain.dom_data.vdom_auth) then
+              Err.variable_with_forbidden_category (Pos.get_position var);
+            let incr = function None -> Some 1 | Some i -> Some (i + 1) in
+            let vdom_sts = Com.CatVar.Map.update cat incr vdom_sts in
+            let var_sts = StrMap.update name incr var_sts in
+            (vdom_sts, var_sts)
           in
-          (match verif_var with
-          | Some (var_name, var_pos) -> (
-              match StrMap.find_opt var_name prog.prog_vars with
-              | None -> Err.unknown_variable var_pos
-              | Some _ -> ())
-          | None -> ());
-          let verif_cat_var_stats, verif_var_stats =
-            let fold_var var idx_mem env (vdom_sts, var_sts) =
-              let name = check_variable var idx_mem env in
-              let var_data = StrMap.find name env.prog.prog_vars in
-              let cat = Com.Var.cat var_data in
-              if not (Com.CatVar.Map.mem cat verif_domain.dom_data.vdom_auth)
-              then Err.variable_with_forbidden_category (Pos.get_position var);
-              let incr = function None -> Some 1 | Some i -> Some (i + 1) in
-              let vdom_sts = Com.CatVar.Map.update cat incr vdom_sts in
-              let var_sts = StrMap.update name incr var_sts in
-              (vdom_sts, var_sts)
-            in
-            let init = (Com.CatVar.Map.empty, StrMap.empty) in
-            let env =
-              {
-                prog;
-                tmp_vars = StrMap.empty;
-                ref_vars = StrMap.empty;
-                res_var = None;
-              }
-            in
-            fold_var_expr fold_var false init verif_expr env
-          in
-          let verif_seq, prog = get_seq prog in
-          let verif =
+          let init = (Com.CatVar.Map.empty, StrMap.empty) in
+          let env =
             {
-              verif_id;
-              verif_apps;
-              verif_domain;
-              verif_expr;
-              verif_error;
-              verif_var;
-              verif_is_blocking;
-              verif_cat_var_stats;
-              verif_var_stats;
-              verif_seq;
+              prog;
+              tmp_vars = StrMap.empty;
+              ref_vars = StrMap.empty;
+              res_var = None;
             }
           in
-          (match IntMap.find_opt id prog.prog_verifs with
-          | Some v ->
-              let verif_pos = Pos.get_position v.verif_id in
-              Err.rov_already_defined Verif id verif_pos cond_pos
-          | None -> ());
-          let prog_verifs = IntMap.add id verif prog_verifs in
-          (prog_verifs, prog, num + 1))
-        (prog.prog_verifs, prog, 0)
-        v.Mast.verif_conditions
-    in
-    { prog with prog_verifs }
-  else prog
+          fold_var_expr fold_var false init verif_expr env
+        in
+        let verif_seq, prog = get_seq prog in
+        let verif =
+          {
+            verif_id;
+            verif_apps;
+            verif_domain;
+            verif_expr;
+            verif_error;
+            verif_var;
+            verif_is_blocking;
+            verif_cat_var_stats;
+            verif_var_stats;
+            verif_seq;
+          }
+        in
+        (match IntMap.find_opt id prog.prog_verifs with
+        | Some v ->
+            let verif_pos = Pos.get_position v.verif_id in
+            Err.rov_already_defined Verif id verif_pos cond_pos
+        | None -> ());
+        let prog_verifs = IntMap.add id verif prog_verifs in
+        (prog_verifs, prog, num + 1))
+      (prog.prog_verifs, prog, 0)
+      v.Mast.verif_conditions
+  in
+  { prog with prog_verifs }
 
 let convert_verifs (prog : program) : program =
   let prog_targets =
@@ -2272,7 +2187,7 @@ let convert_verifs (prog : program) : program =
             {
               target_name = (tname, Pos.no_pos);
               target_file;
-              target_apps = StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+              target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
               target_result = None;
               target_tmp_vars = StrMap.empty;
@@ -2516,8 +2431,7 @@ let complete_verif_calls (prog : program) : program =
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
-                  target_apps =
-                    StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                  target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];
                   target_result = None;
                   target_tmp_vars = StrMap.empty;
@@ -2550,8 +2464,7 @@ let complete_verif_calls (prog : program) : program =
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
-                  target_apps =
-                    StrMap.one prog.prog_app (prog.prog_app, Pos.no_pos);
+                  target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];
                   target_result = None;
                   target_tmp_vars = StrMap.empty;
@@ -2570,7 +2483,6 @@ let complete_verif_calls (prog : program) : program =
   { prog with prog_targets }
 
 let proceed (p : Mast.program) (main_target : string) : program =
-  let app = "iliad" in
   (* à paramétrer *)
   let prog =
     List.fold_left
@@ -2593,7 +2505,7 @@ let proceed (p : Mast.program) (main_target : string) : program =
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)
           prog source_file)
-      (empty_program p app main_target)
+      (empty_program p main_target)
       p
   in
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules

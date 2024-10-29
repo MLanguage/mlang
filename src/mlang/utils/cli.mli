@@ -20,6 +20,7 @@
 
 val mlang_t :
   (string list ->
+  string list ->
   bool ->
   bool ->
   string list ->
@@ -72,6 +73,8 @@ type round_ops =
 val source_files : string list ref
 (** M source files to be compiled *)
 
+val application_names : string list ref
+
 val dep_graph_file : string ref
 (** Prefix for dependency graph output files *)
 
@@ -115,6 +118,7 @@ val round_ops : round_ops ref
 
 val set_all_arg_refs :
   (* files *) string list ->
+  (* applications *) string list ->
   (* without_dgfip_m *) bool ->
   (* debug *) bool ->
   (* var_info_debug *) string list ->

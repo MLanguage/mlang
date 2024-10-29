@@ -953,10 +953,12 @@ let get_rules_verif_etc prog =
             | Rule r ->
                 let rules, chainings =
                   if is_valid_app r.rule_apps then
-                    ( Pos.unmark r.rule_number :: rules,
-                      match r.rule_chaining with
-                      | None -> chainings
-                      | Some cn -> StrSet.add (Pos.unmark cn) chainings )
+                    let rules = Pos.unmark r.rule_number :: rules in
+                    let chainings =
+                      let fold ch _ chainings = StrSet.add ch chainings in
+                      StrMap.fold fold r.rule_chainings chainings
+                    in
+                    (rules, chainings)
                   else (rules, chainings)
                 in
                 (rules, verifs, errors, chainings)

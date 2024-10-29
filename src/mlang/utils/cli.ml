@@ -29,6 +29,10 @@ let files =
     non_empty & pos_all file []
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
+let applications =
+  Arg.(
+    non_empty & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
+
 let without_dgfip_m =
   Arg.(
     value & flag
@@ -180,11 +184,11 @@ let dgfip_options =
 
 let mlang_t f =
   Term.(
-    const f $ files $ without_dgfip_m $ debug $ var_info_debug $ display_time
-    $ dep_graph_file $ no_print_cycles $ backend $ output $ run_all_tests
-    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
-    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
-    $ m_clean_calls $ dgfip_options)
+    const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
+    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
+    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
+    $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
+    $ income_year_cli $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
@@ -240,6 +244,8 @@ type round_ops = RODefault | ROMulti | ROMainframe of int
 
 let source_files : string list ref = ref []
 
+let application_names : string list ref = ref []
+
 let without_dgfip_m = ref false
 
 let dep_graph_file : string ref = ref "dep_graph.dot"
@@ -274,14 +280,15 @@ let comparison_error_margin = ref 0.000001
 
 let income_year = ref None
 
-let set_all_arg_refs (files_ : string list) (without_dgfip_m_ : bool)
-    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
-    (dep_graph_file_ : string) (no_print_cycles_ : bool)
+let set_all_arg_refs (files_ : string list) applications_
+    (without_dgfip_m_ : bool) (debug_ : bool) (var_info_debug_ : string list)
+    (display_time_ : bool) (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
     (income_year_ : int option) (value_sort_ : value_sort)
     (round_ops_ : round_ops) =
   source_files := files_;
+  application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
