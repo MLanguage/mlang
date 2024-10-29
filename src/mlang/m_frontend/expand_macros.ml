@@ -147,6 +147,7 @@ let get_selected_chains (apps_env : apps_env)
   in
   StrMap.fold sel_chain chains StrMap.empty
 
+(** Eliminates constants and loops *)
 let check_apps_on_cmdline (apps_env : apps_env) : unit =
   let iter a _ =
     match StrMap.find_opt a apps_env.apps with
@@ -255,7 +256,6 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
   List.rev prog
 
 module ConstMap = StrMap
-(** Eliminates constants and loops *)
 
 type const_context = float Pos.marked ConstMap.t
 

@@ -30,7 +30,8 @@ let files =
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
 let applications =
-  Arg.(value & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
+  Arg.(
+    non_empty & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
 
 let without_dgfip_m =
   Arg.(
@@ -287,7 +288,7 @@ let set_all_arg_refs (files_ : string list) applications_
     (income_year_ : int option) (value_sort_ : value_sort)
     (round_ops_ : round_ops) =
   source_files := files_;
-  (application_names := match applications_ with [] -> [ "iliad" ] | al -> al);
+  application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
   var_info_debug := var_info_debug_;
