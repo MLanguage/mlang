@@ -160,7 +160,7 @@ let run_test test_file annee_exec flag_no_bin_compare =
   M.dump_raw_tgv_in out tgv err;
 
   let res_ok = check_result tgv (get_errs tgv) res_prim ctl_prim in
-  free_errs tgv;
+(*  free_errs tgv; *)
   match flag_no_bin_compare with
   | true -> if res_ok then 0 else 1
   | false -> 

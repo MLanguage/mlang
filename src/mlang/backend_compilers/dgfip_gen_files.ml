@@ -1349,11 +1349,12 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
   if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
-  if flags.flg_short then Format.fprintf fmt "#define FLG_SHORT\n";
+  if flags.flg_short then
+    Format.fprintf fmt "#define FLG_SHORT /* inutile ? */\n";
   if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
   if flags.flg_optim_min_max then
-    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX\n";
+    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
   if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
     Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
@@ -1389,11 +1390,9 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
 
 let gen_dbg fmt =
   Format.fprintf fmt
-    {|#ifdef FLG_COLORS
-int change_couleur (int couleur,int typographie);
-int get_couleur ( );
-int get_typo ( );
-#endif
+    {|int change_couleur(int couleur, int typographie);
+int get_couleur();
+int get_typo();
     
 #ifdef FLG_TRACE
 extern int niv_trace;
@@ -1414,6 +1413,7 @@ let gen_const fmt =
 #define TRUE 1
 
 struct S_print_context {
+  FILE *std;
   long indent;
   int is_newline;
 };
@@ -1422,8 +1422,7 @@ typedef struct S_print_context T_print_context;
 
 typedef void *T_var_irdata;
 
-struct S_erreur
-{
+struct S_erreur {
   char *message;
   char *codebo;
   char *souscode;
@@ -1434,16 +1433,21 @@ struct S_erreur
 
 typedef struct S_erreur T_erreur;
 
-struct S_discord
-{
-  struct S_discord *suivant;
+typedef struct S_discord T_discord;
+
+struct S_discord {
+  T_discord *suivant;
   T_erreur *erreur;
 };
 
-typedef struct S_discord T_discord;
+typedef struct S_keep_discord T_keep_discord;
 
-struct S_irdata
-{
+struct S_keep_discord {
+  T_discord *discord;
+  T_keep_discord *suivant;
+};
+
+struct S_irdata {
   double *saisie;
   double *calculee;
   double *base;
@@ -1458,8 +1462,8 @@ struct S_irdata
   T_varinfo **info_ref;
   int tmps_org;
   int ref_org;
+  T_keep_discord *keep_discords;
   T_discord *discords;
-  T_discord *tas_discord;
   T_discord **p_discord;
   int nb_anos;
   int nb_discos;
@@ -1631,7 +1635,48 @@ extern int nb_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
 extern void finalise_erreur _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
+
+extern T_irdata *cree_irdata(void);
+extern void init_saisie(T_irdata *irdata);
+extern void init_calculee(T_irdata *irdata);
+extern void init_base(T_irdata *irdata);
 extern void init_erreur(T_irdata *irdata);
+extern void detruis_irdata(T_irdata *irdata);
+extern void set_max_bloquantes(T_irdata *irdata, const int max_ano);
+extern void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void ecris_saisie(T_irdata *irdata, int idx, char def, double val);
+extern void ecris_calculee(T_irdata *irdata, int idx, char def, double val);
+extern void ecris_base(T_irdata *irdata, int idx, char def, double val);
+extern char lis_saisie_def(T_irdata *irdata, int idx);
+extern char lis_calculee_def(T_irdata *irdata, int idx);
+extern char lis_base_def(T_irdata *irdata, int idx);
+extern double lis_saisie_val(T_irdata *irdata, int idx);
+extern double lis_calculee_val(T_irdata *irdata, int idx);
+extern double lis_base_val(T_irdata *irdata, int idx);
+extern char *lis_saisie_def_ref(T_irdata *irdata, int idx);
+extern char *lis_calculee_def_ref(T_irdata *irdata, int idx);
+extern char *lis_base_def_ref(T_irdata *irdata, int idx);
+extern double *lis_saisie_val_ref(T_irdata *irdata, int idx);
+extern double *lis_calculee_val_ref(T_irdata *irdata, int idx);
+extern double *lis_base_val_ref(T_irdata *irdata, int idx);
+extern T_discord *lis_discords(T_irdata *irdata);
+extern T_erreur *lis_erreur(T_discord *discord);
+extern T_discord *discord_suivante(T_discord *discord);
+extern char *lis_erreur_message(T_erreur *err);
+extern char *lis_erreur_code_bo(T_erreur *err);
+extern char *lis_erreur_sous_code(T_erreur *err);
+extern char *lis_erreur_is_isf(T_erreur *err);
+extern char *lis_erreur_nom(T_erreur *err);
+extern int lis_erreur_type(T_erreur *err);
+
+extern T_varinfo *cherche_varinfo(T_irdata *irdata, char *nom);
+extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
+extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
+extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
+extern void pr_out_var(T_irdata *irdata, char *nom);
+extern void pr_err_var(T_irdata *irdata, char *nom);
 |}
 
 let gen_decl_functions fmt (cprog : Mir.program) =
@@ -1695,27 +1740,24 @@ let gen_mlang_c fmt =
 
 #include "mlang.h"
 
-#ifdef FLG_COLORS 
 int color = 37;
 int typo = 0;
 
-int change_couleur (int couleur,int typographie)
-{
-	 color = couleur;
-	 typo = typographie;
-	return 0 ;
+int change_couleur (int couleur,int typographie) {
+#ifdef FLG_COLORS 
+  color = couleur;
+	typo = typographie;
+#endif /* FLG_COLORS */
+	return 0;
 }
 
-int get_couleur ( )
-{
+int get_couleur () {
 	return color ;
 }
 
-int get_typo ( )
-{
+int get_typo () {
 	return typo ;
 }
-#endif 
 
 double floor_g(double a) {
   if (fabs(a) <= (double)LONG_MAX) {
@@ -1735,72 +1777,134 @@ double ceil_g(double a) {
 
 extern FILE * fd_trace_dialog;
 
-static void add_erreur_code(T_erreur *erreur, const char *code) {
+
+#define C_STR_ERREUR_DEB " (("
+#define C_LEN_ERREUR_DEB (sizeof(C_STR_ERREUR_DEB)-1)
+
+#define C_STR_ERREUR_FIN "))"
+#define C_LEN_ERREUR_FIN (sizeof(C_STR_ERREUR_FIN)-1)
+
+static T_erreur *new_erreur(T_erreur *ref_erreur, char *code) {
+  T_erreur *pErreur = NULL;
   size_t len = 0;
   char *new_message = NULL;
-  char *debut = NULL;
 
+  if(ref_erreur == NULL || ref_erreur->message == NULL) return NULL;
+  pErreur = (T_erreur *)malloc(sizeof(T_erreur));
+  if (pErreur == NULL) goto erreur_new_erreur;
+  len = strlen(ref_erreur->message) + 1;
+  if(code != NULL) {
+    len += C_LEN_ERREUR_DEB + strlen(code) + C_LEN_ERREUR_FIN;
+  }
+  new_message = (char *)malloc(len * sizeof(char));
+  if(new_message == NULL) goto erreur_new_erreur;
+  strcpy(new_message, ref_erreur->message);
   if (code != NULL) {
-    debut = strstr(erreur->message," ((");
-    if (debut != NULL) {
-      len = strlen(erreur->message) - strlen(debut);
-    } else {
-      len = strlen(erreur->message);
-    }
-
-    new_message = (char *)malloc((len + 10) * sizeof(char));
-    memset(new_message, '\0', (len + 10) * sizeof(char));
-    strncpy(new_message, erreur->message, len);
-    strcat(new_message, " ((");
+    strcat(new_message, C_STR_ERREUR_DEB);
     strcat(new_message, code);
-    strcat(new_message, "))\0");
-    erreur->message = new_message;
+    strcat(new_message, C_STR_ERREUR_FIN);
   }
+  pErreur->message = new_message;
+  pErreur->codebo = ref_erreur->codebo;
+  pErreur->souscode = ref_erreur->souscode;
+  pErreur->isisf = ref_erreur->isisf;
+  pErreur->nom = ref_erreur->nom;
+  pErreur->type = ref_erreur->type;
+  return pErreur;
+
+erreur_new_erreur:
+  if (pErreur != NULL) free(pErreur);
+  if (new_message != NULL) free(new_message);
+  return NULL;
 }
 
-void init_erreur(T_irdata *irdata) {
-/*  IRDATA_reset_erreur(irdata); */
-  *irdata->p_discord = irdata->tas_discord;
-  irdata->tas_discord = irdata->discords;
-  irdata->discords = 0;
-  irdata->p_discord = &irdata->discords;
-  irdata->nb_anos = 0;
-  irdata->nb_discos = 0;
-  irdata->nb_infos = 0;
-  irdata->nb_bloqs = 0;
-  irdata->max_bloqs = 4;
+/* Libération de la mémoire allouée par la fonction new_erreur */
+static void free_new_erreur(T_erreur *erreur) {
+  char *msg = NULL;
+
+  if (erreur == NULL) return;
+  msg = erreur->message;
+  if(msg != NULL) {
+    free(msg);
+  }
+  free(erreur);
 }
 
-void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
-  T_discord *new_discord = NULL;
+T_discord *new_discord(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
+  T_discord *pDiscord = NULL;
+  T_erreur *pErreur = NULL;
+  T_keep_discord *pKeep = NULL;
 
-  if (irdata->tas_discord == 0) {
-    new_discord = (T_discord *)malloc(sizeof(T_discord));
-  } else {
-    new_discord = irdata->tas_discord;
-    irdata->tas_discord = new_discord->suivant;
+  if(irdata == NULL || ref_erreur == NULL) return NULL;
+  pDiscord = (T_discord *)malloc(sizeof(T_discord));
+  if(pDiscord == NULL) goto erreur_new_discord;
+  pKeep = malloc(sizeof(T_keep_discord));
+  if(pKeep == NULL) goto erreur_new_discord;
+  pErreur = new_erreur(ref_erreur, code);
+  if(pErreur == NULL) goto erreur_new_discord;
+
+  pKeep->discord = pDiscord;
+  pKeep->suivant = irdata->keep_discords;
+  irdata->keep_discords = pKeep;
+
+  pDiscord->erreur = pErreur;
+  pDiscord->suivant = NULL;
+  *irdata->p_discord = pDiscord;
+  irdata->p_discord = &pDiscord->suivant;
+
+  return pDiscord;
+
+erreur_new_discord:
+  if (pDiscord != NULL) free(pDiscord);
+  if (pKeep != NULL) free(pKeep);
+  if (pErreur != NULL) free_new_erreur(pErreur);
+  return NULL;
+}
+
+void free_keep_discord(T_irdata *irdata) {
+  T_discord *pDiscord = NULL;
+  T_keep_discord *pKeep = NULL;
+  T_keep_discord *pNext = NULL;
+
+  if(irdata == NULL) return;
+  pKeep = irdata->keep_discords;
+  while (pKeep != NULL) {
+    pDiscord = pKeep->discord;
+    if (pDiscord != NULL) {
+      free_new_erreur(pDiscord->erreur);
+      free(pDiscord);
+    }
+    pNext = pKeep->suivant;
+    free(pKeep);
+    pKeep = pNext;
   }
+  irdata->keep_discords = NULL;
+}
 
-  add_erreur_code(erreur, code);
+/* Libération de la mémoire allouée par la fonction add_erreur */
+#ifdef ANCIEN
+void free_erreur() {}
+#else
+void free_erreur(T_irdata *irdata) {
+  init_erreur(irdata);
+}
+#endif /* ANCIEN */
 
-  new_discord->erreur = erreur;
-  new_discord->suivant = 0;
-  *irdata->p_discord = new_discord;
-  irdata->p_discord = &new_discord->suivant;
+void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
+  T_discord *pDiscord = NULL;
 
-  if (erreur->type == ANOMALIE) irdata->nb_anos++;
-  if (erreur->type == DISCORDANCE) irdata->nb_discos++;
-  if (erreur->type == INFORMATIVE) irdata->nb_infos++;
-
-  if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
+  pDiscord = new_discord(irdata, ref_erreur, code);
+  if(pDiscord == NULL) return;
+  if (ref_erreur->type == ANOMALIE) irdata->nb_anos++;
+  if (ref_erreur->type == DISCORDANCE) irdata->nb_discos++;
+  if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
+  if(strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
     irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
     }
   }
 }
-
-void free_erreur() {}
 
 int nb_anomalies(T_irdata *irdata) {
   return irdata->nb_anos;
@@ -1949,7 +2053,7 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
 
 #endif /* FLG_TRACE */
 
-T_discord * no_error(T_irdata *irdata) {
+T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
@@ -2016,7 +2120,7 @@ void print_indent(FILE *std, T_print_context *pr_ctx) {
   if (pr_ctx->is_newline) {
     int i;
     for (i = 1; i < pr_ctx->indent; i++) {
-      fprintf(std, " ");
+      fprintf(pr_ctx->std, " ");
     }
     pr_ctx->is_newline = 0;
   }
@@ -2027,15 +2131,15 @@ void print_string(FILE *std, T_print_context *pr_ctx, char *str) {
     if (*str == '\n') {
       pr_ctx->is_newline = 1;
     } else {
-      print_indent(std, pr_ctx);
+      print_indent(NULL, pr_ctx);
     }
-    fprintf(std, "%c", *str);
+    fprintf(pr_ctx->std, "%c", *str);
     str++;
   }
 }
 
 void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax) {
-  print_indent(std, pr_ctx);
+  print_indent(NULL, pr_ctx);
   if (pmin < 0) {
     pmin = 0;
   }
@@ -2052,12 +2156,12 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
     pmax = 20;
   }
   if (isnan(f)) {
-    fprintf(std, "incorrect");
+    fprintf(pr_ctx->std, "incorrect");
   } else if (isinf(f)) {
     if (f >= 0.0) {
-      fprintf(std, "+infini");
+      fprintf(pr_ctx->std, "+infini");
     } else {
-      fprintf(std, "-infini");
+      fprintf(pr_ctx->std, "-infini");
     }
   } else {
     size_t sz;
@@ -2091,15 +2195,411 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
       }
       if (*ptr == ',') *ptr = 0;
     }
-    fprintf(std, "%s", buf);
+    fprintf(pr_ctx->std, "%s", buf);
 /*    free(buf); */
   }
 }
 
-void nettoie_erreur(irdata)
-T_irdata *irdata;
-{
+void nettoie_erreur(T_irdata *irdata) {
   init_erreur(irdata);
+}
+
+static void init_tab(char *p_def, double *p_val, int nb) {
+  if (p_val == NULL || p_def == NULL || nb < 0) return;
+  memset(p_val, 0, nb * sizeof (double));
+  memset(p_def, 0, nb);
+}
+
+void init_saisie(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
+}
+
+void init_calculee(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
+}
+
+void init_base(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+}
+
+void init_erreur(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  free_keep_discord(irdata);
+  irdata->discords = NULL;
+  irdata->p_discord = &irdata->discords;
+  irdata->nb_anos = 0;
+  irdata->nb_discos = 0;
+  irdata->nb_infos = 0;
+  irdata->nb_bloqs = 0;
+  irdata->max_bloqs = 4;
+}
+
+void detruis_irdata(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  if (irdata->saisie != NULL) free(irdata->saisie);
+  if (irdata->def_saisie != NULL) free(irdata->def_saisie);
+  if (irdata->calculee != NULL) free(irdata->calculee);
+  if (irdata->def_calculee != NULL) free(irdata->def_calculee);
+  if (irdata->base != NULL) free(irdata->base);
+  if (irdata->def_base != NULL) free(irdata->def_base);
+  if (irdata->tmps != NULL) free(irdata->tmps);
+  if (irdata->def_tmps != NULL) free(irdata->def_tmps);
+  if (irdata->info_tmps != NULL) free(irdata->info_tmps);
+  if (irdata->ref != NULL) free(irdata->ref);
+  if (irdata->def_ref != NULL) free(irdata->def_ref);
+  if (irdata->info_ref != NULL) free(irdata->info_ref);
+  init_erreur(irdata);
+  if (irdata->err_finalise != NULL) free(irdata->err_finalise);
+  if (irdata->err_sortie != NULL) free(irdata->err_sortie);
+  if (irdata->err_archive != NULL) free(irdata->err_archive);
+  free(irdata);
+}
+
+T_irdata *cree_irdata(void) {
+  T_irdata *irdata = NULL;
+  
+  irdata = (T_irdata *)malloc(sizeof (T_irdata));
+  if (irdata == NULL) return NULL;
+  irdata->saisie = NULL;
+  irdata->def_saisie = NULL;
+  if (TAILLE_SAISIE > 0) {
+    irdata->saisie = (double *)malloc(TAILLE_SAISIE * sizeof (double));
+    if (irdata->saisie == NULL) goto erreur_cree_irdata;
+    irdata->def_saisie = (char *)malloc(TAILLE_SAISIE * sizeof (char));
+    if (irdata->def_saisie == NULL) goto erreur_cree_irdata;
+  }
+  init_saisie(irdata);
+  irdata->calculee = NULL;
+  irdata->def_calculee = NULL;
+  if (TAILLE_CALCULEE > 0) {
+    irdata->calculee = (double *)malloc(TAILLE_CALCULEE * sizeof (double));
+    if (irdata->calculee == NULL) goto erreur_cree_irdata;
+    irdata->def_calculee = (char *)malloc(TAILLE_CALCULEE * sizeof (char));
+    if (irdata->def_calculee == NULL) goto erreur_cree_irdata;
+  }
+  init_calculee(irdata);
+  irdata->base = NULL;
+  irdata->def_base = NULL;
+  if (TAILLE_BASE > 0) {
+    irdata->base = (double *)malloc(TAILLE_BASE * sizeof (double));
+    if (irdata->base == NULL) goto erreur_cree_irdata;
+    irdata->def_base = (char *)malloc(TAILLE_BASE * sizeof (char));
+    if (irdata->def_base == NULL) goto erreur_cree_irdata;
+  }
+  init_base(irdata);
+  irdata->tmps = NULL;
+  irdata->def_tmps = NULL;
+  irdata->info_tmps = NULL;
+  if (TAILLE_TMP_VARS > 0) {
+    irdata->tmps = (double *)malloc(TAILLE_TMP_VARS * sizeof (double));
+    if (irdata->tmps == NULL) goto erreur_cree_irdata;
+    irdata->def_tmps = (char *)malloc(TAILLE_TMP_VARS * sizeof (char));
+    if (irdata->def_tmps == NULL) goto erreur_cree_irdata;
+    irdata->info_tmps = (T_varinfo *)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo));    
+    if (irdata->info_tmps == NULL) goto erreur_cree_irdata;
+  }
+  irdata->ref = NULL;
+  irdata->def_ref = NULL;
+  irdata->info_ref = NULL;
+  if (TAILLE_REFS > 0) {
+    irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
+    if (irdata->ref == NULL) goto erreur_cree_irdata;
+    irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
+    if (irdata->def_ref == NULL) goto erreur_cree_irdata;
+    irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
+    if (irdata->info_ref == NULL) goto erreur_cree_irdata;
+  }
+  irdata->tmps_org = 0;
+  irdata->ref_org = 0;
+  irdata->keep_discords = NULL;
+  irdata->discords = NULL;
+  irdata->p_discord = &irdata->discords;
+  irdata->sz_err_finalise = 0;
+  irdata->err_finalise = NULL;
+  irdata->nb_err_finalise = 0;
+  irdata->sz_err_sortie = 0;
+  irdata->err_sortie = NULL;
+  irdata->nb_err_sortie = 0;
+  irdata->sz_err_archive = 0;
+  irdata->err_archive = NULL;
+  irdata->nb_err_archive = 0;
+  init_erreur(irdata);
+  irdata->ctx_pr_out.std = stdout;
+  irdata->ctx_pr_out.indent = 0;
+  irdata->ctx_pr_out.is_newline = 1;
+  irdata->ctx_pr_err.std = stderr;
+  irdata->ctx_pr_err.indent = 0;
+  irdata->ctx_pr_err.is_newline = 1;
+  return irdata;
+
+erreur_cree_irdata:
+  detruis_irdata(irdata);
+  return NULL;
+}
+
+void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
+  if (irdata == NULL) return;
+  if (max_ano < 0) {
+    irdata->max_bloqs = 0;
+  } else {
+    irdata->max_bloqs = max_ano;
+  }
+}
+
+void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double));
+  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE);
+}
+
+void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double));
+  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE);
+}
+
+void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double));
+  memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE);
+}
+
+static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
+  if (t_val == NULL || t_def == NULL || idx < 0 || t_nb <= idx) return;
+  if (def == 0) t_def[idx] = 0;
+  else t_def[idx] = 1;
+  t_val[idx] = val;
+}
+
+void ecris_saisie(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE, idx, def, val);
+}
+
+void ecris_calculee(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE, idx, def, val);
+}
+
+void ecris_base(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_base, irdata->base, TAILLE_BASE, idx, def, val);
+}
+
+static char lis_tab_def(char *t_def, int t_nb, int idx) {
+  if (t_def == NULL || idx < 0 || t_nb <= idx) return 0;
+  return t_def[idx];
+}
+
+char lis_saisie_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_saisie, TAILLE_SAISIE, idx);
+}
+
+char lis_calculee_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_calculee, TAILLE_CALCULEE, idx);
+}
+
+char lis_base_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_base, TAILLE_BASE, idx);
+}
+
+static double lis_tab_val(double *t_val, int t_nb, int idx) {
+  if (t_val == NULL || idx < 0 || t_nb <= idx) return 0.0;
+  return t_val[idx];
+}
+
+double lis_saisie_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->saisie, TAILLE_SAISIE, idx);
+}
+
+double lis_calculee_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->calculee, TAILLE_CALCULEE, idx);
+}
+
+double lis_base_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->base, TAILLE_BASE, idx);
+}
+
+static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
+  if (t_def == NULL || idx < 0 || t_nb <= idx) return NULL;
+  return &(t_def[idx]);
+}
+
+char *lis_saisie_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_saisie, TAILLE_SAISIE, idx);
+}
+
+char *lis_calculee_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_calculee, TAILLE_CALCULEE, idx);
+}
+
+char *lis_base_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_base, TAILLE_BASE, idx);
+}
+
+static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
+  if (t_val == NULL || idx < 0 || t_nb <= idx) return NULL;
+  return &(t_val[idx]);
+}
+
+double *lis_saisie_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->saisie, TAILLE_SAISIE, idx);
+}
+
+double *lis_calculee_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->calculee, TAILLE_CALCULEE, idx);
+}
+
+double *lis_base_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->base, TAILLE_BASE, idx);
+}
+
+T_discord *lis_discords(T_irdata *irdata) {
+  if (irdata == NULL) return NULL;
+  return irdata->discords;
+}
+
+T_erreur *lis_erreur(T_discord *discord) {
+  if (discord == NULL) return NULL;
+  return discord->erreur;
+}
+
+char *lis_erreur_message(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->message;
+}
+
+T_discord *discord_suivante(T_discord *discord) {
+  if (discord == NULL) return NULL;
+  return discord->suivant;
+}
+
+char *lis_erreur_code_bo(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->message;
+}
+
+char *lis_erreur_sous_code(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->souscode;
+}
+
+char *lis_erreur_is_isf(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->isisf;
+}
+
+char *lis_erreur_nom(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->nom;
+}
+
+int lis_erreur_type(T_erreur *err) {
+  if (err == NULL) return 0;
+  return err->type;
+}
+
+/* !!! */
+T_varinfo *cherche_varinfo(T_irdata *irdata, char *nom) {
+  int i = 0;
+
+  if (irdata == NULL || nom == NULL) return NULL;
+
+#define CHERCHE_VARINFO(TYP)                                    \
+  for (i = 0; i < NB_##TYP; i++) {                              \
+    T_varinfo_##TYP *info = &(varinfo_##TYP[i]);                \
+    if (                                                        \
+      strcmp(nom, info->name) == 0                              \
+      || (info->alias != NULL && strcmp(nom, info->alias) == 0) \
+    ) {                                                         \
+      return (T_varinfo *)info;                                              \
+    }                                                           \
+  }                                                             \
+
+  CHERCHE_VARINFO(calculee)
+  CHERCHE_VARINFO(calculee_base)
+/*  CHERCHE_VARINFO(calculee_base_restituee) */
+/*  CHERCHE_VARINFO(calculee_restituee) */
+  CHERCHE_VARINFO(saisie_contexte)
+  CHERCHE_VARINFO(saisie_corrective_revenu)
+  CHERCHE_VARINFO(saisie_famille)
+  CHERCHE_VARINFO(saisie_penalite)
+  CHERCHE_VARINFO(saisie_revenu)
+  CHERCHE_VARINFO(saisie_variation)
+
+#undef CHERCHE_VARINFO
+
+  return NULL;
+}
+
+char lis_varinfo_def(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return 0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->def_saisie[info->idx];
+    case EST_CALCULEE:
+      return irdata->def_calculee[info->idx];
+    case EST_BASE:
+      return irdata->def_base[info->idx];
+    default:
+      return 0;
+  }
+}
+
+double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return 0.0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->saisie[info->idx];
+    case EST_CALCULEE:
+      return irdata->calculee[info->idx];
+    case EST_BASE:
+      return irdata->base[info->idx];
+    default:
+      return 0.0;
+  }
+}
+
+/* !!! */
+void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
+  T_varinfo *info = NULL;
+
+  if (pr_ctx == NULL) return;
+  info = cherche_varinfo(irdata, nom);  
+  if (info == NULL) {
+    fprintf(pr_ctx->std, "inconnu");
+  } else {
+    if (lis_varinfo_def(irdata, info) == 0) {
+      fprintf(pr_ctx->std, "indefini");
+    } else {
+      print_double(NULL, pr_ctx, lis_varinfo_val(irdata, info), 0, 30);
+    }
+  }
+}
+
+void pr_out_var(T_irdata *irdata, char *nom) {
+  if (irdata == NULL) return;
+  pr_var(&(irdata->ctx_pr_out), irdata, nom);
+}
+
+void pr_err_var(T_irdata *irdata, char *nom) {
+  if (irdata == NULL) return;
+  pr_var(&(irdata->ctx_pr_err), irdata, nom);
 }
 |}
 

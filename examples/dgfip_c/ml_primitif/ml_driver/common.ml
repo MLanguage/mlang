@@ -297,7 +297,7 @@ end
 
 external init_errs : TGV.t -> unit = "ml_init_errs"
 external get_err_list : TGV.t -> string list = "ml_get_err_list"
-external free_errs : TGV.t -> unit = "ml_free_errs"
+(*external free_errs : TGV.t -> unit = "ml_free_errs"*)
 
 let get_errs tgv =
   List.fold_left (fun res e -> StrSet.add e res) StrSet.empty (get_err_list tgv)

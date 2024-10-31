@@ -655,7 +655,7 @@ ml_get_err_list(value mlTgv)
   }
   CAMLreturn(res);
 }
-
+/*
 CAMLprim value
 ml_free_errs(value mlTgv)
 {
@@ -672,7 +672,7 @@ ml_free_errs(value mlTgv)
   }
   CAMLreturn(Val_unit);
 }
-
+*/
 CAMLprim value
 ml_charge_vars(void)
 {
