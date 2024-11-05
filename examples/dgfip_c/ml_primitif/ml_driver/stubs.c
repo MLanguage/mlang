@@ -14,6 +14,7 @@
 #include "caml/fail.h"
 #include "caml/custom.h"
 
+#include "mlang.h"
 #include "irdata.h"
 #include "compir.h"
 
@@ -752,7 +753,7 @@ ml_tgv_reset(value mlTgv, value mlCode)
 }
 
 CAMLprim value
-ml_tgv_get(value mlTgv, value mlCode)
+ml_tgv_get2(value mlTgv, value mlCode)
 {
   CAMLparam2(mlTgv,mlCode);
   CAMLlocal1(optOut);
@@ -768,6 +769,25 @@ ml_tgv_get(value mlTgv, value mlCode)
   if(montant == NULL) optOut = Val_none;
   else optOut = caml_alloc_some(caml_copy_double(*montant));
 
+  CAMLreturn(optOut);
+}
+
+CAMLprim value ml_tgv_get(value mlTgv, value mlCode) {
+  CAMLparam2(mlTgv,mlCode);
+  CAMLlocal1(optOut);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  const char *code = String_val(mlCode);
+  T_varinfo *varinfo = cherche_varinfo(tgv, code);
+  if (varinfo == NULL) {
+    fprintf(stderr, "La variable %s n'existe pas (alias ?)\n", code);
+    exit(1);
+  }
+  if (lis_varinfo_def(tgv, varinfo)) {
+    optOut = caml_alloc_some(caml_copy_double(lis_varinfo_val(tgv, varinfo)));
+  } else {
+    optOut = Val_none;
+  }
   CAMLreturn(optOut);
 }
 

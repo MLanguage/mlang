@@ -156,10 +156,12 @@ module TGV = struct
   external alloc_tgv : unit -> t = "ml_tgv_alloc"
   external udefined : t -> string -> bool = "ml_tgv_defined"
   external ureset : t -> string -> unit = "ml_tgv_reset"
-  external uget : t -> string -> float option = "ml_tgv_get"
+  external uget2 : t -> string -> float option = "ml_tgv_get2"
   external uget_array : t -> string -> int -> float option = "ml_tgv_get_array"
   external uset : t -> string -> float -> unit = "ml_tgv_set"
   external copy_all : t -> t -> unit = "ml_tgv_copy"
+
+  external uget : t -> string -> float option = "ml_tgv_get"
 
   let defined tgv var = udefined tgv (VarDict.unalias var)
 
