@@ -60,3 +60,7 @@ define source_dir_ext
 $(shell find $(1) -name \*.m | sort)
 endef
 
+define cmd_exists
+$(shell command -v $(1) 2>&1 > /dev/null ] && echo "1")
+endef
+
