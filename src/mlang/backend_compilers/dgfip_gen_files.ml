@@ -784,12 +784,12 @@ let gen_table_debug fmt flags vars i =
   gen_table fmt is_ebcdic vars (Debug i) opt
 
 let gen_table_varinfo fmt var_dict cat
-    Com.CatVar.{ id_int; id_str; attributs; _ } stats =
+    Com.CatVar.{ id_int; id_str; attributs; _ } (stats, var_map) =
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
-  let nb =
+  let nb, var_map =
     StrMap.fold
-      (fun _ (var, idx, size) nb ->
+      (fun _ (var, idx, size) (nb, var_map) ->
         if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
           let loc_cat =
             match (Com.Var.loc_tgv var).loc_cat with
@@ -804,30 +804,24 @@ let gen_table_varinfo fmt var_dict cat
             (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
             (Com.Var.attrs var);
           Format.fprintf fmt " },\n";
-          nb + 1)
-        else nb)
-      var_dict 0
+          let var_addr =
+            Format.sprintf "(T_varinfo *)&(varinfo_%s[%d])" id_str nb
+          in
+          let var_map = StrMap.add (Com.Var.name_str var) var_addr var_map in
+          let var_map =
+            match Com.Var.alias var with
+            | None -> var_map
+            | Some m_alias -> StrMap.add (Pos.unmark m_alias) var_addr var_map
+          in
+          (nb + 1, var_map))
+        else (nb, var_map))
+      var_dict (0, var_map)
   in
   Format.fprintf fmt "  NULL\n};\n\n";
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
-
-let gen_table_alias_map fmt (cprog : Mir.program) =
-  let aliases =
-    StrMap.fold
-      (fun name var aliases ->
-        match Com.Var.alias var with
-        | None -> aliases
-        | Some alias -> StrMap.add (Pos.unmark alias) name aliases)
-      cprog.program_vars StrMap.empty
-  in
-  Format.fprintf fmt "T_alias_map alias_map[NB_saisie + 1] = {\n";
-  StrMap.iter
-    (fun alias name -> Format.fprintf fmt "  { \"%s\", \"%s\" },\n" alias name)
-    aliases;
-  Format.fprintf fmt "  NULL\n};\n\n"
+  (Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats, var_map)
 
 let gen_table_varinfos fmt (cprog : Mir.program) vars =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
@@ -893,7 +887,13 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
   in
   Com.CatVar.Map.fold
     (gen_table_varinfo fmt var_dict)
-    cprog.program_var_categories Com.CatVar.Map.empty
+    cprog.program_var_categories
+    (Com.CatVar.Map.empty, StrMap.empty)
+
+let gen_table_varinfo_map fmt var_map =
+  Format.fprintf fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+  StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
+  Format.fprintf fmt "  NULL\n};\n\n"
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   Format.fprintf fmt
@@ -906,10 +906,10 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   int loc_cat;
 } T_varinfo;
 
-typedef struct S_alias_map {
-  char *alias;
+typedef struct S_varinfo_map {
   char *name;
-} T_alias_map;
+  T_varinfo *info;
+} T_varinfo_map;
 
 |};
   Com.CatVar.Map.iter
@@ -932,19 +932,23 @@ typedef struct S_alias_map {
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
-  Format.fprintf fmt "extern T_alias_map alias_map[];\n";
+  Format.fprintf fmt "extern T_varinfo_map varinfo[];\n";
   Format.fprintf fmt "\n";
   Com.CatVar.Map.iter
     (fun _ (id_str, _, nb, _) ->
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
-  let nb_saisie =
+  let nb_saisie, nb_variable =
     Com.CatVar.Map.fold
-      (fun cat (_, _, nb, _) nb_saisie ->
-        match cat with Input _ -> nb + nb_saisie | _ -> nb_saisie)
-      stats 0
+      (fun cat (_, _, nb, _) (nb_saisie, nb_variable) ->
+        let nb_variable = nb + nb_variable in
+        match cat with
+        | Input _ -> (nb + nb_saisie, nb_variable)
+        | _ -> (nb_saisie, nb_variable))
+      stats (0, 0)
   in
   Format.fprintf fmt "#define NB_saisie %d\n" nb_saisie;
+  Format.fprintf fmt "#define NB_variable %d\n" nb_variable;
   Format.fprintf fmt "\n";
   let id_tmp =
     Com.CatVar.Map.fold
@@ -1702,6 +1706,10 @@ extern int lis_erreur_type(T_erreur *err);
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
 extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
+extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
+extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
+extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
+extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
 extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
 extern void pr_out_var(T_irdata *irdata, char *nom);
 extern void pr_err_var(T_irdata *irdata, char *nom);
@@ -1762,7 +1770,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
   gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
-let gen_mlang_c fmt (cprog : Mir.program) =
+let gen_mlang_c fmt =
   Format.fprintf fmt "%s"
     {|/****** LICENCE CECIL *****/
 
@@ -2542,18 +2550,18 @@ int lis_erreur_type(T_erreur *err) {
   return err->type;
 }
 
-char *cherche_alias(T_irdata *irdata, const char *alias) {
-  T_alias_map *map = NULL;
+T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
+  T_varinfo_map *map = NULL;
   int res = -1;
   int inf = 0;
-  int sup = NB_saisie;
+  int sup = NB_variable + NB_saisie;
   int millieu = 0;
 
-  if (irdata == NULL || alias == NULL) return NULL;
+  if (irdata == NULL || nom == NULL) return NULL;
   while ((res != 0) && (inf < sup)) {
     millieu = (inf + sup) / 2;
-    map = &(alias_map[millieu]);
-    res = strcmp(alias, map->alias);
+    map = &(varinfo[millieu]);
+    res = strcmp(nom, map->name);
     if (res < 0) {
       sup = millieu;
     } else if (res > 0) {
@@ -2561,50 +2569,8 @@ char *cherche_alias(T_irdata *irdata, const char *alias) {
     }
   }
   if (res == 0) {
-    return map->name;
+    return map->info;
   }
-  return NULL;
-}
-
-T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
-  const char *nom_reel = NULL;
-
-  if (irdata == NULL || nom == NULL) return NULL;
-  nom_reel = cherche_alias(irdata, nom);
-  if (nom_reel == NULL) nom_reel = nom;
-
-#define CHERCHE_VARINFO(TYP)            \
-  {                                     \
-    T_varinfo_##TYP *info = NULL;       \
-    int res = -1;                       \
-    int inf = 0;                        \
-    int sup = NB_##TYP;                 \
-    int millieu = 0;                    \
-                                        \
-    while ((res != 0) && (inf < sup)) { \
-      millieu = (inf + sup) / 2;        \
-      info = &(varinfo_##TYP[millieu]); \
-      res = strcmp(nom_reel, info->name);    \
-      if (res < 0) {                    \
-        sup = millieu;                  \
-      } else if (res > 0) {             \
-        inf = millieu + 1;              \
-      }                                 \
-    }                                   \
-    if (res == 0) {                     \
-      return (T_varinfo *)info;         \
-    }                                   \
-  }                                     \
-
-|};
-  Com.CatVar.Map.iter
-    (fun _ Com.CatVar.{ id_str; _ } ->
-      Format.fprintf fmt "  CHERCHE_VARINFO(%s)\n" id_str)
-    cprog.program_var_categories;
-  Format.fprintf fmt
-    {|
-#undef CHERCHE_VARINFO
-
   return NULL;
 }
 
@@ -2633,6 +2599,88 @@ double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
       return irdata->base[info->idx];
     default:
       return 0.0;
+  }
+}
+
+char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
+  if (irdata == NULL || info == NULL || info->size <= idx) return 0;
+  if (idx < 0) return 1;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->def_saisie[info->idx + idx];
+    case EST_CALCULEE:
+      return irdata->def_calculee[info->idx + idx];
+    case EST_BASE:
+      return irdata->def_base[info->idx + idx];
+    default:
+      return 0;
+  }
+}
+
+double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
+  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return 0.0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->saisie[info->idx + idx];
+    case EST_CALCULEE:
+      return irdata->calculee[info->idx + idx];
+    case EST_BASE:
+      return irdata->base[info->idx + idx];
+    default:
+      return 0.0;
+  }
+}
+
+void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
+  if (irdata == NULL || info == NULL) return;
+  if (def == 0) {
+    val = 0.0;
+  } else {
+    def = 1;
+  }
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      irdata->def_saisie[info->idx] = def;
+      irdata->saisie[info->idx] = val;
+      return;
+    case EST_CALCULEE:
+      irdata->def_calculee[info->idx] = def;
+      irdata->calculee[info->idx] = val;
+      return;
+    case EST_BASE:
+      irdata->def_base[info->idx] = def;
+      irdata->base[info->idx] = val;
+      return;
+    default:
+      return;
+  }
+}
+
+void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val) {
+  int var_idx = 0;
+
+  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return;
+  var_idx = info->idx + idx;
+  if (def == 0) {
+    val = 0.0;
+  } else {
+    def = 1;
+  }
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      irdata->def_saisie[var_idx] = def;
+      irdata->saisie[var_idx] = val;
+      return;
+    case EST_CALCULEE:
+      irdata->def_calculee[var_idx] = def;
+      irdata->calculee[var_idx] = val;
+      return;
+    case EST_BASE:
+      irdata->def_base[var_idx] = def;
+      irdata->base[var_idx] = val;
+      return;
+    default:
+      return;
   }
 }
 
@@ -2705,8 +2753,8 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "varinfos.c") in
-  let stats_varinfos = gen_table_varinfos fmt cprog vars in
-  gen_table_alias_map fmt cprog;
+  let stats_varinfos, var_map = gen_table_varinfos fmt cprog vars in
+  gen_table_varinfo_map fmt var_map;
   close_out oc;
 
   let vars_debug = get_vars_debug Dgfip_options.(flags.flg_tri_ebcdic) vars in
@@ -2763,5 +2811,5 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in
-  gen_mlang_c fmt cprog;
+  gen_mlang_c fmt;
   close_out oc

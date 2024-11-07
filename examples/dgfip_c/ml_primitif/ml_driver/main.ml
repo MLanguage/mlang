@@ -1,34 +1,29 @@
-
 open Common
 
 let read_test filename =
   let test = Read_test.read_test filename in
-  let tgv = TGV.alloc_tgv () in
+  let tgv = M.TGV.alloc_tgv () in
   let res_prim, ctl_prim =
-    List.fold_left (fun (res_prim, ctl_prim) s ->
-        match s with
-        | `EntreesPrimitif pl ->
-            List.iter (fun (code, montant) ->
-              TGV.set tgv code montant
-            ) pl;
-            res_prim, ctl_prim
-        | `ResultatsPrimitif pl ->
-            let res_prim =
-              List.fold_left (fun resultats (code, montant) ->
-                  StrMap.add code montant resultats
-                ) res_prim pl
-            in
-            res_prim, ctl_prim
-        | `ControlesPrimitif el ->
-            let ctl_prim =
-              List.fold_left (fun erreurs e ->
-                  StrSet.add e erreurs
-                ) ctl_prim el
-            in
-            res_prim, ctl_prim
-        | _ ->
-            res_prim, ctl_prim
-      ) (StrMap.empty, StrSet.empty) test
+    let fold_prim (res_prim, ctl_prim) s =
+      match s with
+      | `EntreesPrimitif pl ->
+          List.iter (fun (code, montant) -> M.TGV.set tgv code montant) pl;
+          res_prim, ctl_prim
+      | `ResultatsPrimitif pl ->
+          let res_prim =
+            let fold res (code, montant) = StrMap.add code montant res in
+            List.fold_left fold res_prim pl
+          in
+          res_prim, ctl_prim
+      | `ControlesPrimitif el ->
+          let ctl_prim =
+            let fold err e = StrSet.add e err in
+            List.fold_left fold ctl_prim el
+          in
+          res_prim, ctl_prim
+      | _ -> res_prim, ctl_prim
+    in
+    List.fold_left fold_prim (StrMap.empty, StrSet.empty) test
   in
   tgv, res_prim, ctl_prim
 
@@ -40,7 +35,7 @@ let check_result tgv err expected_tgv expected_err =
       match code with
       | "NBPT" -> ()
       | _ ->
-          let montant' = try TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
+          let montant' = try M.TGV.get_def tgv code 0.0 with Not_found -> 0.0 in
           (* Comparaison des valeurs au centime près, conformément à la doctrine
              DGFiP actuellement en vigueur *)
           let comp =
@@ -79,8 +74,6 @@ let var_addr () =
      aux [] |> List.rev)
   in
   Lazy.force vars
-
-module StrSet = Set.Make(String)
 
 let compare_dump out outexp =
   let out = open_in_bin out in
@@ -134,67 +127,33 @@ let compare_dump out outexp =
   close_in out;
   close_in outexp
 
-let run_test test_file annee_exec flag_no_bin_compare =
+let run_test test_file annee_exec =
   Printf.printf "Testing %s...\n%!" test_file;
-
   let annee_calc = M.annee_calc () in
-
-  let out = Printf.sprintf "%d.output/%s.tgv" annee_calc (Filename.basename test_file) in
-  let out_exp = Printf.sprintf "%d.expected/%s.tgv" annee_calc (Filename.basename test_file) in
-
   let tgv, res_prim, ctl_prim = read_test test_file in
-
-  let annee_revenu = TGV.get_int_def tgv "ANREV" annee_calc in
+  let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
   if annee_revenu <> annee_calc then (
     Printf.eprintf
       "Attention, année calculette (%d) <> année revenu (%d)\n%!"
       annee_calc
       annee_revenu
   );
-
-  TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
-  TGV.set_int tgv "ANCSDED" annee_exec; (* instead of execution date *)
-  init_errs tgv;
-  let err = M.enchainement_primitif tgv in
+  M.TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
+  M.TGV.set_int tgv "ANCSDED" annee_exec;
+  M.init_errs tgv;
+  let _err = M.enchainement_primitif tgv in
   M.export_errs tgv;
-  M.dump_raw_tgv_in out tgv err;
-
-  let res_ok = check_result tgv (get_errs tgv) res_prim ctl_prim in
-(*  free_errs tgv; *)
-  match flag_no_bin_compare with
-  | true -> if res_ok then 0 else 1
-  | false -> 
-    if not (Sys.file_exists out_exp)
-      then begin
-      Printf.eprintf "Expected results file %s not found." out_exp;
-      exit (if res_ok then 10 else 11)
-    end;
-
-    begin
-      match Unix.system (Printf.sprintf "diff -q %s %s 1>/dev/null 2>&1" out out_exp) with
-      | WEXITED 0 ->
-          if res_ok then 0 else 1
-      | WEXITED 1 -> (* Differences *)
-          compare_dump out out_exp;
-          if res_ok then 20 else 21
-      | WEXITED 2 -> (* Other error *)
-          if res_ok then 30 else 31
-      | WEXITED _ ->
-          32
-      | WSIGNALED _ | WSTOPPED _ ->
-          33
-      end
+  let err_set =
+    let add res e = StrSet.add e res in
+    List.fold_left add StrSet.empty (M.get_err_list tgv)
+  in
+  check_result tgv err_set res_prim ctl_prim
 
 let main () =
-  if Array.length Sys.argv < 2 then
-    begin
-      Printf.printf "Syntaxe :\n%s fichier_test\n" Sys.argv.(0);
-      exit 31
-    end;
-
-  (try Unix.mkdir ((string_of_int (M.annee_calc ()))^".output")
-         0o755 with _ -> ());
-
+  if Array.length Sys.argv < 2 then (
+    Printf.printf "Syntaxe :\n%s fichier_test\n" Sys.argv.(0);
+    exit 31
+  );
   let args = List.tl (Array.to_list Sys.argv) in
   let annee_exec, test_files =
     match args with
@@ -214,19 +173,19 @@ let main () =
         annee, files
   in
   let rec loop = function
-  | [] -> 0
+  | [] -> true
   | test_file :: files ->
-      let res = run_test test_file annee_exec true in
-      (* Gc.minor (); (* sinon out of memory *)*)
-      if res <> 0 then res else loop files
+      run_test test_file annee_exec && ((* Gc.minor ();*) loop files)
   in
-  loop test_files
+  match loop test_files with
+  | true -> exit 0
+  | false -> exit 1
 
-let () =
+let _ =
   Printexc.record_backtrace true;
-  try
-    exit (main ())
+  try main ()
   with e ->
     Printf.eprintf "%s\n" (Printexc.to_string e);
     Printexc.print_backtrace stderr;
     exit 30
+

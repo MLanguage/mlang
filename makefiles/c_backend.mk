@@ -155,7 +155,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	NO_BINARY_COMPARE=$(NO_BINARY_COMPARE) ./cal ${TEST_FILES}
+	./cal ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

@@ -1,4 +1,3 @@
-
 type file = {
   c: in_channel;
   mutable lines: string list;
@@ -8,8 +7,7 @@ let open_file filename =
   let c = open_in filename in
   { c; lines = [] }
 
-let close_file file =
-  close_in file.c
+let close_file file = close_in file.c
 
 let read_line file =
   match file.lines with
@@ -19,9 +17,7 @@ let read_line file =
 let put_back_line file line =
   file.lines <- line :: file.lines
 
-let convert_int s =
-  try int_of_string s
-  with _ -> 0
+let convert_int s = try int_of_string s with _ -> 0
 
 let convert_float s =
   try Float.of_string s
@@ -133,3 +129,4 @@ let read_test filename =
   with
   | Failure s -> failwith (Printf.sprintf "%s: %s" filename s)
   | e -> raise e
+
