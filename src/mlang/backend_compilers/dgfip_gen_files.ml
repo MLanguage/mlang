@@ -1332,6 +1332,18 @@ let gen_erreurs_c fmt flags errors =
     Format.fprintf fmt "    NULL\n};\n"
   end
 
+let gen_struct_h fmt =
+  Format.fprintf fmt
+    {|/****** LICENCE CECIL *****/
+
+#ifndef _STRUCT_H_
+#define _STRUCT_H_
+#include "desc_static.h.inc"
+#include "irdata.h"
+#endif /* _STRUCT_H_*/
+
+|}
+
 (* Print #defines corresponding to generation options *)
 let gen_conf_h fmt (cprog : Mir.program) flags =
   let open Dgfip_options in
@@ -2194,6 +2206,10 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
 
   let oc, fmt = open_file (Filename.concat folder "conf.h") in
   gen_conf_h fmt cprog flags;
+  close_out oc;
+
+  let oc, fmt = open_file (Filename.concat folder "struct.h") in
+  gen_struct_h fmt;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in
