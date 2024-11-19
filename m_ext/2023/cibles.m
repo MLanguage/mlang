@@ -350,17 +350,17 @@ argument: EXISTE_CODE_SUPP;
 #afficher_erreur "est_code_supp_avfisc[\n";
 calculer cible trace_in;
 EXISTE_CODE_SUPP = 0;
-#si
-#     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
-#  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-#  ou present(RFDHIS)  ou present(REPSNO3_A)
-#  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
-#  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
-#  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
-#  ou present(PINELQO_A)
-#alors
-#  EXISTE_CODE_SUPP = 1;
-#sinon
+si
+     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
+  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
+  ou present(RFDHIS)  ou present(REPSNO3_A)
+  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
+  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
+  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
+  ou present(PINELQO_A)
+alors
+  EXISTE_CODE_SUPP = 1;
+sinon
   iterer
   : variable REV_AV
   : categorie saisie revenu, saisie revenu corrective
@@ -368,7 +368,7 @@ EXISTE_CODE_SUPP = 0;
   : dans (
     EXISTE_CODE_SUPP = 1;
   )
-#finsi
+finsi
 calculer cible trace_out;
 #afficher_erreur "]est_code_supp_avfisc\n";
 
@@ -750,7 +750,6 @@ calculer cible traite_double_liquidation_pvro;
 
 cible enchaine_calcul:
 application: iliad;
-# variable temporaire: CALCULER_ACOMPTES;
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible effacer_base_etc;
   calculer cible traite_double_liquidation_2;
@@ -762,9 +761,7 @@ si V_IND_TRAIT = 4 alors # primitif
 sinon
   V_ACO_MTAP = 0;
   V_NEGACO = 0;
-#  CALCULER_ACOMPTES = si (present(FLAGDERNIE)) alors (1) sinon (0) finsi;
-#  calculer cible traite_double_liquidation3 : avec CALCULER_ACOMPTES;
-  calculer cible traite_double_liquidation_pvro;
+  calculer cible traite_double_liquidation_2;
 finsi
 
 cible exporte_si_non_bloquantes:
