@@ -437,6 +437,27 @@ let translate (p : Mast.program) (main_target : string) : Mir.program =
   let prog_targets = prog.prog_targets in
   let var_category_map = prog.prog_var_cats in
   let var_data = prog.prog_vars in
+  let rules =
+    let map_rule (rule : Check_validity.rule) =
+      let id = Pos.unmark rule.rule_id in
+      Format.sprintf "%s_regle_%d" prog.prog_prefix id
+    in
+    IntMap.map map_rule prog.prog_rules
+  in
+  let verifs =
+    let map_verif (verif : Check_validity.verif) =
+      let id = Pos.unmark verif.verif_id in
+      Format.sprintf "%s_verif_%d" prog.prog_prefix id
+    in
+    IntMap.map map_verif prog.prog_verifs
+  in
+  let chainings =
+    let map_chainings (chaining : Check_validity.chaining) =
+      let name = Pos.unmark chaining.chain_name in
+      Format.sprintf "%s_chaining_%s" prog.prog_prefix name
+    in
+    StrMap.map map_chainings prog.prog_chainings
+  in
   let errs = prog.prog_errors in
   let functions =
     get_targets true errs var_category_map var_data prog_functions
@@ -450,6 +471,10 @@ let translate (p : Mast.program) (main_target : string) : Mir.program =
       program_rule_domains = prog.prog_rdoms;
       program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
+      program_rules = rules;
+      program_verifs = verifs;
+      program_chainings = chainings;
+      program_errors = errs;
       program_functions = functions;
       program_targets = targets;
       program_main_target = prog.prog_main_target;

@@ -186,92 +186,39 @@ typedef struct S_varinfo_map {
 let is_valid_app apps =
   StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
 
-(* Retrieve rules, verifications, errors and chainings from a program *)
-let get_rules_verif_etc prog =
-  let open Mast in
-  let rules, verifs, errors, chainings =
-    List.fold_left
-      (fun (rules, verifs, errors, chainings) file ->
-        List.fold_left
-          (fun (rules, verifs, errors, chainings) item ->
-            match Pos.unmark item with
-            | Rule r ->
-                let rules, chainings =
-                  if is_valid_app r.rule_apps then
-                    let rules = Pos.unmark r.rule_number :: rules in
-                    let chainings =
-                      let fold ch _ chainings = StrSet.add ch chainings in
-                      StrMap.fold fold r.rule_chainings chainings
-                    in
-                    (rules, chainings)
-                  else (rules, chainings)
-                in
-                (rules, verifs, errors, chainings)
-            | Verification v ->
-                let verifs =
-                  if is_valid_app v.verif_apps then
-                    fst
-                    @@ List.fold_left
-                         (fun (verifs, vn) _vc -> (vn :: verifs, vn + 1))
-                         (verifs, Pos.unmark v.verif_number)
-                         v.verif_conditions
-                  else verifs
-                in
-                (rules, verifs, errors, chainings)
-            | Error e -> (rules, verifs, e :: errors, chainings)
-            (* | Chaining (cn, _anl) -> rules, verifs, errors, cn ::
-               chainings *)
-            | _ -> (rules, verifs, errors, chainings))
-          (rules, verifs, errors, chainings)
-          file)
-      ([], [], [], StrSet.empty) prog
-  in
-  let rules = List.fast_sort compare rules in
-  let verifs = List.fast_sort compare verifs in
-  let errors = List.fast_sort compare errors in
-  (* let chainings = List.fast_sort compare chainings in *)
-  (rules, verifs, errors, chainings)
-
-let gen_erreurs_c fmt flags errors =
-  let open Mast in
+let gen_erreurs_c fmt flags (cprog : Mir.program) =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
 |};
   (* TODO before 2006, the format is slightly different *)
-  List.iter
-    (fun e ->
-      match e.error_descr with
-      | [ famille; code_bo; sous_code; libelle; is_isf ] ->
-          let terr =
-            match Pos.unmark e.error_typ with
-            | Anomaly -> 1 (* also called blocking *)
-            | Discordance -> 2
-            | Information -> 4
-          in
-          let sous_code_suffix =
-            if String.equal (Pos.unmark sous_code) "00" then ""
-            else "-" ^ Pos.unmark sous_code
-          in
-          Format.fprintf fmt
-            "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
-             \"%s\", %d };\n"
-            (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo)
-            sous_code_suffix
-            (Strings.sanitize_str libelle)
-            (Pos.unmark code_bo) (Pos.unmark sous_code) (Pos.unmark is_isf)
-            (Pos.unmark e.error_name) terr
-      | _ -> failwith "Invalid error description")
-    errors;
+  StrMap.iter
+    (fun _ (e : Com.Error.t) ->
+      let terr =
+        match e.typ with Anomaly -> 1 | Discordance -> 2 | Information -> 4
+      in
+      let sous_code_suffix =
+        if String.equal (Pos.unmark e.sous_code) "00" then ""
+        else "-" ^ Pos.unmark e.sous_code
+      in
+      Format.fprintf fmt
+        "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
+         \"%s\", %d };\n"
+        (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
+        sous_code_suffix
+        (Strings.sanitize_str e.libelle)
+        (Pos.unmark e.code_bo) (Pos.unmark e.sous_code) (Pos.unmark e.is_isf)
+        (Pos.unmark e.name) terr)
+    cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
     Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
 
-    List.iter
-      (fun e ->
-        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.error_name))
-      errors;
+    StrMap.iter
+      (fun _ (e : Com.Error.t) ->
+        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.name))
+      cprog.program_errors;
 
     Format.fprintf fmt "    NULL\n};\n"
   end
@@ -486,7 +433,7 @@ extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
 
-let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
+let gen_lib fmt (cprog : Mir.program) flags =
   let count loc =
     StrMap.fold
       (fun _ var nb ->
@@ -497,10 +444,10 @@ let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
   let taille_calculee = count Com.CatVar.LocComputed in
   let taille_base = count Com.CatVar.LocBase in
   let taille_totale = taille_saisie + taille_calculee + taille_base in
-  let nb_ench = StrSet.cardinal chainings in
-  let nb_err = List.length errors in
-  let nb_call = List.length rules in
-  let nb_verif = List.length verifs in
+  let nb_ench = StrMap.cardinal cprog.program_chainings in
+  let nb_err = StrMap.cardinal cprog.program_errors in
+  let nb_call = IntMap.cardinal cprog.program_rules in
+  let nb_verif = IntMap.cardinal cprog.program_verifs in
 
   Format.fprintf fmt
     {|#define TAILLE_SAISIE %d
@@ -545,11 +492,11 @@ let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
 
   (* TODO external declaration of individual control rules (seems to be no
      longer used) *)
-  List.iter
-    (fun e ->
-      let en = Pos.unmark e.Mast.error_name in
+  StrMap.iter
+    (fun _ (e : Com.Error.t) ->
+      let en = Pos.unmark e.name in
       Format.fprintf fmt "extern T_erreur erreur_%s;\n" en)
-    errors;
+    cprog.program_errors;
 
   (* TODO function declarations (seems to be no longer used) *)
   if flags.Dgfip_options.flg_pro then
@@ -649,7 +596,7 @@ let gen_decl_targets fmt (cprog : Mir.program) =
            name))
     targets
 
-let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
+let gen_mlang_h fmt cprog flags stats_varinfos =
   let pr form = Format.fprintf fmt form in
   pr "/****** LICENCE CECIL *****/\n\n";
   pr "#ifndef _MLANG_H_\n";
@@ -675,7 +622,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
   pr "\n";
-  gen_lib fmt cprog flags rules verifs chainings errors;
+  gen_lib fmt cprog flags;
   pr "\n";
   gen_decl_functions fmt cprog;
   pr "\n";
@@ -1629,20 +1576,17 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
+let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   let folder = Filename.dirname !Cli.output_file in
 
-  let rules, verifs, errors, chainings = get_rules_verif_etc prog in
-
-  Dgfip_compir_files.generate_compir_files flags prog cprog rules verifs errors
-    chainings;
+  Dgfip_compir_files.generate_compir_files flags cprog;
 
   let oc, fmt = open_file (Filename.concat folder "varinfos.c") in
   let stats_varinfos = gen_table_varinfos fmt cprog in
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "erreurs.c") in
-  gen_erreurs_c fmt flags errors;
+  gen_erreurs_c fmt flags cprog;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "conf.h") in
@@ -1650,7 +1594,7 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in
-  gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors;
+  gen_mlang_h fmt cprog flags stats_varinfos;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in

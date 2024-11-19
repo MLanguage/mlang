@@ -56,8 +56,10 @@ type program = {
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
-      (** A static register of all variables that can be used during a
-          calculation *)
+  program_rules : string IntMap.t;
+  program_verifs : string IntMap.t;
+  program_chainings : string StrMap.t;
+  program_errors : Com.Error.t StrMap.t;
   program_functions : target_data Com.TargetMap.t;
   program_targets : target_data Com.TargetMap.t;
   program_main_target : string;

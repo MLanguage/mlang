@@ -181,7 +181,6 @@ let driver (files : string list) (application_names : string list)
     m_program := List.rev !m_program;
     finish "completed!";
     Cli.debug_print "Elaborating...";
-    let source_m_program = !m_program in
     let m_program = Mast_to_mir.translate !m_program mpp_function in
     let m_program = Mir.expand_functions m_program in
     Cli.debug_print "Creating combined program suitable for execution...";
@@ -213,8 +212,7 @@ let driver (files : string list) (application_names : string list)
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Dgfip_gen_files.generate_auxiliary_files dgfip_flags
-              source_m_program m_program;
+            Dgfip_gen_files.generate_auxiliary_files dgfip_flags m_program;
             Bir_to_dgfip_c.generate_c_program dgfip_flags m_program
               !Cli.output_file;
             Cli.debug_print "Result written to %s" !Cli.output_file
