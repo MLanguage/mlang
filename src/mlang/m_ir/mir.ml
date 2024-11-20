@@ -199,7 +199,7 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
 
 let expand_functions (p : program) : program =
   let open Com in
-  let program_targets =
+  let update_instrs p_procs =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
@@ -272,6 +272,8 @@ let expand_functions (p : program) : program =
       (fun t ->
         let target_prog = List.map map_instr t.target_prog in
         { t with target_prog })
-      p.program_targets
+      p_procs
   in
-  { p with program_targets }
+  let program_functions = update_instrs p.program_functions in
+  let program_targets = update_instrs p.program_targets in
+  { p with program_functions; program_targets }
