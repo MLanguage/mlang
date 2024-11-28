@@ -684,15 +684,15 @@ static T_erreur *new_erreur(T_erreur *ref_erreur, char *code) {
   size_t len = 0;
   char *new_message = NULL;
 
-  if(ref_erreur == NULL || ref_erreur->message == NULL) return NULL;
+  if (ref_erreur == NULL || ref_erreur->message == NULL) return NULL;
   pErreur = (T_erreur *)malloc(sizeof(T_erreur));
   if (pErreur == NULL) goto erreur_new_erreur;
   len = strlen(ref_erreur->message) + 1;
-  if(code != NULL) {
+  if (code != NULL) {
     len += C_LEN_ERREUR_DEB + strlen(code) + C_LEN_ERREUR_FIN;
   }
   new_message = (char *)malloc(len * sizeof(char));
-  if(new_message == NULL) goto erreur_new_erreur;
+  if (new_message == NULL) goto erreur_new_erreur;
   strcpy(new_message, ref_erreur->message);
   if (code != NULL) {
     strcat(new_message, C_STR_ERREUR_DEB);
@@ -715,12 +715,9 @@ erreur_new_erreur:
 
 /* Libération de la mémoire allouée par la fonction new_erreur */
 static void free_new_erreur(T_erreur *erreur) {
-  char *msg = NULL;
-
   if (erreur == NULL) return;
-  msg = erreur->message;
-  if(msg != NULL) {
-    free(msg);
+  if (erreur->message != NULL) {
+    free(erreur->message);
   }
   free(erreur);
 }
@@ -730,13 +727,13 @@ T_discord *new_discord(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   T_erreur *pErreur = NULL;
   T_keep_discord *pKeep = NULL;
 
-  if(irdata == NULL || ref_erreur == NULL) return NULL;
+  if (irdata == NULL || ref_erreur == NULL) return NULL;
   pDiscord = (T_discord *)malloc(sizeof(T_discord));
-  if(pDiscord == NULL) goto erreur_new_discord;
+  if (pDiscord == NULL) goto erreur_new_discord;
   pKeep = malloc(sizeof(T_keep_discord));
-  if(pKeep == NULL) goto erreur_new_discord;
+  if (pKeep == NULL) goto erreur_new_discord;
   pErreur = new_erreur(ref_erreur, code);
-  if(pErreur == NULL) goto erreur_new_discord;
+  if (pErreur == NULL) goto erreur_new_discord;
 
   pKeep->discord = pDiscord;
   pKeep->suivant = irdata->keep_discords;
@@ -761,7 +758,7 @@ void free_keep_discord(T_irdata *irdata) {
   T_keep_discord *pKeep = NULL;
   T_keep_discord *pNext = NULL;
 
-  if(irdata == NULL) return;
+  if (irdata == NULL) return;
   pKeep = irdata->keep_discords;
   while (pKeep != NULL) {
     pDiscord = pKeep->discord;
@@ -789,11 +786,11 @@ void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   T_discord *pDiscord = NULL;
 
   pDiscord = new_discord(irdata, ref_erreur, code);
-  if(pDiscord == NULL) return;
+  if (pDiscord == NULL) return;
   if (ref_erreur->type == ANOMALIE) irdata->nb_anos++;
   if (ref_erreur->type == DISCORDANCE) irdata->nb_discos++;
   if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
-  if(strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
+  if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
     irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
@@ -1122,7 +1119,7 @@ void init_base(T_irdata *irdata) {
 
 void init_erreur(T_irdata *irdata) {
   if (irdata == NULL) return;
-  free_keep_discord(irdata);
+//  free_keep_discord(irdata);
   irdata->discords = NULL;
   irdata->p_discord = &irdata->discords;
   irdata->nb_anos = 0;
