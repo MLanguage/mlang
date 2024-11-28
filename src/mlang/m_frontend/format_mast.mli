@@ -22,4 +22,6 @@ val format_rule_domain : Pp.t -> Mast.rule_domain_decl -> unit
 
 val format_verif_domain : Pp.t -> Mast.verif_domain_decl -> unit
 
+val format_source_file_item : Pp.t -> Mast.source_file_item -> unit
+
 val format_source_file : Pp.t -> Mast.source_file -> unit

@@ -38,13 +38,26 @@ let process_dgfip_options (backend : string option)
    rule 1 is modified to add assignments to APPLI_XXX variables according to the
    target application (OCEANS, BATCH and ILIAD). *)
 let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
-    (source_file : Mast.source_file) =
+    (program : Mast.program) =
   let open Mast in
-  let mk_assign var val_ =
-    let v = if val_ then 1.0 else 0.0 in
-    ( Com.SingleFormula
-        ((Normal var, Pos.no_pos), None, (Literal (Float v), Pos.no_pos)),
-      Pos.no_pos )
+  let var_exists name =
+    List.exists
+      (List.exists (fun (item, _) ->
+           match item with
+           | VariableDecl (ComputedVar (cv, _)) ->
+               Pos.unmark cv.comp_name = name
+           | VariableDecl (InputVar (iv, _)) -> Pos.unmark iv.input_name = name
+           | _ -> false))
+      program
+  in
+  let mk_assign name value l =
+    if var_exists name then
+      let no_pos x = (x, Pos.no_pos) in
+      let var = Normal name in
+      let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
+      let cmd = Com.SingleFormula (no_pos var, None, no_pos litt) in
+      no_pos cmd :: l
+    else l
   in
   let oceans, batch, iliad =
     match backend with
@@ -53,22 +66,21 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
     | _ -> (false, false, true)
   in
   List.map
-    (fun item ->
-      match Pos.unmark item with
-      | Rule r when Pos.unmark r.rule_number = 1 ->
-          let fl =
-            List.map
-              (fun f -> Pos.same_pos_as (Com.Affectation f) f)
-              [
-                mk_assign "APPLI_OCEANS" oceans;
-                mk_assign "APPLI_BATCH" batch;
-                mk_assign "APPLI_ILIAD" iliad;
-              ]
-          in
-          ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
-            Pos.get_position item )
-      | _ -> item)
-    source_file
+    (List.map (fun item ->
+         match Pos.unmark item with
+         | Rule r when Pos.unmark r.rule_number = 1 ->
+             let fl =
+               List.map
+                 (fun f -> Pos.same_pos_as (Com.Affectation f) f)
+                 ([]
+                 |> mk_assign "APPLI_OCEANS" oceans
+                 |> mk_assign "APPLI_BATCH" batch
+                 |> mk_assign "APPLI_ILIAD" iliad)
+             in
+             ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
+               Pos.get_position item )
+         | _ -> item))
+    program
 
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
@@ -171,7 +183,6 @@ let driver (files : string list) (application_names : string list)
         in
         try
           let commands = Mparser.source_file token filebuf in
-          let commands = patch_rule_1 backend dgfip_flags commands in
           m_program := commands :: !m_program
         with Mparser.Error ->
           close_in input;
@@ -179,6 +190,7 @@ let driver (files : string list) (application_names : string list)
             (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
       !Cli.source_files;
     m_program := List.rev !m_program;
+    m_program := patch_rule_1 backend dgfip_flags !m_program;
     finish "completed!";
     Cli.debug_print "Elaborating...";
     let m_program = Mast_to_mir.translate !m_program mpp_function in
