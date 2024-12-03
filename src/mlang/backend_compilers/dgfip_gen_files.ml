@@ -816,7 +816,7 @@ int nb_bloquantes(T_irdata *irdata) {
 
 #ifdef FLG_TRACE
 
-int niv_trace = 3;
+/* int niv_trace = 3; */
 
 #ifdef FLG_API
 #define TRACE_FILE fd_trace_dialog
