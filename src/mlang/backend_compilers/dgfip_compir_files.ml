@@ -466,12 +466,12 @@ let gen_table fmt is_ebcdic vars req_type opt =
               ~attributes ~desc ~alias_opt
       end)
     vars;
-
+  (*
   if !empty then
     gen_var fmt req_type opt ~idx:0 ~name:"" ~tvar:Computed ~is_output:false
       ~typ_opt:None ~attributes:StrMap.empty ~desc:"" ~alias_opt:None;
-
-  Format.fprintf fmt "};\n"
+*)
+  Format.fprintf fmt "    NULL};\n"
 
 let gen_desc fmt is_ebcdic vars ~alias_only =
   let vars = sort_vars_by_name is_ebcdic vars in
@@ -744,7 +744,7 @@ let gen_table_call fmt flags vars_debug (cprog : Mir.program) =
     IntMap.iter
       (fun id rn -> Format.fprintf fmt "    { %d, %s },\n" id rn)
       cprog.program_rules;
-    Format.fprintf fmt "};\n\n";
+    Format.fprintf fmt "    NULL};\n\n";
 
     Format.fprintf fmt "T_desc_err desc_err[NB_ERR + 1] = {\n";
     StrMap.iter
@@ -752,7 +752,7 @@ let gen_table_call fmt flags vars_debug (cprog : Mir.program) =
         let en = Pos.unmark e.name in
         Format.fprintf fmt "    { \"%s\", &erreur_%s },\n" en en)
       cprog.program_errors;
-    Format.fprintf fmt "};\n\n");
+    Format.fprintf fmt "    NULL};\n\n");
 
   StrMap.iter
     (fun _ tn -> Format.fprintf fmt "extern T_discord *%s(T_irdata *);\n" tn)
@@ -762,7 +762,7 @@ let gen_table_call fmt flags vars_debug (cprog : Mir.program) =
   StrMap.iter
     (fun cn tn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn tn)
     cprog.program_chainings;
-  Format.fprintf fmt "};\n"
+  Format.fprintf fmt "    NULL};\n"
 
 (* Print the table of verification functions (tablev.c) *)
 let gen_table_verif fmt flags (cprog : Mir.program) =
@@ -782,7 +782,7 @@ let gen_table_verif fmt flags (cprog : Mir.program) =
     IntMap.iter
       (fun id tn -> Format.fprintf fmt "    { %d, %s },\n" id tn)
       cprog.program_verifs;
-    Format.fprintf fmt "};\n\n")
+    Format.fprintf fmt "    NULL};\n\n")
 
 (* Count variables in a specific category *)
 let count vars req_type =

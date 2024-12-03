@@ -355,7 +355,6 @@ struct S_irdata {
   int ref_org;
   T_keep_discord *keep_discords;
   T_discord *discords;
-  T_discord **p_discord;
   int nb_anos;
   int nb_discos;
   int nb_infos;
@@ -740,9 +739,8 @@ T_discord *new_discord(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   irdata->keep_discords = pKeep;
 
   pDiscord->erreur = pErreur;
-  pDiscord->suivant = NULL;
-  *irdata->p_discord = pDiscord;
-  irdata->p_discord = &pDiscord->suivant;
+  pDiscord->suivant = irdata->discords;
+  irdata->discords = pDiscord;
 
   return pDiscord;
 
@@ -1120,7 +1118,6 @@ void init_base(T_irdata *irdata) {
 void init_erreur(T_irdata *irdata) {
   if (irdata == NULL) return;
   irdata->discords = NULL;
-  irdata->p_discord = &irdata->discords;
   irdata->nb_anos = 0;
   irdata->nb_discos = 0;
   irdata->nb_infos = 0;
@@ -1207,7 +1204,6 @@ T_irdata *cree_irdata(void) {
   irdata->ref_org = 0;
   irdata->keep_discords = NULL;
   irdata->discords = NULL;
-  irdata->p_discord = &irdata->discords;
   irdata->sz_err_finalise = 0;
   irdata->err_finalise = NULL;
   irdata->nb_err_finalise = 0;
