@@ -17,18 +17,22 @@
 open Lexing
 open Mlexer
 
+exception Exit
+
 let process_dgfip_options (backend : string option)
     (dgfip_options : string list option) =
   match backend with
   | Some backend when String.lowercase_ascii backend = "dgfip_c" -> begin
       match dgfip_options with
       | None ->
-          Errors.raise_error
-            "when using the DGFiP backend, DGFiP options MUST be provided"
+          Cli.error_print
+            "when using the DGFiP backend, DGFiP options MUST be provided";
+          raise Exit
       | Some options -> begin
           match Dgfip_options.process_dgfip_options options with
           | None ->
-              Errors.raise_error "parsing of DGFiP options failed, aborting"
+              Cli.error_print "parsing of DGFiP options failed, aborting";
+              raise Exit
           | Some flags -> flags
         end
     end
@@ -231,10 +235,16 @@ let driver (files : string list) (application_names : string list)
             Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
     end
-  with Errors.StructuredError (msg, pos, kont) ->
-    Cli.error_print "%a" Errors.format_structured_error (msg, pos);
+  with Errors.StructuredError (msg, pos_list, kont) ->
+    let pp_pos fmt (s_opt, p) =
+      match s_opt with
+      | Some s -> Format.fprintf fmt "(%s, %a)" s Pos.format_position_gnu p
+      | None -> Pos.format_position_gnu fmt p
+    in
+    Cli.error_print "Uncaught exception: Errors.StructuredError(\"%s\")@."
+      (String.escaped msg);
+    Cli.error_print "%a@." (Pp.list_endline pp_pos) pos_list;
     (match kont with None -> () | Some kont -> kont ());
-    exit (-1)
+    Format.eprintf "%s@." (Printexc.get_backtrace ())
 
-let main () =
-  exit @@ Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)
+let main () = Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)
