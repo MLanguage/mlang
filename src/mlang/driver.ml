@@ -94,8 +94,6 @@ let driver (files : string list) (application_names : string list)
     (roundops : string option) (comparison_error_margin : float option)
     (income_year : int option) (m_clean_calls : bool)
     (dgfip_options : string list option) =
-  if income_year = None then
-    Errors.raise_error "income year missing (--income-year YEAR)";
   let value_sort =
     let precision = Option.get precision in
     if precision = "double" then Cli.RegularFloat

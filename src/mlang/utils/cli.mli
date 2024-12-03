@@ -110,7 +110,7 @@ val m_clean_calls : bool ref
 
 val comparison_error_margin : float ref
 
-val income_year : int option ref
+val income_year : int ref
 
 val value_sort : value_sort ref
 

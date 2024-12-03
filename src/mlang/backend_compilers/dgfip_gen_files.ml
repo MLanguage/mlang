@@ -1119,7 +1119,6 @@ void init_base(T_irdata *irdata) {
 
 void init_erreur(T_irdata *irdata) {
   if (irdata == NULL) return;
-//  free_keep_discord(irdata);
   irdata->discords = NULL;
   irdata->p_discord = &irdata->discords;
   irdata->nb_anos = 0;
