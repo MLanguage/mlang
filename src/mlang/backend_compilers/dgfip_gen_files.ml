@@ -628,7 +628,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
-let gen_mlang_c fmt =
+let gen_mlang_c fmt flags =
   Format.fprintf fmt "%s"
     {|/****** LICENCE CECIL *****/
 
@@ -788,8 +788,13 @@ void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   if (ref_erreur->type == ANOMALIE) irdata->nb_anos++;
   if (ref_erreur->type == DISCORDANCE) irdata->nb_discos++;
   if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
-  if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
-    irdata->nb_bloqs++;
+|};
+  if flags.Dgfip_options.flg_pro || flags.flg_iliad then
+    Format.fprintf fmt "%s"
+      {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {|}
+  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {|};
+  Format.fprintf fmt "%s"
+    {|irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
     }
@@ -1590,5 +1595,5 @@ let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in
-  gen_mlang_c fmt;
+  gen_mlang_c fmt flags;
   close_out oc
