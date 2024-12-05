@@ -791,8 +791,10 @@ void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
 |};
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then
     Format.fprintf fmt "%s"
-      {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {|}
-  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {|};
+      {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
+|}
+  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
+|};
   Format.fprintf fmt "%s"
     {|irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
