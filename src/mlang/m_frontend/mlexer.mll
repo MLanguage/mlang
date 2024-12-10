@@ -84,6 +84,7 @@ rule token = parse
     | "enchaineur" -> CHAINING
     | "erreur" -> ERROR
     | "et" -> AND
+    | "evenement" -> EVENT
     | "exporte_erreurs" -> EXPORT_ERRORS
     | "faire" -> DO
     | "finalise_erreurs" -> FINALIZE_ERRORS

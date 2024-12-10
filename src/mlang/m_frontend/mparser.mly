@@ -58,6 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
+%token EVENT
 
 %token EOF
 
