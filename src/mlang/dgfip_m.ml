@@ -263,6 +263,7 @@ let string_to_rule_domain_id : string -> string list = function
   | "base_anterieure" -> [ "corrective"; "base_anterieure" ]
   | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
   | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
+  | "base_TLNUNV" -> [ "corrective"; "base_TLNUNV" ]
   | "horizontale" -> [ "horizontale" ]
   | "base_primitive_penalisee" -> [ "corrective"; "base_primitive_penalisee" ]
   | _ -> raise Not_found
