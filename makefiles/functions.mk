@@ -44,7 +44,7 @@ $(if $(call not,$(call is_in,$(1))), \
 endef
 
 define make_in_raw
-$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(1) ROOT_DIR=$(ROOT_DIR) $(2)
+@$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(1) ROOT_DIR=$(ROOT_DIR) $(2)
 endef
 
 define check_in

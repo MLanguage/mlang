@@ -2,7 +2,7 @@
 
 (name mlang)
 
-(version 1.1.0)
+(version %%VERSION%%)
 
 (generate_opam_files true)
 
