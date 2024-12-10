@@ -424,20 +424,18 @@ module Error = struct
 
   type t = {
     name : string Pos.marked;
-    kind : string Pos.marked;
-    major_code : string Pos.marked;
-    minor_code : string Pos.marked;
-    description : string Pos.marked;
-    isisf : string Pos.marked;
+    famille : string Pos.marked;
+    code_bo : string Pos.marked;
+    sous_code : string Pos.marked;
+    libelle : string Pos.marked;
+    is_isf : string Pos.marked;
     typ : typ;
   }
 
   let pp_descr fmt err =
-    Format.fprintf fmt "%s:%s:%s:%s:%s" (Pos.unmark err.kind)
-      (Pos.unmark err.major_code)
-      (Pos.unmark err.minor_code)
-      (Pos.unmark err.description)
-      (Pos.unmark err.isisf)
+    Format.fprintf fmt "%s:%s:%s:%s:%s" (Pos.unmark err.famille)
+      (Pos.unmark err.code_bo) (Pos.unmark err.sous_code)
+      (Pos.unmark err.libelle) (Pos.unmark err.is_isf)
 
   let compare (var1 : t) (var2 : t) = compare var1.name var2.name
 end

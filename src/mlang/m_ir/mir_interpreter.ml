@@ -697,7 +697,7 @@ struct
         | Com.Error.Discordance -> ctx.ctx_nb_discos <- ctx.ctx_nb_discos + 1
         | Com.Error.Information -> ctx.ctx_nb_infos <- ctx.ctx_nb_infos + 1);
         let is_blocking =
-          err.typ = Com.Error.Anomaly && Pos.unmark err.isisf = "N"
+          err.typ = Com.Error.Anomaly && Pos.unmark err.is_isf = "N"
         in
         ctx.ctx_nb_bloquantes <-
           (ctx.ctx_nb_bloquantes + if is_blocking then 1 else 0);

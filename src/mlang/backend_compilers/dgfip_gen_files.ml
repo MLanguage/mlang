@@ -14,807 +14,52 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(* Various flags used to control wicch data to put in each variable array *)
-type gen_opt = {
-  with_verif : bool;
-  with_classe : bool;
-  with_priorite : bool;
-  with_categorie_TL : bool;
-  with_nat_code : bool;
-  with_cotsoc : bool;
-  with_ind_abat : bool;
-  with_acompte : bool;
-  with_avfisc : bool;
-  with_rapcat : bool;
-  with_sanction : bool;
-  with_modcat : bool;
-  with_liee : bool;
-  with_libelle : bool;
-  with_alias : bool;
-  with_type : bool;
-  with_type_donnee : bool;
-  with_primrest : bool;
-}
-
-(* Used to compute array indices for each category of variable *)
-type idx = {
-  out : int ref;
-  comp : int ref;
-  base : int ref;
-  inp : int ref;
-  ctxt : int ref;
-  fam : int ref;
-  rev : int ref;
-  revc : int ref;
-  var : int ref;
-  pen : int ref;
-}
-
-type var_subtype =
-  | Context
-  | Family
-  | Income
-  | CorrIncome
-  | Variation
-  | Penality
-  | Base
-  | Computed
-
-(* Used to specify the type of array to generate *)
-type gen_type =
-  | Computed of var_subtype option
-  | Input of var_subtype option
-  | Output (* can be of any subtype *)
-  | Debug of int
-(* can be of any subtype *)
-
-let is_input st = match st with Base | Computed -> false | _ -> true
-
-let is_computed st = match st with Base | Computed -> true | _ -> false
-
-let input_var_subtype iv : var_subtype =
-  List.find_map
-    (fun t ->
-      match Pos.unmark t with
-      | "contexte" -> Some Context
-      | "famille" -> Some Family
-      | "penalite" -> Some Penality
-      | "revenu" -> Some Income
-      | _ -> None)
-    iv.Mast.input_category
-  |> function
-  | Some s -> s
-  | None -> assert false
-(* Missing CorrIncome and Variation (actually not used *)
-
-let computed_var_subtype cv : var_subtype =
-  let is_base =
-    List.exists
-      (fun ct -> String.equal (Pos.unmark ct) Mast.base_category)
-      cv.Mast.comp_category
-  in
-  if is_base then Base else Computed
-
-let computed_var_is_output cv = cv.Mast.comp_is_givenback
-
-let input_var_is_output iv = iv.Mast.input_is_givenback
-
-let consider_output is_ebcdic attribs =
-  is_ebcdic = false
-  || List.exists
-       (fun (an, av) ->
-         match (Pos.unmark an, Pos.unmark av) with
-         | "primrest", v -> v <> 0
-         | _ -> false)
-       attribs
-
-(* Used to generated the array names *)
-let subtype_name subtyp =
-  match subtyp with
-  | Context -> "contexte"
-  | Family -> "famille"
-  | Income -> "revenu"
-  | CorrIncome -> "revenu_correc"
-  | Variation -> "variation"
-  | Penality -> "penalite"
-  | Base -> assert false (* never used *)
-  | Computed -> assert false
-(* never used *)
-
-(* Used to generated the array names *)
-let req_type_name req_type =
-  match req_type with
-  | Computed (Some typ) -> subtype_name typ
-  | Computed None -> Mast.computed_category
-  | Input (Some typ) -> subtype_name typ
-  | Input None -> Mast.input_category
-  | Output -> Mast.givenback_category
-  | Debug i when i <= 0 -> "debug"
-  | Debug i -> Printf.sprintf "debug%02d" i
-
-let new_idx () =
-  {
-    out = ref 0;
-    comp = ref 0;
-    base = ref 0;
-    inp = ref 0;
-    ctxt = ref 0;
-    fam = ref 0;
-    rev = ref 0;
-    revc = ref 0;
-    var = ref 0;
-    pen = ref 0;
-  }
-
-(* Compute the variable indices in the different arrays according to its type *)
-(* Returns 3 indices: 1 - Index in the Computed/Base/Input arrays of the TGV 2 -
-   Index in the Context/Family/Income/... arrays 3 - Index in the Restituee
-   array *)
-let next_idx idx kind output size =
-  let idxr1, idxr2 =
-    match (kind : var_subtype) with
-    | Computed -> (idx.comp, idx.comp)
-    | Base -> (idx.base, idx.base)
-    | Context -> (idx.inp, idx.ctxt)
-    | Family -> (idx.inp, idx.fam)
-    | Income -> (idx.inp, idx.rev)
-    | CorrIncome -> (idx.inp, idx.revc)
-    | Variation -> (idx.inp, idx.var)
-    | Penality -> (idx.inp, idx.pen)
-  in
-  let idx1, idx2 = (!idxr1, !idxr2) in
-  idxr1 := !idxr1 + size;
-  if idxr1 != idxr2 then idxr2 := !idxr2 + size;
-  let idxo_opt =
-    if output then (
-      let idxo = !(idx.out) in
-      idx.out := !(idx.out) + size;
-      Some idxo)
-    else None
-  in
-  (idx1, idx2, idxo_opt)
-
-let get_attr a attributes =
-  let attr_opt =
-    List.find_opt (fun (an, _al) -> Pos.unmark an = a) attributes
-  in
-  match attr_opt with
-  | None -> if a = "primrest" then 1 else -1
-  | Some (_an, al) -> Pos.unmark al
-
-let get_name name alias_opt =
-  match alias_opt with Some alias -> alias | _ -> name
-
-let sort_vars_by_alias is_ebcdic vars =
-  let compare_name =
-    if is_ebcdic then Strings.compare_ebcdic else Strings.compare_default
-  in
-  List.fast_sort
-    (fun (_, _, _, _, name1, alias_opt1, _, _, _, _)
-         (_, _, _, _, name2, alias_opt2, _, _, _, _) ->
-      let var_name1 = get_name name1 alias_opt1 in
-      let var_name2 = get_name name2 alias_opt2 in
-      compare_name var_name1 var_name2)
-    vars
-
-let sort_vars_by_name is_ebcdic vars =
-  let compare_name =
-    if is_ebcdic then Strings.compare_ebcdic else Strings.compare_default
-  in
-  List.fast_sort
-    (fun (_, _, _, _, name1, _, _, _, _, _) (_, _, _, _, name2, _, _, _, _, _) ->
-      compare_name name1 name2)
-    vars
-
-(* Retrieve all the variables, sorted by alias, and compute their IDs *)
-let get_vars prog is_ebcdic =
-  let open Mast in
-  let idx = new_idx () in
-
-  (* Retrieve the variables in file-order and compute their IDs *)
-  let vars =
-    List.fold_left
-      (fun vars file ->
-        List.fold_left
-          (fun vars item ->
-            match Pos.unmark item with
-            | VariableDecl (ComputedVar cv) ->
-                let cv = Pos.unmark cv in
-                let tvar = computed_var_subtype cv in
-                (* Base or Computed *)
-                let size =
-                  match cv.comp_table with
-                  | Some (Mast.LiteralSize i, _) -> i
-                  | None -> 1
-                  | Some (Mast.SymbolSize _, _) -> assert false
-                in
-                let idx1, idx2, idxo_opt =
-                  next_idx idx tvar
-                    (computed_var_is_output cv
-                    && consider_output is_ebcdic cv.Mast.comp_attributes)
-                    size
-                in
-                let var =
-                  ( tvar,
-                    idx1,
-                    idx2,
-                    idxo_opt,
-                    Pos.unmark cv.comp_name,
-                    None,
-                    Strings.sanitize_str cv.comp_description,
-                    cv.comp_typ,
-                    cv.comp_attributes,
-                    size )
-                in
-                var :: vars
-            | VariableDecl (InputVar iv) ->
-                let iv = Pos.unmark iv in
-                let tvar = input_var_subtype iv in
-                let idx1, idx2, idxo_opt =
-                  next_idx idx tvar
-                    (input_var_is_output iv
-                    && consider_output is_ebcdic iv.Mast.input_attributes)
-                    1
-                in
-                let var =
-                  ( tvar,
-                    idx1,
-                    idx2,
-                    idxo_opt,
-                    Pos.unmark iv.input_name,
-                    Some (Pos.unmark iv.input_alias),
-                    Strings.sanitize_str iv.input_description,
-                    iv.input_typ,
-                    iv.input_attributes,
-                    1 )
-                in
-                var :: vars
-            | _ -> vars)
-          vars file)
-      [] prog
-  in
-
-  let vars = sort_vars_by_name is_ebcdic vars in
-
-  let idx = new_idx () in
-
-  (* Recompute the indices of Restituee vars, as they are sorted by name (as
-     opposed to file-order) *)
-  let vars =
-    List.map
-      (fun ( tvar,
-             idx1,
-             idx2,
-             idxo_opt,
-             name,
-             alias_opt,
-             desc,
-             typ_opt,
-             attributes,
-             size ) ->
-        let _idx1, _idx2, idxo_opt =
-          next_idx idx tvar (idxo_opt <> None) size
-        in
-        ( tvar,
-          idx1,
-          idx2,
-          idxo_opt,
-          name,
-          alias_opt,
-          desc,
-          typ_opt,
-          attributes,
-          size ))
-      vars
-  in
-
-  let vars = sort_vars_by_alias is_ebcdic vars in
-
-  let idx = new_idx () in
-
-  (* Recompute the indices of Context/Family/Income/... vars, as they are sorted
-     by alias *)
-  List.map
-    (fun ( tvar,
-           idx1,
-           _idx2,
-           idxo_opt,
-           name,
-           alias_opt,
-           desc,
-           typ_opt,
-           attributes,
-           size ) ->
-      let _idx1, idx2, _idxo_opt = next_idx idx tvar (idxo_opt <> None) size in
-      ( tvar,
-        idx1,
-        idx2,
-        idxo_opt,
-        name,
-        alias_opt,
-        desc,
-        typ_opt,
-        attributes,
-        size ))
-    vars
-
-(* Retrieve the variables for the debug array; variables with aliases are
-   duplicated *)
-let get_vars_debug is_ebcdic vars =
-  sort_vars_by_name is_ebcdic
-    (List.fold_left
-       (fun vars var ->
-         let ( tvar,
-               idx1,
-               idx2,
-               idxo_opt,
-               _name,
-               alias_opt,
-               desc,
-               typ_opt,
-               attributes,
-               size ) =
-           var
-         in
-         match alias_opt with
-         | Some alias ->
-             ( tvar,
-               idx1,
-               idx2,
-               idxo_opt,
-               alias,
-               alias_opt,
-               desc,
-               typ_opt,
-               attributes,
-               size )
-             :: var :: vars
-         | None -> var :: vars)
-       [] vars)
-
-(* Split a list in approximately equal chunks into a list of lists *)
-let split_list lst cnt =
-  let size = List.length lst in
-  let rec aux l nl s sz nll c =
-    let nl, s, sz, nll, c =
-      if s < sz then (nl, s, sz, nll, c)
-      else
-        let sz = ((c + 2) * size / cnt) - ((c + 1) * size / cnt) in
-        ([], 0, sz, List.rev nl :: nll, c + 1)
-    in
-    match l with
-    | [] ->
-        assert (nl = []);
-        List.rev nll
-    | x :: l -> aux l (x :: nl) (s + 1) sz nll c
-  in
-  if cnt <= 1 then [ lst ]
-  else
-    let sz = size / cnt in
-    aux lst [] 0 sz [] 0
-
-(* Print a variable's description *)
-let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
-    ~desc ~alias_opt =
-  let var_name = if opt.with_alias then get_name name alias_opt else name in
-
-  let kind, is_input =
-    match (tvar : var_subtype) with
-    | Computed -> ("EST_CALCULEE", false)
-    | Base -> ("EST_BASE", false)
-    | _ -> ("EST_SAISIE", true)
-  in
-
-  let typ = match typ_opt with None -> Com.Real | Some ct -> Pos.unmark ct in
-
-  Format.fprintf fmt "    { \"%s\", %s | %d" var_name kind idx;
-  if opt.with_type_donnee then
-    Format.fprintf fmt ", %a" Com.format_value_typ typ;
-  if opt.with_verif then
-    if is_input && false then Format.fprintf fmt ", err_%s" name
-      (* Note: no alias *)
-    else Format.fprintf fmt ", no_error";
-  (* does not seem to be used anymore... *)
-  if opt.with_classe then
-    Format.fprintf fmt ", %d" (get_attr "classe" attributes);
-  if opt.with_priorite then
-    Format.fprintf fmt ", %d" (get_attr "priorite" attributes);
-  if opt.with_categorie_TL then
-    Format.fprintf fmt ", %d" (get_attr "categorie_TL" attributes);
-  if opt.with_nat_code then
-    Format.fprintf fmt ", %d" (get_attr "nat_code" attributes);
-  if opt.with_cotsoc then
-    Format.fprintf fmt ", %d" (get_attr "cotsoc" attributes);
-  if opt.with_ind_abat then
-    Format.fprintf fmt ", %d" (get_attr "ind_abat" attributes);
-  if opt.with_acompte then
-    Format.fprintf fmt ", %d" (get_attr "acompte" attributes);
-  if opt.with_avfisc then
-    Format.fprintf fmt ", %d" (get_attr "avfisc" attributes);
-  if opt.with_rapcat then
-    Format.fprintf fmt ", %d" (get_attr "rapcat" attributes);
-  if opt.with_sanction then
-    Format.fprintf fmt ", %d" (get_attr "sanction" attributes);
-  if opt.with_modcat then
-    Format.fprintf fmt ", %d" (get_attr "modcat" attributes);
-  if opt.with_liee then
-    if true (* no linked var *) then Format.fprintf fmt ", (T_var_irdata)NULL"
-    else Format.fprintf fmt ", desc_%s" (assert false);
-  (* only REVENU vars may use this, but they don't... *)
-  if opt.with_type && is_output then Format.fprintf fmt ", RESTITUEE";
-  (* there also exist RESTITUEE_P and RESTITUEE_C, but they are unused *)
-  if opt.with_primrest then
-    Format.fprintf fmt ", %d" (get_attr "primrest" attributes);
-  if opt.with_libelle then Format.fprintf fmt ", \"%s\"" desc
-  else Format.fprintf fmt " /*\"%s\"*/" desc;
-  begin
-    match ((req_type : gen_type), tvar) with
-    | Input _, Income -> Format.fprintf fmt ", \"%s\"" name
-    | _ -> ()
-  end;
-  Format.fprintf fmt " },\n"
-
-(* Check if a variable matches requested selection critaria *)
-let var_matches req_type var_type is_output =
-  match req_type with
-  | Computed (Some rt) -> is_computed var_type && rt = var_type
-  | Computed None -> is_computed var_type
-  | Input (Some rt) -> is_input var_type && rt = var_type
-  | Input None -> is_input var_type
-  | Output -> is_output
-  | Debug _i -> true
-
-(* Print the specified variable table *)
-let gen_table fmt is_ebcdic vars req_type opt =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
-
-#include "compir.h"
-
-|};
-  (* if opt.with_verif then *)
-  Format.fprintf fmt "extern T_discord *no_error(T_irdata *);\n";
-
-  (* TODO there should be individual var verification functions here, but they
-     do not seem to be used (for all kind of input vars as well as output vars
-     and debug tables) *)
-  let vars =
-    if opt.with_alias then sort_vars_by_alias is_ebcdic vars
-    else sort_vars_by_name is_ebcdic vars
-  in
-  let table_name = req_type_name req_type in
-  let table_NAME = String.uppercase_ascii table_name in
-  begin
-    match req_type with
-    | Debug _i ->
-        Format.fprintf fmt "T_desc_debug desc_%s[NB_%s + 1] = {\n" table_name
-          table_NAME
-    | _ ->
-        Format.fprintf fmt "T_desc_%s desc_%s[NB_%s + 1] = {\n" table_name
-          table_name table_NAME
-  end;
-
-  let empty = ref true in
-  List.iter
-    (fun ( tvar,
-           idx1,
-           _idx2,
-           idxo_opt,
-           name,
-           alias_opt,
-           desc,
-           typ_opt,
-           attributes,
-           _size ) ->
-      let is_output = match idxo_opt with Some _ -> true | _ -> false in
-      if var_matches req_type tvar is_output then begin
-        empty := false;
-        match req_type with
-        | Debug _i ->
-            (* Special case for debug *)
-            let opt = { opt with with_alias = false } in
-            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
-              ~attributes ~desc ~alias_opt
-        | _ ->
-            (* General case*)
-            gen_var fmt req_type opt ~idx:idx1 ~name ~tvar ~is_output ~typ_opt
-              ~attributes ~desc ~alias_opt
-      end)
-    vars;
-
-  if !empty then
-    gen_var fmt req_type opt ~idx:0 ~name:"" ~tvar:Computed ~is_output:false
-      ~typ_opt:None ~attributes:[] ~desc:"" ~alias_opt:None;
-
-  Format.fprintf fmt "};\n"
-
-let gen_desc fmt is_ebcdic vars ~alias_only =
-  let vars = sort_vars_by_name is_ebcdic vars in
-
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
-
-#include "compir.h"
-
-|};
-
-  List.iter
-    (fun ( tvar,
-           _idx1,
-           idx2,
-           idxo_opt,
-           name,
-           alias_opt,
-           _desc,
-           _typ_opt,
-           _attributes,
-           _size ) ->
-      if (not alias_only) || alias_opt <> None then
-        let data_opt =
-          match (tvar : var_subtype) with
-          | Base | Computed -> begin
-              (* computed var: only output *)
-              match idxo_opt with
-              | Some idx -> Some (Mast.givenback_category, idx)
-              | None -> None
-            end
-          | _ -> Some (subtype_name tvar, idx2)
-        in
-        match data_opt with
-        | Some (type_name, idx) ->
-            let var_name =
-              match (alias_only, alias_opt) with
-              | true, Some alias -> alias
-              | _ -> name
-            in
-            (* TODO special handling for debug vars (though it does not seem to
-               happen) *)
-            Format.fprintf fmt "#define desc_%s (T_var_irdata)(desc_%s + %d)\n"
-              var_name type_name idx
-        | None -> ())
-    vars
-
-(* TODO when flg_controle_immediat, add per variable verifications (add #define
-   desc_verif) although it does not seem to be used anymore *)
-
-let gen_table_output fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = false;
-      with_classe = false;
-      with_priorite = false;
-      with_categorie_TL = false;
-      with_nat_code = false;
-      with_cotsoc = false;
-      with_ind_abat = false;
-      with_acompte = false;
-      with_avfisc = false;
-      with_rapcat = false;
-      with_sanction = false;
-      with_modcat = false;
-      with_liee = false;
-      with_libelle = flags.Dgfip_options.flg_genere_libelle_restituee;
-      with_alias = false;
-      with_type = true;
-      with_type_donnee = true;
-      with_primrest = true;
-    }
-  in
-  gen_table fmt is_ebcdic vars Output opt
-
-let gen_table_context fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = true;
-      with_categorie_TL = true;
-      with_nat_code = false;
-      with_cotsoc = false;
-      with_ind_abat = false;
-      with_acompte = false;
-      with_avfisc = false;
-      with_rapcat = false;
-      with_sanction = false;
-      with_modcat = true;
-      with_liee = false;
-      with_libelle = true;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some Context)) opt
-
-let gen_table_family fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = true;
-      with_categorie_TL = true;
-      with_nat_code = true;
-      with_cotsoc = false;
-      with_ind_abat = false;
-      with_acompte = false;
-      with_avfisc = false;
-      with_rapcat = false;
-      with_sanction = false;
-      with_modcat = true;
-      with_liee = false;
-      with_libelle = flags.Dgfip_options.flg_pro || flags.flg_iliad;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some Family)) opt
-
-let gen_table_income fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = true;
-      with_categorie_TL = true;
-      with_nat_code = true;
-      with_cotsoc = true;
-      with_ind_abat = true;
-      with_acompte = true;
-      with_avfisc = true;
-      with_rapcat = true;
-      with_sanction = true;
-      with_modcat = true;
-      with_liee = true;
-      with_libelle = flags.Dgfip_options.flg_pro || not flags.flg_gcos;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some Income)) opt
-
-let gen_table_corrincome fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = true;
-      with_categorie_TL = true;
-      with_nat_code = true;
-      with_cotsoc = true;
-      with_ind_abat = true;
-      with_acompte = true;
-      with_avfisc = true;
-      with_rapcat = true;
-      with_sanction = true;
-      with_modcat = true;
-      with_liee = true;
-      with_libelle = true;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some CorrIncome)) opt
-
-let gen_table_variation fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = false;
-      with_categorie_TL = false;
-      with_nat_code = false;
-      with_cotsoc = false;
-      with_ind_abat = false;
-      with_acompte = false;
-      with_avfisc = false;
-      with_rapcat = false;
-      with_sanction = false;
-      with_modcat = false;
-      with_liee = false;
-      with_libelle = false;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some Variation)) opt
-
-let gen_table_penality fmt flags vars =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = false;
-      with_priorite = false;
-      with_categorie_TL = false;
-      with_nat_code = false;
-      with_cotsoc = false;
-      with_ind_abat = false;
-      with_acompte = false;
-      with_avfisc = false;
-      with_rapcat = false;
-      with_sanction = false;
-      with_modcat = false;
-      with_liee = false;
-      with_libelle = false;
-      with_alias = true;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Input (Some Penality)) opt
-
-let gen_table_debug fmt flags vars i =
-  let is_ebcdic = flags.Dgfip_options.flg_tri_ebcdic in
-  let opt =
-    {
-      with_verif = true;
-      with_classe = true;
-      with_priorite = true;
-      with_categorie_TL = true;
-      with_nat_code = true;
-      with_cotsoc = true;
-      with_ind_abat = true;
-      with_acompte = true;
-      with_avfisc = true;
-      with_rapcat = true;
-      with_sanction = true;
-      with_modcat = true;
-      with_liee = true;
-      with_libelle = false;
-      with_alias = false;
-      with_type = false;
-      with_type_donnee = true;
-      with_primrest = false;
-    }
-  in
-  gen_table fmt is_ebcdic vars (Debug i) opt
-
-let gen_table_varinfo fmt var_dict cat
-    Com.CatVar.{ id_int; id_str; attributs; _ } stats =
+let gen_table_varinfo fmt vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
+    (stats, var_map) =
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
-  let nb =
+  let nb, var_map =
     StrMap.fold
-      (fun _ (var, idx, size) nb ->
+      (fun _ var (nb, var_map) ->
         if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
+          let loc_tgv = Com.Var.loc_tgv var in
+          let name = Com.Var.name_str var in
+          let alias = Com.Var.alias_str var in
+          let idx = loc_tgv.loc_idx in
+          let size = Com.Var.size var in
           let loc_cat =
-            match (Com.Var.loc_tgv var).loc_cat with
+            match loc_tgv.loc_cat with
             | Com.CatVar.LocComputed -> "EST_CALCULEE"
             | Com.CatVar.LocBase -> "EST_BASE"
             | Com.CatVar.LocInput -> "EST_SAISIE"
           in
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s"
-            (Com.Var.name_str var) (Com.Var.alias_str var) idx size id_int
-            loc_cat;
+          let attrs = Com.Var.attrs var in
+          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s" name alias idx
+            size id_int loc_cat;
           StrMap.iter
             (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-            (Com.Var.attrs var);
+            attrs;
           Format.fprintf fmt " },\n";
-          nb + 1)
-        else nb)
-      var_dict 0
+          let var_addr =
+            Format.sprintf "(T_varinfo *)&(varinfo_%s[%d])" id_str nb
+          in
+          let var_map = StrMap.add (Com.Var.name_str var) var_addr var_map in
+          let var_map =
+            match Com.Var.alias var with
+            | None -> var_map
+            | Some m_alias -> StrMap.add (Pos.unmark m_alias) var_addr var_map
+          in
+          (nb + 1, var_map))
+        else (nb, var_map))
+      vars (0, var_map)
   in
   Format.fprintf fmt "  NULL\n};\n\n";
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
+  (Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats, var_map)
 
-let gen_table_varinfos fmt (cprog : Mir.program) vars =
+let gen_table_varinfos fmt (cprog : Mir.program) =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
@@ -851,34 +96,16 @@ let gen_table_varinfos fmt (cprog : Mir.program) vars =
       Format.fprintf fmt "  return 0.0;\n";
       Format.fprintf fmt "}\n\n")
     attrs;
-
-  let var_dict =
-    StrMap.fold
-      (fun _ var dict ->
-        StrMap.add (Pos.unmark var.Com.Var.name) (var, -1, -1) dict)
-      cprog.program_vars StrMap.empty
+  let stats_varinfos, var_map =
+    Com.CatVar.Map.fold
+      (gen_table_varinfo fmt cprog.program_vars)
+      cprog.program_var_categories
+      (Com.CatVar.Map.empty, StrMap.empty)
   in
-  let var_dict =
-    List.fold_left
-      (fun dict
-           ( _tvar,
-             idx1,
-             _idx2,
-             _idxo_opt,
-             name,
-             _alias_opt,
-             _desc,
-             _typ_opt,
-             _attributes,
-             size ) ->
-        StrMap.update name
-          (function Some (var, _, _) -> Some (var, idx1, size) | None -> None)
-          dict)
-      var_dict vars
-  in
-  Com.CatVar.Map.fold
-    (gen_table_varinfo fmt var_dict)
-    cprog.program_var_categories Com.CatVar.Map.empty
+  Format.fprintf fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+  StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
+  Format.fprintf fmt "  NULL\n};\n\n";
+  stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   Format.fprintf fmt
@@ -890,6 +117,11 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   int cat;
   int loc_cat;
 } T_varinfo;
+
+typedef struct S_varinfo_map {
+  char *name;
+  T_varinfo *info;
+} T_varinfo_map;
 
 |};
   Com.CatVar.Map.iter
@@ -912,11 +144,23 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
     (fun _ (id_str, _, _, _) ->
       Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
+  Format.fprintf fmt "extern T_varinfo_map varinfo[];\n";
   Format.fprintf fmt "\n";
   Com.CatVar.Map.iter
     (fun _ (id_str, _, nb, _) ->
       Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
     stats;
+  let nb_saisie, nb_variable =
+    Com.CatVar.Map.fold
+      (fun cat (_, _, nb, _) (nb_saisie, nb_variable) ->
+        let nb_variable = nb + nb_variable in
+        match cat with
+        | Input _ -> (nb + nb_saisie, nb_variable)
+        | _ -> (nb_saisie, nb_variable))
+      stats (0, 0)
+  in
+  Format.fprintf fmt "#define NB_saisie %d\n" nb_saisie;
+  Format.fprintf fmt "#define NB_variable %d\n" nb_variable;
   Format.fprintf fmt "\n";
   let id_tmp =
     Com.CatVar.Map.fold
@@ -939,395 +183,42 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
       Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
     attrs
 
-let is_valid_app apps = StrMap.mem "iliad" apps
+let is_valid_app apps =
+  StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
 
-(* Retrieve rules, verifications, errors and chainings from a program *)
-let get_rules_verif_etc prog =
-  let open Mast in
-  let rules, verifs, errors, chainings =
-    List.fold_left
-      (fun (rules, verifs, errors, chainings) file ->
-        List.fold_left
-          (fun (rules, verifs, errors, chainings) item ->
-            match Pos.unmark item with
-            | Rule r ->
-                let rules, chainings =
-                  if is_valid_app r.rule_apps then
-                    let rules = Pos.unmark r.rule_number :: rules in
-                    let chainings =
-                      let fold ch _ chainings = StrSet.add ch chainings in
-                      StrMap.fold fold r.rule_chainings chainings
-                    in
-                    (rules, chainings)
-                  else (rules, chainings)
-                in
-                (rules, verifs, errors, chainings)
-            | Verification v ->
-                let verifs =
-                  if is_valid_app v.verif_apps then
-                    fst
-                    @@ List.fold_left
-                         (fun (verifs, vn) _vc -> (vn :: verifs, vn + 1))
-                         (verifs, Pos.unmark v.verif_number)
-                         v.verif_conditions
-                  else verifs
-                in
-                (rules, verifs, errors, chainings)
-            | Error e -> (rules, verifs, e :: errors, chainings)
-            (* | Chaining (cn, _anl) -> rules, verifs, errors, cn ::
-               chainings *)
-            | _ -> (rules, verifs, errors, chainings))
-          (rules, verifs, errors, chainings)
-          file)
-      ([], [], [], StrSet.empty) prog
-  in
-
-  let rules = List.fast_sort compare rules in
-  let verifs = List.fast_sort compare verifs in
-  let errors = List.fast_sort compare errors in
-
-  (* let chainings = List.fast_sort compare chainings in *)
-  (rules, verifs, errors, chainings)
-
-(* Print the table of rule functions, and then the table of errors (tableg.c) *)
-let gen_table_call fmt flags vars_debug prefix rules chainings errors =
-  let open Mast in
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
-
-#include "compir.h"
-
-|};
-
-  if flags.Dgfip_options.flg_debug then begin
-    if flags.nb_debug_c <= 0 then gen_table_debug fmt flags vars_debug 0;
-
-    Format.fprintf fmt "T_desc_call desc_call[NB_CALL + 1] = {\n";
-    List.iter
-      (fun rn -> Format.fprintf fmt "    { %d, %s_regle_%d },\n" rn prefix rn)
-      rules;
-    Format.fprintf fmt "};\n\n";
-
-    Format.fprintf fmt "T_desc_err desc_err[NB_ERR + 1] = {\n";
-    List.iter
-      (fun e ->
-        let en = Pos.unmark e.error_name in
-        Format.fprintf fmt "    { \"%s\", &erreur_%s },\n" en en)
-      errors;
-    Format.fprintf fmt "};\n\n"
-  end;
-
-  StrSet.iter
-    (fun cn -> Format.fprintf fmt "extern T_discord *%s(T_irdata *);\n" cn)
-    chainings;
-
-  Format.fprintf fmt "T_desc_ench desc_ench[NB_ENCH + 1] = {\n";
-  StrSet.iter
-    (fun cn -> Format.fprintf fmt "    { \"%s\", %s },\n" cn cn)
-    chainings;
-  Format.fprintf fmt "};\n"
-
-(* Print the table of verification functions (tablev.c) *)
-let gen_table_verif fmt flags prefix verifs =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
-
-#include "compir.h"
-
-|};
-
-  if flags.Dgfip_options.flg_debug || flags.flg_controle_immediat then begin
-    (* TODO: when control_immediat, don' put everything (but what ?) *)
-    List.iter
-      (fun vn ->
-        Format.fprintf fmt "extern T_discord *%s_verif_%d(T_irdata *);\n" prefix
-          vn)
-      verifs;
-
-    Format.fprintf fmt "T_desc_verif desc_verif[NB_VERIF + 1] = {\n";
-    List.iter
-      (fun vn -> Format.fprintf fmt "    { %d, %s_verif_%d },\n" vn prefix vn)
-      verifs;
-    Format.fprintf fmt "};\n\n"
-  end
-
-(* Count variables in a specific category *)
-let count vars req_type =
-  List.fold_left
-    (fun cpt (tvar, _, _, idxo_opt, _, _, _, _, _, size) ->
-      let is_output = match idxo_opt with Some _ -> true | _ -> false in
-      if var_matches req_type tvar is_output then cpt + size else cpt)
-    0 vars
-
-let gen_annee fmt flags =
-  Format.fprintf fmt "#define ANNEE_REVENU %04d\n"
-    flags.Dgfip_options.annee_revenu;
-  Format.pp_print_flush fmt ()
-
-let gen_compir_h fmt flags vars vars_debug =
-  (* TODO paths may differ if dir_var_h is set *)
-  Format.fprintf fmt
-    {|/****** LICENCE CECIL *****/
-
-#ifndef _COMPIR_H_
-#define _COMPIR_H_
-
-#include "mlang.h"
-
-#define FALSE 0
-#define TRUE 1
-
-|};
-
-  gen_annee fmt flags;
-  let nb_contexte = count vars (Input (Some Context)) in
-  let nb_famille = count vars (Input (Some Family)) in
-  let nb_revenu = count vars (Input (Some Income)) in
-  let nb_revenu_correc = count vars (Input (Some CorrIncome)) in
-  let nb_variation = count vars (Input (Some Variation)) in
-  let nb_penalite = count vars (Input (Some Penality)) in
-  let nb_restituee = count vars Output in
-  let nb_debug = List.map List.length vars_debug in
-
-  Format.fprintf fmt
-    {|#define NB_CONTEXTE %d
-#define NB_FAMILLE %d
-#define NB_REVENU %d
-#define NB_REVENU_CORREC %d
-#define NB_VARIATION %d
-#define NB_PENALITE %d
-#define NB_RESTITUEE %d
-|}
-    nb_contexte nb_famille nb_revenu nb_revenu_correc nb_variation nb_penalite
-    nb_restituee;
-
-  (if flags.Dgfip_options.flg_debug then
-   if flags.nb_debug_c <= 0 then
-     let nb = match nb_debug with [ nb ] -> nb | _ -> assert false in
-     Format.fprintf fmt "#define NB_DEBUG %d\n" nb
-   else
-     let i =
-       List.fold_left
-         (fun i nb ->
-           Format.fprintf fmt "#define NB_DEBUG%02d %d\n" i nb;
-           i + 1)
-         1 nb_debug
-     in
-     assert (i = flags.nb_debug_c + 1));
-
-  Format.fprintf fmt
-    {|
-typedef struct S_desc_contexte
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-  int priorite;
-  int categorie_TL;
-  int modcat;
-  char *libelle;
-} T_desc_contexte;
-
-typedef struct S_desc_famille
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-  int priorite;
-  int categorie_TL;
-  int nat_code;
-  int modcat;
-  char *libelle;
-} T_desc_famille;
-
-typedef struct S_desc_revenu
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-  int priorite;
-  int categorie_TL;
-  int nat_code;
-  int cotsoc;
-  int ind_abat;
-  int acompte;
-  int avfisc;
-  int rapcat;
-  int sanction;
-  int modcat;
-  T_var_irdata liee;
-  char *libelle;
-  char *code;
-} T_desc_revenu;
-
-typedef struct S_desc_revenu_correc
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-  int priorite;
-  int categorie_TL;
-  int nat_code;
-  int cotsoc;
-  int ind_abat;
-  int acompte;
-  int avfisc;
-  int rapcat;
-  int sanction;
-  int modcat;
-  T_var_irdata liee;
-  char *libelle;
-} T_desc_revenu_correc;
-
-typedef struct S_desc_variation
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-} T_desc_variation;
-
-typedef struct S_desc_penalite
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-} T_desc_penalite;
-
-typedef struct S_desc_restituee
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  int type;
-  int primrest;
-#ifdef FLG_GENERE_LIBELLE_RESTITUEE
-  char *libelle;
-#endif /* FLG_GENERE_LIBELLE_RESTITUEE */
-#ifdef FLG_EXTRACTION
-  int est_extraite;
-#endif /* FLG_EXTRACTION */
-} T_desc_restituee;
-
-typedef struct S_desc_debug
-{
-  char *nom;
-  int indice;
-  long type_donnee;
-  T_discord *(*verif)(T_irdata *);
-  int classe;
-  int priorite;
-  int categorie_TL;
-  int cotsoc;
-  int ind_abat;
-  int acompte;
-  int avfisc;
-  int rapcat;
-  int sanction;
-  int modcat;
-  int nat_code;
-  T_var_irdata liee;
-#ifdef FLG_EXTRACTION
-  int est_extraite;
-#endif /* FLG_EXTRACTION */
-} T_desc_debug;
-
-typedef struct S_desc_err
-{
-  char *nom;
-  T_erreur *erreur;
-} T_desc_err;
-
-typedef struct S_desc_call
-{
-  int num;
-  T_discord *(*proc)(T_irdata *irdata);
-} T_desc_call;
-
-typedef struct S_desc_ench
-{
-  char *nom;
-  T_discord *(*proc)(T_irdata *irdata);
-} T_desc_ench;
-
-typedef struct S_desc_verif
-{
-  int num;
-  T_discord *(*proc)(T_irdata *irdata);
-} T_desc_verif;
-
-extern T_desc_contexte desc_contexte[];
-extern T_desc_famille desc_famille[];
-extern T_desc_penalite desc_penalite[];
-extern T_desc_revenu desc_revenu[];
-extern T_desc_revenu_correc desc_revenu_correc[];
-extern T_desc_variation desc_variation[];
-extern T_desc_restituee desc_restituee[];
-
-extern T_desc_err desc_err[];
-extern T_desc_verif desc_verif[];
-extern T_desc_call desc_call[];
-extern T_desc_ench desc_ench[];
-extern T_desc_debug desc_debug01[];
-extern T_desc_debug desc_debug02[];
-extern T_desc_debug desc_debug03[];
-extern T_desc_debug desc_debug04[];
-
-extern struct S_erreur *tabErreurs[];
-
-|};
-
-  Format.fprintf fmt "#endif /* _COMPIR_H_ */\n"
-
-let gen_erreurs_c fmt flags errors =
-  let open Mast in
+let gen_erreurs_c fmt flags (cprog : Mir.program) =
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
 |};
-
   (* TODO before 2006, the format is slightly different *)
-  List.iter
-    (fun e ->
-      match e.error_descr with
-      | [ famille; code_bo; sous_code; libelle; is_isf ] ->
-          let terr =
-            match Pos.unmark e.error_typ with
-            | Anomaly -> 1 (* also called blocking *)
-            | Discordance -> 2
-            | Information -> 4
-          in
-          let sous_code_suffix =
-            if String.equal (Pos.unmark sous_code) "00" then ""
-            else "-" ^ Pos.unmark sous_code
-          in
-          Format.fprintf fmt
-            "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
-             \"%s\", %d };\n"
-            (Pos.unmark e.error_name) (Pos.unmark famille) (Pos.unmark code_bo)
-            sous_code_suffix
-            (Strings.sanitize_str libelle)
-            (Pos.unmark code_bo) (Pos.unmark sous_code) (Pos.unmark is_isf)
-            (Pos.unmark e.error_name) terr
-      | _ -> failwith "Invalid error description")
-    errors;
+  StrMap.iter
+    (fun _ (e : Com.Error.t) ->
+      let terr =
+        match e.typ with Anomaly -> 1 | Discordance -> 2 | Information -> 4
+      in
+      let sous_code_suffix =
+        if String.equal (Pos.unmark e.sous_code) "00" then ""
+        else "-" ^ Pos.unmark e.sous_code
+      in
+      Format.fprintf fmt
+        "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
+         \"%s\", %d };\n"
+        (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
+        sous_code_suffix
+        (Strings.sanitize_str e.libelle)
+        (Pos.unmark e.code_bo) (Pos.unmark e.sous_code) (Pos.unmark e.is_isf)
+        (Pos.unmark e.name) terr)
+    cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
     Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
 
-    List.iter
-      (fun e ->
-        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.error_name))
-      errors;
+    StrMap.iter
+      (fun _ (e : Com.Error.t) ->
+        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.name))
+      cprog.program_errors;
 
     Format.fprintf fmt "    NULL\n};\n"
   end
@@ -1349,11 +240,12 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
   if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
-  if flags.flg_short then Format.fprintf fmt "#define FLG_SHORT\n";
+  if flags.flg_short then
+    Format.fprintf fmt "#define FLG_SHORT /* inutile ? */\n";
   if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
   if flags.flg_optim_min_max then
-    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX\n";
+    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
   if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
     Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
@@ -1389,11 +281,9 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
 
 let gen_dbg fmt =
   Format.fprintf fmt
-    {|#ifdef FLG_COLORS
-int change_couleur (int couleur,int typographie);
-int get_couleur ( );
-int get_typo ( );
-#endif
+    {|int change_couleur(int couleur, int typographie);
+int get_couleur();
+int get_typo();
     
 #ifdef FLG_TRACE
 extern int niv_trace;
@@ -1414,6 +304,7 @@ let gen_const fmt =
 #define TRUE 1
 
 struct S_print_context {
+  FILE *std;
   long indent;
   int is_newline;
 };
@@ -1422,8 +313,7 @@ typedef struct S_print_context T_print_context;
 
 typedef void *T_var_irdata;
 
-struct S_erreur
-{
+struct S_erreur {
   char *message;
   char *codebo;
   char *souscode;
@@ -1434,16 +324,21 @@ struct S_erreur
 
 typedef struct S_erreur T_erreur;
 
-struct S_discord
-{
-  struct S_discord *suivant;
+typedef struct S_discord T_discord;
+
+struct S_discord {
+  T_discord *suivant;
   T_erreur *erreur;
 };
 
-typedef struct S_discord T_discord;
+typedef struct S_keep_discord T_keep_discord;
 
-struct S_irdata
-{
+struct S_keep_discord {
+  T_discord *discord;
+  T_keep_discord *suivant;
+};
+
+struct S_irdata {
   double *saisie;
   double *calculee;
   double *base;
@@ -1458,9 +353,8 @@ struct S_irdata
   T_varinfo **info_ref;
   int tmps_org;
   int ref_org;
+  T_keep_discord *keep_discords;
   T_discord *discords;
-  T_discord *tas_discord;
-  T_discord **p_discord;
   int nb_anos;
   int nb_discos;
   int nb_infos;
@@ -1538,7 +432,7 @@ extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
 
-let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
+let gen_lib fmt (cprog : Mir.program) flags =
   let count loc =
     StrMap.fold
       (fun _ var nb ->
@@ -1549,10 +443,10 @@ let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
   let taille_calculee = count Com.CatVar.LocComputed in
   let taille_base = count Com.CatVar.LocBase in
   let taille_totale = taille_saisie + taille_calculee + taille_base in
-  let nb_ench = StrSet.cardinal chainings in
-  let nb_err = List.length errors in
-  let nb_call = List.length rules in
-  let nb_verif = List.length verifs in
+  let nb_ench = StrMap.cardinal cprog.program_chainings in
+  let nb_err = StrMap.cardinal cprog.program_errors in
+  let nb_call = IntMap.cardinal cprog.program_rules in
+  let nb_verif = IntMap.cardinal cprog.program_verifs in
 
   Format.fprintf fmt
     {|#define TAILLE_SAISIE %d
@@ -1597,11 +491,11 @@ let gen_lib fmt (cprog : Mir.program) flags rules verifs chainings errors =
 
   (* TODO external declaration of individual control rules (seems to be no
      longer used) *)
-  List.iter
-    (fun e ->
-      let en = Pos.unmark e.Mast.error_name in
+  StrMap.iter
+    (fun _ (e : Com.Error.t) ->
+      let en = Pos.unmark e.name in
       Format.fprintf fmt "extern T_erreur erreur_%s;\n" en)
-    errors;
+    cprog.program_errors;
 
   (* TODO function declarations (seems to be no longer used) *)
   if flags.Dgfip_options.flg_pro then
@@ -1631,7 +525,52 @@ extern int nb_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
 extern void finalise_erreur _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
+
+extern T_irdata *cree_irdata(void);
+extern void init_saisie(T_irdata *irdata);
+extern void init_calculee(T_irdata *irdata);
+extern void init_base(T_irdata *irdata);
 extern void init_erreur(T_irdata *irdata);
+extern void detruis_irdata(T_irdata *irdata);
+extern void set_max_bloquantes(T_irdata *irdata, const int max_ano);
+extern void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void ecris_saisie(T_irdata *irdata, int idx, char def, double val);
+extern void ecris_calculee(T_irdata *irdata, int idx, char def, double val);
+extern void ecris_base(T_irdata *irdata, int idx, char def, double val);
+extern char lis_saisie_def(T_irdata *irdata, int idx);
+extern char lis_calculee_def(T_irdata *irdata, int idx);
+extern char lis_base_def(T_irdata *irdata, int idx);
+extern double lis_saisie_val(T_irdata *irdata, int idx);
+extern double lis_calculee_val(T_irdata *irdata, int idx);
+extern double lis_base_val(T_irdata *irdata, int idx);
+extern char *lis_saisie_def_ref(T_irdata *irdata, int idx);
+extern char *lis_calculee_def_ref(T_irdata *irdata, int idx);
+extern char *lis_base_def_ref(T_irdata *irdata, int idx);
+extern double *lis_saisie_val_ref(T_irdata *irdata, int idx);
+extern double *lis_calculee_val_ref(T_irdata *irdata, int idx);
+extern double *lis_base_val_ref(T_irdata *irdata, int idx);
+extern T_discord *lis_discords(T_irdata *irdata);
+extern T_erreur *lis_erreur(T_discord *discord);
+extern T_discord *discord_suivante(T_discord *discord);
+extern char *lis_erreur_message(T_erreur *err);
+extern char *lis_erreur_code_bo(T_erreur *err);
+extern char *lis_erreur_sous_code(T_erreur *err);
+extern char *lis_erreur_is_isf(T_erreur *err);
+extern char *lis_erreur_nom(T_erreur *err);
+extern int lis_erreur_type(T_erreur *err);
+
+extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
+extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
+extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
+extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
+extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
+extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
+extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
+extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
+extern void pr_out_var(T_irdata *irdata, char *nom);
+extern void pr_err_var(T_irdata *irdata, char *nom);
 |}
 
 let gen_decl_functions fmt (cprog : Mir.program) =
@@ -1656,8 +595,8 @@ let gen_decl_targets fmt (cprog : Mir.program) =
            name))
     targets
 
-let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
-  let pr = Format.fprintf fmt in
+let gen_mlang_h fmt cprog flags stats_varinfos =
+  let pr form = Format.fprintf fmt form in
   pr "/****** LICENCE CECIL *****/\n\n";
   pr "#ifndef _MLANG_H_\n";
   pr "#define _MLANG_H_\n";
@@ -1673,7 +612,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
   pr "\n";
   pr "#define _PROTS(X) X\n";
   pr "\n";
-  gen_annee fmt flags;
+  pr "#define ANNEE_REVENU %04d\n" flags.Dgfip_options.annee_revenu;
   pr "\n";
   gen_decl_varinfos fmt cprog stats_varinfos;
   pr "\n";
@@ -1682,40 +621,37 @@ let gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors =
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
   pr "\n";
-  gen_lib fmt cprog flags rules verifs chainings errors;
+  gen_lib fmt cprog flags;
   pr "\n";
   gen_decl_functions fmt cprog;
   pr "\n";
   gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
-let gen_mlang_c fmt =
+let gen_mlang_c fmt flags =
   Format.fprintf fmt "%s"
     {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
-#ifdef FLG_COLORS 
 int color = 37;
 int typo = 0;
 
-int change_couleur (int couleur,int typographie)
-{
-	 color = couleur;
-	 typo = typographie;
-	return 0 ;
+int change_couleur (int couleur,int typographie) {
+#ifdef FLG_COLORS 
+  color = couleur;
+	typo = typographie;
+#endif /* FLG_COLORS */
+	return 0;
 }
 
-int get_couleur ( )
-{
+int get_couleur () {
 	return color ;
 }
 
-int get_typo ( )
-{
+int get_typo () {
 	return typo ;
 }
-#endif 
 
 double floor_g(double a) {
   if (fabs(a) <= (double)LONG_MAX) {
@@ -1735,72 +671,137 @@ double ceil_g(double a) {
 
 extern FILE * fd_trace_dialog;
 
-static void add_erreur_code(T_erreur *erreur, const char *code) {
+
+#define C_STR_ERREUR_DEB " (("
+#define C_LEN_ERREUR_DEB (sizeof(C_STR_ERREUR_DEB)-1)
+
+#define C_STR_ERREUR_FIN "))"
+#define C_LEN_ERREUR_FIN (sizeof(C_STR_ERREUR_FIN)-1)
+
+static T_erreur *new_erreur(T_erreur *ref_erreur, char *code) {
+  T_erreur *pErreur = NULL;
   size_t len = 0;
   char *new_message = NULL;
-  char *debut = NULL;
 
+  if (ref_erreur == NULL || ref_erreur->message == NULL) return NULL;
+  pErreur = (T_erreur *)malloc(sizeof(T_erreur));
+  if (pErreur == NULL) goto erreur_new_erreur;
+  len = strlen(ref_erreur->message) + 1;
   if (code != NULL) {
-    debut = strstr(erreur->message," ((");
-    if (debut != NULL) {
-      len = strlen(erreur->message) - strlen(debut);
-    } else {
-      len = strlen(erreur->message);
-    }
-
-    new_message = (char *)malloc((len + 10) * sizeof(char));
-    memset(new_message, '\0', (len + 10) * sizeof(char));
-    strncpy(new_message, erreur->message, len);
-    strcat(new_message, " ((");
+    len += C_LEN_ERREUR_DEB + strlen(code) + C_LEN_ERREUR_FIN;
+  }
+  new_message = (char *)malloc(len * sizeof(char));
+  if (new_message == NULL) goto erreur_new_erreur;
+  strcpy(new_message, ref_erreur->message);
+  if (code != NULL) {
+    strcat(new_message, C_STR_ERREUR_DEB);
     strcat(new_message, code);
-    strcat(new_message, "))\0");
-    erreur->message = new_message;
+    strcat(new_message, C_STR_ERREUR_FIN);
   }
+  pErreur->message = new_message;
+  pErreur->codebo = ref_erreur->codebo;
+  pErreur->souscode = ref_erreur->souscode;
+  pErreur->isisf = ref_erreur->isisf;
+  pErreur->nom = ref_erreur->nom;
+  pErreur->type = ref_erreur->type;
+  return pErreur;
+
+erreur_new_erreur:
+  if (pErreur != NULL) free(pErreur);
+  if (new_message != NULL) free(new_message);
+  return NULL;
 }
 
-void init_erreur(T_irdata *irdata) {
-/*  IRDATA_reset_erreur(irdata); */
-  *irdata->p_discord = irdata->tas_discord;
-  irdata->tas_discord = irdata->discords;
-  irdata->discords = 0;
-  irdata->p_discord = &irdata->discords;
-  irdata->nb_anos = 0;
-  irdata->nb_discos = 0;
-  irdata->nb_infos = 0;
-  irdata->nb_bloqs = 0;
-  irdata->max_bloqs = 4;
+/* Libération de la mémoire allouée par la fonction new_erreur */
+static void free_new_erreur(T_erreur *erreur) {
+  if (erreur == NULL) return;
+  if (erreur->message != NULL) {
+    free(erreur->message);
+  }
+  free(erreur);
 }
 
-void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code) {
-  T_discord *new_discord = NULL;
+T_discord *new_discord(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
+  T_discord *pDiscord = NULL;
+  T_erreur *pErreur = NULL;
+  T_keep_discord *pKeep = NULL;
 
-  if (irdata->tas_discord == 0) {
-    new_discord = (T_discord *)malloc(sizeof(T_discord));
-  } else {
-    new_discord = irdata->tas_discord;
-    irdata->tas_discord = new_discord->suivant;
+  if (irdata == NULL || ref_erreur == NULL) return NULL;
+  pDiscord = (T_discord *)malloc(sizeof(T_discord));
+  if (pDiscord == NULL) goto erreur_new_discord;
+  pKeep = malloc(sizeof(T_keep_discord));
+  if (pKeep == NULL) goto erreur_new_discord;
+  pErreur = new_erreur(ref_erreur, code);
+  if (pErreur == NULL) goto erreur_new_discord;
+
+  pKeep->discord = pDiscord;
+  pKeep->suivant = irdata->keep_discords;
+  irdata->keep_discords = pKeep;
+
+  pDiscord->erreur = pErreur;
+  pDiscord->suivant = irdata->discords;
+  irdata->discords = pDiscord;
+
+  return pDiscord;
+
+erreur_new_discord:
+  if (pDiscord != NULL) free(pDiscord);
+  if (pKeep != NULL) free(pKeep);
+  if (pErreur != NULL) free_new_erreur(pErreur);
+  return NULL;
+}
+
+void free_keep_discord(T_irdata *irdata) {
+  T_discord *pDiscord = NULL;
+  T_keep_discord *pKeep = NULL;
+  T_keep_discord *pNext = NULL;
+
+  if (irdata == NULL) return;
+  pKeep = irdata->keep_discords;
+  while (pKeep != NULL) {
+    pDiscord = pKeep->discord;
+    if (pDiscord != NULL) {
+      free_new_erreur(pDiscord->erreur);
+      free(pDiscord);
+    }
+    pNext = pKeep->suivant;
+    free(pKeep);
+    pKeep = pNext;
   }
+  irdata->keep_discords = NULL;
+}
 
-  add_erreur_code(erreur, code);
+/* Libération de la mémoire allouée par la fonction add_erreur */
+#ifdef ANCIEN
+void free_erreur() {}
+#else
+void free_erreur(T_irdata *irdata) {
+  init_erreur(irdata);
+}
+#endif /* ANCIEN */
 
-  new_discord->erreur = erreur;
-  new_discord->suivant = 0;
-  *irdata->p_discord = new_discord;
-  irdata->p_discord = &new_discord->suivant;
+void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
+  T_discord *pDiscord = NULL;
 
-  if (erreur->type == ANOMALIE) irdata->nb_anos++;
-  if (erreur->type == DISCORDANCE) irdata->nb_discos++;
-  if (erreur->type == INFORMATIVE) irdata->nb_infos++;
-
-  if (strcmp(erreur->isisf, "N") == 0 && erreur->type == ANOMALIE) {
-    irdata->nb_bloqs++;
+  pDiscord = new_discord(irdata, ref_erreur, code);
+  if (pDiscord == NULL) return;
+  if (ref_erreur->type == ANOMALIE) irdata->nb_anos++;
+  if (ref_erreur->type == DISCORDANCE) irdata->nb_discos++;
+  if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
+|};
+  if flags.Dgfip_options.flg_pro || flags.flg_iliad then
+    Format.fprintf fmt "%s"
+      {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
+|}
+  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
+|};
+  Format.fprintf fmt "%s"
+    {|irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
     }
   }
 }
-
-void free_erreur() {}
 
 int nb_anomalies(T_irdata *irdata) {
   return irdata->nb_anos;
@@ -1820,7 +821,7 @@ int nb_bloquantes(T_irdata *irdata) {
 
 #ifdef FLG_TRACE
 
-int niv_trace = 3;
+/* int niv_trace = 3; */
 
 #ifdef FLG_API
 #define TRACE_FILE fd_trace_dialog
@@ -1949,7 +950,7 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
 
 #endif /* FLG_TRACE */
 
-T_discord * no_error(T_irdata *irdata) {
+T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
@@ -2016,7 +1017,7 @@ void print_indent(FILE *std, T_print_context *pr_ctx) {
   if (pr_ctx->is_newline) {
     int i;
     for (i = 1; i < pr_ctx->indent; i++) {
-      fprintf(std, " ");
+      fprintf(pr_ctx->std, " ");
     }
     pr_ctx->is_newline = 0;
   }
@@ -2027,15 +1028,15 @@ void print_string(FILE *std, T_print_context *pr_ctx, char *str) {
     if (*str == '\n') {
       pr_ctx->is_newline = 1;
     } else {
-      print_indent(std, pr_ctx);
+      print_indent(NULL, pr_ctx);
     }
-    fprintf(std, "%c", *str);
+    fprintf(pr_ctx->std, "%c", *str);
     str++;
   }
 }
 
 void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax) {
-  print_indent(std, pr_ctx);
+  print_indent(NULL, pr_ctx);
   if (pmin < 0) {
     pmin = 0;
   }
@@ -2052,12 +1053,12 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
     pmax = 20;
   }
   if (isnan(f)) {
-    fprintf(std, "incorrect");
+    fprintf(pr_ctx->std, "incorrect");
   } else if (isinf(f)) {
     if (f >= 0.0) {
-      fprintf(std, "+infini");
+      fprintf(pr_ctx->std, "+infini");
     } else {
-      fprintf(std, "-infini");
+      fprintf(pr_ctx->std, "-infini");
     }
   } else {
     size_t sz;
@@ -2091,15 +1092,481 @@ void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pm
       }
       if (*ptr == ',') *ptr = 0;
     }
-    fprintf(std, "%s", buf);
+    fprintf(pr_ctx->std, "%s", buf);
 /*    free(buf); */
   }
 }
 
-void nettoie_erreur(irdata)
-T_irdata *irdata;
-{
+void nettoie_erreur(T_irdata *irdata) {
   init_erreur(irdata);
+}
+
+static void init_tab(char *p_def, double *p_val, int nb) {
+  if (p_val == NULL || p_def == NULL || nb < 0) return;
+  memset(p_val, 0, nb * sizeof (double));
+  memset(p_def, 0, nb);
+}
+
+void init_saisie(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
+}
+
+void init_calculee(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
+}
+
+void init_base(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+}
+
+void init_erreur(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  irdata->discords = NULL;
+  irdata->nb_anos = 0;
+  irdata->nb_discos = 0;
+  irdata->nb_infos = 0;
+  irdata->nb_bloqs = 0;
+  irdata->max_bloqs = 4;
+}
+
+void detruis_irdata(T_irdata *irdata) {
+  if (irdata == NULL) return;
+  if (irdata->saisie != NULL) free(irdata->saisie);
+  if (irdata->def_saisie != NULL) free(irdata->def_saisie);
+  if (irdata->calculee != NULL) free(irdata->calculee);
+  if (irdata->def_calculee != NULL) free(irdata->def_calculee);
+  if (irdata->base != NULL) free(irdata->base);
+  if (irdata->def_base != NULL) free(irdata->def_base);
+  if (irdata->tmps != NULL) free(irdata->tmps);
+  if (irdata->def_tmps != NULL) free(irdata->def_tmps);
+  if (irdata->info_tmps != NULL) free(irdata->info_tmps);
+  if (irdata->ref != NULL) free(irdata->ref);
+  if (irdata->def_ref != NULL) free(irdata->def_ref);
+  if (irdata->info_ref != NULL) free(irdata->info_ref);
+  init_erreur(irdata);
+  if (irdata->err_finalise != NULL) free(irdata->err_finalise);
+  if (irdata->err_sortie != NULL) free(irdata->err_sortie);
+  if (irdata->err_archive != NULL) free(irdata->err_archive);
+  free(irdata);
+}
+
+T_irdata *cree_irdata(void) {
+  T_irdata *irdata = NULL;
+  
+  irdata = (T_irdata *)malloc(sizeof (T_irdata));
+  if (irdata == NULL) return NULL;
+  irdata->saisie = NULL;
+  irdata->def_saisie = NULL;
+  if (TAILLE_SAISIE > 0) {
+    irdata->saisie = (double *)malloc(TAILLE_SAISIE * sizeof (double));
+    if (irdata->saisie == NULL) goto erreur_cree_irdata;
+    irdata->def_saisie = (char *)malloc(TAILLE_SAISIE * sizeof (char));
+    if (irdata->def_saisie == NULL) goto erreur_cree_irdata;
+  }
+  init_saisie(irdata);
+  irdata->calculee = NULL;
+  irdata->def_calculee = NULL;
+  if (TAILLE_CALCULEE > 0) {
+    irdata->calculee = (double *)malloc(TAILLE_CALCULEE * sizeof (double));
+    if (irdata->calculee == NULL) goto erreur_cree_irdata;
+    irdata->def_calculee = (char *)malloc(TAILLE_CALCULEE * sizeof (char));
+    if (irdata->def_calculee == NULL) goto erreur_cree_irdata;
+  }
+  init_calculee(irdata);
+  irdata->base = NULL;
+  irdata->def_base = NULL;
+  if (TAILLE_BASE > 0) {
+    irdata->base = (double *)malloc(TAILLE_BASE * sizeof (double));
+    if (irdata->base == NULL) goto erreur_cree_irdata;
+    irdata->def_base = (char *)malloc(TAILLE_BASE * sizeof (char));
+    if (irdata->def_base == NULL) goto erreur_cree_irdata;
+  }
+  init_base(irdata);
+  irdata->tmps = NULL;
+  irdata->def_tmps = NULL;
+  irdata->info_tmps = NULL;
+  if (TAILLE_TMP_VARS > 0) {
+    irdata->tmps = (double *)malloc(TAILLE_TMP_VARS * sizeof (double));
+    if (irdata->tmps == NULL) goto erreur_cree_irdata;
+    irdata->def_tmps = (char *)malloc(TAILLE_TMP_VARS * sizeof (char));
+    if (irdata->def_tmps == NULL) goto erreur_cree_irdata;
+    irdata->info_tmps = (T_varinfo *)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo));    
+    if (irdata->info_tmps == NULL) goto erreur_cree_irdata;
+  }
+  irdata->ref = NULL;
+  irdata->def_ref = NULL;
+  irdata->info_ref = NULL;
+  if (TAILLE_REFS > 0) {
+    irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
+    if (irdata->ref == NULL) goto erreur_cree_irdata;
+    irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
+    if (irdata->def_ref == NULL) goto erreur_cree_irdata;
+    irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
+    if (irdata->info_ref == NULL) goto erreur_cree_irdata;
+  }
+  irdata->tmps_org = 0;
+  irdata->ref_org = 0;
+  irdata->keep_discords = NULL;
+  irdata->discords = NULL;
+  irdata->sz_err_finalise = 0;
+  irdata->err_finalise = NULL;
+  irdata->nb_err_finalise = 0;
+  irdata->sz_err_sortie = 0;
+  irdata->err_sortie = NULL;
+  irdata->nb_err_sortie = 0;
+  irdata->sz_err_archive = 0;
+  irdata->err_archive = NULL;
+  irdata->nb_err_archive = 0;
+  init_erreur(irdata);
+  irdata->ctx_pr_out.std = stdout;
+  irdata->ctx_pr_out.indent = 0;
+  irdata->ctx_pr_out.is_newline = 1;
+  irdata->ctx_pr_err.std = stderr;
+  irdata->ctx_pr_err.indent = 0;
+  irdata->ctx_pr_err.is_newline = 1;
+  return irdata;
+
+erreur_cree_irdata:
+  detruis_irdata(irdata);
+  return NULL;
+}
+
+void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
+  if (irdata == NULL) return;
+  if (max_ano < 0) {
+    irdata->max_bloqs = 0;
+  } else {
+    irdata->max_bloqs = max_ano;
+  }
+}
+
+void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double));
+  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE);
+}
+
+void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double));
+  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE);
+}
+
+void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  if (irdata_src == NULL || irdata_dst == NULL) return;
+  memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double));
+  memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE);
+}
+
+static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
+  if (t_val == NULL || t_def == NULL || idx < 0 || t_nb <= idx) return;
+  if (def == 0) t_def[idx] = 0;
+  else t_def[idx] = 1;
+  t_val[idx] = val;
+}
+
+void ecris_saisie(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE, idx, def, val);
+}
+
+void ecris_calculee(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE, idx, def, val);
+}
+
+void ecris_base(T_irdata *irdata, int idx, char def, double val) {
+  if (irdata == NULL) return;
+  ecris_tab(irdata->def_base, irdata->base, TAILLE_BASE, idx, def, val);
+}
+
+static char lis_tab_def(char *t_def, int t_nb, int idx) {
+  if (t_def == NULL || idx < 0 || t_nb <= idx) return 0;
+  return t_def[idx];
+}
+
+char lis_saisie_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_saisie, TAILLE_SAISIE, idx);
+}
+
+char lis_calculee_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_calculee, TAILLE_CALCULEE, idx);
+}
+
+char lis_base_def(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0;
+  return lis_tab_def(irdata->def_base, TAILLE_BASE, idx);
+}
+
+static double lis_tab_val(double *t_val, int t_nb, int idx) {
+  if (t_val == NULL || idx < 0 || t_nb <= idx) return 0.0;
+  return t_val[idx];
+}
+
+double lis_saisie_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->saisie, TAILLE_SAISIE, idx);
+}
+
+double lis_calculee_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->calculee, TAILLE_CALCULEE, idx);
+}
+
+double lis_base_val(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return 0.0;
+  return lis_tab_val(irdata->base, TAILLE_BASE, idx);
+}
+
+static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
+  if (t_def == NULL || idx < 0 || t_nb <= idx) return NULL;
+  return &(t_def[idx]);
+}
+
+char *lis_saisie_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_saisie, TAILLE_SAISIE, idx);
+}
+
+char *lis_calculee_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_calculee, TAILLE_CALCULEE, idx);
+}
+
+char *lis_base_def_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_def_ref(irdata->def_base, TAILLE_BASE, idx);
+}
+
+static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
+  if (t_val == NULL || idx < 0 || t_nb <= idx) return NULL;
+  return &(t_val[idx]);
+}
+
+double *lis_saisie_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->saisie, TAILLE_SAISIE, idx);
+}
+
+double *lis_calculee_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->calculee, TAILLE_CALCULEE, idx);
+}
+
+double *lis_base_val_ref(T_irdata *irdata, int idx) {
+  if (irdata == NULL) return NULL;
+  return lis_tab_val_ref(irdata->base, TAILLE_BASE, idx);
+}
+
+T_discord *lis_discords(T_irdata *irdata) {
+  if (irdata == NULL) return NULL;
+  return irdata->discords;
+}
+
+T_erreur *lis_erreur(T_discord *discord) {
+  if (discord == NULL) return NULL;
+  return discord->erreur;
+}
+
+char *lis_erreur_message(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->message;
+}
+
+T_discord *discord_suivante(T_discord *discord) {
+  if (discord == NULL) return NULL;
+  return discord->suivant;
+}
+
+char *lis_erreur_code_bo(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->message;
+}
+
+char *lis_erreur_sous_code(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->souscode;
+}
+
+char *lis_erreur_is_isf(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->isisf;
+}
+
+char *lis_erreur_nom(T_erreur *err) {
+  if (err == NULL) return NULL;
+  return err->nom;
+}
+
+int lis_erreur_type(T_erreur *err) {
+  if (err == NULL) return 0;
+  return err->type;
+}
+
+T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
+  T_varinfo_map *map = NULL;
+  int res = -1;
+  int inf = 0;
+  int sup = NB_variable + NB_saisie;
+  int millieu = 0;
+
+  if (irdata == NULL || nom == NULL) return NULL;
+  while ((res != 0) && (inf < sup)) {
+    millieu = (inf + sup) / 2;
+    map = &(varinfo[millieu]);
+    res = strcmp(nom, map->name);
+    if (res < 0) {
+      sup = millieu;
+    } else if (res > 0) {
+      inf = millieu + 1;
+    }
+  }
+  if (res == 0) {
+    return map->info;
+  }
+  return NULL;
+}
+
+char lis_varinfo_def(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return 0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->def_saisie[info->idx];
+    case EST_CALCULEE:
+      return irdata->def_calculee[info->idx];
+    case EST_BASE:
+      return irdata->def_base[info->idx];
+    default:
+      return 0;
+  }
+}
+
+double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return 0.0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->saisie[info->idx];
+    case EST_CALCULEE:
+      return irdata->calculee[info->idx];
+    case EST_BASE:
+      return irdata->base[info->idx];
+    default:
+      return 0.0;
+  }
+}
+
+char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
+  if (irdata == NULL || info == NULL || info->size <= idx) return 0;
+  if (idx < 0) return 1;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->def_saisie[info->idx + idx];
+    case EST_CALCULEE:
+      return irdata->def_calculee[info->idx + idx];
+    case EST_BASE:
+      return irdata->def_base[info->idx + idx];
+    default:
+      return 0;
+  }
+}
+
+double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
+  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return 0.0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return irdata->saisie[info->idx + idx];
+    case EST_CALCULEE:
+      return irdata->calculee[info->idx + idx];
+    case EST_BASE:
+      return irdata->base[info->idx + idx];
+    default:
+      return 0.0;
+  }
+}
+
+void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
+  if (irdata == NULL || info == NULL) return;
+  if (def == 0) {
+    val = 0.0;
+  } else {
+    def = 1;
+  }
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      irdata->def_saisie[info->idx] = def;
+      irdata->saisie[info->idx] = val;
+      return;
+    case EST_CALCULEE:
+      irdata->def_calculee[info->idx] = def;
+      irdata->calculee[info->idx] = val;
+      return;
+    case EST_BASE:
+      irdata->def_base[info->idx] = def;
+      irdata->base[info->idx] = val;
+      return;
+    default:
+      return;
+  }
+}
+
+void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val) {
+  int var_idx = 0;
+
+  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return;
+  var_idx = info->idx + idx;
+  if (def == 0) {
+    val = 0.0;
+  } else {
+    def = 1;
+  }
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      irdata->def_saisie[var_idx] = def;
+      irdata->saisie[var_idx] = val;
+      return;
+    case EST_CALCULEE:
+      irdata->def_calculee[var_idx] = def;
+      irdata->calculee[var_idx] = val;
+      return;
+    case EST_BASE:
+      irdata->def_base[var_idx] = def;
+      irdata->base[var_idx] = val;
+      return;
+    default:
+      return;
+  }
+}
+
+/* !!! */
+void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
+  T_varinfo *info = NULL;
+
+  if (pr_ctx == NULL) return;
+  info = cherche_varinfo(irdata, nom);
+  if (info == NULL) {
+    fprintf(pr_ctx->std, "inconnu");
+  } else {
+    if (lis_varinfo_def(irdata, info) == 0) {
+      fprintf(pr_ctx->std, "indefini");
+    } else {
+      print_double(NULL, pr_ctx, lis_varinfo_val(irdata, info), 0, 30);
+    }
+  }
+}
+
+void pr_out_var(T_irdata *irdata, char *nom) {
+  if (irdata == NULL) return;
+  pr_var(&(irdata->ctx_pr_out), irdata, nom);
+}
+
+void pr_err_var(T_irdata *irdata, char *nom) {
+  if (irdata == NULL) return;
+  pr_var(&(irdata->ctx_pr_err), irdata, nom);
 }
 |}
 
@@ -2108,88 +1575,17 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-(* Generate the auxiliary files AND return the map of variables names to TGV
-   ids *)
-let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
+let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   let folder = Filename.dirname !Cli.output_file in
 
-  let vars = get_vars prog Dgfip_options.(flags.flg_tri_ebcdic) in
-
-  let oc, fmt = open_file (Filename.concat folder "compir_restitue.c") in
-  gen_table_output fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_contexte.c") in
-  gen_table_context fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_famille.c") in
-  gen_table_family fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_revenu.c") in
-  gen_table_income fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_revcor.c") in
-  gen_table_corrincome fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_variatio.c") in
-  gen_table_variation fmt flags vars;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_penalite.c") in
-  gen_table_penality fmt flags vars;
-  close_out oc;
+  Dgfip_compir_files.generate_compir_files flags cprog;
 
   let oc, fmt = open_file (Filename.concat folder "varinfos.c") in
-  let stats_varinfos = gen_table_varinfos fmt cprog vars in
-  close_out oc;
-
-  let vars_debug = get_vars_debug Dgfip_options.(flags.flg_tri_ebcdic) vars in
-  let vars_debug_split = split_list vars_debug flags.nb_debug_c in
-  let _ =
-    if flags.nb_debug_c > 0 then
-      List.fold_left
-        (fun i vars ->
-          let file = Printf.sprintf "compir_tableg%02d.c" i in
-          let oc, fmt = open_file (Filename.concat folder file) in
-          if flags.flg_debug then gen_table_debug fmt flags vars i
-          else
-            Format.fprintf fmt
-              "/****** LICENCE CECIL *****/\n\n#include \"compir.h\"\n\n";
-          close_out oc;
-          i + 1)
-        1 vars_debug_split
-    else 0
-  in
-
-  let oc, fmt = open_file (Filename.concat folder "compir_desc.h") in
-  gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:true;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_desc_inv.h") in
-  gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:false;
-  close_out oc;
-
-  let rules, verifs, errors, chainings = get_rules_verif_etc prog in
-  let prefix = cprog.program_safe_prefix in
-
-  let oc, fmt = open_file (Filename.concat folder "compir_tableg.c") in
-  gen_table_call fmt flags vars_debug prefix rules chainings errors;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir_tablev.c") in
-  gen_table_verif fmt flags prefix verifs;
-  close_out oc;
-
-  let oc, fmt = open_file (Filename.concat folder "compir.h") in
-  gen_compir_h fmt flags vars vars_debug_split;
+  let stats_varinfos = gen_table_varinfos fmt cprog in
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "erreurs.c") in
-  gen_erreurs_c fmt flags errors;
+  gen_erreurs_c fmt flags cprog;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "conf.h") in
@@ -2197,9 +1593,9 @@ let generate_auxiliary_files flags prog (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.h") in
-  gen_mlang_h fmt cprog flags stats_varinfos rules verifs chainings errors;
+  gen_mlang_h fmt cprog flags stats_varinfos;
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in
-  gen_mlang_c fmt;
+  gen_mlang_c fmt flags;
   close_out oc

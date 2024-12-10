@@ -26,7 +26,7 @@ let make_position_between (p1 : t) (p2 : t) : t =
   if p1.pos_filename <> p2.pos_filename then begin
     Cli.error_print "Conflicting position filenames: %s <> %s" p1.pos_filename
       p2.pos_filename;
-    exit (-1)
+    failwith "Pos error"
   end
   else
     let b1, e1 = p1.pos_loc in
@@ -172,7 +172,7 @@ let retrieve_loc_text (pos : t) : string =
       with Sys_error _ ->
         Cli.error_print "File not found for displaying position : \"%s\""
           filename;
-        exit (-1)
+        failwith "Pos error"
     in
     let print_matched_line (line : string) (line_no : int) : string =
       let line_indent = indent_number line in

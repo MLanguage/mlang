@@ -276,11 +276,11 @@ module Error : sig
 
   type t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
-    kind : string Pos.marked;
-    major_code : string Pos.marked;
-    minor_code : string Pos.marked;
-    description : string Pos.marked;
-    isisf : string Pos.marked;
+    famille : string Pos.marked;
+    code_bo : string Pos.marked;
+    sous_code : string Pos.marked;
+    libelle : string Pos.marked;
+    is_isf : string Pos.marked;
     typ : typ;
   }
 

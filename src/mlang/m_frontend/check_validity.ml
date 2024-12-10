@@ -632,11 +632,11 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       check_global_var var prog
 
 let check_error (error : Mast.error_) (prog : program) : program =
-  let kind = List.nth error.error_descr 0 in
-  let major_code = List.nth error.error_descr 1 in
-  let minor_code = List.nth error.error_descr 2 in
-  let description = List.nth error.error_descr 3 in
-  let isisf =
+  let famille = List.nth error.error_descr 0 in
+  let code_bo = List.nth error.error_descr 1 in
+  let sous_code = List.nth error.error_descr 2 in
+  let libelle = List.nth error.error_descr 3 in
+  let is_isf =
     match List.nth_opt error.error_descr 4 with
     | Some s -> s
     | None -> ("", Pos.no_pos)
@@ -646,11 +646,11 @@ let check_error (error : Mast.error_) (prog : program) : program =
       {
         name = error.Mast.error_name;
         typ = Pos.unmark error.Mast.error_typ;
-        kind;
-        major_code;
-        minor_code;
-        isisf;
-        description;
+        famille;
+        code_bo;
+        sous_code;
+        is_isf;
+        libelle;
       }
   in
   let name, name_pos = err.name in

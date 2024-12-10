@@ -278,7 +278,7 @@ let round_ops = ref RODefault
    interpreter *)
 let comparison_error_margin = ref 0.000001
 
-let income_year = ref None
+let income_year = ref 0
 
 let set_all_arg_refs (files_ : string list) applications_
     (without_dgfip_m_ : bool) (debug_ : bool) (var_info_debug_ : string list)
@@ -298,7 +298,10 @@ let set_all_arg_refs (files_ : string list) applications_
   no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
-  income_year := income_year_;
+  (income_year :=
+     match income_year_ with
+     | Some y -> y
+     | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
   value_sort := value_sort_;
   round_ops := round_ops_;
   match output_file_ with

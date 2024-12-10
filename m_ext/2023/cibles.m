@@ -799,7 +799,7 @@ puis_quand nb_discordances() + nb_informatives() = 0 faire
 puis_quand nb_anomalies() = 0 faire
   calculer cible exporte_si_non_bloquantes;
   calculer cible ir_calcul_primitif_isf;
-  finalise_erreurs;
+#  finalise_erreurs;
   calculer cible enchaine_calcul;
   finalise_erreurs;
   calculer cible exporte_si_non_bloquantes;

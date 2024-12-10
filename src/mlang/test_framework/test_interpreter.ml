@@ -23,9 +23,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     float StrMap.t * StrSet.t * Com.literal Com.Var.Map.t =
   let input_file =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
-    let ancsded_val =
-      Com.Float (float_of_int (Option.get !Cli.income_year + 1))
-    in
+    let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
     List.fold_left
       (fun in_f ((var, var_pos), (value, _value_pos)) ->
         let var = find_var_of_name program (var, var_pos) in

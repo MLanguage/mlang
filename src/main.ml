@@ -14,4 +14,12 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let () = Mlang.Driver.main ()
+open Mlang
+
+let () =
+  Printexc.record_backtrace true;
+  try ignore (Driver.main ()) with
+  | Exit -> ()
+  | e ->
+      Format.eprintf "Uncaught exception: %s@." (Printexc.to_string e);
+      Format.eprintf "%s@." (Printexc.get_backtrace ())
