@@ -34,7 +34,7 @@ default: FORCE build
 
 all: FORCE quick_test tests test_dgfip_c_backend
 
-clean: FORCE
+clean: FORCE remise_a_zero_versionnage
 	$(call make_in,$(DGFIP_DIR),clean_backend_all)
 	rm -f doc/doc.html
 	dune clean
