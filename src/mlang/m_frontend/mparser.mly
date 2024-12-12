@@ -58,7 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT
+%token EVENT VALUE
 
 %token EOF
 
@@ -104,6 +104,7 @@ source_file_item:
 | al = application_etc { al }
 | cl = chaining_etc { cl }
 | cl = var_category_decl_etc { cl }
+| el = event_decl_etc { el }
 | crl = rule_domain_decl_etc { crl }
 | cvl = verif_domain_decl_etc { cvl }
 | ol = output_etc { ol }
@@ -127,6 +128,18 @@ var_category_decl:
   SEMICOLON {
     { var_type; var_category; var_attributes }
   }
+
+event_decl_etc:
+| e = with_pos(event_decl) l = with_pos(symbol_colon_etc)* {
+    Pos.same_pos_as (EventDecl (Pos.unmark e)) e :: l
+  }
+
+event_field:
+| VARIABLE name = symbol_with_pos { Com.{name; is_var = true; index = 0} }
+| VALUE name = symbol_with_pos { Com.{name; is_var = false; index = 0} }
+
+event_decl:
+| EVENT COLON el = separated_nonempty_list(COLON, event_field) SEMICOLON { el }
 
 rule_domain_decl_etc:
 | cr =with_pos(rule_domain_decl) l = with_pos(symbol_colon_etc)* { cr :: l }

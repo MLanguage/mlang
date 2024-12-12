@@ -8,4 +8,6 @@ val verif_domains_declaration : string
 
 val declarations : string
 
+val event_declaration : string
+
 val string_to_rule_domain_id : string -> string list

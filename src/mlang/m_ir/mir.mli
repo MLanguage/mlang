@@ -56,6 +56,8 @@ type program = {
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
+  program_event_fields : Com.event_field StrMap.t;
+  program_event_field_idxs : string IntMap.t;
   program_rules : string IntMap.t;
   program_verifs : string IntMap.t;
   program_chainings : string StrMap.t;

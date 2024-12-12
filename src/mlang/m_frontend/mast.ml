@@ -213,6 +213,7 @@ type source_file_item =
   | Application of application Pos.marked  (** Declares an application *)
   | Chaining of chaining Pos.marked * application Pos.marked list
   | VariableDecl of variable_decl
+  | EventDecl of Com.event_field list
   | Function of target
   | Rule of rule
   | Target of target

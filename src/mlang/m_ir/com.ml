@@ -291,6 +291,8 @@ module Var = struct
      let compare_name n0 n1 = !compare_name_ref n0 n1*)
 end
 
+type event_field = { name : string Pos.marked; index : int; is_var : bool }
+
 module DomainId = StrSet
 
 module DomainIdSet = struct

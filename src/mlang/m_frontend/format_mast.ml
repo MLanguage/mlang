@@ -45,6 +45,13 @@ let format_var_category_id fmt (vd : var_category_id) =
   | [ ("*", _) ] -> Format.fprintf fmt "*"
   | _ -> assert false
 
+let format_event_decl fmt el =
+  let pp_field fmt (ef : Com.event_field) =
+    let ef_type = if ef.is_var then "variable" else "valeur" in
+    Format.fprintf fmt "%s %s" ef_type (Pos.unmark ef.name)
+  in
+  Format.fprintf fmt "evenement : %a;" (Pp.list " : " pp_field) el
+
 let format_instruction fmt i =
   Com.format_instruction format_variable Pp.string fmt i
 
@@ -191,6 +198,7 @@ let format_source_file_item fmt (i : source_file_item) =
         (Pp.list_space (Pp.unmark format_application))
         apps
   | VariableDecl vd -> format_variable_decl fmt vd
+  | EventDecl el -> format_event_decl fmt el
   | Function t -> format_target fmt t
   | Rule r -> format_rule fmt r
   | Target t -> format_target fmt t

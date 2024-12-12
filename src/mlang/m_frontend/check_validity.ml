@@ -295,6 +295,20 @@ module Err = struct
   let is_base_function fn pos =
     let msg = Format.sprintf "function %s already exist as base function" fn in
     Errors.raise_spanned_error msg pos
+
+  let event_already_declared old_pos pos =
+    let msg =
+      Format.asprintf "event fields are already declared at %a"
+        Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let event_field_already_declared name old_pos pos =
+    let msg =
+      Format.asprintf "event field \"%s\" is already declared at %a" name
+        Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -342,6 +356,9 @@ type program = {
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
   prog_alias : Com.Var.t StrMap.t;
+  prog_event_fields : Com.event_field StrMap.t;
+  prog_event_field_idxs : string IntMap.t;
+  prog_event_pos : Pos.t;
   prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Com.rule_domain_data doms;
   prog_rdom_syms : syms;
@@ -417,6 +434,9 @@ let empty_program (p : Mast.program) main_target =
     prog_chainings = StrMap.empty;
     prog_var_cats = Com.CatVar.Map.empty;
     prog_vars = StrMap.empty;
+    prog_event_fields = StrMap.empty;
+    prog_event_field_idxs = IntMap.empty;
+    prog_event_pos = Pos.no_pos;
     prog_alias = StrMap.empty;
     prog_errors = StrMap.empty;
     prog_rdoms = Com.DomainIdMap.empty;
@@ -630,6 +650,32 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~typ:(Option.map Pos.unmark comp_var.Mast.comp_typ)
       in
       check_global_var var prog
+
+let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
+    (prog : program) : program =
+  if not (StrMap.is_empty prog.prog_event_fields) then
+    Err.event_already_declared prog.prog_event_pos decl_pos;
+  let prog_event_fields =
+    let fold (map, index) (ef : Com.event_field) =
+      let name = Pos.unmark ef.name in
+      match StrMap.find_opt name map with
+      | None ->
+          let map = StrMap.add name { ef with index } map in
+          let index = index + 1 in
+          (map, index)
+      | Some old_ef ->
+          let old_pos = Pos.get_position old_ef.name in
+          let name_pos = Pos.get_position ef.name in
+          Err.event_field_already_declared name old_pos name_pos
+    in
+    fst (List.fold_left fold (StrMap.empty, 0) evt_decl)
+  in
+  let prog_event_field_idxs =
+    let fold name (ef : Com.event_field) map = IntMap.add ef.index name map in
+    StrMap.fold fold prog_event_fields IntMap.empty
+  in
+  let prog_event_pos = decl_pos in
+  { prog with prog_event_fields; prog_event_field_idxs; prog_event_pos }
 
 let check_error (error : Mast.error_) (prog : program) : program =
   let famille = List.nth error.error_descr 0 in
@@ -2488,13 +2534,14 @@ let proceed (p : Mast.program) (main_target : string) : program =
     List.fold_left
       (fun prog source_file ->
         List.fold_left
-          (fun prog (item, _pos_item) ->
+          (fun prog (item, pos_item) ->
             match item with
             | Mast.Application (name, pos) -> check_application name pos prog
             | Mast.Chaining ((name, pos), m_apps) ->
                 check_chaining name pos m_apps prog
             | Mast.VarCatDecl (decl, pos) -> check_var_category decl pos prog
             | Mast.VariableDecl var_decl -> check_var_decl var_decl prog
+            | Mast.EventDecl evt_decl -> check_event_decl evt_decl pos_item prog
             | Mast.Error error -> check_error error prog
             | Mast.Func -> prog (* unused *)
             | Mast.Output _ -> prog (* unused *)

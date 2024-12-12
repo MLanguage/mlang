@@ -243,8 +243,8 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                       (Mast.Function target, pos_item) :: prog_file
                     in
                     (apps_env, prog_file)
-              | VariableDecl _ | Error _ | Output _ | Func | VarCatDecl _
-              | RuleDomDecl _ | VerifDomDecl _ ->
+              | VariableDecl _ | EventDecl _ | Error _ | Output _ | Func
+              | VarCatDecl _ | RuleDomDecl _ | VerifDomDecl _ ->
                   (apps_env, source_item :: prog_file))
             (apps_env, []) source_file
         in
