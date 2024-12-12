@@ -861,8 +861,8 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
   | _ -> ()
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) :
-    float option StrMap.t * StrSet.t =
+    (events : Com.event_value IntMap.t list) (sort : Cli.value_sort)
+    (roundops : Cli.round_ops) : float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.empty_ctx p in
@@ -881,6 +881,27 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
       else res
     in
     StrMap.fold fold p.program_vars StrMap.empty
+  in
+  let _eventMap =
+    let fold (map, idx) (evt : Com.event_value IntMap.t) =
+      let foldEvt id ev map =
+        match IntMap.find_opt id p.program_event_field_idxs with
+        | Some fname -> (
+            match StrMap.find_opt fname p.program_event_fields with
+            | Some ef -> (
+                match (ev, ef.is_var) with
+                | Com.Numeric _, false | Com.RefVar _, true ->
+                    StrMap.add fname ev map
+                | _ -> Errors.raise_error "Wrong event field type")
+            | None -> Errors.raise_error "Wrong event field")
+        | None ->
+            Errors.raise_error
+              (Format.sprintf "Too much event fields: index %d for size %d" id
+                 (IntMap.cardinal p.program_event_field_idxs))
+      in
+      (IntMap.add idx (IntMap.fold foldEvt evt StrMap.empty) map, idx + 1)
+    in
+    fst (List.fold_left fold (IntMap.empty, 0) events)
   in
   let anoSet =
     let fold res (e, _) = StrSet.add (Pos.unmark e.Com.Error.name) res in

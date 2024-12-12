@@ -232,15 +232,15 @@ let declarations =
 let event_declaration =
   {|
 evenement
-: valeur date
+: valeur numero
 : valeur rappel
 : variable code
-: valeur change
-: valeur direction
+: valeur montant
+: valeur sens
 : valeur penalite
-: valeur base_tolerance_legale
-: valeur mois_jour
-: valeur decl_2042_rect;
+: valeur base_tl
+: valeur date
+: valeur 2042_rect;
 |}
 
 let string_to_rule_domain_id : string -> string list = function

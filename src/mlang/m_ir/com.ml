@@ -293,6 +293,8 @@ end
 
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
+type event_value = Numeric of float option | RefVar of string
+
 module DomainId = StrSet
 
 module DomainIdSet = struct
