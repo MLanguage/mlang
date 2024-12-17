@@ -298,7 +298,7 @@ extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv
 #endif /* FLG_TRACE */
 |}
 
-let gen_const fmt =
+let gen_const fmt (cprog : Mir.program) =
   Format.fprintf fmt
     {|#define FALSE 0
 #define TRUE 1
@@ -388,6 +388,22 @@ typedef struct S_irdata T_irdata;
 /*#define DR_ irdata->def_ref*/
 /*#define IT_ irdata->info_tmps*/
 /*#define IR_ irdata->info_ref*/
+
+struct S_event {
+|};
+  IntMap.iter
+    (fun _idx fname ->
+      let field = StrMap.find fname cprog.program_event_fields in
+      if field.is_var then
+        Format.fprintf fmt "  T_varinfo *field_%s_var;\n" fname
+      else (
+        Format.fprintf fmt "  char field_%s_def;\n" fname;
+        Format.fprintf fmt "  double field_%s_val;\n" fname))
+    cprog.program_event_field_idxs;
+  Format.fprintf fmt
+    {|};
+
+typedef struct S_event T_event;
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
@@ -616,7 +632,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   pr "\n";
   gen_decl_varinfos fmt cprog stats_varinfos;
   pr "\n";
-  gen_const fmt;
+  gen_const fmt cprog;
   pr "\n";
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
