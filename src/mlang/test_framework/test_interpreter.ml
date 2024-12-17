@@ -20,8 +20,9 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
     StrMap.find name p.program_vars
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
-    float StrMap.t * StrSet.t * Com.literal Com.Var.Map.t =
-  let input_file =
+    (Com.literal Com.Var.Map.t * float StrMap.t * StrSet.t)
+    * (Com.event_value IntMap.t list * float StrMap.t * StrSet.t) option =
+  let inputVars =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
     let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
     List.fold_left
@@ -36,18 +37,74 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       (Com.Var.Map.one ancsded ancsded_val)
       t.prim.entrees
   in
-  let expectedVars =
+  let eventsList rappels =
+    let fromDirection = function
+      | "R" -> Some 0.0
+      | "C" -> Some 1.0
+      | "M" -> Some 2.0
+      | "P" -> Some 3.0
+      | s ->
+          Cli.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
+            s;
+          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+    in
+    let fromPenalty = function
+      | None -> None
+      | Some p when 0 <= p && p <= 99 -> Some (float p)
+      | Some p ->
+          Cli.error_print "Code de pénalité: %d, devrait être entre 0 et 99" p;
+          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+    in
+    let from_2042_rect = function
+      | None -> None
+      | Some 0 -> Some 0.0
+      | Some 1 -> Some 1.0
+      | Some r ->
+          Cli.error_print
+            "Indicateur de déclaration rectificative: %d, devrait être 0 ou 1" r;
+          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+    in
+    let toEvent (rappel : Irj_ast.rappel) =
+      IntMap.empty
+      |> IntMap.add 0 (Com.Numeric (Some (float rappel.event_nb)))
+      |> IntMap.add 1 (Com.Numeric (Some (float rappel.rappel_nb)))
+      |> IntMap.add 2 (Com.RefVar rappel.variable_code)
+      |> IntMap.add 3 (Com.Numeric (Some (float rappel.change_value)))
+      |> IntMap.add 4 (Com.Numeric (fromDirection rappel.direction))
+      |> IntMap.add 5 (Com.Numeric (fromPenalty rappel.penalty_code))
+      |> IntMap.add 6
+           (Com.Numeric (Option.map float rappel.base_tolerance_legale))
+      |> IntMap.add 7 (Com.Numeric (Some (float rappel.month_year)))
+      |> IntMap.add 8 (Com.Numeric (from_2042_rect rappel.decl_2042_rect))
+    in
+    List.map toEvent rappels
+  in
+  let expectedVars vars_init =
     let fold res ((var, _), (value, _)) =
       let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
       StrMap.add var fVal res
     in
-    List.fold_left fold StrMap.empty t.prim.resultats_attendus
+    List.fold_left fold StrMap.empty vars_init
   in
-  let expectedAnos =
+  let expectedAnos anos_init =
     let fold res ano = StrSet.add ano res in
-    List.fold_left fold StrSet.empty (List.map fst t.prim.controles_attendus)
+    List.fold_left fold StrSet.empty (List.map fst anos_init)
   in
-  (expectedVars, expectedAnos, input_file)
+  let prim =
+    ( inputVars,
+      expectedVars t.prim.resultats_attendus,
+      expectedAnos t.prim.controles_attendus )
+  in
+  let corr =
+    match t.rapp with
+    | None -> None
+    | Some rapp ->
+        Some
+          ( eventsList rapp.entrees_rappels,
+            expectedVars rapp.resultats_attendus,
+            expectedAnos rapp.controles_attendus )
+  in
+  (prim, corr)
 
 exception InterpError of int
 
@@ -56,12 +113,18 @@ let check_test (program : Mir.program) (test_name : string)
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
-  let expVars, expAnos, input_file = to_MIR_function_and_inputs program t in
+  let (inputVars, expVars, expAnos), evtDatas =
+    to_MIR_function_and_inputs program t
+  in
+  let events =
+    match evtDatas with None -> [] | Some (events, _, _) -> events
+  in
   Cli.debug_print "Executing program";
   (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
      Format_bir.format_program program; *)
   let varMap, anoSet =
-    Mir_interpreter.evaluate_program program input_file value_sort round_ops
+    Mir_interpreter.evaluate_program program inputVars events value_sort
+      round_ops
   in
   let check_vars exp vars =
     let test_error_margin = 0.01 in

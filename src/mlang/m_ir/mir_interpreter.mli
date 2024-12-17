@@ -156,6 +156,7 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
+  Com.event_value IntMap.t list ->
   Cli.value_sort ->
   Cli.round_ops ->
   float option StrMap.t * StrSet.t
