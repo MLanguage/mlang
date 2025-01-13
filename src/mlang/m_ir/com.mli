@@ -334,6 +334,10 @@ type ('v, 'e) instruction =
       * 'v Pos.marked list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
+  | Iterate_values of
+      'v Pos.marked
+      * ('v m_expression * 'v m_expression) list
+      * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list

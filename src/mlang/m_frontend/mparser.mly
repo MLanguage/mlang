@@ -561,6 +561,7 @@ target_etc:
       target_nb_tmps = -1;
       target_sz_tmps = -1;
       target_nb_refs = -1;
+      target_nb_itval = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
@@ -594,6 +595,7 @@ function_etc:
       target_nb_tmps = -1;
       target_sz_tmps = -1;
       target_nb_refs = -1;
+      target_nb_itval = -1;
       target_prog;
     } in
     Pos.same_pos_as (Function target) name :: l
@@ -678,17 +680,31 @@ instruction:
   }
 | ITERATE COLON
   VARIABLE vn = symbol_with_pos COLON
-  it_params = nonempty_list(it_param)
+  it_params = nonempty_list(with_pos(it_param))
   IN LPAREN instrs = instruction_list_rev RPAREN {
     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
-    let var_list, var_cats =
-      let fold (var_list, var_cats) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats
-      | `VarCatsIt vc -> var_list, vc :: var_cats
-      in
-      List.fold_left fold ([], []) it_params
-    in
-    Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
+    match it_params with
+    | (`VarInterval _, _) :: _ ->
+        let var_intervals =
+          let fold var_intervals = function
+          | (`VarInterval (e0, e1), _) -> (e0, e1) :: var_intervals
+          | (`VarList _, pos) | (`VarCatsIt _, pos) ->
+              Errors.raise_spanned_error "variable descriptors forbidden in values iteration" pos
+          in
+          List.fold_left fold [] it_params
+        in
+        Some (Iterate_values (var, List.rev var_intervals, List.rev instrs))
+    | _ ->
+        let var_list, var_cats =
+          let fold (var_list, var_cats) = function
+          | (`VarList vl, _) -> (List.rev vl) @ var_list, var_cats
+          | (`VarCatsIt vc, _) -> var_list, vc :: var_cats
+          | (`VarInterval _, pos) ->
+              Errors.raise_spanned_error "interval forbidden in variable iteration" pos
+          in
+          List.fold_left fold ([], []) it_params
+        in
+        Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
   }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
@@ -815,6 +831,9 @@ it_param:
       | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
     in
     `VarCatsIt (vcats, expr)
+  }
+| expr0 = with_pos(expression) RANGE expr1 = with_pos(expression) COLON {
+    `VarInterval (expr0, expr1)
   }
 
 it_param_with_expr:

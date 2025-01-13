@@ -481,6 +481,10 @@ type ('v, 'e) instruction =
       * 'v Pos.marked list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
+  | Iterate_values of
+      'v Pos.marked
+      * ('v m_expression * 'v m_expression) list
+      * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
@@ -770,6 +774,16 @@ let rec format_instruction form_var form_err =
           vars
           (Pp.list_space format_var_param)
           var_params;
+        Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
+    | Iterate_values (var, var_intervals, itb) ->
+        let format_var_intervals fmt (e0, e1) =
+          Format.fprintf fmt ": %a .. %a@\n" form_expr (Pos.unmark e0) form_expr
+            (Pos.unmark e1)
+        in
+        Format.fprintf fmt "iterate variable %a@;: %a@;: dans (" form_var
+          (Pos.unmark var)
+          (Pp.list_space format_var_intervals)
+          var_intervals;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | Restore (vars, var_params, rb) ->
         let format_var_param fmt (var, vcs, expr) =

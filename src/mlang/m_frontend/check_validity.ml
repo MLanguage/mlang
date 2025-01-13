@@ -458,6 +458,7 @@ let empty_program (p : Mast.program) main_target =
         nb_vars = 0;
         nb_all_tmps = 0;
         nb_all_refs = 0;
+        nb_all_itval = 0;
         sz_calculated = 0;
         sz_base = 0;
         sz_input = 0;
@@ -802,238 +803,6 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let doms, syms = check_domain Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
-
-let complete_vars (prog : program) : program =
-  let prog_vars = prog.prog_vars in
-  let prog_vars =
-    let incr_cpt cat cpt =
-      let i = Com.CatVar.Map.find cat cpt in
-      let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
-      (cpt, i)
-    in
-    let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
-    let prog_vars, _ =
-      StrMap.fold
-        (fun vn (var : Com.Var.t) (res, cpt) ->
-          let tgv = Com.Var.tgv var in
-          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
-          let cpt, i = incr_cpt tgv.cat cpt in
-          let loc = Com.set_loc_tgv_cat var.loc dcat.loc dcat.id_str i in
-          let var = Com.Var.{ var with loc } in
-          let res = StrMap.add vn var res in
-          (res, cpt))
-        prog_vars (StrMap.empty, cat_cpt)
-    in
-    prog_vars
-  in
-  let module CatLoc = struct
-    type t = Com.CatVar.loc
-
-    let pp fmt (loc : t) =
-      match loc with
-      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
-      | Com.CatVar.LocBase -> Format.fprintf fmt "base"
-      | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
-
-    let compare x y = compare x y
-  end in
-  let module CatLocMap = struct
-    include MapExt.Make (CatLoc)
-
-    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
-        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-        (map : 'a t) : unit =
-      pp ~sep ~pp_key ~assoc pp_val fmt map
-  end in
-  let loc_vars, sz_loc_vars, sz_vars =
-    let fold _ (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
-      let var = Com.Var.{ var with loc = Com.set_loc_int var.loc n } in
-      let loc_cat =
-        (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
-      in
-      let loc_vars =
-        let upd = function
-          | None -> Some (Com.Var.Set.one var)
-          | Some set -> Some (Com.Var.Set.add var set)
-        in
-        CatLocMap.update loc_cat upd loc_vars
-      in
-      let sz = Com.Var.size var in
-      let sz_loc_vars =
-        let upd = function
-          | None -> Some sz
-          | Some n_loc -> Some (n_loc + sz)
-        in
-        CatLocMap.update loc_cat upd sz_loc_vars
-      in
-      (loc_vars, sz_loc_vars, n + sz)
-    in
-    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
-  in
-  let update_loc (var : Com.Var.t) (vars, n) =
-    let loc = Com.set_loc_tgv_idx var.loc n in
-    let vars =
-      StrMap.add (Com.Var.name_str var) Com.Var.{ var with loc } vars
-    in
-    (vars, n + Com.Var.size var)
-  in
-  let prog_vars =
-    CatLocMap.fold
-      (fun _loc_cat vars prog_vars ->
-        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
-      loc_vars StrMap.empty
-  in
-  let nb_loc loc_cat =
-    match CatLocMap.find_opt loc_cat loc_vars with
-    | Some set -> Com.Var.Set.cardinal set
-    | None -> 0
-  in
-  let sz_loc loc_cat =
-    match CatLocMap.find_opt loc_cat sz_loc_vars with
-    | Some sz -> sz
-    | None -> 0
-  in
-  let prog_targets =
-    let rec aux nbRef = function
-      | [] -> nbRef
-      | (instr, _) :: il -> (
-          match instr with
-          | Com.IfThenElse (_, ilt, ile) ->
-              aux (nbRef + max (aux 0 ilt) (aux 0 ile)) il
-          | Com.WhenDoElse (wdl, ed) ->
-              let rec wde nbRef = function
-                | (_, dl, _) :: wdl' -> wde (max nbRef (aux 0 dl)) wdl'
-                | [] -> max nbRef (aux 0 (Pos.unmark ed))
-              in
-              aux (wde nbRef wdl) il
-          | Com.VerifBlock instrs -> aux (nbRef + aux 0 instrs) il
-          | Com.Iterate (_, _, _, instrs) -> aux (nbRef + 1 + aux 0 instrs) il
-          | Com.Restore (_, _, instrs) -> aux (nbRef + max 1 (aux 0 instrs)) il
-          | Com.ComputeTarget _ | Com.Affectation _ | Com.Print _
-          | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
-          | Com.FinalizeErrors ->
-              aux nbRef il
-          | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
-              assert false)
-    in
-    let map (t : Mast.target) =
-      let target_nb_tmps = StrMap.cardinal t.target_tmp_vars in
-      let target_sz_tmps =
-        let fold _ (_, tsz_opt) sz =
-          match tsz_opt with
-          | None -> sz + 1
-          | Some (tsz, _) -> sz + Mast.get_table_size tsz
-        in
-        StrMap.fold fold t.target_tmp_vars 0
-      in
-      let target_nb_refs = List.length t.target_args + aux 0 t.target_prog in
-      { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
-    in
-    StrMap.map map prog.prog_targets
-  in
-  let nb_all_tmps, sz_all_tmps, nb_all_refs =
-    let rec aux (nb, sz, nbRef, tdata) = function
-      | [] -> (nb, sz, nbRef, tdata)
-      | (instr, _) :: il -> (
-          match instr with
-          | Com.ComputeTarget (tn, _targs) ->
-              let name = Pos.unmark tn in
-              let target = StrMap.find name prog_targets in
-              let nb1, sz1 = (target.target_nb_tmps, target.target_sz_tmps) in
-              let nbRef1 = List.length target.target_args in
-              let nbt, szt, nbRefT, tdata =
-                match StrMap.find_opt name tdata with
-                | None ->
-                    let nbt, szt, nbRefT, tdata =
-                      aux (0, 0, 0, tdata) target.target_prog
-                    in
-                    let tdata = StrMap.add name (nbt, szt, nbRefT) tdata in
-                    (nbt, szt, nbRefT, tdata)
-                | Some (nbt, szt, nbRefT) -> (nbt, szt, nbRefT, tdata)
-              in
-              let nb = nb + nb1 + nbt in
-              let sz = sz + sz1 + szt in
-              let nbRef = nbRef + nbRef1 + nbRefT in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.IfThenElse (_, ilt, ile) ->
-              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) ilt in
-              let nb2, sz2, nbRef2, tdata = aux (0, 0, 0, tdata) ile in
-              let nb = nb + max nb1 nb2 in
-              let sz = sz + max sz1 sz2 in
-              let nbRef = nbRef + max nbRef1 nbRef2 in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.WhenDoElse (wdl, ed) ->
-              let rec wde (nb, sz, nbRef, tdata) = function
-                | (_, dl, _) :: wdl' ->
-                    let nb', sz', nbRef', tdata = aux (0, 0, 0, tdata) dl in
-                    let nb = max nb nb' in
-                    let sz = max sz sz' in
-                    let nbRef = max nbRef nbRef' in
-                    wde (nb, sz, nbRef, tdata) wdl'
-                | [] ->
-                    let nb', sz', nbRef', tdata =
-                      aux (0, 0, 0, tdata) (Pos.unmark ed)
-                    in
-                    let nb = max nb nb' in
-                    let sz = max sz sz' in
-                    let nbRef = max nbRef nbRef' in
-                    (nb, sz, nbRef, tdata)
-              in
-              let nb', sz', nbRef', tdata = wde (0, 0, 0, tdata) wdl in
-              let nb = nb + nb' in
-              let sz = sz + sz' in
-              let nbRef = nbRef + nbRef' in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.VerifBlock instrs ->
-              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
-              let nb = nb + nb1 in
-              let sz = sz + sz1 in
-              let nbRef = nbRef + nbRef1 in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.Iterate (_, _, _, instrs) ->
-              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
-              let nb = nb + nb1 in
-              let sz = sz + sz1 in
-              let nbRef = nbRef + 1 + nbRef1 in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.Restore (_, _, instrs) ->
-              let nb1, sz1, nbRef1, tdata = aux (0, 0, 0, tdata) instrs in
-              let nb = nb + nb1 in
-              let sz = sz + sz1 in
-              let nbRef = nbRef + max 1 nbRef1 in
-              aux (nb, sz, nbRef, tdata) il
-          | Com.Affectation _ | Com.Print _ | Com.RaiseError _ | Com.CleanErrors
-          | Com.ExportErrors | Com.FinalizeErrors ->
-              aux (nb, sz, nbRef, tdata) il
-          | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
-              assert false)
-    in
-    match StrMap.find_opt prog.prog_main_target prog_targets with
-    | None -> Err.main_target_not_found prog.prog_main_target
-    | Some t ->
-        let init_instrs =
-          [ (Com.ComputeTarget (t.target_name, []), Pos.no_pos) ]
-        in
-        let nb, sz, nbRef, _ = aux (0, 0, 0, StrMap.empty) init_instrs in
-        (nb, sz, nbRef)
-  in
-  let prog_stats =
-    Mir.
-      {
-        nb_calculated = nb_loc Com.CatVar.LocComputed;
-        nb_input = nb_loc Com.CatVar.LocInput;
-        nb_base = nb_loc Com.CatVar.LocBase;
-        nb_vars = StrMap.cardinal prog_vars;
-        nb_all_tmps;
-        nb_all_refs;
-        sz_calculated = sz_loc Com.CatVar.LocComputed;
-        sz_input = sz_loc Com.CatVar.LocInput;
-        sz_base = sz_loc Com.CatVar.LocBase;
-        sz_vars;
-        sz_all_tmps;
-      }
-  in
-  { prog with prog_vars; prog_targets; prog_stats }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1581,6 +1350,45 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let env = { env with prog } in
             let res_instr = Com.Iterate (var, vars, var_params, res_instrs) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+        | Com.Iterate_values (var, var_intervals, instrs) ->
+            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            let var_pos = Pos.get_position var in
+            let var_name =
+              match Pos.unmark var with
+              | Mast.Normal var -> var
+              | Mast.Generic _ -> assert false
+            in
+            (match StrMap.find_opt var_name env.prog.prog_vars with
+            | Some Com.Var.{ name = _, old_pos; _ } ->
+                Err.variable_already_declared var_name old_pos var_pos
+            | None -> ());
+            (match StrMap.find_opt var_name env.tmp_vars with
+            | Some (_, old_pos) ->
+                Err.variable_already_declared var_name old_pos var_pos
+            | None -> ());
+            (match StrMap.find_opt var_name env.ref_vars with
+            | Some old_pos ->
+                Err.variable_already_declared var_name old_pos var_pos
+            | None -> ());
+            let env' =
+              {
+                env with
+                tmp_vars = StrMap.add var_name (None, var_pos) env.tmp_vars;
+              }
+            in
+            List.iter
+              (fun (e0, e1) ->
+                ignore (check_expression false e0 env);
+                ignore (check_expression false e1 env))
+              var_intervals;
+            let prog, res_instrs, _, _ =
+              check_instructions instrs is_rule env'
+            in
+            let env = { env with prog } in
+            let res_instr =
+              Com.Iterate_values (var, var_intervals, res_instrs)
+            in
+            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.Restore (vars, var_params, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             ignore
@@ -1866,6 +1674,7 @@ let convert_rules (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_nb_itval = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2014,6 +1823,7 @@ let complete_rule_domains (prog : program) : program =
                 target_nb_tmps = 0;
                 target_sz_tmps = 0;
                 target_nb_refs = 0;
+                target_nb_itval = 0;
               }
           in
           StrMap.add tname target prog_targets
@@ -2113,6 +1923,7 @@ let complete_chainings (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_nb_itval = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2241,6 +2052,7 @@ let convert_verifs (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_nb_itval = 0;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2485,6 +2297,7 @@ let complete_verif_calls (prog : program) : program =
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
                   target_nb_refs = 0;
+                  target_nb_itval = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -2518,6 +2331,7 @@ let complete_verif_calls (prog : program) : program =
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
                   target_nb_refs = 0;
+                  target_nb_itval = 0;
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -2527,6 +2341,310 @@ let complete_verif_calls (prog : program) : program =
       (prog.prog_targets, OrdVerifSetMap.empty)
   in
   { prog with prog_targets }
+
+let complete_vars (prog : program) : program =
+  let prog_vars = prog.prog_vars in
+  let prog_vars =
+    let incr_cpt cat cpt =
+      let i = Com.CatVar.Map.find cat cpt in
+      let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
+      (cpt, i)
+    in
+    let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
+    let prog_vars, _ =
+      StrMap.fold
+        (fun vn (var : Com.Var.t) (res, cpt) ->
+          let tgv = Com.Var.tgv var in
+          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
+          let cpt, i = incr_cpt tgv.cat cpt in
+          let loc = Com.set_loc_tgv_cat var.loc dcat.loc dcat.id_str i in
+          let var = Com.Var.{ var with loc } in
+          let res = StrMap.add vn var res in
+          (res, cpt))
+        prog_vars (StrMap.empty, cat_cpt)
+    in
+    prog_vars
+  in
+  let module CatLoc = struct
+    type t = Com.CatVar.loc
+
+    let pp fmt (loc : t) =
+      match loc with
+      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
+      | Com.CatVar.LocBase -> Format.fprintf fmt "base"
+      | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
+
+    let compare x y = compare x y
+  end in
+  let module CatLocMap = struct
+    include MapExt.Make (CatLoc)
+
+    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end in
+  let loc_vars, sz_loc_vars, sz_vars =
+    let fold _ (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
+      let var = Com.Var.{ var with loc = Com.set_loc_int var.loc n } in
+      let loc_cat =
+        (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
+      in
+      let loc_vars =
+        let upd = function
+          | None -> Some (Com.Var.Set.one var)
+          | Some set -> Some (Com.Var.Set.add var set)
+        in
+        CatLocMap.update loc_cat upd loc_vars
+      in
+      let sz = Com.Var.size var in
+      let sz_loc_vars =
+        let upd = function
+          | None -> Some sz
+          | Some n_loc -> Some (n_loc + sz)
+        in
+        CatLocMap.update loc_cat upd sz_loc_vars
+      in
+      (loc_vars, sz_loc_vars, n + sz)
+    in
+    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
+  in
+  let update_loc (var : Com.Var.t) (vars, n) =
+    let loc = Com.set_loc_tgv_idx var.loc n in
+    let vars =
+      StrMap.add (Com.Var.name_str var) Com.Var.{ var with loc } vars
+    in
+    (vars, n + Com.Var.size var)
+  in
+  let prog_vars =
+    CatLocMap.fold
+      (fun _loc_cat vars prog_vars ->
+        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
+      loc_vars StrMap.empty
+  in
+  let nb_loc loc_cat =
+    match CatLocMap.find_opt loc_cat loc_vars with
+    | Some set -> Com.Var.Set.cardinal set
+    | None -> 0
+  in
+  let sz_loc loc_cat =
+    match CatLocMap.find_opt loc_cat sz_loc_vars with
+    | Some sz -> sz
+    | None -> 0
+  in
+  let prog_targets =
+    let rec aux nbRef nbIt = function
+      | [] -> (nbRef, nbIt)
+      | (instr, _) :: il -> (
+          match instr with
+          | Com.IfThenElse (_, ilt, ile) ->
+              let nbRefT, nbItT = aux 0 0 ilt in
+              let nbRefE, nbItE = aux 0 0 ile in
+              aux (nbRef + max nbRefT nbRefE) (nbIt + max nbItT nbItE) il
+          | Com.WhenDoElse (wdl, ed) ->
+              let rec wde nbRef nbIt = function
+                | (_, dl, _) :: wdl' ->
+                    let nbRefW, nbItW = aux 0 0 dl in
+                    wde (max nbRef nbRefW) (max nbIt nbItW) wdl'
+                | [] ->
+                    let nbRefW, nbItW = aux 0 0 (Pos.unmark ed) in
+                    aux (max nbRef nbRefW) (max nbIt nbItW) il
+              in
+              wde nbRef nbIt wdl
+          | Com.VerifBlock is ->
+              let nbRef', nbIt' = aux 0 0 is in
+              aux (nbRef + nbRef') (nbIt + nbIt') il
+          | Com.Iterate (_, _, _, is) ->
+              let nbRef', nbIt' = aux 0 0 is in
+              aux (nbRef + nbRef' + 1) (nbIt + nbIt') il
+          | Com.Iterate_values (_, _, is) ->
+              let nbRef', nbIt' = aux 0 0 is in
+              aux (nbRef + nbRef') (nbIt + nbIt' + 1) il
+          | Com.Restore (_, _, is) ->
+              let nbRef', nbIt' = aux 0 0 is in
+              aux (nbRef + max 1 nbRef') (nbIt + nbIt') il
+          | Com.ComputeTarget _ | Com.Affectation _ | Com.Print _
+          | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
+          | Com.FinalizeErrors ->
+              aux nbRef nbIt il
+          | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
+              assert false)
+    in
+    let map (t : Mast.target) =
+      let target_nb_tmps = StrMap.cardinal t.target_tmp_vars in
+      let target_sz_tmps =
+        let fold _ (_, tsz_opt) sz =
+          match tsz_opt with
+          | None -> sz + 1
+          | Some (tsz, _) -> sz + Mast.get_table_size tsz
+        in
+        StrMap.fold fold t.target_tmp_vars 0
+      in
+      let nbRef, target_nb_itval = aux 0 0 t.target_prog in
+      let target_nb_refs = List.length t.target_args + nbRef in
+      { t with target_nb_tmps; target_sz_tmps; target_nb_refs; target_nb_itval }
+    in
+    StrMap.map map prog.prog_targets
+  in
+  let nb_all_tmps, sz_all_tmps, nb_all_refs, nb_all_itval =
+    let rec aux (nb, sz, nbRef, nbItval, tdata) = function
+      | [] -> (nb, sz, nbRef, nbItval, tdata)
+      | (instr, _) :: il -> (
+          match instr with
+          | Com.ComputeTarget (tn, _targs) ->
+              let name = Pos.unmark tn in
+              let target = StrMap.find name prog_targets in
+              let nb1, sz1 = (target.target_nb_tmps, target.target_sz_tmps) in
+              let nbRef1 = List.length target.target_args in
+              let nbItval1 = target.target_nb_itval in
+              let nbt, szt, nbRefT, nbItvalT, tdata =
+                match StrMap.find_opt name tdata with
+                | None ->
+                    let nbt, szt, nbRefT, nbItvalT, tdata =
+                      aux (0, 0, 0, 0, tdata) target.target_prog
+                    in
+                    let tdata =
+                      StrMap.add name (nbt, szt, nbRefT, nbItvalT) tdata
+                    in
+                    (nbt, szt, nbRefT, nbItvalT, tdata)
+                | Some (nbt, szt, nbRefT, nbItvalT) ->
+                    (nbt, szt, nbRefT, nbItvalT, tdata)
+              in
+              let nb = nb + nb1 + nbt in
+              let sz = sz + sz1 + szt in
+              let nbRef = nbRef + nbRef1 + nbRefT in
+              let nbItval = nbItval + nbItval1 + nbItvalT in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.IfThenElse (_, ilt, ile) ->
+              let nb1, sz1, nbRef1, nbItval1, tdata =
+                aux (0, 0, 0, 0, tdata) ilt
+              in
+              let nb2, sz2, nbRef2, nbItval2, tdata =
+                aux (0, 0, 0, 0, tdata) ile
+              in
+              let nb = nb + max nb1 nb2 in
+              let sz = sz + max sz1 sz2 in
+              let nbRef = nbRef + max nbRef1 nbRef2 in
+              let nbItval = nbItval + max nbItval1 nbItval2 in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.WhenDoElse (wdl, ed) ->
+              let rec wde (nb, sz, nbRef, nbItval, tdata) = function
+                | (_, dl, _) :: wdl' ->
+                    let nb', sz', nbRef', nbItval', tdata =
+                      aux (0, 0, 0, 0, tdata) dl
+                    in
+                    let nb = max nb nb' in
+                    let sz = max sz sz' in
+                    let nbRef = max nbRef nbRef' in
+                    let nbItval = max nbItval nbItval' in
+                    wde (nb, sz, nbRef, nbItval, tdata) wdl'
+                | [] ->
+                    let nb', sz', nbRef', nbItval', tdata =
+                      aux (0, 0, 0, 0, tdata) (Pos.unmark ed)
+                    in
+                    let nb = max nb nb' in
+                    let sz = max sz sz' in
+                    let nbRef = max nbRef nbRef' in
+                    let nbItval = max nbItval nbItval' in
+                    (nb, sz, nbRef, nbItval, tdata)
+              in
+              let nb', sz', nbRef', nbItval', tdata =
+                wde (0, 0, 0, 0, tdata) wdl
+              in
+              let nb = nb + nb' in
+              let sz = sz + sz' in
+              let nbRef = nbRef + nbRef' in
+              let nbItval = nbItval + nbItval' in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.VerifBlock instrs ->
+              let nb1, sz1, nbRef1, nbItval1, tdata =
+                aux (0, 0, 0, 0, tdata) instrs
+              in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbRef = nbRef + nbRef1 in
+              let nbItval = nbItval + nbItval1 in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.Iterate (_, _, _, instrs) ->
+              let nb1, sz1, nbRef1, nbItval1, tdata =
+                aux (0, 0, 0, 0, tdata) instrs
+              in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbRef = nbRef + 1 + nbRef1 in
+              let nbItval = nbItval + nbItval1 in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.Iterate_values (_, _, instrs) ->
+              let nb1, sz1, nbRef1, nbItval1, tdata =
+                aux (0, 0, 0, 0, tdata) instrs
+              in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbRef = nbRef + nbRef1 in
+              let nbItval = nbItval + 1 + nbItval1 in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.Restore (_, _, instrs) ->
+              let nb1, sz1, nbRef1, nbItval1, tdata =
+                aux (0, 0, 0, 0, tdata) instrs
+              in
+              let nb = nb + nb1 in
+              let sz = sz + sz1 in
+              let nbRef = nbRef + max 1 nbRef1 in
+              let nbItval = nbItval + nbItval1 in
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.Affectation _ | Com.Print _ | Com.RaiseError _ | Com.CleanErrors
+          | Com.ExportErrors | Com.FinalizeErrors ->
+              aux (nb, sz, nbRef, nbItval, tdata) il
+          | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
+              assert false)
+    in
+    let nb, sz, nbRef, nbItval, _ =
+      StrMap.fold
+        (fun tn (t : Mast.target) (nb, sz, nbRef, nbItval, tdata) ->
+          match StrMap.find_opt tn tdata with
+          | Some (nbt, szt, nbRefT, nbItvalT) ->
+              ( max nb nbt,
+                max sz szt,
+                max nbRef nbRefT,
+                max nbItval nbItvalT,
+                tdata )
+          | None ->
+              let init_instrs =
+                [ (Com.ComputeTarget (t.target_name, []), Pos.no_pos) ]
+              in
+              let nbT, szT, nbRefT, nbItvalT, tdata =
+                aux (0, 0, 0, 0, tdata) init_instrs
+              in
+              ( max nb nbT,
+                max sz szT,
+                max nbRef nbRefT,
+                max nbItval nbItvalT,
+                tdata ))
+        prog_targets (0, 0, 0, 0, StrMap.empty)
+    in
+    (nb, sz, nbRef, nbItval)
+  in
+  (match StrMap.find_opt prog.prog_main_target prog_targets with
+  | None -> Err.main_target_not_found prog.prog_main_target
+  | Some _ -> ());
+  let prog_stats =
+    Mir.
+      {
+        nb_calculated = nb_loc Com.CatVar.LocComputed;
+        nb_input = nb_loc Com.CatVar.LocInput;
+        nb_base = nb_loc Com.CatVar.LocBase;
+        nb_vars = StrMap.cardinal prog_vars;
+        nb_all_tmps;
+        nb_all_refs;
+        nb_all_itval;
+        sz_calculated = sz_loc Com.CatVar.LocComputed;
+        sz_input = sz_loc Com.CatVar.LocInput;
+        sz_base = sz_loc Com.CatVar.LocBase;
+        sz_vars;
+        sz_all_tmps;
+      }
+  in
+  { prog with prog_vars; prog_targets; prog_stats }
 
 let proceed (p : Mast.program) (main_target : string) : program =
   (* à paramétrer *)

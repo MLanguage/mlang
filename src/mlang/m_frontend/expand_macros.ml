@@ -709,6 +709,17 @@ let rec expand_instruction (const_map : const_context)
       in
       let instrs' = expand_instructions const_map instrs in
       (Com.Iterate (name, vars, var_params', instrs'), instr_pos) :: prev
+  | Com.Iterate_values (name, var_intervals, instrs) ->
+      let var_intervals' =
+        List.map
+          (fun (e0, e1) ->
+            let e0' = expand_expression const_map ParamsMap.empty e0 in
+            let e1' = expand_expression const_map ParamsMap.empty e1 in
+            (e0', e1'))
+          var_intervals
+      in
+      let instrs' = expand_instructions const_map instrs in
+      (Com.Iterate_values (name, var_intervals', instrs'), instr_pos) :: prev
   | Com.Restore (vars, var_params, instrs) ->
       let instrs' = expand_instructions const_map instrs in
       (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev

@@ -52,6 +52,7 @@ type stats = {
   nb_vars : int;
   nb_all_tmps : int;
   nb_all_refs : int;
+  nb_all_itval : int;
   sz_calculated : int;
   sz_base : int;
   sz_input : int;
@@ -259,6 +260,17 @@ let expand_functions (p : program) : program =
           in
           let instrs' = List.map map_instr instrs in
           (Iterate (v_id, vars, var_params', instrs'), instr_pos)
+      | Iterate_values (v_id, var_intervals, instrs) ->
+          let var_intervals' =
+            List.map
+              (fun (e0, e1) ->
+                let e0' = expand_functions_expr e0 in
+                let e1' = expand_functions_expr e1 in
+                (e0', e1'))
+              var_intervals
+          in
+          let instrs' = List.map map_instr instrs in
+          (Iterate_values (v_id, var_intervals', instrs'), instr_pos)
       | Restore (vars, filters, instrs) ->
           let filters' =
             List.map
