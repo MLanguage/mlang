@@ -517,8 +517,8 @@ struct
           | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
           | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
 
-  and evaluate_stmt (canBlock : bool) (p : Mir.program) (ctx : ctx)
-      (stmt : Mir.m_instruction) : unit =
+  and evaluate_stmt (tn : string) (canBlock : bool) (p : Mir.program)
+      (ctx : ctx) (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
     | Com.Affectation (Com.SingleFormula (m_var, vidx_opt, vexpr), _) -> (
         let vari = get_var ctx (Pos.unmark m_var) in
@@ -528,23 +528,23 @@ struct
     | Com.Affectation _ -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx p b with
-        | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock p ctx f
-        | Number _ -> evaluate_stmts canBlock p ctx t
+        | Number z when N.(z =. zero ()) -> evaluate_stmts tn canBlock p ctx f
+        | Number _ -> evaluate_stmts tn canBlock p ctx t
         | Undefined -> ())
     | Com.WhenDoElse (wdl, ed) ->
         let rec aux = function
           | (expr, dl, _) :: l -> (
               match evaluate_expr ctx p expr with
               | Number z when N.(z =. zero ()) ->
-                  evaluate_stmts canBlock p ctx (Pos.unmark ed)
+                  evaluate_stmts tn canBlock p ctx (Pos.unmark ed)
               | Number _ ->
-                  evaluate_stmts canBlock p ctx dl;
+                  evaluate_stmts tn canBlock p ctx dl;
                   aux l
               | Undefined -> aux l)
           | [] -> ()
         in
         aux wdl
-    | Com.VerifBlock stmts -> evaluate_stmts true p ctx stmts
+    | Com.VerifBlock stmts -> evaluate_stmts tn true p ctx stmts
     | Com.ComputeTarget ((tn, _), args) ->
         let tf = Com.TargetMap.find tn p.program_targets in
         let rec set_args n = function
@@ -620,7 +620,7 @@ struct
         List.iter
           (fun (v, _) ->
             ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
-            evaluate_stmts canBlock p ctx stmts)
+            evaluate_stmts tn canBlock p ctx stmts)
           vars;
         List.iter
           (fun (vcs, expr) ->
@@ -628,10 +628,12 @@ struct
               StrMap.iter
                 (fun _ v ->
                   if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
+                    (* Format.eprintf "%s ref %d/%d@." tn (ctx.ctx_ref_org + var_i)
+                       (Array.length ctx.ctx_ref);*)
                     ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
                     match evaluate_expr ctx p expr with
                     | Number z when N.(z =. one ()) ->
-                        evaluate_stmts canBlock p ctx stmts
+                        evaluate_stmts tn canBlock p ctx stmts
                     | _ -> ()))
                 p.program_vars
             in
@@ -680,7 +682,7 @@ struct
                 vcs backup)
             backup var_params
         in
-        evaluate_stmts canBlock p ctx stmts;
+        evaluate_stmts tn canBlock p ctx stmts;
         List.iter
           (fun ((v : Com.Var.t), i, value) ->
             match v.scope with
@@ -734,19 +736,19 @@ struct
     | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
         assert false
 
-  and evaluate_stmts canBlock (p : Mir.program) (ctx : ctx)
+  and evaluate_stmts (tn : string) canBlock (p : Mir.program) (ctx : ctx)
       (stmts : Mir.m_instruction list) : unit =
-    try List.iter (evaluate_stmt canBlock p ctx) stmts
+    try List.iter (evaluate_stmt tn canBlock p ctx) stmts
     with BlockingError as b_err -> if canBlock then raise b_err
 
-  and evaluate_target canBlock (p : Mir.program) (ctx : ctx) (_tn : string)
+  and evaluate_target canBlock (p : Mir.program) (ctx : ctx) (tn : string)
       (tf : Mir.target_data) : unit =
     for i = 0 to tf.target_sz_tmps - 1 do
       ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
     done;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + tf.target_sz_tmps;
     ctx.ctx_ref_org <- ctx.ctx_ref_org + tf.target_nb_refs;
-    evaluate_stmts canBlock p ctx tf.target_prog;
+    evaluate_stmts tn canBlock p ctx tf.target_prog;
     ctx.ctx_ref_org <- ctx.ctx_ref_org - tf.target_nb_refs;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org - tf.target_sz_tmps
 
@@ -761,7 +763,8 @@ struct
             Errors.raise_error "Unable to find main function of Bir program"
       in
       evaluate_target false p ctx p.program_main_target main_target;
-      evaluate_stmt false p ctx (Com.ExportErrors, Pos.no_pos)
+      evaluate_stmt p.program_main_target false p ctx
+        (Com.ExportErrors, Pos.no_pos)
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))

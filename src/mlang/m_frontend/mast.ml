@@ -105,7 +105,6 @@ type target = {
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
-  target_nb_itval : int;
   target_prog : instruction Pos.marked list;
 }
 

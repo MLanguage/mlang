@@ -42,7 +42,6 @@ type stats = {
   nb_vars : int;
   nb_all_tmps : int;
   nb_all_refs : int;
-  nb_all_itval : int;
   sz_calculated : int;
   sz_base : int;
   sz_input : int;

@@ -561,7 +561,6 @@ target_etc:
       target_nb_tmps = -1;
       target_sz_tmps = -1;
       target_nb_refs = -1;
-      target_nb_itval = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
@@ -595,7 +594,6 @@ function_etc:
       target_nb_tmps = -1;
       target_sz_tmps = -1;
       target_nb_refs = -1;
-      target_nb_itval = -1;
       target_prog;
     } in
     Pos.same_pos_as (Function target) name :: l

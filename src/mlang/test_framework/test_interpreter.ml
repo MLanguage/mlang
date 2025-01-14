@@ -202,9 +202,12 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         raise e
   in
   let s, f =
-    Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], StrMap.empty)
-      (fun (old_s, old_f) (new_s, new_f) ->
-        (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))
+    List.fold_left
+      (fun r n -> process n r)
+      ([], StrMap.empty) (Array.to_list arr)
+    (* Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], StrMap.empty)
+       (fun (old_s, old_f) (new_s, new_f) ->
+         (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))*)
   in
   (* finish "done!"; *)
   Cli.warning_flag := true;
