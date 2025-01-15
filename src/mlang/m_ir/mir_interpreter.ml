@@ -628,8 +628,6 @@ struct
               StrMap.iter
                 (fun _ v ->
                   if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                    (* Format.eprintf "%s ref %d/%d@." tn (ctx.ctx_ref_org + var_i)
-                       (Array.length ctx.ctx_ref);*)
                     ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
                     match evaluate_expr ctx p expr with
                     | Number z when N.(z =. one ()) ->

@@ -2493,9 +2493,6 @@ let complete_vars_stack (prog : program) : program =
         StrMap.fold fold t.target_tmp_vars nbIt
       in
       let target_nb_refs = List.length t.target_args + nbRef in
-      if target_nb_tmps + target_sz_tmps + target_nb_refs > 0 then
-        Format.eprintf "%s: %d %d %d@." (Pos.unmark t.target_name)
-          target_nb_tmps target_sz_tmps target_nb_refs;
       { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
     in
     (StrMap.map map prog.prog_functions, StrMap.map map prog.prog_targets)
@@ -2513,7 +2510,9 @@ let complete_vars_stack (prog : program) : program =
       | None -> (
           let eval_call (t : Mast.target) =
             let nb, sz, nbRef =
-              (t.target_nb_tmps, t.target_sz_tmps, List.length t.target_args)
+              ( t.target_nb_tmps,
+                t.target_sz_tmps,
+                List.length t.target_args + t.target_nb_refs )
             in
             let nb', sz', nbRef', tdata = aux_instrs tdata t.target_prog in
             let nb = nb + nb' in
@@ -2666,7 +2665,7 @@ let complete_vars_stack (prog : program) : program =
       | Com.FuncCallLoop _ | Com.Loop _ -> assert false
     in
     let nb, sz, nbRef, _ =
-      let fold tn (t : Mast.target) (nb, sz, nbRef, tdata) =
+      let fold tn _ (nb, sz, nbRef, tdata) =
         let nb', sz', nbRef', tdata = aux_call tdata tn in
         (max nb nb', max sz sz', max nbRef nbRef', tdata)
       in
@@ -2682,7 +2681,6 @@ let complete_vars_stack (prog : program) : program =
   let prog_stats =
     Mir.{ prog.prog_stats with nb_all_tmps; sz_all_tmps; nb_all_refs }
   in
-  Format.eprintf "%d %d %d@." nb_all_tmps sz_all_tmps nb_all_refs;
   { prog with prog_functions; prog_targets; prog_stats }
 
 let proceed (p : Mast.program) (main_target : string) : program =
