@@ -637,6 +637,42 @@ struct
             in
             Com.CatVar.Map.iter eval vcs)
           var_params
+    | Com.Iterate_values ((m_var : Com.Var.t Pos.marked), var_intervals, stmts)
+      ->
+        let var = Pos.unmark m_var in
+        let var_i =
+          match var.loc with LocTmp (_, i) -> i | _ -> assert false
+        in
+        List.iter
+          (fun (e0, e1, step) ->
+            match evaluate_expr ctx p e0 with
+            | Number z0 -> (
+                match evaluate_expr ctx p e1 with
+                | Number z1 -> (
+                    match evaluate_expr ctx p step with
+                    | Number zStep when not N.(is_zero zStep) ->
+                        if N.(zStep > zero ()) then
+                          let rec loop i =
+                            if N.(i <=. z1) then (
+                              ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <-
+                                Number i;
+                              evaluate_stmts tn canBlock p ctx stmts;
+                              loop N.(i +. zStep))
+                          in
+                          loop z0
+                        else
+                          let rec loop i =
+                            if N.(i >=. z1) then (
+                              ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <-
+                                Number i;
+                              evaluate_stmts tn canBlock p ctx stmts;
+                              loop N.(i +. zStep))
+                          in
+                          loop z0
+                    | _ -> ())
+                | Undefined -> ())
+            | Undefined -> ())
+          var_intervals
     | Com.Restore (vars, var_params, stmts) ->
         let backup =
           List.fold_left

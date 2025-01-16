@@ -58,7 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT VALUE
+%token EVENT VALUE STEP
 
 %token EOF
 
@@ -685,7 +685,7 @@ instruction:
     | (`VarInterval _, _) :: _ ->
         let var_intervals =
           let fold var_intervals = function
-          | (`VarInterval (e0, e1), _) -> (e0, e1) :: var_intervals
+          | (`VarInterval (e0, e1, step), _) -> (e0, e1, step) :: var_intervals
           | (`VarList _, pos) | (`VarCatsIt _, pos) ->
               Errors.raise_spanned_error "variable descriptors forbidden in values iteration" pos
           in
@@ -830,8 +830,10 @@ it_param:
     in
     `VarCatsIt (vcats, expr)
   }
-| expr0 = with_pos(expression) RANGE expr1 = with_pos(expression) COLON {
-    `VarInterval (expr0, expr1)
+| expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
+  STEP step = with_pos(expression) COLON {
+    
+    `VarInterval (expr0, expr1, step)
   }
 
 it_param_with_expr:

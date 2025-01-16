@@ -282,6 +282,12 @@ module Err = struct
     let msg = Format.sprintf "result missing in function %s" fn in
     Errors.raise_spanned_error msg pos
 
+  let forbidden_in_var_in_function vn fn pos =
+    let msg =
+      Format.sprintf "variable %s cannot be read in function %s" vn fn
+    in
+    Errors.raise_spanned_error msg pos
+
   let forbidden_out_var_in_function vn fn pos =
     let msg =
       Format.sprintf "variable %s cannot be written in function %s" vn fn
@@ -1350,7 +1356,6 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let res_instr = Com.Iterate (var, vars, var_params, res_instrs) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.Iterate_values (var, var_intervals, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let var_pos = Pos.get_position var in
             let var_name =
               match Pos.unmark var with
@@ -1375,17 +1380,29 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 tmp_vars = StrMap.add var_name (None, var_pos) env.tmp_vars;
               }
             in
-            List.iter
-              (fun (e0, e1) ->
-                ignore (check_expression false e0 env);
-                ignore (check_expression false e1 env))
-              var_intervals;
-            let prog, res_instrs, _, _ =
+            let in_exprs =
+              List.fold_left
+                (fun in_exprs (e0, e1, step) ->
+                  in_exprs
+                  |> StrSet.union (check_expression false e0 env)
+                  |> StrSet.union (check_expression false e1 env)
+                  |> StrSet.union (check_expression false step env))
+                StrSet.empty var_intervals
+            in
+            let prog, res_instrs, in_instrs, out_instrs =
               check_instructions instrs is_rule env'
             in
             let env = { env with prog } in
             let res_instr =
               Com.Iterate_values (var, var_intervals, res_instrs)
+            in
+            let in_vars =
+              in_vars
+              |> StrSet.union
+                   (in_exprs |> StrSet.union in_instrs |> StrSet.remove var_name)
+            in
+            let out_vars =
+              out_vars |> StrSet.union (out_instrs |> StrSet.remove var_name)
             in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.Restore (vars, var_params, instrs) ->
@@ -1539,15 +1556,24 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
     let res_var = target_result in
     let prog, target_prog =
       let env = { prog; tmp_vars; ref_vars; res_var } in
-      let prog, target_prog, _in_vars, out_vars =
+      let prog, target_prog, in_vars, out_vars =
         check_instructions t.target_prog is_function env
       in
-      (if is_function then
-       let vr = Pos.unmark (Option.get target_result) in
-       let bad_out_vars = StrSet.remove vr out_vars in
-       if StrSet.card bad_out_vars > 0 then
-         let vn = StrSet.min_elt bad_out_vars in
-         Err.forbidden_out_var_in_function vn tname tpos);
+      if is_function then (
+        let vr = Pos.unmark (Option.get target_result) in
+        let bad_in_vars =
+          List.fold_left
+            (fun res (vn, _) -> StrSet.remove vn res)
+            in_vars target_args
+          |> StrSet.remove vr
+        in
+        let bad_out_vars = StrSet.remove vr out_vars in
+        (if StrSet.card bad_in_vars > 0 then
+         let vn = StrSet.min_elt bad_in_vars in
+         Err.forbidden_in_var_in_function vn tname tpos);
+        if StrSet.card bad_out_vars > 0 then
+          let vn = StrSet.min_elt bad_out_vars in
+          Err.forbidden_out_var_in_function vn tname tpos);
       (prog, target_prog)
     in
     let target =
@@ -2590,12 +2616,13 @@ let complete_vars_stack (prog : program) : program =
           let nbRef = 1 + max nbRef nbRef' in
           (nb, sz, nbRef, tdata)
       | Com.Iterate_values (_, me2l, instrs) ->
-          let fold (nb, sz, nbRef, tdata) (me0, me1) =
+          let fold (nb, sz, nbRef, tdata) (me0, me1, mstep) =
             let nb', sz', nbRef', tdata = aux_expr tdata me0 in
             let nb'', sz'', nbRef'', tdata = aux_expr tdata me1 in
-            let nb = max nb (max nb' nb'') in
-            let sz = max sz (max sz' sz'') in
-            let nbRef = max nbRef (max nbRef' nbRef'') in
+            let nb''', sz''', nbRef''', tdata = aux_expr tdata mstep in
+            let nb = max nb (max nb' (max nb'' nb''')) in
+            let sz = max sz (max sz' (max sz'' sz''')) in
+            let nbRef = max nbRef (max nbRef' (max nbRef'' nbRef''')) in
             (nb, sz, nbRef, tdata)
           in
           let nb', sz', nbRef', tdata =

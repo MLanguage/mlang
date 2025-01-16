@@ -712,10 +712,11 @@ let rec expand_instruction (const_map : const_context)
   | Com.Iterate_values (name, var_intervals, instrs) ->
       let var_intervals' =
         List.map
-          (fun (e0, e1) ->
+          (fun (e0, e1, step) ->
             let e0' = expand_expression const_map ParamsMap.empty e0 in
             let e1' = expand_expression const_map ParamsMap.empty e1 in
-            (e0', e1'))
+            let step' = expand_expression const_map ParamsMap.empty step in
+            (e0', e1', step'))
           var_intervals
       in
       let instrs' = expand_instructions const_map instrs in

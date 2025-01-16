@@ -336,7 +336,7 @@ type ('v, 'e) instruction =
       * ('v, 'e) m_instruction list
   | Iterate_values of
       'v Pos.marked
-      * ('v m_expression * 'v m_expression) list
+      * ('v m_expression * 'v m_expression * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list

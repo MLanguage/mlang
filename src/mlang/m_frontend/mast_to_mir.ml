@@ -172,7 +172,7 @@ let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
 
 let rec translate_prog (error_decls : Com.Error.t StrMap.t)
     (cats : Com.CatVar.data Com.CatVar.Map.t) (var_data : Com.Var.t StrMap.t)
-    (it_depth : int) prog =
+    (it_depth : int) (itval_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
     | (Com.Affectation (Com.SingleFormula (v, idx, e), _), pos) :: il ->
@@ -297,10 +297,48 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             var_params
         in
         let prog_it =
-          translate_prog error_decls cats var_data (it_depth + 1) instrs
+          translate_prog error_decls cats var_data (it_depth + 1) itval_depth
+            instrs
         in
         let m_var = Pos.same_pos_as var vn in
         aux ((Com.Iterate (m_var, vars', var_params', prog_it), pos) :: res) il
+    | (Com.Iterate_values (vn, var_intervals, instrs), pos) :: il ->
+        let var_pos = Pos.get_position vn in
+        let var_name =
+          match Pos.unmark vn with
+          | Mast.Normal name -> name
+          | Mast.Generic _ -> assert false
+        in
+        (match StrMap.find_opt var_name var_data with
+        | Some v ->
+            let msg =
+              Format.asprintf "variable already declared %a" Pos.format_position
+                (Pos.get_position v.name)
+            in
+            Errors.raise_spanned_error msg pos
+        | _ -> ());
+        let var =
+          Com.Var.new_temp ~name:(var_name, var_pos) ~is_table:None
+            ~loc_int:itval_depth
+        in
+        let var_data = StrMap.add var_name var var_data in
+        let var_intervals' =
+          List.map
+            (fun (e0, e1, step) ->
+              let e0' = translate_expression cats var_data e0 in
+              let e1' = translate_expression cats var_data e1 in
+              let step' = translate_expression cats var_data step in
+              (e0', e1', step'))
+            var_intervals
+        in
+        let prog_it =
+          translate_prog error_decls cats var_data it_depth (itval_depth + 1)
+            instrs
+        in
+        let m_var = Pos.same_pos_as var vn in
+        aux
+          ((Com.Iterate_values (m_var, var_intervals', prog_it), pos) :: res)
+          il
     | (Com.Restore (vars, var_params, instrs), pos) :: il ->
         let vars' =
           List.map
@@ -325,7 +363,7 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
             var_params
         in
         let prog_rest =
-          translate_prog error_decls cats var_data it_depth instrs
+          translate_prog error_decls cats var_data it_depth itval_depth instrs
         in
         aux ((Com.Restore (vars', var_params', prog_rest), pos) :: res) il
     | (Com.RaiseError (err_name, var_opt), pos) :: il ->
@@ -370,7 +408,7 @@ let get_targets (is_function : bool) (error_decls : Com.Error.t StrMap.t)
             t.target_args
       in
       let target_sz_tmps = t.target_sz_tmps in
-      let tmp_var_data, _ =
+      let tmp_var_data, itval_depth =
         StrMap.fold
           (fun name ((_, pos), size) (tmp_var_data, n) ->
             let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
@@ -410,7 +448,7 @@ let get_targets (is_function : bool) (error_decls : Com.Error.t StrMap.t)
       let target_prog =
         translate_prog error_decls cats tmp_var_data
           (List.length target_args - target_nb_refs)
-          t.target_prog
+          itval_depth t.target_prog
       in
       let target_data =
         Mir.

@@ -642,6 +642,58 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}@;")
             vcs)
         var_params
+  | Iterate_values (m_var, var_intervals, stmts) ->
+      let pr fmt = Format.fprintf oc fmt in
+      let var = Pos.unmark m_var in
+      let itval_def = VID.gen_def var "" in
+      let itval_val = VID.gen_val var "" in
+      let itval_name = fresh_c_local "iterate_values" in
+      let itval_e0_val = Format.sprintf "%s_e0" itval_name in
+      let itval_e1_val = Format.sprintf "%s_e1" itval_name in
+      let itval_step_val = Format.sprintf "%s_step" itval_name in
+      let itval_e0_def = Format.sprintf "%s_def" itval_e0_val in
+      let itval_e1_def = Format.sprintf "%s_def" itval_e1_val in
+      let itval_step_def = Format.sprintf "%s_def" itval_step_val in
+      List.iter
+        (fun (e0, e1, step) ->
+          let locals_e0, set_e0, def_e0, value_e0 =
+            D.build_expression @@ generate_c_expr e0
+          in
+          let locals_e1, set_e1, def_e1, value_e1 =
+            D.build_expression @@ generate_c_expr e1
+          in
+          let locals_step, set_step, def_step, value_step =
+            D.build_expression @@ generate_c_expr step
+          in
+          pr "@[<v 2>{@;";
+          pr "char %s;@;double %s;@;" itval_e0_def itval_e0_val;
+          pr "char %s;@;double %s;@;" itval_e1_def itval_e1_val;
+          pr "char %s;@;double %s;@;" itval_step_def itval_step_val;
+          pr "%a" D.format_local_declarations locals_e0;
+          pr "%a" D.format_local_declarations locals_e1;
+          pr "%a" D.format_local_declarations locals_step;
+          pr "%a" (D.format_set_vars dgfip_flags) set_e0;
+          pr "%a" (D.format_set_vars dgfip_flags) set_e1;
+          pr "%a" (D.format_set_vars dgfip_flags) set_step;
+          pr "%a@;" (D.format_assign dgfip_flags itval_e0_def) def_e0;
+          pr "%a@;" (D.format_assign dgfip_flags itval_e1_def) def_e1;
+          pr "%a@;" (D.format_assign dgfip_flags itval_step_def) def_step;
+          pr "%a@;" (D.format_assign dgfip_flags itval_e0_val) value_e0;
+          pr "%a@;" (D.format_assign dgfip_flags itval_e1_val) value_e1;
+          pr "%a@;" (D.format_assign dgfip_flags itval_step_val) value_step;
+          pr "@[<hov 2>if(%s && %s && %s && %s != 0.0){@;" itval_e0_def
+            itval_e1_def itval_step_def itval_step_val;
+          pr
+            "@[<hov 2>for(%s = 1, %s = %s; (%s > 0.0 ? %s <= %s : %s >= %s); \
+             %s = %s + %s){@;"
+            itval_def itval_val itval_e0_val itval_step_val itval_val
+            itval_e1_val itval_val itval_e1_val itval_val itval_val
+            itval_step_val;
+          pr "%a@]@;" (generate_stmts dgfip_flags program) stmts;
+          pr "}@;";
+          pr "@]@;}@;";
+          pr "@]@;}")
+        var_intervals
   | Restore (vars, var_params, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@;";

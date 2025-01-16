@@ -91,6 +91,7 @@ rule token = parse
     | "finquand" -> ENDWHEN
     | "finsi" -> ENDIF
     | "fonction" -> FONCTION
+    | "increment" -> STEP
     | "indefini" -> UNDEFINED
     | "indenter" -> INDENT
     | "informative" -> INFORMATIVE

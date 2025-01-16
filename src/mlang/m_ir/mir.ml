@@ -262,10 +262,11 @@ let expand_functions (p : program) : program =
       | Iterate_values (v_id, var_intervals, instrs) ->
           let var_intervals' =
             List.map
-              (fun (e0, e1) ->
+              (fun (e0, e1, step) ->
                 let e0' = expand_functions_expr e0 in
                 let e1' = expand_functions_expr e1 in
-                (e0', e1'))
+                let step' = expand_functions_expr step in
+                (e0', e1', step'))
               var_intervals
           in
           let instrs' = List.map map_instr instrs in
