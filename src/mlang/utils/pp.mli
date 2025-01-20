@@ -14,6 +14,10 @@ val nil : t -> 'a -> unit
 
 val string : t -> string -> unit
 
+val int : t -> int -> unit
+
+val float : t -> float -> unit
+
 val option : (t -> 'a -> unit) -> t -> 'a option -> unit
 
 val list : (unit, t, unit) format -> (t -> 'a -> unit) -> t -> 'a list -> unit

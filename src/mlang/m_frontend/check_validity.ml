@@ -1024,6 +1024,9 @@ let rec fold_var_expr
       | Com.PresentFunc ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           check_func 1
+      | Com.NbEvents ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          check_func 0
       | Com.Func fn ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           let fd =
@@ -2171,7 +2174,8 @@ let eval_expr_verif (prog : program) (verif : verif)
             | [ Some f ] when f = 0.0 -> None
             | [ r ] -> r
             | _ -> assert false)
-        | Com.PresentFunc | Com.Multimax | Com.Func _ -> assert false)
+        | Com.PresentFunc | Com.Multimax | Com.NbEvents | Com.Func _ ->
+            assert false)
     | Comparison (op, e0, e1) -> (
         match (aux e0, aux e1) with
         | None, _ | _, None -> None

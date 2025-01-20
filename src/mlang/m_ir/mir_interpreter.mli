@@ -68,6 +68,7 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
+    mutable ctx_events : Com.event_value StrMap.t IntMap.t;
   }
   (** Interpretation context *)
 
@@ -78,6 +79,9 @@ module type S = sig
   val value_to_literal : value -> Com.literal
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
+
+  val update_ctx_with_events :
+    ctx -> Mir.program -> Com.event_value IntMap.t list -> unit
 
   (** Interpreter runtime errors *)
   type run_error =

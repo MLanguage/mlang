@@ -387,6 +387,7 @@ type func =
   | Supzero  (** ??? *)
   | VerifNumber
   | ComplNumber
+  | NbEvents
   | Func of string
 
 type 'v expression =
@@ -618,6 +619,7 @@ let format_func fmt f =
     | Supzero -> "supzero"
     | VerifNumber -> "numero_verif"
     | ComplNumber -> "numero_compl"
+    | NbEvents -> "nb_evenements"
     | Func fn -> fn)
 
 let rec format_expression form_var fmt =

@@ -245,6 +245,7 @@ type func =
   | Supzero  (** ??? *)
   | VerifNumber
   | ComplNumber
+  | NbEvents
   | Func of string
 
 type 'v expression =

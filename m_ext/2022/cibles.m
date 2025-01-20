@@ -773,56 +773,6 @@ si nb_discordances() + nb_informatives() > 0 alors
   exporte_erreurs;
 finsi
 
-fonction truc:
-application: iliad;
-argument: A0, A1;
-resultat: RES;
-variable temporaire: TOTO;
-#V_IND_TRAIT = 4;
-afficher_erreur "truc\n" indenter(2);
-TOTO = 1;
-iterer
-: variable I
-: A0 .. A1 increment 1
-: dans (
-  si I = A0 alors
-    RES = 1;
-  sinon
-    RES = 2 * RES + TOTO;
-  finsi
-  afficher_erreur (I) ": " (RES) "\n";
-)
-afficher_erreur indenter(-2);
-
-cible test_boucle:
-application: iliad;
-argument: I0, I1;
-variable temporaire: TOTO;
-TOTO = 0;
-iterer
-: variable I
-: I0 .. I1 increment 0.7
-: 2 .. 1 increment -1
-: dans (
-  iterer
-  : variable J
-  : -3 .. -1 increment 1
-  : 1 .. 0 increment -1
-  : dans (
-    afficher_erreur nom(I) " = " (I) ", " nom(J) " = " (J) "\n";
-  )
-)
-TOTO = truc(TOTO, truc(4, truc(7, 9)));
-afficher_erreur "truc: " (TOTO) "\n";
-
-cible test:
-application: iliad;
-variable temporaire: A0, A1;
-A0 = 1.6;
-A1 = 3.6;
-calculer cible test_boucle : avec A0, A1;
-
-
 cible enchainement_primitif:
 application: iliad;
 variable temporaire: EXPORTE_ERREUR;
@@ -860,7 +810,6 @@ sinon_faire
 finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
-#calculer cible test;
 
 # primitif iterpréteur
 
