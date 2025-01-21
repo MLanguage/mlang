@@ -148,6 +148,9 @@ let rec translate_expression (cats : Com.CatVar.data Com.CatVar.Map.t)
         | _ ->
             let msg = Format.sprintf "unknown variable %s" v_name in
             Errors.raise_spanned_error msg (Pos.get_position v))
+    | EventField (e, f) ->
+        let new_e = translate_expression cats var_data e in
+        EventField (new_e, f)
     | Size v -> (
         let v_name =
           match Pos.unmark v with
@@ -253,6 +256,12 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
                              Format.sprintf "unknown variable %s" name
                            in
                            Errors.raise_spanned_error msg (Pos.get_position v))
+                   | Com.PrintEventName (e, f) ->
+                       let e' = translate_expression cats var_data e in
+                       Com.PrintEventName (e', f)
+                   | Com.PrintEventAlias (e, f) ->
+                       let e' = translate_expression cats var_data e in
+                       Com.PrintEventAlias (e', f)
                    | Com.PrintIndent e ->
                        Com.PrintIndent (translate_expression cats var_data e)
                    | Com.PrintExpr (e, min, max) ->
@@ -509,6 +518,7 @@ let translate (p : Mast.program) (main_target : string) : Mir.program =
       program_rule_domains = prog.prog_rdoms;
       program_verif_domains = prog.prog_vdoms;
       program_vars = var_data;
+      program_alias = prog.prog_alias;
       program_event_fields = prog.prog_event_fields;
       program_event_field_idxs = prog.prog_event_field_idxs;
       program_rules = rules;

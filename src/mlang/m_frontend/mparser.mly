@@ -58,7 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT VALUE STEP
+%token EVENT VALUE STEP EVENT_FIELD
 
 %token EOF
 
@@ -753,20 +753,25 @@ instruction_then_when_branch:
 
 print_argument:
 | s = STRING { Com.PrintString (parse_string s) }
-| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
-    {
-      match Pos.unmark f with
-      | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
-      | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
-      | _ -> assert false
-    }
+| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN {
+    match Pos.unmark f with
+    | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
+    | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
+    | _ -> assert false
+  }
+| f = with_pos(print_function) LPAREN expr = with_pos(sum_expression)
+  COMMA field = symbol_with_pos RPAREN {
+    match Pos.unmark f with
+    | "nom" -> Com.PrintEventName (expr, field)
+    | "alias" -> Com.PrintEventAlias (expr, field)
+    | _ -> assert false
+  }
 | INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
-| LPAREN e = with_pos(expression) RPAREN prec = print_precision?
-    {
-      match prec with
-      | Some (min, max) -> Com.PrintExpr (e, min, max)
-      | None -> Com.PrintExpr (e, 0, 20)
-    }
+| LPAREN e = with_pos(expression) RPAREN prec = print_precision? {
+    match prec with
+    | Some (min, max) -> Com.PrintExpr (e, min, max)
+    | None -> Com.PrintExpr (e, 0, 20)
+  }
 
 print_function:
 | NAME { "nom" }
@@ -1171,6 +1176,9 @@ function_call:
   }
 | ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
+  }
+| EVENT_FIELD LPAREN m_expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN {
+    EventField (m_expr, field)
   }
 | SIZE LPAREN var = symbol_with_pos RPAREN {
     Size (parse_variable $sloc (fst var), snd var)

@@ -315,6 +315,10 @@ module Err = struct
         Pos.format_position old_pos
     in
     Errors.raise_spanned_error msg pos
+
+  let unknown_event_field name pos =
+    let msg = Format.asprintf "unknown event field \"%s\"" name in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -361,7 +365,7 @@ type program = {
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
-  prog_alias : Com.Var.t StrMap.t;
+  prog_alias : string Pos.marked StrMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
   prog_event_pos : Pos.t;
@@ -596,16 +600,19 @@ let check_global_var (var : Com.Var.t) (prog : program) : program =
     | Some (gvar : Com.Var.t) ->
         let old_pos = Pos.get_position gvar.name in
         Err.variable_already_declared name old_pos name_pos
-    | None -> StrMap.add name var prog.prog_vars
+    | None -> (
+        match StrMap.find_opt name prog.prog_alias with
+        | None -> StrMap.add name var prog.prog_vars
+        | Some (_, old_pos) ->
+            Err.variable_already_declared name old_pos name_pos)
   in
   let prog_alias =
     match Com.Var.alias var with
     | Some (alias, alias_pos) -> (
         match StrMap.find_opt alias prog.prog_alias with
-        | Some (gvar : Com.Var.t) ->
-            let old_pos = Pos.get_position (Option.get (Com.Var.alias gvar)) in
+        | Some (_, old_pos) ->
             Err.alias_already_declared alias old_pos alias_pos
-        | None -> StrMap.add alias var prog.prog_alias)
+        | None -> StrMap.add alias var.name prog.prog_alias)
     | None -> prog.prog_alias
   in
   { prog with prog_vars; prog_alias }
@@ -1064,6 +1071,11 @@ let rec fold_var_expr
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
           | None -> ()));
       fold_var v Both env acc
+  | EventField (e, f) -> (
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
+      | Some _ -> fold_var_expr fold_var is_filter acc e env
+      | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get_position f))
   | Size v -> fold_var v Both env acc
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
@@ -1308,6 +1320,14 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Com.PrintString _ -> ()
                 | Com.PrintName v | Com.PrintAlias v ->
                     ignore (check_variable v Both env)
+                | Com.PrintEventName (e, f) | Com.PrintEventAlias (e, f) -> (
+                    match
+                      StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields
+                    with
+                    | Some _ -> ignore (check_expression false e env)
+                    | None ->
+                        Err.unknown_event_field (Pos.unmark f)
+                          (Pos.get_position f))
                 | Com.PrintIndent e -> ignore (check_expression false e env)
                 | Com.PrintExpr (e, _min, _max) ->
                     ignore (check_expression false e env))
@@ -2239,7 +2259,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             in
             Some (if res = positive then 1.0 else 0.0))
     | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes | Index _
-    | FuncCallLoop _ | Loop _ ->
+    | FuncCallLoop _ | Loop _ | EventField _ ->
         assert false
   in
   aux expr
@@ -2601,7 +2621,10 @@ let complete_vars_stack (prog : program) : program =
             match a with
             | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
                 (nb, sz, nbRef, tdata)
-            | Com.PrintIndent me | Com.PrintExpr (me, _, _) ->
+            | Com.PrintEventName (me, _)
+            | Com.PrintEventAlias (me, _)
+            | Com.PrintIndent me
+            | Com.PrintExpr (me, _, _) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata me in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
           in
@@ -2657,7 +2680,10 @@ let complete_vars_stack (prog : program) : program =
           assert false
     and aux_expr tdata (expr, _pos) =
       match expr with
-      | Com.TestInSet (_, me, _) | Com.Unop (_, me) | Com.Index (_, me) ->
+      | Com.TestInSet (_, me, _)
+      | Com.Unop (_, me)
+      | Com.Index (_, me)
+      | Com.EventField (me, _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in

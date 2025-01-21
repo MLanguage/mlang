@@ -152,7 +152,7 @@ end
 
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
-type event_value = Numeric of float option | RefVar of string
+type 'v event_value = Numeric of float option | RefVar of 'v
 
 module DomainId : StrSet.T
 
@@ -271,6 +271,7 @@ type 'v expression =
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
+  | EventField of 'v m_expression * string Pos.marked
 
 and 'v m_expression = 'v expression Pos.marked
 
@@ -300,6 +301,8 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
+  | PrintEventName of 'v m_expression * string Pos.marked
+  | PrintEventAlias of 'v m_expression * string Pos.marked
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 

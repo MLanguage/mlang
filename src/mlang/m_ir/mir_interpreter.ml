@@ -47,7 +47,7 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : Com.event_value StrMap.t IntMap.t;
+    mutable ctx_events : Com.Var.t Com.event_value StrMap.t IntMap.t;
   }
 
   val empty_ctx : Mir.program -> ctx
@@ -59,7 +59,7 @@ module type S = sig
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   val update_ctx_with_events :
-    ctx -> Mir.program -> Com.event_value IntMap.t list -> unit
+    ctx -> Mir.program -> Com.Var.t Com.event_value IntMap.t list -> unit
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
@@ -127,7 +127,7 @@ struct
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : Com.event_value StrMap.t IntMap.t;
+    mutable ctx_events : Com.Var.t Com.event_value StrMap.t IntMap.t;
   }
 
   let empty_ctx (p : Mir.program) : ctx =
@@ -181,9 +181,9 @@ struct
       value_inputs
 
   let update_ctx_with_events (ctx : ctx) (p : Mir.program)
-      (events : Com.event_value IntMap.t list) : unit =
+      (events : Com.Var.t Com.event_value IntMap.t list) : unit =
     let ctx_events =
-      let fold (map, idx) (evt : Com.event_value IntMap.t) =
+      let fold (map, idx) (evt : Com.Var.t Com.event_value IntMap.t) =
         let foldEvt id ev map =
           match IntMap.find_opt id p.program_event_field_idxs with
           | Some fname -> (
@@ -215,7 +215,7 @@ struct
     let pp_ev fmt = function
       | Com.Numeric None -> Pp.string fmt "indefini"
       | Com.Numeric (Some f) -> Pp.float fmt f
-      | Com.RefVar v -> Pp.string fmt v
+      | Com.RefVar v -> Pp.string fmt (Com.Var.name_str v)
     in
     IntMap.iter
       (fun i m ->
@@ -488,6 +488,19 @@ struct
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
             | Some l -> Number (N.of_float (float (Pos.unmark l)))
             | None -> Undefined)
+        | EventField (e, f) -> (
+            let new_e = evaluate_expr ctx p e in
+            match new_e with
+            | Number z when N.(z >=. zero ()) -> (
+                let i = Int64.to_int N.(to_int z) in
+                match IntMap.find_opt i ctx.ctx_events with
+                | Some m -> (
+                    match StrMap.find (Pos.unmark f) m with
+                    | Com.Numeric (Some v) -> Number N.(of_float v)
+                    | Com.Numeric None -> Undefined
+                    | Com.RefVar var -> get_var_value ctx var 0)
+                | None -> Undefined)
+            | _ -> Undefined)
         | Size var -> (
             let var, _ = get_var ctx (Pos.unmark var) in
             match Com.Var.is_table var with
@@ -497,8 +510,7 @@ struct
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
         | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
-        | NbCategory _ -> assert false
-        | FuncCallLoop _ | Loop _ -> assert false
+        | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
       with
       | RuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
@@ -649,6 +661,30 @@ struct
             | PrintAlias (var, _) ->
                 let var, _ = get_var ctx var in
                 pr_raw ctx_pr (Com.Var.alias_str var)
+            | PrintEventName (e, f) -> (
+                match evaluate_expr ctx p e with
+                | Number x -> (
+                    let i = Int64.to_int (N.to_int x) in
+                    match IntMap.find_opt i ctx.ctx_events with
+                    | Some m -> (
+                        match StrMap.find_opt (Pos.unmark f) m with
+                        | Some (Com.RefVar var) ->
+                            pr_raw ctx_pr (Com.Var.name_str var)
+                        | _ -> ())
+                    | None -> ())
+                | Undefined -> ())
+            | PrintEventAlias (e, f) -> (
+                match evaluate_expr ctx p e with
+                | Number x -> (
+                    let i = Int64.to_int (N.to_int x) in
+                    match IntMap.find_opt i ctx.ctx_events with
+                    | Some m -> (
+                        match StrMap.find_opt (Pos.unmark f) m with
+                        | Some (Com.RefVar var) ->
+                            pr_raw ctx_pr (Com.Var.alias_str var)
+                        | _ -> ())
+                    | None -> ())
+                | Undefined -> ())
             | PrintIndent e ->
                 let diff =
                   match evaluate_expr ctx p e with
@@ -951,7 +987,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
   | _ -> ()
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
-    (events : Com.event_value IntMap.t list) (sort : Cli.value_sort)
+    (events : Com.Var.t Com.event_value IntMap.t list) (sort : Cli.value_sort)
     (roundops : Cli.round_ops) : float option StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in

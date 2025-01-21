@@ -338,6 +338,22 @@ struct S_keep_discord {
   T_keep_discord *suivant;
 };
 
+struct S_event {
+|};
+  IntMap.iter
+    (fun _idx fname ->
+      let field = StrMap.find fname cprog.program_event_fields in
+      if field.is_var then
+        Format.fprintf fmt "  T_varinfo *field_%s_var;\n" fname
+      else (
+        Format.fprintf fmt "  char field_%s_def;\n" fname;
+        Format.fprintf fmt "  double field_%s_val;\n" fname))
+    cprog.program_event_field_idxs;
+  Format.fprintf fmt
+    {|};
+
+typedef struct S_event T_event;
+
 struct S_irdata {
   double *saisie;
   double *calculee;
@@ -370,12 +386,24 @@ struct S_irdata {
   int sz_err_archive;
   char **err_archive;
   int nb_err_archive;
+  T_event *events;
+  int nb_events;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
 };
 
 typedef struct S_irdata T_irdata;
 
+|};
+  StrMap.iter
+    (fun f _ ->
+      Format.fprintf fmt
+        "extern char event_field_%s(T_irdata *irdata, char *res_def, double \
+         *res_val, char idx_def, double idx_val);\n"
+        f)
+    cprog.program_event_fields;
+  Format.fprintf fmt
+    {|
 #define S_ irdata->saisie
 #define C_ irdata->calculee
 #define B_ irdata->base
@@ -388,22 +416,6 @@ typedef struct S_irdata T_irdata;
 /*#define DR_ irdata->def_ref*/
 /*#define IT_ irdata->info_tmps*/
 /*#define IR_ irdata->info_ref*/
-
-struct S_event {
-|};
-  IntMap.iter
-    (fun _idx fname ->
-      let field = StrMap.find fname cprog.program_event_fields in
-      if field.is_var then
-        Format.fprintf fmt "  T_varinfo *field_%s_var;\n" fname
-      else (
-        Format.fprintf fmt "  char field_%s_def;\n" fname;
-        Format.fprintf fmt "  double field_%s_val;\n" fname))
-    cprog.program_event_field_idxs;
-  Format.fprintf fmt
-    {|};
-
-typedef struct S_event T_event;
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
@@ -426,7 +438,6 @@ extern void free_erreur();
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
 |};
   Format.fprintf fmt "#define EPSILON %f" !Cli.comparison_error_margin;
-
   Format.fprintf fmt
     {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)
@@ -576,6 +587,7 @@ extern char *lis_erreur_sous_code(T_erreur *err);
 extern char *lis_erreur_is_isf(T_erreur *err);
 extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
+extern int nb_evenements(T_irdata *irdata);
 
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
@@ -644,7 +656,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
-let gen_mlang_c fmt flags =
+let gen_mlang_c fmt (cprog : Mir.program) flags =
   Format.fprintf fmt "%s"
     {|/****** LICENCE CECIL *****/
 
@@ -1424,6 +1436,11 @@ int lis_erreur_type(T_erreur *err) {
   return err->type;
 }
 
+int nb_evenements(T_irdata *irdata) {
+  if (irdata == NULL) return 0;
+  return irdata->nb_events;
+}
+
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   T_varinfo_map *map = NULL;
   int res = -1;
@@ -1584,7 +1601,32 @@ void pr_err_var(T_irdata *irdata, char *nom) {
   if (irdata == NULL) return;
   pr_var(&(irdata->ctx_pr_err), irdata, nom);
 }
-|}
+
+|};
+  StrMap.iter
+    (fun f (ef : Com.event_field) ->
+      Format.fprintf fmt
+        "char event_field_%s(T_irdata *irdata, char *res_def, double *res_val, \
+         char idx_def, double idx_val) {\n"
+        f;
+      if ef.is_var then Format.fprintf fmt "  T_varinfo *info = NULL;\n";
+      Format.fprintf fmt "  int idx = (int)floor(idx_val);\n";
+      Format.fprintf fmt
+        "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
+      Format.fprintf fmt "    *res_def = 0;\n";
+      Format.fprintf fmt "    *res_val = 0.0;\n";
+      Format.fprintf fmt "    return 0;\n";
+      Format.fprintf fmt "  }\n";
+      if ef.is_var then (
+        Format.fprintf fmt "  info = irdata->events[idx].field_%s_var;\n" f;
+        Format.fprintf fmt "  *res_def = lis_varinfo_def(irdata, info);\n";
+        Format.fprintf fmt "  *res_val = lis_varinfo_val(irdata, info);\n")
+      else (
+        Format.fprintf fmt "  *res_def = irdata->events[idx].field_%s_def;\n" f;
+        Format.fprintf fmt "  *res_val = irdata->events[idx].field_%s_val;\n" f);
+      Format.fprintf fmt "  return *res_def;\n";
+      Format.fprintf fmt "}\n\n")
+    cprog.program_event_fields
 
 let open_file filename =
   let oc = open_out filename in
@@ -1613,5 +1655,5 @@ let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file (Filename.concat folder "mlang.c") in
-  gen_mlang_c fmt flags;
+  gen_mlang_c fmt cprog flags;
   close_out oc

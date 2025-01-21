@@ -66,6 +66,7 @@ type program = {
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
+  program_alias : string Pos.marked StrMap.t;
   program_event_fields : Com.event_field StrMap.t;
   program_event_field_idxs : string IntMap.t;
   program_rules : string IntMap.t;
@@ -238,6 +239,12 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 let arg, arg_pos = m_arg in
                 match arg with
+                | Com.PrintEventName (e, f) ->
+                    let e' = expand_functions_expr e in
+                    (Com.PrintEventName (e', f), arg_pos)
+                | Com.PrintEventAlias (e, f) ->
+                    let e' = expand_functions_expr e in
+                    (Com.PrintEventAlias (e', f), arg_pos)
                 | Com.PrintIndent e ->
                     let e' = expand_functions_expr e in
                     (Com.PrintIndent e', arg_pos)

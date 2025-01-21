@@ -288,6 +288,10 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
         D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
       in
       D.build_transitive_composition { set_vars; def_test; value_comp }
+  | FuncCall ((NbEvents, _), _) ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_evenements(irdata)" in
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | FuncCall ((Func fn, _), args) ->
       let res = fresh_c_local "result" in
       let def_res = Pp.spr "def_%s" res in
@@ -343,6 +347,33 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
       in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
+  | EventField (me, f) ->
+      let fn = Format.sprintf "event_field_%s" (Pos.unmark f) in
+      let res = fresh_c_local "result" in
+      let def_res = Pp.spr "def_%s" res in
+      let val_res = Pp.spr "val_%s" res in
+      let def_res_ptr = Pp.spr "&%s" def_res in
+      let val_res_ptr = Pp.spr "&%s" val_res in
+      let set_vars, arg_exprs =
+        let e = generate_c_expr me in
+        (e.set_vars, [ e.def_test; e.value_comp ])
+      in
+      let d_fun =
+        D.dfun fn
+          ([
+             D.dlow_level "irdata";
+             D.dlow_level def_res_ptr;
+             D.dlow_level val_res_ptr;
+           ]
+          @ arg_exprs)
+      in
+      let set_vars =
+        set_vars
+        @ [ (D.Def, def_res, d_fun); (D.Val, val_res, D.dlow_level val_res) ]
+      in
+      let def_test = D.dinstr def_res in
+      let value_comp = D.dinstr val_res in
+      D.build_transitive_composition { set_vars; def_test; value_comp }
   | Size var ->
       let ptr = VID.gen_info_ptr (Pos.unmark var) in
       let def_test = D.dinstr "1.0" in
@@ -364,8 +395,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_bloquantes(irdata)" in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | NbCategory _ -> assert false
-  | FuncCallLoop _ | Loop _ -> assert false
+  | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_m_assign (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
     (offset : D.offset) (oc : Format.formatter) (se : D.expression_composition)
@@ -517,6 +547,26 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       in
       let print_val = fresh_c_local "mpp_print" in
       let print_def = print_val ^ "_d" in
+      let print_name_or_alias name_or_alias e f =
+        let locals, set, def, value = D.build_expression @@ generate_c_expr e in
+        Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
+          D.format_local_declarations locals
+          (D.format_set_vars dgfip_flags)
+          set
+          (D.format_assign dgfip_flags print_def)
+          def
+          (D.format_assign dgfip_flags print_val)
+          value;
+        Format.fprintf oc "@[<v 2>{@;int idx = (int)floor(%s);@; /* prout */"
+          print_val;
+        Format.fprintf oc
+          "@[<v 2>if(%s && 0 <= idx && idx < irdata->nb_events){@;" print_def;
+        Format.fprintf oc
+          "print_string(%s, %s, irdata->events[idx].field_%s_var->%s);@]@;"
+          print_std pr_ctx (Pos.unmark f) name_or_alias;
+        Format.fprintf oc "}@]@;";
+        Format.fprintf oc "}@;"
+      in
       Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
         (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
@@ -532,6 +582,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let ptr = VID.gen_info_ptr var in
               Format.fprintf oc "print_string(%s, %s, %s->alias);@;" print_std
                 pr_ctx ptr
+          | PrintEventName (e, f) -> print_name_or_alias "name" e f
+          | PrintEventAlias (e, f) -> print_name_or_alias "alias" e f
           | PrintIndent e ->
               let locals, set, def, value =
                 D.build_expression @@ generate_c_expr e

@@ -76,6 +76,7 @@ rule token = parse
     | "calculee" -> COMPUTED
     | "calculer" -> COMPUTE
     | "categorie" -> CATEGORY
+    | "champ_evenement" -> EVENT_FIELD
     | "cible" -> TARGET
     | "const" -> CONST
     | "dans" -> IN

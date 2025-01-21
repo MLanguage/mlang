@@ -213,3 +213,49 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   CAMLreturn(mlErrListOut);
 }
 
+CAMLprim value ml_set_evt_list(value mlTgv, value mlEvtList) {
+  CAMLparam2(mlTgv, mlEvtList);
+  CAMLlocal2(mlList, mlEvt);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  int len = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    len++;
+    mlList = Field(mlList, 1);
+  }
+  if (len > 0) {
+    tgv->events = (T_event *)malloc(len * sizeof (T_event));
+  } else {
+    tgv->events = NULL;
+  }
+  tgv->nb_events = len;
+
+  int i = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    mlEvt = Field(mlList, 0);
+    tgv->events[i].field_numero_def = 1;
+    tgv->events[i].field_numero_val = Double_val(Field(mlEvt, 0));
+    tgv->events[i].field_rappel_def = 1;
+    tgv->events[i].field_rappel_val = Double_val(Field(mlEvt, 1));
+    tgv->events[i].field_code_var = cherche_var(tgv, String_val(Field(mlEvt, 2)));
+    tgv->events[i].field_montant_def = 1;
+    tgv->events[i].field_montant_val = Double_val(Field(mlEvt, 3));
+    tgv->events[i].field_sens_def = 1;
+    tgv->events[i].field_sens_val = Double_val(Field(mlEvt, 4));
+    tgv->events[i].field_penalite_def = 1;
+    tgv->events[i].field_penalite_val = Double_val(Field(mlEvt, 5));
+    tgv->events[i].field_base_tl_def = 1;
+    tgv->events[i].field_base_tl_val = Double_val(Field(mlEvt, 6));
+    tgv->events[i].field_date_def = 1;
+    tgv->events[i].field_date_val = Double_val(Field(mlEvt, 7));
+    tgv->events[i].field_2042_rect_def = 1;
+    tgv->events[i].field_2042_rect_val = Double_val(Field(mlEvt, 8));
+    i++;
+    mlList = Field(mlList, 1);
+  }
+  CAMLreturn(Val_unit);
+}
+
+

@@ -55,16 +55,25 @@ let parse_entree_corr s =
   | _ -> failwith (Printf.sprintf "Ligne entree correctif invalide: '%s'" s)
 
 let parse_entree_rap s =
+  let err () = failwith (Printf.sprintf "Ligne entree rappel invalide: '%s'" s) in
   let sl = String.split_on_char '/' s in
   match sl with
   | [ num_evt; num_rappel; code; montant; sens;
       penalite; base_tl; date_evt; ind20 ] ->
-      let date_evt = convert_int date_evt in
-      (convert_int num_evt, convert_int num_rappel,
-       code, convert_float montant, sens.[0],
-       convert_int penalite, convert_float base_tl,
-       (date_evt mod 10000, date_evt / 10000), String.equal ind20 "1") (* TODO: improve *)
-  | _ -> failwith (Printf.sprintf "Ligne entree rappel invalide: '%s'" s)
+      let sens_float =
+        if String.length sens = 0 then err ();
+        match sens.[0] with
+        | 'R' -> 0.0
+        | 'C' -> 1.0
+        | 'M' -> 2.0
+        | 'P' -> 3.0
+        | _ -> err ()
+      in
+      (convert_float num_evt, convert_float num_rappel,
+       code, convert_float montant, sens_float,
+       convert_float penalite, convert_float base_tl,
+       convert_float date_evt, convert_float ind20) (* TODO: improve *)
+  | _ -> err ()
 
 let read_section_contents f parsefun =
   let rec aux contents =

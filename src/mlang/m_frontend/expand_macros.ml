@@ -617,6 +617,9 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       | Var v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
       | Literal (Float _), v_pos -> Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
+  | EventField (e, f) ->
+      let e' = expand_expression const_map loop_map e in
+      (EventField (e', f), expr_pos)
   | Size var -> (
       match expand_variable const_map loop_map var with
       | Var v, v_pos -> (Size (v, v_pos), expr_pos)
@@ -689,6 +692,12 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
+            | Com.PrintEventName (expr, f) ->
+                let expr' = expand_expression const_map ParamsMap.empty expr in
+                (Com.PrintEventName (expr', f), Pos.get_position arg)
+            | Com.PrintEventAlias (expr, f) ->
+                let expr' = expand_expression const_map ParamsMap.empty expr in
+                (Com.PrintEventAlias (expr', f), Pos.get_position arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintIndent expr', Pos.get_position arg)

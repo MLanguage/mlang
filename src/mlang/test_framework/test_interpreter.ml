@@ -21,7 +21,8 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     (Com.literal Com.Var.Map.t * float StrMap.t * StrSet.t)
-    * (Com.event_value IntMap.t list * float StrMap.t * StrSet.t) option =
+    * (Com.Var.t Com.event_value IntMap.t list * float StrMap.t * StrSet.t)
+      option =
   let inputVars =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
     let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
@@ -38,6 +39,18 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       t.prim.entrees
   in
   let eventsList rappels =
+    let from_var vn =
+      let name =
+        match StrMap.find_opt vn program.program_alias with
+        | Some m_name -> Pos.unmark m_name
+        | None -> vn
+      in
+      match StrMap.find_opt name program.program_vars with
+      | Some var -> var
+      | None ->
+          Cli.error_print "Variable inconnue: %s" vn;
+          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+    in
     let fromDirection = function
       | "R" -> Some 0.0
       | "C" -> Some 1.0
@@ -49,14 +62,14 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let fromPenalty = function
-      | None -> None
+      | None -> Some 0.0 (* None *)
       | Some p when 0 <= p && p <= 99 -> Some (float p)
       | Some p ->
           Cli.error_print "Code de pénalité: %d, devrait être entre 0 et 99" p;
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let from_2042_rect = function
-      | None -> None
+      | None -> Some 0.0 (* None *)
       | Some 0 -> Some 0.0
       | Some 1 -> Some 1.0
       | Some r ->
@@ -68,7 +81,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       IntMap.empty
       |> IntMap.add 0 (Com.Numeric (Some (float rappel.event_nb)))
       |> IntMap.add 1 (Com.Numeric (Some (float rappel.rappel_nb)))
-      |> IntMap.add 2 (Com.RefVar rappel.variable_code)
+      |> IntMap.add 2 (Com.RefVar (from_var rappel.variable_code))
       |> IntMap.add 3 (Com.Numeric (Some (float rappel.change_value)))
       |> IntMap.add 4 (Com.Numeric (fromDirection rappel.direction))
       |> IntMap.add 5 (Com.Numeric (fromPenalty rappel.penalty_code))

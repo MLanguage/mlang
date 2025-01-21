@@ -773,7 +773,6 @@ si nb_discordances() + nb_informatives() > 0 alors
   exporte_erreurs;
 finsi
 
-
 fonction truc:
 application: iliad;
 argument: A0, A1;
@@ -823,6 +822,38 @@ A0 = 1.6;
 A1 = 3.6;
 calculer cible test_boucle : avec A0, A1;
 afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
+iterer
+: variable I
+: 0 .. (nb_evenements() - 1) increment 1
+: dans (
+  afficher_erreur (I) ": ";
+  si (present(champ_evenement(I, numero))) alors afficher_erreur (champ_evenement(I, numero)); finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, rappel))) alors afficher_erreur (champ_evenement(I, rappel)); finsi
+  afficher_erreur "/" alias(I, code) "," nom(I, code) "/";
+  si (present(champ_evenement(I, montant))) alors afficher_erreur (champ_evenement(I, montant)); finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, sens))) alors
+    si (champ_evenement(I, sens) = 0) alors
+      afficher_erreur "R";
+    sinon_si (champ_evenement(I, sens) = 1) alors
+        afficher_erreur "C";
+    sinon_si (champ_evenement(I, sens) = 2) alors
+      afficher_erreur "M";
+    sinon_si (champ_evenement(I, sens) = 3) alors
+      afficher_erreur "P";
+    finsi
+  finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, penalite))) alors afficher_erreur (champ_evenement(I, penalite)); finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, base_tl))) alors afficher_erreur (champ_evenement(I, base_tl)); finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, date))) alors afficher_erreur (champ_evenement(I, date)); finsi
+  afficher_erreur "/";
+  si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
+  afficher_erreur "\n";
+)
 
 cible enchainement_primitif:
 application: iliad;

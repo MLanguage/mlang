@@ -3,29 +3,30 @@ open Common
 let read_test filename =
   let test = Read_test.read_test filename in
   let tgv = M.TGV.alloc_tgv () in
-  let res_prim, ctl_prim =
-    let fold_prim (res_prim, ctl_prim) s =
+  let evt_list, res_prim, ctl_prim =
+    let fold_prim (evt_list, res_prim, ctl_prim) s =
       match s with
       | `EntreesPrimitif pl ->
           List.iter (fun (code, montant) -> M.TGV.set tgv code montant) pl;
-          res_prim, ctl_prim
+          evt_list, res_prim, ctl_prim
       | `ResultatsPrimitif pl ->
           let res_prim =
             let fold res (code, montant) = StrMap.add code montant res in
             List.fold_left fold res_prim pl
           in
-          res_prim, ctl_prim
+          evt_list, res_prim, ctl_prim
       | `ControlesPrimitif el ->
           let ctl_prim =
             let fold err e = StrSet.add e err in
             List.fold_left fold ctl_prim el
           in
-          res_prim, ctl_prim
-      | _ -> res_prim, ctl_prim
+          evt_list, res_prim, ctl_prim
+      | `EntreesRappels evt_list -> evt_list, res_prim, ctl_prim
+      | _ -> evt_list, res_prim, ctl_prim
     in
-    List.fold_left fold_prim (StrMap.empty, StrSet.empty) test
+    List.fold_left fold_prim ([], StrMap.empty, StrSet.empty) test
   in
-  tgv, res_prim, ctl_prim
+  tgv, evt_list, res_prim, ctl_prim
 
 let check_result tgv err expected_tgv expected_err =
   let result = ref true in
@@ -130,7 +131,8 @@ let compare_dump out outexp =
 let run_test test_file annee_exec =
   Printf.printf "Testing %s...\n%!" test_file;
   let annee_calc = M.annee_calc () in
-  let tgv, res_prim, ctl_prim = read_test test_file in
+  let tgv, evt_list, res_prim, ctl_prim = read_test test_file in
+  M.set_evt_list tgv evt_list;
   let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
   if annee_revenu <> annee_calc then (
     Printf.eprintf
