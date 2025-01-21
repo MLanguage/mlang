@@ -893,9 +893,13 @@ lvalue:
 | s = with_pos(lvalue_name) i = with_pos(brackets)? { (s, i) }
 
 formula:
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN  EQUALS e = with_pos(expression) {
+    EventFieldDecl (idx, f, e)
+  }
 | lvalue = lvalue EQUALS e = with_pos(expression) {
     let v, idx = lvalue in
-    (v, idx, e)
+    VarDecl (v, idx, e)
   }
 
 verification_etc:

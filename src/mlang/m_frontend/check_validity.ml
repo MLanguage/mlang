@@ -319,6 +319,12 @@ module Err = struct
   let unknown_event_field name pos =
     let msg = Format.asprintf "unknown event field \"%s\"" name in
     Errors.raise_spanned_error msg pos
+
+  let event_field_not_a_reference name pos =
+    let msg =
+      Format.asprintf "event field \"%s\" is not a variable reference" name
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1190,7 +1196,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
         match instr with
         | Com.Affectation (f, _) -> (
             match f with
-            | Com.SingleFormula (v, idx, e) ->
+            | Com.SingleFormula (VarDecl (v, idx, e)) ->
                 let out_var =
                   let idx_mem = OneOf (Option.map (fun _ -> ()) idx) in
                   check_variable v idx_mem env
@@ -1209,6 +1215,20 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   let out_vars = StrSet.add out_var out_vars in
                   aux (env, m_instr :: res, in_vars, out_vars) il
                 else aux (env, m_instr :: res, in_vars, out_vars) il
+            | Com.SingleFormula (EventFieldDecl (idx, f, e)) ->
+                if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+                let f_name, f_pos = f in
+                (match StrMap.find_opt f_name env.prog.prog_event_fields with
+                | Some ef when ef.is_var -> ()
+                | Some _ -> Err.event_field_not_a_reference f_name f_pos
+                | None -> Err.unknown_event_field f_name f_pos);
+                let in_vars_index = check_expression false idx env in
+                let in_vars_expr = check_expression false e env in
+                let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
+                let in_vars =
+                  StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
+                in
+                aux (env, m_instr :: res, in_vars, out_vars) il
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
             (* if is_rule then Err.insruction_forbidden_in_rules instr_pos; *)
@@ -2578,12 +2598,16 @@ let complete_vars_stack (prog : program) : program =
       match instr with
       | Com.Affectation mf -> (
           match Pos.unmark mf with
-          | SingleFormula (_, mei_opt, mev) ->
+          | SingleFormula (VarDecl (_, mei_opt, mev)) ->
               let nbI, szI, nbRefI, tdata =
                 match mei_opt with
                 | None -> (0, 0, 0, tdata)
                 | Some mei -> aux_expr tdata mei
               in
+              let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
+              (max nbI nbV, max szI szV, max nbRefI nbRefV, tdata)
+          | SingleFormula (EventFieldDecl (mei, _, mev)) ->
+              let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
               let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
               (max nbI nbV, max szI szV, max nbRefI nbRefV, tdata)
           | MultipleFormulaes _ -> assert false)

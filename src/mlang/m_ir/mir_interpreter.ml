@@ -585,12 +585,28 @@ struct
   and evaluate_stmt (tn : string) (canBlock : bool) (p : Mir.program)
       (ctx : ctx) (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
-    | Com.Affectation (Com.SingleFormula (m_var, vidx_opt, vexpr), _) -> (
-        let vari = get_var ctx (Pos.unmark m_var) in
-        match vidx_opt with
-        | None -> set_var_value p ctx vari vexpr
-        | Some ei -> set_var_value_tab p ctx vari ei vexpr)
-    | Com.Affectation _ -> assert false
+    | Com.Affectation (Com.SingleFormula decl, _) -> (
+        match decl with
+        | VarDecl (m_var, vidx_opt, vexpr) -> (
+            let vari = get_var ctx (Pos.unmark m_var) in
+            match vidx_opt with
+            | None -> set_var_value p ctx vari vexpr
+            | Some ei -> set_var_value_tab p ctx vari ei vexpr)
+        | EventFieldDecl (idx, f, expr) -> (
+            let new_idx = evaluate_expr ctx p idx in
+            match new_idx with
+            | Number z when N.(z >=. zero ()) -> (
+                let i = Int64.to_int N.(to_int z) in
+                match IntMap.find_opt i ctx.ctx_events with
+                | Some m -> (
+                    match StrMap.find (Pos.unmark f) m with
+                    | Com.RefVar var ->
+                        let vari = get_var ctx var in
+                        set_var_value p ctx vari expr
+                    | Com.Numeric _ -> assert false)
+                | None -> ())
+            | _ -> ()))
+    | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx p b with
         | Number z when N.(z =. zero ()) -> evaluate_stmts tn canBlock p ctx f

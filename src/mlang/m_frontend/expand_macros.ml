@@ -635,7 +635,7 @@ let expand_formula (const_map : const_context)
     Mast.variable Com.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
-  | Com.SingleFormula (v, idx, e) ->
+  | Com.SingleFormula (VarDecl (v, idx, e)) ->
       let v' =
         match expand_variable const_map ParamsMap.empty v with
         | Com.Var v, v_pos -> (v, v_pos)
@@ -645,8 +645,12 @@ let expand_formula (const_map : const_context)
       in
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (v', idx', e'), form_pos) :: prev
-  | Com.MultipleFormulaes (lvs, (v, idx, e)) ->
+      (Com.SingleFormula (VarDecl (v', idx', e')), form_pos) :: prev
+  | Com.SingleFormula (EventFieldDecl (idx, f, e)) ->
+      let idx' = expand_expression const_map ParamsMap.empty idx in
+      let e' = expand_expression const_map ParamsMap.empty e in
+      (Com.SingleFormula (EventFieldDecl (idx', f, e')), form_pos) :: prev
+  | Com.MultipleFormulaes (lvs, VarDecl (v, idx, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
         let v' =
@@ -658,7 +662,16 @@ let expand_formula (const_map : const_context)
         in
         let idx' = Option.map (expand_expression const_map loop_map) idx in
         let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (v', idx', e'), form_pos)
+        (Com.SingleFormula (VarDecl (v', idx', e')), form_pos)
+      in
+      let res = loop_context_provider translator in
+      List.rev res @ prev
+  | Com.MultipleFormulaes (lvs, EventFieldDecl (idx, f, e)) ->
+      let loop_context_provider = expand_loop_variables lvs const_map in
+      let translator loop_map =
+        let idx' = expand_expression const_map loop_map idx in
+        let e' = expand_expression const_map loop_map e in
+        (Com.SingleFormula (EventFieldDecl (idx', f, e')), form_pos)
       in
       let res = loop_context_provider translator in
       List.rev res @ prev

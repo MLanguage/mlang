@@ -459,7 +459,9 @@ type 'v print_arg =
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl = 'v Pos.marked * 'v m_expression option * 'v m_expression
+type 'v formula_decl =
+  | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
+  | EventFieldDecl of 'v m_expression * string Pos.marked * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -704,13 +706,20 @@ let format_print_arg form_var fmt =
           (Pp.unmark (format_expression form_var))
           e min max
 
-let format_formula_decl form_var fmt (v, idx, e) =
-  Format.fprintf fmt "%a" form_var (Pos.unmark v);
-  (match idx with
-  | Some vi ->
-      Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
-  | None -> ());
-  Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+let format_formula_decl form_var fmt = function
+  | VarDecl (v, idx, e) ->
+      Format.fprintf fmt "%a" form_var (Pos.unmark v);
+      (match idx with
+      | Some vi ->
+          Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
+      | None -> ());
+      Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+  | EventFieldDecl (idx, f, e) ->
+      Format.fprintf fmt "champ_evenement(%a,%s) = %a"
+        (format_expression form_var)
+        (Pos.unmark idx) (Pos.unmark f)
+        (format_expression form_var)
+        (Pos.unmark e)
 
 let format_formula form_var fmt f =
   match f with

@@ -466,14 +466,57 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
         (generate_c_expr vexpr);
       pr "@]@;}@;"
 
+let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
+    (idx : Mir.expression Pos.marked) (field : string Pos.marked)
+    (expr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
+  let pr form = Format.fprintf fmt form in
+  pr "@[<v 2>{@;";
+  let idx_val = fresh_c_local "mpp_idx" in
+  let idx_def = idx_val ^ "_d" in
+  let locals_idx, set_idx, def_idx, value_idx =
+    D.build_expression @@ generate_c_expr idx
+  in
+  pr "char %s;@;long %s;@;%a%a%a@;%a@;" idx_def idx_val
+    D.format_local_declarations locals_idx
+    (D.format_set_vars dgfip_flags)
+    set_idx
+    (D.format_assign dgfip_flags idx_def)
+    def_idx
+    (D.format_assign dgfip_flags idx_val)
+    value_idx;
+  pr "@[<v 2>if(%s && 0 <= %s && %s < irdata->nb_events){@;" idx_def idx_val
+    idx_val;
+  let expr_val = fresh_c_local "mpp_expr" in
+  let expr_def = expr_val ^ "_d" in
+  let locals_expr, set_expr, def_expr, value_expr =
+    D.build_expression @@ generate_c_expr expr
+  in
+  pr "@[<v 2>{@;char %s;@;double %s;@;%a%a%a@;%a@;" expr_def expr_val
+    D.format_local_declarations locals_expr
+    (D.format_set_vars dgfip_flags)
+    set_expr
+    (D.format_assign dgfip_flags expr_def)
+    def_expr
+    (D.format_assign dgfip_flags expr_val)
+    value_expr;
+  pr "ecris_varinfo(irdata, irdata->events[%s].field_%s_var, %s, %s);" idx_val
+    (Pos.unmark field) expr_def expr_val;
+  pr "@]@;}@;";
+  pr "@]@;}";
+  pr "@]@;}@;"
+
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (stmt : Mir.m_instruction) =
   match Pos.unmark stmt with
-  | Affectation (SingleFormula (m_var, vidx_opt, vexpr), _) ->
+  | Affectation (SingleFormula (VarDecl (m_var, vidx_opt, vexpr)), _) ->
       Format.fprintf oc "@[<v 2>{@;";
       generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc;
       Format.fprintf oc "@]@;}@;"
-  | Affectation _ -> assert false
+  | Affectation (SingleFormula (EventFieldDecl (idx, f, expr)), _) ->
+      Format.fprintf oc "@[<v 2>{@;";
+      generate_event_field_def dgfip_flags idx f expr oc;
+      Format.fprintf oc "@]@;}@;"
+  | Affectation (MultipleFormulaes _, _) -> assert false
   | IfThenElse (cond, iftrue, iffalse) ->
       Format.fprintf oc "@[<v 2>{@,";
       let cond_val = fresh_c_local "mpp_cond" in

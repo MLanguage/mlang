@@ -59,7 +59,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
       let no_pos x = (x, Pos.no_pos) in
       let var = Normal name in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (no_pos var, None, no_pos litt) in
+      let cmd = Com.SingleFormula (VarDecl (no_pos var, None, no_pos litt)) in
       no_pos cmd :: l
     else l
   in

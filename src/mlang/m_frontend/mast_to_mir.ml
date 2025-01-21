@@ -178,18 +178,27 @@ let rec translate_prog (error_decls : Com.Error.t StrMap.t)
     (it_depth : int) (itval_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
-    | (Com.Affectation (Com.SingleFormula (v, idx, e), _), pos) :: il ->
-        let var =
-          match Pos.unmark (translate_variable var_data v) with
-          | Com.Var var -> Pos.same_pos_as var v
-          | _ -> assert false
-          (* should not happen *)
+    | (Com.Affectation (SingleFormula decl, _), pos) :: il ->
+        let decl' =
+          match decl with
+          | VarDecl (v, idx, e) ->
+              let var =
+                match Pos.unmark (translate_variable var_data v) with
+                | Com.Var var -> Pos.same_pos_as var v
+                | _ -> assert false
+                (* should not happen *)
+              in
+              let idx' = Option.map (translate_expression cats var_data) idx in
+              let e' = translate_expression cats var_data e in
+              Com.VarDecl (var, idx', e')
+          | EventFieldDecl (idx, f, e) ->
+              let idx' = translate_expression cats var_data idx in
+              let e' = translate_expression cats var_data e in
+              Com.EventFieldDecl (idx', f, e')
         in
-        let var_idx = Option.map (translate_expression cats var_data) idx in
-        let var_e = translate_expression cats var_data e in
-        let m_form = (Com.SingleFormula (var, var_idx, var_e), pos) in
+        let m_form = (Com.SingleFormula decl', pos) in
         aux ((Com.Affectation m_form, pos) :: res) il
-    | (Com.Affectation _, _) :: _ -> assert false
+    | (Com.Affectation (MultipleFormulaes _, _), _) :: _ -> assert false
     | (Com.IfThenElse (e, ilt, ile), pos) :: il ->
         let expr = translate_expression cats var_data e in
         let prog_then = aux [] ilt in

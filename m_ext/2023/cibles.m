@@ -854,6 +854,14 @@ iterer
   si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
   afficher_erreur "\n";
 )
+si nb_evenements() > 0 alors
+  afficher_erreur "0: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
+  champ_evenement(0, code) = 456;
+  afficher_erreur "1: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
+sinon
+  afficher_erreur "!!! AUCUN EVENEMENT !!!\n";
+finsi
+
 
 cible enchainement_primitif:
 application: iliad;

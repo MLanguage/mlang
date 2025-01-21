@@ -206,15 +206,21 @@ let expand_functions (p : program) : program =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
-      | Affectation (SingleFormula (v_id, v_idx_opt, v_expr), pos) ->
+      | Affectation (SingleFormula (VarDecl (v_id, v_idx_opt, v_expr)), pos) ->
           let m_idx_opt =
             match v_idx_opt with
             | Some v_idx -> Some (expand_functions_expr v_idx)
             | None -> None
           in
           let m_expr = expand_functions_expr v_expr in
-          (Affectation (SingleFormula (v_id, m_idx_opt, m_expr), pos), instr_pos)
-      | Affectation _ -> assert false
+          ( Affectation (SingleFormula (VarDecl (v_id, m_idx_opt, m_expr)), pos),
+            instr_pos )
+      | Affectation (SingleFormula (EventFieldDecl (v_idx, f, v_expr)), pos) ->
+          let m_idx = expand_functions_expr v_idx in
+          let m_expr = expand_functions_expr v_expr in
+          ( Affectation (SingleFormula (EventFieldDecl (m_idx, f, m_expr)), pos),
+            instr_pos )
+      | Affectation (MultipleFormulaes _, _) -> assert false
       | IfThenElse (i, t, e) ->
           let i' = expand_functions_expr i in
           let t' = List.map map_instr t in

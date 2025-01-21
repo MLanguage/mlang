@@ -312,7 +312,9 @@ type 'v print_arg =
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl = 'v Pos.marked * 'v m_expression option * 'v m_expression
+type 'v formula_decl =
+  | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
+  | EventFieldDecl of 'v m_expression * string Pos.marked * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
