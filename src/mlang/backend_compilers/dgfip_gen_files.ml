@@ -386,7 +386,7 @@ struct S_irdata {
   int sz_err_archive;
   char **err_archive;
   int nb_err_archive;
-  T_event *events;
+  T_event **events;
   int nb_events;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
@@ -1178,6 +1178,13 @@ void detruis_irdata(T_irdata *irdata) {
   if (irdata->err_finalise != NULL) free(irdata->err_finalise);
   if (irdata->err_sortie != NULL) free(irdata->err_sortie);
   if (irdata->err_archive != NULL) free(irdata->err_archive);
+  if (irdata->events != NULL) {
+    int i = 0;
+    for (i = 0; i < irdata->nb_events; i++) {
+      if (irdata->events[i] != NULL) free(irdata->events[i]);
+    }
+    free(irdata->events);
+  }
   free(irdata);
 }
 
@@ -1618,12 +1625,12 @@ void pr_err_var(T_irdata *irdata, char *nom) {
       Format.fprintf fmt "    return 0;\n";
       Format.fprintf fmt "  }\n";
       if ef.is_var then (
-        Format.fprintf fmt "  info = irdata->events[idx].field_%s_var;\n" f;
+        Format.fprintf fmt "  info = irdata->events[idx]->field_%s_var;\n" f;
         Format.fprintf fmt "  *res_def = lis_varinfo_def(irdata, info);\n";
         Format.fprintf fmt "  *res_val = lis_varinfo_val(irdata, info);\n")
       else (
-        Format.fprintf fmt "  *res_def = irdata->events[idx].field_%s_def;\n" f;
-        Format.fprintf fmt "  *res_val = irdata->events[idx].field_%s_val;\n" f);
+        Format.fprintf fmt "  *res_def = irdata->events[idx]->field_%s_def;\n" f;
+        Format.fprintf fmt "  *res_val = irdata->events[idx]->field_%s_val;\n" f);
       Format.fprintf fmt "  return *res_def;\n";
       Format.fprintf fmt "}\n\n")
     cprog.program_event_fields

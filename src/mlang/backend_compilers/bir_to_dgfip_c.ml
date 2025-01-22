@@ -499,7 +499,7 @@ let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
     def_expr
     (D.format_assign dgfip_flags expr_val)
     value_expr;
-  pr "ecris_varinfo(irdata, irdata->events[%s].field_%s_var, %s, %s);" idx_val
+  pr "ecris_varinfo(irdata, irdata->events[%s]->field_%s_var, %s, %s);" idx_val
     (Pos.unmark field) expr_def expr_val;
   pr "@]@;}@;";
   pr "@]@;}";
@@ -605,7 +605,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
         Format.fprintf oc
           "@[<v 2>if(%s && 0 <= idx && idx < irdata->nb_events){@;" print_def;
         Format.fprintf oc
-          "print_string(%s, %s, irdata->events[idx].field_%s_var->%s);@]@;"
+          "print_string(%s, %s, irdata->events[idx]->field_%s_var->%s);@]@;"
           print_std pr_ctx (Pos.unmark f) name_or_alias;
         Format.fprintf oc "}@]@;";
         Format.fprintf oc "}@;"
