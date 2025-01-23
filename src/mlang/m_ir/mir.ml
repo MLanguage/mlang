@@ -215,10 +215,12 @@ let expand_functions (p : program) : program =
           let m_expr = expand_functions_expr v_expr in
           ( Affectation (SingleFormula (VarDecl (v_id, m_idx_opt, m_expr)), pos),
             instr_pos )
-      | Affectation (SingleFormula (EventFieldDecl (v_idx, f, v_expr)), pos) ->
+      | Affectation (SingleFormula (EventFieldDecl (v_idx, f, i, v_expr)), pos)
+        ->
           let m_idx = expand_functions_expr v_idx in
           let m_expr = expand_functions_expr v_expr in
-          ( Affectation (SingleFormula (EventFieldDecl (m_idx, f, m_expr)), pos),
+          ( Affectation
+              (SingleFormula (EventFieldDecl (m_idx, f, i, m_expr)), pos),
             instr_pos )
       | Affectation (MultipleFormulaes _, _) -> assert false
       | IfThenElse (i, t, e) ->
@@ -245,12 +247,12 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 let arg, arg_pos = m_arg in
                 match arg with
-                | Com.PrintEventName (e, f) ->
+                | Com.PrintEventName (e, f, i) ->
                     let e' = expand_functions_expr e in
-                    (Com.PrintEventName (e', f), arg_pos)
-                | Com.PrintEventAlias (e, f) ->
+                    (Com.PrintEventName (e', f, i), arg_pos)
+                | Com.PrintEventAlias (e, f, i) ->
                     let e' = expand_functions_expr e in
-                    (Com.PrintEventAlias (e', f), arg_pos)
+                    (Com.PrintEventAlias (e', f, i), arg_pos)
                 | Com.PrintIndent e ->
                     let e' = expand_functions_expr e in
                     (Com.PrintIndent e', arg_pos)
@@ -292,6 +294,23 @@ let expand_functions (p : program) : program =
           in
           let instrs' = List.map map_instr instrs in
           (Restore (vars, filters', instrs'), instr_pos)
+      | ArrangeEvents (sort, filter, instrs) ->
+          let sort' =
+            match sort with
+            | Some (var0, var1, expr) ->
+                let expr' = expand_functions_expr expr in
+                Some (var0, var1, expr')
+            | None -> None
+          in
+          let filter' =
+            match filter with
+            | Some (var, expr) ->
+                let expr' = expand_functions_expr expr in
+                Some (var, expr')
+            | None -> None
+          in
+          let instrs' = List.map map_instr instrs in
+          (ArrangeEvents (sort', filter', instrs'), instr_pos)
       | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in

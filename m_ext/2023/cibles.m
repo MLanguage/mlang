@@ -858,6 +858,10 @@ si nb_evenements() > 0 alors
   afficher_erreur "0: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
   champ_evenement(0, code) = 456;
   afficher_erreur "1: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
+  afficher_erreur "0: " nom(0, montant) " = " (champ_evenement(0, montant)) "\n";
+  champ_evenement(0, montant) = 123.456;
+  afficher_erreur "1: " nom(0, montant) " = " (champ_evenement(0, montant)) "\n";
+
 sinon
   afficher_erreur "!!! AUCUN EVENEMENT !!!\n";
 finsi

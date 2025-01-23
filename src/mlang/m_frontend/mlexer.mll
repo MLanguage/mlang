@@ -68,6 +68,7 @@ rule token = parse
     | "application" -> APPLICATION
     | "apres" -> AFTER
     | "argument" -> INPUT_ARG
+    | "arranger_evenements" -> ARRANGE_EVENTS
     | "attribut" -> ATTRIBUT
     | "autorise" -> AUTHORIZE
     | "avec" -> WITH
@@ -88,6 +89,7 @@ rule token = parse
     | "evenement" -> EVENT
     | "exporte_erreurs" -> EXPORT_ERRORS
     | "faire" -> DO
+    | "filtrer" -> FILTER
     | "finalise_erreurs" -> FINALIZE_ERRORS
     | "finquand" -> ENDWHEN
     | "finsi" -> ENDIF
@@ -109,6 +111,7 @@ rule token = parse
     | "non" -> NOT
     | "numero_compl" -> COMPL_NUMBER
     | "numero_verif" -> VERIF_NUMBER
+    | "trier" -> SORT
     | "ou" -> OR
     | "par_defaut" -> BY_DEFAULT
     | "pour" -> FOR

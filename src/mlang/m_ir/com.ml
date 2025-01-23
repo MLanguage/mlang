@@ -293,7 +293,7 @@ end
 
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
-type 'v event_value = Numeric of float option | RefVar of 'v
+type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
 
 module DomainId = StrSet
 
@@ -413,7 +413,7 @@ type 'v expression =
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
-  | EventField of 'v m_expression * string Pos.marked
+  | EventField of 'v m_expression * string Pos.marked * int
 
 and 'v m_expression = 'v expression Pos.marked
 
@@ -452,8 +452,8 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
-  | PrintEventName of 'v m_expression * string Pos.marked
-  | PrintEventAlias of 'v m_expression * string Pos.marked
+  | PrintEventName of 'v m_expression * string Pos.marked * int
+  | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
@@ -461,7 +461,8 @@ type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
   | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
-  | EventFieldDecl of 'v m_expression * string Pos.marked * 'v m_expression
+  | EventFieldDecl of
+      'v m_expression * string Pos.marked * int * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -494,6 +495,10 @@ type ('v, 'e) instruction =
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v, 'e) m_instruction list
+  | ArrangeEvents of
+      ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
+      * ('v Pos.marked * 'v m_expression) option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
@@ -671,7 +676,7 @@ let rec format_expression form_var fmt =
   | Attribut (v, a) ->
       Format.fprintf fmt "attribut(%a, %s)" form_var (Pos.unmark v)
         (Pos.unmark a)
-  | EventField (e, f) ->
+  | EventField (e, f, _) ->
       Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
         (Pos.unmark f)
   | Size v -> Format.fprintf fmt "taille(%a)" form_var (Pos.unmark v)
@@ -686,9 +691,9 @@ let format_print_arg form_var fmt =
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
   | PrintName v -> Format.fprintf fmt "nom(%a)" (Pp.unmark form_var) v
   | PrintAlias v -> Format.fprintf fmt "alias(%a)" (Pp.unmark form_var) v
-  | PrintEventName (e, f) ->
+  | PrintEventName (e, f, _) ->
       Format.fprintf fmt "nom(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
-  | PrintEventAlias (e, f) ->
+  | PrintEventAlias (e, f, _) ->
       Format.fprintf fmt "alias(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
   | PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
@@ -714,7 +719,7 @@ let format_formula_decl form_var fmt = function
           Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
       | None -> ());
       Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
-  | EventFieldDecl (idx, f, e) ->
+  | EventFieldDecl (idx, f, _, e) ->
       Format.fprintf fmt "champ_evenement(%a,%s) = %a"
         (format_expression form_var)
         (Pos.unmark idx) (Pos.unmark f)
@@ -821,6 +826,19 @@ let rec format_instruction form_var form_err =
           (Pp.list_space format_var_param)
           var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs rb
+    | ArrangeEvents (s, f, itb) ->
+        Format.fprintf fmt "arrange_evenements@;:";
+        (match s with
+        | Some (v0, v1, e) ->
+            Format.fprintf fmt "trier %a,%a : avec %a@;" form_var
+              (Pos.unmark v0) form_var (Pos.unmark v1) form_expr (Pos.unmark e)
+        | None -> ());
+        (match f with
+        | Some (v, e) ->
+            Format.fprintf fmt "filter %a : avec %a@;" form_var (Pos.unmark v)
+              form_expr (Pos.unmark e)
+        | None -> ());
+        Format.fprintf fmt ": dans (@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | RaiseError (err, var_opt) ->
         Format.fprintf fmt "leve_erreur %a %s\n" form_err (Pos.unmark err)
           (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")

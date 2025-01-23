@@ -152,7 +152,7 @@ end
 
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
-type 'v event_value = Numeric of float option | RefVar of 'v
+type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
 
 module DomainId : StrSet.T
 
@@ -271,7 +271,7 @@ type 'v expression =
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
-  | EventField of 'v m_expression * string Pos.marked
+  | EventField of 'v m_expression * string Pos.marked * int
 
 and 'v m_expression = 'v expression Pos.marked
 
@@ -301,8 +301,8 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
-  | PrintEventName of 'v m_expression * string Pos.marked
-  | PrintEventAlias of 'v m_expression * string Pos.marked
+  | PrintEventName of 'v m_expression * string Pos.marked * int
+  | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
@@ -314,7 +314,8 @@ type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
   | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
-  | EventFieldDecl of 'v m_expression * string Pos.marked * 'v m_expression
+  | EventFieldDecl of
+      'v m_expression * string Pos.marked * int * 'v m_expression
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -347,6 +348,10 @@ type ('v, 'e) instruction =
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v, 'e) m_instruction list
+  | ArrangeEvents of
+      ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
+      * ('v Pos.marked * 'v m_expression) option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors

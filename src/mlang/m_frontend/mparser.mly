@@ -58,7 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT VALUE STEP EVENT_FIELD
+%token EVENT VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER
 
 %token EOF
 
@@ -715,6 +715,41 @@ instruction:
     in
     Some (Restore (List.rev var_list, List.rev var_cats, List.rev instrs))
   }
+| ARRANGE_EVENTS COLON
+  arr_params = nonempty_list(with_pos(arrange_events_param))
+  IN LPAREN instrs = instruction_list_rev RPAREN {
+    let sort, filter =
+      let fold (sort, sort_pos, filter, filter_pos) = function
+      | (`ArrangeEventsSort (v0, v1, e), pos) when sort = None ->
+          (Some (v0, v1, e), pos, filter, filter_pos)
+      | (`ArrangeEventsFilter (v, e), pos) when filter = None ->
+          (sort, sort_pos, Some (v, e), pos)
+      | (`ArrangeEventsSort _, pos) ->
+          let msg =
+            Format.asprintf
+              "event sorting already specified at %a"
+              Pos.format_position sort_pos
+          in
+          Errors.raise_spanned_error msg pos
+      | (`ArrangeEventsFilter _, pos) ->
+          let msg =
+            Format.asprintf
+              "event filter already specified at %a"
+              Pos.format_position sort_pos
+          in
+          Errors.raise_spanned_error msg pos
+      in
+      let sort, _, filter, _ =
+        List.fold_left fold (None, Pos.no_pos, None, Pos.no_pos) arr_params
+      in
+      match sort, filter with
+      | None, None ->
+          let msg = "event organizer needs a sort or a filter specification" in
+          Errors.raise_spanned_error msg (mk_position $sloc)
+      | _, _ -> sort, filter
+    in
+    Some (ArrangeEvents (sort, filter, List.rev instrs))
+  }
 | RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     Some (RaiseError (e_name, var))
   }
@@ -762,8 +797,8 @@ print_argument:
 | f = with_pos(print_function) LPAREN expr = with_pos(sum_expression)
   COMMA field = symbol_with_pos RPAREN {
     match Pos.unmark f with
-    | "nom" -> Com.PrintEventName (expr, field)
-    | "alias" -> Com.PrintEventAlias (expr, field)
+    | "nom" -> Com.PrintEventName (expr, field, -1)
+    | "alias" -> Com.PrintEventAlias (expr, field, -1)
     | _ -> assert false
   }
 | INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
@@ -837,7 +872,6 @@ it_param:
   }
 | expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
   STEP step = with_pos(expression) COLON {
-    
     `VarInterval (expr0, expr1, step)
   }
 
@@ -879,6 +913,18 @@ rest_param_category:
 rest_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
+arrange_events_param:
+| SORT v0 = symbol_with_pos COMMA v1 = symbol_with_pos
+  COLON WITH expr = with_pos(expression) COLON {
+    let var0 = Pos.same_pos_as (Normal (Pos.unmark v0)) v0 in
+    let var1 = Pos.same_pos_as (Normal (Pos.unmark v1)) v1 in  
+    `ArrangeEventsSort (var0, var1, expr)
+  }
+| FILTER v = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
+    let var = Pos.same_pos_as (Normal (Pos.unmark v)) v in
+    `ArrangeEventsFilter (var, expr)
+  }
+
 formula_kind:
 | f = formula { SingleFormula f }
 | fs = for_formula { let (lv, ft) = fs in MultipleFormulaes (lv, ft) }
@@ -895,7 +941,7 @@ lvalue:
 formula:
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN  EQUALS e = with_pos(expression) {
-    EventFieldDecl (idx, f, e)
+    EventFieldDecl (idx, f, -1, e)
   }
 | lvalue = lvalue EQUALS e = with_pos(expression) {
     let v, idx = lvalue in
@@ -1182,7 +1228,7 @@ function_call:
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
   }
 | EVENT_FIELD LPAREN m_expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN {
-    EventField (m_expr, field)
+    EventField (m_expr, field, -1)
   }
 | SIZE LPAREN var = symbol_with_pos RPAREN {
     Size (parse_variable $sloc (fst var), snd var)

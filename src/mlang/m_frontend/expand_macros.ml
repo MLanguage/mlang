@@ -617,9 +617,9 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       | Var v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
       | Literal (Float _), v_pos -> Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
-  | EventField (e, f) ->
+  | EventField (e, f, i) ->
       let e' = expand_expression const_map loop_map e in
-      (EventField (e', f), expr_pos)
+      (EventField (e', f, i), expr_pos)
   | Size var -> (
       match expand_variable const_map loop_map var with
       | Var v, v_pos -> (Size (v, v_pos), expr_pos)
@@ -646,10 +646,10 @@ let expand_formula (const_map : const_context)
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
       let e' = expand_expression const_map ParamsMap.empty e in
       (Com.SingleFormula (VarDecl (v', idx', e')), form_pos) :: prev
-  | Com.SingleFormula (EventFieldDecl (idx, f, e)) ->
+  | Com.SingleFormula (EventFieldDecl (idx, f, i, e)) ->
       let idx' = expand_expression const_map ParamsMap.empty idx in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (EventFieldDecl (idx', f, e')), form_pos) :: prev
+      (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos) :: prev
   | Com.MultipleFormulaes (lvs, VarDecl (v, idx, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
@@ -666,12 +666,12 @@ let expand_formula (const_map : const_context)
       in
       let res = loop_context_provider translator in
       List.rev res @ prev
-  | Com.MultipleFormulaes (lvs, EventFieldDecl (idx, f, e)) ->
+  | Com.MultipleFormulaes (lvs, EventFieldDecl (idx, f, i, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
         let idx' = expand_expression const_map loop_map idx in
         let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (EventFieldDecl (idx', f, e')), form_pos)
+        (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos)
       in
       let res = loop_context_provider translator in
       List.rev res @ prev
@@ -705,12 +705,12 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
-            | Com.PrintEventName (expr, f) ->
+            | Com.PrintEventName (expr, f, i) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintEventName (expr', f), Pos.get_position arg)
-            | Com.PrintEventAlias (expr, f) ->
+                (Com.PrintEventName (expr', f, i), Pos.get_position arg)
+            | Com.PrintEventAlias (expr, f, i) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintEventAlias (expr', f), Pos.get_position arg)
+                (Com.PrintEventAlias (expr', f, i), Pos.get_position arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintIndent expr', Pos.get_position arg)
@@ -746,6 +746,23 @@ let rec expand_instruction (const_map : const_context)
   | Com.Restore (vars, var_params, instrs) ->
       let instrs' = expand_instructions const_map instrs in
       (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev
+  | Com.ArrangeEvents (sort, filter, instrs) ->
+      let sort' =
+        match sort with
+        | Some (var0, var1, expr) ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some (var0, var1, expr')
+        | None -> None
+      in
+      let filter' =
+        match filter with
+        | Some (var, expr) ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some (var, expr')
+        | None -> None
+      in
+      let instrs' = expand_instructions const_map instrs in
+      (Com.ArrangeEvents (sort', filter', instrs'), instr_pos) :: prev
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       (Com.VerifBlock instrs', instr_pos) :: prev

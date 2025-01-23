@@ -21,7 +21,9 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     (Com.literal Com.Var.Map.t * float StrMap.t * StrSet.t)
-    * (Com.Var.t Com.event_value IntMap.t list * float StrMap.t * StrSet.t)
+    * ((Com.literal, Com.Var.t) Com.event_value IntMap.t list
+      * float StrMap.t
+      * StrSet.t)
       option =
   let inputVars =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
@@ -31,7 +33,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
         let var = find_var_of_name program (var, var_pos) in
         let lit =
           match value with
-          | Irj_ast.I i -> Com.Float (float_of_int i)
+          | Irj_ast.I i -> Com.Float (float i)
           | F f -> Com.Float f
         in
         Com.Var.Map.add var lit in_f)
@@ -52,26 +54,30 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let fromDirection = function
-      | "R" -> Some 0.0
-      | "C" -> Some 1.0
-      | "M" -> Some 2.0
-      | "P" -> Some 3.0
+      | "R" -> Com.Float 0.0
+      | "C" -> Com.Float 1.0
+      | "M" -> Com.Float 2.0
+      | "P" -> Com.Float 3.0
       | s ->
           Cli.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
             s;
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let fromPenalty = function
-      | None -> Some 0.0 (* None *)
-      | Some p when 0 <= p && p <= 99 -> Some (float p)
+      | None -> Com.Float 0.0 (* None *)
+      | Some p when 0 <= p && p <= 99 -> Com.Float (float p)
       | Some p ->
           Cli.error_print "Code de pénalité: %d, devrait être entre 0 et 99" p;
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
+    let fromBaseTl = function
+      | Some f -> Com.Float (float f)
+      | None -> Com.Undefined
+    in
     let from_2042_rect = function
-      | None -> Some 0.0 (* None *)
-      | Some 0 -> Some 0.0
-      | Some 1 -> Some 1.0
+      | None -> Com.Float 0.0 (* None *)
+      | Some 0 -> Com.Float 0.0
+      | Some 1 -> Com.Float 1.0
       | Some r ->
           Cli.error_print
             "Indicateur de déclaration rectificative: %d, devrait être 0 ou 1" r;
@@ -79,15 +85,14 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     in
     let toEvent (rappel : Irj_ast.rappel) =
       IntMap.empty
-      |> IntMap.add 0 (Com.Numeric (Some (float rappel.event_nb)))
-      |> IntMap.add 1 (Com.Numeric (Some (float rappel.rappel_nb)))
+      |> IntMap.add 0 (Com.Numeric (Com.Float (float rappel.event_nb)))
+      |> IntMap.add 1 (Com.Numeric (Com.Float (float rappel.rappel_nb)))
       |> IntMap.add 2 (Com.RefVar (from_var rappel.variable_code))
-      |> IntMap.add 3 (Com.Numeric (Some (float rappel.change_value)))
+      |> IntMap.add 3 (Com.Numeric (Com.Float (float rappel.change_value)))
       |> IntMap.add 4 (Com.Numeric (fromDirection rappel.direction))
       |> IntMap.add 5 (Com.Numeric (fromPenalty rappel.penalty_code))
-      |> IntMap.add 6
-           (Com.Numeric (Option.map float rappel.base_tolerance_legale))
-      |> IntMap.add 7 (Com.Numeric (Some (float rappel.month_year)))
+      |> IntMap.add 6 (Com.Numeric (fromBaseTl rappel.base_tolerance_legale))
+      |> IntMap.add 7 (Com.Numeric (Com.Float (float rappel.month_year)))
       |> IntMap.add 8 (Com.Numeric (from_2042_rect rappel.decl_2042_rect))
     in
     List.map toEvent rappels

@@ -347,7 +347,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
       in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | EventField (me, f) ->
+  | EventField (me, f, _) ->
       let fn = Format.sprintf "event_field_%s" (Pos.unmark f) in
       let res = fresh_c_local "result" in
       let def_res = Pp.spr "def_%s" res in
@@ -467,7 +467,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
       pr "@]@;}@;"
 
 let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
-    (idx : Mir.expression Pos.marked) (field : string Pos.marked)
+    (p : Mir.program) (idx : Mir.expression Pos.marked) (field : string)
     (expr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
   let pr form = Format.fprintf fmt form in
   pr "@[<v 2>{@;";
@@ -499,8 +499,12 @@ let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
     def_expr
     (D.format_assign dgfip_flags expr_val)
     value_expr;
-  pr "ecris_varinfo(irdata, irdata->events[%s].field_%s_var, %s, %s);" idx_val
-    (Pos.unmark field) expr_def expr_val;
+  if (StrMap.find field p.program_event_fields).is_var then
+    pr "ecris_varinfo(irdata, irdata->events[%s]->field_%s_var, %s, %s);"
+      idx_val field expr_def expr_val
+  else (
+    pr "irdata->events[%s]->field_%s_def = %s;@;" idx_val field expr_def;
+    pr "irdata->events[%s]->field_%s_val = %s;" idx_val field expr_val);
   pr "@]@;}@;";
   pr "@]@;}";
   pr "@]@;}@;"
@@ -512,9 +516,9 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       Format.fprintf oc "@[<v 2>{@;";
       generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc;
       Format.fprintf oc "@]@;}@;"
-  | Affectation (SingleFormula (EventFieldDecl (idx, f, expr)), _) ->
+  | Affectation (SingleFormula (EventFieldDecl (idx, f, _, expr)), _) ->
       Format.fprintf oc "@[<v 2>{@;";
-      generate_event_field_def dgfip_flags idx f expr oc;
+      generate_event_field_def dgfip_flags program idx (Pos.unmark f) expr oc;
       Format.fprintf oc "@]@;}@;"
   | Affectation (MultipleFormulaes _, _) -> assert false
   | IfThenElse (cond, iftrue, iffalse) ->
@@ -625,8 +629,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let ptr = VID.gen_info_ptr var in
               Format.fprintf oc "print_string(%s, %s, %s->alias);@;" print_std
                 pr_ctx ptr
-          | PrintEventName (e, f) -> print_name_or_alias "name" e f
-          | PrintEventAlias (e, f) -> print_name_or_alias "alias" e f
+          | PrintEventName (e, f, _) -> print_name_or_alias "name" e f
+          | PrintEventAlias (e, f, _) -> print_name_or_alias "alias" e f
           | PrintIndent e ->
               let locals, set, def, value =
                 D.build_expression @@ generate_c_expr e
