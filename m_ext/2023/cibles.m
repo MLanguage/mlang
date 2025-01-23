@@ -261,13 +261,13 @@ verifier domaine corrective
 
 cible trace_in:
 application: iliad;
-variable temporaire: TOTO;
+variables_temporaires: TOTO;
 TOTO = 0;
 #afficher_erreur indenter(2);
 
 cible trace_out:
 application: iliad;
-variable temporaire: TOTO;
+variables_temporaires: TOTO;
 TOTO = 0;
 #afficher_erreur indenter(-2);
 
@@ -311,7 +311,7 @@ calculer cible trace_out;
 
 cible calcule_acomptes:
 application: iliad;
-variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_acomptes[\n";
 calculer cible trace_in;
 FLAG_ACO = 1;
@@ -346,7 +346,7 @@ calculer cible trace_out;
 
 cible est_code_supp_avfisc:
 application: iliad;
-argument: EXISTE_CODE_SUPP;
+arguments: EXISTE_CODE_SUPP;
 #afficher_erreur "est_code_supp_avfisc[\n";
 calculer cible trace_in;
 EXISTE_CODE_SUPP = 0;
@@ -374,7 +374,7 @@ calculer cible trace_out;
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire:
+variables_temporaires:
   EXISTE_AVFISC, EXISTE_CODE_SUPP,
   SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_avfiscal[\n";
@@ -440,7 +440,7 @@ calculer cible trace_out;
 
 cible calcule_acomptes_avfisc:
 application: iliad;
-variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_acomptes_avfisc[\n";
 calculer cible trace_in;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
@@ -463,7 +463,7 @@ calculer cible trace_out;
 
 cible est_calcul_acomptes:
 application: iliad;
-argument: EXISTE_ACOMPTES;
+arguments: EXISTE_ACOMPTES;
 #afficher_erreur "est_calcul_acomptes[\n";
 calculer cible trace_in;
 EXISTE_ACOMPTES = 0;
@@ -479,7 +479,7 @@ calculer cible trace_out;
 
 cible est_calcul_avfisc:
 application: iliad;
-argument: EXISTE_AVFISC;
+arguments: EXISTE_AVFISC;
 #afficher_erreur "est_calcul_avfisc[\n";
 calculer cible trace_in;
 EXISTE_AVFISC = 0;
@@ -498,8 +498,8 @@ calculer cible trace_out;
 
 cible traite_double_liquidation3:
 application: iliad;
-argument: P_EST_CALCUL_ACOMPTES;
-variable temporaire: CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+arguments: P_EST_CALCUL_ACOMPTES;
+variables_temporaires: CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 #afficher_erreur "traite_double_liquidation3[\n";
 calculer cible trace_in;
 FLAG_ACO = 0;
@@ -567,7 +567,7 @@ calculer cible trace_out;
 
 cible abs_flag:
 application: iliad;
-argument: VAR, ABS, FLAG;
+arguments: VAR, ABS, FLAG;
 si present(VAR) alors
   FLAG = (VAR < 0);
   ABS = abs(VAR);
@@ -576,7 +576,7 @@ finsi
 
 cible traite_double_liquidation_exit_taxe:
 application: iliad;
-variable temporaire: CALCULER_ACOMPTES;
+variables_temporaires: CALCULER_ACOMPTES;
 #afficher_erreur "traite_double_liquidation_exit_taxe[\n";
 calculer cible trace_in;
 si present(PVIMPOS) ou present(CODRWB) alors
@@ -750,7 +750,7 @@ calculer cible traite_double_liquidation_pvro;
 
 cible enchaine_calcul:
 application: iliad;
-# variable temporaire: CALCULER_ACOMPTES;
+# variables_temporaires: CALCULER_ACOMPTES;
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible effacer_base_etc;
   calculer cible traite_double_liquidation_2;
@@ -775,9 +775,9 @@ finsi
 
 fonction truc:
 application: iliad;
-argument: A0, A1;
+arguments: A0, A1;
 resultat: RES;
-variable temporaire: TOTO;
+variables_temporaires: TOTO;
 #V_IND_TRAIT = 4;
 afficher_erreur "truc\n" indenter(2);
 TOTO = 1;
@@ -796,8 +796,8 @@ afficher_erreur indenter(-2);
 
 cible test_boucle:
 application: iliad;
-argument: I0, I1;
-variable temporaire: TOTO;
+arguments: I0, I1;
+variables_temporaires: TOTO;
 TOTO = 0;
 iterer
 : variable I
@@ -815,13 +815,8 @@ iterer
 TOTO = truc(TOTO, truc(4, truc(7, 9)));
 afficher_erreur "truc: " (TOTO) "\n";
 
-cible test:
+cible afficher_evenements:
 application: iliad;
-variable temporaire: A0, A1;
-A0 = 1.6;
-A1 = 3.6;
-calculer cible test_boucle : avec A0, A1;
-afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
 iterer
 : variable I
 : 0 .. (nb_evenements() - 1) increment 1
@@ -854,22 +849,44 @@ iterer
   si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
   afficher_erreur "\n";
 )
+
+cible test:
+application: iliad;
+variables_temporaires: A0, A1;
+A0 = 1.6;
+A1 = 3.6;
+calculer cible test_boucle : avec A0, A1;
+afficher_erreur "\n";
+afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
+afficher_erreur "\n";
+calculer cible afficher_evenements;
+afficher_erreur "\n";
 si nb_evenements() > 0 alors
   afficher_erreur "0: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
   champ_evenement(0, code) = 456;
   afficher_erreur "1: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
-  afficher_erreur "0: " nom(0, montant) " = " (champ_evenement(0, montant)) "\n";
+  afficher_erreur "0: montant " (champ_evenement(0, montant)) "\n";
   champ_evenement(0, montant) = 123.456;
-  afficher_erreur "1: " nom(0, montant) " = " (champ_evenement(0, montant)) "\n";
-
+  afficher_erreur "1: montant " (champ_evenement(0, montant)) "\n";
 sinon
   afficher_erreur "!!! AUCUN EVENEMENT !!!\n";
 finsi
-
+afficher_erreur "\n";
+arranger_evenements
+: trier I, J : avec
+  champ_evenement(I, rappel) <= champ_evenement(J, rappel)
+  ou (
+    champ_evenement(I, rappel) = champ_evenement(J, rappel)
+    et champ_evenement(I, montant) <= champ_evenement(J, montant)
+  )
+: filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55
+: dans (
+  calculer cible afficher_evenements;
+)
 
 cible enchainement_primitif:
 application: iliad;
-variable temporaire: EXPORTE_ERREUR;
+variables_temporaires: EXPORTE_ERREUR;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;

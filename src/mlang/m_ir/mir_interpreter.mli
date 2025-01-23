@@ -69,7 +69,7 @@ module type S = sig
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_event_tab : (value, Com.Var.t) Com.event_value Array.t Array.t;
-    mutable ctx_events : int Array.t;
+    mutable ctx_events : int Array.t list;
   }
   (** Interpretation context *)
 

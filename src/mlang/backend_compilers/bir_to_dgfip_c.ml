@@ -595,24 +595,27 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let print_val = fresh_c_local "mpp_print" in
       let print_def = print_val ^ "_d" in
       let print_name_or_alias name_or_alias e f =
-        let locals, set, def, value = D.build_expression @@ generate_c_expr e in
-        Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
-          D.format_local_declarations locals
-          (D.format_set_vars dgfip_flags)
-          set
-          (D.format_assign dgfip_flags print_def)
-          def
-          (D.format_assign dgfip_flags print_val)
-          value;
-        Format.fprintf oc "@[<v 2>{@;int idx = (int)floor(%s);@; /* prout */"
-          print_val;
-        Format.fprintf oc
-          "@[<v 2>if(%s && 0 <= idx && idx < irdata->nb_events){@;" print_def;
-        Format.fprintf oc
-          "print_string(%s, %s, irdata->events[idx].field_%s_var->%s);@]@;"
-          print_std pr_ctx (Pos.unmark f) name_or_alias;
-        Format.fprintf oc "}@]@;";
-        Format.fprintf oc "}@;"
+        let ef = StrMap.find (Pos.unmark f) program.program_event_fields in
+        if ef.is_var then (
+          let locals, set, def, value =
+            D.build_expression @@ generate_c_expr e
+          in
+          Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
+            D.format_local_declarations locals
+            (D.format_set_vars dgfip_flags)
+            set
+            (D.format_assign dgfip_flags print_def)
+            def
+            (D.format_assign dgfip_flags print_val)
+            value;
+          Format.fprintf oc "@[<v 2>{@;int idx = (int)floor(%s);@;" print_val;
+          Format.fprintf oc
+            "@[<v 2>if(%s && 0 <= idx && idx < irdata->nb_events){@;" print_def;
+          Format.fprintf oc
+            "print_string(%s, %s, irdata->events[idx]->field_%s_var->%s);@]@;"
+            print_std pr_ctx (Pos.unmark f) name_or_alias;
+          Format.fprintf oc "}@]@;";
+          Format.fprintf oc "}@;")
       in
       Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
       List.iter
@@ -793,6 +796,60 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}@;";
           pr "@]@;}")
         var_intervals
+  | ArrangeEvents (sort, filter, stmts) ->
+      let pr fmt = Format.fprintf oc fmt in
+      let events_sav = fresh_c_local "events_sav" in
+      let events_tmp = fresh_c_local "events_tmp" in
+      let nb_events_sav = fresh_c_local "nb_events_sav" in
+      let cpt_i = fresh_c_local "i" in
+      let cpt_j = fresh_c_local "j" in
+      pr "@[<v 2>{";
+      pr "@;T_event **%s = irdata->events;" events_sav;
+      pr "@;int %s = irdata->nb_events;" nb_events_sav;
+      pr "@;T_event **%s = NULL;" events_tmp;
+      pr "@;int %s = 0;" cpt_i;
+      pr "@;int %s = 0;" cpt_j;
+      pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
+        nb_events_sav;
+      (match filter with
+      | Some (m_var, expr) ->
+          pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
+          let var = Pos.unmark m_var in
+          let ref_def = VID.gen_def var "" in
+          let ref_val = VID.gen_val var "" in
+          let cond_def = fresh_c_local "cond_def" in
+          let cond_val = fresh_c_local "cond_val" in
+          let locals, set, def, value =
+            D.build_expression @@ generate_c_expr expr
+          in
+          pr "@;char %s;" cond_def;
+          pr "@;double %s;" cond_val;
+          pr "@;%s = 1;" ref_def;
+          pr "@;%s = (double)%s;" ref_val cpt_j;
+          pr "@;@[<v 2>{@;%a%a%a@;%a@]@;}" D.format_local_declarations locals
+            (D.format_set_vars dgfip_flags)
+            set
+            (D.format_assign dgfip_flags cond_def)
+            def
+            (D.format_assign dgfip_flags cond_val)
+            value;
+          pr "@;@[<v 2>if(%s && %s) {" cond_def cond_val;
+          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_j;
+          pr "@;%s++;" cpt_i;
+          pr "@]@;}";
+          pr "@;%s++;" cpt_j;
+          pr "@]@;}";
+          pr "@;irdata->events = %s;" events_tmp;
+          pr "@;irdata->nb_events = %s;" cpt_i
+      | None -> ());
+      pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+      (match filter with
+      | Some _ ->
+          pr "@;free(irdata->events);";
+          pr "@;irdata->events = %s;" events_sav;
+          pr "@;irdata->nb_events = %s;" nb_events_sav
+      | None -> ());
+      pr "@]@;}@;"
   | Restore (vars, var_params, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
       pr "@[<v 2>{@;";

@@ -47,7 +47,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE RESULT
+%token RULE VERIFICATION TARGET INPUT_ARGS TEMP_VARS SIZE RESULT
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
 %token WHEN DO THEN_WHEN ELSE_DO ENDWHEN NOTHING
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
@@ -538,7 +538,7 @@ rule_etc:
 rule_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
 | CHAINING COLON chs = symbol_enumeration SEMICOLON { `Chainings chs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { `TmpVars tmp_vars }
 
@@ -568,10 +568,10 @@ target_etc:
 
 target_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
-| INPUT_ARG COLON
+| INPUT_ARGS COLON
   inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
   { Target_input_arg inputs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { Target_tmp_vars tmp_vars }
 
@@ -601,10 +601,10 @@ function_etc:
 
 function_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
-| INPUT_ARG COLON
+| INPUT_ARGS COLON
   inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
   { Target_input_arg inputs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { Target_tmp_vars tmp_vars }
 | RESULT COLON res = with_pos(variable_name) SEMICOLON { Function_result res }

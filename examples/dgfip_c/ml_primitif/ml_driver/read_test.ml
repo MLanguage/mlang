@@ -21,13 +21,16 @@ let convert_int s = try int_of_string s with _ -> 0
 
 let convert_float s =
   try Float.of_string s
-  (* with _ -> 0.0 *)
   with _ -> (* to cope with badly formatted tests *)
     try Float.of_string
           (String.sub s 0
              (String.index_from s
                 ((String.index s '.') + 1) '.'))
     with _ -> 0.0
+
+let convert_float_opt s =
+  let rec isSpc i = i < 0 || (s.[i] = ' ' && isSpc (i - 1)) in
+  if isSpc (String.length s - 1) then None else Some (convert_float s)
 
 let parse_generic s =
   let sl = String.split_on_char '/' s in
@@ -60,6 +63,7 @@ let parse_entree_rap s =
   match sl with
   | [ num_evt; num_rappel; code; montant; sens;
       penalite; base_tl; date_evt; ind20 ] ->
+      if String.length code = 0 then err ();
       let sens_float =
         if String.length sens = 0 then err ();
         match sens.[0] with
@@ -69,10 +73,17 @@ let parse_entree_rap s =
         | 'P' -> 3.0
         | _ -> err ()
       in
-      (convert_float num_evt, convert_float num_rappel,
-       code, convert_float montant, sens_float,
-       convert_float penalite, convert_float base_tl,
-       convert_float date_evt, convert_float ind20) (* TODO: improve *)
+      (
+        convert_float num_evt,
+        convert_float num_rappel,
+        code,
+        convert_float montant,
+        sens_float,
+        convert_float_opt penalite,
+        convert_float_opt base_tl,
+        convert_float date_evt,
+        convert_float_opt ind20
+      ) (* TODO: improve *)
   | _ -> err ()
 
 let read_section_contents f parsefun =

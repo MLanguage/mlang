@@ -48,52 +48,37 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
         | None -> vn
       in
       match StrMap.find_opt name program.program_vars with
-      | Some var -> var
+      | Some var -> Com.RefVar var
       | None ->
           Cli.error_print "Variable inconnue: %s" vn;
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let fromDirection = function
-      | "R" -> Com.Float 0.0
-      | "C" -> Com.Float 1.0
-      | "M" -> Com.Float 2.0
-      | "P" -> Com.Float 3.0
+      | "R" -> Com.Numeric (Com.Float 0.0)
+      | "C" -> Com.Numeric (Com.Float 1.0)
+      | "M" -> Com.Numeric (Com.Float 2.0)
+      | "P" -> Com.Numeric (Com.Float 3.0)
       | s ->
           Cli.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
             s;
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
-    let fromPenalty = function
-      | None -> Com.Float 0.0 (* None *)
-      | Some p when 0 <= p && p <= 99 -> Com.Float (float p)
-      | Some p ->
-          Cli.error_print "Code de pénalité: %d, devrait être entre 0 et 99" p;
-          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
-    in
-    let fromBaseTl = function
-      | Some f -> Com.Float (float f)
-      | None -> Com.Undefined
-    in
-    let from_2042_rect = function
-      | None -> Com.Float 0.0 (* None *)
-      | Some 0 -> Com.Float 0.0
-      | Some 1 -> Com.Float 1.0
-      | Some r ->
-          Cli.error_print
-            "Indicateur de déclaration rectificative: %d, devrait être 0 ou 1" r;
-          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+    let toNum p = Com.Numeric (Com.Float (float p)) in
+    let optToNum = function
+      | Some p -> Com.Numeric (Com.Float (float p))
+      | None -> Com.Numeric Com.Undefined
     in
     let toEvent (rappel : Irj_ast.rappel) =
       IntMap.empty
-      |> IntMap.add 0 (Com.Numeric (Com.Float (float rappel.event_nb)))
-      |> IntMap.add 1 (Com.Numeric (Com.Float (float rappel.rappel_nb)))
-      |> IntMap.add 2 (Com.RefVar (from_var rappel.variable_code))
-      |> IntMap.add 3 (Com.Numeric (Com.Float (float rappel.change_value)))
-      |> IntMap.add 4 (Com.Numeric (fromDirection rappel.direction))
-      |> IntMap.add 5 (Com.Numeric (fromPenalty rappel.penalty_code))
-      |> IntMap.add 6 (Com.Numeric (fromBaseTl rappel.base_tolerance_legale))
-      |> IntMap.add 7 (Com.Numeric (Com.Float (float rappel.month_year)))
-      |> IntMap.add 8 (Com.Numeric (from_2042_rect rappel.decl_2042_rect))
+      |> IntMap.add 0 (toNum rappel.event_nb)
+      |> IntMap.add 1 (toNum rappel.rappel_nb)
+      |> IntMap.add 2 (from_var rappel.variable_code)
+      |> IntMap.add 3 (toNum rappel.change_value)
+      |> IntMap.add 4 (fromDirection rappel.direction)
+      |> IntMap.add 5 (optToNum rappel.penalty_code)
+      |> IntMap.add 6 (optToNum rappel.base_tolerance_legale)
+      |> IntMap.add 7 (toNum rappel.month_year)
+      |> IntMap.add 8 (optToNum rappel.decl_2042_rect)
     in
     List.map toEvent rappels
   in

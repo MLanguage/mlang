@@ -48,7 +48,7 @@ module type S = sig
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_event_tab : (value, Com.Var.t) Com.event_value Array.t Array.t;
-    mutable ctx_events : int Array.t;
+    mutable ctx_events : int Array.t list;
   }
 
   val empty_ctx : Mir.program -> ctx
@@ -132,7 +132,7 @@ struct
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_event_tab : (value, Com.Var.t) Com.event_value Array.t Array.t;
-    mutable ctx_events : int Array.t;
+    mutable ctx_events : int Array.t list;
   }
 
   let empty_ctx (p : Mir.program) : ctx =
@@ -158,7 +158,7 @@ struct
       ctx_finalized_anos = [];
       ctx_exported_anos = [];
       ctx_event_tab = [||];
-      ctx_events = [||];
+      ctx_events = [];
     }
 
   let literal_to_value (l : Com.literal) : value =
@@ -244,7 +244,7 @@ struct
       done
     done;
     ctx.ctx_event_tab <- ctx_event_tab;
-    ctx.ctx_events <- Array.init nbEvt Fun.id
+    ctx.ctx_events <- [ Array.init nbEvt Fun.id ]
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
@@ -492,7 +492,7 @@ struct
                 | None -> Undefined
                 | Some f -> Number (N.of_int f)))
         | FuncCall ((NbEvents, _), _) ->
-            let card = Array.length ctx.ctx_events in
+            let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
         | FuncCall ((Func fn, _), args) ->
             let fd = Com.TargetMap.find fn p.program_functions in
@@ -515,8 +515,9 @@ struct
             match new_e with
             | Number z when N.(z >=. zero ()) ->
                 let i = Int64.to_int N.(to_int z) in
-                if 0 <= i && i < Array.length ctx.ctx_events then
-                  match ctx.ctx_event_tab.(ctx.ctx_events.(i)).(j) with
+                let events = List.hd ctx.ctx_events in
+                if 0 <= i && i < Array.length events then
+                  match ctx.ctx_event_tab.(events.(i)).(j) with
                   | Com.Numeric v -> v
                   | Com.RefVar var -> get_var_value ctx var 0
                 else Undefined
@@ -617,15 +618,15 @@ struct
             match new_idx with
             | Number z when N.(z >=. zero ()) -> (
                 let i = Int64.to_int N.(to_int z) in
-                if 0 <= i && i < Array.length ctx.ctx_events then
-                  match ctx.ctx_event_tab.(ctx.ctx_events.(i)).(j) with
+                let events = List.hd ctx.ctx_events in
+                if 0 <= i && i < Array.length events then
+                  match ctx.ctx_event_tab.(events.(i)).(j) with
                   | Com.RefVar var ->
                       let vari = get_var ctx var in
                       set_var_value p ctx vari expr
                   | Com.Numeric _ ->
                       let value = evaluate_expr ctx p expr in
-                      ctx.ctx_event_tab.(ctx.ctx_events.(i)).(j) <-
-                        Com.Numeric value)
+                      ctx.ctx_event_tab.(events.(i)).(j) <- Com.Numeric value)
             | _ -> ()))
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (
@@ -702,8 +703,9 @@ struct
                 match evaluate_expr ctx p e with
                 | Number x -> (
                     let i = Int64.to_int (N.to_int x) in
-                    if 0 <= i && i < Array.length ctx.ctx_events then
-                      match ctx.ctx_event_tab.(ctx.ctx_events.(i)).(j) with
+                    let events = List.hd ctx.ctx_events in
+                    if 0 <= i && i < Array.length events then
+                      match ctx.ctx_event_tab.(events.(i)).(j) with
                       | Com.RefVar var -> pr_raw ctx_pr (Com.Var.name_str var)
                       | _ -> ())
                 | Undefined -> ())
@@ -711,8 +713,9 @@ struct
                 match evaluate_expr ctx p e with
                 | Number x -> (
                     let i = Int64.to_int (N.to_int x) in
-                    if 0 <= i && i < Array.length ctx.ctx_events then
-                      match ctx.ctx_event_tab.(ctx.ctx_events.(i)).(j) with
+                    let events = List.hd ctx.ctx_events in
+                    if 0 <= i && i < Array.length events then
+                      match ctx.ctx_event_tab.(events.(i)).(j) with
                       | Com.RefVar var -> pr_raw ctx_pr (Com.Var.alias_str var)
                       | _ -> ())
                 | Undefined -> ())
@@ -846,6 +849,86 @@ struct
             | Com.Var.Arg -> (List.hd ctx.ctx_args).(i) <- value
             | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
           backup
+    | Com.ArrangeEvents (sort, filter, stmts) ->
+        let events =
+          match filter with
+          | Some (m_var, expr) ->
+              let var = Pos.unmark m_var in
+              let var_i =
+                match var.loc with LocTmp (_, i) -> i | _ -> assert false
+              in
+              let events0 = List.hd ctx.ctx_events in
+              let rec aux res i =
+                if i >= Array.length events0 then Array.of_list (List.rev res)
+                else
+                  let vi = Number N.(of_int (Int64.of_int i)) in
+                  ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <- vi;
+                  let res' =
+                    match evaluate_expr ctx p expr with
+                    | Number z when N.(z =. one ()) -> events0.(i) :: res
+                    | _ -> res
+                  in
+                  aux res' (i + 1)
+              in
+              aux [] 0
+          | None -> Array.copy (List.hd ctx.ctx_events)
+        in
+        (match sort with
+        | Some (m_var0, m_var1, expr) ->
+            let var0 = Pos.unmark m_var0 in
+            let var0_i =
+              match var0.loc with LocTmp (_, i) -> i | _ -> assert false
+            in
+            let var1 = Pos.unmark m_var1 in
+            let var1_i =
+              match var1.loc with LocTmp (_, i) -> i | _ -> assert false
+            in
+            let sort_fun i j =
+              let vi = Number N.(of_int (Int64.of_int i)) in
+              ctx.ctx_tmps.(ctx.ctx_tmps_org + var0_i) <- vi;
+              let vj = Number N.(of_int (Int64.of_int j)) in
+              ctx.ctx_tmps.(ctx.ctx_tmps_org + var1_i) <- vj;
+              match evaluate_expr ctx p expr with
+              | Number z when N.(z =. zero ()) -> false
+              | Number _ -> true
+              | Undefined -> false
+            in
+            let mergeSort cmp a =
+              let merge cmp a iLeft iRight iEnd b =
+                let rec aux i j k =
+                  if k < iEnd then
+                    if i < iRight && (j >= iEnd || cmp a.(i) a.(j)) then (
+                      b.(k) <- a.(i);
+                      aux (i + 1) j (k + 1))
+                    else (
+                      b.(k) <- a.(j);
+                      aux i (j + 1) (k + 1))
+                in
+                aux iLeft iRight iLeft
+              in
+              let b = Array.copy a in
+              let n = Array.length a in
+              let rec aux a b cp width =
+                if width < n then (
+                  let rec aux' i =
+                    if i < n then (
+                      merge cmp a i
+                        (min (i + width) n)
+                        (min (i + (2 * width)) n)
+                        b;
+                      aux' (i + (2 * width)))
+                  in
+                  aux' 0;
+                  aux b a (not cp) (2 * width))
+                else if cp then Array.blit a 0 b 0 n
+              in
+              aux a b false 1
+            in
+            mergeSort sort_fun events
+        | None -> ());
+        ctx.ctx_events <- events :: ctx.ctx_events;
+        evaluate_stmts tn canBlock p ctx stmts;
+        ctx.ctx_events <- List.tl ctx.ctx_events
     | Com.RaiseError (m_err, var_opt) ->
         let err = Pos.unmark m_err in
         (match err.typ with

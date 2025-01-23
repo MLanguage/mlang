@@ -67,7 +67,7 @@ rule token = parse
     | "anomalie" -> ANOMALY
     | "application" -> APPLICATION
     | "apres" -> AFTER
-    | "argument" -> INPUT_ARG
+    | "arguments" -> INPUT_ARGS
     | "arranger_evenements" -> ARRANGE_EVENTS
     | "attribut" -> ATTRIBUT
     | "autorise" -> AUTHORIZE
@@ -111,7 +111,6 @@ rule token = parse
     | "non" -> NOT
     | "numero_compl" -> COMPL_NUMBER
     | "numero_verif" -> VERIF_NUMBER
-    | "trier" -> SORT
     | "ou" -> OR
     | "par_defaut" -> BY_DEFAULT
     | "pour" -> FOR
@@ -130,11 +129,12 @@ rule token = parse
     | "specialise" -> SPECIALIZE
     | "tableau" -> TABLE
     | "taille" -> SIZE
-    | "temporaire" -> TEMPORARY
+    | "trier" -> SORT
     | "type" -> TYPE
     | "un" -> ONE
     | "valeur" -> VALUE
     | "variable" -> VARIABLE
+    | "variables_temporaires" -> TEMP_VARS
     | "verif" -> VERIFICATION
     | "verifiable" -> VERIFIABLE
     | "verifier" -> VERIFY

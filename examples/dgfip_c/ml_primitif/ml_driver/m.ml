@@ -148,5 +148,19 @@ external get_err_list : TGV.t -> string list = "ml_get_err_list"
 external annee_calc : unit -> int = "ml_annee_calc"
 external export_errs : TGV.t -> unit = "ml_export_errs"
 external enchainement_primitif : TGV.t -> unit = "ml_enchainement_primitif"
-external set_evt_list : TGV.t -> (float * float * string * float * float * float * float * float * float) list-> unit = "ml_set_evt_list" 
+external set_evt_list :
+  TGV.t
+  -> (
+      float
+      * float
+      * string
+      * float
+      * float
+      * float option
+      * float option
+      * float
+      * float option
+    ) list
+  -> unit
+= "ml_set_evt_list" 
 
