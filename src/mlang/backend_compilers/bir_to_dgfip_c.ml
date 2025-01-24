@@ -841,14 +841,53 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@;irdata->events = %s;" events_tmp;
           pr "@;irdata->nb_events = %s;" cpt_i
+      | None ->
+          pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
+          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_j cpt_j;
+          pr "@;%s++;" cpt_j;
+          pr "@]@;}";
+          pr "@;irdata->events = %s;" events_tmp);
+      (match sort with
+      | Some (m_var0, m_var1, expr) ->
+          ( (*
+void mergeSort(int *a, int n) {
+  int *b = (int * )malloc(n * (sizeof (int)));
+  for (int width = 1; width < n; width = 2 * width) {
+    for (int iLeft = 0; iLeft < n; iLeft = iLeft + 2 * width) {
+      int iRight = iLeft + width;
+      int iEnd = iLeft + 2 * width;
+      if (iRight > n) iRight = n;
+      if (iEnd > n) iEnd = n;
+      {
+        int i = iLeft;
+        int j = iRight;
+        for (int k = iLeft; k < iEnd; k++) {
+          int cpt = 0;
+          {
+            cpt = a[i] <= a[j];
+          }
+          if (i < iRight && (j >= iEnd || cpt)) {
+            b[k] = a[i];
+            i = i + 1;
+          } else {
+            b[k] = a[j];
+            j = j + 1;    
+          }
+        }     
+      }
+    }
+    for (int i = 0; i < n; i++) {
+      a[i] = b[i];
+    }
+  }
+  free(b);
+}
+*) )
       | None -> ());
       pr "@;%a" (generate_stmts dgfip_flags program) stmts;
-      (match filter with
-      | Some _ ->
-          pr "@;free(irdata->events);";
-          pr "@;irdata->events = %s;" events_sav;
-          pr "@;irdata->nb_events = %s;" nb_events_sav
-      | None -> ());
+      pr "@;free(irdata->events);";
+      pr "@;irdata->events = %s;" events_sav;
+      pr "@;irdata->nb_events = %s;" nb_events_sav;
       pr "@]@;}@;"
   | Restore (vars, var_params, stmts) ->
       let pr fmt = Format.fprintf oc fmt in
