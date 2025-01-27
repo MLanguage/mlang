@@ -1939,8 +1939,10 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
     Some
       (function
       | id, var ->
-          Cli.debug_print "warning: auto-cycle in rule %d with variable %s" id
-            var)
+          Errors.print_spanned_warning
+            (Format.asprintf
+               "Rule %d needs variable %s as both input and output" id var)
+            Pos.no_pos)
   in
   let sorted_rules =
     try RulesSorting.sort ~auto_cycle rule_graph with
