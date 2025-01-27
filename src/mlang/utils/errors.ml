@@ -63,3 +63,7 @@ let raise_spanned_error_with_continuation (msg : string)
 let print_spanned_warning (msg : string) ?(span_msg : string option)
     (span : Pos.t) : unit =
   Cli.warning_print "%a" format_structured_error (msg, [ (span_msg, span) ])
+
+let print_multispanned_warning (msg : string)
+    (spans : (string option * Pos.t) list) =
+  Cli.warning_print "%a" format_structured_error (msg, spans)
