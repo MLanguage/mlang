@@ -1930,16 +1930,50 @@ let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
   Com.DomainId.equal rdom_id rule_rdom_id
   || Com.DomainIdSet.mem rule_rdom_id rdom.Com.dom_min
 
+let check_no_variable_duplicates (rdom_rules : rule IntMap.t) : unit =
+  (* checks whether a variable is defined in two different rules given a rule "set".
+     We cannot do it over all the rules of a single program because some are defined in different chainings *)
+  let module StrMapOverride = struct
+    include StrMap
+
+    let add key data m =
+      (match find_opt key m with
+      | Some _ when not (is_vartmp key) ->
+          Cli.warning_print "Overriding with a new vertex on variable %s" key
+      | _ -> ());
+      add key data m
+  end in
+  let _, nb =
+    IntMap.fold
+      (fun _id r (varset, count) ->
+        let out = r.rule_out_vars in
+        let inter = StrSet.inter varset out in
+        let nb =
+          StrSet.fold
+            (fun var_name c ->
+              if not (is_vartmp var_name) then (
+                Cli.error_print "Variable %s is defined in two different rules"
+                  var_name;
+                c + 1)
+              else c)
+            inter 0
+        in
+        (StrSet.union varset out, count + nb))
+      rdom_rules (StrSet.empty, 0)
+  in
+  if nb > 0 then exit 1
+
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
     Com.DomainIdMap.fold
       (fun rdom_id rdom prog_targets ->
-        if rdom.Com.dom_data.Com.rdom_computable then
+        if rdom.Com.dom_data.Com.rdom_computable then (
           let rdom_rules =
             IntMap.filter
               (fun _ rule -> rdom_rule_filter rdom rule)
               prog.prog_rules
           in
+          check_no_variable_duplicates rdom_rules;
           let rule_graph =
             create_rule_graph
               (fun r -> r.rule_in_vars)
@@ -1970,7 +2004,7 @@ let complete_rule_domains (prog : program) : program =
                 target_nb_refs = 0;
               }
           in
-          StrMap.add tname target prog_targets
+          StrMap.add tname target prog_targets)
         else prog_targets)
       prog.prog_rdoms prog.prog_targets
   in
