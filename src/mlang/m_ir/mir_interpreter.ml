@@ -893,7 +893,7 @@ struct
               | Number _ -> true
               | Undefined -> false
             in
-            Sort.mergeSort sort_fun events
+            Sorting.mergeSort sort_fun events
         | None -> ());
         ctx.ctx_events <- events :: ctx.ctx_events;
         evaluate_stmts tn canBlock p ctx stmts;
