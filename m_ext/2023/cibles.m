@@ -879,7 +879,7 @@ arranger_evenements
     champ_evenement(I, rappel) = champ_evenement(J, rappel)
     et champ_evenement(I, montant) <= champ_evenement(J, montant)
   )
-#{: filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55}#
+: filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55
 : dans (
   calculer cible afficher_evenements;
 )

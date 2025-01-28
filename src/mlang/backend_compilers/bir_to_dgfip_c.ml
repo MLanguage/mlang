@@ -833,7 +833,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
             def
             (D.format_assign dgfip_flags cond_val)
             value;
-          pr "@;@[<v 2>if(%s && %s) {" cond_def cond_val;
+          pr "@;@[<v 2>if(%s && (%s != 0.0)) {" cond_def cond_val;
           pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_j;
           pr "@;%s++;" cpt_i;
           pr "@]@;}";
@@ -849,40 +849,78 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;irdata->events = %s;" events_tmp);
       (match sort with
       | Some (m_var0, m_var1, expr) ->
-          ( (*
-void mergeSort(int *a, int n) {
-  int *b = (int * )malloc(n * (sizeof (int)));
-  for (int width = 1; width < n; width = 2 * width) {
-    for (int iLeft = 0; iLeft < n; iLeft = iLeft + 2 * width) {
-      int iRight = iLeft + width;
-      int iEnd = iLeft + 2 * width;
-      if (iRight > n) iRight = n;
-      if (iEnd > n) iEnd = n;
-      {
-        int i = iLeft;
-        int j = iRight;
-        for (int k = iLeft; k < iEnd; k++) {
-          int cpt = 0;
-          {
-            cpt = a[i] <= a[j];
-          }
-          if (i < iRight && (j >= iEnd || cpt)) {
-            b[k] = a[i];
-            i = i + 1;
-          } else {
-            b[k] = a[j];
-            j = j + 1;    
-          }
-        }     
-      }
-    }
-    for (int i = 0; i < n; i++) {
-      a[i] = b[i];
-    }
-  }
-  free(b);
-}
-*) )
+          pr "@;/* merge sort */";
+          pr "@;@[<v 2>{";
+          pr
+            "@;\
+             T_event **b = (T_event **)malloc(irdata->nb_events * (sizeof \
+             (T_event *)));";
+          pr "@;int width;";
+          pr "@;int iLeft;";
+          pr "@;int i;";
+          pr
+            "@;\
+             @[<v 2>for (width = 1; width < irdata->nb_events; width = 2 * \
+             width) {";
+          pr
+            "@;\
+             @[<v 2>for (iLeft = 0; iLeft < irdata->nb_events; iLeft = iLeft + \
+             2 * width) {";
+          pr "@;int iRight = iLeft + width;";
+          pr "@;int iEnd = iLeft + 2 * width;";
+          pr "@;if (iRight > irdata->nb_events) iRight = irdata->nb_events;";
+          pr "@;if (iEnd > irdata->nb_events) iEnd = irdata->nb_events;";
+          pr "@;@[<v 2>{";
+          pr "@;int i = iLeft;";
+          pr "@;int j = iRight;";
+          pr "@;int k;";
+          pr "@;@[<v 2>for (k = iLeft; k < iEnd; k++) {";
+          pr "@;int cpt = 0;";
+          pr "@;@[<v 2>{";
+          (* Comparaison *)
+          let var0 = Pos.unmark m_var0 in
+          let ref0_def = VID.gen_def var0 "" in
+          let ref0_val = VID.gen_val var0 "" in
+          let var1 = Pos.unmark m_var1 in
+          let ref1_def = VID.gen_def var1 "" in
+          let ref1_val = VID.gen_val var1 "" in
+          let cmp_def = fresh_c_local "cmp_def" in
+          let cmp_val = fresh_c_local "cmp_val" in
+          let locals, set, def, value =
+            D.build_expression @@ generate_c_expr expr
+          in
+          pr "@;char %s;" cmp_def;
+          pr "@;double %s;" cmp_val;
+          pr "@;%s = 1;" ref0_def;
+          pr "@;%s = (double)i;" ref0_val;
+          pr "@;%s = 1;" ref1_def;
+          pr "@;%s = (double)j;" ref1_val;
+          pr "@;@[<v 2>{@;%a%a%a@;%a@]@;}" D.format_local_declarations locals
+            (D.format_set_vars dgfip_flags)
+            set
+            (D.format_assign dgfip_flags cmp_def)
+            def
+            (D.format_assign dgfip_flags cmp_val)
+            value;
+          pr "@;cpt = %s && (%s != 0.0);" cmp_def cmp_val;
+          (* ----------- *)
+          pr "@]@;}";
+          pr "@;@[<v 2>if (i < iRight && (j >= iEnd || cpt)) {";
+          pr "@;b[k] = irdata->events[i];";
+          pr "@;i = i + 1;";
+          pr "@]@;@;@[<v 2>} else {";
+          pr "@;b[k] = irdata->events[j];";
+          pr "@;j = j + 1;";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@;@[<v 2>for (i = 0; i < irdata->nb_events; i++) {";
+          pr "@;irdata->events[i] = b[i];";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@;free(b);";
+          pr "@]@;}"
       | None -> ());
       pr "@;%a" (generate_stmts dgfip_flags program) stmts;
       pr "@;free(irdata->events);";
