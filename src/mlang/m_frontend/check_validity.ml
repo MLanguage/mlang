@@ -1632,15 +1632,16 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
   let env, res, in_vars, out_vars, def_vars =
     aux (env, [], StrSet.empty, StrSet.empty, StrMap.empty) instrs
   in
-  StrMap.iter
-    (fun vn l ->
-      if List.length l > 1 && not (is_vartmp vn) then
-        Errors.print_multispanned_warning
-          (Format.asprintf
-             "Variable %s is defined more than once in the same rule" vn)
-          (List.map (fun pos -> (None, pos)) (List.rev l)))
-    (* List.rev for purely cosmetic reasons *)
-    def_vars;
+  if is_rule then
+    StrMap.iter
+      (fun vn l ->
+        if List.length l > 1 && not (is_vartmp vn) then
+          Errors.print_multispanned_warning
+            (Format.asprintf
+               "Variable %s is defined more than once in the same rule" vn)
+            (List.map (fun pos -> (None, pos)) (List.rev l)))
+      (* List.rev for purely cosmetic reasons *)
+      def_vars;
   let tmp_vars =
     StrMap.fold (fun vn _ s -> StrSet.add vn s) env.tmp_vars StrSet.empty
   in
