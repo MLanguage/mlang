@@ -14,17 +14,17 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let sanitize_str (s, p) =
-  String.map
-    (fun c ->
-      if c >= Char.chr 128 then
-        let () =
-          Cli.warning_print "Replaced char code %d by space %a" (Char.code c)
-            Pos.format_position p
-        in
-        ' '
-      else c)
-    s
+(* let sanitize_str (s, p) =
+   String.map
+     (fun c ->
+       if c >= Char.chr 128 then
+         let () =
+           Cli.warning_print "Replaced char code %d by space %a" (Char.code c)
+             Pos.format_position p
+         in
+         ' '
+       else c)
+     s *)
 
 let compare_default = String.compare
 
