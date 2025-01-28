@@ -543,8 +543,16 @@ typedef struct S_env_sauvegarde {
   struct S_env_sauvegarde *suite;
 } T_env_sauvegarde;
 
+typedef struct S_env_sauvegarde_evt {
+  T_event sauv_evt;
+  T_event *orig_evt;
+  struct S_env_sauvegarde_evt *suite;
+} T_env_sauvegarde_evt;
+
 extern void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, int sz);
 extern void env_restaurer(T_env_sauvegarde **liste);
+extern void env_sauvegarder_evt(T_env_sauvegarde_evt **liste, T_event *evt);
+extern void env_restaurer_evt(T_env_sauvegarde_evt **liste);
 extern int nb_informatives(T_irdata *irdata);
 extern int nb_discordances(T_irdata *irdata);
 extern int nb_anomalies(T_irdata *irdata);
@@ -1029,9 +1037,42 @@ void env_restaurer(T_env_sauvegarde **liste) {
 
   while (*liste != NULL) {
     courant = *liste;
-    *liste = courant-> suite;
+    *liste = courant->suite;
     *(courant->orig_def) = courant->sauv_def;
     *(courant->orig_val) = courant->sauv_val;
+    free(courant);
+  }
+}
+
+static void copy_evt(T_event *src, T_event *dst) {
+|};
+  StrMap.iter
+    (fun f (ef : Com.event_field) ->
+      if ef.is_var then
+        Format.fprintf fmt "  dst->field_%s_var = src->field_%s_var;\n" f f
+      else (
+        Format.fprintf fmt "  dst->field_%s_def = src->field_%s_def;\n" f f;
+        Format.fprintf fmt "  dst->field_%s_val = src->field_%s_val;\n" f f))
+    cprog.program_event_fields;
+  Format.fprintf fmt "%s"
+    {|
+    }
+
+void env_sauvegarder_evt(T_env_sauvegarde_evt **liste, T_event *evt) {
+  T_env_sauvegarde_evt *nouveau = (T_env_sauvegarde_evt *)malloc(sizeof (T_env_sauvegarde_evt));
+  copy_evt(evt, &(nouveau->sauv_evt));
+  nouveau->orig_evt = evt;
+  nouveau->suite = *liste;
+  *liste = nouveau;
+}
+
+void env_restaurer_evt(T_env_sauvegarde_evt **liste) {
+  T_env_sauvegarde_evt *courant;
+
+  while (*liste != NULL) {
+    courant = *liste;
+    *liste = courant->suite;
+    copy_evt(&(courant->sauv_evt), courant->orig_evt);
     free(courant);
   }
 }

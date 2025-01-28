@@ -348,6 +348,7 @@ type ('v, 'e) instruction =
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * 'v m_expression list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option

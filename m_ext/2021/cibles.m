@@ -648,8 +648,7 @@ iterer
 )
 afficher_erreur "\n";
 restaurer
-: FLAG_PVRO
-: TOTO
+: variables FLAG_PVRO, TOTO
 : variable RESTREV : categorie saisie contexte : avec present(RESTREV)
 : apres (
   FLAG_PVRO = indefini;

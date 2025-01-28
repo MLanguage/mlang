@@ -743,9 +743,17 @@ let rec expand_instruction (const_map : const_context)
       in
       let instrs' = expand_instructions const_map instrs in
       (Com.Iterate_values (name, var_intervals', instrs'), instr_pos) :: prev
-  | Com.Restore (vars, var_params, instrs) ->
+  | Com.Restore (vars, var_params, evts, instrs) ->
+      let var_params' =
+        List.map
+          (fun (v, c, e) ->
+            let e' = expand_expression const_map ParamsMap.empty e in
+            (v, c, e'))
+          var_params
+      in
+      let evts' = List.map (expand_expression const_map ParamsMap.empty) evts in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev
+      (Com.Restore (vars, var_params', evts', instrs'), instr_pos) :: prev
   | Com.ArrangeEvents (sort, filter, instrs) ->
       let sort' =
         match sort with

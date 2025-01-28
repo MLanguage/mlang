@@ -495,6 +495,7 @@ type ('v, 'e) instruction =
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * 'v m_expression list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
@@ -814,18 +815,33 @@ let rec format_instruction form_var form_err =
           (Pp.list_space format_var_intervals)
           var_intervals;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
-    | Restore (vars, var_params, rb) ->
+    | Restore (vars, var_params, evts, rb) ->
+        let format_vars fmt = function
+          | [] -> ()
+          | vars ->
+              Format.fprintf fmt "@;: variables %a"
+                (Pp.list_comma (Pp.unmark form_var))
+                vars
+        in
         let format_var_param fmt (var, vcs, expr) =
-          Format.fprintf fmt ": variable %a : categorie %a : avec %a@\n"
+          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a"
             (Pp.unmark form_var) var (CatVar.Map.pp_keys ()) vcs form_expr
             (Pos.unmark expr)
         in
-        Format.fprintf fmt "restaure@;: %a@;: %a@;: apres ("
-          (Pp.list_comma (Pp.unmark form_var))
-          vars
-          (Pp.list_space format_var_param)
-          var_params;
-        Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs rb
+        let format_var_params fmt = function
+          | [] -> ()
+          | var_params -> Pp.list "" format_var_param fmt var_params
+        in
+        let format_evts fmt = function
+          | [] -> ()
+          | evts ->
+              Format.fprintf fmt "@;: evenements %a"
+                (Pp.list_comma (Pp.unmark form_expr))
+                evts
+        in
+        Format.fprintf fmt "restaure%a%a%a@;: apres (" format_vars vars
+          format_var_params var_params format_evts evts;
+        Format.fprintf fmt "@[<h 2>  %a@]@;)@;" form_instrs rb
     | ArrangeEvents (s, f, itb) ->
         Format.fprintf fmt "arrange_evenements@;:";
         (match s with

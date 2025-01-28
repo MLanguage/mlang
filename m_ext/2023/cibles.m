@@ -815,44 +815,49 @@ iterer
 TOTO = truc(TOTO, truc(4, truc(7, 9)));
 afficher_erreur "truc: " (TOTO) "\n";
 
+cible afficher_evenement:
+application: iliad;
+arguments: I;
+afficher_erreur (I) ": ";
+si (present(champ_evenement(I, numero))) alors afficher_erreur (champ_evenement(I, numero)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, rappel))) alors afficher_erreur (champ_evenement(I, rappel)); finsi
+afficher_erreur "/" alias(I, code) "," nom(I, code) "/";
+si (present(champ_evenement(I, montant))) alors afficher_erreur (champ_evenement(I, montant)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, sens))) alors
+  si (champ_evenement(I, sens) = 0) alors
+    afficher_erreur "R";
+  sinon_si (champ_evenement(I, sens) = 1) alors
+      afficher_erreur "C";
+  sinon_si (champ_evenement(I, sens) = 2) alors
+    afficher_erreur "M";
+  sinon_si (champ_evenement(I, sens) = 3) alors
+    afficher_erreur "P";
+  finsi
+finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, penalite))) alors afficher_erreur (champ_evenement(I, penalite)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, base_tl))) alors afficher_erreur (champ_evenement(I, base_tl)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, date))) alors afficher_erreur (champ_evenement(I, date)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
+
 cible afficher_evenements:
 application: iliad;
 iterer
 : variable I
 : 0 .. (nb_evenements() - 1) increment 1
 : dans (
-  afficher_erreur (I) ": ";
-  si (present(champ_evenement(I, numero))) alors afficher_erreur (champ_evenement(I, numero)); finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, rappel))) alors afficher_erreur (champ_evenement(I, rappel)); finsi
-  afficher_erreur "/" alias(I, code) "," nom(I, code) "/";
-  si (present(champ_evenement(I, montant))) alors afficher_erreur (champ_evenement(I, montant)); finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, sens))) alors
-    si (champ_evenement(I, sens) = 0) alors
-      afficher_erreur "R";
-    sinon_si (champ_evenement(I, sens) = 1) alors
-        afficher_erreur "C";
-    sinon_si (champ_evenement(I, sens) = 2) alors
-      afficher_erreur "M";
-    sinon_si (champ_evenement(I, sens) = 3) alors
-      afficher_erreur "P";
-    finsi
-  finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, penalite))) alors afficher_erreur (champ_evenement(I, penalite)); finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, base_tl))) alors afficher_erreur (champ_evenement(I, base_tl)); finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, date))) alors afficher_erreur (champ_evenement(I, date)); finsi
-  afficher_erreur "/";
-  si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
+  calculer cible afficher_evenement : avec I;
   afficher_erreur "\n";
 )
 
 cible test:
 application: iliad;
-variables_temporaires: A0, A1;
+variables_temporaires: A0, A1, EVT;
 A0 = 1.6;
 A1 = 3.6;
 calculer cible test_boucle : avec A0, A1;
@@ -883,6 +888,22 @@ arranger_evenements
 : dans (
   calculer cible afficher_evenements;
 )
+afficher_erreur "\n";
+EVT = 26;
+afficher_erreur "0: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
+restaurer
+: evenements EVT
+: apres (
+  champ_evenement(EVT, montant) = 111111.111111;
+  afficher_erreur "1: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+)
+afficher_erreur "2: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
 
 cible enchainement_primitif:
 application: iliad;

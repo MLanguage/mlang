@@ -87,6 +87,7 @@ rule token = parse
     | "erreur" -> ERROR
     | "et" -> AND
     | "evenement" -> EVENT
+    | "evenements" -> EVENTS
     | "exporte_erreurs" -> EXPORT_ERRORS
     | "faire" -> DO
     | "filtrer" -> FILTER
@@ -134,6 +135,7 @@ rule token = parse
     | "un" -> ONE
     | "valeur" -> VALUE
     | "variable" -> VARIABLE
+    | "variables" -> VARIABLES
     | "variables_temporaires" -> TEMP_VARS
     | "verif" -> VERIFICATION
     | "verifiable" -> VERIFIABLE

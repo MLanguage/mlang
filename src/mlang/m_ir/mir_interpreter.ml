@@ -796,48 +796,63 @@ struct
                 | Undefined -> ())
             | Undefined -> ())
           var_intervals
-    | Com.Restore (vars, var_params, stmts) ->
-        let backup =
+    | Com.Restore (vars, var_params, evts, stmts) ->
+        let backup_vars =
           List.fold_left
-            (fun backup (m_v : Com.Var.t Pos.marked) ->
+            (fun backup_vars (m_v : Com.Var.t Pos.marked) ->
               let v, vi = m_v |> Pos.unmark |> get_var ctx in
-              let rec aux backup i =
-                if i = Com.Var.size v then backup
+              let rec aux backup_vars i =
+                if i = Com.Var.size v then backup_vars
                 else
                   let value = get_var_value ctx v i in
-                  aux ((v, vi + i, value) :: backup) (i + 1)
+                  aux ((v, vi + i, value) :: backup_vars) (i + 1)
               in
-              aux backup 0)
+              aux backup_vars 0)
             [] vars
         in
-        let backup =
+        let backup_vars =
           List.fold_left
-            (fun backup ((m_var : Com.Var.t Pos.marked), vcs, expr) ->
+            (fun backup_vars ((m_var : Com.Var.t Pos.marked), vcs, expr) ->
               let var = Pos.unmark m_var in
               let var_i =
                 match var.loc with LocRef (_, i) -> i | _ -> assert false
               in
               Com.CatVar.Map.fold
-                (fun vc _ backup ->
+                (fun vc _ backup_vars ->
                   StrMap.fold
-                    (fun _ v backup ->
+                    (fun _ v backup_vars ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
                         let var, vi = get_var ctx v in
                         ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, vi);
                         match evaluate_expr ctx p expr with
                         | Number z when N.(z =. one ()) ->
-                            let rec aux backup i =
-                              if i = Com.Var.size var then backup
+                            let rec aux backup_vars i =
+                              if i = Com.Var.size var then backup_vars
                               else
                                 let value = get_var_value ctx var i in
-                                aux ((v, vi + i, value) :: backup) (i + 1)
+                                aux ((v, vi + i, value) :: backup_vars) (i + 1)
                             in
-                            aux backup 0
-                        | _ -> backup)
-                      else backup)
-                    p.program_vars backup)
-                vcs backup)
-            backup var_params
+                            aux backup_vars 0
+                        | _ -> backup_vars)
+                      else backup_vars)
+                    p.program_vars backup_vars)
+                vcs backup_vars)
+            backup_vars var_params
+        in
+        let backup_evts =
+          List.fold_left
+            (fun backup_evts expr ->
+              match evaluate_expr ctx p expr with
+              | Number z ->
+                  let i = N.(to_int z) |> Int64.to_int in
+                  let events0 = List.hd ctx.ctx_events in
+                  if 0 <= i && i < Array.length events0 then
+                    let j = events0.(i) in
+                    let evt = Array.copy ctx.ctx_event_tab.(j) in
+                    (j, evt) :: backup_evts
+                  else backup_evts
+              | _ -> backup_evts)
+            [] evts
         in
         evaluate_stmts tn canBlock p ctx stmts;
         List.iter
@@ -848,7 +863,8 @@ struct
             | Com.Var.Ref -> assert false
             | Com.Var.Arg -> (List.hd ctx.ctx_args).(i) <- value
             | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
-          backup
+          backup_vars;
+        List.iter (fun (j, evt) -> ctx.ctx_event_tab.(j) <- evt) backup_evts
     | Com.ArrangeEvents (sort, filter, stmts) ->
         let events =
           match filter with

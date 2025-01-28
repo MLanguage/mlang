@@ -55,10 +55,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS FINALIZE_ERRORS
 %token ITERATE CATEGORY RESTORE AFTER
 %token ERROR ANOMALY DISCORDANCE
-%token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
+%token INFORMATIVE OUTPUT FONCTION VARIABLE VARIABLES ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER
+%token EVENT EVENTS VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER
 
 %token EOF
 
@@ -706,14 +706,22 @@ instruction:
   }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    let var_list, var_cats =
-      let fold (var_list, var_cats) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats
-      | `VarCatsRest vc -> var_list, vc @ var_cats
+    let var_list, var_cats, event_list =
+      let fold (var_list, var_cats, event_list) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats, event_list
+      | `VarCatsRest vc -> var_list, vc @ var_cats, event_list
+      | `EventList el -> var_list, var_cats, el @ event_list
       in
-      List.fold_left fold ([], []) rest_params
+      List.fold_left fold ([], [], []) rest_params
     in
-    Some (Restore (List.rev var_list, List.rev var_cats, List.rev instrs))
+    Some (
+      Restore (
+        List.rev var_list,
+        List.rev var_cats,
+        List.rev event_list,
+        List.rev instrs
+      )
+    )
   }
 | ARRANGE_EVENTS COLON
   arr_params = nonempty_list(with_pos(arrange_events_param))
@@ -879,7 +887,7 @@ it_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
 rest_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+| VARIABLES vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
       List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
     in
@@ -890,6 +898,9 @@ rest_param:
     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
     let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
     `VarCatsRest filters
+  }
+| EVENTS expr_list = separated_nonempty_list(COMMA, with_pos(expression)) COLON {
+    `EventList expr_list;
   }
 
 rest_param_category:

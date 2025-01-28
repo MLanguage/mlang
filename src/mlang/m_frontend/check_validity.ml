@@ -1424,7 +1424,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
               out_vars |> StrSet.union (out_instrs |> StrSet.remove var_name)
             in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
-        | Com.Restore (vars, var_params, instrs) ->
+        | Com.Restore (vars, var_params, evts, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             ignore
               (List.fold_left
@@ -1449,11 +1449,14 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 in
                 ignore (check_expression false expr env))
               var_params;
+            List.iter
+              (fun expr -> ignore (check_expression false expr env))
+              evts;
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env
             in
             let env = { env with prog } in
-            let res_instr = Com.Restore (vars, var_params, res_instrs) in
+            let res_instr = Com.Restore (vars, var_params, evts, res_instrs) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.ArrangeEvents (sort, filter, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -2539,7 +2542,7 @@ let complete_vars_stack (prog : program) : program =
       | Com.Iterate_values (_, _, instrs) ->
           let nbRef, nbIt = aux_instrs instrs in
           (nbRef, nbIt + 1)
-      | Com.Restore (_, _, instrs) ->
+      | Com.Restore (_, _, _, instrs) ->
           let nbRef, nbIt = aux_instrs instrs in
           (max nbRef 1, nbIt)
       | Com.ArrangeEvents (sort, filter, instrs) ->
@@ -2686,18 +2689,26 @@ let complete_vars_stack (prog : program) : program =
           let sz = 1 + max sz sz' in
           let nbRef = max nbRef nbRef' in
           (nb, sz, nbRef, tdata)
-      | Com.Restore (_, mel, instrs) ->
-          let fold (nb, sz, nbRef, tdata) (_, _, me) =
-            let nb', sz', nbRef', tdata = aux_expr tdata me in
-            (max nb nb', max sz sz', max nbRef nbRef', tdata)
-          in
+      | Com.Restore (_, var_params, evts, instrs) ->
           let nb', sz', nbRef', tdata =
-            List.fold_left fold (0, 0, 0, tdata) mel
+            let fold (nb, sz, nbRef, tdata) (_, _, me) =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) var_params
+          in
+          let nb'', sz'', nbRef'', tdata =
+            let fold (nb, sz, nbRef, tdata) me =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) evts
           in
           let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb nb' in
-          let sz = max sz sz' in
-          let nbRef = 1 + max nbRef nbRef' in
+          let nb = max nb (max nb' nb'') in
+          let sz = max sz (max sz' sz'') in
+          (* ??? *)
+          let nbRef = 1 + max nbRef (max nbRef' nbRef'') in
           (nb, sz, nbRef, tdata)
       | Com.ArrangeEvents (sort, filter, instrs) ->
           let n', (nb', sz', nbRef', tdata) =
