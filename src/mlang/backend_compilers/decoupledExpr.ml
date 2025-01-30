@@ -533,10 +533,10 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
 let rec format_local_declarations fmt
     ((def_stk_size, val_stk_size) : local_decls) =
   if def_stk_size >= 0 then (
-    Format.fprintf fmt "@[<hov 2>register int int%d;@]@," def_stk_size;
+    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" def_stk_size;
     format_local_declarations fmt (def_stk_size - 1, val_stk_size))
   else if val_stk_size >= 0 then (
-    Format.fprintf fmt "@[<hov 2>register double real%d;@]@," val_stk_size;
+    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" val_stk_size;
     format_local_declarations fmt (def_stk_size, val_stk_size - 1))
   else ()
 
@@ -544,14 +544,14 @@ let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
     (lv : local_vars) =
   let lv = List.rev lv in
   let format_one_assign fmt (_, { slot; subexpr }) =
-    Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
+    Format.fprintf fmt "@;@[<hov 2>%a =@ %a;@]" format_slot slot
       (format_dexpr dgfip_flags) subexpr
   in
   List.iter (format_one_assign fmt) lv
 
 let format_assign (dgfip_flags : Dgfip_options.flags) (var : string) fmt
     ((e, _kind, lv) : t) =
-  Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
+  Format.fprintf fmt "%a@;@[<hov 2>%s =@ %a;@]"
     (format_local_vars_defs dgfip_flags)
     lv var (format_dexpr dgfip_flags) e
 
@@ -559,9 +559,9 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
   List.iter
     (fun ((kd, vn, _expr) : dflag * string * t) ->
-      Pp.fpr fmt "%s %s;@;" (match kd with Def -> "char" | Val -> "double") vn)
+      Pp.fpr fmt "@;%s %s;" (match kd with Def -> "char" | Val -> "double") vn)
     set_vars;
   List.iter
     (fun ((_kd, vn, expr) : dflag * string * t) ->
-      Pp.fpr fmt "%a@;" (format_assign dgfip_flags vn) expr)
+      format_assign dgfip_flags vn fmt expr)
     set_vars

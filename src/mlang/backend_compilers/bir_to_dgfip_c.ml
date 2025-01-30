@@ -403,7 +403,7 @@ let generate_expr_with_res_in dgfip_flags oc res_def res_val expr =
   let pr form = Format.fprintf oc form in
   let locals, set, def, value = D.build_expression @@ generate_c_expr expr in
   if D.is_always_true def then
-    pr "@;@[<v 2>{@;%a@;%a@;%a@;%a@]@;}" D.format_local_declarations locals
+    pr "@;@[<v 2>{%a%a%a%a@]@;}" D.format_local_declarations locals
       (D.format_set_vars dgfip_flags)
       set
       (D.format_assign dgfip_flags res_def)
@@ -411,7 +411,7 @@ let generate_expr_with_res_in dgfip_flags oc res_def res_val expr =
       (D.format_assign dgfip_flags res_val)
       value
   else
-    pr "@;@[<v 2>{@;%a@;%a@;%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
+    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
       D.format_local_declarations locals
       (D.format_set_vars dgfip_flags)
       set
@@ -443,7 +443,8 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
         pr "@;@[<v 2>{";
         let idx = fresh_c_local "idx" in
         pr "@;int %s;" idx;
-        pr "@;@[<v 2>for (%s = 0; %s < %s; %s++) {" idx idx size idx;
+        pr "@;@[<v 2>@[<hov 2>for (%s = 0;@ %s < %s;@ %s++) {@]" idx idx size
+          idx;
         pr "%a" (generate_m_assign dgfip_flags var (GetValueExpr idx)) vexpr;
         pr "@]@;}";
         pr "@]@;}")
@@ -507,11 +508,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let cond_val = cond ^ "_val" in
       pr "@;char %s;@;double %s;" cond_def cond_val;
       generate_expr_with_res_in dgfip_flags oc cond_def cond_val cond_expr;
-      pr "@;@[<v 2>if (%s && (%s != 0.0)) {" cond_def cond_val;
-      pr "@;%a" (generate_stmts dgfip_flags program) iftrue;
+      pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+      pr "%a" (generate_stmts dgfip_flags program) iftrue;
       if iffalse <> [] then (
         pr "@]@;@[<v 2>} else if (%s) {" cond_def;
-        pr "@;%a" (generate_stmts dgfip_flags program) iffalse);
+        pr "%a" (generate_stmts dgfip_flags program) iffalse);
       pr "@]@;}";
       pr "@]@;}"
   | WhenDoElse (wdl, ed) ->
@@ -527,7 +528,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
             generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
             pr "@;@[<v 2>if(%s) {" cond_def;
             pr "@;if (! %s) goto %s;" cond_val goto_label;
-            pr "@;%a" (generate_stmts dgfip_flags program) dl;
+            pr "%a" (generate_stmts dgfip_flags program) dl;
             pr "@]@;}";
             aux l
         | [] -> ()
@@ -535,14 +536,14 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       aux wdl;
       pr "@;goto %s;" fin_label;
       pr "@;%s:" goto_label;
-      pr "@;%a" (generate_stmts dgfip_flags program) (Pos.unmark ed);
+      pr "%a" (generate_stmts dgfip_flags program) (Pos.unmark ed);
       pr "@;%s:{}" fin_label;
       pr "@]@;}"
   | VerifBlock stmts ->
       let goto_label = fresh_c_local "verif_block" in
       pr "@;@[<v 2>{";
       pr "@;if (setjmp(irdata->jmp_bloq) != 0) goto %s;" goto_label;
-      pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
       pr "%s:;" goto_label;
       pr "@]@;}"
   | Print (std, args) ->
@@ -625,7 +626,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;%s = %s;" ref_info (VID.gen_info_ptr v);
           pr "@;%s = %s;" ref_def (VID.gen_def_ptr v);
           pr "@;%s = %s;" ref_val (VID.gen_val_ptr v);
-          pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+          pr "%a" (generate_stmts dgfip_flags program) stmts;
           pr "@]@;}")
         vars;
       List.iter
@@ -648,7 +649,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@;%s = &(%s[%s->idx]);" ref_val ref_tab ref_info;
               generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
               pr "@;@[<hov 2>if (%s && %s != 0.0) {" cond_def cond_val;
-              pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+              pr "%a" (generate_stmts dgfip_flags program) stmts;
               pr "@]@;}";
               pr "@;tab_%s++;" it_name;
               pr "@;nb_%s++;" it_name;
@@ -660,13 +661,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let var = Pos.unmark m_var in
       let itval_def = VID.gen_def var "" in
       let itval_val = VID.gen_val var "" in
-      let itval_name = fresh_c_local "itval" in
-      let e0_def = Format.sprintf "%s_e0_def" itval_name in
-      let e0_val = Format.sprintf "%s_e0_val" itval_name in
-      let e1_def = Format.sprintf "%s_e1_def" itval_name in
-      let e1_val = Format.sprintf "%s_e1_val" itval_name in
-      let step_def = Format.sprintf "%s_step_def" itval_name in
-      let step_val = Format.sprintf "%s_step_val" itval_name in
+      let postfix = fresh_c_local "" in
+      let e0_def = Format.sprintf "e0_def%s" postfix in
+      let e0_val = Format.sprintf "e0_val%s" postfix in
+      let e1_def = Format.sprintf "e1_def%s" postfix in
+      let e1_val = Format.sprintf "e1_val%s" postfix in
+      let step_def = Format.sprintf "step_def%s" postfix in
+      let step_val = Format.sprintf "step_val%s" postfix in
       List.iter
         (fun (e0, e1, step) ->
           pr "@;@[<v 2>{";
@@ -676,15 +677,15 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           generate_expr_with_res_in dgfip_flags oc e0_def e0_val e0;
           generate_expr_with_res_in dgfip_flags oc e1_def e1_val e1;
           generate_expr_with_res_in dgfip_flags oc step_def step_val step;
-          pr "@;@[<v 2>if(%s && %s && %s && %s != 0.0){" e0_def e1_def step_def
+          pr "@;@[<v 2>if(%s && %s && %s && %s != 0.0) {" e0_def e1_def step_def
             step_val;
           pr
             "@;\
-             @[<v 2>for (%s = 1, %s = %s; (%s > 0.0 ? %s <= %s : %s >= %s); %s \
-             = %s + %s) {"
+             @[<v 2>@[<hov 2>for (%s = 1,@ %s = %s;@ (%s > 0.0 ? %s <= %s : %s \
+             >= %s);@ %s = %s + %s) {@]"
             itval_def itval_val e0_val step_val itval_val e1_val itval_val
             e1_val itval_val itval_val step_val;
-          pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+          pr "%a" (generate_stmts dgfip_flags program) stmts;
           pr "@]@;}";
           pr "@]@;}";
           pr "@]@;}")
@@ -743,12 +744,12 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;int i;";
           pr
             "@;\
-             @[<v 2>for (width = 1; width < irdata->nb_events; width = 2 * \
-             width) {";
+             @[<v 2>@[<hov 2>for (width = 1;@ width < irdata->nb_events;@ \
+             width = 2 * width) {@]";
           pr
             "@;\
-             @[<v 2>for (iLeft = 0; iLeft < irdata->nb_events; iLeft = iLeft + \
-             2 * width) {";
+             @[<v 2>@[<hov 2>for (iLeft = 0;@ iLeft < irdata->nb_events;@ \
+             iLeft = iLeft + 2 * width) {@]";
           pr "@;int iRight = iLeft + width;";
           pr "@;int iEnd = iLeft + 2 * width;";
           pr "@;if (iRight > irdata->nb_events) iRight = irdata->nb_events;";
@@ -757,7 +758,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;int i = iLeft;";
           pr "@;int j = iRight;";
           pr "@;int k;";
-          pr "@;@[<v 2>for (k = iLeft; k < iEnd; k++) {";
+          pr "@;@[<v 2>@[<hov 2>for (k = iLeft;@ k < iEnd;@ k++) {@]";
           pr "@;int cpt = 0;";
           pr "@;@[<v 2>{";
           (* Comparaison *)
@@ -788,14 +789,14 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}";
           pr "@]@;}";
-          pr "@;@[<v 2>for (i = 0; i < irdata->nb_events; i++) {";
+          pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < irdata->nb_events;@ i++) {@]";
           pr "@;irdata->events[i] = b[i];";
           pr "@]@;}";
           pr "@]@;}";
           pr "@;free(b);";
           pr "@]@;}"
       | None -> ());
-      pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
       pr "@;free(irdata->events);";
       pr "@;irdata->events = %s;" events_sav;
       pr "@;irdata->nb_events = %s;" nb_events_sav;
@@ -836,7 +837,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@;%s = &(D%s[%s->idx]);" ref_def ref_tab ref_info;
               pr "@;%s = &(%s[%s->idx]);" ref_val ref_tab ref_info;
               generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
-              pr "@;@[<v 2>if (%s && %s != 0.0){" cond_def cond_val;
+              pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
               pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name
                 (VID.gen_def_ptr var) (VID.gen_val_ptr var) (VID.gen_size var);
               pr "@]@;}";
@@ -879,7 +880,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;%s = 1;" ref_def;
           pr "@;%s = (double)%s;" ref_val idx;
           generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
-          pr "@;@[<v 2>if (%s && %s != 0.0){" cond_def cond_val;
+          pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
           pr "@;env_sauvegarder_evt(&%s, irdata->events[%s]);@;" rest_evt_name
             idx;
           pr "@]@;}";
@@ -887,7 +888,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}")
         evtfs;
-      pr "@;%a" (generate_stmts dgfip_flags program) stmts;
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
       pr "@;env_restaurer(&%s);@;" rest_name;
       pr "@;env_restaurer_evt(&%s);@;" rest_evt_name;
       pr "@]@;}"
@@ -907,7 +908,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (stmts : Mir.m_instruction list) =
-  Format.pp_print_list (generate_stmt dgfip_flags program) oc stmts
+  List.iter (generate_stmt dgfip_flags program oc) stmts
 
 let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
   let pr fmt = Format.fprintf oc fmt in
@@ -915,7 +916,7 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
     pr "@;@[<v 2>{";
     pr "@;int i;";
     pr "@;T_varinfo *info;";
-    pr "@;@[<v 2>for (i = 0; i < %d; i++) {" tf.target_sz_tmps;
+    pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
     pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
     pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
     pr "@]@;}";
@@ -956,7 +957,7 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (fn : string) =
   let pr fmt = Format.fprintf oc fmt in
   let fd = Com.TargetMap.find fn program.program_functions in
-  pr "@;@[<v 2>%a {" (generate_function_prototype false) fd;
+  pr "@.@[<v 2>%a {" (generate_function_prototype false) fd;
   pr "%a" generate_var_tmp_decls fd;
   pr "@;";
   if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" fn;
@@ -968,7 +969,7 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
   if fd.target_sz_tmps > 0 then
     pr "@;irdata->tmps_org = irdata->tmps_org - %d;" fd.target_sz_tmps;
   pr "@;return 1;";
-  pr "@]@;}@;"
+  pr "@]@;}@."
 
 let generate_functions (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program)
@@ -990,7 +991,7 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
   let pr fmt = Format.fprintf oc fmt in
   let tf = Com.TargetMap.find f program.program_targets in
-  pr "@;@[<v 2>%a {" (generate_target_prototype false) f;
+  pr "@.@[<v 2>%a {" (generate_target_prototype false) f;
   pr "%a" generate_var_tmp_decls tf;
   pr "@;";
   if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" f;
@@ -1002,7 +1003,7 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
   if tf.target_sz_tmps > 0 then
     pr "@;irdata->tmps_org = irdata->tmps_org - %d;" tf.target_sz_tmps;
   pr "@;return irdata->discords;";
-  pr "@]@;}@;"
+  pr "@]@;}@."
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t) =

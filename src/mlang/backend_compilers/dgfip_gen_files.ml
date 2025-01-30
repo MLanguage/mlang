@@ -404,18 +404,24 @@ typedef struct S_irdata T_irdata;
     cprog.program_event_fields;
   Format.fprintf fmt
     {|
-#define S_ irdata->saisie
-#define C_ irdata->calculee
-#define B_ irdata->base
-/*#define T_ irdata->tmps*/
-/*#define R_ irdata->ref*/
 #define DS_ irdata->def_saisie
+#define S_ irdata->saisie
+
 #define DC_ irdata->def_calculee
+#define C_ irdata->calculee
+
 #define DB_ irdata->def_base
-/*#define DT_ irdata->def_tmps*/
-/*#define DR_ irdata->def_ref*/
-/*#define IT_ irdata->info_tmps*/
-/*#define IR_ irdata->info_ref*/
+#define B_ irdata->base
+
+#define I_(cat,idx) ((T_varinfo *)&(varinfo_##cat[idx]))
+
+#define DT_(idx) (irdata->def_tmps[irdata->tmps_org + (idx)])
+#define T_(idx) (irdata->tmps[irdata->tmps_org + (idx)])
+#define IT_(idx) (&(irdata->info_tmps[irdata->tmps_org + (idx)]))
+
+#define DR_(idx) (irdata->def_ref[irdata->ref_org + (idx)])
+#define R_(idx) (irdata->ref[irdata->ref_org + (idx)])
+#define IR_(idx) (irdata->info_ref[irdata->ref_org + (idx)])
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
