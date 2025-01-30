@@ -63,6 +63,7 @@ rule token = parse
     | "REEL" -> REAL
     | "afficher" -> PRINT
     | "afficher_erreur" -> PRINT_ERR
+    | "ajouter" -> ADD
     | "alias" -> ALIAS
     | "alors" -> THEN
     | "anomalie" -> ANOMALY

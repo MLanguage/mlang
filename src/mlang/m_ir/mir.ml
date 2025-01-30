@@ -298,7 +298,7 @@ let expand_functions (p : program) : program =
           in
           let instrs' = List.map map_instr instrs in
           (Restore (vars, var_params', evts', evtfs', instrs'), instr_pos)
-      | ArrangeEvents (sort, filter, instrs) ->
+      | ArrangeEvents (sort, filter, add, instrs) ->
           let sort' =
             match sort with
             | Some (var0, var1, expr) ->
@@ -313,8 +313,9 @@ let expand_functions (p : program) : program =
                 Some (var, expr')
             | None -> None
           in
+          let add' = Option.map expand_functions_expr add in
           let instrs' = List.map map_instr instrs in
-          (ArrangeEvents (sort', filter', instrs'), instr_pos)
+          (ArrangeEvents (sort', filter', add', instrs'), instr_pos)
       | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in

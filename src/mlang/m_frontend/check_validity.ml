@@ -319,6 +319,10 @@ module Err = struct
   let unknown_event_field name pos =
     let msg = Format.asprintf "unknown event field \"%s\"" name in
     Errors.raise_spanned_error msg pos
+
+  let event_field_need_a_variable name pos =
+    let msg = Format.asprintf "event field \"%s\" require a variable" name in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1475,7 +1479,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
               Com.Restore (vars, var_params, evts, evtfs, res_instrs)
             in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
-        | Com.ArrangeEvents (sort, filter, instrs) ->
+        | Com.ArrangeEvents (sort, filter, add, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             (match sort with
             | Some (var0, var1, expr) ->
@@ -1503,11 +1507,14 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 in
                 ignore (check_expression false expr env)
             | None -> ());
+            (match add with
+            | Some expr -> ignore (check_expression false expr env)
+            | None -> ());
             let prog, res_instrs, _in_instrs, _out_instrs =
               check_instructions instrs is_rule env
             in
             let env = { env with prog } in
-            let res_instr = Com.ArrangeEvents (sort, filter, res_instrs) in
+            let res_instr = Com.ArrangeEvents (sort, filter, add, res_instrs) in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.RaiseError (m_err, m_var_opt) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -2567,7 +2574,7 @@ let complete_vars_stack (prog : program) : program =
       | Com.Restore (_, _, _, _, instrs) ->
           let nbRef, nbIt = aux_instrs instrs in
           (max nbRef 1, nbIt)
-      | Com.ArrangeEvents (sort, filter, instrs) ->
+      | Com.ArrangeEvents (sort, filter, _, instrs) ->
           let nbItSort = match sort with Some _ -> 2 | None -> 0 in
           let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
           let nbRef, nbIt = aux_instrs instrs in
@@ -2739,7 +2746,7 @@ let complete_vars_stack (prog : program) : program =
           (* ??? *)
           let nbRef = 1 + (max nbRef @@ max nbRef' @@ max nbRef'' nbRef''') in
           (nb, sz, nbRef, tdata)
-      | Com.ArrangeEvents (sort, filter, instrs) ->
+      | Com.ArrangeEvents (sort, filter, add, instrs) ->
           let n', (nb', sz', nbRef', tdata) =
             match sort with
             | Some (_, _, expr) -> (2, aux_expr tdata expr)
@@ -2750,10 +2757,15 @@ let complete_vars_stack (prog : program) : program =
             | Some (_, expr) -> (1, aux_expr tdata expr)
             | None -> (0, (0, 0, 0, tdata))
           in
+          let nb''', sz''', nbRef''', tdata =
+            match add with
+            | Some expr -> aux_expr tdata expr
+            | None -> (0, 0, 0, tdata)
+          in
           let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max n' n'' + (max nb @@ max nb' nb'') in
-          let sz = max n' n'' + (max sz @@ max sz' sz'') in
-          let nbRef = max nbRef @@ max nbRef' nbRef'' in
+          let nb = max n' n'' + (max nb @@ max nb' @@ max nb'' nb''') in
+          let sz = max n' n'' + (max sz @@ max sz' @@ max sz'' sz''') in
+          let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
           (nb, sz, nbRef, tdata)
       | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
       | Com.FinalizeErrors ->
@@ -2849,6 +2861,11 @@ let proceed (p : Mast.program) (main_target : string) : program =
       (empty_program p main_target)
       p
   in
+  StrMap.iter
+    (fun name (ef : Com.event_field) ->
+      if ef.is_var && StrMap.cardinal prog.prog_vars = 0 then
+        Err.event_field_need_a_variable name (Pos.get_position ef.name))
+    prog.prog_event_fields;
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
   |> complete_verif_calls |> complete_vars |> complete_vars_stack

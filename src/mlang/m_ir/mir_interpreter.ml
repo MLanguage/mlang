@@ -47,8 +47,7 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_event_tab : (value, Com.Var.t) Com.event_value Array.t Array.t;
-    mutable ctx_events : int Array.t list;
+    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
   }
 
   val empty_ctx : Mir.program -> ctx
@@ -131,8 +130,7 @@ struct
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_event_tab : (value, Com.Var.t) Com.event_value Array.t Array.t;
-    mutable ctx_events : int Array.t list;
+    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
   }
 
   let empty_ctx (p : Mir.program) : ctx =
@@ -157,7 +155,6 @@ struct
       ctx_nb_bloquantes = 0;
       ctx_finalized_anos = [];
       ctx_exported_anos = [];
-      ctx_event_tab = [||];
       ctx_events = [];
     }
 
@@ -197,7 +194,7 @@ struct
         Errors.raise_error
           (Format.sprintf "Too much event fields: index %d for size %d"
              (nbEvtFields - 1) nbProgFields);
-      let map = Array.make nbEvtFields (Com.Numeric Undefined) in
+      let map = Array.make nbProgFields (Com.Numeric Undefined) in
       let iter id ev =
         match IntMap.find_opt id p.program_event_field_idxs with
         | Some fname -> (
@@ -243,8 +240,7 @@ struct
         Format.eprintf "  %a%a@." pp_field s pp_ev map.(j)
       done
     done;
-    ctx.ctx_event_tab <- ctx_event_tab;
-    ctx.ctx_events <- [ Array.init nbEvt Fun.id ]
+    ctx.ctx_events <- [ ctx_event_tab ]
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
@@ -520,7 +516,7 @@ struct
                 let i = Int64.to_int N.(to_int z) in
                 let events = List.hd ctx.ctx_events in
                 if 0 <= i && i < Array.length events then
-                  match ctx.ctx_event_tab.(events.(i)).(j) with
+                  match events.(i).(j) with
                   | Com.Numeric v -> v
                   | Com.RefVar var -> get_var_value ctx var 0
                 else Undefined
@@ -623,13 +619,13 @@ struct
                 let i = Int64.to_int N.(to_int z) in
                 let events = List.hd ctx.ctx_events in
                 if 0 <= i && i < Array.length events then
-                  match ctx.ctx_event_tab.(events.(i)).(j) with
+                  match events.(i).(j) with
                   | Com.RefVar var ->
                       let vari = get_var ctx var in
                       set_var_value p ctx vari expr
                   | Com.Numeric _ ->
                       let value = evaluate_expr ctx p expr in
-                      ctx.ctx_event_tab.(events.(i)).(j) <- Com.Numeric value)
+                      events.(i).(j) <- Com.Numeric value)
             | _ -> ()))
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (
@@ -708,7 +704,7 @@ struct
                     let i = Int64.to_int (N.to_int x) in
                     let events = List.hd ctx.ctx_events in
                     if 0 <= i && i < Array.length events then
-                      match ctx.ctx_event_tab.(events.(i)).(j) with
+                      match events.(i).(j) with
                       | Com.RefVar var -> pr_raw ctx_pr (Com.Var.name_str var)
                       | _ -> ())
                 | Undefined -> ())
@@ -718,7 +714,7 @@ struct
                     let i = Int64.to_int (N.to_int x) in
                     let events = List.hd ctx.ctx_events in
                     if 0 <= i && i < Array.length events then
-                      match ctx.ctx_event_tab.(events.(i)).(j) with
+                      match events.(i).(j) with
                       | Com.RefVar var -> pr_raw ctx_pr (Com.Var.alias_str var)
                       | _ -> ())
                 | Undefined -> ())
@@ -849,10 +845,10 @@ struct
               | Number z ->
                   let i = z |> N.to_int |> Int64.to_int in
                   let events0 = List.hd ctx.ctx_events in
-                  if 0 <= i && i < Array.length events0 then
-                    let j = events0.(i) in
-                    let evt = Array.copy ctx.ctx_event_tab.(j) in
-                    (j, evt) :: backup_evts
+                  if 0 <= i && i < Array.length events0 then (
+                    let evt = events0.(i) in
+                    events0.(i) <- Array.copy evt;
+                    (i, evt) :: backup_evts)
                   else backup_evts
               | _ -> backup_evts)
             [] evts
@@ -871,9 +867,9 @@ struct
                   ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <- Number vi;
                   match evaluate_expr ctx p expr with
                   | Number z when N.(z =. one ()) ->
-                      let j = events0.(i) in
-                      let evt = Array.copy ctx.ctx_event_tab.(j) in
-                      aux ((j, evt) :: backup_evts) (i + 1)
+                      let evt = events0.(i) in
+                      events0.(i) <- Array.copy evt;
+                      aux ((i, evt) :: backup_evts) (i + 1)
                   | _ -> aux backup_evts (i + 1))
                 else backup_evts
               in
@@ -890,8 +886,41 @@ struct
             | Com.Var.Arg -> (List.hd ctx.ctx_args).(i) <- value
             | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
           backup_vars;
-        List.iter (fun (j, evt) -> ctx.ctx_event_tab.(j) <- evt) backup_evts
-    | Com.ArrangeEvents (sort, filter, stmts) ->
+        let events0 = List.hd ctx.ctx_events in
+        List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
+    | Com.ArrangeEvents (sort, filter, add, stmts) ->
+        let event_list, nbAdd =
+          match add with
+          | Some expr -> (
+              match evaluate_expr ctx p expr with
+              | Number z when N.(z >. zero ()) ->
+                  let nb = z |> N.to_int |> Int64.to_int in
+                  if nb > 0 then
+                    let nbProgFields =
+                      IntMap.cardinal p.program_event_field_idxs
+                    in
+                    let defEvt =
+                      Array.init nbProgFields (fun id ->
+                          let fname =
+                            IntMap.find id p.program_event_field_idxs
+                          in
+                          let ef = StrMap.find fname p.program_event_fields in
+                          match ef.is_var with
+                          | true ->
+                              let _, defVar =
+                                StrMap.min_binding p.program_vars
+                              in
+                              Com.RefVar defVar
+                          | false -> Com.Numeric Undefined)
+                    in
+                    ( List.init nb (function
+                        | 0 -> defEvt
+                        | _ -> Array.copy defEvt),
+                      nb )
+                  else ([], 0)
+              | _ -> ([], 0))
+          | None -> ([], 0)
+        in
         let events =
           match filter with
           | Some (m_var, expr) ->
@@ -912,9 +941,17 @@ struct
                   in
                   aux res' (i + 1)
               in
-              aux [] 0
-          | None -> Array.copy (List.hd ctx.ctx_events)
+              aux event_list 0
+          | None when event_list = [] -> Array.copy (List.hd ctx.ctx_events)
+          | None ->
+              let events0 = List.hd ctx.ctx_events in
+              let rec aux res i =
+                if i >= Array.length events0 then Array.of_list (List.rev res)
+                else aux (events0.(i) :: res) (i + 1)
+              in
+              aux event_list 0
         in
+        ctx.ctx_events <- events :: ctx.ctx_events;
         (match sort with
         | Some (m_var0, m_var1, expr) ->
             let var0 = Pos.unmark m_var0 in
@@ -925,7 +962,7 @@ struct
             let var1_i =
               match var1.loc with LocTmp (_, i) -> i | _ -> assert false
             in
-            let sort_fun i j =
+            let sort_fun i _ j _ =
               let vi = Number N.(of_int (Int64.of_int i)) in
               ctx.ctx_tmps.(ctx.ctx_tmps_org + var0_i) <- vi;
               let vj = Number N.(of_int (Int64.of_int j)) in
@@ -935,9 +972,8 @@ struct
               | Number _ -> true
               | Undefined -> false
             in
-            Sorting.mergeSort sort_fun events
+            Sorting.mergeSort sort_fun nbAdd (Array.length events) events
         | None -> ());
-        ctx.ctx_events <- events :: ctx.ctx_events;
         evaluate_stmts tn canBlock p ctx stmts;
         ctx.ctx_events <- List.tl ctx.ctx_events
     | Com.RaiseError (m_err, var_opt) ->

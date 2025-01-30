@@ -402,7 +402,7 @@ let rec translate_prog (p : Check_validity.program)
           ((Com.Restore (vars', var_params', evts', evtfs', prog_rest), pos)
           :: res)
           il
-    | (Com.ArrangeEvents (sort, filter, instrs), pos) :: il ->
+    | (Com.ArrangeEvents (sort, filter, add, instrs), pos) :: il ->
         let sort', itval_depth' =
           match sort with
           | Some (var0, var1, expr) ->
@@ -467,8 +467,9 @@ let rec translate_prog (p : Check_validity.program)
               (Some (m_var, expr'), max itval_depth' (itval_depth + 1))
           | None -> (None, itval_depth')
         in
+        let add' = Option.map (translate_expression p var_data) add in
         let instrs' = translate_prog p var_data it_depth itval_depth' instrs in
-        aux ((Com.ArrangeEvents (sort', filter', instrs'), pos) :: res) il
+        aux ((Com.ArrangeEvents (sort', filter', add', instrs'), pos) :: res) il
     | (Com.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) p.prog_errors in
         let m_err_decl = Pos.same_pos_as err_decl err_name in

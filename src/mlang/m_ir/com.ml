@@ -501,6 +501,7 @@ type ('v, 'e) instruction =
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
       * ('v Pos.marked * 'v m_expression) option
+      * 'v m_expression option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
@@ -853,7 +854,7 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "restaure%a%a%a%a@;: apres (" format_vars vars
           format_var_params var_params format_evts evts format_evtfs evtfs;
         Format.fprintf fmt "@[<h 2>  %a@]@;)@;" form_instrs rb
-    | ArrangeEvents (s, f, itb) ->
+    | ArrangeEvents (s, f, a, itb) ->
         Format.fprintf fmt "arrange_evenements@;:";
         (match s with
         | Some (v0, v1, e) ->
@@ -864,6 +865,9 @@ let rec format_instruction form_var form_err =
         | Some (v, e) ->
             Format.fprintf fmt "filter %a : avec %a@;" form_var (Pos.unmark v)
               form_expr (Pos.unmark e)
+        | None -> ());
+        (match a with
+        | Some e -> Format.fprintf fmt "ajouter %a@;" form_expr (Pos.unmark e)
         | None -> ());
         Format.fprintf fmt ": dans (@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | RaiseError (err, var_opt) ->

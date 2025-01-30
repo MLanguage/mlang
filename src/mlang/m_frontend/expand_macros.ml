@@ -762,7 +762,7 @@ let rec expand_instruction (const_map : const_context)
       let instrs' = expand_instructions const_map instrs in
       (Com.Restore (vars, var_params', evts', evtfs', instrs'), instr_pos)
       :: prev
-  | Com.ArrangeEvents (sort, filter, instrs) ->
+  | Com.ArrangeEvents (sort, filter, add, instrs) ->
       let sort' =
         match sort with
         | Some (var0, var1, expr) ->
@@ -777,8 +777,15 @@ let rec expand_instruction (const_map : const_context)
             Some (var, expr')
         | None -> None
       in
+      let add' =
+        match add with
+        | Some expr ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some expr'
+        | None -> None
+      in
       let instrs' = expand_instructions const_map instrs in
-      (Com.ArrangeEvents (sort', filter', instrs'), instr_pos) :: prev
+      (Com.ArrangeEvents (sort', filter', add', instrs'), instr_pos) :: prev
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       (Com.VerifBlock instrs', instr_pos) :: prev

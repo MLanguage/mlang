@@ -1,8 +1,13 @@
-let mergeSort cmp a =
-  let merge cmp a iLeft iRight iEnd b =
+let mergeSort cmp aBeg aEnd a =
+  let n = Array.length a in
+  let b = Array.copy a in
+  let aBeg = max 0 (min aBeg n) in
+  let aEnd = max 0 (min aEnd n) in
+  let aBeg, aEnd = (min aBeg aEnd, max aBeg aEnd) in
+  let merge a iLeft iRight iEnd b =
     let rec aux i j k =
       if k < iEnd then
-        if i < iRight && (j >= iEnd || cmp a.(i) a.(j)) then (
+        if i < iRight && (j >= iEnd || cmp i a.(i) j a.(j)) then (
           b.(k) <- a.(i);
           aux (i + 1) j (k + 1))
         else (
@@ -11,17 +16,15 @@ let mergeSort cmp a =
     in
     aux iLeft iRight iLeft
   in
-  let b = Array.copy a in
-  let n = Array.length a in
-  let rec aux a b cp width =
-    if width < n then (
+  let rec aux a b width =
+    if width < aEnd then (
       let rec aux' i =
-        if i < n then (
-          merge cmp a i (min (i + width) n) (min (i + (2 * width)) n) b;
+        if i < aEnd then (
+          merge a i (min (i + width) aEnd) (min (i + (2 * width)) aEnd) b;
           aux' (i + (2 * width)))
       in
-      aux' 0;
-      aux b a (not cp) (2 * width))
-    else if cp then Array.blit a 0 b 0 n
+      aux' aBeg;
+      Array.blit b aBeg a aBeg (aEnd - aBeg);
+      aux a b (2 * width))
   in
-  aux a b false 1
+  aux a b 1

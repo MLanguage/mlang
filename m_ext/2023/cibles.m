@@ -885,6 +885,7 @@ arranger_evenements
     et champ_evenement(I, montant) <= champ_evenement(J, montant)
   )
 : filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55
+: ajouter 3
 : dans (
   calculer cible afficher_evenements;
 )

@@ -1,1 +1,2 @@
-val mergeSort : ('a -> 'a -> bool) -> 'a Array.t -> unit
+val mergeSort :
+  (int -> 'a -> int -> 'a -> bool) -> int -> int -> 'a Array.t -> unit

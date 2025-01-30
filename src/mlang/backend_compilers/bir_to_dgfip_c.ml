@@ -690,7 +690,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}")
         var_intervals
-  | ArrangeEvents (sort, filter, stmts) ->
+  | ArrangeEvents (sort, filter, add, stmts) ->
       let events_sav = fresh_c_local "events_sav" in
       let events_tmp = fresh_c_local "events_tmp" in
       let nb_events_sav = fresh_c_local "nb_events_sav" in
@@ -735,6 +735,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       | Some (m_var0, m_var1, expr) ->
           pr "@;/* merge sort */";
           pr "@;@[<v 2>{";
+          pr "@;int aBeg = 0;";
+          pr "@;int aEnd = irdata->nb_events;";
           pr
             "@;\
              T_event **b = (T_event **)malloc(irdata->nb_events * (sizeof \
@@ -744,16 +746,16 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;int i;";
           pr
             "@;\
-             @[<v 2>@[<hov 2>for (width = 1;@ width < irdata->nb_events;@ \
-             width = 2 * width) {@]";
+             @[<v 2>@[<hov 2>for (width = 1;@ width < aEnd;@ width = 2 * \
+             width) {@]";
           pr
             "@;\
-             @[<v 2>@[<hov 2>for (iLeft = 0;@ iLeft < irdata->nb_events;@ \
-             iLeft = iLeft + 2 * width) {@]";
+             @[<v 2>@[<hov 2>for (iLeft = aBeg;@ iLeft < aEnd;@ iLeft = iLeft \
+             + 2 * width) {@]";
           pr "@;int iRight = iLeft + width;";
           pr "@;int iEnd = iLeft + 2 * width;";
-          pr "@;if (iRight > irdata->nb_events) iRight = irdata->nb_events;";
-          pr "@;if (iEnd > irdata->nb_events) iEnd = irdata->nb_events;";
+          pr "@;if (iRight > aEnd) iRight = aEnd;";
+          pr "@;if (iEnd > aEnd) iEnd = aEnd;";
           pr "@;@[<v 2>{";
           pr "@;int i = iLeft;";
           pr "@;int j = iRight;";
@@ -789,7 +791,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}";
           pr "@]@;}";
-          pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < irdata->nb_events;@ i++) {@]";
+          pr "@;@[<v 2>@[<hov 2>for (i = aBeg;@ i < aEnd;@ i++) {@]";
           pr "@;irdata->events[i] = b[i];";
           pr "@]@;}";
           pr "@]@;}";

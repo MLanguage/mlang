@@ -354,6 +354,7 @@ type ('v, 'e) instruction =
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
       * ('v Pos.marked * 'v m_expression) option
+      * 'v m_expression option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors

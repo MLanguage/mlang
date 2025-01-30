@@ -58,7 +58,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token INFORMATIVE OUTPUT FONCTION VARIABLE VARIABLES ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT EVENTS VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER
+%token EVENT EVENTS VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD
 
 %token EOF
 
@@ -728,12 +728,14 @@ instruction:
 | ARRANGE_EVENTS COLON
   arr_params = nonempty_list(with_pos(arrange_events_param))
   IN LPAREN instrs = instruction_list_rev RPAREN {
-    let sort, filter =
-      let fold (sort, sort_pos, filter, filter_pos) = function
+    let sort, filter, add =
+      let fold (sort, sort_pos, filter, filter_pos, add, add_pos) = function
       | (`ArrangeEventsSort (v0, v1, e), pos) when sort = None ->
-          (Some (v0, v1, e), pos, filter, filter_pos)
+          (Some (v0, v1, e), pos, filter, filter_pos, add, add_pos)
       | (`ArrangeEventsFilter (v, e), pos) when filter = None ->
-          (sort, sort_pos, Some (v, e), pos)
+          (sort, sort_pos, Some (v, e), pos, add, add_pos)
+      | (`ArrangeEventsAdd e, pos) when add = None ->
+          (sort, sort_pos, filter, filter_pos, Some e, pos)
       | (`ArrangeEventsSort _, pos) ->
           let msg =
             Format.asprintf
@@ -748,17 +750,24 @@ instruction:
               Pos.format_position sort_pos
           in
           Errors.raise_spanned_error msg pos
+      | (`ArrangeEventsAdd _, pos) ->
+          let msg =
+            Format.asprintf
+              "event creation already specified at %a"
+              Pos.format_position add_pos
+          in
+          Errors.raise_spanned_error msg pos
       in
-      let sort, _, filter, _ =
-        List.fold_left fold (None, Pos.no_pos, None, Pos.no_pos) arr_params
+      let sort, _, filter, _, add, _ =
+        List.fold_left fold (None, Pos.no_pos, None, Pos.no_pos, None, Pos.no_pos) arr_params
       in
-      match sort, filter with
-      | None, None ->
-          let msg = "event organizer needs a sort or a filter specification" in
+      match sort, filter, add with
+      | None, None, None ->
+          let msg = "event organizer needs a sort, a filter or a creation specification" in
           Errors.raise_spanned_error msg (mk_position $sloc)
-      | _, _ -> sort, filter
+      | _, _, _ -> sort, filter, add
     in
-    Some (ArrangeEvents (sort, filter, List.rev instrs))
+    Some (ArrangeEvents (sort, filter, add, List.rev instrs))
   }
 | RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     Some (RaiseError (e_name, var))
@@ -940,6 +949,9 @@ arrange_events_param:
 | FILTER v = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
     let var = Pos.same_pos_as (Normal (Pos.unmark v)) v in
     `ArrangeEventsFilter (var, expr)
+  }
+| ADD expr = with_pos(expression) COLON {
+    `ArrangeEventsAdd (expr)
   }
 
 formula_kind:
