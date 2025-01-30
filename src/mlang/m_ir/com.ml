@@ -362,7 +362,7 @@ type 'v loop_variables =
 type unop = Not | Minus
 
 (** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
+type binop = And | Or | Add | Sub | Mul | Div | Mod
 
 (** Comparison operators *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
@@ -496,6 +496,7 @@ type ('v, 'e) instruction =
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
+      * ('v Pos.marked * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
@@ -594,7 +595,8 @@ let format_binop fmt op =
     | Add -> "+"
     | Sub -> "-"
     | Mul -> "*"
-    | Div -> "/")
+    | Div -> "/"
+    | Mod -> "%")
 
 let format_comp_op fmt op =
   Format.pp_print_string fmt
@@ -815,7 +817,7 @@ let rec format_instruction form_var form_err =
           (Pp.list_space format_var_intervals)
           var_intervals;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
-    | Restore (vars, var_params, evts, rb) ->
+    | Restore (vars, var_params, evts, evtfs, rb) ->
         let format_vars fmt = function
           | [] -> ()
           | vars ->
@@ -839,8 +841,17 @@ let rec format_instruction form_var form_err =
                 (Pp.list_comma (Pp.unmark form_expr))
                 evts
         in
-        Format.fprintf fmt "restaure%a%a%a@;: apres (" format_vars vars
-          format_var_params var_params format_evts evts;
+        let format_evtfs fmt = function
+          | [] -> ()
+          | evtfs ->
+              List.iter
+                (fun (v, e) ->
+                  Format.fprintf fmt "@;: evenement %a : avec %a"
+                    (Pp.unmark form_var) v (Pp.unmark form_expr) e)
+                evtfs
+        in
+        Format.fprintf fmt "restaure%a%a%a%a@;: apres (" format_vars vars
+          format_var_params var_params format_evts evts format_evtfs evtfs;
         Format.fprintf fmt "@[<h 2>  %a@]@;)@;" form_instrs rb
     | ArrangeEvents (s, f, itb) ->
         Format.fprintf fmt "arrange_evenements@;:";

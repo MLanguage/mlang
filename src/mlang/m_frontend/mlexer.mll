@@ -45,6 +45,7 @@ rule token = parse
 | '-' { MINUS }
 | '*' { TIMES }
 | '/' { DIV }
+| '%' { MOD }
 | '=' { EQUALS }
 | "!=" { NEQ }
 | '>' { GT }

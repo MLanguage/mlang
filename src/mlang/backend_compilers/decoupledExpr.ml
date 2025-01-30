@@ -315,6 +315,17 @@ let div (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
       (Dlit f, Val, [])
   | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
 
+let modulo (e1 : constr) (e2 : constr) (stacks : local_stacks)
+    (ctx : local_vars) : t =
+  let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
+  let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
+  match (e1, e2) with
+  | _, Dlit 1. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 ->
+      let f = mod_float f1 f2 in
+      (Dlit f, Val, [])
+  | _ -> (Dfun ("fmod", [ e1; e2 ]), Val, lv2 @ lv1)
+
 let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in

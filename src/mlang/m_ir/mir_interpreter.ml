@@ -350,6 +350,9 @@ struct
       | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
       | Div, _, l2 when is_zero l2 -> Number (N.zero ())
       | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+      | Mod, Undefined, _ | Mod, _, Undefined -> Undefined (* yes... *)
+      | Mod, _, l2 when is_zero l2 -> Number (N.zero ())
+      | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
       | And, Undefined, _ | And, _, Undefined -> Undefined
       | Or, Undefined, Undefined -> Undefined
       | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
@@ -796,7 +799,7 @@ struct
                 | Undefined -> ())
             | Undefined -> ())
           var_intervals
-    | Com.Restore (vars, var_params, evts, stmts) ->
+    | Com.Restore (vars, var_params, evts, evtfs, stmts) ->
         let backup_vars =
           List.fold_left
             (fun backup_vars (m_v : Com.Var.t Pos.marked) ->
@@ -844,7 +847,7 @@ struct
             (fun backup_evts expr ->
               match evaluate_expr ctx p expr with
               | Number z ->
-                  let i = N.(to_int z) |> Int64.to_int in
+                  let i = z |> N.to_int |> Int64.to_int in
                   let events0 = List.hd ctx.ctx_events in
                   if 0 <= i && i < Array.length events0 then
                     let j = events0.(i) in
@@ -853,6 +856,29 @@ struct
                   else backup_evts
               | _ -> backup_evts)
             [] evts
+        in
+        let backup_evts =
+          List.fold_left
+            (fun backup_evts ((m_var : Com.Var.t Pos.marked), expr) ->
+              let var = Pos.unmark m_var in
+              let var_i =
+                match var.loc with LocTmp (_, i) -> i | _ -> assert false
+              in
+              let events0 = List.hd ctx.ctx_events in
+              let rec aux backup_evts i =
+                if i < Array.length events0 then (
+                  let vi = i |> Int64.of_int |> N.of_int in
+                  ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <- Number vi;
+                  match evaluate_expr ctx p expr with
+                  | Number z when N.(z =. one ()) ->
+                      let j = events0.(i) in
+                      let evt = Array.copy ctx.ctx_event_tab.(j) in
+                      aux ((j, evt) :: backup_evts) (i + 1)
+                  | _ -> aux backup_evts (i + 1))
+                else backup_evts
+              in
+              aux backup_evts 0)
+            backup_evts evtfs
         in
         evaluate_stmts tn canBlock p ctx stmts;
         List.iter

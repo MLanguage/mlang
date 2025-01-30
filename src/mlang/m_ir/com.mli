@@ -220,7 +220,7 @@ type 'v loop_variables =
 type unop = Not | Minus
 
 (** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
+type binop = And | Or | Add | Sub | Mul | Div | Mod
 
 (** Comparison operators *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
@@ -349,6 +349,7 @@ type ('v, 'e) instruction =
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
+      * ('v Pos.marked * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
       ('v Pos.marked * 'v Pos.marked * 'v m_expression) option

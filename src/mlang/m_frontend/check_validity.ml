@@ -1197,6 +1197,10 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     (match StrMap.find_opt var_name env.ref_vars with
     | Some old_pos -> Err.variable_already_declared var_name old_pos var_pos
     | None -> ());
+    (match env.res_var with
+    | Some (vr, old_pos) when vr = var_name ->
+        Err.variable_already_declared var_name old_pos var_pos
+    | Some _ | None -> ());
     (var_name, var_pos)
   in
   let rec aux (env, res, in_vars, out_vars) = function
@@ -1424,7 +1428,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
               out_vars |> StrSet.union (out_instrs |> StrSet.remove var_name)
             in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
-        | Com.Restore (vars, var_params, evts, instrs) ->
+        | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             ignore
               (List.fold_left
@@ -1452,11 +1456,24 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             List.iter
               (fun expr -> ignore (check_expression false expr env))
               evts;
+            List.iter
+              (fun (var, expr) ->
+                let var_name, var_pos = check_it_var env var in
+                let env =
+                  {
+                    env with
+                    tmp_vars = StrMap.add var_name (None, var_pos) env.tmp_vars;
+                  }
+                in
+                ignore (check_expression false expr env))
+              evtfs;
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env
             in
             let env = { env with prog } in
-            let res_instr = Com.Restore (vars, var_params, evts, res_instrs) in
+            let res_instr =
+              Com.Restore (vars, var_params, evts, evtfs, res_instrs)
+            in
             aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
         | Com.ArrangeEvents (sort, filter, instrs) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -2257,7 +2274,12 @@ let eval_expr_verif (prog : program) (verif : verif)
         | Com.Div -> (
             match (r0, r1) with
             | None, _ | _, None -> None
-            | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1)))
+            | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1))
+        | Com.Mod -> (
+            match (r0, r1) with
+            | None, _ | _, None -> None
+            | Some f0, Some f1 ->
+                if f1 = 0.0 then r1 else Some (mod_float f0 f1)))
     | Conditional (e0, e1, e2) -> (
         let r0 = aux e0 in
         let r1 = aux e1 in
@@ -2542,14 +2564,14 @@ let complete_vars_stack (prog : program) : program =
       | Com.Iterate_values (_, _, instrs) ->
           let nbRef, nbIt = aux_instrs instrs in
           (nbRef, nbIt + 1)
-      | Com.Restore (_, _, _, instrs) ->
+      | Com.Restore (_, _, _, _, instrs) ->
           let nbRef, nbIt = aux_instrs instrs in
           (max nbRef 1, nbIt)
       | Com.ArrangeEvents (sort, filter, instrs) ->
           let nbItSort = match sort with Some _ -> 2 | None -> 0 in
           let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
           let nbRef, nbIt = aux_instrs instrs in
-          (nbRef, max nbIt (max nbItSort nbItFilter))
+          (nbRef, max nbIt @@ max nbItSort nbItFilter)
       | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
       | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
           (0, 0)
@@ -2621,18 +2643,18 @@ let complete_vars_stack (prog : program) : program =
           let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
           let nbT, szT, nbRefT, tdata = aux_instrs tdata ilT in
           let nbE, szE, nbRefE, tdata = aux_instrs tdata ilE in
-          let nb = max nbI (max nbT nbE) in
-          let sz = max szI (max szT szE) in
-          let nbRef = max nbRefI (max nbRefT nbRefE) in
+          let nb = max nbI @@ max nbT nbE in
+          let sz = max szI @@ max szT szE in
+          let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
       | Com.WhenDoElse (wdl, ed) ->
           let rec wde (nb, sz, nbRef, tdata) = function
             | (me, dl, _) :: wdl' ->
                 let nbE, szE, nbRefE, tdata = aux_expr tdata me in
                 let nbD, szD, nbRefD, tdata = aux_instrs tdata dl in
-                let nb = max nb (max nbE nbD) in
-                let sz = max sz (max szE szD) in
-                let nbRef = max nbRef (max nbRefE nbRefD) in
+                let nb = max nb @@ max nbE nbD in
+                let sz = max sz @@ max szE szD in
+                let nbRef = max nbRef @@ max nbRefE nbRefD in
                 wde (nb, sz, nbRef, tdata) wdl'
             | [] ->
                 let nbD, szD, nbRefD, tdata =
@@ -2676,9 +2698,9 @@ let complete_vars_stack (prog : program) : program =
             let nb', sz', nbRef', tdata = aux_expr tdata me0 in
             let nb'', sz'', nbRef'', tdata = aux_expr tdata me1 in
             let nb''', sz''', nbRef''', tdata = aux_expr tdata mstep in
-            let nb = max nb (max nb' (max nb'' nb''')) in
-            let sz = max sz (max sz' (max sz'' sz''')) in
-            let nbRef = max nbRef (max nbRef' (max nbRef'' nbRef''')) in
+            let nb = max nb @@ max nb' @@ max nb'' nb''' in
+            let sz = max sz @@ max sz' @@ max sz'' sz''' in
+            let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
             (nb, sz, nbRef, tdata)
           in
           let nb', sz', nbRef', tdata =
@@ -2689,7 +2711,7 @@ let complete_vars_stack (prog : program) : program =
           let sz = 1 + max sz sz' in
           let nbRef = max nbRef nbRef' in
           (nb, sz, nbRef, tdata)
-      | Com.Restore (_, var_params, evts, instrs) ->
+      | Com.Restore (_, var_params, evts, evtfs, instrs) ->
           let nb', sz', nbRef', tdata =
             let fold (nb, sz, nbRef, tdata) (_, _, me) =
               let nb', sz', nbRef', tdata = aux_expr tdata me in
@@ -2704,11 +2726,18 @@ let complete_vars_stack (prog : program) : program =
             in
             List.fold_left fold (0, 0, 0, tdata) evts
           in
+          let nb''', sz''', nbRef''', tdata =
+            let fold (nb, sz, nbRef, tdata) (_, me) =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) evtfs
+          in
           let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb (max nb' nb'') in
-          let sz = max sz (max sz' sz'') in
+          let nb = max nb @@ max nb' @@ max nb'' nb''' in
+          let sz = max sz @@ max sz' @@ max sz'' sz''' in
           (* ??? *)
-          let nbRef = 1 + max nbRef (max nbRef' nbRef'') in
+          let nbRef = 1 + (max nbRef @@ max nbRef' @@ max nbRef'' nbRef''') in
           (nb, sz, nbRef, tdata)
       | Com.ArrangeEvents (sort, filter, instrs) ->
           let n', (nb', sz', nbRef', tdata) =
@@ -2722,9 +2751,9 @@ let complete_vars_stack (prog : program) : program =
             | None -> (0, (0, 0, 0, tdata))
           in
           let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max n' n'' + max nb (max nb' nb'') in
-          let sz = max n' n'' + max sz (max sz' sz'') in
-          let nbRef = max nbRef (max nbRef' nbRef'') in
+          let nb = max n' n'' + (max nb @@ max nb' nb'') in
+          let sz = max n' n'' + (max sz @@ max sz' sz'') in
+          let nbRef = max nbRef @@ max nbRef' nbRef'' in
           (nb, sz, nbRef, tdata)
       | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
       | Com.FinalizeErrors ->
@@ -2750,9 +2779,9 @@ let complete_vars_stack (prog : program) : program =
             | None -> (0, 0, 0, tdata)
             | Some meE -> aux_expr tdata meE
           in
-          let nb = max nbI (max nbT nbE) in
-          let sz = max szI (max szT szE) in
-          let nbRef = max nbRefI (max nbRefT nbRefE) in
+          let nb = max nbI @@ max nbT nbE in
+          let sz = max szI @@ max szT szE in
+          let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
       | Com.FuncCall (func, mel) ->
           let fold (nb, sz, nbRef, tdata) me =

@@ -35,7 +35,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token<string> SYMBOL STRING
 
-%token PLUS MINUS TIMES DIV
+%token PLUS MINUS TIMES DIV MOD
 %token GTE LTE GT LT NEQ EQUALS
 %token SEMICOLON COLON COMMA
 %token AND OR NOT UNDEFINED
@@ -706,19 +706,21 @@ instruction:
   }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    let var_list, var_cats, event_list =
-      let fold (var_list, var_cats, event_list) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats, event_list
-      | `VarCatsRest vc -> var_list, vc @ var_cats, event_list
-      | `EventList el -> var_list, var_cats, el @ event_list
+    let var_list, var_cats, event_list, event_filter =
+      let fold (var_list, var_cats, event_list, event_filter) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats, event_list, event_filter
+      | `VarCatsRest vc -> var_list, vc @ var_cats, event_list, event_filter
+      | `EventList el -> var_list, var_cats, el @ event_list, event_filter
+      | `EventFilter ef -> var_list, var_cats, event_list, ef :: event_filter
       in
-      List.fold_left fold ([], [], []) rest_params
+      List.fold_left fold ([], [], [], []) rest_params
     in
     Some (
       Restore (
         List.rev var_list,
         List.rev var_cats,
         List.rev event_list,
+        List.rev event_filter,
         List.rev instrs
       )
     )
@@ -900,7 +902,11 @@ rest_param:
     `VarCatsRest filters
   }
 | EVENTS expr_list = separated_nonempty_list(COMMA, with_pos(expression)) COLON {
-    `EventList expr_list;
+    `EventList expr_list
+  }
+| EVENT vn = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
+     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    `EventFilter (var, expr)
   }
 
 rest_param_category:
@@ -1188,6 +1194,7 @@ product_expression:
 %inline product_operator:
 | TIMES { Com.Mul }
 | DIV { Com.Div }
+| MOD { Com.Mod }
 
 table_index_name:
 s = SYMBOL { parse_variable $sloc s }

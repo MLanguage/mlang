@@ -75,7 +75,8 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
         let set_vars = se1.D.set_vars @ se2.D.set_vars in
         let def_test =
           match Pos.unmark op with
-          | Com.And | Com.Mul | Com.Div -> D.dand se1.def_test se2.def_test
+          | Com.And | Com.Mul | Com.Div | Com.Mod ->
+              D.dand se1.def_test se2.def_test
           | Com.Or | Com.Add | Com.Sub -> D.dor se1.def_test se2.def_test
         in
         let op e1 e2 =
@@ -86,6 +87,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           | Com.Sub -> D.sub e1 e2
           | Com.Mul -> D.mult e1 e2
           | Com.Div -> D.ite e2 (D.div e1 e2) (D.lit 0.)
+          | Com.Mod -> D.ite e2 (D.modulo e1 e2) (D.lit 0.)
         in
         let value_comp = op se1.value_comp se2.value_comp in
         D.build_transitive_composition ~safe_def:true
@@ -798,7 +800,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       pr "@;irdata->events = %s;" events_sav;
       pr "@;irdata->nb_events = %s;" nb_events_sav;
       pr "@]@;}"
-  | Restore (vars, var_params, evts, stmts) ->
+  | Restore (vars, var_params, evts, evtfs, stmts) ->
       pr "@;@[<v 2>{";
       let rest_name = fresh_c_local "restore" in
       let rest_evt_name = fresh_c_local "restore_evt" in
@@ -861,6 +863,30 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}")
         evts;
+      List.iter
+        (fun (m_var, expr) ->
+          let var = Pos.unmark m_var in
+          let idx = fresh_c_local "idx" in
+          let ref_def = VID.gen_def var "" in
+          let ref_val = VID.gen_val var "" in
+          let cond = fresh_c_local "cond" in
+          let cond_def = cond ^ "_def" in
+          let cond_val = cond ^ "_val" in
+          pr "@;@[<v 2>{";
+          pr "@;int %s = 0;" idx;
+          pr "@;@[<v 2>while (%s < irdata->nb_events) {" idx;
+          pr "@;char %s;@;double %s;" cond_def cond_val;
+          pr "@;%s = 1;" ref_def;
+          pr "@;%s = (double)%s;" ref_val idx;
+          generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+          pr "@;@[<v 2>if (%s && %s != 0.0){" cond_def cond_val;
+          pr "@;env_sauvegarder_evt(&%s, irdata->events[%s]);@;" rest_evt_name
+            idx;
+          pr "@]@;}";
+          pr "@;%s++;" idx;
+          pr "@]@;}";
+          pr "@]@;}")
+        evtfs;
       pr "@;%a" (generate_stmts dgfip_flags program) stmts;
       pr "@;env_restaurer(&%s);@;" rest_name;
       pr "@;env_restaurer_evt(&%s);@;" rest_evt_name;

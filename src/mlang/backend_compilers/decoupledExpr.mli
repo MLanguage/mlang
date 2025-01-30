@@ -100,6 +100,10 @@ val div : constr -> constr -> constr
 (** Float division. Care to guard for division by zero as it is not intrisectly
     guarranteed *)
 
+val modulo : constr -> constr -> constr
+(** Float modulo. Care to guard for modulo by zero as it is not intrisectly
+    guarranteed *)
+
 val comp : string -> constr -> constr -> constr
 (** Comparison operation. The operator is given as C-style string literal *)
 

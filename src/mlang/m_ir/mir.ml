@@ -286,15 +286,18 @@ let expand_functions (p : program) : program =
           in
           let instrs' = List.map map_instr instrs in
           (Iterate_values (v_id, var_intervals', instrs'), instr_pos)
-      | Restore (vars, var_params, evts, instrs) ->
+      | Restore (vars, var_params, evts, evtfs, instrs) ->
           let var_params' =
             List.map
               (fun (v, cs, e) -> (v, cs, expand_functions_expr e))
               var_params
           in
           let evts' = List.map expand_functions_expr evts in
+          let evtfs' =
+            List.map (fun (v, e) -> (v, expand_functions_expr e)) evtfs
+          in
           let instrs' = List.map map_instr instrs in
-          (Restore (vars, var_params', evts', instrs'), instr_pos)
+          (Restore (vars, var_params', evts', evtfs', instrs'), instr_pos)
       | ArrangeEvents (sort, filter, instrs) ->
           let sort' =
             match sort with

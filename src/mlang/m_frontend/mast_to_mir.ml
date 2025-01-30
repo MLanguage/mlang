@@ -357,7 +357,7 @@ let rec translate_prog (p : Check_validity.program)
         aux
           ((Com.Iterate_values (m_var, var_intervals', prog_it), pos) :: res)
           il
-    | (Com.Restore (vars, var_params, evts, instrs), pos) :: il ->
+    | (Com.Restore (vars, var_params, evts, evtfs, instrs), pos) :: il ->
         let vars' =
           List.map
             (fun vn ->
@@ -383,9 +383,24 @@ let rec translate_prog (p : Check_validity.program)
             var_params
         in
         let evts' = List.map (translate_expression p var_data) evts in
+        let evtfs' =
+          List.map
+            (fun (vn, expr) ->
+              let var_pos = Pos.get_position vn in
+              let var_name = Mast.get_normal_var (Pos.unmark vn) in
+              let var =
+                Com.Var.new_temp ~name:(var_name, var_pos) ~is_table:None
+                  ~loc_int:itval_depth
+              in
+              let var_data = StrMap.add var_name var var_data in
+              let mir_expr = translate_expression p var_data expr in
+              (Pos.mark var_pos var, mir_expr))
+            evtfs
+        in
         let prog_rest = translate_prog p var_data it_depth itval_depth instrs in
         aux
-          ((Com.Restore (vars', var_params', evts', prog_rest), pos) :: res)
+          ((Com.Restore (vars', var_params', evts', evtfs', prog_rest), pos)
+          :: res)
           il
     | (Com.ArrangeEvents (sort, filter, instrs), pos) :: il ->
         let sort', itval_depth' =

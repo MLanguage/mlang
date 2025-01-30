@@ -889,21 +889,50 @@ arranger_evenements
   calculer cible afficher_evenements;
 )
 afficher_erreur "\n";
-EVT = 26;
-afficher_erreur "0: ";
-calculer cible afficher_evenement : avec EVT;
-afficher_erreur "\n";
-restaurer
-: evenements EVT
-: apres (
-  champ_evenement(EVT, montant) = 111111.111111;
-  afficher_erreur "1: ";
+arranger_evenements
+: trier I, J : avec champ_evenement(I, rappel) <= champ_evenement(J, rappel)
+: dans (
+  EVT = 25;
+  afficher_erreur "0: ";
   calculer cible afficher_evenement : avec EVT;
   afficher_erreur "\n";
+  iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+    si inf(champ_evenement(I, rappel) % 2) = 0 alors
+      afficher_erreur "0: ";
+      calculer cible afficher_evenement : avec I;
+      afficher_erreur "\n";
+    finsi
+  )
+  afficher_erreur "\n";
+  restaurer
+  : evenements EVT
+  : evenement I : avec inf(champ_evenement(I, rappel) % 2) = 0
+  : apres (
+    champ_evenement(EVT, montant) = 111111.111111;
+    afficher_erreur "1: ";
+    calculer cible afficher_evenement : avec EVT;
+    afficher_erreur "\n";
+    iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+      si inf(champ_evenement(I, rappel) % 2) = 0 alors
+        champ_evenement(I, montant) = 111111.111111;
+        afficher_erreur "2: ";
+        calculer cible afficher_evenement : avec I;
+        afficher_erreur "\n";
+      finsi
+    )
+  )
+  afficher_erreur "\n";
+  afficher_erreur "2: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+  iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+    si inf(champ_evenement(I, rappel) % 2) = 0 alors
+      afficher_erreur "2: ";
+      calculer cible afficher_evenement : avec I;
+      afficher_erreur "\n";
+    finsi
+  )
 )
-afficher_erreur "2: ";
-calculer cible afficher_evenement : avec EVT;
-afficher_erreur "\n";
 
 cible enchainement_primitif:
 application: iliad;
