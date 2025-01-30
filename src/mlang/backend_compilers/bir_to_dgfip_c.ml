@@ -694,16 +694,55 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let events_sav = fresh_c_local "events_sav" in
       let events_tmp = fresh_c_local "events_tmp" in
       let nb_events_sav = fresh_c_local "nb_events_sav" in
+      let nb_add = fresh_c_local "nb_add" in
       let cpt_i = fresh_c_local "i" in
       let cpt_j = fresh_c_local "j" in
+      let evt = fresh_c_local "evt" in
       pr "@;@[<v 2>{";
       pr "@;T_event **%s = irdata->events;" events_sav;
       pr "@;int %s = irdata->nb_events;" nb_events_sav;
+      pr "@;int %s = 0;" nb_add;
       pr "@;T_event **%s = NULL;" events_tmp;
       pr "@;int %s = 0;" cpt_i;
       pr "@;int %s = 0;" cpt_j;
-      pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
-        nb_events_sav;
+      (match add with
+      | Some expr ->
+          pr "@;@[<v 2>{";
+          let cond = fresh_c_local "cond" in
+          let cond_def = cond ^ "_def" in
+          let cond_val = cond ^ "_val" in
+          pr "@;char %s;@;double %s;" cond_def cond_val;
+          generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+          pr "@;%s = (int)%s;" nb_add cond_val;
+          pr "@;if (%s < 0) %s = 0;" nb_add nb_add;
+          pr "@;@[<v 2>if (%s && 0 < %s) {" cond_def nb_add;
+          let cpt_k = fresh_c_local "k" in
+          pr "@;int %s = 0;" cpt_k;
+          pr "@;%s = (T_event **)malloc((%s + %s) * (sizeof (T_event *)));"
+            events_tmp nb_events_sav nb_add;
+          pr "@;@[<v 2>for (%s = 0; %s < %s; %s++) {" cpt_k cpt_k nb_add cpt_k;
+          pr "@;T_event *%s = (T_event *)malloc(sizeof (T_event));" evt;
+          StrMap.iter
+            (fun f (ef : Com.event_field) ->
+              if ef.is_var then
+                let _, var = StrMap.min_binding program.program_vars in
+                pr "@;%s->field_%s_var = %s;" evt f (VID.gen_info_ptr var)
+              else (
+                pr "@;%s->field_%s_def = 0;" evt f;
+                pr "@;%s->field_%s_val = 0.0;" evt f))
+            program.program_event_fields;
+          pr "@;%s[%s] = %s;" events_tmp cpt_k evt;
+          pr "@]@;}";
+          pr "@]@;@[<v 2>} else {";
+          pr "@;%s = 0;" nb_add;
+          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
+            nb_events_sav;
+          pr "@]@;}";
+          pr "@;%s = %s;" cpt_i nb_add;
+          pr "@]@;}"
+      | None ->
+          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
+            nb_events_sav);
       (match filter with
       | Some (m_var, expr) ->
           pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
@@ -730,12 +769,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_j cpt_j;
           pr "@;%s++;" cpt_j;
           pr "@]@;}";
-          pr "@;irdata->events = %s;" events_tmp);
+          pr "@;irdata->events = %s;" events_tmp;
+          pr "@;irdata->nb_events = %s;" cpt_i);
       (match sort with
       | Some (m_var0, m_var1, expr) ->
           pr "@;/* merge sort */";
           pr "@;@[<v 2>{";
-          pr "@;int aBeg = 0;";
+          pr "@;int aBeg = %s;" nb_add;
           pr "@;int aEnd = irdata->nb_events;";
           pr
             "@;\

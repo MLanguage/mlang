@@ -889,6 +889,7 @@ arranger_evenements
 : dans (
   calculer cible afficher_evenements;
 )
+#{
 afficher_erreur "\n";
 arranger_evenements
 : trier I, J : avec champ_evenement(I, rappel) <= champ_evenement(J, rappel)
@@ -934,6 +935,7 @@ arranger_evenements
     finsi
   )
 )
+}#
 
 cible enchainement_primitif:
 application: iliad;
