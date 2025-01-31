@@ -183,7 +183,7 @@ let rec translate_prog (p : Check_validity.program)
         let decl' =
           match decl with
           | VarDecl (v, idx, e) ->
-              let var =
+              let v' =
                 match Pos.unmark (translate_variable var_data v) with
                 | Com.Var var -> Pos.same_pos_as var v
                 | _ -> assert false
@@ -191,12 +191,22 @@ let rec translate_prog (p : Check_validity.program)
               in
               let idx' = Option.map (translate_expression p var_data) idx in
               let e' = translate_expression p var_data e in
-              Com.VarDecl (var, idx', e')
+              Com.VarDecl (v', idx', e')
           | EventFieldDecl (idx, f, _, e) ->
               let idx' = translate_expression p var_data idx in
               let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
               let e' = translate_expression p var_data e in
               Com.EventFieldDecl (idx', f, i, e')
+          | EventFieldRef (idx, f, _, v) ->
+              let idx' = translate_expression p var_data idx in
+              let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+              let v' =
+                match Pos.unmark (translate_variable var_data v) with
+                | Com.Var var -> Pos.same_pos_as var v
+                | _ -> assert false
+                (* should not happen *)
+              in
+              Com.EventFieldRef (idx', f, i, v')
         in
         let m_form = (Com.SingleFormula decl', pos) in
         aux ((Com.Affectation m_form, pos) :: res) il

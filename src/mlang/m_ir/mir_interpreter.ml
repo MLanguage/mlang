@@ -626,6 +626,18 @@ struct
                   | Com.Numeric _ ->
                       let value = evaluate_expr ctx p expr in
                       events.(i).(j) <- Com.Numeric value)
+            | _ -> ())
+        | EventFieldRef (idx, _, j, m_var) -> (
+            let new_idx = evaluate_expr ctx p idx in
+            match new_idx with
+            | Number z when N.(z >=. zero ()) -> (
+                let i = Int64.to_int N.(to_int z) in
+                let events = List.hd ctx.ctx_events in
+                if 0 <= i && i < Array.length events then
+                  match events.(i).(j) with
+                  | Com.RefVar _ ->
+                      events.(i).(j) <- Com.RefVar (Pos.unmark m_var)
+                  | Com.Numeric _ -> ())
             | _ -> ()))
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (

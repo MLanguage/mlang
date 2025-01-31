@@ -488,18 +488,35 @@ let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
   pr "@]@;}";
   pr "@]@;}"
 
+let generate_event_field_ref (dgfip_flags : Dgfip_options.flags)
+    (p : Mir.program) (idx_expr : Mir.expression Pos.marked) (field : string)
+    (m_var : Com.Var.t Pos.marked) (oc : Format.formatter) : unit =
+  if (StrMap.find field p.program_event_fields).is_var then (
+    let pr form = Format.fprintf oc form in
+    let idx = fresh_c_local "idx" in
+    let idx_def = idx ^ "_def" in
+    let idx_val = idx ^ "_val" in
+    let var = Pos.unmark m_var in
+    let var_info_ptr = VID.gen_info_ptr var in
+    pr "@;@[<v 2>{";
+    pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+    generate_expr_with_res_in dgfip_flags oc idx_def idx_val idx_expr;
+    pr "@;%s = (int)%s;" idx idx_val;
+    pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" idx_def idx idx;
+    pr "@;irdata->events[%s]->field_%s_var = %s;" idx field var_info_ptr;
+    pr "@]@;}";
+    pr "@]@;}")
+
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (stmt : Mir.m_instruction) =
   let pr fmt = Format.fprintf oc fmt in
   match Pos.unmark stmt with
   | Affectation (SingleFormula (VarDecl (m_var, vidx_opt, vexpr)), _) ->
-      pr "@;@[<v 2>{";
-      generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc;
-      pr "@]@;}"
+      generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc
   | Affectation (SingleFormula (EventFieldDecl (idx, f, _, expr)), _) ->
-      pr "@;@[<v 2>{";
-      generate_event_field_def dgfip_flags program idx (Pos.unmark f) expr oc;
-      pr "@]@;}"
+      generate_event_field_def dgfip_flags program idx (Pos.unmark f) expr oc
+  | Affectation (SingleFormula (EventFieldRef (idx, f, _, m_var)), _) ->
+      generate_event_field_ref dgfip_flags program idx (Pos.unmark f) m_var oc
   | Affectation (MultipleFormulaes _, _) -> assert false
   | IfThenElse (cond_expr, iftrue, iffalse) ->
       pr "@;@[<v 2>{";
@@ -765,9 +782,9 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;irdata->events = %s;" events_tmp;
           pr "@;irdata->nb_events = %s;" cpt_i
       | None ->
-          pr "@;@[<v 2>while (%s < %s) {" cpt_j nb_events_sav;
-          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_j cpt_j;
-          pr "@;%s++;" cpt_j;
+          pr "@;@[<v 2>while (%s < %s) {" cpt_i nb_events_sav;
+          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_i;
+          pr "@;%s++;" cpt_i;
           pr "@]@;}";
           pr "@;irdata->events = %s;" events_tmp;
           pr "@;irdata->nb_events = %s;" cpt_i);

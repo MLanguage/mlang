@@ -57,8 +57,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ERROR ANOMALY DISCORDANCE
 %token INFORMATIVE OUTPUT FONCTION VARIABLE VARIABLES ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
-%token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
-%token EVENT EVENTS VALUE STEP EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD
+%token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
+%token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
 
 %token EOF
 
@@ -813,8 +813,8 @@ print_argument:
     | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
     | _ -> assert false
   }
-| f = with_pos(print_function) LPAREN expr = with_pos(sum_expression)
-  COMMA field = symbol_with_pos RPAREN {
+| f = with_pos(print_function) LPAREN EVENT_FIELD LPAREN
+  expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN RPAREN {
     match Pos.unmark f with
     | "nom" -> Com.PrintEventName (expr, field, -1)
     | "alias" -> Com.PrintEventAlias (expr, field, -1)
@@ -969,8 +969,13 @@ lvalue:
 
 formula:
 | EVENT_FIELD LPAREN idx = with_pos(expression)
-  COMMA f = symbol_with_pos RPAREN  EQUALS e = with_pos(expression) {
+  COMMA f = symbol_with_pos RPAREN EQUALS e = with_pos(expression) {
     EventFieldDecl (idx, f, -1, e)
+  }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN REFERENCE v = symbol_with_pos {
+    let var = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    EventFieldRef (idx, f, -1, var)
   }
 | lvalue = lvalue EQUALS e = with_pos(expression) {
     let v, idx = lvalue in

@@ -822,7 +822,7 @@ afficher_erreur (I) ": ";
 si (present(champ_evenement(I, numero))) alors afficher_erreur (champ_evenement(I, numero)); finsi
 afficher_erreur "/";
 si (present(champ_evenement(I, rappel))) alors afficher_erreur (champ_evenement(I, rappel)); finsi
-afficher_erreur "/" alias(I, code) "," nom(I, code) "/";
+afficher_erreur "/" alias(champ_evenement(I, code)) "," nom(champ_evenement(I, code)) "/";
 si (present(champ_evenement(I, montant))) alors afficher_erreur (champ_evenement(I, montant)); finsi
 afficher_erreur "/";
 si (present(champ_evenement(I, sens))) alors
@@ -867,9 +867,9 @@ afficher_erreur "\n";
 calculer cible afficher_evenements;
 afficher_erreur "\n";
 si nb_evenements() > 0 alors
-  afficher_erreur "0: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
+  afficher_erreur "0: " nom(champ_evenement(0, code)) " = " (champ_evenement(0, code)) "\n";
   champ_evenement(0, code) = 456;
-  afficher_erreur "1: " nom(0, code) " = " (champ_evenement(0, code)) "\n";
+  afficher_erreur "1: " nom(champ_evenement(0, code)) " = " (champ_evenement(0, code)) "\n";
   afficher_erreur "0: montant " (champ_evenement(0, montant)) "\n";
   champ_evenement(0, montant) = 123.456;
   afficher_erreur "1: montant " (champ_evenement(0, montant)) "\n";
@@ -887,14 +887,17 @@ arranger_evenements
 : filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55
 : ajouter 3
 : dans (
+  champ_evenement(0, code) reference COD1AM;
+  champ_evenement(1, code) reference COD1AR;
+  champ_evenement(2, code) reference COD1AV;
   calculer cible afficher_evenements;
 )
-#{
 afficher_erreur "\n";
 arranger_evenements
 : trier I, J : avec champ_evenement(I, rappel) <= champ_evenement(J, rappel)
 : dans (
   EVT = 25;
+  afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
   afficher_erreur "0: ";
   calculer cible afficher_evenement : avec EVT;
   afficher_erreur "\n";
@@ -917,7 +920,7 @@ arranger_evenements
     iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
       si inf(champ_evenement(I, rappel) % 2) = 0 alors
         champ_evenement(I, montant) = 111111.111111;
-        afficher_erreur "2: ";
+        afficher_erreur "1: ";
         calculer cible afficher_evenement : avec I;
         afficher_erreur "\n";
       finsi
@@ -935,7 +938,22 @@ arranger_evenements
     finsi
   )
 )
-}#
+afficher_erreur "\n";
+EVT = 25;
+afficher_erreur "0: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
+restaurer
+: evenements EVT
+: apres (
+  champ_evenement(EVT, code) reference COD1AV;
+  afficher_erreur "1: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+)
+afficher_erreur "2: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
 
 cible enchainement_primitif:
 application: iliad;

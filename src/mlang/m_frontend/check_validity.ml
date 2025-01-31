@@ -323,6 +323,12 @@ module Err = struct
   let event_field_need_a_variable name pos =
     let msg = Format.asprintf "event field \"%s\" require a variable" name in
     Errors.raise_spanned_error msg pos
+
+  let event_field_is_not_a_reference name pos =
+    let msg =
+      Format.asprintf "event field \"%s\" is not a variable reference" name
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1246,6 +1252,19 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
                 in
                 aux (env, m_instr :: res, in_vars, out_vars) il
+            | Com.SingleFormula (EventFieldRef (idx, f, _, v)) ->
+                if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+                let f_name, f_pos = f in
+                (match StrMap.find_opt f_name env.prog.prog_event_fields with
+                | Some ef when ef.is_var -> ()
+                | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+                | None -> Err.unknown_event_field f_name f_pos);
+                let in_vars_index = check_expression false idx env in
+                ignore (check_variable v (OneOf None) env);
+                let in_vars =
+                  StrSet.union in_vars (StrSet.diff in_vars_index out_vars)
+                in
+                aux (env, m_instr :: res, in_vars, out_vars) il
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
             (* if is_rule then Err.insruction_forbidden_in_rules instr_pos; *)
@@ -1359,13 +1378,12 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     ignore (check_variable v Both env)
                 | Com.PrintEventName (e, f, _) | Com.PrintEventAlias (e, f, _)
                   -> (
-                    match
-                      StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields
-                    with
-                    | Some _ -> ignore (check_expression false e env)
-                    | None ->
-                        Err.unknown_event_field (Pos.unmark f)
-                          (Pos.get_position f))
+                    let f_name, f_pos = f in
+                    match StrMap.find_opt f_name env.prog.prog_event_fields with
+                    | Some ef when ef.is_var ->
+                        ignore (check_expression false e env)
+                    | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+                    | None -> Err.unknown_event_field f_name f_pos)
                 | Com.PrintIndent e -> ignore (check_expression false e env)
                 | Com.PrintExpr (e, _min, _max) ->
                     ignore (check_expression false e env))
@@ -2644,6 +2662,7 @@ let complete_vars_stack (prog : program) : program =
               let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
               let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
               (max nbI nbV, max szI szV, max nbRefI nbRefV, tdata)
+          | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
           | MultipleFormulaes _ -> assert false)
       | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)
       | Com.IfThenElse (meI, ilT, ilE) ->

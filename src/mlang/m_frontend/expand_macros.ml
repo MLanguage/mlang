@@ -650,6 +650,16 @@ let expand_formula (const_map : const_context)
       let idx' = expand_expression const_map ParamsMap.empty idx in
       let e' = expand_expression const_map ParamsMap.empty e in
       (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos) :: prev
+  | Com.SingleFormula (EventFieldRef (idx, f, i, v)) ->
+      let idx' = expand_expression const_map ParamsMap.empty idx in
+      let v' =
+        match expand_variable const_map ParamsMap.empty v with
+        | Com.Var v, v_pos -> (v, v_pos)
+        | Com.Literal (Com.Float _), v_pos ->
+            Err.constant_forbidden_as_lvalue v_pos
+        | _ -> assert false
+      in
+      (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos) :: prev
   | Com.MultipleFormulaes (lvs, VarDecl (v, idx, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
@@ -672,6 +682,21 @@ let expand_formula (const_map : const_context)
         let idx' = expand_expression const_map loop_map idx in
         let e' = expand_expression const_map loop_map e in
         (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos)
+      in
+      let res = loop_context_provider translator in
+      List.rev res @ prev
+  | Com.MultipleFormulaes (lvs, EventFieldRef (idx, f, i, v)) ->
+      let loop_context_provider = expand_loop_variables lvs const_map in
+      let translator loop_map =
+        let idx' = expand_expression const_map loop_map idx in
+        let v' =
+          match expand_variable const_map loop_map v with
+          | Com.Var v, v_pos -> (v, v_pos)
+          | Com.Literal (Com.Float _), v_pos ->
+              Err.constant_forbidden_as_lvalue v_pos
+          | _ -> assert false
+        in
+        (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos)
       in
       let res = loop_context_provider translator in
       List.rev res @ prev

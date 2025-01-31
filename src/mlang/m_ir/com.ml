@@ -463,6 +463,7 @@ type 'v formula_decl =
   | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
   | EventFieldDecl of
       'v m_expression * string Pos.marked * int * 'v m_expression
+  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v Pos.marked
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -729,6 +730,10 @@ let format_formula_decl form_var fmt = function
         (Pos.unmark idx) (Pos.unmark f)
         (format_expression form_var)
         (Pos.unmark e)
+  | EventFieldRef (idx, f, _, v) ->
+      Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
+        (format_expression form_var)
+        (Pos.unmark idx) (Pos.unmark f) form_var (Pos.unmark v)
 
 let format_formula form_var fmt f =
   match f with

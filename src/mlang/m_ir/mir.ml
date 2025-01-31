@@ -222,6 +222,10 @@ let expand_functions (p : program) : program =
           ( Affectation
               (SingleFormula (EventFieldDecl (m_idx, f, i, m_expr)), pos),
             instr_pos )
+      | Affectation (SingleFormula (EventFieldRef (v_idx, f, i, v_id)), pos) ->
+          let m_idx = expand_functions_expr v_idx in
+          ( Affectation (SingleFormula (EventFieldRef (m_idx, f, i, v_id)), pos),
+            instr_pos )
       | Affectation (MultipleFormulaes _, _) -> assert false
       | IfThenElse (i, t, e) ->
           let i' = expand_functions_expr i in
