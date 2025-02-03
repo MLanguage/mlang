@@ -2004,7 +2004,7 @@ let check_no_variable_duplicates (rdom_rules : rule IntMap.t)
         else boo)
       rule_defined false
   in
-  if duplicate then exit 1
+  if duplicate then exit (-1)
 
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
