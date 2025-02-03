@@ -1944,6 +1944,7 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
             (Format.asprintf
                "Rule %d needs variable %s as both input and output" id var)
             Pos.no_pos)
+    (* ideally give position information *)
   in
   let sorted_rules =
     try RulesSorting.sort ~auto_cycle rule_graph with
@@ -1968,38 +1969,42 @@ let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
   Com.DomainId.equal rdom_id rule_rdom_id
   || Com.DomainIdSet.mem rule_rdom_id rdom.Com.dom_min
 
-let check_no_variable_duplicates (rdom_rules : rule IntMap.t) : unit =
+let check_no_variable_duplicates (rdom_rules : rule IntMap.t)
+    (rdom_id : Com.DomainId.t) : unit =
   (* checks whether a variable is defined in two different rules given a rule "set".
      We cannot do it over all the rules of a single program because some are defined in different chainings *)
-  let module StrMapOverride = struct
-    include StrMap
-
-    let add key data m =
-      (match find_opt key m with
-      | Some _ when not (is_vartmp key) ->
-          Cli.warning_print "Overriding with a new vertex on variable %s" key
-      | _ -> ());
-      add key data m
-  end in
-  let _, nb =
+  let rule_defined =
     IntMap.fold
-      (fun _id r (varset, count) ->
+      (fun id r rule_defined ->
         let out = r.rule_out_vars in
-        let inter = StrSet.inter varset out in
-        let nb =
-          StrSet.fold
-            (fun var_name c ->
-              if not (is_vartmp var_name) then (
-                Cli.error_print "Variable %s is defined in two different rules"
-                  var_name;
-                c + 1)
-              else c)
-            inter 0
-        in
-        (StrSet.union varset out, count + nb))
-      rdom_rules (StrSet.empty, 0)
+        StrSet.fold
+          (fun var_name rule_defined ->
+            let tail =
+              match StrMap.find_opt var_name rule_defined with
+              | Some tl -> tl
+              | None -> []
+            in
+            StrMap.add var_name (id :: tail) rule_defined)
+          out rule_defined)
+      rdom_rules StrMap.empty
   in
-  if nb > 0 then exit 1
+  let duplicate =
+    StrMap.fold
+      (fun var_name rule_list boo ->
+        if (not (is_vartmp var_name)) && List.length rule_list > 1 then (
+          Cli.error_print
+            "Variable %s is defined in %d different rules in rule domain %a: %a"
+            var_name (List.length rule_list) (Com.DomainId.pp ()) rdom_id
+            (Format.pp_print_list
+               ?pp_sep:(Some (fun fmt () -> Format.fprintf fmt ","))
+               (fun fmt id -> Format.fprintf fmt "%d" id))
+            (List.rev rule_list);
+          (* List.rev for cosmetic reasons *)
+          true)
+        else boo)
+      rule_defined false
+  in
+  if duplicate then exit 1
 
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
@@ -2011,7 +2016,7 @@ let complete_rule_domains (prog : program) : program =
               (fun _ rule -> rdom_rule_filter rdom rule)
               prog.prog_rules
           in
-          check_no_variable_duplicates rdom_rules;
+          check_no_variable_duplicates rdom_rules rdom_id;
           let rule_graph =
             create_rule_graph
               (fun r -> r.rule_in_vars)
