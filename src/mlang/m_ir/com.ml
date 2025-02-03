@@ -345,19 +345,6 @@ module TargetMap = StrMap
 
 type literal = Float of float | Undefined
 
-type 'v atom = AtomVar of 'v | AtomLiteral of literal
-
-type 'v set_value_loop =
-  | Single of 'v atom Pos.marked
-  | Range of 'v atom Pos.marked * 'v atom Pos.marked
-  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
-
-type 'v loop_variable = char Pos.marked * 'v set_value_loop list
-
-type 'v loop_variables =
-  | ValueSets of 'v loop_variable list
-  | Ranges of 'v loop_variable list
-
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -366,11 +353,6 @@ type binop = And | Or | Add | Sub | Mul | Div | Mod
 
 (** Comparison operators *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
-
-type 'v set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
 
 type func =
   | SumFunc  (** Sums the arguments *)
@@ -390,7 +372,29 @@ type func =
   | NbEvents
   | Func of string
 
-type 'v expression =
+type 'v access =
+  | VarAccess of 'v
+  | FieldAccess of 'v m_expression * string Pos.marked * int
+
+and 'v atom = AtomVar of 'v | AtomLiteral of literal
+
+and 'v set_value_loop =
+  | Single of 'v atom Pos.marked
+  | Range of 'v atom Pos.marked * 'v atom Pos.marked
+  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
+
+and 'v loop_variable = char Pos.marked * 'v set_value_loop list
+
+and 'v loop_variables =
+  | ValueSets of 'v loop_variable list
+  | Ranges of 'v loop_variable list
+
+and 'v set_value =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v Pos.marked
+  | IntervalValue of int Pos.marked * int Pos.marked
+
+and 'v expression =
   | TestInSet of bool * 'v m_expression * 'v set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
@@ -403,7 +407,7 @@ type 'v expression =
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
   | Literal of literal
-  | Var of 'v
+  | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
@@ -413,7 +417,6 @@ type 'v expression =
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
-  | EventField of 'v m_expression * string Pos.marked * int
 
 and 'v m_expression = 'v expression Pos.marked
 
@@ -611,11 +614,11 @@ let format_comp_op fmt op =
     | Neq -> "!=")
 
 let format_set_value format_variable fmt sv =
-  let open Format in
   match sv with
+  | FloatValue i -> Pp.fpr fmt "%f" (Pos.unmark i)
   | VarValue v -> format_variable fmt (Pos.unmark v)
-  | Interval (i1, i2) -> fprintf fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | FloatValue i -> fprintf fmt "%f" (Pos.unmark i)
+  | IntervalValue (i1, i2) ->
+      Pp.fpr fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
 
 let format_func fmt f =
   Format.pp_print_string fmt
@@ -671,7 +674,10 @@ let rec format_expression form_var fmt =
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | Literal l -> format_literal fmt l
-  | Var v -> form_var fmt v
+  | Var (VarAccess v) -> form_var fmt v
+  | Var (FieldAccess (e, f, _)) ->
+      Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
+        (Pos.unmark f)
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"
         (format_loop_variables form_var)
@@ -681,9 +687,6 @@ let rec format_expression form_var fmt =
   | Attribut (v, a) ->
       Format.fprintf fmt "attribut(%a, %s)" form_var (Pos.unmark v)
         (Pos.unmark a)
-  | EventField (e, f, _) ->
-      Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
-        (Pos.unmark f)
   | Size v -> Format.fprintf fmt "taille(%a)" form_var (Pos.unmark v)
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"

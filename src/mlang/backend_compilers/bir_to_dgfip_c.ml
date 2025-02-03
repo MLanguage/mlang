@@ -138,7 +138,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     }
                   in
                   comparison (Com.Eq, Pos.no_pos) sle0 s_i
-              | Com.Interval (bn, en) ->
+              | Com.IntervalValue (bn, en) ->
                   let s_bn =
                     let bn' = float_of_int (Pos.unmark bn) in
                     D.{ set_vars = []; def_test = dtrue; value_comp = lit bn' }
@@ -280,7 +280,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
+  | FuncCall ((Multimax, _), [ e1; (Var (VarAccess v2), _) ]) ->
       let bound = generate_c_expr e1 in
       let set_vars = bound.D.set_vars in
       let def_test =
@@ -332,24 +332,13 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
   | Literal Undefined ->
       { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
-  | Var var ->
+  | Var (VarAccess var) ->
       {
         set_vars = [];
         def_test = D.m_var var None Def;
         value_comp = D.m_var var None Val;
       }
-  | Attribut (var, a) ->
-      let ptr = VID.gen_info_ptr (Pos.unmark var) in
-      let def_test =
-        D.dinstr
-          (Format.sprintf "attribut_%s_def((T_varinfo *)%s)" (Pos.unmark a) ptr)
-      in
-      let value_comp =
-        D.dinstr
-          (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
-      in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | EventField (me, f, _) ->
+  | Var (FieldAccess (me, f, _)) ->
       let fn = Format.sprintf "event_field_%s" (Pos.unmark f) in
       let res = fresh_c_local "result" in
       let def_res = Pp.spr "def_%s" res in
@@ -376,6 +365,17 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let def_test = D.dinstr def_res in
       let value_comp = D.dinstr val_res in
       D.build_transitive_composition { set_vars; def_test; value_comp }
+  | Attribut (var, a) ->
+      let ptr = VID.gen_info_ptr (Pos.unmark var) in
+      let def_test =
+        D.dinstr
+          (Format.sprintf "attribut_%s_def((T_varinfo *)%s)" (Pos.unmark a) ptr)
+      in
+      let value_comp =
+        D.dinstr
+          (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
+      in
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | Size var ->
       let ptr = VID.gen_info_ptr (Pos.unmark var) in
       let def_test = D.dinstr "1.0" in

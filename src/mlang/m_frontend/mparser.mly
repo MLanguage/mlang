@@ -1159,7 +1159,7 @@ interval:
     let pos = mk_position $sloc in
     let ir1 = parse_int $sloc i1, pos in
     let ir2 = parse_int $sloc i2, pos in
-    Com.Interval (ir1, ir2) : set_value
+    Com.IntervalValue (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
@@ -1223,7 +1223,7 @@ factor:
 | s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
 | a = with_pos(factor_atom) {
     match Pos.unmark a with
-    | Com.AtomVar v -> Com.Var v
+    | Com.AtomVar v -> Com.Var (VarAccess v)
     | Com.AtomLiteral l -> Com.Literal l
   }
 | LPAREN e = expression RPAREN { e }
@@ -1263,7 +1263,7 @@ function_call:
     Attribut ((parse_variable $sloc (fst var), snd var), attr)
   }
 | EVENT_FIELD LPAREN m_expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN {
-    EventField (m_expr, field, -1)
+    Var (FieldAccess (m_expr, field, -1))
   }
 | SIZE LPAREN var = symbol_with_pos RPAREN {
     Size (parse_variable $sloc (fst var), snd var)

@@ -985,7 +985,7 @@ let rec fold_var_expr
                 Err.forbidden_expresion_in_filter (Pos.get_position v);
               fold_var v (OneOf None) env res
           | Com.FloatValue _ -> res
-          | Com.Interval (bn, en) ->
+          | Com.IntervalValue (bn, en) ->
               if Pos.unmark bn > Pos.unmark en then
                 Err.wrong_interval_bounds (Pos.get_position bn);
               res)
@@ -1021,7 +1021,7 @@ let rec fold_var_expr
           match args with
           | [ expr; var_expr ] -> (
               match var_expr with
-              | Var var, var_pos ->
+              | Var (VarAccess var), var_pos ->
                   let acc = fold_var_expr fold_var is_filter acc expr env in
                   fold_var (var, var_pos) Both env acc
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
@@ -1053,9 +1053,14 @@ let rec fold_var_expr
           in
           check_func (List.length fd.target_args))
   | Literal _ -> acc
-  | Var var ->
+  | Var (VarAccess var) ->
       if is_filter then Err.variable_forbidden_in_filter expr_pos;
       fold_var (var, expr_pos) (OneOf None) env acc
+  | Var (FieldAccess (e, f, _)) -> (
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
+      | Some _ -> fold_var_expr fold_var is_filter acc e env
+      | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get_position f))
   | NbCategory cs ->
       if not is_filter then Err.expression_only_in_filter expr_pos;
       let cats = mast_to_catvars cs env.prog.prog_var_cats in
@@ -1081,11 +1086,6 @@ let rec fold_var_expr
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
           | None -> ()));
       fold_var v Both env acc
-  | EventField (e, f, _) -> (
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
-      | Some _ -> fold_var_expr fold_var is_filter acc e env
-      | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get_position f))
   | Size v -> fold_var v Both env acc
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
@@ -2320,13 +2320,13 @@ let eval_expr_verif (prog : program) (verif : verif)
                   match set_value with
                   | Com.VarValue _ -> assert false
                   | Com.FloatValue (f, _) -> res || f = v
-                  | Com.Interval ((bn, _), (en, _)) ->
+                  | Com.IntervalValue ((bn, _), (en, _)) ->
                       res || (float bn <= v && v <= float en))
                 false values
             in
             Some (if res = positive then 1.0 else 0.0))
     | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes | Index _
-    | FuncCallLoop _ | Loop _ | EventField _ ->
+    | FuncCallLoop _ | Loop _ ->
         assert false
   in
   aux expr
@@ -2796,7 +2796,7 @@ let complete_vars_stack (prog : program) : program =
       | Com.TestInSet (_, me, _)
       | Com.Unop (_, me)
       | Com.Index (_, me)
-      | Com.EventField (me, _, _) ->
+      | Com.Var (FieldAccess (me, _, _)) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
@@ -2828,9 +2828,10 @@ let complete_vars_stack (prog : program) : program =
             | _ -> (0, 0, 0, tdata)
           in
           (max nb nb', max sz sz', max nbRef nbRef', tdata)
-      | Com.Literal _ | Com.Var _ | Com.NbCategory _ | Com.Attribut _
-      | Com.Size _ | Com.NbAnomalies | Com.NbDiscordances | Com.NbInformatives
-      | Com.NbBloquantes ->
+      | Com.Literal _
+      | Com.Var (VarAccess _)
+      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.NbAnomalies
+      | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
           (0, 0, 0, tdata)
       | Com.FuncCallLoop _ | Com.Loop _ -> assert false
     in

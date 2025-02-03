@@ -32,27 +32,17 @@ let get_var_from_name (var_data : Com.Var.t StrMap.t)
 
 (**{1 Translation}*)
 
-(**{2 Variables}*)
-
-(** Variables are tricky to translate; indeed, we have unrolled all the loops,
-    and generic variables depend on the loop parameters. We have to interrogate
-    the loop context for the current values of the loop parameter and then
-    replace *inside the string* the loop parameter by its value to produce the
-    new variable. *)
-
-let get_var (var_data : Com.Var.t StrMap.t)
-    (name : Mast.variable_name Pos.marked) : Mir.expression =
-  Com.Var (get_var_from_name var_data name)
-
 (**{2 Preliminary passes}*)
 
 (**{2 SSA construction}*)
 
 let translate_variable (var_data : Com.Var.t StrMap.t)
-    (var : Mast.variable Pos.marked) : Mir.expression Pos.marked =
+    (var : Mast.variable Pos.marked) : Com.Var.t Pos.marked =
   match Pos.unmark var with
   | Mast.Normal name ->
-      Pos.same_pos_as (get_var var_data (Pos.same_pos_as name var)) var
+      Pos.same_pos_as
+        (get_var_from_name var_data (Pos.same_pos_as name var))
+        var
   | Mast.Generic _ -> assert false
 
 (** {2 Translation of expressions}*)
@@ -76,7 +66,7 @@ let rec translate_expression (p : Check_validity.program)
                     | Mast.Generic _ -> assert false
                   in
                   VarValue (new_v, pos)
-              | Interval (bv, ev) -> Interval (bv, ev))
+              | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
             values
         in
         TestInSet (positive, new_e, new_set_values)
@@ -103,11 +93,7 @@ let rec translate_expression (p : Check_validity.program)
     | Index (t, i) ->
         let t_var = translate_variable var_data t in
         let new_i = translate_expression p var_data i in
-        Index
-          ( (match Pos.unmark t_var with
-            | Var v -> (v, Pos.get_position f)
-            | _ -> assert false (* should not happen *)),
-            new_i )
+        Index (t_var, new_i)
     | Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression p var_data e1 in
         let new_e2 = translate_expression p var_data e2 in
@@ -119,9 +105,13 @@ let rec translate_expression (p : Check_validity.program)
         in
         FuncCall (f_name, new_args)
     | Literal l -> Literal l
-    | Var var ->
+    | Var (VarAccess var) ->
         let new_var = translate_variable var_data (Pos.same_pos_as var f) in
-        Pos.unmark new_var
+        Var (VarAccess (Pos.unmark new_var))
+    | Var (FieldAccess (e, f, _)) ->
+        let new_e = translate_expression p var_data e in
+        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+        Var (FieldAccess (new_e, f, i))
     | NbCategory cs ->
         NbCategory (Check_validity.mast_to_catvars cs p.prog_var_cats)
     | Attribut (v, a) -> (
@@ -149,10 +139,6 @@ let rec translate_expression (p : Check_validity.program)
         | _ ->
             let msg = Format.sprintf "unknown variable %s" v_name in
             Errors.raise_spanned_error msg (Pos.get_position v))
-    | EventField (e, f, _) ->
-        let new_e = translate_expression p var_data e in
-        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-        EventField (new_e, f, i)
     | Size v -> (
         let v_name =
           match Pos.unmark v with
@@ -183,12 +169,7 @@ let rec translate_prog (p : Check_validity.program)
         let decl' =
           match decl with
           | VarDecl (v, idx, e) ->
-              let v' =
-                match Pos.unmark (translate_variable var_data v) with
-                | Com.Var var -> Pos.same_pos_as var v
-                | _ -> assert false
-                (* should not happen *)
-              in
+              let v' = translate_variable var_data v in
               let idx' = Option.map (translate_expression p var_data) idx in
               let e' = translate_expression p var_data e in
               Com.VarDecl (v', idx', e')
@@ -200,12 +181,7 @@ let rec translate_prog (p : Check_validity.program)
           | EventFieldRef (idx, f, _, v) ->
               let idx' = translate_expression p var_data idx in
               let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-              let v' =
-                match Pos.unmark (translate_variable var_data v) with
-                | Com.Var var -> Pos.same_pos_as var v
-                | _ -> assert false
-                (* should not happen *)
-              in
+              let v' = translate_variable var_data v in
               Com.EventFieldRef (idx', f, i, v')
         in
         let m_form = (Com.SingleFormula decl', pos) in
@@ -226,12 +202,7 @@ let rec translate_prog (p : Check_validity.program)
         let ed' = Pos.same_pos_as (aux [] (Pos.unmark ed)) ed in
         aux ((Com.WhenDoElse (wdl', ed'), pos) :: res) il
     | (Com.ComputeTarget (tn, targs), pos) :: il ->
-        let map v =
-          match Pos.unmark (translate_variable var_data v) with
-          | Com.Var var -> Pos.same_pos_as var v
-          | _ -> assert false
-          (* should not happen *)
-        in
+        let map v = translate_variable var_data v in
         let targs' = List.map map targs in
         aux ((Com.ComputeTarget (tn, targs'), pos) :: res) il
     | (Com.VerifBlock instrs, pos) :: il ->

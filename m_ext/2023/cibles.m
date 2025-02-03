@@ -992,7 +992,7 @@ sinon_faire
 finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
-calculer cible test;
+#calculer cible test;
 
 # primitif iterpréteur
 

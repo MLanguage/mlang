@@ -310,13 +310,13 @@ let expand_table_size (const_map : const_context) table_size =
   | _ -> table_size
 
 let rec expand_variable (const_map : const_context) (loop_map : loop_context)
-    (m_var : Mast.variable Pos.marked) : Mast.expression Pos.marked =
+    (m_var : Mast.variable Pos.marked) : Mast.variable Com.atom Pos.marked =
   let var, var_pos = m_var in
   match var with
   | Mast.Normal name -> (
       match ConstMap.find_opt name const_map with
-      | Some (f, _) -> (Com.Literal (Float f), var_pos)
-      | None -> (Com.Var var, var_pos))
+      | Some (f, _) -> (Com.AtomLiteral (Float f), var_pos)
+      | None -> (Com.AtomVar var, var_pos))
   | Mast.Generic gen_name ->
       if List.length gen_name.Mast.parameters == 0 then
         expand_variable const_map loop_map
@@ -334,7 +334,7 @@ and check_var_name (var_name : string) (var_pos : Pos.t) : unit =
   done
 
 and instantiate_params (const_map : const_context) (loop_map : loop_context)
-    (var_name : string) (pos : Pos.t) : Mast.expression Pos.marked =
+    (var_name : string) (pos : Pos.t) : Mast.variable Com.atom Pos.marked =
   match ParamsMap.choose_opt loop_map with
   | None ->
       check_var_name var_name pos;
@@ -545,10 +545,10 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
             match set_value with
             | VarValue set_var -> (
                 match expand_variable const_map loop_map set_var with
-                | Literal (Float f), var_pos -> FloatValue (f, var_pos)
-                | Var var, var_pos -> VarValue (var, var_pos)
+                | AtomLiteral (Float f), var_pos -> FloatValue (f, var_pos)
+                | AtomVar var, var_pos -> VarValue (var, var_pos)
                 | _ -> assert false)
-            | FloatValue _ | Interval _ -> set_value)
+            | FloatValue _ | IntervalValue _ -> set_value)
           values
       in
       (TestInSet (positive, e', values'), expr_pos)
@@ -566,8 +566,8 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
   | Index (t, i) ->
       let t' =
         match expand_variable const_map loop_map t with
-        | Var v, v_pos -> (v, v_pos)
-        | Literal (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
         | _ -> assert false
       in
       let i' = expand_expression const_map loop_map i in
@@ -597,7 +597,13 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       let args' = loop_context_provider translator in
       (FuncCall (f_name, args'), expr_pos)
   | Literal _ -> m_expr
-  | Var v -> expand_variable const_map loop_map (v, expr_pos)
+  | Var (VarAccess v) -> (
+      match expand_variable const_map loop_map (v, expr_pos) with
+      | AtomLiteral l, pos -> (Literal l, pos)
+      | AtomVar v, pos -> (Var (VarAccess v), pos))
+  | Var (FieldAccess (e, f, i)) ->
+      let e' = expand_expression const_map loop_map e in
+      (Var (FieldAccess (e', f, i)), expr_pos)
   | Loop (lvs, e) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator lmap =
@@ -614,16 +620,14 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
         loop_exprs
   | Attribut (var, a) -> (
       match expand_variable const_map loop_map var with
-      | Var v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
-      | Literal (Float _), v_pos -> Err.constant_cannot_have_an_attribut v_pos
+      | AtomVar v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
+      | AtomLiteral (Float _), v_pos ->
+          Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
-  | EventField (e, f, i) ->
-      let e' = expand_expression const_map loop_map e in
-      (EventField (e', f, i), expr_pos)
   | Size var -> (
       match expand_variable const_map loop_map var with
-      | Var v, v_pos -> (Size (v, v_pos), expr_pos)
-      | Literal (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
+      | AtomVar v, v_pos -> (Size (v, v_pos), expr_pos)
+      | AtomLiteral (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
       | _ -> assert false)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
@@ -638,9 +642,8 @@ let expand_formula (const_map : const_context)
   | Com.SingleFormula (VarDecl (v, idx, e)) ->
       let v' =
         match expand_variable const_map ParamsMap.empty v with
-        | Com.Var v, v_pos -> (v, v_pos)
-        | Com.Literal (Com.Float _), v_pos ->
-            Err.constant_forbidden_as_lvalue v_pos
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
         | _ -> assert false
       in
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
@@ -654,9 +657,8 @@ let expand_formula (const_map : const_context)
       let idx' = expand_expression const_map ParamsMap.empty idx in
       let v' =
         match expand_variable const_map ParamsMap.empty v with
-        | Com.Var v, v_pos -> (v, v_pos)
-        | Com.Literal (Com.Float _), v_pos ->
-            Err.constant_forbidden_as_lvalue v_pos
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
         | _ -> assert false
       in
       (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos) :: prev
@@ -665,8 +667,8 @@ let expand_formula (const_map : const_context)
       let translator loop_map =
         let v' =
           match expand_variable const_map loop_map v with
-          | Com.Var v, v_pos -> (v, v_pos)
-          | Com.Literal (Com.Float _), v_pos ->
+          | AtomVar v, v_pos -> (v, v_pos)
+          | AtomLiteral (Float _), v_pos ->
               Err.constant_forbidden_as_lvalue v_pos
           | _ -> assert false
         in
@@ -691,8 +693,8 @@ let expand_formula (const_map : const_context)
         let idx' = expand_expression const_map loop_map idx in
         let v' =
           match expand_variable const_map loop_map v with
-          | Com.Var v, v_pos -> (v, v_pos)
-          | Com.Literal (Com.Float _), v_pos ->
+          | AtomVar v, v_pos -> (v, v_pos)
+          | AtomLiteral (Float _), v_pos ->
               Err.constant_forbidden_as_lvalue v_pos
           | _ -> assert false
         in
@@ -817,9 +819,8 @@ let rec expand_instruction (const_map : const_context)
   | Com.ComputeTarget (tn, targs) ->
       let map var =
         match expand_variable const_map ParamsMap.empty var with
-        | Com.Var v, v_pos -> (v, v_pos)
-        | Com.Literal (Com.Float _), v_pos ->
-            Err.constant_forbidden_as_arg v_pos
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_arg v_pos
         | _ -> assert false
       in
       let targs' = List.map map targs in

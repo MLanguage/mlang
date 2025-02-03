@@ -375,7 +375,7 @@ struct
                     | Com.FloatValue i ->
                         let val_i = Number (N.of_float (Pos.unmark i)) in
                         comparison Com.Eq new_e0 val_i
-                    | Com.Interval (bn, en) ->
+                    | Com.IntervalValue (bn, en) ->
                         let val_bn =
                           Number (N.of_float (float_of_int (Pos.unmark bn)))
                         in
@@ -415,7 +415,19 @@ struct
         | Index (var, e1) ->
             let idx = evaluate_expr ctx p e1 in
             get_var_tab ctx var idx
-        | Var var -> get_var_value ctx var 0
+        | Var (VarAccess var) -> get_var_value ctx var 0
+        | Var (FieldAccess (e, _, j)) -> (
+            let new_e = evaluate_expr ctx p e in
+            match new_e with
+            | Number z when N.(z >=. zero ()) ->
+                let i = Int64.to_int N.(to_int z) in
+                let events = List.hd ctx.ctx_events in
+                if 0 <= i && i < Array.length events then
+                  match events.(i).(j) with
+                  | Com.Numeric v -> v
+                  | Com.RefVar var -> get_var_value ctx var 0
+                else Undefined
+            | _ -> Undefined)
         | FuncCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx p arg in
             match new_arg with
@@ -460,7 +472,7 @@ struct
                 let up = N.to_int (roundf f) in
                 let var_arg2 =
                   match Pos.unmark arg2 with
-                  | Var v -> (v, Pos.get_position e)
+                  | Var (VarAccess v) -> (v, Pos.get_position e)
                   | _ -> assert false
                   (* todo: rte *)
                 in
@@ -509,18 +521,6 @@ struct
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
             | Some l -> Number (N.of_float (float (Pos.unmark l)))
             | None -> Undefined)
-        | EventField (e, _, j) -> (
-            let new_e = evaluate_expr ctx p e in
-            match new_e with
-            | Number z when N.(z >=. zero ()) ->
-                let i = Int64.to_int N.(to_int z) in
-                let events = List.hd ctx.ctx_events in
-                if 0 <= i && i < Array.length events then
-                  match events.(i).(j) with
-                  | Com.Numeric v -> v
-                  | Com.RefVar var -> get_var_value ctx var 0
-                else Undefined
-            | _ -> Undefined)
         | Size var -> (
             let var, _ = get_var ctx (Pos.unmark var) in
             match Com.Var.is_table var with

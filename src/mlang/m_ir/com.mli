@@ -187,35 +187,6 @@ module TargetMap : StrMap.T
 
 type literal = Float of float | Undefined
 
-(** The M language has an extremely odd way to specify looping. Rather than
-    having first-class local mutable variables whose value change at each loop
-    iteration, the M language prefers to use the changing loop parameter to
-    instantiate the variable names inside the loop. For instance,
-
-    {v somme(i=1..10:Xi) v}
-
-    should evaluate to the sum of variables [X1], [X2], etc. Parameters can be
-    number or characters and there can be multiple of them. We have to store all
-    this information. *)
-
-(** Values that can be substituted for loop parameters *)
-type 'v atom = AtomVar of 'v | AtomLiteral of literal
-
-type 'v set_value_loop =
-  | Single of 'v atom Pos.marked
-  | Range of 'v atom Pos.marked * 'v atom Pos.marked
-  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
-
-type 'v loop_variable = char Pos.marked * 'v set_value_loop list
-(** A loop variable is the character that should be substituted in variable
-    names inside the loop plus the set of value to substitute. *)
-
-(** There are two kind of loop variables declaration, but they are semantically
-    the same though they have different concrete syntax. *)
-type 'v loop_variables =
-  | ValueSets of 'v loop_variable list
-  | Ranges of 'v loop_variable list
-
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -224,11 +195,6 @@ type binop = And | Or | Add | Sub | Mul | Div | Mod
 
 (** Comparison operators *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
-
-type 'v set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
 
 type func =
   | SumFunc  (** Sums the arguments *)
@@ -248,7 +214,45 @@ type func =
   | NbEvents
   | Func of string
 
-type 'v expression =
+(** The M language has an extremely odd way to specify looping. Rather than
+    having first-class local mutable variables whose value change at each loop
+    iteration, the M language prefers to use the changing loop parameter to
+    instantiate the variable names inside the loop. For instance,
+
+    {v somme(i=1..10:Xi) v}
+
+    should evaluate to the sum of variables [X1], [X2], etc. Parameters can be
+    number or characters and there can be multiple of them. We have to store all
+    this information. *)
+
+type 'v access =
+  | VarAccess of 'v
+  | FieldAccess of 'v m_expression * string Pos.marked * int
+
+(** Values that can be substituted for loop parameters *)
+and 'v atom = AtomVar of 'v | AtomLiteral of literal
+
+and 'v set_value_loop =
+  | Single of 'v atom Pos.marked
+  | Range of 'v atom Pos.marked * 'v atom Pos.marked
+  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
+
+and 'v loop_variable = char Pos.marked * 'v set_value_loop list
+(** A loop variable is the character that should be substituted in variable
+    names inside the loop plus the set of value to substitute. *)
+
+(** There are two kind of loop variables declaration, but they are semantically
+    the same though they have different concrete syntax. *)
+and 'v loop_variables =
+  | ValueSets of 'v loop_variable list
+  | Ranges of 'v loop_variable list
+
+and 'v set_value =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v Pos.marked
+  | IntervalValue of int Pos.marked * int Pos.marked
+
+and 'v expression =
   | TestInSet of bool * 'v m_expression * 'v set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
@@ -261,7 +265,7 @@ type 'v expression =
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
   | Literal of literal
-  | Var of 'v
+  | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
@@ -271,7 +275,6 @@ type 'v expression =
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
-  | EventField of 'v m_expression * string Pos.marked * int
 
 and 'v m_expression = 'v expression Pos.marked
 
