@@ -459,8 +459,10 @@ extern void free_erreur();
 
 extern double floor_g(double);
 extern double ceil_g(double);
-extern int multimax_def(int, char *);
-extern double multimax(double, double *);
+extern int multimax_def(int, char *, int);
+extern double multimax(int, double *, int);
+extern int multimax_varinfo_def(T_irdata *irdata, T_varinfo *info, int nbopd);
+extern double multimax_varinfo(T_irdata *irdata, T_varinfo *info, int nbopd);
 extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
@@ -996,18 +998,18 @@ T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
-int multimax_def(int nbopd, char *var) {
+int multimax_def(int nbopd, char *var, int size) {
   int i = 0;
-  for (i = 0; i < nbopd; i++) {
+  for (i = 0; i < nbopd && i < size; i++) {
     if (var[i] == 1) return 1;
   }
   return 0;
 }
 
-double multimax(double nbopd, double *var) {
+double multimax(int nbopd, double *var, int size) {
   int i = 0;
   double s = 0.0;
-  for (i = 0; i < (int)nbopd; i++) {
+  for (i = 0; i < nbopd && i < size; i++) {
     if (var[i] >= s) s = var[i];
   }
   return s;
@@ -1659,27 +1661,68 @@ void pr_err_var(T_irdata *irdata, char *nom) {
 |};
   StrMap.iter
     (fun f (ef : Com.event_field) ->
-      Format.fprintf fmt
+      let pr form = Pp.fpr fmt form in
+      pr
         "char event_field_%s(T_irdata *irdata, char *res_def, double *res_val, \
          char idx_def, double idx_val) {\n"
         f;
-      if ef.is_var then Format.fprintf fmt "  T_varinfo *info = NULL;\n";
-      Format.fprintf fmt "  int idx = (int)floor(idx_val);\n";
-      Format.fprintf fmt
-        "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
-      Format.fprintf fmt "    *res_def = 0;\n";
-      Format.fprintf fmt "    *res_val = 0.0;\n";
-      Format.fprintf fmt "    return 0;\n";
-      Format.fprintf fmt "  }\n";
+      if ef.is_var then pr "  T_varinfo *info = NULL;\n";
+      pr "  int idx = (int)floor(idx_val);\n";
+      pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
+      pr "    *res_def = 0;\n";
+      pr "    *res_val = 0.0;\n";
+      pr "    return 0;\n";
+      pr "  }\n";
       if ef.is_var then (
-        Format.fprintf fmt "  info = irdata->events[idx]->field_%s_var;\n" f;
-        Format.fprintf fmt "  *res_def = lis_varinfo_def(irdata, info);\n";
-        Format.fprintf fmt "  *res_val = lis_varinfo_val(irdata, info);\n")
+        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
+        pr "  *res_def = lis_varinfo_def(irdata, info);\n";
+        pr "  *res_val = lis_varinfo_val(irdata, info);\n")
       else (
-        Format.fprintf fmt "  *res_def = irdata->events[idx]->field_%s_def;\n" f;
-        Format.fprintf fmt "  *res_val = irdata->events[idx]->field_%s_val;\n" f);
-      Format.fprintf fmt "  return *res_def;\n";
-      Format.fprintf fmt "}\n\n")
+        pr "  *res_def = irdata->events[idx]->field_%s_def;\n" f;
+        pr "  *res_val = irdata->events[idx]->field_%s_val;\n" f);
+      pr "  return *res_def;\n";
+      pr "}\n\n";
+
+      if ef.is_var then (
+        pr
+          "char multimax_%s_def(T_irdata *irdata, char nb_def, double nb_val, \
+           char idx_def, double idx_val) {\n"
+          f;
+        pr "  int nb;\n";
+        pr "  int idx;\n";
+        pr "  T_varinfo *info;\n";
+        pr "  int i;\n";
+        pr "  if (nb_def == 0 || idx_def == 0) return 0;\n";
+        pr "  idx = (int)floor(idx_val);\n";
+        pr "  if (idx < 0 || irdata->nb_events <= idx) return 0;\n";
+        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
+        pr "  nb = (int)floor(nb_val);\n";
+        pr "  for (i = 0; i < nb && i < info->size; i++) {\n";
+        pr "    if (lis_varinfo_tab_def(irdata, info, i) == 1) return 1;\n";
+        pr "  }\n";
+        pr "  return 0;\n";
+        pr "}\n\n";
+
+        pr
+          "char multimax_%s_val(T_irdata *irdata, char nb_def, double nb_val, \
+           char idx_def, double idx_val) {\n"
+          f;
+        pr "  int nb;\n";
+        pr "  int idx;\n";
+        pr "  T_varinfo *info;\n";
+        pr "  int i;\n";
+        pr "  double s = 0.0;\n";
+        pr "  if (nb_def == 0 || idx_def == 0) return 0;\n";
+        pr "  idx = (int)floor(idx_val);\n";
+        pr "  if (idx < 0 || irdata->nb_events <= idx) return 0;\n";
+        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
+        pr "  nb = (int)floor(nb_val);\n";
+        pr "  for (i = 0; i < nb && i < info->size; i++) {\n";
+        pr "    double v = lis_varinfo_tab_val(irdata, info, i);\n";
+        pr "    if (v >= s) s = v;\n";
+        pr "  }\n";
+        pr "  return s;\n";
+        pr "}\n\n"))
     cprog.program_event_fields
 
 let open_file filename =

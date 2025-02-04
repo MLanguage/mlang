@@ -639,20 +639,23 @@ let expand_formula (const_map : const_context)
     Mast.variable Com.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
-  | Com.SingleFormula (VarDecl (v, idx, e)) ->
-      let v' =
-        match expand_variable const_map ParamsMap.empty v with
-        | AtomVar v, v_pos -> (v, v_pos)
-        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
-        | _ -> assert false
+  | Com.SingleFormula (VarDecl (m_access, idx, e)) ->
+      let m_access' =
+        let access, access_pos = m_access in
+        match access with
+        | VarAccess v -> (
+            match expand_variable const_map ParamsMap.empty (v, access_pos) with
+            | AtomVar v, v_pos -> (Com.VarAccess v, v_pos)
+            | AtomLiteral (Float _), v_pos ->
+                Err.constant_forbidden_as_lvalue v_pos
+            | _ -> assert false)
+        | FieldAccess (i, f, i_f) ->
+            let i' = expand_expression const_map ParamsMap.empty i in
+            (Com.FieldAccess (i', f, i_f), access_pos)
       in
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (VarDecl (v', idx', e')), form_pos) :: prev
-  | Com.SingleFormula (EventFieldDecl (idx, f, i, e)) ->
-      let idx' = expand_expression const_map ParamsMap.empty idx in
-      let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos) :: prev
+      (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos) :: prev
   | Com.SingleFormula (EventFieldRef (idx, f, i, v)) ->
       let idx' = expand_expression const_map ParamsMap.empty idx in
       let v' =
@@ -662,31 +665,36 @@ let expand_formula (const_map : const_context)
         | _ -> assert false
       in
       (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos) :: prev
-  | Com.MultipleFormulaes (lvs, VarDecl (v, idx, e)) ->
-      let loop_context_provider = expand_loop_variables lvs const_map in
-      let translator loop_map =
-        let v' =
-          match expand_variable const_map loop_map v with
-          | AtomVar v, v_pos -> (v, v_pos)
-          | AtomLiteral (Float _), v_pos ->
-              Err.constant_forbidden_as_lvalue v_pos
-          | _ -> assert false
-        in
-        let idx' = Option.map (expand_expression const_map loop_map) idx in
-        let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (VarDecl (v', idx', e')), form_pos)
-      in
-      let res = loop_context_provider translator in
-      List.rev res @ prev
-  | Com.MultipleFormulaes (lvs, EventFieldDecl (idx, f, i, e)) ->
-      let loop_context_provider = expand_loop_variables lvs const_map in
-      let translator loop_map =
-        let idx' = expand_expression const_map loop_map idx in
-        let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (EventFieldDecl (idx', f, i, e')), form_pos)
-      in
-      let res = loop_context_provider translator in
-      List.rev res @ prev
+  | Com.MultipleFormulaes (lvs, VarDecl (m_access, idx, e)) -> (
+      let access, access_pos = m_access in
+      match access with
+      | VarAccess v ->
+          let loop_context_provider = expand_loop_variables lvs const_map in
+          let translator loop_map =
+            let m_access' =
+              match expand_variable const_map loop_map (v, access_pos) with
+              | AtomVar v, v_pos -> (Com.VarAccess v, v_pos)
+              | AtomLiteral (Float _), v_pos ->
+                  Err.constant_forbidden_as_lvalue v_pos
+              | _ -> assert false
+            in
+            let idx' = Option.map (expand_expression const_map loop_map) idx in
+            let e' = expand_expression const_map loop_map e in
+            (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos)
+          in
+          let res = loop_context_provider translator in
+          List.rev res @ prev
+      | FieldAccess (i, f, i_f) ->
+          let loop_context_provider = expand_loop_variables lvs const_map in
+          let translator loop_map =
+            let i' = expand_expression const_map loop_map i in
+            let m_access' = (Com.FieldAccess (i', f, i_f), access_pos) in
+            let idx' = Option.map (expand_expression const_map loop_map) idx in
+            let e' = expand_expression const_map loop_map e in
+            (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos)
+          in
+          let res = loop_context_provider translator in
+          List.rev res @ prev)
   | Com.MultipleFormulaes (lvs, EventFieldRef (idx, f, i, v)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =

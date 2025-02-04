@@ -954,6 +954,23 @@ restaurer
 afficher_erreur "2: ";
 calculer cible afficher_evenement : avec EVT;
 afficher_erreur "\n";
+afficher_erreur "\n";
+champ_evenement(EVT, code) reference TNAPCR;
+iterer : variable I : 0 .. taille(TNAPCR) - 1 increment 1 : dans (
+  TNAPCR[I] = I;
+  afficher_erreur nom(TNAPCR) "[" (I) "] = " (TNAPCR[I]) "\n";
+)
+afficher_erreur "\n";
+iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
+  afficher_erreur "multimax(" (I) ", " nom(TNAPCR) ") = " (multimax(I, TNAPCR)) "\n";
+)
+afficher_erreur "\n";
+iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
+  afficher_erreur
+    "multimax(" (I) ", " nom(champ_evenement(EVT, code)) " (via evenements)) = "
+    (multimax(I, champ_evenement(EVT, code))) "\n";
+)
+afficher_erreur "\n";
 
 cible enchainement_primitif:
 application: iliad;
@@ -992,7 +1009,7 @@ sinon_faire
 finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
-#calculer cible test;
+calculer cible test;
 
 # primitif iterpréteur
 

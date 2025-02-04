@@ -469,39 +469,54 @@ struct
             match evaluate_expr ctx p arg1 with
             | Undefined -> Undefined
             | Number f -> (
-                let up = N.to_int (roundf f) in
-                let var_arg2 =
+                let up = Int64.sub (N.to_int (roundf f)) 1L in
+                let var_arg2_opt =
                   match Pos.unmark arg2 with
-                  | Var (VarAccess v) -> (v, Pos.get_position e)
-                  | _ -> assert false
-                  (* todo: rte *)
+                  | Var (VarAccess v) -> Some (v, Pos.get_position e)
+                  | Var (FieldAccess (ei, _, j)) -> (
+                      let new_ei = evaluate_expr ctx p ei in
+                      match new_ei with
+                      | Number z when N.(z >=. zero ()) ->
+                          let i = Int64.to_int N.(to_int z) in
+                          let events = List.hd ctx.ctx_events in
+                          if 0 <= i && i < Array.length events then
+                            match events.(i).(j) with
+                            | Com.RefVar var -> Some (var, Pos.get_position e)
+                            | Com.Numeric _ -> None
+                          else None
+                      | _ -> None)
+                  | _ -> None
                 in
-                let cast_to_int (v : value) : Int64.t option =
-                  match v with
-                  | Number f -> Some (N.to_int (roundf f))
-                  | Undefined -> None
-                in
-                let pos = Pos.get_position arg2 in
-                let access_index (i : int) : Int64.t option =
-                  cast_to_int
-                  @@ evaluate_expr ctx p
-                       ( Index
-                           (var_arg2, (Literal (Float (float_of_int i)), pos)),
-                         pos )
-                in
-                let maxi = ref (access_index 0) in
-                for i = 0 to Int64.to_int up do
-                  match access_index i with
-                  | None -> ()
-                  | Some n ->
-                      maxi :=
-                        Option.fold ~none:(Some n)
-                          ~some:(fun m -> Some (max n m))
-                          !maxi
-                done;
-                match !maxi with
+                match var_arg2_opt with
                 | None -> Undefined
-                | Some f -> Number (N.of_int f)))
+                | Some var_arg2 -> (
+                    let cast_to_int (v : value) : Int64.t option =
+                      match v with
+                      | Number f -> Some (N.to_int (roundf f))
+                      | Undefined -> None
+                    in
+                    let pos = Pos.get_position arg2 in
+                    let access_index (i : int) : Int64.t option =
+                      cast_to_int
+                      @@ evaluate_expr ctx p
+                           ( Index
+                               ( var_arg2,
+                                 (Literal (Float (float_of_int i)), pos) ),
+                             pos )
+                    in
+                    let maxi = ref None in
+                    for i = 0 to Int64.to_int up do
+                      match access_index i with
+                      | None -> ()
+                      | Some n ->
+                          maxi :=
+                            Option.fold ~none:(Some n)
+                              ~some:(fun m -> Some (max n m))
+                              !maxi
+                    done;
+                    match !maxi with
+                    | None -> Undefined
+                    | Some f -> Number (N.of_int f))))
         | FuncCall ((NbEvents, _), _) ->
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
@@ -605,40 +620,41 @@ struct
   and evaluate_stmt (tn : string) (canBlock : bool) (p : Mir.program)
       (ctx : ctx) (stmt : Mir.m_instruction) : unit =
     match Pos.unmark stmt with
-    | Com.Affectation (Com.SingleFormula decl, _) -> (
-        match decl with
-        | VarDecl (m_var, vidx_opt, vexpr) -> (
-            let vari = get_var ctx (Pos.unmark m_var) in
+    | Com.Affectation (SingleFormula (VarDecl (m_acc, vidx_opt, vexpr)), _) -> (
+        match Pos.unmark m_acc with
+        | Com.VarAccess var -> (
+            let vari = get_var ctx var in
             match vidx_opt with
             | None -> set_var_value p ctx vari vexpr
             | Some ei -> set_var_value_tab p ctx vari ei vexpr)
-        | EventFieldDecl (idx, _, j, expr) -> (
-            let new_idx = evaluate_expr ctx p idx in
-            match new_idx with
+        | Com.FieldAccess (i, _, j) -> (
+            let new_i = evaluate_expr ctx p i in
+            match new_i with
             | Number z when N.(z >=. zero ()) -> (
                 let i = Int64.to_int N.(to_int z) in
                 let events = List.hd ctx.ctx_events in
                 if 0 <= i && i < Array.length events then
                   match events.(i).(j) with
-                  | Com.RefVar var ->
+                  | Com.RefVar var -> (
                       let vari = get_var ctx var in
-                      set_var_value p ctx vari expr
+                      match vidx_opt with
+                      | None -> set_var_value p ctx vari vexpr
+                      | Some ei -> set_var_value_tab p ctx vari ei vexpr)
                   | Com.Numeric _ ->
-                      let value = evaluate_expr ctx p expr in
+                      let value = evaluate_expr ctx p vexpr in
                       events.(i).(j) <- Com.Numeric value)
-            | _ -> ())
-        | EventFieldRef (idx, _, j, m_var) -> (
-            let new_idx = evaluate_expr ctx p idx in
-            match new_idx with
-            | Number z when N.(z >=. zero ()) -> (
-                let i = Int64.to_int N.(to_int z) in
-                let events = List.hd ctx.ctx_events in
-                if 0 <= i && i < Array.length events then
-                  match events.(i).(j) with
-                  | Com.RefVar _ ->
-                      events.(i).(j) <- Com.RefVar (Pos.unmark m_var)
-                  | Com.Numeric _ -> ())
             | _ -> ()))
+    | Com.Affectation (SingleFormula (EventFieldRef (idx, _, j, m_var)), _) -> (
+        let new_idx = evaluate_expr ctx p idx in
+        match new_idx with
+        | Number z when N.(z >=. zero ()) -> (
+            let i = Int64.to_int N.(to_int z) in
+            let events = List.hd ctx.ctx_events in
+            if 0 <= i && i < Array.length events then
+              match events.(i).(j) with
+              | Com.RefVar _ -> events.(i).(j) <- Com.RefVar (Pos.unmark m_var)
+              | Com.Numeric _ -> ())
+        | _ -> ())
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx p b with

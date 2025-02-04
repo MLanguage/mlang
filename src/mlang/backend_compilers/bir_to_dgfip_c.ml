@@ -280,16 +280,41 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((Multimax, _), [ e1; (Var (VarAccess v2), _) ]) ->
-      let bound = generate_c_expr e1 in
-      let set_vars = bound.D.set_vars in
-      let def_test =
-        D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
-      in
-      let value_comp =
-        D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
-      in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | FuncCall ((Multimax, _), [ e1; (Var m_acc, _) ]) -> (
+      match m_acc with
+      | VarAccess v ->
+          let bound = generate_c_expr e1 in
+          let set_vars = bound.D.set_vars in
+          let size_comp = D.dinstr (Pp.spr "(%s->size)" (VID.gen_info_ptr v)) in
+          let def_test =
+            D.dfun "multimax_def"
+              [ bound.value_comp; D.m_var v PassPointer Def; size_comp ]
+          in
+          let value_comp =
+            D.dfun "multimax"
+              [ bound.value_comp; D.m_var v PassPointer Val; size_comp ]
+          in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | FieldAccess (i, (fn, _), _) ->
+          let f_def = Pp.spr "multimax_%s_def" fn in
+          let f_val = Pp.spr "multimax_%s_val" fn in
+          let bound = generate_c_expr e1 in
+          let set_vars = bound.D.set_vars in
+          let irdata_comp = D.dlow_level "irdata" in
+          let idx = generate_c_expr i in
+          let set_vars = set_vars @ idx.D.set_vars in
+          let args =
+            [
+              irdata_comp;
+              bound.def_test;
+              bound.value_comp;
+              idx.def_test;
+              idx.value_comp;
+            ]
+          in
+          let def_test = D.dfun f_def args in
+          let value_comp = D.dfun f_val args in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
   | FuncCall ((NbEvents, _), _) ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_evenements(irdata)" in
@@ -464,6 +489,7 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
 
 let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
     (p : Mir.program) (idx_expr : Mir.expression Pos.marked) (field : string)
+    (vidx_opt : Mir.expression Pos.marked option)
     (expr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
   let pr form = Format.fprintf oc form in
   pr "@;@[<v 2>{";
@@ -479,9 +505,23 @@ let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
   let res_val = res ^ "_val" in
   pr "@;char %s;@;double %s;" res_def res_val;
   generate_expr_with_res_in dgfip_flags oc res_def res_val expr;
-  if (StrMap.find field p.program_event_fields).is_var then
-    pr "@;ecris_varinfo(irdata, irdata->events[%s]->field_%s_var, %s, %s);" idx
-      field res_def res_val
+  if (StrMap.find field p.program_event_fields).is_var then (
+    match vidx_opt with
+    | None ->
+        pr "@;ecris_varinfo(irdata, irdata->events[%s]->field_%s_var, %s, %s);"
+          idx field res_def res_val
+    | Some ei ->
+        let i = fresh_c_local "i" in
+        let i_def = i ^ "_def" in
+        let i_val = i ^ "_val" in
+        pr "@;char %s;@;double %s;@;int %s;" i_def i_val i;
+        generate_expr_with_res_in dgfip_flags oc i_def i_val ei;
+        pr "@;%s = (int)%s;" i i_val;
+        pr
+          "@;\
+           ecris_varinfo_tab(irdata, irdata->events[%s]->field_%s_var, %s, %s, \
+           %s);"
+          idx i field res_def res_val)
   else (
     pr "@;irdata->events[%s]->field_%s_def = %s;" idx field res_def;
     pr "@;irdata->events[%s]->field_%s_val = %s;" idx field res_val);
@@ -511,10 +551,12 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (stmt : Mir.m_instruction) =
   let pr fmt = Format.fprintf oc fmt in
   match Pos.unmark stmt with
-  | Affectation (SingleFormula (VarDecl (m_var, vidx_opt, vexpr)), _) ->
-      generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc
-  | Affectation (SingleFormula (EventFieldDecl (idx, f, _, expr)), _) ->
-      generate_event_field_def dgfip_flags program idx (Pos.unmark f) expr oc
+  | Affectation (SingleFormula (VarDecl (m_acc, vidx_opt, vexpr)), _) -> (
+      match Pos.unmark m_acc with
+      | VarAccess var -> generate_var_def dgfip_flags var vidx_opt vexpr oc
+      | FieldAccess (i, f, _) ->
+          let fn = Pos.unmark f in
+          generate_event_field_def dgfip_flags program i fn vidx_opt vexpr oc)
   | Affectation (SingleFormula (EventFieldRef (idx, f, _, m_var)), _) ->
       generate_event_field_ref dgfip_flags program idx (Pos.unmark f) m_var oc
   | Affectation (MultipleFormulaes _, _) -> assert false

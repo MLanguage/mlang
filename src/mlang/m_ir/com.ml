@@ -463,9 +463,7 @@ type 'v print_arg =
 type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
-  | VarDecl of 'v Pos.marked * 'v m_expression option * 'v m_expression
-  | EventFieldDecl of
-      'v m_expression * string Pos.marked * int * 'v m_expression
+  | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
   | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v Pos.marked
 
 type 'v formula =
@@ -720,19 +718,18 @@ let format_print_arg form_var fmt =
           e min max
 
 let format_formula_decl form_var fmt = function
-  | VarDecl (v, idx, e) ->
-      Format.fprintf fmt "%a" form_var (Pos.unmark v);
+  | VarDecl (access, idx, e) ->
+      (match Pos.unmark access with
+      | VarAccess v -> form_var fmt v
+      | FieldAccess (i, f, _) ->
+          Format.fprintf fmt "champ_evenement(%a,%s)"
+            (format_expression form_var)
+            (Pos.unmark i) (Pos.unmark f));
       (match idx with
       | Some vi ->
           Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
       | None -> ());
       Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
-  | EventFieldDecl (idx, f, _, e) ->
-      Format.fprintf fmt "champ_evenement(%a,%s) = %a"
-        (format_expression form_var)
-        (Pos.unmark idx) (Pos.unmark f)
-        (format_expression form_var)
-        (Pos.unmark e)
   | EventFieldRef (idx, f, _, v) ->
       Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
         (format_expression form_var)

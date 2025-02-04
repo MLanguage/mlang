@@ -965,21 +965,25 @@ lvalue_name:
 | s = SYMBOL { parse_variable $sloc s }
 
 lvalue:
-| s = with_pos(lvalue_name) i = with_pos(brackets)? { (s, i) }
+| s = with_pos(lvalue_name) i = with_pos(brackets)? {
+    let access = Pos.same_pos_as (Com.VarAccess (Pos.unmark s)) s in
+    (access, i)
+  }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN i = with_pos(brackets)? {
+    let access = (Com.FieldAccess (idx, f, -1), mk_position $sloc) in
+    (access, i)
+  }
 
 formula:
-| EVENT_FIELD LPAREN idx = with_pos(expression)
-  COMMA f = symbol_with_pos RPAREN EQUALS e = with_pos(expression) {
-    EventFieldDecl (idx, f, -1, e)
+| lval = lvalue EQUALS e = with_pos(expression) {
+    let access, idx = lval in
+    VarDecl (access, idx, e)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN REFERENCE v = symbol_with_pos {
     let var = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     EventFieldRef (idx, f, -1, var)
-  }
-| lvalue = lvalue EQUALS e = with_pos(expression) {
-    let v, idx = lvalue in
-    VarDecl (v, idx, e)
   }
 
 verification_etc:

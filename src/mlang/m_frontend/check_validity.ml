@@ -184,7 +184,7 @@ module Err = struct
 
   let second_arg_of_multimax pos =
     Errors.raise_spanned_error
-      "second argument of functionn multimax must be a variable name" pos
+      "second argument of function multimax must be a variable name" pos
 
   let loop_in_rules rdom_chain cycle =
     let rdom_chain_str =
@@ -1020,10 +1020,17 @@ let rec fold_var_expr
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           match args with
           | [ expr; var_expr ] -> (
+              let acc = fold_var_expr fold_var is_filter acc expr env in
               match var_expr with
               | Var (VarAccess var), var_pos ->
-                  let acc = fold_var_expr fold_var is_filter acc expr env in
                   fold_var (var, var_pos) Both env acc
+              | Var (FieldAccess (i, f, _)), _access_pos ->
+                  let f_name, f_pos = f in
+                  (match StrMap.find_opt f_name env.prog.prog_event_fields with
+                  | Some ef when ef.is_var -> ()
+                  | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+                  | None -> Err.unknown_event_field f_name f_pos);
+                  fold_var_expr fold_var is_filter acc i env
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
           | _ -> Err.multimax_require_two_args expr_pos)
       | Com.SumFunc -> check_func (-1)
@@ -1220,49 +1227,53 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
         match instr with
         | Com.Affectation (f, _) -> (
             match f with
-            | Com.SingleFormula (VarDecl (v, idx, e)) ->
-                let out_var =
-                  let idx_mem = OneOf (Option.map (fun _ -> ()) idx) in
-                  check_variable v idx_mem env
-                in
+            | Com.SingleFormula (VarDecl (m_access, idx, e)) -> (
+                let access, access_pos = m_access in
                 let in_vars_index =
                   match idx with
                   | Some ei -> check_expression false ei env
                   | None -> StrSet.empty
                 in
                 let in_vars_expr = check_expression false e env in
-                if is_rule then
-                  let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
-                  let in_vars =
-                    StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
-                  in
-                  let out_vars = StrSet.add out_var out_vars in
-                  aux (env, m_instr :: res, in_vars, out_vars) il
-                else aux (env, m_instr :: res, in_vars, out_vars) il
-            | Com.SingleFormula (EventFieldDecl (idx, f, _, e)) ->
-                if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-                let f_name, f_pos = f in
-                (match StrMap.find_opt f_name env.prog.prog_event_fields with
-                | Some _ -> ()
-                | None -> Err.unknown_event_field f_name f_pos);
-                let in_vars_index = check_expression false idx env in
-                let in_vars_expr = check_expression false e env in
                 let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
-                let in_vars =
-                  StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
-                in
-                aux (env, m_instr :: res, in_vars, out_vars) il
-            | Com.SingleFormula (EventFieldRef (idx, f, _, v)) ->
+                match access with
+                | VarAccess v ->
+                    let out_var =
+                      let idx_mem = OneOf (Option.map (fun _ -> ()) idx) in
+                      check_variable (v, access_pos) idx_mem env
+                    in
+                    let in_vars =
+                      StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
+                    in
+                    let out_vars = StrSet.add out_var out_vars in
+                    aux (env, m_instr :: res, in_vars, out_vars) il
+                | FieldAccess (i, f, _) ->
+                    if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+                    let f_name, f_pos = f in
+                    (match
+                       StrMap.find_opt f_name env.prog.prog_event_fields
+                     with
+                    | Some ef when (not ef.is_var) && idx <> None ->
+                        Err.event_field_is_not_a_reference f_name f_pos
+                    | Some _ -> ()
+                    | None -> Err.unknown_event_field f_name f_pos);
+                    let in_vars_i = check_expression false i env in
+                    let in_vars_aff = StrSet.union in_vars_i in_vars_aff in
+                    let in_vars =
+                      StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
+                    in
+                    aux (env, m_instr :: res, in_vars, out_vars) il)
+            | Com.SingleFormula (EventFieldRef (i, f, _, v)) ->
                 if is_rule then Err.insruction_forbidden_in_rules instr_pos;
                 let f_name, f_pos = f in
                 (match StrMap.find_opt f_name env.prog.prog_event_fields with
                 | Some ef when ef.is_var -> ()
                 | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                 | None -> Err.unknown_event_field f_name f_pos);
-                let in_vars_index = check_expression false idx env in
-                ignore (check_variable v (OneOf None) env);
+                let in_vars_i = check_expression false i env in
+                ignore (check_variable v Both env);
                 let in_vars =
-                  StrSet.union in_vars (StrSet.diff in_vars_index out_vars)
+                  StrSet.union in_vars (StrSet.diff in_vars_i out_vars)
                 in
                 aux (env, m_instr :: res, in_vars, out_vars) il
             | Com.MultipleFormulaes _ -> assert false)
@@ -2650,18 +2661,21 @@ let complete_vars_stack (prog : program) : program =
       match instr with
       | Com.Affectation mf -> (
           match Pos.unmark mf with
-          | SingleFormula (VarDecl (_, mei_opt, mev)) ->
+          | SingleFormula (VarDecl (m_access, mei_opt, mev)) -> (
               let nbI, szI, nbRefI, tdata =
                 match mei_opt with
                 | None -> (0, 0, 0, tdata)
                 | Some mei -> aux_expr tdata mei
               in
               let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
-              (max nbI nbV, max szI szV, max nbRefI nbRefV, tdata)
-          | SingleFormula (EventFieldDecl (mei, _, _, mev)) ->
-              let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
-              let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
-              (max nbI nbV, max szI szV, max nbRefI nbRefV, tdata)
+              let nb, sz, nbRef =
+                (max nbI nbV, max szI szV, max nbRefI nbRefV)
+              in
+              match Pos.unmark m_access with
+              | VarAccess _ -> (nb, sz, nbRef, tdata)
+              | FieldAccess (mei, _, _) ->
+                  let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
+                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata))
           | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
           | MultipleFormulaes _ -> assert false)
       | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)

@@ -168,16 +168,21 @@ let rec translate_prog (p : Check_validity.program)
     | (Com.Affectation (SingleFormula decl, _), pos) :: il ->
         let decl' =
           match decl with
-          | VarDecl (v, idx, e) ->
-              let v' = translate_variable var_data v in
+          | VarDecl (m_access, idx, e) ->
+              let m_access' =
+                let access, a_pos = m_access in
+                match access with
+                | VarAccess v ->
+                    let v', v_pos' = translate_variable var_data (v, a_pos) in
+                    (Com.VarAccess v', v_pos')
+                | FieldAccess (i, f, _) ->
+                    let i' = translate_expression p var_data i in
+                    let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
+                    (Com.FieldAccess (i', f, ef.index), a_pos)
+              in
               let idx' = Option.map (translate_expression p var_data) idx in
               let e' = translate_expression p var_data e in
-              Com.VarDecl (v', idx', e')
-          | EventFieldDecl (idx, f, _, e) ->
-              let idx' = translate_expression p var_data idx in
-              let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-              let e' = translate_expression p var_data e in
-              Com.EventFieldDecl (idx', f, i, e')
+              Com.VarDecl (m_access', idx', e')
           | EventFieldRef (idx, f, _, v) ->
               let idx' = translate_expression p var_data idx in
               let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
