@@ -1988,23 +1988,21 @@ let check_no_variable_duplicates (rdom_rules : rule IntMap.t)
           out rule_defined)
       rdom_rules StrMap.empty
   in
-  let duplicate =
-    StrMap.fold
-      (fun var_name rule_list boo ->
-        if (not (is_vartmp var_name)) && List.length rule_list > 1 then (
-          Cli.error_print
+  StrMap.iter
+    (fun var_name rule_list ->
+      if (not (is_vartmp var_name)) && List.length rule_list > 1 then
+        let msg =
+          Format.asprintf
             "Variable %s is defined in %d different rules in rule domain %a: %a"
             var_name (List.length rule_list) (Com.DomainId.pp ()) rdom_id
             (Format.pp_print_list
                ?pp_sep:(Some (fun fmt () -> Format.fprintf fmt ","))
                (fun fmt id -> Format.fprintf fmt "%d" id))
-            (List.rev rule_list);
+            (List.rev rule_list)
           (* List.rev for cosmetic reasons *)
-          true)
-        else boo)
-      rule_defined false
-  in
-  if duplicate then exit (-1)
+        in
+        Errors.raise_error msg)
+    rule_defined
 
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
