@@ -235,10 +235,10 @@ let driver (files : string list) (application_names : string list)
             Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
     end
-  with Errors.StructuredError (msg, pos_list, kont) ->
+  with Errors.StructuredError (msg, pos_list, kont) as e ->
     Cli.error_print "%a" Errors.format_structured_error (msg, pos_list);
     (match kont with None -> () | Some kont -> kont ());
-    exit (-1)
+    raise e
 
 let main () =
   exit @@ Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)

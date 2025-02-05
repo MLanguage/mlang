@@ -33,7 +33,7 @@ endif
 # Mlang configuration
 ##################################################
 
-MLANG_BIN=dune exec $(ROOT_DIR)/_build/default/src/main.exe --
+MLANG_BIN=OCAMLRUNPARAM=$(OCAMLRUNPARAM) dune exec $(ROOT_DIR)/_build/default/src/main.exe --
 
 PRECISION?=double
 MLANG_DEFAULT_OPTS=\

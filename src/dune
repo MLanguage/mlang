@@ -1,13 +1,13 @@
 (env
  (dev
   (flags
-   (:standard -g -warn-error -a)))
+   (:standard -warn-error -a)))
  (ci
   (flags
-   (:standard -warn-error +a)))
+   (:standard -w +a-4-40..42-44-45-70 -warn-error +a)))
  (release
   (flags
-   (:standard -warn-error -a))))
+   (:standard -w +a-4-40..42-44-45-70 -warn-error -a))))
 
 (rule
  (with-stdout-to
