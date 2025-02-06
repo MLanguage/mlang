@@ -59,13 +59,17 @@ let rec translate_expression (p : Check_validity.program)
           List.map
             (function
               | FloatValue f -> FloatValue f
-              | VarValue (v, pos) ->
+              | VarValue (VarAccess v, pos) ->
                   let new_v =
                     match v with
                     | Mast.Normal name -> StrMap.find name var_data
                     | Mast.Generic _ -> assert false
                   in
-                  VarValue (new_v, pos)
+                  VarValue (VarAccess new_v, pos)
+              | VarValue (FieldAccess (e, ((fn, _) as f), _), pos) ->
+                  let new_e = translate_expression p var_data e in
+                  let i_f = (StrMap.find fn p.prog_event_fields).index in
+                  VarValue (FieldAccess (new_e, f, i_f), pos)
               | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
             values
         in
@@ -90,10 +94,15 @@ let rec translate_expression (p : Check_validity.program)
     | Unop (op, e) ->
         let new_e = translate_expression p var_data e in
         Unop (op, new_e)
-    | Index (t, i) ->
-        let t_var = translate_variable var_data t in
+    | Index ((VarAccess t, pos), i) ->
+        let t_var, t_pos = translate_variable var_data (t, pos) in
         let new_i = translate_expression p var_data i in
-        Index (t_var, new_i)
+        Index ((VarAccess t_var, t_pos), new_i)
+    | Index ((FieldAccess (e, f, _), pos), i) ->
+        let new_e = translate_expression p var_data e in
+        let new_i = translate_expression p var_data i in
+        let i_f = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+        Index ((FieldAccess (new_e, f, i_f), pos), new_i)
     | Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression p var_data e1 in
         let new_e2 = translate_expression p var_data e2 in
@@ -114,43 +123,34 @@ let rec translate_expression (p : Check_validity.program)
         Var (FieldAccess (new_e, f, i))
     | NbCategory cs ->
         NbCategory (Check_validity.mast_to_catvars cs p.prog_var_cats)
-    | Attribut (v, a) -> (
-        if
-          CatVar.Map.fold
-            (fun _ CatVar.{ attributs; _ } res ->
-              res
-              && StrMap.fold
-                   (fun attr _ res -> res && attr <> Pos.unmark a)
-                   attributs true)
-            p.prog_var_cats true
-        then Errors.raise_spanned_error "unknown attribut" (Pos.get_position a);
+    | Attribut ((VarAccess v, v_pos), a) -> (
         let v_name =
-          match Pos.unmark v with
-          | Mast.Normal v_name -> v_name
-          | _ -> assert false
-        in
-        match StrMap.find_opt v_name var_data with
-        | Some var -> (
-            if Com.Var.is_ref var then Attribut (Pos.same_pos_as var v, a)
-            else
-              match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-              | Some l -> Literal (Float (float (Pos.unmark l)))
-              | None -> Literal Undefined)
-        | _ ->
-            let msg = Format.sprintf "unknown variable %s" v_name in
-            Errors.raise_spanned_error msg (Pos.get_position v))
-    | Size v -> (
-        let v_name =
-          match Pos.unmark v with
-          | Mast.Normal v_name -> v_name
-          | _ -> assert false
+          match v with Mast.Normal v_name -> v_name | _ -> assert false
         in
         let var = StrMap.find v_name var_data in
-        if Com.Var.is_ref var then Size (Pos.same_pos_as var v)
+        if Com.Var.is_ref var then Attribut ((VarAccess var, v_pos), a)
+        else
+          match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
+          | Some l -> Literal (Float (float (Pos.unmark l)))
+          | None -> Literal Undefined)
+    | Attribut ((FieldAccess (e, f, _), pos), a) ->
+        let new_e = translate_expression p var_data e in
+        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+        Attribut ((FieldAccess (new_e, f, i), pos), a)
+    | Size (VarAccess v, pos) -> (
+        let v_name =
+          match v with Mast.Normal v_name -> v_name | _ -> assert false
+        in
+        let var = StrMap.find v_name var_data in
+        if Com.Var.is_ref var then Size (VarAccess var, pos)
         else
           match Com.Var.is_table var with
           | Some i -> Literal (Float (float_of_int i))
           | None -> Literal (Float 1.0))
+    | Size (FieldAccess (e, f, _), pos) ->
+        let new_e = translate_expression p var_data e in
+        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+        Size (FieldAccess (new_e, f, i), pos)
     | NbAnomalies -> NbAnomalies
     | NbDiscordances -> NbDiscordances
     | NbInformatives -> NbInformatives

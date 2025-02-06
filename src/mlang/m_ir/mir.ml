@@ -114,6 +114,18 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
     'var Com.expression Pos.marked =
   let open Com in
   match Pos.unmark e with
+  | TestInSet (positive, e0, values) ->
+      let new_e0 = expand_functions_expr e0 in
+      let new_values =
+        let map = function
+          | Com.VarValue (FieldAccess (mei, f, i_f), pos) ->
+              let new_mei = expand_functions_expr mei in
+              Com.VarValue (FieldAccess (new_mei, f, i_f), pos)
+          | value -> value
+        in
+        List.map map values
+      in
+      Pos.same_pos_as (TestInSet (positive, new_e0, new_values)) e
   | Comparison (op, e1, e2) ->
       let new_e1 = expand_functions_expr e1 in
       let new_e2 = expand_functions_expr e2 in
@@ -130,9 +142,13 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_e2 = expand_functions_expr e2 in
       let new_e3 = Option.map expand_functions_expr e3 in
       Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
-  | Index (var, e1) ->
+  | Index ((VarAccess v, pos), e1) ->
       let new_e1 = expand_functions_expr e1 in
-      Pos.same_pos_as (Index (var, new_e1)) e
+      Pos.same_pos_as (Index ((VarAccess v, pos), new_e1)) e
+  | Index ((FieldAccess (ie, f, i_f), pos), e1) ->
+      let new_ie = expand_functions_expr ie in
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Index ((FieldAccess (new_ie, f, i_f), pos), new_e1)) e
   | Literal _ -> e
   | Var _ -> e
   | FuncCall ((SumFunc, _), args) ->
@@ -182,23 +198,19 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
              expand_functions_expr arg,
              Pos.same_pos_as (Literal (Float 0.0)) e ))
         e
-  | FuncCall ((PresentFunc, pos), [ arg ]) ->
-      (* we do not expand this function as it deals specifically with undefined
-         variables *)
-      Pos.same_pos_as
-        (FuncCall ((PresentFunc, pos), [ expand_functions_expr arg ]))
-        e
-  | FuncCall ((ArrFunc, pos), [ arg ]) ->
-      (* we do not expand this function as it requires modulo or modf *)
-      Pos.same_pos_as
-        (FuncCall ((ArrFunc, pos), [ expand_functions_expr arg ]))
-        e
-  | FuncCall ((InfFunc, pos), [ arg ]) ->
-      (* we do not expand this function as it requires modulo or modf *)
-      Pos.same_pos_as
-        (FuncCall ((InfFunc, pos), [ expand_functions_expr arg ]))
-        e
-  | _ -> e
+  | FuncCall (fn, args) ->
+      Pos.same_pos_as (FuncCall (fn, List.map expand_functions_expr args)) e
+  | Attribut ((VarAccess _, _), _) -> e
+  | Attribut ((FieldAccess (ie, f, i_f), pos), a) ->
+      let new_ie = expand_functions_expr ie in
+      Pos.same_pos_as (Attribut ((FieldAccess (new_ie, f, i_f), pos), a)) e
+  | Size (VarAccess _, _) -> e
+  | Size (FieldAccess (ie, f, i_f), pos) ->
+      let new_ie = expand_functions_expr ie in
+      Pos.same_pos_as (Size (FieldAccess (new_ie, f, i_f), pos)) e
+  | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
+  | FuncCallLoop _ | Loop _ | NbCategory _ ->
+      e
 
 let expand_functions (p : program) : program =
   let open Com in

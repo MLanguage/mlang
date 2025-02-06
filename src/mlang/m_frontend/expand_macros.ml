@@ -543,11 +543,16 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
         List.map
           (fun set_value ->
             match set_value with
-            | VarValue set_var -> (
-                match expand_variable const_map loop_map set_var with
-                | AtomLiteral (Float f), var_pos -> FloatValue (f, var_pos)
-                | AtomVar var, var_pos -> VarValue (var, var_pos)
-                | _ -> assert false)
+            | VarValue (a, a_pos) -> (
+                match a with
+                | VarAccess v -> (
+                    match expand_variable const_map loop_map (v, a_pos) with
+                    | AtomLiteral (Float f), var_pos -> FloatValue (f, var_pos)
+                    | AtomVar var, var_pos -> VarValue (VarAccess var, var_pos)
+                    | _ -> assert false)
+                | FieldAccess (e, f, i_f) ->
+                    let e' = expand_expression const_map loop_map e in
+                    VarValue (FieldAccess (e', f, i_f), a_pos))
             | FloatValue _ | IntervalValue _ -> set_value)
           values
       in
@@ -563,15 +568,19 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
   | Unop (op, e) ->
       let e' = expand_expression const_map loop_map e in
       (Unop (op, e'), expr_pos)
-  | Index (t, i) ->
-      let t' =
-        match expand_variable const_map loop_map t with
+  | Index ((VarAccess t, t_pos), i) ->
+      let t', t_pos' =
+        match expand_variable const_map loop_map (t, t_pos) with
         | AtomVar v, v_pos -> (v, v_pos)
         | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
         | _ -> assert false
       in
       let i' = expand_expression const_map loop_map i in
-      (Index (t', i'), expr_pos)
+      (Index ((VarAccess t', t_pos'), i'), expr_pos)
+  | Index ((FieldAccess (e, f, i_f), pos), i) ->
+      let e' = expand_expression const_map loop_map e in
+      let i' = expand_expression const_map loop_map i in
+      (Index ((FieldAccess (e', f, i_f), pos), i'), expr_pos)
   | Conditional (e1, e2, e3_opt) ->
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
@@ -618,17 +627,23 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
           (Binop ((Or, expr_pos), res, loop_expr), expr_pos))
         (Literal (Float 0.0), expr_pos)
         loop_exprs
-  | Attribut (var, a) -> (
-      match expand_variable const_map loop_map var with
-      | AtomVar v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
+  | Attribut ((VarAccess v, pos), a) -> (
+      match expand_variable const_map loop_map (v, pos) with
+      | AtomVar v, v_pos -> (Attribut ((VarAccess v, v_pos), a), expr_pos)
       | AtomLiteral (Float _), v_pos ->
           Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
-  | Size var -> (
-      match expand_variable const_map loop_map var with
-      | AtomVar v, v_pos -> (Size (v, v_pos), expr_pos)
+  | Attribut ((FieldAccess (e, f, i), pos), a) ->
+      let e' = expand_expression const_map loop_map e in
+      (Attribut ((FieldAccess (e', f, i), pos), a), expr_pos)
+  | Size (VarAccess v, pos) -> (
+      match expand_variable const_map loop_map (v, pos) with
+      | AtomVar v, v_pos -> (Size (VarAccess v, v_pos), expr_pos)
       | AtomLiteral (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
       | _ -> assert false)
+  | Size (FieldAccess (e, f, i), pos) ->
+      let e' = expand_expression const_map loop_map e in
+      (Size (FieldAccess (e', f, i), pos), expr_pos)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
       m_expr

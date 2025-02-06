@@ -249,7 +249,7 @@ and 'v loop_variables =
 
 and 'v set_value =
   | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
+  | VarValue of 'v access Pos.marked
   | IntervalValue of int Pos.marked * int Pos.marked
 
 and 'v expression =
@@ -259,7 +259,7 @@ and 'v expression =
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v Pos.marked * 'v m_expression
+  | Index of 'v access Pos.marked * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -269,8 +269,8 @@ and 'v expression =
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v Pos.marked * string Pos.marked
-  | Size of 'v Pos.marked
+  | Attribut of 'v access Pos.marked * string Pos.marked
+  | Size of 'v access Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -386,7 +386,12 @@ val format_binop : Pp.t -> binop -> unit
 
 val format_comp_op : Pp.t -> comp_op -> unit
 
-val format_set_value : (Pp.t -> 'v -> unit) -> Pp.t -> 'v set_value -> unit
+val format_set_value :
+  (Pp.t -> 'v -> unit) ->
+  (Pp.t -> 'v expression -> unit) ->
+  Pp.t ->
+  'v set_value ->
+  unit
 
 val format_func : Pp.t -> func -> unit
 

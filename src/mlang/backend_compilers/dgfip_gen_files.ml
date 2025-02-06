@@ -73,28 +73,30 @@ let gen_table_varinfos fmt (cprog : Mir.program) =
   in
   StrSet.iter
     (fun attr ->
-      Format.fprintf fmt "char attribut_%s_def(T_varinfo *vi) {\n" attr;
-      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Pp.fpr fmt "char attribut_%s_def(T_varinfo *vi) {\n" attr;
+      Pp.fpr fmt "  if (vi == NULL) return 0;\n";
+      Pp.fpr fmt "  switch (vi->cat) {\n";
       Com.CatVar.Map.iter
         (fun _ Com.CatVar.{ id_str; attributs; _ } ->
           if StrMap.mem attr attributs then
-            Format.fprintf fmt "    case ID_%s: return 1;\n" id_str)
+            Pp.fpr fmt "    case ID_%s: return 1;\n" id_str)
         cprog.program_var_categories;
-      Format.fprintf fmt "  }\n";
-      Format.fprintf fmt "  return 0;\n";
-      Format.fprintf fmt "}\n\n";
-      Format.fprintf fmt "double attribut_%s(T_varinfo *vi) {\n" attr;
-      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Pp.fpr fmt "  }\n";
+      Pp.fpr fmt "  return 0;\n";
+      Pp.fpr fmt "}\n\n";
+      Pp.fpr fmt "double attribut_%s(T_varinfo *vi) {\n" attr;
+      Pp.fpr fmt "  if (vi == NULL) return 0.0;\n";
+      Pp.fpr fmt "  switch (vi->cat) {\n";
       Com.CatVar.Map.iter
         (fun _ Com.CatVar.{ id_str; attributs; _ } ->
           if StrMap.mem attr attributs then (
-            Format.fprintf fmt "    case ID_%s:\n" id_str;
-            Format.fprintf fmt "      return ((T_varinfo_%s *)vi)->attr_%s;\n"
-              id_str attr))
+            Pp.fpr fmt "    case ID_%s:\n" id_str;
+            Pp.fpr fmt "      return ((T_varinfo_%s *)vi)->attr_%s;\n" id_str
+              attr))
         cprog.program_var_categories;
-      Format.fprintf fmt "  }\n";
-      Format.fprintf fmt "  return 0.0;\n";
-      Format.fprintf fmt "}\n\n")
+      Pp.fpr fmt "  }\n";
+      Pp.fpr fmt "  return 0.0;\n";
+      Pp.fpr fmt "}\n\n")
     attrs;
   let stats_varinfos, var_map =
     Com.CatVar.Map.fold
@@ -102,9 +104,9 @@ let gen_table_varinfos fmt (cprog : Mir.program) =
       cprog.program_var_categories
       (Com.CatVar.Map.empty, StrMap.empty)
   in
-  Format.fprintf fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+  Pp.fpr fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
   StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
-  Format.fprintf fmt "  NULL\n};\n\n";
+  Pp.fpr fmt "  NULL\n};\n\n";
   stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
@@ -396,8 +398,13 @@ typedef struct S_irdata T_irdata;
 
 |};
   StrMap.iter
-    (fun f _ ->
-      Format.fprintf fmt
+    (fun f (ef : Com.event_field) ->
+      if ef.is_var then
+        Pp.fpr fmt
+          "extern T_varinfo *event_field_%s_var(T_irdata *irdata, char \
+           idx_def, double idx_val);\n"
+          f;
+      Pp.fpr fmt
         "extern char event_field_%s(T_irdata *irdata, char *res_def, double \
          *res_val, char idx_def, double idx_val);\n"
         f)
@@ -422,6 +429,9 @@ typedef struct S_irdata T_irdata;
 #define DR_(idx) (irdata->def_ref[irdata->ref_org + (idx)])
 #define R_(idx) (irdata->ref[irdata->ref_org + (idx)])
 #define IR_(idx) (irdata->info_ref[irdata->ref_org + (idx)])
+
+extern T_event *event(T_irdata *irdata, char idx_def, double idx_val);
+extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
@@ -459,10 +469,8 @@ extern void free_erreur();
 
 extern double floor_g(double);
 extern double ceil_g(double);
-extern int multimax_def(int, char *, int);
-extern double multimax(int, double *, int);
-extern int multimax_varinfo_def(T_irdata *irdata, T_varinfo *info, int nbopd);
-extern double multimax_varinfo(T_irdata *irdata, T_varinfo *info, int nbopd);
+extern int multimax(char *var_def, double *var_val, int size, char nb_def, double nb_val, char *res_def, double *res_val);
+extern int multimax_varinfo(T_irdata *irdata, T_varinfo *info, char nb_def, double nb_val, char *res_def, double *res_val);
 extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
@@ -610,6 +618,9 @@ extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
 extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
 extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
 extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
+extern int lis_varinfo_tab(T_irdata *irdata, T_varinfo *info, char idx_def, double idx_val, char *res_def, double *res_val);
+extern char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info);
+extern double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info);
 extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
 extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
 extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
@@ -621,13 +632,13 @@ let gen_decl_functions fmt (cprog : Mir.program) =
   let functions = Com.TargetMap.bindings cprog.program_functions in
   let pp_args fmt args =
     List.iteri
-      (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
+      (fun i _ -> Pp.fpr fmt ", char arg_def%d, double arg_val%d" i i)
       args
   in
   Format.fprintf fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (fn, fd) ->
          Format.fprintf fmt
-           "extern int %s(T_irdata* irdata, char *def_res, double *val_res%a);"
+           "extern int %s(T_irdata* irdata, char *res_def, double *res_val%a);"
            fn pp_args fd.Mir.target_args))
     functions
 
@@ -994,25 +1005,51 @@ void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const
 
 #endif /* FLG_TRACE */
 
+T_event *event(T_irdata *irdata, char idx_def, double idx_val) {
+  int idx;
+  if (idx_def == 0) return NULL;
+  idx = (int)idx_val;
+  if (idx < 0 || irdata->nb_events <= idx) return NULL;
+  return irdata->events[idx];
+}
+
+int size_varinfo(T_varinfo *info, char *res_def, double *res_val) {
+  *res_def = 0;
+  *res_val = 0.0;
+  if (info == NULL) {
+    return *res_def;
+  }
+  *res_def = 1;
+  *res_val = (double)info->size;
+  return *res_def;
+}
+
 T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
-int multimax_def(int nbopd, char *var, int size) {
-  int i = 0;
-  for (i = 0; i < nbopd && i < size; i++) {
-    if (var[i] == 1) return 1;
+int multimax(char *var_def, double *var_val, int size, char nb_def, double nb_val, char *res_def, double *res_val) {
+  int i;
+  int nb;
+  *res_def = 0;
+  *res_val = 0.0;
+  if (var_def == NULL || var_val == NULL) return *res_def;
+  if (nb_def == 0) return *res_def;
+  nb = (int)nb_val;
+  for (i = 0; i < nb && i < size; i++) {
+    if (var_def[i] == 1) *res_def = 1;
+    if (var_val[i] >= *res_val) *res_val = var_val[i];
   }
-  return 0;
+  return *res_def;
 }
 
-double multimax(int nbopd, double *var, int size) {
-  int i = 0;
-  double s = 0.0;
-  for (i = 0; i < nbopd && i < size; i++) {
-    if (var[i] >= s) s = var[i];
-  }
-  return s;
+int multimax_varinfo(T_irdata *irdata, T_varinfo *info, char nb_def, double nb_val, char *res_def, double *res_val) {
+  char *var_def = lis_varinfo_ptr_def(irdata, info);
+  double *var_val = lis_varinfo_ptr_val(irdata, info);
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || info == NULL) return *res_def;
+  return multimax(var_def, var_val, info->size, nb_def, nb_val, res_def, res_val);
 }
 
 int modulo_def(int a, int b) {
@@ -1305,6 +1342,8 @@ T_irdata *cree_irdata(void) {
   irdata->err_archive = NULL;
   irdata->nb_err_archive = 0;
   init_erreur(irdata);
+  irdata->events = NULL;
+  irdata->nb_events = 0;
   irdata->ctx_pr_out.std = stdout;
   irdata->ctx_pr_out.indent = 0;
   irdata->ctx_pr_out.is_newline = 1;
@@ -1578,6 +1617,46 @@ double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
   }
 }
 
+int lis_varinfo_tab(T_irdata *irdata, T_varinfo *info, char idx_def, double idx_val, char *res_def, double *res_val) {
+  int idx;
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || info == NULL || idx_def == 0) return *res_def;
+  idx = (int)idx_val;
+  *res_def = lis_varinfo_tab_def(irdata, info, idx);
+  *res_val = lis_varinfo_tab_val(irdata, info, idx);
+  return *res_def;
+}
+
+
+char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return NULL;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return &(irdata->def_saisie[info->idx]);
+    case EST_CALCULEE:
+      return &(irdata->def_calculee[info->idx]);
+    case EST_BASE:
+      return &(irdata->def_base[info->idx]);
+    default:
+      return NULL;
+  }
+}
+
+double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info) {
+  if (irdata == NULL || info == NULL) return NULL;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      return &(irdata->saisie[info->idx]);
+    case EST_CALCULEE:
+      return &(irdata->calculee[info->idx]);
+    case EST_BASE:
+      return &(irdata->base[info->idx]);
+    default:
+      return NULL;
+  }
+}
+
 void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
   if (irdata == NULL || info == NULL) return;
   if (def == 0) {
@@ -1685,43 +1764,15 @@ void pr_err_var(T_irdata *irdata, char *nom) {
 
       if ef.is_var then (
         pr
-          "char multimax_%s_def(T_irdata *irdata, char nb_def, double nb_val, \
-           char idx_def, double idx_val) {\n"
+          "T_varinfo *event_field_%s_var(T_irdata *irdata, char idx_def, \
+           double idx_val) {\n"
           f;
-        pr "  int nb;\n";
-        pr "  int idx;\n";
-        pr "  T_varinfo *info;\n";
-        pr "  int i;\n";
-        pr "  if (nb_def == 0 || idx_def == 0) return 0;\n";
-        pr "  idx = (int)floor(idx_val);\n";
-        pr "  if (idx < 0 || irdata->nb_events <= idx) return 0;\n";
-        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
-        pr "  nb = (int)floor(nb_val);\n";
-        pr "  for (i = 0; i < nb && i < info->size; i++) {\n";
-        pr "    if (lis_varinfo_tab_def(irdata, info, i) == 1) return 1;\n";
+        pr "  T_varinfo *info = NULL;\n";
+        pr "  int idx = (int)floor(idx_val);\n";
+        pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
+        pr "    return NULL;\n";
         pr "  }\n";
-        pr "  return 0;\n";
-        pr "}\n\n";
-
-        pr
-          "char multimax_%s_val(T_irdata *irdata, char nb_def, double nb_val, \
-           char idx_def, double idx_val) {\n"
-          f;
-        pr "  int nb;\n";
-        pr "  int idx;\n";
-        pr "  T_varinfo *info;\n";
-        pr "  int i;\n";
-        pr "  double s = 0.0;\n";
-        pr "  if (nb_def == 0 || idx_def == 0) return 0;\n";
-        pr "  idx = (int)floor(idx_val);\n";
-        pr "  if (idx < 0 || irdata->nb_events <= idx) return 0;\n";
-        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
-        pr "  nb = (int)floor(nb_val);\n";
-        pr "  for (i = 0; i < nb && i < info->size; i++) {\n";
-        pr "    double v = lis_varinfo_tab_val(irdata, info, i);\n";
-        pr "    if (v >= s) s = v;\n";
-        pr "  }\n";
-        pr "  return s;\n";
+        pr "  return irdata->events[idx]->field_%s_var;\n" f;
         pr "}\n\n"))
     cprog.program_event_fields
 

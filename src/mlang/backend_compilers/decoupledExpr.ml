@@ -71,7 +71,7 @@ and expr =
   | Daccess of Com.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
-  | DlowLevel of string
+  | Ddirect of expr
 
 and expr_var = Local of stack_slot | M of Com.Var.t * offset * dflag
 
@@ -136,7 +136,7 @@ let rec expr_position (expr : expr) (st : local_stacks) =
           (* Needed to bumb the stack to avoid erasing subexpressions *)
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
-  | DlowLevel _ -> Not_to_stack
+  | Ddirect _ -> Not_to_stack
   | _ -> Must_be_pushed
 
 (* allocate to local variable if necessary *)
@@ -370,8 +370,9 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
-let dlow_level (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
-  (DlowLevel i, Val, [])
+let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
+  let expr, flags, ctx = c stacks ctx in
+  (Ddirect expr, flags, ctx)
 
 let access (var : Com.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
@@ -520,7 +521,8 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
-  | Dinstr instr | DlowLevel instr -> Format.fprintf fmt "%s" instr
+  | Dinstr instr -> Format.fprintf fmt "%s" instr
+  | Ddirect expr -> format_dexpr fmt expr
   | Daccess (var, dflag, de) ->
       Format.fprintf fmt "(%s[(int)%a])"
         (generate_variable ~def_flag:(dflag = Def)

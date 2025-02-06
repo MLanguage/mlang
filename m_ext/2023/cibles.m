@@ -958,8 +958,11 @@ afficher_erreur "\n";
 champ_evenement(EVT, code) reference TNAPCR;
 iterer : variable I : 0 .. taille(TNAPCR) - 1 increment 1 : dans (
   TNAPCR[I] = I;
-  afficher_erreur nom(TNAPCR) "[" (I) "] = " (TNAPCR[I]) "\n";
+  afficher_erreur nom(TNAPCR) "[" (I) "] = " (TNAPCR[I]) " -- ";
+  afficher_erreur nom(champ_evenement(EVT, code)) "[" (I) "] = " (champ_evenement(EVT, code)[I]) "\n";
 )
+afficher_erreur nom(TNAPCR) "[" (taille(TNAPCR)) "] = " (TNAPCR[taille(TNAPCR)]) " -- ";
+afficher_erreur nom(champ_evenement(EVT, code)) "[" (taille(TNAPCR)) "] = " (champ_evenement(EVT, code)[taille(TNAPCR)]) "\n";
 afficher_erreur "\n";
 iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
   afficher_erreur "multimax(" (I) ", " nom(TNAPCR) ") = " (multimax(I, TNAPCR)) "\n";
@@ -970,6 +973,19 @@ iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
     "multimax(" (I) ", " nom(champ_evenement(EVT, code)) " (via evenements)) = "
     (multimax(I, champ_evenement(EVT, code))) "\n";
 )
+afficher_erreur "\n";
+afficher_erreur "taille(" nom(TNAPCR) ") = " (taille(TNAPCR)) "\n";
+afficher_erreur "taille(" nom(champ_evenement(EVT, code)) ") = " (taille(champ_evenement(EVT, code))) "\n";
+afficher_erreur "taille(" nom(champ_evenement(1000, code)) ") = " (taille(champ_evenement(1000, code))) "\n";
+afficher_erreur "\n";
+champ_evenement(EVT, code) reference COD1AV;
+afficher_erreur "attribut(" nom(COD1AV) ") = " (attribut(COD1AV, primrest)) "\n";
+afficher_erreur
+  "attribut(" nom(champ_evenement(EVT, code)) ", primrest) = "
+  (attribut(champ_evenement(EVT, code), primrest)) "\n";
+afficher_erreur
+  "attribut(" nom(champ_evenement(1000, code)) ", primrest) = "
+  (attribut(champ_evenement(1000, code), primrest)) "\n";
 afficher_erreur "\n";
 
 cible enchainement_primitif:
@@ -1009,7 +1025,7 @@ sinon_faire
 finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
-calculer cible test;
+#calculer cible test;
 
 # primitif iterpréteur
 

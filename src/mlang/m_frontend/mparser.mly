@@ -961,17 +961,18 @@ formula_kind:
 for_formula:
 | FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
-lvalue_name:
-| s = SYMBOL { parse_variable $sloc s }
-
-lvalue:
-| s = with_pos(lvalue_name) i = with_pos(brackets)? {
-    let access = Pos.same_pos_as (Com.VarAccess (Pos.unmark s)) s in
-    (access, i)
+var_access:
+| s = symbol_with_pos {
+    let v = parse_variable $sloc (Pos.unmark s) in
+    Pos.same_pos_as (Com.VarAccess v) s
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
-  COMMA f = symbol_with_pos RPAREN i = with_pos(brackets)? {
-    let access = (Com.FieldAccess (idx, f, -1), mk_position $sloc) in
+  COMMA f = symbol_with_pos RPAREN {
+    (Com.FieldAccess (idx, f, -1), mk_position $sloc)
+  }
+
+lvalue:
+| access = var_access i = with_pos(brackets)? {
     (access, i)
   }
 
@@ -1151,10 +1152,15 @@ enumeration:
 
 enumeration_item:
 | bounds = interval { bounds }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN {
+    let pos = mk_position $sloc in
+    Com.VarValue (FieldAccess (idx, field, -1), pos)
+  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (v, pos)
+    | ParseVar v -> Com.VarValue (VarAccess v, pos)
     | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
@@ -1217,14 +1223,20 @@ product_expression:
 | DIV { Com.Div }
 | MOD { Com.Mod }
 
-table_index_name:
-s = SYMBOL { parse_variable $sloc s }
-
 factor:
 | MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN i_opt = with_pos(brackets)? {
+    match i_opt with
+    | Some i -> Com.Index ((FieldAccess (idx, field, -1), mk_position $sloc), i)
+    | None -> Var (FieldAccess (idx, field, -1))
+  }
+| s = symbol_with_pos i = with_pos(brackets) {
+    let v = parse_variable $sloc (Pos.unmark s) in
+    Com.Index (Pos.same_pos_as (Com.VarAccess v) s, i)
+  }
 | a = with_pos(factor_atom) {
     match Pos.unmark a with
     | Com.AtomVar v -> Com.Var (VarAccess v)
@@ -1263,15 +1275,10 @@ function_call:
 | NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
     NbCategory (Com.CatVar.Map.from_string_list cats)
   }
-| ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
-    Attribut ((parse_variable $sloc (fst var), snd var), attr)
+| ATTRIBUT LPAREN access = var_access COMMA attr = symbol_with_pos RPAREN {
+    Attribut (access, attr)
   }
-| EVENT_FIELD LPAREN m_expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN {
-    Var (FieldAccess (m_expr, field, -1))
-  }
-| SIZE LPAREN var = symbol_with_pos RPAREN {
-    Size (parse_variable $sloc (fst var), snd var)
-  }
+| SIZE LPAREN access = var_access RPAREN { Size access }
 | NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }

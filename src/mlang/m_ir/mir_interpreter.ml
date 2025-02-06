@@ -367,11 +367,23 @@ struct
                 (fun or_chain set_value ->
                   let equal_test =
                     match set_value with
-                    | Com.VarValue set_var ->
-                        let new_set_var =
-                          get_var_value ctx (Pos.unmark set_var) 0
-                        in
-                        comparison Com.Eq new_e0 new_set_var
+                    | Com.VarValue (VarAccess v, _) ->
+                        let new_v = get_var_value ctx v 0 in
+                        comparison Com.Eq new_e0 new_v
+                    | Com.VarValue (FieldAccess (e, _, j), _) -> (
+                        let new_e = evaluate_expr ctx p e in
+                        match new_e with
+                        | Number z when N.(z >=. zero ()) ->
+                            let i = Int64.to_int N.(to_int z) in
+                            let events = List.hd ctx.ctx_events in
+                            if 0 <= i && i < Array.length events then
+                              match events.(i).(j) with
+                              | Com.Numeric n -> n
+                              | Com.RefVar v ->
+                                  let new_v = get_var_value ctx v 0 in
+                                  comparison Com.Eq new_e0 new_v
+                            else Undefined
+                        | _ -> Undefined)
                     | Com.FloatValue i ->
                         let val_i = Number (N.of_float (Pos.unmark i)) in
                         comparison Com.Eq new_e0 val_i
@@ -412,9 +424,25 @@ struct
             | Undefined -> Undefined)
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
-        | Index (var, e1) ->
-            let idx = evaluate_expr ctx p e1 in
-            get_var_tab ctx var idx
+        | Index (m_acc, e1) -> (
+            match Pos.unmark m_acc with
+            | VarAccess v ->
+                let idx = evaluate_expr ctx p e1 in
+                get_var_tab ctx (Pos.same_pos_as v m_acc) idx
+            | FieldAccess (e, _, j) -> (
+                let new_e = evaluate_expr ctx p e in
+                match new_e with
+                | Number z when N.(z >=. zero ()) ->
+                    let i = Int64.to_int N.(to_int z) in
+                    let events = List.hd ctx.ctx_events in
+                    if 0 <= i && i < Array.length events then
+                      match events.(i).(j) with
+                      | Com.RefVar v ->
+                          let idx = evaluate_expr ctx p e1 in
+                          get_var_tab ctx (Pos.same_pos_as v m_acc) idx
+                      | Com.Numeric _ -> Undefined
+                    else Undefined
+                | _ -> Undefined))
         | Var (VarAccess var) -> get_var_value ctx var 0
         | Var (FieldAccess (e, _, j)) -> (
             let new_e = evaluate_expr ctx p e in
@@ -472,7 +500,7 @@ struct
                 let up = Int64.sub (N.to_int (roundf f)) 1L in
                 let var_arg2_opt =
                   match Pos.unmark arg2 with
-                  | Var (VarAccess v) -> Some (v, Pos.get_position e)
+                  | Var (VarAccess var) -> Some var
                   | Var (FieldAccess (ei, _, j)) -> (
                       let new_ei = evaluate_expr ctx p ei in
                       match new_ei with
@@ -481,7 +509,7 @@ struct
                           let events = List.hd ctx.ctx_events in
                           if 0 <= i && i < Array.length events then
                             match events.(i).(j) with
-                            | Com.RefVar var -> Some (var, Pos.get_position e)
+                            | Com.RefVar var -> Some var
                             | Com.Numeric _ -> None
                           else None
                       | _ -> None)
@@ -496,12 +524,12 @@ struct
                       | Undefined -> None
                     in
                     let pos = Pos.get_position arg2 in
+                    let access = (Com.VarAccess var_arg2, pos) in
                     let access_index (i : int) : Int64.t option =
                       cast_to_int
                       @@ evaluate_expr ctx p
                            ( Index
-                               ( var_arg2,
-                                 (Literal (Float (float_of_int i)), pos) ),
+                               (access, (Literal (Float (float_of_int i)), pos)),
                              pos )
                     in
                     let maxi = ref None in
@@ -531,16 +559,52 @@ struct
             ctx.ctx_res <- List.tl ctx.ctx_res;
             res
         | FuncCall (_, _) -> assert false
-        | Attribut (var, a) -> (
-            let var, _ = get_var ctx (Pos.unmark var) in
-            match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-            | Some l -> Number (N.of_float (float (Pos.unmark l)))
-            | None -> Undefined)
-        | Size var -> (
-            let var, _ = get_var ctx (Pos.unmark var) in
-            match Com.Var.is_table var with
-            | Some i -> Number (N.of_float (float_of_int i))
-            | None -> Number (N.of_float 1.0))
+        | Attribut (m_acc, a) -> (
+            match Pos.unmark m_acc with
+            | VarAccess v -> (
+                let var, _ = get_var ctx v in
+                match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
+                | Some l -> Number (N.of_float (float (Pos.unmark l)))
+                | None -> Undefined)
+            | FieldAccess (e, _, j) -> (
+                let new_e = evaluate_expr ctx p e in
+                match new_e with
+                | Number z when N.(z >=. zero ()) ->
+                    let i = Int64.to_int N.(to_int z) in
+                    let events = List.hd ctx.ctx_events in
+                    if 0 <= i && i < Array.length events then
+                      match events.(i).(j) with
+                      | Com.RefVar var -> (
+                          match
+                            StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var)
+                          with
+                          | Some l -> Number (N.of_float (float (Pos.unmark l)))
+                          | None -> Undefined)
+                      | Com.Numeric _ -> Undefined
+                    else Undefined
+                | _ -> Undefined))
+        | Size m_acc -> (
+            match Pos.unmark m_acc with
+            | VarAccess v -> (
+                let var, _ = get_var ctx v in
+                match Com.Var.is_table var with
+                | Some i -> Number (N.of_float (float_of_int i))
+                | None -> Number (N.of_float 1.0))
+            | FieldAccess (e, _, j) -> (
+                let new_e = evaluate_expr ctx p e in
+                match new_e with
+                | Number z when N.(z >=. zero ()) ->
+                    let i = Int64.to_int N.(to_int z) in
+                    let events = List.hd ctx.ctx_events in
+                    if 0 <= i && i < Array.length events then
+                      match events.(i).(j) with
+                      | Com.RefVar var -> (
+                          match Com.Var.is_table var with
+                          | Some i -> Number (N.of_float (float_of_int i))
+                          | None -> Number (N.of_float 1.0))
+                      | Com.Numeric _ -> Undefined
+                    else Undefined
+                | _ -> Undefined))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))

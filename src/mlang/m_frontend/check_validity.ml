@@ -151,6 +151,10 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
+  let unknown_attribut attr pos =
+    let msg = Format.sprintf "unknown attribute \"%s\"" attr in
+    Errors.raise_spanned_error msg pos
+
   let tmp_vars_have_no_attrs pos =
     Errors.raise_spanned_error "temporary variables have no attributes" pos
 
@@ -980,10 +984,17 @@ let rec fold_var_expr
       List.fold_left
         (fun res set_value ->
           match set_value with
-          | Com.VarValue v ->
-              if is_filter then
-                Err.forbidden_expresion_in_filter (Pos.get_position v);
-              fold_var v (OneOf None) env res
+          | Com.VarValue (a, a_pos) -> (
+              if is_filter then Err.forbidden_expresion_in_filter a_pos;
+              match a with
+              | VarAccess v -> fold_var (v, a_pos) (OneOf None) env res
+              | FieldAccess (ie, f, _) ->
+                  let f_name, f_pos = f in
+                  (match StrMap.find_opt f_name env.prog.prog_event_fields with
+                  | Some ef when ef.is_var -> ()
+                  | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+                  | None -> Err.unknown_event_field f_name f_pos);
+                  fold_var_expr fold_var is_filter acc ie env)
           | Com.FloatValue _ -> res
           | Com.IntervalValue (bn, en) ->
               if Pos.unmark bn > Pos.unmark en then
@@ -997,10 +1008,19 @@ let rec fold_var_expr
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
   | Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
-  | Index (t, e) ->
+  | Index ((VarAccess t, pos), e) ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       let acc = fold_var_expr fold_var is_filter acc e env in
-      fold_var t (OneOf (Some ())) env acc
+      fold_var (t, pos) (OneOf (Some ())) env acc
+  | Index ((FieldAccess (ie, f, _), _), e) ->
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      let f_name, f_pos = f in
+      (match StrMap.find_opt f_name env.prog.prog_event_fields with
+      | Some ef when ef.is_var -> ()
+      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+      | None -> Err.unknown_event_field f_name f_pos);
+      let acc = fold_var_expr fold_var is_filter acc ie env in
+      fold_var_expr fold_var is_filter acc e env
   | Conditional (e1, e2, e3_opt) -> (
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       let acc = fold_var_expr fold_var is_filter acc e2 env in
@@ -1024,13 +1044,13 @@ let rec fold_var_expr
               match var_expr with
               | Var (VarAccess var), var_pos ->
                   fold_var (var, var_pos) Both env acc
-              | Var (FieldAccess (i, f, _)), _access_pos ->
+              | Var (FieldAccess (e, f, _)), _access_pos ->
                   let f_name, f_pos = f in
                   (match StrMap.find_opt f_name env.prog.prog_event_fields with
                   | Some ef when ef.is_var -> ()
                   | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                   | None -> Err.unknown_event_field f_name f_pos);
-                  fold_var_expr fold_var is_filter acc i env
+                  fold_var_expr fold_var is_filter acc e env
               | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
           | _ -> Err.multimax_require_two_args expr_pos)
       | Com.SumFunc -> check_func (-1)
@@ -1077,11 +1097,11 @@ let rec fold_var_expr
             Err.unknown_domain Verif pos)
         cats;
       acc
-  | Attribut (v, a) ->
+  | Attribut ((VarAccess v, pos), a) ->
       let name, var_pos =
         match v with
-        | Mast.Normal name, var_pos -> (name, var_pos)
-        | Mast.Generic _, _ -> assert false
+        | Mast.Normal name -> (name, pos)
+        | Mast.Generic _ -> assert false
       in
       (match StrMap.find_opt name env.prog.prog_vars with
       | Some var ->
@@ -1092,8 +1112,30 @@ let rec fold_var_expr
           match StrMap.find_opt name env.tmp_vars with
           | Some _ -> Err.tmp_vars_have_no_attrs var_pos
           | None -> ()));
-      fold_var v Both env acc
-  | Size v -> fold_var v Both env acc
+      fold_var (v, pos) Both env acc
+  | Attribut ((FieldAccess (e, f, _), _), a) ->
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      let f_name, f_pos = f in
+      (match StrMap.find_opt f_name env.prog.prog_event_fields with
+      | Some ef when ef.is_var ->
+          let attr = Pos.unmark a in
+          let fold _ (cvd : Com.CatVar.data) res =
+            res || StrMap.mem attr cvd.attributs
+          in
+          if not (Com.CatVar.Map.fold fold env.prog.prog_var_cats false) then
+            Err.unknown_attribut attr (Pos.get_position a)
+      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+      | None -> Err.unknown_event_field f_name f_pos);
+      fold_var_expr fold_var is_filter acc e env
+  | Size (VarAccess v, pos) -> fold_var (v, pos) Both env acc
+  | Size (FieldAccess (e, f, _), _) ->
+      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      let f_name, f_pos = f in
+      (match StrMap.find_opt f_name env.prog.prog_event_fields with
+      | Some ef when ef.is_var -> ()
+      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+      | None -> Err.unknown_event_field f_name f_pos);
+      fold_var_expr fold_var is_filter acc e env
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
@@ -2193,21 +2235,13 @@ let eval_expr_verif (prog : program) (verif : verif)
     | Com.Literal (Com.Float f) -> Some f
     | Literal Com.Undefined -> None
     | Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
-    | Attribut (m_var, m_attr) ->
-        let var =
-          match Pos.unmark m_var with
-          | Mast.Normal var -> var
-          | _ -> assert false
-        in
+    | Attribut ((VarAccess v, _), m_attr) ->
+        let var = match v with Mast.Normal var -> var | _ -> assert false in
         let attrs = Com.Var.attrs (StrMap.find var prog.prog_vars) in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
-    | Size m_var -> (
-        let var =
-          match Pos.unmark m_var with
-          | Mast.Normal var -> var
-          | _ -> assert false
-        in
+    | Size (VarAccess v, _) -> (
+        let var = match v with Mast.Normal var -> var | _ -> assert false in
         match Com.Var.is_table (StrMap.find var prog.prog_vars) with
         | Some sz -> Some (float sz)
         | None -> Some 1.0)
@@ -2337,7 +2371,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             in
             Some (if res = positive then 1.0 else 0.0))
     | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes | Index _
-    | FuncCallLoop _ | Loop _ ->
+    | FuncCallLoop _ | Loop _ | Attribut _ | Size _ ->
         assert false
   in
   aux expr
@@ -2807,12 +2841,27 @@ let complete_vars_stack (prog : program) : program =
           assert false
     and aux_expr tdata (expr, _pos) =
       match expr with
-      | Com.TestInSet (_, me, _)
+      | Com.TestInSet (_, me, values) ->
+          let fold (nb, sz, nbRef, tdata) = function
+            | Com.VarValue (FieldAccess (mei, _, _), _) ->
+                let nb', sz', nbRef', tdata = aux_expr tdata mei in
+                (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            | _ -> (nb, sz, nbRef, tdata)
+          in
+          let nb', sz', nbRef', tdata =
+            List.fold_left fold (0, 0, 0, tdata) values
+          in
+          let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
+          (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
-      | Com.Index (_, me)
-      | Com.Var (FieldAccess (me, _, _)) ->
+      | Com.Index ((VarAccess _, _), me)
+      | Com.Var (FieldAccess (me, _, _))
+      | Com.Size (FieldAccess (me, _, _), _)
+      | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
           aux_expr tdata me
-      | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
+      | Com.Index ((FieldAccess (me0, _, _), _), me1)
+      | Com.Comparison (_, me0, me1)
+      | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
           let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
           (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)

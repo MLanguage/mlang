@@ -113,7 +113,7 @@ val dfun : string -> constr list -> constr
 val dinstr : string -> constr
 (** Direct instruction *)
 
-val dlow_level : string -> constr
+val ddirect : constr -> constr
 (** Direct instruction, not pushed *)
 
 val access : Com.Var.t -> dflag -> constr -> constr

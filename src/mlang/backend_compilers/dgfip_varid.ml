@@ -62,23 +62,23 @@ let gen_ref_val i vn off = Pp.spr "*(%s%s)" (gen_ref_val_ptr i vn) off
 
 (* arguments accessors *)
 
-let gen_arg_def i = Pp.spr "def_arg%d" i
+let gen_arg_def i = Pp.spr "arg_def%d" i
 
-let gen_arg_val i = Pp.spr "val_arg%d" i
+let gen_arg_val i = Pp.spr "arg_val%d" i
 
-let gen_arg_def_ptr i = Pp.spr "(&def_arg%d)" i
+let gen_arg_def_ptr i = Pp.spr "(&arg_def%d)" i
 
-let gen_arg_val_ptr i = Pp.spr "(&val_arg%d)" i
+let gen_arg_val_ptr i = Pp.spr "(&arg_val%d)" i
 
 (* result accessors *)
 
-let gen_res_def () = Pp.spr "(*def_res)"
+let gen_res_def () = Pp.spr "(*res_def)"
 
-let gen_res_val () = Pp.spr "(*val_res)"
+let gen_res_val () = Pp.spr "(*res_val)"
 
-let gen_res_def_ptr () = Pp.spr "def_res"
+let gen_res_def_ptr () = Pp.spr "res_def"
 
-let gen_res_val_ptr () = Pp.spr "val_res"
+let gen_res_val_ptr () = Pp.spr "res_val"
 
 (* generic accessors *)
 
