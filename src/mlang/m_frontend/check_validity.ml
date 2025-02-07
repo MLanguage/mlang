@@ -17,15 +17,13 @@ type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
 module MarkedVarNames = struct
   type t = string Pos.marked
 
-  type t_marked = t
-
   let compare a b = compare (Pos.unmark a) (Pos.unmark b)
 
   let pp_marked fmt elt = Format.fprintf fmt "%s" (Pos.unmark elt)
 
   module Set = struct
     include SetExt.Make (struct
-      type t = t_marked
+      type nonrec t = t
 
       let compare = compare
     end)
@@ -37,7 +35,7 @@ module MarkedVarNames = struct
 
   module Map = struct
     include MapExt.Make (struct
-      type t = t_marked
+      type nonrec t = t
 
       let compare = compare
     end)
