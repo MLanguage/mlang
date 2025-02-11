@@ -1031,6 +1031,7 @@ calculer cible trace_out;
 
 cible enchainement_primitif_interpreteur:
 application: iliad;
-V_IND_TRAIT = 4; # primitif
-calculer cible enchainement_primitif;
+si V_IND_TRAIT = 4 alors # primitif
+  calculer cible enchainement_primitif;
+finsi
 

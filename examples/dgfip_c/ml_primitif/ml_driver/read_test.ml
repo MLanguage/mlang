@@ -1,3 +1,5 @@
+open Common
+
 type file = {
   c: in_channel;
   mutable lines: string list;

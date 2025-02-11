@@ -1,32 +1,72 @@
 open Common
 
+type instance = {
+  nom : string;
+  label : string;
+  vars : float StrMap.t;
+  events : rappel list;
+  expectedVars : float StrMap.t;
+  expectedAnos : StrSet.t;
+}
+
+let new_instance nom = {
+  nom;
+  label = "";
+  vars = StrMap.empty;
+  events = [];
+  expectedVars = StrMap.empty;
+  expectedAnos = StrSet.empty;
+}
+
 let read_test filename =
   let test = Read_test.read_test filename in
-  let tgv = M.TGV.alloc_tgv () in
-  let evt_list, res_prim, ctl_prim =
-    let fold_prim (evt_list, res_prim, ctl_prim) s =
-      match s with
-      | `EntreesPrimitif pl ->
-          List.iter (fun (code, montant) -> M.TGV.set tgv code montant) pl;
-          evt_list, res_prim, ctl_prim
-      | `ResultatsPrimitif pl ->
-          let res_prim =
-            let fold res (code, montant) = StrMap.add code montant res in
-            List.fold_left fold res_prim pl
-          in
-          evt_list, res_prim, ctl_prim
-      | `ControlesPrimitif el ->
-          let ctl_prim =
-            let fold err e = StrSet.add e err in
-            List.fold_left fold ctl_prim el
-          in
-          evt_list, res_prim, ctl_prim
-      | `EntreesRappels evt_list -> evt_list, res_prim, ctl_prim
-      | _ -> evt_list, res_prim, ctl_prim
-    in
-    List.fold_left fold_prim ([], StrMap.empty, StrSet.empty) test
+  let fold_prim (nom, inst, insts) s =
+    match s with
+    | `Nom noms ->
+         let nom = String.concat " " noms in
+         let inst = {inst with nom} in
+         let insts = List.map (fun i -> {i with nom}) insts in
+         (nom, inst, insts)
+    | `EntreesPrimitif pl ->
+        let vars =
+          let fold res (code, montant) = StrMap.add code montant res in
+          List.fold_left fold StrMap.empty pl
+        in
+        (nom, {inst with vars}, insts)
+    | `ControlesPrimitif el ->
+        let expectedAnos =
+          let fold err e = StrSet.add e err in
+          List.fold_left fold StrSet.empty el
+        in
+        (nom, {inst with expectedAnos}, insts)
+    | `ResultatsPrimitif pl ->
+        let expectedVars =
+          let fold res (code, montant) = StrMap.add code montant res in
+          List.fold_left fold StrMap.empty pl
+        in
+        let inst = {inst with label = "primitif"; expectedVars} in
+        (nom, new_instance nom, inst :: insts)
+    | `EntreesCorrectif _
+    | `ControlesCorrectif _
+    | `ResultatsCorrectif _ -> (nom, inst, insts)
+    | `EntreesRappels events -> (nom, {inst with events}, insts)
+    | `ControlesRappels el ->
+        let expectedAnos =
+          let fold err e = StrSet.add e err in
+          List.fold_left fold StrSet.empty el
+        in
+        (nom, {inst with expectedAnos}, insts)
+    | `ResultatsRappels pl ->
+        let expectedVars =
+          let fold res (code, montant) = StrMap.add code montant res in
+          List.fold_left fold StrMap.empty pl
+        in
+        let inst = {inst with label = "correctif"; expectedVars} in
+        (nom, new_instance nom, inst :: insts)
+    | `Skip -> (nom, inst, insts)
   in
-  tgv, evt_list, res_prim, ctl_prim
+  let _, _, insts = List.fold_left fold_prim ("", new_instance "", []) test in
+  insts
 
 let check_result tgv err expected_tgv expected_err =
   let result = ref true in
@@ -131,25 +171,36 @@ let compare_dump out outexp =
 let run_test test_file annee_exec =
   Printf.printf "Testing %s...\n%!" test_file;
   let annee_calc = M.annee_calc () in
-  let tgv, evt_list, res_prim, ctl_prim = read_test test_file in
-  M.set_evt_list tgv evt_list;
-  let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
-  if annee_revenu <> annee_calc then (
-    Printf.eprintf
-      "Attention, année calculette (%d) <> année revenu (%d)\n%!"
-      annee_calc
-      annee_revenu
-  );
-  M.TGV.set_int tgv "IND_TRAIT" 4 (* = primitif *);
-  M.TGV.set_int tgv "ANCSDED" annee_exec;
-  M.init_errs tgv;
-  let _err = M.enchainement_primitif tgv in
-  M.export_errs tgv;
-  let err_set =
-    let add res e = StrSet.add e res in
-    List.fold_left add StrSet.empty (M.get_err_list tgv)
+  let insts = read_test test_file in
+  let rec run_insts res = function
+  | [] -> res
+  | inst :: insts ->
+      Printf.printf "  Running %s:%s...\n%!" inst.nom inst.label;
+      let tgv = M.TGV.alloc_tgv () in
+      StrMap.iter (M.TGV.set tgv) inst.vars;
+      M.set_evt_list tgv inst.events;
+      let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
+      if annee_revenu <> annee_calc then (
+        Printf.eprintf
+          "Attention, année calculette (%d) <> année revenu (%d)\n%!"
+          annee_calc
+          annee_revenu
+      );
+      (match inst.label with
+      | "primitif" -> M.TGV.set_int tgv "IND_TRAIT" 4
+      | "correctif" -> M.TGV.set_int tgv "IND_TRAIT" 5
+      | _ -> M.TGV.set_int tgv "IND_TRAIT" 0);
+      M.TGV.set_int tgv "ANCSDED" annee_exec;
+      M.init_errs tgv;
+      let _err = M.enchainement_primitif tgv in
+      M.export_errs tgv;
+      let err_set =
+        let add res e = StrSet.add e res in
+        List.fold_left add StrSet.empty (M.get_err_list tgv)
+      in
+      res && check_result tgv err_set inst.expectedVars inst.expectedAnos
   in
-  check_result tgv err_set res_prim ctl_prim
+  run_insts true insts
 
 let main () =
   if Array.length Sys.argv < 2 then (
@@ -177,7 +228,7 @@ let main () =
   let rec loop = function
   | [] -> true
   | test_file :: files ->
-      run_test test_file annee_exec && ((* Gc.minor ();*) loop files)
+      run_test test_file annee_exec && (Gc.minor (); loop files)
   in
   match loop test_files with
   | true -> exit 0

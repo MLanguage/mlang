@@ -83,7 +83,7 @@ module type S = sig
   val update_ctx_with_events :
     ctx ->
     Mir.program ->
-    (Com.literal, Com.Var.t) Com.event_value IntMap.t list ->
+    (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
     unit
 
   (** Interpreter runtime errors *)
@@ -163,10 +163,10 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
-  (Com.literal, Com.Var.t) Com.event_value IntMap.t list ->
+  (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
   Cli.value_sort ->
   Cli.round_ops ->
-  float option StrMap.t * StrSet.t
+  Com.literal Com.Var.Map.t * Com.Error.Set.t
 (** Main interpreter function *)
 
 val evaluate_expr :

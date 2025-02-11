@@ -442,11 +442,44 @@ module Error = struct
   }
 
   let pp_descr fmt err =
-    Format.fprintf fmt "%s:%s:%s:%s:%s" (Pos.unmark err.famille)
+    Pp.fpr fmt "%s:%s:%s:%s:%s" (Pos.unmark err.famille)
       (Pos.unmark err.code_bo) (Pos.unmark err.sous_code)
       (Pos.unmark err.libelle) (Pos.unmark err.is_isf)
 
-  let compare (var1 : t) (var2 : t) = compare var1.name var2.name
+  let pp fmt err = Pp.fpr fmt "%s:%a" (Pos.unmark err.name) pp_descr err
+
+  let compare (err1 : t) (err2 : t) = compare err1.name err2.name
+
+  type error_t = t
+
+  let error_pp = pp
+
+  let error_compare = compare
+
+  module Set = struct
+    include SetExt.Make (struct
+      type t = error_t
+
+      let compare = error_compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = error_pp) (_ : unit)
+        (fmt : Format.formatter) (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type t = error_t
+
+      let compare = error_compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = error_pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
 end
 
 type print_std = StdOut | StdErr

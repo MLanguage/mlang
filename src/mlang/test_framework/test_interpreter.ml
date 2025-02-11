@@ -15,17 +15,24 @@
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
-  with Not_found ->
+  with Not_found -> (
     let name = Mir.find_var_name_by_alias p name in
-    StrMap.find name p.program_vars
+    try StrMap.find name p.program_vars
+    with Not_found ->
+      Cli.error_print "Variable inconnue: %s" name;
+      raise (Errors.StructuredError ("Fichier de test incorrect", [], None)))
+
+type instance = {
+  label : string;
+  vars : Com.literal Com.Var.Map.t;
+  events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list;
+  expectedVars : float StrMap.t;
+  expectedAnos : StrSet.t;
+}
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
-    (Com.literal Com.Var.Map.t * float StrMap.t * StrSet.t)
-    * ((Com.literal, Com.Var.t) Com.event_value IntMap.t list
-      * float StrMap.t
-      * StrSet.t)
-      option =
-  let inputVars =
+    instance list =
+  let vars =
     let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
     let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
     List.fold_left
@@ -69,88 +76,125 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       | None -> Com.Numeric Com.Undefined
     in
     let toEvent (rappel : Irj_ast.rappel) =
-      IntMap.empty
-      |> IntMap.add 0 (toNum rappel.event_nb)
-      |> IntMap.add 1 (toNum rappel.rappel_nb)
-      |> IntMap.add 2 (from_var rappel.variable_code)
-      |> IntMap.add 3 (toNum rappel.change_value)
-      |> IntMap.add 4 (fromDirection rappel.direction)
-      |> IntMap.add 5 (optToNum rappel.penalty_code)
-      |> IntMap.add 6 (optToNum rappel.base_tolerance_legale)
-      |> IntMap.add 7 (toNum rappel.month_year)
-      |> IntMap.add 8 (optToNum rappel.decl_2042_rect)
+      StrMap.empty
+      |> StrMap.add "numero" (toNum rappel.event_nb)
+      |> StrMap.add "rappel" (toNum rappel.rappel_nb)
+      |> StrMap.add "code" (from_var rappel.variable_code)
+      |> StrMap.add "montant" (toNum rappel.change_value)
+      |> StrMap.add "sens" (fromDirection rappel.direction)
+      |> StrMap.add "penalite" (optToNum rappel.penalty_code)
+      |> StrMap.add "base_tl" (optToNum rappel.base_tolerance_legale)
+      |> StrMap.add "date" (toNum rappel.month_year)
+      |> StrMap.add "2042_rect" (optToNum rappel.decl_2042_rect)
     in
     List.map toEvent rappels
   in
-  let expectedVars vars_init =
+  let expVars vars_init =
     let fold res ((var, _), (value, _)) =
       let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
       StrMap.add var fVal res
     in
     List.fold_left fold StrMap.empty vars_init
   in
-  let expectedAnos anos_init =
+  let expAnos anos_init =
     let fold res ano = StrSet.add ano res in
     List.fold_left fold StrSet.empty (List.map fst anos_init)
   in
-  let prim =
-    ( inputVars,
-      expectedVars t.prim.resultats_attendus,
-      expectedAnos t.prim.controles_attendus )
-  in
-  let corr =
-    match t.rapp with
-    | None -> None
-    | Some rapp ->
-        Some
-          ( eventsList rapp.entrees_rappels,
-            expectedVars rapp.resultats_attendus,
-            expectedAnos rapp.controles_attendus )
-  in
-  (prim, corr)
+  let ind_trait = find_var_of_name program ("V_IND_TRAIT", Pos.no_pos) in
+  match t.rapp with
+  | None ->
+      let vars = Com.Var.Map.add ind_trait (Com.Float 4.0) vars in
+      let expectedVars = expVars t.prim.resultats_attendus in
+      let expectedAnos = expAnos t.prim.controles_attendus in
+      [ { label = "primitif"; vars; events = []; expectedVars; expectedAnos } ]
+  | Some rapp ->
+      let corr =
+        let vars = Com.Var.Map.add ind_trait (Com.Float 5.0) vars in
+        let events = eventsList rapp.entrees_rappels in
+        let expectedVars = expVars rapp.resultats_attendus in
+        let expectedAnos = expAnos rapp.controles_attendus in
+        { label = "correctif"; vars; events; expectedVars; expectedAnos }
+      in
+      let expectedVars = expVars t.prim.resultats_attendus in
+      let expectedAnos = expAnos t.prim.controles_attendus in
+      if not (StrMap.is_empty expectedVars && StrSet.is_empty expectedAnos) then
+        let vars = Com.Var.Map.add ind_trait (Com.Float 4.0) vars in
+        let prim =
+          { label = "primitif"; vars; events = []; expectedVars; expectedAnos }
+        in
+        [ prim; corr ]
+      else [ corr ]
 
 exception InterpError of int
 
 let check_test (program : Mir.program) (test_name : string)
     (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) : unit =
-  Cli.debug_print "Parsing %s..." test_name;
-  let t = Irj_file.parse_file test_name in
-  Cli.debug_print "Running test %s..." t.nom;
-  let (inputVars, expVars, expAnos), evtDatas =
-    to_MIR_function_and_inputs program t
-  in
-  let events =
-    match evtDatas with None -> [] | Some (events, _, _) -> events
-  in
-  Cli.debug_print "Executing program";
-  (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
-     Format_bir.format_program program; *)
-  let varMap, anoSet =
-    Mir_interpreter.evaluate_program program inputVars events value_sort
-      round_ops
-  in
   let check_vars exp vars =
     let test_error_margin = 0.01 in
-    let fold var f nb =
+    let fold vname f nb =
       let f' =
-        match StrMap.find_opt var vars with Some (Some f') -> f' | _ -> 0.0
+        let var =
+          match StrMap.find_opt vname program.program_vars with
+          | Some var -> var
+          | None ->
+              Cli.error_print "Variable inconnue: %s" vname;
+              raise
+                (Errors.StructuredError ("Fichier de test incorrect", [], None))
+        in
+        match Com.Var.Map.find_opt var vars with
+        | Some (Com.Float f') -> f'
+        | _ -> 0.0
       in
       if abs_float (f -. f') > test_error_margin then (
-        Cli.error_print "KO | %s expected: %f - evaluated: %f" var f f';
+        Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
         nb + 1)
       else nb
     in
     StrMap.fold fold exp 0
   in
-  let check_anos exp rais =
+  let check_anos exp errSet =
+    let rais =
+      let fold e res = StrSet.add (Pos.unmark e.Com.Error.name) res in
+      Com.Error.Set.fold fold errSet StrSet.empty
+    in
     let missAnos = StrSet.diff exp rais in
     let unexAnos = StrSet.diff rais exp in
     StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
     StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
-  let nbErrs = check_vars expVars varMap + check_anos expAnos anoSet in
-  if nbErrs > 0 then raise (InterpError nbErrs)
+  let dbg_warning = !Cli.warning_flag in
+  let dbg_time = !Cli.display_time in
+  Cli.warning_flag := false;
+  Cli.display_time := false;
+  Cli.debug_print "Parsing %s..." test_name;
+  let t = Irj_file.parse_file test_name in
+  Cli.debug_print "Running test %s..." t.nom;
+  let insts = to_MIR_function_and_inputs program t in
+  let rec check = function
+    | [] -> ()
+    | inst :: insts ->
+        Cli.debug_print "Executing program %s" inst.label;
+        (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
+           Format_bir.format_program program; *)
+        let varMap, anoSet =
+          Mir_interpreter.evaluate_program program inst.vars inst.events
+            value_sort round_ops
+        in
+        let nbErrs =
+          check_vars inst.expectedVars varMap
+          + check_anos inst.expectedAnos anoSet
+        in
+        if nbErrs <= 0 then (
+          Cli.debug_print "OK!";
+          check insts)
+        else (
+          Cli.debug_print "KO!";
+          raise (InterpError nbErrs))
+  in
+  check insts;
+  Cli.warning_flag := dbg_warning;
+  Cli.display_time := dbg_time
 
 type process_acc = string list * int StrMap.t
 
@@ -168,6 +212,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Mir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
+  let dbg_warning = !Cli.warning_flag in
+  let dbg_time = !Cli.display_time in
   Cli.warning_flag := false;
   Cli.display_time := false;
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
@@ -210,8 +256,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))
   in
   (* finish "done!"; *)
-  Cli.warning_flag := true;
-  Cli.display_time := true;
+  Cli.warning_flag := dbg_warning;
+  Cli.display_time := dbg_time;
   Cli.result_print "Test results: %d successes" (List.length s);
 
   if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
