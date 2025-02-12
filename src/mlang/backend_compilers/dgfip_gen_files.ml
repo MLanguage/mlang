@@ -102,9 +102,13 @@ let gen_table_varinfos fmt (cprog : Mir.program) =
       cprog.program_var_categories
       (Com.CatVar.Map.empty, StrMap.empty)
   in
+  Format.fprintf fmt "#ifdef BATCH\n";
+  Format.fprintf fmt "T_varinfo_map varinfo[1] = {NULL};\n";
+  Format.fprintf fmt "#else\n";
   Format.fprintf fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
   StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
-  Format.fprintf fmt "  NULL\n};\n\n";
+  Format.fprintf fmt "  NULL\n};\n";
+  Format.fprintf fmt "#endif /* BATCH */\n\n";
   stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
@@ -237,7 +241,9 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
   if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
   if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
   if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
-  if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
+  if flags.flg_gcos then (
+    Format.fprintf fmt "#define FLG_GCOS\n";
+    Format.fprintf fmt "#define BATCH\n");
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
   if flags.flg_short then
