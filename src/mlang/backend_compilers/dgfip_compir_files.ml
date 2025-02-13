@@ -14,6 +14,12 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+let open_file filename =
+  let folder = Filename.dirname !Cli.output_file in
+  let oc = open_out (Filename.concat folder filename) in
+  let fmt = Format.formatter_of_out_channel oc in
+  (oc, fmt)
+
 (* Various flags used to control wicch data to put in each variable array *)
 type gen_opt = {
   with_verif : bool;
@@ -1021,43 +1027,36 @@ extern struct S_erreur *tabErreurs[];
 |};
   Format.fprintf fmt "#endif /* _COMPIR_H_ */\n"
 
-let open_file filename =
-  let oc = open_out filename in
-  let fmt = Format.formatter_of_out_channel oc in
-  (oc, fmt)
-
 (* Generate the auxiliary files AND return the map of variables names to TGV
    ids *)
 let generate_compir_files flags (cprog : Mir.program) : unit =
-  let folder = Filename.dirname !Cli.output_file in
-
   let vars = get_vars cprog Dgfip_options.(flags.flg_tri_ebcdic) in
 
-  let oc, fmt = open_file (Filename.concat folder "compir_restitue.c") in
+  let oc, fmt = open_file "compir_restitue.c" in
   gen_table_output fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_contexte.c") in
+  let oc, fmt = open_file "compir_contexte.c" in
   gen_table_context fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_famille.c") in
+  let oc, fmt = open_file "compir_famille.c" in
   gen_table_family fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_revenu.c") in
+  let oc, fmt = open_file "compir_revenu.c" in
   gen_table_income fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_revcor.c") in
+  let oc, fmt = open_file "compir_revcor.c" in
   gen_table_corrincome fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_variatio.c") in
+  let oc, fmt = open_file "compir_variatio.c" in
   gen_table_variation fmt flags vars;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_penalite.c") in
+  let oc, fmt = open_file "compir_penalite.c" in
   gen_table_penality fmt flags vars;
   close_out oc;
 
@@ -1067,8 +1066,7 @@ let generate_compir_files flags (cprog : Mir.program) : unit =
     if flags.nb_debug_c > 0 then
       List.fold_left
         (fun i vars ->
-          let file = Printf.sprintf "compir_tableg%02d.c" i in
-          let oc, fmt = open_file (Filename.concat folder file) in
+          let oc, fmt = open_file (Printf.sprintf "compir_tableg%02d.c" i) in
           if flags.flg_debug then gen_table_debug fmt flags vars i
           else
             Format.fprintf fmt
@@ -1079,22 +1077,22 @@ let generate_compir_files flags (cprog : Mir.program) : unit =
     else 0
   in
 
-  let oc, fmt = open_file (Filename.concat folder "compir_desc.h") in
+  let oc, fmt = open_file "compir_desc.h" in
   gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:true;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_desc_inv.h") in
+  let oc, fmt = open_file "compir_desc_inv.h" in
   gen_desc fmt Dgfip_options.(flags.flg_tri_ebcdic) vars ~alias_only:false;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_tableg.c") in
+  let oc, fmt = open_file "compir_tableg.c" in
   gen_table_call fmt flags vars_debug cprog;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir_tablev.c") in
+  let oc, fmt = open_file "compir_tablev.c" in
   gen_table_verif fmt flags cprog;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "compir.h") in
+  let oc, fmt = open_file "compir.h" in
   gen_compir_h fmt flags vars vars_debug_split;
   close_out oc
