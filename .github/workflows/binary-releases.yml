@@ -28,10 +28,10 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Opam modules cache
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         env:
           cache-name: cache-opam-modules
         with:
