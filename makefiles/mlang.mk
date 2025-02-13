@@ -61,8 +61,14 @@ endif
 
 build: FORCE | format dune
 
+build-ci: DUNE_OPTIONS=--profile ci
+build-ci: FORCE | dune
+
+build-release: DUNE_OPTIONS=--profile release
+build-release: FORCE | dune
+
 build-static: LINKING_MODE=static
-build-static: FORCE build
+build-static: FORCE build-release
 
 ##################################################
 # Testing the compiler

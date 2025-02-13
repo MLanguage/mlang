@@ -39,3 +39,5 @@ val raise_spanned_error_with_continuation :
 (* {2 Prints warnings with useful error messages }*)
 
 val print_spanned_warning : string -> ?span_msg:string -> Pos.t -> unit
+
+val print_multispanned_warning : string -> (string option * Pos.t) list -> unit

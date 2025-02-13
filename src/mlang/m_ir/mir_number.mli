@@ -79,7 +79,7 @@ module IntervalNumber : NumberInterface
 module RationalNumber : NumberInterface
 
 module BigIntFixedPointNumber : functor
-  (P : sig
+  (_ : sig
      val scaling_factor_bits : int ref
    end)
   -> NumberInterface

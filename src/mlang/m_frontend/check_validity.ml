@@ -14,6 +14,41 @@ type rule_or_verif = Rule | Verif
 
 type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
 
+module MarkedVarNames = struct
+  type t = string Pos.marked
+
+  let compare a b = compare (Pos.unmark a) (Pos.unmark b)
+
+  let pp_marked fmt elt = Format.fprintf fmt "%s" (Pos.unmark elt)
+
+  module Set = struct
+    include SetExt.Make (struct
+      type nonrec t = t
+
+      let compare = compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = pp_marked) (_ : unit)
+        (fmt : Format.formatter) (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type nonrec t = t
+
+      let compare = compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = pp_marked) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
+end
+(* Ideally we could use Com.Var.{Set,Map} instead (which also carries pos information, and would allow us to not duplicate too many structures),
+   but we check some properties before translating Mast variables to Com variables *)
+
 module Err = struct
   let rov_to_str rov = match rov with Rule -> "rule" | Verif -> "verif"
 
@@ -128,7 +163,9 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
-  let unknown_variable pos = Errors.raise_spanned_error "unknown variable" pos
+  let unknown_variable var_name pos =
+    let msg = Format.asprintf "unknown variable \"%s\"" var_name in
+    Errors.raise_spanned_error msg pos
 
   let variable_used_as_table decl_pos pos =
     let msg =
@@ -151,26 +188,46 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
-  let tmp_vars_have_no_attrs pos =
-    Errors.raise_spanned_error "temporary variables have no attributes" pos
+  let tmp_vars_have_no_attrs name pos =
+    let msg =
+      Format.asprintf "temporary variable \"%s\" should have no attributes" name
+    in
+    Errors.raise_spanned_error msg pos
 
-  let unknown_variable_category pos =
-    Errors.raise_spanned_error "unknown_variable_category" pos
+  let unknown_variable_category (cv : Com.CatVar.t) pos =
+    let msg =
+      Format.asprintf "unknown variable category \"%a\"" Com.CatVar.pp cv
+    in
+    Errors.raise_spanned_error msg pos
 
-  let insruction_forbidden_in_rules pos =
+  let instruction_forbidden_in_rules pos =
     Errors.raise_spanned_error "instruction forbidden in rules" pos
 
   let unknown_domain rov pos =
     let msg = Format.asprintf "unknown %s domain" (rov_to_str rov) in
     Errors.raise_spanned_error msg pos
 
-  let unknown_chaining pos = Errors.raise_spanned_error "unknown chaining" pos
+  let unknown_chaining chaining pos =
+    let msg = Format.asprintf "unknown chaining \"%s\"" chaining in
+    Errors.raise_spanned_error msg pos
 
-  let rule_domain_not_computable pos =
-    Errors.raise_spanned_error "rule domain not computable" pos
+  let rule_domain_not_computable l pos =
+    let msg =
+      Format.asprintf "rule domain \"%a\" not computable"
+        (Format.pp_print_list (fun fmt s ->
+             Format.fprintf fmt "%s" (Pos.unmark s)))
+        l
+    in
+    Errors.raise_spanned_error msg pos
 
-  let verif_domain_not_verifiable pos =
-    Errors.raise_spanned_error "verif domain not verifiable" pos
+  let verif_domain_not_verifiable l pos =
+    let msg =
+      Format.asprintf "verif domain \"%a\" not verifiable"
+        (Format.pp_print_list (fun fmt s ->
+             Format.fprintf fmt "%s" (Pos.unmark s)))
+        l
+    in
+    Errors.raise_spanned_error msg pos
 
   let rov_already_defined rov rov_id old_pos pos =
     let msg =
@@ -184,7 +241,7 @@ module Err = struct
 
   let second_arg_of_multimax pos =
     Errors.raise_spanned_error
-      "second argument of functionn multimax must be a variable name" pos
+      "second argument of function multimax must be a variable name" pos
 
   let loop_in_rules rdom_chain cycle =
     let rdom_chain_str =
@@ -194,11 +251,12 @@ module Err = struct
       | Chaining ch -> Format.sprintf "chaining \"%s\"" ch
     in
     let pp_cycle fmt cycle =
-      let rec aux first = function
+      let rec aux first cycle =
+        match cycle with
         | [] -> ()
         | (v, Some e) :: tl ->
             if first then Format.fprintf fmt "rule %d\n" v
-            else Format.fprintf fmt " -(%s)-> rule %d\n" e v;
+            else Format.fprintf fmt " -(%s)-> rule %d\n" (Pos.unmark e) v;
             aux false tl
         | (v, None) :: tl ->
             if first then Format.fprintf fmt "rule %d\n" v
@@ -226,10 +284,16 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
-  let unknown_error pos = Errors.raise_spanned_error "unknown error" pos
+  let unknown_error err_name pos =
+    let msg = Format.asprintf "unknown error \"%s\"" err_name in
+    Errors.raise_spanned_error msg pos
 
-  let variable_forbidden_in_filter pos =
-    Errors.raise_spanned_error "variables are forbidden in verif filters" pos
+  let variable_forbidden_in_filter var pos =
+    let msg =
+      Format.asprintf "variables (here, \"%s\") are forbidden in verif filters"
+        (Mast.get_variable_name var)
+    in
+    Errors.raise_spanned_error msg pos
 
   let forbidden_expresion_in_filter pos =
     Errors.raise_spanned_error "forbidden expression in verif filter" pos
@@ -237,8 +301,12 @@ module Err = struct
   let expression_only_in_filter pos =
     Errors.raise_spanned_error "expression authorized only in verif filters" pos
 
-  let wrong_interval_bounds pos =
-    Errors.raise_spanned_error "wrong interval bounds" pos
+  let wrong_interval_bounds min max pos =
+    let msg =
+      Format.asprintf "wrong interval bounds (%d should not be greater than %d)"
+        min max
+    in
+    Errors.raise_spanned_error msg pos
 
   let wrong_arity_of_function func_name arity pos =
     let msg =
@@ -313,10 +381,10 @@ type rule = {
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
   rule_tmp_vars :
-    (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
+    (MarkedVarNames.t * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
-  rule_in_vars : StrSet.t;
-  rule_out_vars : StrSet.t;
+  rule_in_vars : MarkedVarNames.Set.t;
+  rule_out_vars : MarkedVarNames.Set.t;
   rule_seq : int;
 }
 
@@ -357,6 +425,9 @@ type program = {
   prog_main_target : string;
   prog_stats : Mir.stats;
 }
+
+let is_vartmp (var : string) =
+  String.length var >= 6 && String.sub var 0 6 = "VARTMP"
 
 let get_target_file (pos : Pos.t) : string =
   let file = Pos.get_file pos |> Filename.basename in
@@ -731,7 +802,7 @@ let mast_to_catvars (cs : Pos.t Com.CatVar.Map.t)
         |> Com.CatVar.Map.union (fun _ p _ -> Some p) res
     | Com.CatVar.Input _ ->
         if Com.CatVar.Map.mem cv cats then Com.CatVar.Map.add cv pos res
-        else Err.unknown_variable_category pos
+        else Err.unknown_variable_category cv pos
     | _ -> Com.CatVar.Map.add cv pos res
   in
   Com.CatVar.Map.fold fold cs Com.CatVar.Map.empty
@@ -1128,7 +1199,7 @@ type var_env = {
   prog : program;
   tmp_vars : int option Pos.marked StrMap.t;
   ref_vars : Pos.t StrMap.t;
-  res_var : string Pos.marked option;
+  res_var : MarkedVarNames.t option;
 }
 
 let rec fold_var_expr
@@ -1149,8 +1220,10 @@ let rec fold_var_expr
               fold_var v (OneOf None) env res
           | Com.FloatValue _ -> res
           | Com.Interval (bn, en) ->
-              if Pos.unmark bn > Pos.unmark en then
-                Err.wrong_interval_bounds (Pos.get_position bn);
+              let b, b_pos = bn and e, e_pos = en in
+              if b > e then
+                Err.wrong_interval_bounds b e
+                  (Pos.make_position_between b_pos e_pos);
               res)
         res values
   | Comparison (_op, e1, e2) ->
@@ -1214,7 +1287,7 @@ let rec fold_var_expr
           check_func (List.length fd.target_args))
   | Literal _ -> acc
   | Var var ->
-      if is_filter then Err.variable_forbidden_in_filter expr_pos;
+      if is_filter then Err.variable_forbidden_in_filter var expr_pos;
       fold_var (var, expr_pos) (OneOf None) env acc
   | NbCategory cs ->
       if not is_filter then Err.expression_only_in_filter expr_pos;
@@ -1238,7 +1311,7 @@ let rec fold_var_expr
             Err.unknown_attribut_for_var cat (Pos.get_position a)
       | None -> (
           match StrMap.find_opt name env.tmp_vars with
-          | Some _ -> Err.tmp_vars_have_no_attrs var_pos
+          | Some _ -> Err.tmp_vars_have_no_attrs name var_pos
           | None -> ()));
       fold_var v Both env acc
   | Size v -> fold_var v Both env acc
@@ -1248,7 +1321,7 @@ let rec fold_var_expr
   | FuncCallLoop _ | Loop _ -> assert false
 
 let check_variable (var : Mast.variable Pos.marked)
-    (idx_mem : unit var_mem_type) (env : var_env) : string =
+    (idx_mem : unit var_mem_type) (env : var_env) : MarkedVarNames.t =
   let var_data, var_pos = var in
   let name, decl_mem, decl_pos =
     match var_data with
@@ -1266,25 +1339,25 @@ let check_variable (var : Mast.variable Pos.marked)
                     match env.res_var with
                     | Some (vr, decl_pos) when vr = vn ->
                         (vn, OneOf None, decl_pos)
-                    | Some _ | None -> Err.unknown_variable var_pos))))
+                    | Some _ | None -> Err.unknown_variable vn var_pos))))
     | Generic _ -> assert false
   in
   match (idx_mem, decl_mem) with
-  | Both, _ | _, Both -> name
+  | Both, _ | _, Both -> (name, var_pos)
   | OneOf idx, OneOf decl_size -> (
       match (idx, decl_size) with
-      | None, None -> name
+      | None, None -> (name, var_pos)
       | None, Some _ -> Err.variable_used_as_table decl_pos var_pos
-      | Some _, Some _ -> name
+      | Some _, Some _ -> (name, var_pos)
       | Some _, None -> Err.table_used_as_variable decl_pos var_pos)
 
 let check_expression (is_filter : bool) (m_expr : Mast.expression Pos.marked)
-    (env : var_env) : StrSet.t =
+    (env : var_env) : MarkedVarNames.Set.t =
   let fold_var var idx_mem env acc =
-    let name = check_variable var idx_mem env in
-    StrSet.add name acc
+    let marked_var = check_variable var idx_mem env in
+    MarkedVarNames.Set.add marked_var acc
   in
-  fold_var_expr fold_var is_filter StrSet.empty m_expr env
+  fold_var_expr fold_var is_filter MarkedVarNames.Set.empty m_expr env
 
 let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   let buf = Buffer.create 100 in
@@ -1312,14 +1385,14 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       | Some (dom_id, _) ->
           let rdom = Com.DomainIdMap.find dom_id prog.prog_rdoms in
           if not rdom.Com.dom_data.rdom_computable then
-            Err.rule_domain_not_computable (Pos.get_position l)
+            Err.rule_domain_not_computable (Pos.unmark l) (Pos.get_position l)
       | None -> Err.unknown_domain Rule (Pos.get_position l))
   | Com.ComputeChaining (ch_name, ch_pos) -> (
       Buffer.add_string buf "_chaining_";
       Buffer.add_string buf ch_name;
       match StrMap.find_opt ch_name prog.prog_chainings with
       | Some _ -> ()
-      | None -> Err.unknown_chaining ch_pos)
+      | None -> Err.unknown_chaining ch_name ch_pos)
   | Com.ComputeVerifs (l, _) -> (
       Buffer.add_string buf "_verifs";
       let id = add_sml buf l in
@@ -1330,7 +1403,7 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       | Some (dom_id, _) ->
           let vdom = Com.DomainIdMap.find dom_id prog.prog_vdoms in
           if not vdom.Com.dom_data.vdom_verifiable then
-            Err.verif_domain_not_verifiable (Pos.get_position l)
+            Err.verif_domain_not_verifiable (Pos.unmark l) (Pos.get_position l)
       | None -> Err.unknown_domain Verif (Pos.get_position l))
   | _ -> assert false);
   Buffer.contents buf
@@ -1347,15 +1420,29 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
 
 let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     (is_rule : bool) (env : var_env) :
-    program * Mast.instruction Pos.marked list * StrSet.t * StrSet.t =
-  let rec aux (env, res, in_vars, out_vars) = function
-    | [] -> (env, List.rev res, in_vars, out_vars)
+    program
+    * Mast.instruction Pos.marked list
+    * MarkedVarNames.Set.t
+    * MarkedVarNames.Set.t =
+  (* the use of def_vars is to track variables definitions within a rule and warn if one is defined twice
+     we use a `Pos.t StrMap` instead of marked variable names because it is enough information in our case *)
+  let rec aux (env, res, in_vars, out_vars, def_vars) instr_list =
+    match instr_list with
+    | [] -> (env, List.rev res, in_vars, out_vars, def_vars)
     | m_instr :: il -> (
         let instr, instr_pos = m_instr in
         match instr with
         | Com.Affectation (f, _) -> (
             match f with
             | Com.SingleFormula (v, idx, e) ->
+                let var, vpos = v in
+                let vn = Mast.get_normal_var var in
+                let def_list =
+                  match StrMap.find_opt vn def_vars with
+                  | None -> [ vpos ]
+                  | Some l -> vpos :: l
+                in
+                let def_vars = StrMap.add vn def_list def_vars in
                 let out_var =
                   let idx_mem = OneOf (Option.map (fun _ -> ()) idx) in
                   check_variable v idx_mem env
@@ -1363,20 +1450,23 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 let in_vars_index =
                   match idx with
                   | Some ei -> check_expression false ei env
-                  | None -> StrSet.empty
+                  | None -> MarkedVarNames.Set.empty
                 in
                 let in_vars_expr = check_expression false e env in
                 if is_rule then
-                  let in_vars_aff = StrSet.union in_vars_index in_vars_expr in
-                  let in_vars =
-                    StrSet.union in_vars (StrSet.diff in_vars_aff out_vars)
+                  let in_vars_aff =
+                    MarkedVarNames.Set.union in_vars_index in_vars_expr
                   in
-                  let out_vars = StrSet.add out_var out_vars in
-                  aux (env, m_instr :: res, in_vars, out_vars) il
-                else aux (env, m_instr :: res, in_vars, out_vars) il
+                  let in_vars =
+                    MarkedVarNames.Set.union in_vars
+                      (MarkedVarNames.Set.diff in_vars_aff out_vars)
+                  in
+                  let out_vars = MarkedVarNames.Set.add out_var out_vars in
+                  aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
+                else aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
-            (* if is_rule then Err.insruction_forbidden_in_rules instr_pos; *)
+            (* if is_rule then Err.instruction_forbidden_in_rules instr_pos; *)
             let in_expr = check_expression false expr env in
             let prog, res_then, in_then, out_then =
               check_instructions i_then is_rule env
@@ -1388,13 +1478,19 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let env = { env with prog } in
             let res_instr = Com.IfThenElse (expr, res_then, res_else) in
             let in_vars =
-              in_vars |> StrSet.union in_expr |> StrSet.union in_then
-              |> StrSet.union in_else
+              in_vars
+              |> MarkedVarNames.Set.union in_expr
+              |> MarkedVarNames.Set.union in_then
+              |> MarkedVarNames.Set.union in_else
             in
             let out_vars =
-              out_vars |> StrSet.union out_then |> StrSet.union out_else
+              out_vars
+              |> MarkedVarNames.Set.union out_then
+              |> MarkedVarNames.Set.union out_else
             in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.WhenDoElse (wdl, ed) ->
             let rec wde (env, res, in_vars, out_vars) = function
               | (expr, dl, pos) :: l ->
@@ -1404,9 +1500,11 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   in
                   let env = { env with prog } in
                   let in_vars =
-                    in_vars |> StrSet.union in_expr |> StrSet.union in_do
+                    in_vars
+                    |> MarkedVarNames.Set.union in_expr
+                    |> MarkedVarNames.Set.union in_do
                   in
-                  let out_vars = out_vars |> StrSet.union out_do in
+                  let out_vars = out_vars |> MarkedVarNames.Set.union out_do in
                   wde (env, (expr, res_do, pos) :: res, in_vars, out_vars) l
               | [] ->
                   let prog, res_ed, in_ed, out_ed =
@@ -1414,16 +1512,18 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   in
                   let env = { env with prog } in
                   let ed' = Pos.same_pos_as res_ed ed in
-                  let in_vars = in_vars |> StrSet.union in_ed in
-                  let out_vars = out_vars |> StrSet.union out_ed in
+                  let in_vars = in_vars |> MarkedVarNames.Set.union in_ed in
+                  let out_vars = out_vars |> MarkedVarNames.Set.union out_ed in
                   (env, Com.WhenDoElse (List.rev res, ed'), in_vars, out_vars)
             in
             let env, wde_res, in_vars, out_vars =
               wde (env, [], in_vars, out_vars) wdl
             in
-            aux (env, (wde_res, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (wde_res, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.ComputeDomain (rdom_list, rdom_pos) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let rdom_id =
               let id = Com.DomainId.from_marked_list rdom_list in
@@ -1437,14 +1537,18 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let prog = { prog with prog_rdom_calls } in
             let env = { env with prog } in
             let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.ComputeChaining _ ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.ComputeVerifs ((vdom_list, vdom_pos), expr) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let vdom_id =
               let id = Com.DomainId.from_marked_list vdom_list in
@@ -1459,17 +1563,21 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             let prog = { prog with prog_vdom_calls } in
             let env = { env with prog } in
             let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.VerifBlock instrs ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let prog, res_instrs, _, _ =
               check_instructions instrs is_rule env
             in
             let env = { env with prog } in
             let res_instr = Com.VerifBlock res_instrs in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.ComputeTarget ((tn, tpos), targs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             (match StrMap.find_opt tn env.prog.prog_targets with
             | None -> Err.unknown_target tn tpos
             | Some target ->
@@ -1477,7 +1585,7 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 if List.length targs <> nb_args then
                   Err.wrong_number_of_args nb_args tpos);
             List.iter (fun var -> ignore (check_variable var Both env)) targs;
-            aux (env, m_instr :: res, in_vars, out_vars) il
+            aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
         | Com.Print (_std, args) ->
             List.iter
               (fun arg ->
@@ -1489,9 +1597,9 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Com.PrintExpr (e, _min, _max) ->
                     ignore (check_expression false e env))
               args;
-            aux (env, m_instr :: res, in_vars, out_vars) il
+            aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
         | Com.Iterate (var, vars, var_params, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let var_pos = Pos.get_position var in
             let var_name =
               match Pos.unmark var with
@@ -1534,9 +1642,11 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             in
             let env = { env with prog } in
             let res_instr = Com.Iterate (var, vars, var_params, res_instrs) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.Restore (vars, var_params, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             ignore
               (List.fold_left
                  (fun seen var ->
@@ -1578,12 +1688,14 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             in
             let env = { env with prog } in
             let res_instr = Com.Restore (vars, var_params, res_instrs) in
-            aux (env, (res_instr, instr_pos) :: res, in_vars, out_vars) il
+            aux
+              (env, (res_instr, instr_pos) :: res, in_vars, out_vars, def_vars)
+              il
         | Com.RaiseError (m_err, m_var_opt) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
             let err_name, err_pos = m_err in
             (match StrMap.find_opt err_name env.prog.prog_errors with
-            | None -> Err.unknown_error err_pos
+            | None -> Err.unknown_error (Pos.unmark m_err) err_pos
             | Some _ -> ());
             (match m_var_opt with
             | Some (var_name, var_pos) -> (
@@ -1592,22 +1704,36 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                   && not (StrMap.mem var_name env.ref_vars)
                 then
                   match StrMap.find_opt var_name env.prog.prog_vars with
-                  | None -> Err.unknown_variable var_pos
+                  | None -> Err.unknown_variable var_name var_pos
                   | Some _ -> ())
             | None -> ());
-            aux (env, m_instr :: res, in_vars, out_vars) il
+            aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
         | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            aux (env, m_instr :: res, in_vars, out_vars) il)
+            if is_rule then Err.instruction_forbidden_in_rules instr_pos;
+            aux (env, m_instr :: res, in_vars, out_vars, def_vars) il)
   in
-  let env, res, in_vars, out_vars =
-    aux (env, [], StrSet.empty, StrSet.empty) instrs
+  let env, res, in_vars, out_vars, def_vars =
+    aux
+      (env, [], MarkedVarNames.Set.empty, MarkedVarNames.Set.empty, StrMap.empty)
+      instrs
   in
+  if is_rule then
+    StrMap.iter
+      (fun vn l ->
+        if List.length l > 1 && not (is_vartmp vn) then
+          Errors.print_multispanned_warning
+            (Format.asprintf
+               "Variable %s is defined more than once in the same rule" vn)
+            (List.map (fun pos -> (None, pos)) (List.rev l)))
+      (* List.rev for purely cosmetic reasons *)
+      def_vars;
   let tmp_vars =
-    StrMap.fold (fun vn _ s -> StrSet.add vn s) env.tmp_vars StrSet.empty
+    StrMap.fold
+      (fun vn posd s -> MarkedVarNames.Set.add (vn, Pos.get_position posd) s)
+      env.tmp_vars MarkedVarNames.Set.empty
   in
-  let in_vars = StrSet.diff in_vars tmp_vars in
-  let out_vars = StrSet.diff out_vars tmp_vars in
+  let in_vars = MarkedVarNames.Set.diff in_vars tmp_vars in
+  let out_vars = MarkedVarNames.Set.diff out_vars tmp_vars in
   (env.prog, res, in_vars, out_vars)
 
 let check_target (is_function : bool) (t : Mast.target) (prog : program) :
@@ -1690,11 +1816,11 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
         check_instructions t.target_prog is_function env
       in
       (if is_function then
-       let vr = Pos.unmark (Option.get target_result) in
-       let bad_out_vars = StrSet.remove vr out_vars in
-       if StrSet.card bad_out_vars > 0 then
-         let vn = StrSet.min_elt bad_out_vars in
-         Err.forbidden_out_var_in_function vn tname tpos);
+       let vr = Option.get target_result in
+       let bad_out_vars = MarkedVarNames.Set.remove vr out_vars in
+       if MarkedVarNames.Set.card bad_out_vars > 0 then
+         let var_pos = MarkedVarNames.Set.min_elt bad_out_vars in
+         Err.forbidden_out_var_in_function (Pos.unmark var_pos) tname tpos);
       (prog, target_prog)
     in
     let target =
@@ -1827,35 +1953,32 @@ let convert_rules (prog : program) : program =
   in
   { prog with prog_targets }
 
-let is_vartmp (var : string) =
-  String.length var >= 6 && String.sub var 0 6 = "VARTMP"
-
-let create_rule_graph (in_vars_from : rule -> StrSet.t)
-    (out_vars_from : rule -> StrSet.t) (rules : 'a IntMap.t) :
-    string IntMap.t option IntMap.t =
+let create_rule_graph (in_vars_from : rule -> MarkedVarNames.Set.t)
+    (out_vars_from : rule -> MarkedVarNames.Set.t) (rules : 'a IntMap.t) :
+    MarkedVarNames.t IntMap.t option IntMap.t =
   let in_vars_of_rules =
     IntMap.fold
       (fun id rule var_map ->
-        StrSet.fold
+        MarkedVarNames.Set.fold
           (fun var var_map ->
-            if is_vartmp var then var_map
+            if is_vartmp (Pos.unmark var) then var_map
             else
-              StrMap.update var
+              MarkedVarNames.Map.update var
                 (function
                   | None -> Some (IntSet.one id)
                   | Some set -> Some (IntSet.add id set))
                 var_map)
           (in_vars_from rule) var_map)
-      rules StrMap.empty
+      rules MarkedVarNames.Map.empty
   in
   IntMap.map
     (fun rule ->
       let edges =
-        StrSet.fold
+        MarkedVarNames.Set.fold
           (fun out_var edges ->
-            if is_vartmp out_var then edges
+            if is_vartmp (Pos.unmark out_var) then edges
             else
-              match StrMap.find_opt out_var in_vars_of_rules with
+              match MarkedVarNames.Map.find_opt out_var in_vars_of_rules with
               | Some out_rules ->
                   IntSet.fold
                     (fun out_id edges -> IntMap.add out_id out_var edges)
@@ -1867,18 +1990,18 @@ let create_rule_graph (in_vars_from : rule -> StrSet.t)
     rules
 
 let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
-    (rule_graph : string IntMap.t option IntMap.t) :
+    (rule_graph : MarkedVarNames.t IntMap.t option IntMap.t) :
     Mast.instruction Pos.marked list =
   let module RuleGraph :
     TopologicalSorting.GRAPH
-      with type 'a t = string IntMap.t option IntMap.t
+      with type 'a t = MarkedVarNames.t IntMap.t option IntMap.t
        and type vertex = int
-       and type edge = string = struct
-    type 'a t = string IntMap.t option IntMap.t
+       and type edge = MarkedVarNames.t = struct
+    type 'a t = MarkedVarNames.t IntMap.t option IntMap.t
 
     type vertex = int
 
-    type edge = string
+    type edge = MarkedVarNames.t
 
     type 'a vertexMap = 'a IntMap.t
 
@@ -1903,9 +2026,11 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   let auto_cycle =
     Some
       (function
-      | id, var ->
-          Cli.debug_print "warning: auto-cycle in rule %d with variable %s" id
-            var)
+      | id, (var_name, var_pos) ->
+          Errors.print_spanned_warning
+            (Format.asprintf
+               "Rule %d needs variable %s as both input and output" id var_name)
+            var_pos)
   in
   let sorted_rules =
     try RulesSorting.sort ~auto_cycle rule_graph with
@@ -1930,16 +2055,52 @@ let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
   Com.DomainId.equal rdom_id rule_rdom_id
   || Com.DomainIdSet.mem rule_rdom_id rdom.Com.dom_min
 
+let check_no_variable_duplicates (rdom_rules : rule IntMap.t)
+    (rdom_id : Com.DomainId.t) : unit =
+  (* checks whether a variable is defined in two different rules given a rule "set".
+     We cannot do it over all the rules of a single program because some are defined in different chainings *)
+  let rule_defined =
+    IntMap.fold
+      (fun _ r rule_defined ->
+        let out = r.rule_out_vars in
+        MarkedVarNames.Set.fold
+          (fun var rule_defined ->
+            let tail =
+              match MarkedVarNames.Map.find_opt var rule_defined with
+              | Some tl -> tl
+              | None -> []
+            in
+            MarkedVarNames.Map.add var
+              (Pos.get_position var :: tail)
+              rule_defined)
+          out rule_defined)
+      rdom_rules MarkedVarNames.Map.empty
+  in
+  MarkedVarNames.Map.iter
+    (fun var pos_list ->
+      let var_name = Pos.unmark var in
+      if (not (is_vartmp var_name)) && List.length pos_list > 1 then
+        let msg =
+          Format.asprintf
+            "Variable %s is defined in %d different rules in rule domain %a"
+            var_name (List.length pos_list) (Com.DomainId.pp ()) rdom_id
+        in
+        Errors.raise_multispanned_error msg
+          (List.map (fun pos -> (None, pos)) (List.rev pos_list)))
+    (* List.rev for cosmetic reasons *)
+    rule_defined
+
 let complete_rule_domains (prog : program) : program =
   let prog_targets =
     Com.DomainIdMap.fold
       (fun rdom_id rdom prog_targets ->
-        if rdom.Com.dom_data.Com.rdom_computable then
+        if rdom.Com.dom_data.Com.rdom_computable then (
           let rdom_rules =
             IntMap.filter
               (fun _ rule -> rdom_rule_filter rdom rule)
               prog.prog_rules
           in
+          check_no_variable_duplicates rdom_rules rdom_id;
           let rule_graph =
             create_rule_graph
               (fun r -> r.rule_in_vars)
@@ -1970,7 +2131,7 @@ let complete_rule_domains (prog : program) : program =
                 target_nb_refs = 0;
               }
           in
-          StrMap.add tname target prog_targets
+          StrMap.add tname target prog_targets)
         else prog_targets)
       prog.prog_rdoms prog.prog_targets
   in
@@ -2102,19 +2263,19 @@ let check_verif (v : Mast.verification) (prog : program) : program =
         let err_name, err_pos = verif_error in
         let verif_is_blocking =
           match StrMap.find_opt err_name prog.prog_errors with
-          | None -> Err.unknown_error err_pos
+          | None -> Err.unknown_error err_name err_pos
           | Some err -> (
               match err.typ with Com.Error.Anomaly -> true | _ -> false)
         in
         (match verif_var with
         | Some (var_name, var_pos) -> (
             match StrMap.find_opt var_name prog.prog_vars with
-            | None -> Err.unknown_variable var_pos
+            | None -> Err.unknown_variable var_name var_pos
             | Some _ -> ())
         | None -> ());
         let verif_cat_var_stats, verif_var_stats =
           let fold_var var idx_mem env (vdom_sts, var_sts) =
-            let name = check_variable var idx_mem env in
+            let name = Pos.unmark (check_variable var idx_mem env) in
             let var_data = StrMap.find name env.prog.prog_vars in
             let cat = Com.Var.cat var_data in
             if not (Com.CatVar.Map.mem cat verif_domain.dom_data.vdom_auth) then
@@ -2217,7 +2378,7 @@ let eval_expr_verif (prog : program) (verif : verif)
     match Pos.unmark expr with
     | Com.Literal (Com.Float f) -> Some f
     | Literal Com.Undefined -> None
-    | Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
+    | Var var -> Err.variable_forbidden_in_filter var (Pos.get_position expr)
     | Attribut (m_var, m_attr) ->
         let var =
           match Pos.unmark m_var with

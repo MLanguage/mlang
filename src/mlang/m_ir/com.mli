@@ -141,9 +141,7 @@ module Var : sig
 
   module Set : SetExt.T with type elt = t
 
-  module Map : sig
-    include MapExt.T with type key = t
-  end
+  module Map : MapExt.T with type key = t
 
   (* val compare_name_ref : (string -> string -> int) ref
 

@@ -235,16 +235,10 @@ let driver (files : string list) (application_names : string list)
             Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)
       | None -> Errors.raise_error "No backend specified!"
     end
-  with Errors.StructuredError (msg, pos_list, kont) ->
-    let pp_pos fmt (s_opt, p) =
-      match s_opt with
-      | Some s -> Format.fprintf fmt "(%s, %a)" s Pos.format_position_gnu p
-      | None -> Pos.format_position_gnu fmt p
-    in
-    Cli.error_print "Uncaught exception: Errors.StructuredError(\"%s\")@."
-      (String.escaped msg);
-    Cli.error_print "%a@." (Pp.list_endline pp_pos) pos_list;
+  with Errors.StructuredError (msg, pos_list, kont) as e ->
+    Cli.error_print "%a" Errors.format_structured_error (msg, pos_list);
     (match kont with None -> () | Some kont -> kont ());
-    Format.eprintf "%s@." (Printexc.get_backtrace ())
+    raise e
 
-let main () = Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)
+let main () =
+  exit @@ Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t driver)

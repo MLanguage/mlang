@@ -225,10 +225,8 @@ let gen_erreurs_c fmt flags (cprog : Mir.program) =
         "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
          \"%s\", %d };\n"
         (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
-        sous_code_suffix
-        (Strings.sanitize_str e.libelle)
-        (Pos.unmark e.code_bo) (Pos.unmark e.sous_code) (Pos.unmark e.is_isf)
-        (Pos.unmark e.name) terr)
+        sous_code_suffix (Pos.unmark e.libelle) (Pos.unmark e.code_bo)
+        (Pos.unmark e.sous_code) (Pos.unmark e.is_isf) (Pos.unmark e.name) terr)
     cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
