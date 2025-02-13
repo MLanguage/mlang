@@ -14,8 +14,20 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let gen_table_varinfo fmt vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
+let open_file filename =
+  let folder = Filename.dirname !Cli.output_file in
+  let oc = open_out (Filename.concat folder filename) in
+  let fmt = Format.formatter_of_out_channel oc in
+  (oc, fmt)
+
+let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
     (stats, var_map) =
+  let oc, fmt = open_file (Pp.spr "varinfo_%s.c" id_str) in
+  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+
+#include "mlang.h"
+
+|};
   Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
     id_str;
   let nb, var_map =
@@ -54,12 +66,20 @@ let gen_table_varinfo fmt vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
       vars (0, var_map)
   in
   Format.fprintf fmt "  NULL\n};\n\n";
+  close_out oc;
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
   (Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats, var_map)
 
-let gen_table_varinfos fmt (cprog : Mir.program) =
+let gen_table_varinfos (cprog : Mir.program) flags =
+  let stats_varinfos, var_map =
+    Com.CatVar.Map.fold
+      (gen_table_varinfo cprog.program_vars)
+      cprog.program_var_categories
+      (Com.CatVar.Map.empty, StrMap.empty)
+  in
+  let oc, fmt = open_file "varinfos.c" in
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
@@ -98,15 +118,14 @@ let gen_table_varinfos fmt (cprog : Mir.program) =
       Pp.fpr fmt "  return 0.0;\n";
       Pp.fpr fmt "}\n\n")
     attrs;
-  let stats_varinfos, var_map =
-    Com.CatVar.Map.fold
-      (gen_table_varinfo fmt cprog.program_vars)
-      cprog.program_var_categories
-      (Com.CatVar.Map.empty, StrMap.empty)
-  in
-  Pp.fpr fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
-  StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
-  Pp.fpr fmt "  NULL\n};\n\n";
+  if flags.Dgfip_options.flg_gcos then
+    Format.fprintf fmt "T_varinfo_map varinfo[1] = {NULL};\n\n"
+  else (
+    Format.fprintf fmt
+      "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+    StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
+    Format.fprintf fmt "  NULL\n};\n\n");
+  close_out oc;
   stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
@@ -208,10 +227,8 @@ let gen_erreurs_c fmt flags (cprog : Mir.program) =
         "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
          \"%s\", %d };\n"
         (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
-        sous_code_suffix
-        (Strings.sanitize_str e.libelle)
-        (Pos.unmark e.code_bo) (Pos.unmark e.sous_code) (Pos.unmark e.is_isf)
-        (Pos.unmark e.name) terr)
+        sous_code_suffix (Pos.unmark e.libelle) (Pos.unmark e.code_bo)
+        (Pos.unmark e.sous_code) (Pos.unmark e.is_isf) (Pos.unmark e.name) terr)
     cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
@@ -239,7 +256,9 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
   if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
   if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
   if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
-  if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
+  if flags.flg_gcos then (
+    Format.fprintf fmt "#define FLG_GCOS\n";
+    Format.fprintf fmt "#define BATCH\n");
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
   if flags.flg_short then
@@ -1776,32 +1795,23 @@ void pr_err_var(T_irdata *irdata, char *nom) {
         pr "}\n\n"))
     cprog.program_event_fields
 
-let open_file filename =
-  let oc = open_out filename in
-  let fmt = Format.formatter_of_out_channel oc in
-  (oc, fmt)
-
 let generate_auxiliary_files flags (cprog : Mir.program) : unit =
-  let folder = Filename.dirname !Cli.output_file in
-
   Dgfip_compir_files.generate_compir_files flags cprog;
 
-  let oc, fmt = open_file (Filename.concat folder "varinfos.c") in
-  let stats_varinfos = gen_table_varinfos fmt cprog in
-  close_out oc;
+  let stats_varinfos = gen_table_varinfos cprog flags in
 
-  let oc, fmt = open_file (Filename.concat folder "erreurs.c") in
+  let oc, fmt = open_file "erreurs.c" in
   gen_erreurs_c fmt flags cprog;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "conf.h") in
+  let oc, fmt = open_file "conf.h" in
   gen_conf_h fmt cprog flags;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "mlang.h") in
+  let oc, fmt = open_file "mlang.h" in
   gen_mlang_h fmt cprog flags stats_varinfos;
   close_out oc;
 
-  let oc, fmt = open_file (Filename.concat folder "mlang.c") in
+  let oc, fmt = open_file "mlang.c" in
   gen_mlang_c fmt cprog flags;
   close_out oc

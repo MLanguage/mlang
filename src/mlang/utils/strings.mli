@@ -14,10 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val sanitize_str : string * Pos.t -> string
+(* val sanitize_str : string * Pos.t -> string *)
 (** DGFiP sources are encoded in iso-8859-1 which is not compatible with some
     backend compilers such as Java and Python, this function transforms illegal
-    characters with a space. *)
+    characters with a space. - not useful anymore (for now) *)
 
 val compare_default : string -> string -> int
 

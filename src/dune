@@ -1,7 +1,15 @@
 (env
  (dev
   (flags
-   (:standard -warn-error -A))))
+   (:standard -warn-error -a)))
+ ;; fail on warnings in CI mode
+ (ci
+  (flags
+   (:standard -w +a-4-40..42-44-45-70 -warn-error +a)))
+ ;; show warnings but still allow release in release mode
+ (release
+  (flags
+   (:standard -w +a-4-40..42-44-45-70 -warn-error -a))))
 
 (rule
  (with-stdout-to

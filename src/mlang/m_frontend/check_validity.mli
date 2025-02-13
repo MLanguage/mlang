@@ -31,7 +31,7 @@ type rule = {
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
-  rule_out_vars : StrSet.t;
+  rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
 }
 
