@@ -254,9 +254,7 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
   if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
   if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
   if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
-  if flags.flg_gcos then (
-    Format.fprintf fmt "#define FLG_GCOS\n";
-    Format.fprintf fmt "#define BATCH\n");
+  if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
   if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
   if flags.flg_short then
