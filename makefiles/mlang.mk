@@ -70,6 +70,9 @@ build-release: FORCE | dune
 build-static: LINKING_MODE=static
 build-static: FORCE build-release
 
+build-doc: DUNE_OPTIONS=@doc
+build-doc: FORCE | dune
+
 ##################################################
 # Testing the compiler
 ##################################################
