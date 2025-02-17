@@ -39,7 +39,7 @@ jobs:
       - name: Build
         run: |
           eval $(opam env)
-          dune build @doc
+          make build-doc
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
