@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        # needed so that tags really fetch, cf. https://github.com/actions/checkout/issues/1471
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Opam modules cache
         uses: actions/cache@v4
