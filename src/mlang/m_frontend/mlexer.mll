@@ -138,7 +138,6 @@ rule token = parse
     | "un" -> ONE
     | "valeur" -> VALUE
     | "variable" -> VARIABLE
-    | "variables" -> VARIABLES
     | "variables_temporaires" -> TEMP_VARS
     | "verif" -> VERIFICATION
     | "verifiable" -> VERIFIABLE
