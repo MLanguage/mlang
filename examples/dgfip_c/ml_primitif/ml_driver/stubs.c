@@ -200,7 +200,7 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   CAMLlocal2(mlErrListTemp, mlErrListOut);
 
   T_irdata *tgv = Tgv_val(mlTgv);
-  T_discord *erreurs = enchainement_primitif(tgv);
+  T_discord *erreurs = enchainement_primitif_interpreteur(tgv);
   mlErrListOut = Val_emptylist;
   while (erreurs != NULL) {
     if (erreurs->erreur != NULL) {

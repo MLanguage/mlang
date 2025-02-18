@@ -855,7 +855,7 @@ iterer
   afficher_erreur "\n";
 )
 
-cible test:
+cible test_evenements:
 application: iliad;
 variables_temporaires: A0, A1, EVT;
 A0 = 1.6;
@@ -988,6 +988,38 @@ afficher_erreur
   (attribut(champ_evenement(1000, code), primrest)) "\n";
 afficher_erreur "\n";
 
+TAILLE_TOTO : const = 3;
+
+cible test_tableaux:
+application : iliad;
+variables_temporaires: TOTO tableau[TAILLE_TOTO], NB;
+NB = TAILLE_TOTO - 1;
+afficher_erreur "test_tableaux\n";
+TOTO[0] = 1;
+iterer : variable I : 1..NB increment 1 : dans (
+  TOTO[I] = 1 + TOTO[I - 1];
+)
+iterer : variable I : 0..NB increment 1 : dans (
+  afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+)
+afficher_erreur "\n";
+restaurer : variables TOTO : apres (
+  iterer : variable I : 0..NB increment 1 : dans (
+    TOTO[I] = indefini;
+    afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+  )
+)
+afficher_erreur "\n";
+iterer : variable I : 0..NB increment 1 : dans (
+  afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+)
+afficher_erreur "\n";
+
+cible test:
+application: iliad;
+calculer cible test_evenements;
+calculer cible test_tableaux;
+
 cible enchainement_primitif:
 application: iliad;
 variables_temporaires: EXPORTE_ERREUR;
@@ -1025,13 +1057,21 @@ sinon_faire
 finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
-#calculer cible test;
 
-# primitif iterpréteur
+# correctif
+
+cible enchainement_correctif:
+application: iliad;
+neant;
+
+# iterpréteur
 
 cible enchainement_primitif_interpreteur:
 application: iliad;
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible enchainement_primitif;
+sinon_si V_IND_TRAIT = 5 alors # correctif
+  calculer cible enchainement_correctif;
 finsi
+calculer cible test;
 

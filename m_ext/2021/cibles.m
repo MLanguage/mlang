@@ -370,13 +370,24 @@ cible est_code_supp_avfisc:
 application: iliad;
 VARTMP1 = 0;
 si
-     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
-  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-  ou present(RFDHIS)  ou present(REPSNO3_A)
-  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
-  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
-  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
-  ou present(PINELQO_A)
+     present(COD7QD)
+  ou present(COD7QB)
+  ou present(COD7QC)
+  ou present(RFORDI)
+  ou present(RFROBOR)
+  ou present(RFDORD)
+  ou present(RFDHIS)
+  # ou present(REPSNO3_A)
+  ou present(COD7QF)
+  ou present(COD7QH)
+  # ou present(CELRREDLG_A)
+  # ou present(PINELQM_A)
+  ou present(RCMABD)
+  ou present(COD7KM)
+  # ou present(PINELQP_A)
+  # ou present(COD7QS_A)
+  # ou present(PINELQN_A)
+  # ou present(PINELQO_A)
 alors
   VARTMP1 = 1;
 sinon
@@ -673,5 +684,4 @@ iterer
   afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
 )
 afficher_erreur "titi fin\n\n";
-
 

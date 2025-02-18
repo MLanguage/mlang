@@ -216,7 +216,7 @@ let get_vars (cprog : Mir.program) is_ebcdic =
                 idxo_opt,
                 name,
                 Option.map Pos.unmark tgv.alias,
-                Pos.unmark tgv.descr,
+                Strings.sanitize_c_str (Pos.unmark tgv.descr),
                 tgv.typ,
                 tgv.attrs,
                 size )

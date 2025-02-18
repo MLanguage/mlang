@@ -26,6 +26,27 @@
        else c)
      s *)
 
+let sanitize_c_str s =
+  let len = String.length s in
+  let buf = Buffer.create len in
+  for i = 0 to len - 1 do
+    match s.[i] with
+    | '\b' -> Buffer.add_string buf "\\b"
+    | '\n' -> Buffer.add_string buf "\\n"
+    | '\r' -> Buffer.add_string buf "\\r"
+    | '\t' -> Buffer.add_string buf "\\t"
+    | '\007' -> Buffer.add_string buf "\\a"
+    | '\027' -> Buffer.add_string buf "\\e"
+    | '\012' -> Buffer.add_string buf "\\f"
+    | '\011' -> Buffer.add_string buf "\\v"
+    | ('\\' | '\'' | '"' | '?') as c -> Buffer.add_string buf (Pp.spr "\\%c" c)
+    | c when c <= '\031' || '\127' <= c ->
+        let code_str = Pp.spr "\\%03o" (Char.code c) in
+        Buffer.add_string buf code_str
+    | c -> Buffer.add_char buf c
+  done;
+  Buffer.contents buf
+
 let compare_default = String.compare
 
 let ascii_to_ebcdic =

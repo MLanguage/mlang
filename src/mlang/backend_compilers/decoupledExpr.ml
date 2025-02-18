@@ -19,7 +19,7 @@ let rec generate_variable (offset : offset) ?(def_flag = false)
           | None -> ""
           | GetValueVar offset -> " + (int)" ^ generate_variable None offset
           | GetValueConst offset -> " + " ^ string_of_int offset
-          | GetValueExpr offset -> Format.sprintf " + (%s)" offset
+          | GetValueExpr offset -> Format.sprintf " + (int)(%s)" offset
           | PassPointer -> assert false
         in
         if def_flag then VID.gen_def var offset
@@ -524,10 +524,10 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Daccess (var, dflag, de) ->
-      Format.fprintf fmt "(%s[(int)%a])"
+      let de_str = Format.asprintf "%a" format_dexpr de in
+      Format.fprintf fmt "(%s)"
         (generate_variable ~def_flag:(dflag = Def)
-           ~trace_flag:dgfip_flags.flg_trace PassPointer var)
-        format_dexpr de
+           ~trace_flag:dgfip_flags.flg_trace (GetValueExpr de_str) var)
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
