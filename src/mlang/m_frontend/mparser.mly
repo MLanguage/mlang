@@ -898,7 +898,7 @@ it_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
 rest_param:
-| VARIABLES vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
+| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
       List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
     in

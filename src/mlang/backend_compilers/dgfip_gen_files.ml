@@ -1149,7 +1149,7 @@ void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff) {
 void print_indent(FILE *std, T_print_context *pr_ctx) {
   if (pr_ctx->is_newline) {
     int i;
-    for (i = 1; i < pr_ctx->indent; i++) {
+    for (i = 0; i < pr_ctx->indent; i++) {
       fprintf(pr_ctx->std, " ");
     }
     pr_ctx->is_newline = 0;
