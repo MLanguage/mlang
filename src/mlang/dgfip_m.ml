@@ -229,6 +229,20 @@ let declarations =
   Format.sprintf "%s%s%s" variable_domains_declaration rule_domains_declaration
     verif_domains_declaration
 
+let event_declaration =
+  {|
+evenement
+: valeur numero
+: valeur rappel
+: variable code
+: valeur montant
+: valeur sens
+: valeur penalite
+: valeur base_tl
+: valeur date
+: valeur 2042_rect;
+|}
+
 let string_to_rule_domain_id : string -> string list = function
   | "primitif" -> [ "primitive" ]
   | "corrective" -> [ "corrective" ]

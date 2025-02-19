@@ -75,7 +75,8 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
         let set_vars = se1.D.set_vars @ se2.D.set_vars in
         let def_test =
           match Pos.unmark op with
-          | Com.And | Com.Mul | Com.Div -> D.dand se1.def_test se2.def_test
+          | Com.And | Com.Mul | Com.Div | Com.Mod ->
+              D.dand se1.def_test se2.def_test
           | Com.Or | Com.Add | Com.Sub -> D.dor se1.def_test se2.def_test
         in
         let op e1 e2 =
@@ -86,6 +87,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           | Com.Sub -> D.sub e1 e2
           | Com.Mul -> D.mult e1 e2
           | Com.Div -> D.ite e2 (D.div e1 e2) (D.lit 0.)
+          | Com.Mod -> D.ite e2 (D.modulo e1 e2) (D.lit 0.)
         in
         let value_comp = op se1.value_comp se2.value_comp in
         D.build_transitive_composition ~safe_def:true
@@ -119,14 +121,44 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           (fun or_chain set_value ->
             let equal_test =
               match set_value with
-              | Com.VarValue set_var ->
-                  let s_set_var =
-                    let v = Pos.unmark set_var in
+              | Com.VarValue (VarAccess v, _) ->
+                  let s_v =
                     let def_test = D.m_var v None Def in
                     let value_comp = D.m_var v None Val in
                     D.{ set_vars = []; def_test; value_comp }
                   in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_set_var
+                  comparison (Com.Eq, Pos.no_pos) sle0 s_v
+              | Com.VarValue (FieldAccess (me, f, _), _) ->
+                  let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
+                  let res = fresh_c_local "result" in
+                  let res_def = Pp.spr "%s_def" res in
+                  let res_val = Pp.spr "%s_val" res in
+                  let res_def_ptr = Pp.spr "&%s" res_def in
+                  let res_val_ptr = Pp.spr "&%s" res_val in
+                  let set_vars, arg_exprs =
+                    let e = generate_c_expr me in
+                    (e.set_vars, [ e.def_test; e.value_comp ])
+                  in
+                  let d_fun =
+                    D.dfun fn
+                      ([
+                         D.ddirect (D.dinstr "irdata");
+                         D.ddirect (D.dinstr res_def_ptr);
+                         D.ddirect (D.dinstr res_val_ptr);
+                       ]
+                      @ arg_exprs)
+                  in
+                  let set_vars =
+                    set_vars
+                    @ [
+                        (D.Def, res_def, d_fun);
+                        (D.Val, res_val, D.ddirect (D.dinstr res_val));
+                      ]
+                  in
+                  let def_test = D.dinstr res_def in
+                  let value_comp = D.dinstr res_val in
+                  let s_f = D.{ set_vars; def_test; value_comp } in
+                  comparison (Com.Eq, Pos.no_pos) sle0 s_f
               | Com.FloatValue i ->
                   let s_i =
                     {
@@ -136,7 +168,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     }
                   in
                   comparison (Com.Eq, Pos.no_pos) sle0 s_i
-              | Com.Interval (bn, en) ->
+              | Com.IntervalValue (bn, en) ->
                   let s_bn =
                     let bn' = float_of_int (Pos.unmark bn) in
                     D.{ set_vars = []; def_test = dtrue; value_comp = lit bn' }
@@ -170,31 +202,74 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
   | Unop (op, e) ->
       let se = generate_c_expr e in
       unop op se
-  | Index (var, e) ->
-      let index = fresh_c_local "index" in
-      let def_index = Pp.spr "def_%s" index in
-      let val_index = Pp.spr "val_%s" index in
-      let idx = generate_c_expr e in
-      let size = VID.gen_size (Pos.unmark var) in
-      let set_vars =
-        idx.D.set_vars
-        @ [
-            (D.Def, def_index, idx.def_test); (D.Val, val_index, idx.value_comp);
-          ]
-      in
-      let def_test =
-        D.dand
-          (D.dand (D.dinstr def_index)
-             (D.comp "<" (D.dinstr val_index) (D.dinstr size)))
-          (D.access (Pos.unmark var) Def (D.dinstr val_index))
-      in
-      let value_comp =
-        D.ite
-          (D.comp "<" (D.dinstr val_index) (D.lit 0.))
-          (D.lit 0.)
-          (D.access (Pos.unmark var) Val (D.dinstr val_index))
-      in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | Index (m_acc, e) -> (
+      match Pos.unmark m_acc with
+      | VarAccess v ->
+          let index = fresh_c_local "index" in
+          let index_def = Pp.spr "%s_def" index in
+          let index_val = Pp.spr "%s_val" index in
+          let idx = generate_c_expr e in
+          let size = VID.gen_size v in
+          let set_vars =
+            idx.D.set_vars
+            @ [
+                (D.Def, index_def, idx.def_test);
+                (D.Val, index_val, idx.value_comp);
+              ]
+          in
+          let def_test =
+            D.dand
+              (D.dand (D.dinstr index_def)
+                 (D.comp "<" (D.dinstr index_val) (D.dinstr size)))
+              (D.access v Def (D.dinstr index_val))
+          in
+          let value_comp =
+            D.ite
+              (D.comp "<" (D.dinstr index_val) (D.lit 0.))
+              (D.lit 0.)
+              (D.access v Val (D.dinstr index_val))
+          in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | FieldAccess (ie, f, _) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let set_vars, idx_def, idx_val =
+            let idx = generate_c_expr e in
+            (idx.set_vars, idx.def_test, idx.value_comp)
+          in
+          let set_vars, evt_d_fun =
+            let i = generate_c_expr ie in
+            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            let evt_d_fun =
+              D.dfun evt_fn [ d_irdata; i.def_test; i.value_comp ]
+            in
+            (set_vars @ i.set_vars, evt_d_fun)
+          in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let d_fun =
+            D.dfun "lis_varinfo_tab"
+              [
+                d_irdata;
+                D.ddirect evt_d_fun;
+                idx_def;
+                idx_val;
+                D.ddirect (D.dinstr res_def_ptr);
+                D.ddirect (D.dinstr res_val_ptr);
+              ]
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
   | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr c in
       let thenval = generate_c_expr t in
@@ -278,22 +353,89 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((Multimax, _), [ e1; (Var v2, _) ]) ->
-      let bound = generate_c_expr e1 in
-      let set_vars = bound.D.set_vars in
-      let def_test =
-        D.dfun "multimax_def" [ bound.value_comp; D.m_var v2 PassPointer Def ]
-      in
-      let value_comp =
-        D.dfun "multimax" [ bound.value_comp; D.m_var v2 PassPointer Val ]
-      in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | FuncCall ((Multimax, _), [ e1; (Var m_acc, _) ]) -> (
+      match m_acc with
+      | VarAccess v ->
+          let bound = generate_c_expr e1 in
+          let set_vars = bound.D.set_vars in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let size_comp = D.dinstr (Pp.spr "(%s->size)" (VID.gen_info_ptr v)) in
+          let d_fun =
+            D.dfun "multimax"
+              [
+                D.m_var v PassPointer Def;
+                D.m_var v PassPointer Val;
+                size_comp;
+                bound.def_test;
+                bound.value_comp;
+                D.ddirect (D.dinstr res_def_ptr);
+                D.ddirect (D.dinstr res_val_ptr);
+              ]
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | FieldAccess (ie, f, _) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let set_vars, bound_def, bound_val =
+            let bound = generate_c_expr e1 in
+            (bound.set_vars, bound.def_test, bound.value_comp)
+          in
+          let set_vars, evt_d_fun =
+            let e = generate_c_expr ie in
+            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            let evt_d_fun =
+              D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ]
+            in
+            (set_vars @ e.set_vars, evt_d_fun)
+          in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let d_fun =
+            D.dfun "multimax_varinfo"
+              [
+                d_irdata;
+                D.ddirect evt_d_fun;
+                bound_def;
+                bound_val;
+                D.ddirect (D.dinstr res_def_ptr);
+                D.ddirect (D.dinstr res_val_ptr);
+              ]
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
+  | FuncCall ((NbEvents, _), _) ->
+      let def_test = D.dinstr "1.0" in
+      let value_comp = D.dinstr "nb_evenements(irdata)" in
+      D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | FuncCall ((Func fn, _), args) ->
       let res = fresh_c_local "result" in
-      let def_res = Pp.spr "def_%s" res in
-      let val_res = Pp.spr "val_%s" res in
-      let def_res_ptr = Pp.spr "&%s" def_res in
-      let val_res_ptr = Pp.spr "&%s" val_res in
+      let res_def = Pp.spr "%s_def" res in
+      let res_val = Pp.spr "%s_val" res in
+      let res_def_ptr = Pp.spr "&%s" res_def in
+      let res_val_ptr = Pp.spr "&%s" res_val in
       let set_vars, arg_exprs =
         let rec aux (set_vars, arg_exprs) = function
           | [] -> (List.rev set_vars, List.rev arg_exprs)
@@ -308,46 +450,124 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let d_fun =
         D.dfun fn
           ([
-             D.dlow_level "irdata";
-             D.dlow_level def_res_ptr;
-             D.dlow_level val_res_ptr;
+             D.ddirect (D.dinstr "irdata");
+             D.ddirect (D.dinstr res_def_ptr);
+             D.ddirect (D.dinstr res_val_ptr);
            ]
           @ arg_exprs)
       in
       let set_vars =
         set_vars
-        @ [ (D.Def, def_res, d_fun); (D.Val, val_res, D.dlow_level val_res) ]
+        @ [
+            (D.Def, res_def, d_fun);
+            (D.Val, res_val, D.ddirect (D.dinstr res_val));
+          ]
       in
-      let def_test = D.dinstr def_res in
-      let value_comp = D.dinstr val_res in
+      let def_test = D.dinstr res_def in
+      let value_comp = D.dinstr res_val in
       D.build_transitive_composition { set_vars; def_test; value_comp }
   | FuncCall _ -> assert false (* should not happen *)
   | Literal (Float f) ->
       { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
   | Literal Undefined ->
       { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
-  | Var var ->
-      {
-        set_vars = [];
-        def_test = D.m_var var None Def;
-        value_comp = D.m_var var None Val;
-      }
-  | Attribut (var, a) ->
-      let ptr = VID.gen_info_ptr (Pos.unmark var) in
-      let def_test =
-        D.dinstr
-          (Format.sprintf "attribut_%s_def((T_varinfo *)%s)" (Pos.unmark a) ptr)
+  | Var (VarAccess var) ->
+      let def_test = D.m_var var None Def in
+      let value_comp = D.m_var var None Val in
+      { set_vars = []; def_test; value_comp }
+  | Var (FieldAccess (me, f, _)) ->
+      let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
+      let res = fresh_c_local "result" in
+      let res_def = Pp.spr "%s_def" res in
+      let res_val = Pp.spr "%s_val" res in
+      let res_def_ptr = Pp.spr "&%s" res_def in
+      let res_val_ptr = Pp.spr "&%s" res_val in
+      let set_vars, arg_exprs =
+        let e = generate_c_expr me in
+        (e.set_vars, [ e.def_test; e.value_comp ])
       in
-      let value_comp =
-        D.dinstr
-          (Format.sprintf "attribut_%s((T_varinfo *)%s)" (Pos.unmark a) ptr)
+      let d_fun =
+        D.dfun fn
+          ([
+             D.ddirect (D.dinstr "irdata");
+             D.ddirect (D.dinstr res_def_ptr);
+             D.ddirect (D.dinstr res_val_ptr);
+           ]
+          @ arg_exprs)
       in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | Size var ->
-      let ptr = VID.gen_info_ptr (Pos.unmark var) in
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
+      let set_vars =
+        set_vars
+        @ [
+            (D.Def, res_def, d_fun);
+            (D.Val, res_val, D.ddirect (D.dinstr res_val));
+          ]
+      in
+      let def_test = D.dinstr res_def in
+      let value_comp = D.dinstr res_val in
+      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | Attribut (m_acc, a) -> (
+      let attr = Pos.unmark a in
+      match Pos.unmark m_acc with
+      | VarAccess v ->
+          let ptr = VID.gen_info_ptr v in
+          let def_test =
+            D.dinstr (Pp.spr "attribut_%s_def((T_varinfo *)%s)" attr ptr)
+          in
+          let value_comp =
+            D.dinstr (Pp.spr "attribut_%s((T_varinfo *)%s)" attr ptr)
+          in
+          D.build_transitive_composition { set_vars = []; def_test; value_comp }
+      | FieldAccess (ie, f, _) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let set_vars, evt_d_fun =
+            let e = generate_c_expr ie in
+            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+          in
+          let def_test =
+            D.dfun (Pp.spr "attribut_%s_def" attr) [ D.ddirect evt_d_fun ]
+          in
+          let value_comp =
+            D.dfun (Pp.spr "attribut_%s" attr) [ D.ddirect evt_d_fun ]
+          in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
+  | Size m_acc -> (
+      match Pos.unmark m_acc with
+      | VarAccess v ->
+          let ptr = VID.gen_info_ptr v in
+          let def_test = D.dinstr "1.0" in
+          let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
+          D.build_transitive_composition { set_vars = []; def_test; value_comp }
+      | FieldAccess (ie, f, _) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let set_vars, evt_d_fun =
+            let e = generate_c_expr ie in
+            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+          in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let d_fun =
+            D.dfun "size_varinfo"
+              [
+                D.ddirect evt_d_fun;
+                D.ddirect (D.dinstr res_def_ptr);
+                D.ddirect (D.dinstr res_val_ptr);
+              ]
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
   | NbAnomalies ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_anomalies(irdata)" in
@@ -364,230 +584,258 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_bloquantes(irdata)" in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | NbCategory _ -> assert false
-  | FuncCallLoop _ | Loop _ -> assert false
+  | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
-let generate_m_assign (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
-    (offset : D.offset) (oc : Format.formatter) (se : D.expression_composition)
-    : unit =
+let generate_expr_with_res_in dgfip_flags oc res_def res_val expr =
   let pr form = Format.fprintf oc form in
-  let def_var = D.generate_variable ~def_flag:true offset var in
-  let val_var = D.generate_variable offset var in
-  let locals, set, def, value = D.build_expression se in
+  let locals, set, def, value = D.build_expression @@ generate_c_expr expr in
   if D.is_always_true def then
-    pr "%a%a%a@;@[<v 2>{@;%a@]@;}" D.format_local_declarations locals
+    pr "@;@[<v 2>{%a%a%a%a@]@;}" D.format_local_declarations locals
       (D.format_set_vars dgfip_flags)
       set
-      (D.format_assign dgfip_flags def_var)
+      (D.format_assign dgfip_flags res_def)
       def
-      (D.format_assign dgfip_flags val_var)
+      (D.format_assign dgfip_flags res_val)
       value
   else
-    pr "%a%a%a@,@[<v 2>if(%s){@;%a@]@,}@,else %s = 0.;"
+    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
       D.format_local_declarations locals
       (D.format_set_vars dgfip_flags)
       set
-      (D.format_assign dgfip_flags def_var)
-      def def_var
-      (D.format_assign dgfip_flags val_var)
-      value val_var;
+      (D.format_assign dgfip_flags res_def)
+      def res_def
+      (D.format_assign dgfip_flags res_val)
+      value res_val
+
+let generate_m_assign (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
+    (offset : D.offset) (oc : Format.formatter)
+    (expr : Mir.expression Pos.marked) : unit =
+  let var_def = D.generate_variable ~def_flag:true offset var in
+  let var_val = D.generate_variable offset var in
+  generate_expr_with_res_in dgfip_flags oc var_def var_val expr;
   (* If the trace flag is set, we print the value of all non-temp variables *)
   if dgfip_flags.flg_trace && not (Com.Var.is_temp var) then
-    pr "@;aff2(\"%s\", irdata, %s);"
+    Format.fprintf oc "@;aff2(\"%s\", irdata, %s);"
       (Pos.unmark var.Com.Var.name)
       (VID.gen_pos_from_start var)
 
 let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
     (vidx_opt : Mir.expression Pos.marked option)
-    (vexpr : Mir.expression Pos.marked) (fmt : Format.formatter) : unit =
-  let pr form = Format.fprintf fmt form in
+    (vexpr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
+  let pr form = Format.fprintf oc form in
+  let size = VID.gen_size var in
   match vidx_opt with
   | None ->
-      let se = generate_c_expr vexpr in
       if Com.Var.is_ref var then (
-        pr "@[<v 2>{@;";
-        let idx = fresh_c_local "idxPROUT" in
+        pr "@;@[<v 2>{";
+        let idx = fresh_c_local "idx" in
         pr "@;int %s;" idx;
-        pr "@;@[<v 2>for(%s = 0; %s < %s; %s++) {" idx idx (VID.gen_size var)
+        pr "@;@[<v 2>@[<hov 2>for (%s = 0;@ %s < %s;@ %s++) {@]" idx idx size
           idx;
-        pr "@;%a" (generate_m_assign dgfip_flags var (GetValueExpr idx)) se;
+        pr "%a" (generate_m_assign dgfip_flags var (GetValueExpr idx)) vexpr;
         pr "@]@;}";
-        pr "@]@;}@;")
-      else generate_m_assign dgfip_flags var None fmt se
+        pr "@]@;}")
+      else generate_m_assign dgfip_flags var None oc vexpr
   | Some ei ->
-      pr "@[<v 2>{@;";
-      let idx_val = fresh_c_local "mpp_idx" in
-      let idx_def = idx_val ^ "_d" in
-      let locals_idx, set_idx, def_idx, value_idx =
-        D.build_expression @@ generate_c_expr ei
-      in
-      pr "char %s;@;long %s;@;%a%a%a@;%a@;" idx_def idx_val
-        D.format_local_declarations locals_idx
-        (D.format_set_vars dgfip_flags)
-        set_idx
-        (D.format_assign dgfip_flags idx_def)
-        def_idx
-        (D.format_assign dgfip_flags idx_val)
-        value_idx;
-      let size = VID.gen_size var in
-      pr "@[<v 2>if(%s && 0 <= %s && %s < %s){@;%a@]@;}" idx_def idx_val idx_val
-        size
-        (generate_m_assign dgfip_flags var (GetValueExpr idx_val))
-        (generate_c_expr vexpr);
-      pr "@]@;}@;"
+      pr "@;@[<v 2>{";
+      let idx = fresh_c_local "idx" in
+      let idx_def = idx ^ "_def" in
+      let idx_val = idx ^ "_val" in
+      pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+      generate_expr_with_res_in dgfip_flags oc idx_def idx_val ei;
+      pr "@;%s = (int)%s;" idx idx_val;
+      pr "@;@[<v 2>if (%s && 0 <= %s && %s < %s) {" idx_def idx idx size;
+      pr "%a" (generate_m_assign dgfip_flags var (GetValueExpr idx)) vexpr;
+      pr "@]@;}";
+      pr "@]@;}"
+
+let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
+    (p : Mir.program) (idx_expr : Mir.expression Pos.marked) (field : string)
+    (vidx_opt : Mir.expression Pos.marked option)
+    (expr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
+  let pr form = Format.fprintf oc form in
+  pr "@;@[<v 2>{";
+  let idx = fresh_c_local "idx" in
+  let idx_def = idx ^ "_def" in
+  let idx_val = idx ^ "_val" in
+  pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+  generate_expr_with_res_in dgfip_flags oc idx_def idx_val idx_expr;
+  pr "@;%s = (int)%s;" idx idx_val;
+  pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" idx_def idx idx;
+  let res = fresh_c_local "res" in
+  let res_def = res ^ "_def" in
+  let res_val = res ^ "_val" in
+  pr "@;char %s;@;double %s;" res_def res_val;
+  generate_expr_with_res_in dgfip_flags oc res_def res_val expr;
+  if (StrMap.find field p.program_event_fields).is_var then (
+    match vidx_opt with
+    | None ->
+        pr "@;ecris_varinfo(irdata, irdata->events[%s]->field_%s_var, %s, %s);"
+          idx field res_def res_val
+    | Some ei ->
+        let i = fresh_c_local "i" in
+        let i_def = i ^ "_def" in
+        let i_val = i ^ "_val" in
+        pr "@;char %s;@;double %s;@;int %s;" i_def i_val i;
+        generate_expr_with_res_in dgfip_flags oc i_def i_val ei;
+        pr "@;%s = (int)%s;" i i_val;
+        pr
+          "@;\
+           ecris_varinfo_tab(irdata, irdata->events[%s]->field_%s_var, %s, %s, \
+           %s);"
+          idx i field res_def res_val)
+  else (
+    pr "@;irdata->events[%s]->field_%s_def = %s;" idx field res_def;
+    pr "@;irdata->events[%s]->field_%s_val = %s;" idx field res_val);
+  pr "@]@;}";
+  pr "@]@;}"
+
+let generate_event_field_ref (dgfip_flags : Dgfip_options.flags)
+    (p : Mir.program) (idx_expr : Mir.expression Pos.marked) (field : string)
+    (m_var : Com.Var.t Pos.marked) (oc : Format.formatter) : unit =
+  if (StrMap.find field p.program_event_fields).is_var then (
+    let pr form = Format.fprintf oc form in
+    let idx = fresh_c_local "idx" in
+    let idx_def = idx ^ "_def" in
+    let idx_val = idx ^ "_val" in
+    let var = Pos.unmark m_var in
+    let var_info_ptr = VID.gen_info_ptr var in
+    pr "@;@[<v 2>{";
+    pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+    generate_expr_with_res_in dgfip_flags oc idx_def idx_val idx_expr;
+    pr "@;%s = (int)%s;" idx idx_val;
+    pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" idx_def idx idx;
+    pr "@;irdata->events[%s]->field_%s_var = %s;" idx field var_info_ptr;
+    pr "@]@;}";
+    pr "@]@;}")
 
 let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (stmt : Mir.m_instruction) =
+  let pr fmt = Format.fprintf oc fmt in
   match Pos.unmark stmt with
-  | Affectation (SingleFormula (m_var, vidx_opt, vexpr), _) ->
-      Format.fprintf oc "@[<v 2>{@;";
-      generate_var_def dgfip_flags (Pos.unmark m_var) vidx_opt vexpr oc;
-      Format.fprintf oc "@]@;}@;"
-  | Affectation _ -> assert false
-  | IfThenElse (cond, iftrue, iffalse) ->
-      Format.fprintf oc "@[<v 2>{@,";
-      let cond_val = fresh_c_local "mpp_cond" in
-      let cond_def = cond_val ^ "_d" in
-      let locals, set, def, value =
-        D.build_expression @@ generate_c_expr cond
-      in
-      Format.fprintf oc "char %s;@;double %s;@;%a%a%a@;%a@;" cond_def cond_val
-        D.format_local_declarations locals
-        (D.format_set_vars dgfip_flags)
-        set
-        (D.format_assign dgfip_flags cond_def)
-        def
-        (D.format_assign dgfip_flags cond_val)
-        value;
-      Format.fprintf oc "@[<v 2>if(%s && %s) {@,%a@]@,}" cond_def cond_val
-        (generate_stmts dgfip_flags program)
-        iftrue;
-      if iffalse <> [] then
-        Format.fprintf oc "@[<v 2>else if(%s){@,%a@]@,}" cond_def
-          (generate_stmts dgfip_flags program)
-          iffalse;
-      Format.fprintf oc "@]@,}@;"
+  | Affectation (SingleFormula (VarDecl (m_acc, vidx_opt, vexpr)), _) -> (
+      match Pos.unmark m_acc with
+      | VarAccess var -> generate_var_def dgfip_flags var vidx_opt vexpr oc
+      | FieldAccess (i, f, _) ->
+          let fn = Pos.unmark f in
+          generate_event_field_def dgfip_flags program i fn vidx_opt vexpr oc)
+  | Affectation (SingleFormula (EventFieldRef (idx, f, _, m_var)), _) ->
+      generate_event_field_ref dgfip_flags program idx (Pos.unmark f) m_var oc
+  | Affectation (MultipleFormulaes _, _) -> assert false
+  | IfThenElse (cond_expr, iftrue, iffalse) ->
+      pr "@;@[<v 2>{";
+      let cond = fresh_c_local "cond" in
+      let cond_def = cond ^ "_def" in
+      let cond_val = cond ^ "_val" in
+      pr "@;char %s;@;double %s;" cond_def cond_val;
+      generate_expr_with_res_in dgfip_flags oc cond_def cond_val cond_expr;
+      pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+      pr "%a" (generate_stmts dgfip_flags program) iftrue;
+      if iffalse <> [] then (
+        pr "@]@;@[<v 2>} else if (%s) {" cond_def;
+        pr "%a" (generate_stmts dgfip_flags program) iffalse);
+      pr "@]@;}";
+      pr "@]@;}"
   | WhenDoElse (wdl, ed) ->
-      let pr fmt_str = Format.fprintf oc fmt_str in
       let goto_label = fresh_c_local "when_do_block" in
       let fin_label = fresh_c_local "when_do_end" in
-      let cond_val = fresh_c_local "when_do_cond" in
-      let cond_def = cond_val ^ "_d" in
-      pr "@[<v 2>{@;";
-      pr "char %s;@;" cond_def;
-      pr "double %s;@;" cond_val;
+      let cond = fresh_c_local "when_do_cond" in
+      let cond_def = cond ^ "_def" in
+      let cond_val = cond ^ "_val" in
+      pr "@;@[<v 2>{";
+      pr "@;char %s;@;double %s;" cond_def cond_val;
       let rec aux = function
         | (expr, dl, _) :: l ->
-            let locals, set, def, value =
-              D.build_expression @@ generate_c_expr expr
-            in
-            pr "@[<v 2>{@;";
-            pr "%a@;" D.format_local_declarations locals;
-            pr "%a@;" (D.format_set_vars dgfip_flags) set;
-            pr "%a@;" (D.format_assign dgfip_flags cond_def) def;
-            pr "%a@;" (D.format_assign dgfip_flags cond_val) value;
-            pr "@[<v 2>if(%s) {@;" cond_def;
-            pr "if (! %s) goto %s;@;" cond_val goto_label;
-            pr "%a@]@;" (generate_stmts dgfip_flags program) dl;
-            pr "}@;";
-            pr "@]@;}@;";
+            generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+            pr "@;@[<v 2>if(%s) {" cond_def;
+            pr "@;if (! %s) goto %s;" cond_val goto_label;
+            pr "%a" (generate_stmts dgfip_flags program) dl;
+            pr "@]@;}";
             aux l
         | [] -> ()
       in
       aux wdl;
-      pr "goto %s;@;" fin_label;
-      pr "%s:@;" goto_label;
-      pr "%a@;" (generate_stmts dgfip_flags program) (Pos.unmark ed);
-      pr "%s:{}@]@;" fin_label;
-      pr "}@;"
+      pr "@;goto %s;" fin_label;
+      pr "@;%s:" goto_label;
+      pr "%a" (generate_stmts dgfip_flags program) (Pos.unmark ed);
+      pr "@;%s:{}" fin_label;
+      pr "@]@;}"
   | VerifBlock stmts ->
       let goto_label = fresh_c_local "verif_block" in
-      let pr fmt = Format.fprintf oc fmt in
-      pr "@[<v 2>{@;";
-      pr "  if (setjmp(irdata->jmp_bloq) != 0) {@;";
-      pr "    goto %s;@;" goto_label;
-      pr "  }@;";
-      pr "%a@;" (generate_stmts dgfip_flags program) stmts;
-      pr "%s:;@]@;}" goto_label
+      pr "@;@[<v 2>{";
+      pr "@;if (setjmp(irdata->jmp_bloq) != 0) goto %s;" goto_label;
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
+      pr "%s:;" goto_label;
+      pr "@]@;}"
   | Print (std, args) ->
       let print_std, pr_ctx =
         match std with
         | StdOut -> ("stdout", "&(irdata->ctx_pr_out)")
         | StdErr -> ("stderr", "&(irdata->ctx_pr_err)")
       in
-      let print_val = fresh_c_local "mpp_print" in
-      let print_def = print_val ^ "_d" in
-      Format.fprintf oc "@[<v 2>{@,char %s;@;double %s;@;" print_def print_val;
+      let print = fresh_c_local "print" in
+      let print_def = print ^ "_def" in
+      let print_val = print ^ "_val" in
+      pr "@;@[<v 2>{";
+      pr "@;char %s;@;double %s;@;int %s;" print_def print_val print;
+      let print_name_or_alias name_or_alias e f =
+        let ef = StrMap.find (Pos.unmark f) program.program_event_fields in
+        if ef.is_var then (
+          generate_expr_with_res_in dgfip_flags oc print_def print_val e;
+          pr "@;%s = (int)%s;" print print_val;
+          pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" print_def
+            print print;
+          pr "@;print_string(%s, %s, irdata->events[%s]->field_%s_var->%s);"
+            print_std pr_ctx print (Pos.unmark f) name_or_alias;
+          pr "@]@;}")
+      in
       List.iter
         (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
           match Pos.unmark arg with
           | PrintString s ->
-              Format.fprintf oc "print_string(%s, %s, \"%s\");@;" print_std
-                pr_ctx (str_escape s)
+              pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
+                (str_escape s)
           | PrintName (var, _) ->
               let ptr = VID.gen_info_ptr var in
-              Format.fprintf oc "print_string(%s, %s, %s->name);@;" print_std
-                pr_ctx ptr
+              pr "@;print_string(%s, %s, %s->name);" print_std pr_ctx ptr
           | PrintAlias (var, _) ->
               let ptr = VID.gen_info_ptr var in
-              Format.fprintf oc "print_string(%s, %s, %s->alias);@;" print_std
-                pr_ctx ptr
+              pr "@;print_string(%s, %s, %s->alias);" print_std pr_ctx ptr
+          | PrintEventName (e, f, _) -> print_name_or_alias "name" e f
+          | PrintEventAlias (e, f, _) -> print_name_or_alias "alias" e f
           | PrintIndent e ->
-              let locals, set, def, value =
-                D.build_expression @@ generate_c_expr e
-              in
-              Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
-                D.format_local_declarations locals
-                (D.format_set_vars dgfip_flags)
-                set
-                (D.format_assign dgfip_flags print_def)
-                def
-                (D.format_assign dgfip_flags print_val)
-                value;
-              Format.fprintf oc "@[<v 2>if(%s){@;" print_def;
-              Format.fprintf oc "set_print_indent(%s, %s, %s);@]@;" print_std
-                pr_ctx print_val;
-              Format.fprintf oc "}@;"
+              generate_expr_with_res_in dgfip_flags oc print_def print_val e;
+              pr "@;@[<v 2>if (%s) {" print_def;
+              pr "@;set_print_indent(%s, %s, %s);" print_std pr_ctx print_val;
+              pr "@]@;}"
           | PrintExpr (e, min, max) ->
-              let locals, set, def, value =
-                D.build_expression @@ generate_c_expr e
-              in
-              Format.fprintf oc "@[<v 2>{%a%a%a@;%a@;@]}@;"
-                D.format_local_declarations locals
-                (D.format_set_vars dgfip_flags)
-                set
-                (D.format_assign dgfip_flags print_def)
-                def
-                (D.format_assign dgfip_flags print_val)
-                value;
-              Format.fprintf oc "@[<v 2>if(%s){@;" print_def;
-              Format.fprintf oc "print_double(%s, %s, %s, %d, %d);@]@;"
-                print_std pr_ctx print_val min max;
-              Format.fprintf oc "@[<v 2>} else {@;";
-              Format.fprintf oc "print_string(%s, %s, \"indefini\");@]@;}@;"
-                print_std pr_ctx)
+              generate_expr_with_res_in dgfip_flags oc print_def print_val e;
+              pr "@;@[<v 2>if (%s) {" print_def;
+              pr "@;print_double(%s, %s, %s, %d, %d);" print_std pr_ctx
+                print_val min max;
+              pr "@]@;@[<v 2>} else {";
+              pr "@;print_string(%s, %s, \"indefini\");" print_std pr_ctx;
+              pr "@]@;}")
         args;
-      Format.fprintf oc "@]@;}@;"
+      pr "@]@;}"
   | ComputeTarget ((tn, _), targs) ->
-      let pr fmt = Format.fprintf oc fmt in
       ignore
         (List.fold_left
            (fun n ((v : Com.Var.t), _) ->
              let ref_idx = Format.sprintf "irdata->ref_org + %d" n in
              let ref_info = Format.sprintf "irdata->info_ref[%s]" ref_idx in
              let v_info_p = VID.gen_info_ptr v in
-             pr "%s = %s;@;" ref_info v_info_p;
+             pr "@;%s = %s;" ref_info v_info_p;
              let ref_def = Format.sprintf "irdata->def_ref[%s]" ref_idx in
              let v_def_p = VID.gen_def_ptr v in
-             pr "%s = %s;@;" ref_def v_def_p;
+             pr "@;%s = %s;" ref_def v_def_p;
              let ref_val = Format.sprintf "irdata->ref[%s]" ref_idx in
              let v_val_p = VID.gen_val_ptr v in
-             pr "%s = %s;@;" ref_val v_val_p;
+             pr "@;%s = %s;" ref_val v_val_p;
              n + 1)
            0 targs);
-      Format.fprintf oc "%s(irdata);" tn
+      pr "@;%s(irdata);" tn
   | Iterate (m_var, vars, var_params, stmts) ->
-      let pr fmt = Format.fprintf oc fmt in
       let it_name = fresh_c_local "iterate" in
       let var = Pos.unmark m_var in
       let ref_info = VID.gen_info_ptr var in
@@ -595,15 +843,12 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let ref_val = VID.gen_val_ptr var in
       List.iter
         (fun (v, _) ->
-          pr "@[<v 2>{@;";
-          let v_info_p = VID.gen_info_ptr v in
-          pr "%s = %s;@;" ref_info v_info_p;
-          let v_def_p = VID.gen_def_ptr v in
-          pr "%s = %s;@;" ref_def v_def_p;
-          let v_val_p = VID.gen_val_ptr v in
-          pr "%s = %s;@;" ref_val v_val_p;
-          pr "%a@;" (generate_stmts dgfip_flags program) stmts;
-          pr "@]@;}@;")
+          pr "@;@[<v 2>{";
+          pr "@;%s = %s;" ref_info (VID.gen_info_ptr v);
+          pr "@;%s = %s;" ref_def (VID.gen_def_ptr v);
+          pr "@;%s = %s;" ref_val (VID.gen_val_ptr v);
+          pr "%a" (generate_stmts dgfip_flags program) stmts;
+          pr "@]@;}")
         vars;
       List.iter
         (fun (vcs, expr) ->
@@ -611,46 +856,224 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
             (fun vc _ ->
               let vcd = Com.CatVar.Map.find vc program.program_var_categories in
               let ref_tab = VID.gen_tab vcd.loc in
-              let cond_val = "cond_" ^ it_name in
-              let cond_def = cond_val ^ "_d" in
-              let locals, set, def, value =
-                D.build_expression @@ generate_c_expr expr
-              in
-              pr "@[<v 2>{@;";
-              pr "T_varinfo_%s *tab_%s = varinfo_%s;@;" vcd.id_str it_name
+              let cond = fresh_c_local "cond" in
+              let cond_def = cond ^ "_def" in
+              let cond_val = cond ^ "_val" in
+              pr "@;@[<v 2>{";
+              pr "@;T_varinfo_%s *tab_%s = varinfo_%s;" vcd.id_str it_name
                 vcd.id_str;
-              pr "int nb_%s = 0;@;" it_name;
-              pr "@[<v 2>while (nb_%s < NB_%s) {@;" it_name vcd.id_str;
-              pr "char %s;@;" cond_def;
-              pr "double %s;@;" cond_val;
-              pr "%s = (T_varinfo *)tab_%s;@;" ref_info it_name;
-              pr "%s = &(D%s[%s->idx]);@;" ref_def ref_tab ref_info;
-              pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
-              pr "@[<v 2>{@;";
-              pr "%a" D.format_local_declarations locals;
-              pr "%a" (D.format_set_vars dgfip_flags) set;
-              pr "%a@;" (D.format_assign dgfip_flags cond_def) def;
-              pr "%a" (D.format_assign dgfip_flags cond_val) value;
-              pr "@]@;";
-              pr "}@;";
-              pr "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
-              pr "%a@]@;" (generate_stmts dgfip_flags program) stmts;
-              pr "}@;";
-              pr "tab_%s++;@;" it_name;
-              pr "nb_%s++;" it_name;
+              pr "@;int nb_%s = 0;" it_name;
+              pr "@;@[<v 2>while (nb_%s < NB_%s) {" it_name vcd.id_str;
+              pr "@;char %s;@;double %s;" cond_def cond_val;
+              pr "@;%s = (T_varinfo *)tab_%s;" ref_info it_name;
+              pr "@;%s = &(D%s[%s->idx]);" ref_def ref_tab ref_info;
+              pr "@;%s = &(%s[%s->idx]);" ref_val ref_tab ref_info;
+              generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+              pr "@;@[<hov 2>if (%s && %s != 0.0) {" cond_def cond_val;
+              pr "%a" (generate_stmts dgfip_flags program) stmts;
               pr "@]@;}";
-              pr "@]@;}@;")
+              pr "@;tab_%s++;" it_name;
+              pr "@;nb_%s++;" it_name;
+              pr "@]@;}";
+              pr "@]@;}")
             vcs)
         var_params
-  | Restore (vars, var_params, stmts) ->
-      let pr fmt = Format.fprintf oc fmt in
-      pr "@[<v 2>{@;";
+  | Iterate_values (m_var, var_intervals, stmts) ->
+      let var = Pos.unmark m_var in
+      let itval_def = VID.gen_def var "" in
+      let itval_val = VID.gen_val var "" in
+      let postfix = fresh_c_local "" in
+      let e0_def = Format.sprintf "e0_def%s" postfix in
+      let e0_val = Format.sprintf "e0_val%s" postfix in
+      let e1_def = Format.sprintf "e1_def%s" postfix in
+      let e1_val = Format.sprintf "e1_val%s" postfix in
+      let step_def = Format.sprintf "step_def%s" postfix in
+      let step_val = Format.sprintf "step_val%s" postfix in
+      List.iter
+        (fun (e0, e1, step) ->
+          pr "@;@[<v 2>{";
+          pr "@;char %s;@;double %s;" e0_def e0_val;
+          pr "@;char %s;@;double %s;" e1_def e1_val;
+          pr "@;char %s;@;double %s;" step_def step_val;
+          generate_expr_with_res_in dgfip_flags oc e0_def e0_val e0;
+          generate_expr_with_res_in dgfip_flags oc e1_def e1_val e1;
+          generate_expr_with_res_in dgfip_flags oc step_def step_val step;
+          pr "@;@[<v 2>if(%s && %s && %s && %s != 0.0) {" e0_def e1_def step_def
+            step_val;
+          pr
+            "@;\
+             @[<v 2>@[<hov 2>for (%s = 1,@ %s = %s;@ (%s > 0.0 ? %s <= %s : %s \
+             >= %s);@ %s = %s + %s) {@]"
+            itval_def itval_val e0_val step_val itval_val e1_val itval_val
+            e1_val itval_val itval_val step_val;
+          pr "%a" (generate_stmts dgfip_flags program) stmts;
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@]@;}")
+        var_intervals
+  | ArrangeEvents (sort, filter, add, stmts) ->
+      let events_sav = fresh_c_local "events_sav" in
+      let events_tmp = fresh_c_local "events_tmp" in
+      let nb_events_sav = fresh_c_local "nb_events_sav" in
+      let nb_add = fresh_c_local "nb_add" in
+      let cpt_i = fresh_c_local "i" in
+      let cpt_j = fresh_c_local "j" in
+      let evt = fresh_c_local "evt" in
+      pr "@;@[<v 2>{";
+      pr "@;T_event **%s = irdata->events;" events_sav;
+      pr "@;int %s = irdata->nb_events;" nb_events_sav;
+      pr "@;int %s = 0;" nb_add;
+      pr "@;T_event **%s = NULL;" events_tmp;
+      pr "@;int %s = 0;" cpt_i;
+      pr "@;int %s = 0;" cpt_j;
+      (match add with
+      | Some expr ->
+          pr "@;@[<v 2>{";
+          let cond = fresh_c_local "cond" in
+          let cond_def = cond ^ "_def" in
+          let cond_val = cond ^ "_val" in
+          pr "@;char %s;@;double %s;" cond_def cond_val;
+          generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+          pr "@;%s = (int)%s;" nb_add cond_val;
+          pr "@;if (%s < 0) %s = 0;" nb_add nb_add;
+          pr "@;@[<v 2>if (%s && 0 < %s) {" cond_def nb_add;
+          let cpt_k = fresh_c_local "k" in
+          pr "@;int %s = 0;" cpt_k;
+          pr "@;%s = (T_event **)malloc((%s + %s) * (sizeof (T_event *)));"
+            events_tmp nb_events_sav nb_add;
+          pr "@;@[<v 2>for (%s = 0; %s < %s; %s++) {" cpt_k cpt_k nb_add cpt_k;
+          pr "@;T_event *%s = (T_event *)malloc(sizeof (T_event));" evt;
+          StrMap.iter
+            (fun f (ef : Com.event_field) ->
+              if ef.is_var then
+                let _, var = StrMap.min_binding program.program_vars in
+                pr "@;%s->field_%s_var = %s;" evt f (VID.gen_info_ptr var)
+              else (
+                pr "@;%s->field_%s_def = 0;" evt f;
+                pr "@;%s->field_%s_val = 0.0;" evt f))
+            program.program_event_fields;
+          pr "@;%s[%s] = %s;" events_tmp cpt_k evt;
+          pr "@]@;}";
+          pr "@]@;@[<v 2>} else {";
+          pr "@;%s = 0;" nb_add;
+          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
+            nb_events_sav;
+          pr "@]@;}";
+          pr "@;%s = %s;" cpt_i nb_add;
+          pr "@]@;}"
+      | None ->
+          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
+            nb_events_sav);
+      (match filter with
+      | Some (m_var, expr) ->
+          pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
+          let var = Pos.unmark m_var in
+          let ref_def = VID.gen_def var "" in
+          let ref_val = VID.gen_val var "" in
+          let cond = fresh_c_local "cond" in
+          let cond_def = cond ^ "_def" in
+          let cond_val = cond ^ "_val" in
+          pr "@;char %s;@;double %s;" cond_def cond_val;
+          pr "@;%s = 1;" ref_def;
+          pr "@;%s = (double)%s;" ref_val cpt_j;
+          generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+          pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_j;
+          pr "@;%s++;" cpt_i;
+          pr "@]@;}";
+          pr "@;%s++;" cpt_j;
+          pr "@]@;}";
+          pr "@;irdata->events = %s;" events_tmp;
+          pr "@;irdata->nb_events = %s;" cpt_i
+      | None ->
+          pr "@;@[<v 2>while (%s < %s) {" cpt_i nb_events_sav;
+          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_i;
+          pr "@;%s++;" cpt_i;
+          pr "@]@;}";
+          pr "@;irdata->events = %s;" events_tmp;
+          pr "@;irdata->nb_events = %s;" cpt_i);
+      (match sort with
+      | Some (m_var0, m_var1, expr) ->
+          pr "@;/* merge sort */";
+          pr "@;@[<v 2>{";
+          pr "@;int aBeg = %s;" nb_add;
+          pr "@;int aEnd = irdata->nb_events;";
+          pr
+            "@;\
+             T_event **b = (T_event **)malloc(irdata->nb_events * (sizeof \
+             (T_event *)));";
+          pr "@;int width;";
+          pr "@;int iLeft;";
+          pr "@;int i;";
+          pr
+            "@;\
+             @[<v 2>@[<hov 2>for (width = 1;@ width < aEnd;@ width = 2 * \
+             width) {@]";
+          pr
+            "@;\
+             @[<v 2>@[<hov 2>for (iLeft = aBeg;@ iLeft < aEnd;@ iLeft = iLeft \
+             + 2 * width) {@]";
+          pr "@;int iRight = iLeft + width;";
+          pr "@;int iEnd = iLeft + 2 * width;";
+          pr "@;if (iRight > aEnd) iRight = aEnd;";
+          pr "@;if (iEnd > aEnd) iEnd = aEnd;";
+          pr "@;@[<v 2>{";
+          pr "@;int i = iLeft;";
+          pr "@;int j = iRight;";
+          pr "@;int k;";
+          pr "@;@[<v 2>@[<hov 2>for (k = iLeft;@ k < iEnd;@ k++) {@]";
+          pr "@;int cpt = 0;";
+          pr "@;@[<v 2>{";
+          (* Comparaison *)
+          let var0 = Pos.unmark m_var0 in
+          let ref0_def = VID.gen_def var0 "" in
+          let ref0_val = VID.gen_val var0 "" in
+          let var1 = Pos.unmark m_var1 in
+          let ref1_def = VID.gen_def var1 "" in
+          let ref1_val = VID.gen_val var1 "" in
+          let cmp_def = fresh_c_local "cmp_def" in
+          let cmp_val = fresh_c_local "cmp_val" in
+          pr "@;char %s;@;double %s;" cmp_def cmp_val;
+          pr "@;%s = 1;" ref0_def;
+          pr "@;%s = (double)i;" ref0_val;
+          pr "@;%s = 1;" ref1_def;
+          pr "@;%s = (double)j;" ref1_val;
+          generate_expr_with_res_in dgfip_flags oc cmp_def cmp_val expr;
+          pr "@;cpt = %s && %s != 0.0;" cmp_def cmp_val;
+          (* ----------- *)
+          pr "@]@;}";
+          pr "@;@[<v 2>if (i < iRight && (j >= iEnd || cpt)) {";
+          pr "@;b[k] = irdata->events[i];";
+          pr "@;i = i + 1;";
+          pr "@]@;@;@[<v 2>} else {";
+          pr "@;b[k] = irdata->events[j];";
+          pr "@;j = j + 1;";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@;@[<v 2>@[<hov 2>for (i = aBeg;@ i < aEnd;@ i++) {@]";
+          pr "@;irdata->events[i] = b[i];";
+          pr "@]@;}";
+          pr "@]@;}";
+          pr "@;free(b);";
+          pr "@]@;}"
+      | None -> ());
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
+      pr "@;free(irdata->events);";
+      pr "@;irdata->events = %s;" events_sav;
+      pr "@;irdata->nb_events = %s;" nb_events_sav;
+      pr "@]@;}"
+  | Restore (vars, var_params, evts, evtfs, stmts) ->
+      pr "@;@[<v 2>{";
       let rest_name = fresh_c_local "restore" in
-      pr "T_env_sauvegarde *%s = NULL;@;" rest_name;
+      let rest_evt_name = fresh_c_local "restore_evt" in
+      pr "@;T_env_sauvegarde *%s = NULL;" rest_name;
+      pr "@;T_env_sauvegarde_evt *%s = NULL;" rest_evt_name;
       List.iter
         (fun m_v ->
           let v = Pos.unmark m_v in
-          pr "env_sauvegarder(&%s, %s, %s, %s);@;" rest_name (VID.gen_def_ptr v)
+          pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name (VID.gen_def_ptr v)
             (VID.gen_val_ptr v) (VID.gen_size v))
         vars;
       List.iter
@@ -664,42 +1087,74 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               let ref_info = VID.gen_info_ptr var in
               let ref_def = VID.gen_def_ptr var in
               let ref_val = VID.gen_val_ptr var in
-              let cond_val = "cond_" ^ it_name in
-              let cond_def = cond_val ^ "_d" in
-              let locals, set, def, value =
-                D.build_expression @@ generate_c_expr expr
-              in
-              pr "@[<v 2>{@;";
-              pr "T_varinfo_%s *tab_%s = varinfo_%s;@;" vcd.id_str it_name
+              let cond = fresh_c_local "cond" in
+              let cond_def = cond ^ "_def" in
+              let cond_val = cond ^ "_val" in
+              pr "@;@[<v 2>{";
+              pr "@;T_varinfo_%s *tab_%s = varinfo_%s;" vcd.id_str it_name
                 vcd.id_str;
-              pr "int nb_%s = 0;@;" it_name;
-              pr "@[<v 2>while (nb_%s < NB_%s) {@;" it_name vcd.id_str;
-              pr "char %s;@;" cond_def;
-              pr "double %s;@;" cond_val;
-              pr "%s = (T_varinfo *)tab_%s;@;" ref_info it_name;
-              pr "%s = &(D%s[%s->idx]);@;" ref_def ref_tab ref_info;
-              pr "%s = &(%s[%s->idx]);@;" ref_val ref_tab ref_info;
-              pr "@[<v 2>{@;";
-              pr "%a" D.format_local_declarations locals;
-              pr "%a" (D.format_set_vars dgfip_flags) set;
-              pr "%a@;" (D.format_assign dgfip_flags cond_def) def;
-              pr "%a" (D.format_assign dgfip_flags cond_val) value;
-              pr "@]@;";
-              pr "}@;";
-              pr "@[<hov 2>if(%s && %s){@;" cond_def cond_val;
-              pr "env_sauvegarder(&%s, %s, %s, %s);" rest_name
+              pr "@;int nb_%s = 0;" it_name;
+              pr "@;@[<v 2>while (nb_%s < NB_%s) {" it_name vcd.id_str;
+              pr "@;char %s;@;double %s;" cond_def cond_val;
+              pr "@;%s = (T_varinfo *)tab_%s;" ref_info it_name;
+              pr "@;%s = &(D%s[%s->idx]);" ref_def ref_tab ref_info;
+              pr "@;%s = &(%s[%s->idx]);" ref_val ref_tab ref_info;
+              generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+              pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+              pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name
                 (VID.gen_def_ptr var) (VID.gen_val_ptr var) (VID.gen_size var);
-              pr "@]@;";
-              pr "}@;";
-              pr "tab_%s++;@;" it_name;
-              pr "nb_%s++;" it_name;
               pr "@]@;}";
-              pr "@]@;}@;")
+              pr "@;tab_%s++;" it_name;
+              pr "@;nb_%s++;" it_name;
+              pr "@]@;}";
+              pr "@]@;}")
             vcs)
         var_params;
-      pr "%a@;" (generate_stmts dgfip_flags program) stmts;
-      pr "env_restaurer(&%s);@;" rest_name;
-      pr "@]}@;"
+      List.iter
+        (fun expr ->
+          let idx = fresh_c_local "idx" in
+          let idx_def = idx ^ "_def" in
+          let idx_val = idx ^ "_val" in
+          pr "@;@[<v 2>{";
+          pr "@;char %s;@;double %s;" idx_def idx_val;
+          pr "@;int %s;" idx;
+          generate_expr_with_res_in dgfip_flags oc idx_def idx_val expr;
+          pr "@;%s = (int)%s;" idx idx_val;
+          pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" idx_def
+            idx idx;
+          pr "@;env_sauvegarder_evt(&%s, irdata->events[%s]);@;" rest_evt_name
+            idx;
+          pr "@]@;}";
+          pr "@]@;}")
+        evts;
+      List.iter
+        (fun (m_var, expr) ->
+          let var = Pos.unmark m_var in
+          let idx = fresh_c_local "idx" in
+          let ref_def = VID.gen_def var "" in
+          let ref_val = VID.gen_val var "" in
+          let cond = fresh_c_local "cond" in
+          let cond_def = cond ^ "_def" in
+          let cond_val = cond ^ "_val" in
+          pr "@;@[<v 2>{";
+          pr "@;int %s = 0;" idx;
+          pr "@;@[<v 2>while (%s < irdata->nb_events) {" idx;
+          pr "@;char %s;@;double %s;" cond_def cond_val;
+          pr "@;%s = 1;" ref_def;
+          pr "@;%s = (double)%s;" ref_val idx;
+          generate_expr_with_res_in dgfip_flags oc cond_def cond_val expr;
+          pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+          pr "@;env_sauvegarder_evt(&%s, irdata->events[%s]);@;" rest_evt_name
+            idx;
+          pr "@]@;}";
+          pr "@;%s++;" idx;
+          pr "@]@;}";
+          pr "@]@;}")
+        evtfs;
+      pr "%a" (generate_stmts dgfip_flags program) stmts;
+      pr "@;env_restaurer(&%s);@;" rest_name;
+      pr "@;env_restaurer_evt(&%s);@;" rest_evt_name;
+      pr "@]@;}"
   | RaiseError (m_err, var_opt) ->
       let err = Pos.unmark m_err in
       let err_name = Pos.unmark err.Com.Error.name in
@@ -708,25 +1163,23 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
         | Some var -> Format.sprintf "\"%s\"" (Pos.unmark var)
         | None -> "NULL"
       in
-      Format.fprintf oc "add_erreur(irdata, &erreur_%s, %s);@;" err_name code
-  | CleanErrors -> Format.fprintf oc "nettoie_erreur(irdata);@;"
-  | ExportErrors -> Format.fprintf oc "exporte_erreur(irdata);@;"
-  | FinalizeErrors -> Format.fprintf oc "finalise_erreur(irdata);@;"
+      pr "@;add_erreur(irdata, &erreur_%s, %s);" err_name code
+  | CleanErrors -> Format.fprintf oc "@;nettoie_erreur(irdata);"
+  | ExportErrors -> Format.fprintf oc "@;exporte_erreur(irdata);"
+  | FinalizeErrors -> Format.fprintf oc "@;finalise_erreur(irdata);"
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (stmts : Mir.m_instruction list) =
-  Format.fprintf oc "@[<v>";
-  Format.pp_print_list (generate_stmt dgfip_flags program) oc stmts;
-  Format.fprintf oc "@]"
+  List.iter (generate_stmt dgfip_flags program oc) stmts
 
 let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
   let pr fmt = Format.fprintf oc fmt in
   if tf.target_sz_tmps > 0 then (
-    pr "@[<v 2>{";
+    pr "@;@[<v 2>{";
     pr "@;int i;";
     pr "@;T_varinfo *info;";
-    pr "@;@[<v 2>for (i = 0; i < %d; i++) {" tf.target_sz_tmps;
+    pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
     pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
     pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
     pr "@]@;}";
@@ -748,19 +1201,18 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target_data) =
       tf.target_tmp_vars;
     pr "@]@;}");
   if tf.target_nb_refs > 0 then
-    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs;
-  pr "@;"
+    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs
 
 let generate_function_prototype (add_semicolon : bool) (oc : Format.formatter)
     (fd : Mir.target_data) =
   let fn = Pos.unmark fd.target_name in
   let pp_args fmt args =
     List.iteri
-      (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
+      (fun i _ -> Pp.fpr fmt ", char arg_def%d, double arg_val%d" i i)
       args
   in
   Format.fprintf oc
-    "int %s(T_irdata* irdata, char *def_res, double *val_res%a)%s" fn pp_args
+    "int %s(T_irdata* irdata, char *res_def, double *res_val%a)%s" fn pp_args
     fd.Mir.target_args
     (if add_semicolon then ";" else "")
 
@@ -768,17 +1220,19 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (fn : string) =
   let pr fmt = Format.fprintf oc fmt in
   let fd = Com.TargetMap.find fn program.program_functions in
-  pr "@[<v 2>%a{@;" (generate_function_prototype false) fd;
-  pr "%a@;" generate_var_tmp_decls fd;
-  if dgfip_flags.flg_trace then pr "aff1(\"debut %s\\n\");@;" fn;
-  pr "%a@;" (generate_stmts dgfip_flags program) fd.target_prog;
-  if dgfip_flags.flg_trace then pr "aff1(\"fin %s\\n\");@;" fn;
+  pr "@.@[<v 2>%a {" (generate_function_prototype false) fd;
+  pr "%a" generate_var_tmp_decls fd;
+  pr "@;";
+  if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" fn;
+  pr "%a" (generate_stmts dgfip_flags program) fd.target_prog;
+  if dgfip_flags.flg_trace then pr "@;aff1(\"fin %s\\n\");" fn;
   pr "@;";
   if fd.target_nb_refs > 0 then
-    pr "irdata->ref_org = irdata->ref_org - %d;@;" fd.target_nb_refs;
+    pr "@;irdata->ref_org = irdata->ref_org - %d;" fd.target_nb_refs;
   if fd.target_sz_tmps > 0 then
-    pr "irdata->tmps_org = irdata->tmps_org - %d;@;" fd.target_sz_tmps;
-  pr "return 1;@]@;}@\n@\n"
+    pr "@;irdata->tmps_org = irdata->tmps_org - %d;" fd.target_sz_tmps;
+  pr "@;return 1;";
+  pr "@]@;}@."
 
 let generate_functions (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program)
@@ -800,17 +1254,19 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
   let pr fmt = Format.fprintf oc fmt in
   let tf = Com.TargetMap.find f program.program_targets in
-  pr "@[<v 2>%a{@;" (generate_target_prototype false) f;
-  pr "%a@;" generate_var_tmp_decls tf;
-  if dgfip_flags.flg_trace then pr "aff1(\"debut %s\\n\");@;" f;
-  pr "%a@;" (generate_stmts dgfip_flags program) tf.target_prog;
-  if dgfip_flags.flg_trace then pr "aff1(\"fin %s\\n\");@;" f;
+  pr "@.@[<v 2>%a {" (generate_target_prototype false) f;
+  pr "%a" generate_var_tmp_decls tf;
+  pr "@;";
+  if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" f;
+  pr "%a" (generate_stmts dgfip_flags program) tf.target_prog;
+  if dgfip_flags.flg_trace then pr "@;aff1(\"fin %s\\n\");" f;
   pr "@;";
   if tf.target_nb_refs > 0 then
-    pr "irdata->ref_org = irdata->ref_org - %d;@;" tf.target_nb_refs;
+    pr "@;irdata->ref_org = irdata->ref_org - %d;" tf.target_nb_refs;
   if tf.target_sz_tmps > 0 then
-    pr "irdata->tmps_org = irdata->tmps_org - %d;@;" tf.target_sz_tmps;
-  pr "return irdata->discords;@]@;}@\n@\n"
+    pr "@;irdata->tmps_org = irdata->tmps_org - %d;" tf.target_sz_tmps;
+  pr "@;return irdata->discords;";
+  pr "@]@;}@."
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t) =
@@ -854,7 +1310,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags)
               let fn = Filename.concat folder (file_str ^ ".c") in
               let oc = open_out fn in
               let fmt = Format.formatter_of_out_channel oc in
-              Format.fprintf fmt "#include \"mlang.h\"\n\n";
+              Format.fprintf fmt "#include \"mlang.h\"@;@;";
               Some (oc, fmt)
         in
         StrMap.update file_str update filemap)
@@ -865,6 +1321,6 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags)
   generate_targets dgfip_flags program filemap;
   StrMap.iter
     (fun _ (oc, fmt) ->
-      Format.fprintf fmt "\n@?";
+      Format.fprintf fmt "@;@?";
       close_out oc)
     filemap

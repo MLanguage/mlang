@@ -57,9 +57,9 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let mk_assign name value l =
     if var_exists name then
       let no_pos x = (x, Pos.no_pos) in
-      let var = Normal name in
+      let m_access = no_pos (Com.VarAccess (Normal name)) in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (no_pos var, None, no_pos litt) in
+      let cmd = Com.SingleFormula (VarDecl (m_access, None, no_pos litt)) in
       no_pos cmd :: l
     else l
   in
@@ -151,18 +151,22 @@ let driver (files : string list) (application_names : string list)
     let current_progress, finish = Cli.create_progress_bar "Parsing" in
     let m_program = ref [] in
     if not without_dgfip_m then (
-      let filebuf = Lexing.from_string Dgfip_m.declarations in
       current_progress Dgfip_m.internal_m;
-      let filebuf =
-        {
-          filebuf with
-          lex_curr_p =
-            { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
-        }
+      let internal_command str =
+        let filebuf =
+          let buf = Lexing.from_string str in
+          {
+            buf with
+            lex_curr_p = { buf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
+          }
+        in
+        Mparser.source_file token filebuf
       in
       try
-        let commands = Mparser.source_file token filebuf in
-        m_program := commands :: !m_program
+        let first_commands = internal_command Dgfip_m.declarations in
+        m_program := first_commands :: !m_program;
+        let last_commands = internal_command Dgfip_m.event_declaration in
+        m_program := !m_program @ [ last_commands ]
       with Mparser.Error ->
         Errors.raise_error
           (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m));

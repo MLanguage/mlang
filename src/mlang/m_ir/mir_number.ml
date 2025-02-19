@@ -61,6 +61,8 @@ module type NumberInterface = sig
 
   val ( *. ) : t -> t -> t
 
+  val ( %. ) : t -> t -> t
+
   val min : t -> t -> t
 
   val max : t -> t -> t
@@ -126,6 +128,8 @@ module RegularFloatNumber : NumberInterface = struct
   let ( /. ) x y = x /. y
 
   let ( *. ) x y = x *. y
+
+  let ( %. ) x y = mod_float x y
 
   let min x y = min x y
 
@@ -197,6 +201,11 @@ module MPFRNumber : NumberInterface = struct
   let ( /. ) x y = Mpfrf.div x y rounding
 
   let ( *. ) x y = Mpfrf.mul x y rounding
+
+  let ( %. ) x y =
+    let d = x /. y in
+    let n = if d >=. zero () then floor d else ceil d in
+    x -. (n *. y)
 
   let min x y = if x >. y then y else x
 
@@ -314,6 +323,11 @@ module IntervalNumber : NumberInterface = struct
 
   let ( *. ) x y = v (Mpfrf.mul x.down y.down Down) (Mpfrf.mul x.up y.up Up)
 
+  let ( %. ) x y =
+    let d = x /. y in
+    let n = if d >=. zero () then floor d else ceil d in
+    x -. (n *. y)
+
   let min x y = if x >. y then y else x
 
   let max x y = if x >. y then x else y
@@ -373,6 +387,11 @@ module RationalNumber : NumberInterface = struct
   let ( /. ) x y = Mpqf.div x y
 
   let ( *. ) x y = Mpqf.mul x y
+
+  let ( %. ) x y =
+    let d = x /. y in
+    let n = if d >=. zero () then floor d else ceil d in
+    x -. (n *. y)
 
   let min x y = if x >. y then y else x
 
@@ -466,6 +485,11 @@ end) : NumberInterface = struct
   let ( /. ) x y = Mpzf.tdiv_q (Mpzf.mul x (precision_modulo ())) y
 
   let ( *. ) x y = Mpzf.tdiv_q (Mpzf.mul x y) (precision_modulo ())
+
+  let ( %. ) x y =
+    let d = x /. y in
+    let n = if d >=. zero () then floor d else ceil d in
+    x -. (n *. y)
 
   let is_zero x = x =. zero ()
 

@@ -259,7 +259,7 @@ iterer
 
 cible calcule_acomptes:
 application: iliad;
-variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: SAUV_ART1731BIS, SAUV_PREM8_11;
 FLAG_ACO = 1;
 V_CALCUL_ACO = 1;
 calculer cible calcul_prim_corr;
@@ -286,7 +286,7 @@ iterer
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
@@ -338,7 +338,7 @@ finsi
 
 cible calcule_acomptes_avfisc:
 application: iliad;
-variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
 FLAG_ACO = 1;
 calculer cible calcule_avfiscal;
@@ -370,13 +370,24 @@ cible est_code_supp_avfisc:
 application: iliad;
 VARTMP1 = 0;
 si
-     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
-  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-  ou present(RFDHIS)  ou present(REPSNO3_A)
-  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
-  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
-  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
-  ou present(PINELQO_A)
+     present(COD7QD)
+  ou present(COD7QB)
+  ou present(COD7QC)
+  ou present(RFORDI)
+  ou present(RFROBOR)
+  ou present(RFDORD)
+  ou present(RFDHIS)
+  # ou present(REPSNO3_A)
+  ou present(COD7QF)
+  ou present(COD7QH)
+  # ou present(CELRREDLG_A)
+  # ou present(PINELQM_A)
+  ou present(RCMABD)
+  ou present(COD7KM)
+  # ou present(PINELQP_A)
+  # ou present(COD7QS_A)
+  # ou present(PINELQN_A)
+  # ou present(PINELQO_A)
 alors
   VARTMP1 = 1;
 sinon
@@ -404,7 +415,7 @@ finsi
 
 cible traite_double_liquidation3:
 application: iliad;
-variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+variables_temporaires: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 P_EST_CALCUL_ACOMPTES = VARTMP1;
 FLAG_ACO = 0;
 V_NEGACO = 0;
@@ -634,7 +645,7 @@ iterer
 
 cible titi:
 application : iliad;
-variable temporaire: TOTO tableau[3];
+variables_temporaires: TOTO tableau[3];
 TOTO[0] = 0;
 TOTO[1] = 1 + TOTO[0];
 TOTO[2] = 2 + TOTO[1];
@@ -648,8 +659,7 @@ iterer
 )
 afficher_erreur "\n";
 restaurer
-: FLAG_PVRO
-: TOTO
+: variables FLAG_PVRO, TOTO
 : variable RESTREV : categorie saisie contexte : avec present(RESTREV)
 : apres (
   FLAG_PVRO = indefini;
@@ -674,5 +684,4 @@ iterer
   afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
 )
 afficher_erreur "titi fin\n\n";
-
 

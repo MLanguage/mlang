@@ -68,6 +68,7 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
+    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
   }
   (** Interpretation context *)
 
@@ -78,6 +79,12 @@ module type S = sig
   val value_to_literal : value -> Com.literal
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
+
+  val update_ctx_with_events :
+    ctx ->
+    Mir.program ->
+    (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
+    unit
 
   (** Interpreter runtime errors *)
   type run_error =
@@ -156,9 +163,10 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
+  (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
   Cli.value_sort ->
   Cli.round_ops ->
-  float option StrMap.t * StrSet.t
+  Com.literal Com.Var.Map.t * Com.Error.Set.t
 (** Main interpreter function *)
 
 val evaluate_expr :

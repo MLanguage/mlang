@@ -291,6 +291,10 @@ module Var = struct
      let compare_name n0 n1 = !compare_name_ref n0 n1*)
 end
 
+type event_field = { name : string Pos.marked; index : int; is_var : bool }
+
+type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
+
 module DomainId = StrSet
 
 module DomainIdSet = struct
@@ -341,32 +345,14 @@ module TargetMap = StrMap
 
 type literal = Float of float | Undefined
 
-type 'v atom = AtomVar of 'v | AtomLiteral of literal
-
-type 'v set_value_loop =
-  | Single of 'v atom Pos.marked
-  | Range of 'v atom Pos.marked * 'v atom Pos.marked
-  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
-
-type 'v loop_variable = char Pos.marked * 'v set_value_loop list
-
-type 'v loop_variables =
-  | ValueSets of 'v loop_variable list
-  | Ranges of 'v loop_variable list
-
 (** Unary operators *)
 type unop = Not | Minus
 
 (** Binary operators *)
-type binop = And | Or | Add | Sub | Mul | Div
+type binop = And | Or | Add | Sub | Mul | Div | Mod
 
 (** Comparison operators *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
-
-type 'v set_value =
-  | FloatValue of float Pos.marked
-  | VarValue of 'v Pos.marked
-  | Interval of int Pos.marked * int Pos.marked
 
 type func =
   | SumFunc  (** Sums the arguments *)
@@ -383,27 +369,50 @@ type func =
   | Supzero  (** ??? *)
   | VerifNumber
   | ComplNumber
+  | NbEvents
   | Func of string
 
-type 'v expression =
+type 'v access =
+  | VarAccess of 'v
+  | FieldAccess of 'v m_expression * string Pos.marked * int
+
+and 'v atom = AtomVar of 'v | AtomLiteral of literal
+
+and 'v set_value_loop =
+  | Single of 'v atom Pos.marked
+  | Range of 'v atom Pos.marked * 'v atom Pos.marked
+  | Interval of 'v atom Pos.marked * 'v atom Pos.marked
+
+and 'v loop_variable = char Pos.marked * 'v set_value_loop list
+
+and 'v loop_variables =
+  | ValueSets of 'v loop_variable list
+  | Ranges of 'v loop_variable list
+
+and 'v set_value =
+  | FloatValue of float Pos.marked
+  | VarValue of 'v access Pos.marked
+  | IntervalValue of int Pos.marked * int Pos.marked
+
+and 'v expression =
   | TestInSet of bool * 'v m_expression * 'v set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v Pos.marked * 'v m_expression
+  | Index of 'v access Pos.marked * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
   | Literal of literal
-  | Var of 'v
+  | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v Pos.marked * string Pos.marked
-  | Size of 'v Pos.marked
+  | Attribut of 'v access Pos.marked * string Pos.marked
+  | Size of 'v access Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -433,11 +442,44 @@ module Error = struct
   }
 
   let pp_descr fmt err =
-    Format.fprintf fmt "%s:%s:%s:%s:%s" (Pos.unmark err.famille)
+    Pp.fpr fmt "%s:%s:%s:%s:%s" (Pos.unmark err.famille)
       (Pos.unmark err.code_bo) (Pos.unmark err.sous_code)
       (Pos.unmark err.libelle) (Pos.unmark err.is_isf)
 
-  let compare (var1 : t) (var2 : t) = compare var1.name var2.name
+  let pp fmt err = Pp.fpr fmt "%s:%a" (Pos.unmark err.name) pp_descr err
+
+  let compare (err1 : t) (err2 : t) = compare err1.name err2.name
+
+  type error_t = t
+
+  let error_pp = pp
+
+  let error_compare = compare
+
+  module Set = struct
+    include SetExt.Make (struct
+      type t = error_t
+
+      let compare = error_compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = error_pp) (_ : unit)
+        (fmt : Format.formatter) (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type t = error_t
+
+      let compare = error_compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = error_pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
 end
 
 type print_std = StdOut | StdErr
@@ -446,12 +488,16 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
+  | PrintEventName of 'v m_expression * string Pos.marked * int
+  | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl = 'v Pos.marked * 'v m_expression option * 'v m_expression
+type 'v formula_decl =
+  | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
+  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v Pos.marked
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -477,9 +523,20 @@ type ('v, 'e) instruction =
       * 'v Pos.marked list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
+  | Iterate_values of
+      'v Pos.marked
+      * ('v m_expression * 'v m_expression * 'v m_expression) list
+      * ('v, 'e) m_instruction list
   | Restore of
       'v Pos.marked list
       * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      * 'v m_expression list
+      * ('v Pos.marked * 'v m_expression) list
+      * ('v, 'e) m_instruction list
+  | ArrangeEvents of
+      ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
+      * ('v Pos.marked * 'v m_expression) option
+      * 'v m_expression option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
@@ -574,7 +631,8 @@ let format_binop fmt op =
     | Add -> "+"
     | Sub -> "-"
     | Mul -> "*"
-    | Div -> "/")
+    | Div -> "/"
+    | Mod -> "%")
 
 let format_comp_op fmt op =
   Format.pp_print_string fmt
@@ -586,12 +644,18 @@ let format_comp_op fmt op =
     | Eq -> "="
     | Neq -> "!=")
 
-let format_set_value format_variable fmt sv =
-  let open Format in
+let format_access form_var form_expr fmt = function
+  | VarAccess v -> form_var fmt v
+  | FieldAccess (e, f, _) ->
+      Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
+        (Pos.unmark f)
+
+let format_set_value form_var form_expr fmt sv =
   match sv with
-  | VarValue v -> format_variable fmt (Pos.unmark v)
-  | Interval (i1, i2) -> fprintf fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-  | FloatValue i -> fprintf fmt "%f" (Pos.unmark i)
+  | FloatValue i -> Pp.fpr fmt "%f" (Pos.unmark i)
+  | VarValue m_acc -> format_access form_var form_expr fmt (Pos.unmark m_acc)
+  | IntervalValue (i1, i2) ->
+      Pp.fpr fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
 
 let format_func fmt f =
   Format.pp_print_string fmt
@@ -610,6 +674,7 @@ let format_func fmt f =
     | Supzero -> "supzero"
     | VerifNumber -> "numero_verif"
     | ComplNumber -> "numero_compl"
+    | NbEvents -> "nb_evenements"
     | Func fn -> fn)
 
 let rec format_expression form_var fmt =
@@ -618,7 +683,7 @@ let rec format_expression form_var fmt =
   | TestInSet (belong, e, values) ->
       Format.fprintf fmt "(%a %sdans %a)" form_expr (Pos.unmark e)
         (if belong then "" else "non ")
-        (Pp.list_comma (format_set_value form_var))
+        (Pp.list_comma (format_set_value form_var form_expr))
         values
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" form_expr (Pos.unmark e1) format_comp_op
@@ -628,9 +693,10 @@ let rec format_expression form_var fmt =
         (Pos.unmark op) form_expr (Pos.unmark e2)
   | Unop (op, e) ->
       Format.fprintf fmt "%a %a" format_unop op form_expr (Pos.unmark e)
-  | Index (v, i) ->
-      Format.fprintf fmt "%a[%a]" form_var (Pos.unmark v) form_expr
-        (Pos.unmark i)
+  | Index (m_acc, i) ->
+      Format.fprintf fmt "%a[%a]"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc) form_expr (Pos.unmark i)
   | Conditional (e1, e2, e3) ->
       let pp_sinon fmt e = Format.fprintf fmt " sinon %a" form_expr e in
       Format.fprintf fmt "(si %a alors %a%a finsi)" form_expr (Pos.unmark e1)
@@ -646,26 +712,36 @@ let rec format_expression form_var fmt =
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | Literal l -> format_literal fmt l
-  | Var v -> form_var fmt v
+  | Var acc -> format_access form_var form_expr fmt acc
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | NbCategory cs ->
       Format.fprintf fmt "nb_categorie(%a)" (CatVar.Map.pp_keys ()) cs
-  | Attribut (v, a) ->
-      Format.fprintf fmt "attribut(%a, %s)" form_var (Pos.unmark v)
-        (Pos.unmark a)
-  | Size v -> Format.fprintf fmt "taille(%a)" form_var (Pos.unmark v)
+  | Attribut (m_acc, a) ->
+      Format.fprintf fmt "attribut(%a, %s)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc) (Pos.unmark a)
+  | Size m_acc ->
+      Format.fprintf fmt "taille(%a)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc)
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
   | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
-let format_print_arg form_var fmt = function
+let format_print_arg form_var fmt =
+  let form_expr = format_expression form_var in
+  function
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
   | PrintName v -> Format.fprintf fmt "nom(%a)" (Pp.unmark form_var) v
   | PrintAlias v -> Format.fprintf fmt "alias(%a)" (Pp.unmark form_var) v
+  | PrintEventName (e, f, _) ->
+      Format.fprintf fmt "nom(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
+  | PrintEventAlias (e, f, _) ->
+      Format.fprintf fmt "alias(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
   | PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
         (Pp.unmark (format_expression form_var))
@@ -682,13 +758,20 @@ let format_print_arg form_var fmt = function
           (Pp.unmark (format_expression form_var))
           e min max
 
-let format_formula_decl form_var fmt (v, idx, e) =
-  Format.fprintf fmt "%a" form_var (Pos.unmark v);
-  (match idx with
-  | Some vi ->
-      Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
-  | None -> ());
-  Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+let format_formula_decl form_var fmt = function
+  | VarDecl (m_access, idx, e) ->
+      format_access form_var
+        (format_expression form_var)
+        fmt (Pos.unmark m_access);
+      (match idx with
+      | Some vi ->
+          Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
+      | None -> ());
+      Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+  | EventFieldRef (idx, f, _, v) ->
+      Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
+        (format_expression form_var)
+        (Pos.unmark idx) (Pos.unmark f) form_var (Pos.unmark v)
 
 let format_formula form_var fmt f =
   match f with
@@ -767,18 +850,69 @@ let rec format_instruction form_var form_err =
           (Pp.list_space format_var_param)
           var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
-    | Restore (vars, var_params, rb) ->
+    | Iterate_values (var, var_intervals, itb) ->
+        let format_var_intervals fmt (e0, e1, step) =
+          Format.fprintf fmt ": %a .. %a increment %a@\n" form_expr
+            (Pos.unmark e0) form_expr (Pos.unmark e1) form_expr
+            (Pos.unmark step)
+        in
+        Format.fprintf fmt "iterate variable %a@;: %a@;: dans (" form_var
+          (Pos.unmark var)
+          (Pp.list_space format_var_intervals)
+          var_intervals;
+        Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
+    | Restore (vars, var_params, evts, evtfs, rb) ->
+        let format_vars fmt = function
+          | [] -> ()
+          | vars ->
+              Format.fprintf fmt "@;: variables %a"
+                (Pp.list_comma (Pp.unmark form_var))
+                vars
+        in
         let format_var_param fmt (var, vcs, expr) =
-          Format.fprintf fmt ": variable %a : categorie %a : avec %a@\n"
+          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a"
             (Pp.unmark form_var) var (CatVar.Map.pp_keys ()) vcs form_expr
             (Pos.unmark expr)
         in
-        Format.fprintf fmt "restaure@;: %a@;: %a@;: apres ("
-          (Pp.list_comma (Pp.unmark form_var))
-          vars
-          (Pp.list_space format_var_param)
-          var_params;
-        Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs rb
+        let format_var_params fmt = function
+          | [] -> ()
+          | var_params -> Pp.list "" format_var_param fmt var_params
+        in
+        let format_evts fmt = function
+          | [] -> ()
+          | evts ->
+              Format.fprintf fmt "@;: evenements %a"
+                (Pp.list_comma (Pp.unmark form_expr))
+                evts
+        in
+        let format_evtfs fmt = function
+          | [] -> ()
+          | evtfs ->
+              List.iter
+                (fun (v, e) ->
+                  Format.fprintf fmt "@;: evenement %a : avec %a"
+                    (Pp.unmark form_var) v (Pp.unmark form_expr) e)
+                evtfs
+        in
+        Format.fprintf fmt "restaure%a%a%a%a@;: apres (" format_vars vars
+          format_var_params var_params format_evts evts format_evtfs evtfs;
+        Format.fprintf fmt "@[<h 2>  %a@]@;)@;" form_instrs rb
+    | ArrangeEvents (s, f, a, itb) ->
+        Format.fprintf fmt "arrange_evenements@;:";
+        (match s with
+        | Some (v0, v1, e) ->
+            Format.fprintf fmt "trier %a,%a : avec %a@;" form_var
+              (Pos.unmark v0) form_var (Pos.unmark v1) form_expr (Pos.unmark e)
+        | None -> ());
+        (match f with
+        | Some (v, e) ->
+            Format.fprintf fmt "filter %a : avec %a@;" form_var (Pos.unmark v)
+              form_expr (Pos.unmark e)
+        | None -> ());
+        (match a with
+        | Some e -> Format.fprintf fmt "ajouter %a@;" form_expr (Pos.unmark e)
+        | None -> ());
+        Format.fprintf fmt ": dans (@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | RaiseError (err, var_opt) ->
         Format.fprintf fmt "leve_erreur %a %s\n" form_err (Pos.unmark err)
           (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")

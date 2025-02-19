@@ -243,8 +243,8 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                       (Mast.Function target, pos_item) :: prog_file
                     in
                     (apps_env, prog_file)
-              | VariableDecl _ | Error _ | Output _ | Func | VarCatDecl _
-              | RuleDomDecl _ | VerifDomDecl _ ->
+              | VariableDecl _ | EventDecl _ | Error _ | Output _ | Func
+              | VarCatDecl _ | RuleDomDecl _ | VerifDomDecl _ ->
                   (apps_env, source_item :: prog_file))
             (apps_env, []) source_file
         in
@@ -310,13 +310,13 @@ let expand_table_size (const_map : const_context) table_size =
   | _ -> table_size
 
 let rec expand_variable (const_map : const_context) (loop_map : loop_context)
-    (m_var : Mast.variable Pos.marked) : Mast.expression Pos.marked =
+    (m_var : Mast.variable Pos.marked) : Mast.variable Com.atom Pos.marked =
   let var, var_pos = m_var in
   match var with
   | Mast.Normal name -> (
       match ConstMap.find_opt name const_map with
-      | Some (f, _) -> (Com.Literal (Float f), var_pos)
-      | None -> (Com.Var var, var_pos))
+      | Some (f, _) -> (Com.AtomLiteral (Float f), var_pos)
+      | None -> (Com.AtomVar var, var_pos))
   | Mast.Generic gen_name ->
       if List.length gen_name.Mast.parameters == 0 then
         expand_variable const_map loop_map
@@ -334,7 +334,7 @@ and check_var_name (var_name : string) (var_pos : Pos.t) : unit =
   done
 
 and instantiate_params (const_map : const_context) (loop_map : loop_context)
-    (var_name : string) (pos : Pos.t) : Mast.expression Pos.marked =
+    (var_name : string) (pos : Pos.t) : Mast.variable Com.atom Pos.marked =
   match ParamsMap.choose_opt loop_map with
   | None ->
       check_var_name var_name pos;
@@ -543,12 +543,17 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
         List.map
           (fun set_value ->
             match set_value with
-            | VarValue set_var -> (
-                match expand_variable const_map loop_map set_var with
-                | Literal (Float f), var_pos -> FloatValue (f, var_pos)
-                | Var var, var_pos -> VarValue (var, var_pos)
-                | _ -> assert false)
-            | FloatValue _ | Interval _ -> set_value)
+            | VarValue (a, a_pos) -> (
+                match a with
+                | VarAccess v -> (
+                    match expand_variable const_map loop_map (v, a_pos) with
+                    | AtomLiteral (Float f), var_pos -> FloatValue (f, var_pos)
+                    | AtomVar var, var_pos -> VarValue (VarAccess var, var_pos)
+                    | _ -> assert false)
+                | FieldAccess (e, f, i_f) ->
+                    let e' = expand_expression const_map loop_map e in
+                    VarValue (FieldAccess (e', f, i_f), a_pos))
+            | FloatValue _ | IntervalValue _ -> set_value)
           values
       in
       (TestInSet (positive, e', values'), expr_pos)
@@ -563,15 +568,19 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
   | Unop (op, e) ->
       let e' = expand_expression const_map loop_map e in
       (Unop (op, e'), expr_pos)
-  | Index (t, i) ->
-      let t' =
-        match expand_variable const_map loop_map t with
-        | Var v, v_pos -> (v, v_pos)
-        | Literal (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
+  | Index ((VarAccess t, t_pos), i) ->
+      let t', t_pos' =
+        match expand_variable const_map loop_map (t, t_pos) with
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_table v_pos
         | _ -> assert false
       in
       let i' = expand_expression const_map loop_map i in
-      (Index (t', i'), expr_pos)
+      (Index ((VarAccess t', t_pos'), i'), expr_pos)
+  | Index ((FieldAccess (e, f, i_f), pos), i) ->
+      let e' = expand_expression const_map loop_map e in
+      let i' = expand_expression const_map loop_map i in
+      (Index ((FieldAccess (e', f, i_f), pos), i'), expr_pos)
   | Conditional (e1, e2, e3_opt) ->
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
@@ -597,7 +606,13 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
       let args' = loop_context_provider translator in
       (FuncCall (f_name, args'), expr_pos)
   | Literal _ -> m_expr
-  | Var v -> expand_variable const_map loop_map (v, expr_pos)
+  | Var (VarAccess v) -> (
+      match expand_variable const_map loop_map (v, expr_pos) with
+      | AtomLiteral l, pos -> (Literal l, pos)
+      | AtomVar v, pos -> (Var (VarAccess v), pos))
+  | Var (FieldAccess (e, f, i)) ->
+      let e' = expand_expression const_map loop_map e in
+      (Var (FieldAccess (e', f, i)), expr_pos)
   | Loop (lvs, e) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator lmap =
@@ -612,16 +627,23 @@ let rec expand_expression (const_map : const_context) (loop_map : loop_context)
           (Binop ((Or, expr_pos), res, loop_expr), expr_pos))
         (Literal (Float 0.0), expr_pos)
         loop_exprs
-  | Attribut (var, a) -> (
-      match expand_variable const_map loop_map var with
-      | Var v, v_pos -> (Attribut ((v, v_pos), a), expr_pos)
-      | Literal (Float _), v_pos -> Err.constant_cannot_have_an_attribut v_pos
+  | Attribut ((VarAccess v, pos), a) -> (
+      match expand_variable const_map loop_map (v, pos) with
+      | AtomVar v, v_pos -> (Attribut ((VarAccess v, v_pos), a), expr_pos)
+      | AtomLiteral (Float _), v_pos ->
+          Err.constant_cannot_have_an_attribut v_pos
       | _ -> assert false)
-  | Size var -> (
-      match expand_variable const_map loop_map var with
-      | Var v, v_pos -> (Size (v, v_pos), expr_pos)
-      | Literal (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
+  | Attribut ((FieldAccess (e, f, i), pos), a) ->
+      let e' = expand_expression const_map loop_map e in
+      (Attribut ((FieldAccess (e', f, i), pos), a), expr_pos)
+  | Size (VarAccess v, pos) -> (
+      match expand_variable const_map loop_map (v, pos) with
+      | AtomVar v, v_pos -> (Size (VarAccess v, v_pos), expr_pos)
+      | AtomLiteral (Float _), v_pos -> Err.constant_cannot_have_a_size v_pos
       | _ -> assert false)
+  | Size (FieldAccess (e, f, i), pos) ->
+      let e' = expand_expression const_map loop_map e in
+      (Size (FieldAccess (e', f, i), pos), expr_pos)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
       m_expr
@@ -632,30 +654,74 @@ let expand_formula (const_map : const_context)
     Mast.variable Com.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
-  | Com.SingleFormula (v, idx, e) ->
-      let v' =
-        match expand_variable const_map ParamsMap.empty v with
-        | Com.Var v, v_pos -> (v, v_pos)
-        | Com.Literal (Com.Float _), v_pos ->
-            Err.constant_forbidden_as_lvalue v_pos
-        | _ -> assert false
+  | Com.SingleFormula (VarDecl (m_access, idx, e)) ->
+      let m_access' =
+        let access, access_pos = m_access in
+        match access with
+        | VarAccess v -> (
+            match expand_variable const_map ParamsMap.empty (v, access_pos) with
+            | AtomVar v, v_pos -> (Com.VarAccess v, v_pos)
+            | AtomLiteral (Float _), v_pos ->
+                Err.constant_forbidden_as_lvalue v_pos
+            | _ -> assert false)
+        | FieldAccess (i, f, i_f) ->
+            let i' = expand_expression const_map ParamsMap.empty i in
+            (Com.FieldAccess (i', f, i_f), access_pos)
       in
       let idx' = Option.map (expand_expression const_map ParamsMap.empty) idx in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (v', idx', e'), form_pos) :: prev
-  | Com.MultipleFormulaes (lvs, (v, idx, e)) ->
+      (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos) :: prev
+  | Com.SingleFormula (EventFieldRef (idx, f, i, v)) ->
+      let idx' = expand_expression const_map ParamsMap.empty idx in
+      let v' =
+        match expand_variable const_map ParamsMap.empty v with
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
+        | _ -> assert false
+      in
+      (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos) :: prev
+  | Com.MultipleFormulaes (lvs, VarDecl (m_access, idx, e)) -> (
+      let access, access_pos = m_access in
+      match access with
+      | VarAccess v ->
+          let loop_context_provider = expand_loop_variables lvs const_map in
+          let translator loop_map =
+            let m_access' =
+              match expand_variable const_map loop_map (v, access_pos) with
+              | AtomVar v, v_pos -> (Com.VarAccess v, v_pos)
+              | AtomLiteral (Float _), v_pos ->
+                  Err.constant_forbidden_as_lvalue v_pos
+              | _ -> assert false
+            in
+            let idx' = Option.map (expand_expression const_map loop_map) idx in
+            let e' = expand_expression const_map loop_map e in
+            (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos)
+          in
+          let res = loop_context_provider translator in
+          List.rev res @ prev
+      | FieldAccess (i, f, i_f) ->
+          let loop_context_provider = expand_loop_variables lvs const_map in
+          let translator loop_map =
+            let i' = expand_expression const_map loop_map i in
+            let m_access' = (Com.FieldAccess (i', f, i_f), access_pos) in
+            let idx' = Option.map (expand_expression const_map loop_map) idx in
+            let e' = expand_expression const_map loop_map e in
+            (Com.SingleFormula (VarDecl (m_access', idx', e')), form_pos)
+          in
+          let res = loop_context_provider translator in
+          List.rev res @ prev)
+  | Com.MultipleFormulaes (lvs, EventFieldRef (idx, f, i, v)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
+        let idx' = expand_expression const_map loop_map idx in
         let v' =
           match expand_variable const_map loop_map v with
-          | Com.Var v, v_pos -> (v, v_pos)
-          | Com.Literal (Com.Float _), v_pos ->
+          | AtomVar v, v_pos -> (v, v_pos)
+          | AtomLiteral (Float _), v_pos ->
               Err.constant_forbidden_as_lvalue v_pos
           | _ -> assert false
         in
-        let idx' = Option.map (expand_expression const_map loop_map) idx in
-        let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (v', idx', e'), form_pos)
+        (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos)
       in
       let res = loop_context_provider translator in
       List.rev res @ prev
@@ -689,6 +755,12 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
+            | Com.PrintEventName (expr, f, i) ->
+                let expr' = expand_expression const_map ParamsMap.empty expr in
+                (Com.PrintEventName (expr', f, i), Pos.get_position arg)
+            | Com.PrintEventAlias (expr, f, i) ->
+                let expr' = expand_expression const_map ParamsMap.empty expr in
+                (Com.PrintEventAlias (expr', f, i), Pos.get_position arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintIndent expr', Pos.get_position arg)
@@ -709,18 +781,69 @@ let rec expand_instruction (const_map : const_context)
       in
       let instrs' = expand_instructions const_map instrs in
       (Com.Iterate (name, vars, var_params', instrs'), instr_pos) :: prev
-  | Com.Restore (vars, var_params, instrs) ->
+  | Com.Iterate_values (name, var_intervals, instrs) ->
+      let var_intervals' =
+        List.map
+          (fun (e0, e1, step) ->
+            let e0' = expand_expression const_map ParamsMap.empty e0 in
+            let e1' = expand_expression const_map ParamsMap.empty e1 in
+            let step' = expand_expression const_map ParamsMap.empty step in
+            (e0', e1', step'))
+          var_intervals
+      in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Restore (vars, var_params, instrs'), instr_pos) :: prev
+      (Com.Iterate_values (name, var_intervals', instrs'), instr_pos) :: prev
+  | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
+      let var_params' =
+        List.map
+          (fun (v, c, e) ->
+            let e' = expand_expression const_map ParamsMap.empty e in
+            (v, c, e'))
+          var_params
+      in
+      let evts' = List.map (expand_expression const_map ParamsMap.empty) evts in
+      let evtfs' =
+        List.map
+          (fun (v, e) ->
+            let e' = expand_expression const_map ParamsMap.empty e in
+            (v, e'))
+          evtfs
+      in
+      let instrs' = expand_instructions const_map instrs in
+      (Com.Restore (vars, var_params', evts', evtfs', instrs'), instr_pos)
+      :: prev
+  | Com.ArrangeEvents (sort, filter, add, instrs) ->
+      let sort' =
+        match sort with
+        | Some (var0, var1, expr) ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some (var0, var1, expr')
+        | None -> None
+      in
+      let filter' =
+        match filter with
+        | Some (var, expr) ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some (var, expr')
+        | None -> None
+      in
+      let add' =
+        match add with
+        | Some expr ->
+            let expr' = expand_expression const_map ParamsMap.empty expr in
+            Some expr'
+        | None -> None
+      in
+      let instrs' = expand_instructions const_map instrs in
+      (Com.ArrangeEvents (sort', filter', add', instrs'), instr_pos) :: prev
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       (Com.VerifBlock instrs', instr_pos) :: prev
   | Com.ComputeTarget (tn, targs) ->
       let map var =
         match expand_variable const_map ParamsMap.empty var with
-        | Com.Var v, v_pos -> (v, v_pos)
-        | Com.Literal (Com.Float _), v_pos ->
-            Err.constant_forbidden_as_arg v_pos
+        | AtomVar v, v_pos -> (v, v_pos)
+        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_arg v_pos
         | _ -> assert false
       in
       let targs' = List.map map targs in

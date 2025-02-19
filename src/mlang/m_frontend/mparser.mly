@@ -35,7 +35,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token<string> SYMBOL STRING
 
-%token PLUS MINUS TIMES DIV
+%token PLUS MINUS TIMES DIV MOD
 %token GTE LTE GT LT NEQ EQUALS
 %token SEMICOLON COLON COMMA
 %token AND OR NOT UNDEFINED
@@ -47,7 +47,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
 %token COMPUTED CONST ALIAS INPUT FOR
-%token RULE VERIFICATION TARGET INPUT_ARG TEMPORARY SIZE RESULT
+%token RULE VERIFICATION TARGET INPUT_ARGS TEMP_VARS SIZE RESULT
 %token IF THEN ELSEIF ELSE ENDIF PRINT PRINT_ERR NAME INDENT
 %token WHEN DO THEN_WHEN ELSE_DO ENDWHEN NOTHING
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
@@ -57,7 +57,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token ERROR ANOMALY DISCORDANCE
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
-%token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE
+%token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
+%token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
 
 %token EOF
 
@@ -103,6 +104,7 @@ source_file_item:
 | al = application_etc { al }
 | cl = chaining_etc { cl }
 | cl = var_category_decl_etc { cl }
+| el = event_decl_etc { el }
 | crl = rule_domain_decl_etc { crl }
 | cvl = verif_domain_decl_etc { cvl }
 | ol = output_etc { ol }
@@ -126,6 +128,18 @@ var_category_decl:
   SEMICOLON {
     { var_type; var_category; var_attributes }
   }
+
+event_decl_etc:
+| e = with_pos(event_decl) l = with_pos(symbol_colon_etc)* {
+    Pos.same_pos_as (EventDecl (Pos.unmark e)) e :: l
+  }
+
+event_field:
+| VARIABLE name = symbol_with_pos { Com.{name; is_var = true; index = 0} }
+| VALUE name = symbol_with_pos { Com.{name; is_var = false; index = 0} }
+
+event_decl:
+| EVENT COLON el = separated_nonempty_list(COLON, event_field) SEMICOLON { el }
 
 rule_domain_decl_etc:
 | cr =with_pos(rule_domain_decl) l = with_pos(symbol_colon_etc)* { cr :: l }
@@ -524,7 +538,7 @@ rule_etc:
 rule_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { `Applications apps }
 | CHAINING COLON chs = symbol_enumeration SEMICOLON { `Chainings chs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { `TmpVars tmp_vars }
 
@@ -554,10 +568,10 @@ target_etc:
 
 target_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
-| INPUT_ARG COLON
+| INPUT_ARGS COLON
   inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
   { Target_input_arg inputs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { Target_tmp_vars tmp_vars }
 
@@ -587,10 +601,10 @@ function_etc:
 
 function_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
-| INPUT_ARG COLON
+| INPUT_ARGS COLON
   inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
   { Target_input_arg inputs }
-| VARIABLE TEMPORARY COLON
+| TEMP_VARS COLON
   tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
   { Target_tmp_vars tmp_vars }
 | RESULT COLON res = with_pos(variable_name) SEMICOLON { Function_result res }
@@ -664,28 +678,96 @@ instruction:
   }
 | ITERATE COLON
   VARIABLE vn = symbol_with_pos COLON
-  it_params = nonempty_list(it_param)
+  it_params = nonempty_list(with_pos(it_param))
   IN LPAREN instrs = instruction_list_rev RPAREN {
     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
-    let var_list, var_cats =
-      let fold (var_list, var_cats) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats
-      | `VarCatsIt vc -> var_list, vc :: var_cats
-      in
-      List.fold_left fold ([], []) it_params
-    in
-    Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
+    match it_params with
+    | (`VarInterval _, _) :: _ ->
+        let var_intervals =
+          let fold var_intervals = function
+          | (`VarInterval (e0, e1, step), _) -> (e0, e1, step) :: var_intervals
+          | (`VarList _, pos) | (`VarCatsIt _, pos) ->
+              Errors.raise_spanned_error "variable descriptors forbidden in values iteration" pos
+          in
+          List.fold_left fold [] it_params
+        in
+        Some (Iterate_values (var, List.rev var_intervals, List.rev instrs))
+    | _ ->
+        let var_list, var_cats =
+          let fold (var_list, var_cats) = function
+          | (`VarList vl, _) -> (List.rev vl) @ var_list, var_cats
+          | (`VarCatsIt vc, _) -> var_list, vc :: var_cats
+          | (`VarInterval _, pos) ->
+              Errors.raise_spanned_error "interval forbidden in variable iteration" pos
+          in
+          List.fold_left fold ([], []) it_params
+        in
+        Some (Iterate (var, List.rev var_list, List.rev var_cats, List.rev instrs))
   }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    let var_list, var_cats =
-      let fold (var_list, var_cats) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats
-      | `VarCatsRest vc -> var_list, vc @ var_cats
+    let var_list, var_cats, event_list, event_filter =
+      let fold (var_list, var_cats, event_list, event_filter) = function
+      | `VarList vl -> (List.rev vl) @ var_list, var_cats, event_list, event_filter
+      | `VarCatsRest vc -> var_list, vc @ var_cats, event_list, event_filter
+      | `EventList el -> var_list, var_cats, el @ event_list, event_filter
+      | `EventFilter ef -> var_list, var_cats, event_list, ef :: event_filter
       in
-      List.fold_left fold ([], []) rest_params
+      List.fold_left fold ([], [], [], []) rest_params
     in
-    Some (Restore (List.rev var_list, List.rev var_cats, List.rev instrs))
+    Some (
+      Restore (
+        List.rev var_list,
+        List.rev var_cats,
+        List.rev event_list,
+        List.rev event_filter,
+        List.rev instrs
+      )
+    )
+  }
+| ARRANGE_EVENTS COLON
+  arr_params = nonempty_list(with_pos(arrange_events_param))
+  IN LPAREN instrs = instruction_list_rev RPAREN {
+    let sort, filter, add =
+      let fold (sort, sort_pos, filter, filter_pos, add, add_pos) = function
+      | (`ArrangeEventsSort (v0, v1, e), pos) when sort = None ->
+          (Some (v0, v1, e), pos, filter, filter_pos, add, add_pos)
+      | (`ArrangeEventsFilter (v, e), pos) when filter = None ->
+          (sort, sort_pos, Some (v, e), pos, add, add_pos)
+      | (`ArrangeEventsAdd e, pos) when add = None ->
+          (sort, sort_pos, filter, filter_pos, Some e, pos)
+      | (`ArrangeEventsSort _, pos) ->
+          let msg =
+            Format.asprintf
+              "event sorting already specified at %a"
+              Pos.format_position sort_pos
+          in
+          Errors.raise_spanned_error msg pos
+      | (`ArrangeEventsFilter _, pos) ->
+          let msg =
+            Format.asprintf
+              "event filter already specified at %a"
+              Pos.format_position sort_pos
+          in
+          Errors.raise_spanned_error msg pos
+      | (`ArrangeEventsAdd _, pos) ->
+          let msg =
+            Format.asprintf
+              "event creation already specified at %a"
+              Pos.format_position add_pos
+          in
+          Errors.raise_spanned_error msg pos
+      in
+      let sort, _, filter, _, add, _ =
+        List.fold_left fold (None, Pos.no_pos, None, Pos.no_pos, None, Pos.no_pos) arr_params
+      in
+      match sort, filter, add with
+      | None, None, None ->
+          let msg = "event organizer needs a sort, a filter or a creation specification" in
+          Errors.raise_spanned_error msg (mk_position $sloc)
+      | _, _, _ -> sort, filter, add
+    in
+    Some (ArrangeEvents (sort, filter, add, List.rev instrs))
   }
 | RAISE_ERROR e_name = symbol_with_pos var = with_pos(variable_name)? SEMICOLON {
     Some (RaiseError (e_name, var))
@@ -725,20 +807,25 @@ instruction_then_when_branch:
 
 print_argument:
 | s = STRING { Com.PrintString (parse_string s) }
-| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN
-    {
-      match Pos.unmark f with
-      | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
-      | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
-      | _ -> assert false
-    }
+| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN {
+    match Pos.unmark f with
+    | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
+    | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
+    | _ -> assert false
+  }
+| f = with_pos(print_function) LPAREN EVENT_FIELD LPAREN
+  expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN RPAREN {
+    match Pos.unmark f with
+    | "nom" -> Com.PrintEventName (expr, field, -1)
+    | "alias" -> Com.PrintEventAlias (expr, field, -1)
+    | _ -> assert false
+  }
 | INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
-| LPAREN e = with_pos(expression) RPAREN prec = print_precision?
-    {
-      match prec with
-      | Some (min, max) -> Com.PrintExpr (e, min, max)
-      | None -> Com.PrintExpr (e, 0, 20)
-    }
+| LPAREN e = with_pos(expression) RPAREN prec = print_precision? {
+    match prec with
+    | Some (min, max) -> Com.PrintExpr (e, min, max)
+    | None -> Com.PrintExpr (e, 0, 20)
+  }
 
 print_function:
 | NAME { "nom" }
@@ -802,6 +889,10 @@ it_param:
     in
     `VarCatsIt (vcats, expr)
   }
+| expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
+  STEP step = with_pos(expression) COLON {
+    `VarInterval (expr0, expr1, step)
+  }
 
 it_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
@@ -818,6 +909,13 @@ rest_param:
     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
     let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
     `VarCatsRest filters
+  }
+| EVENTS expr_list = separated_nonempty_list(COMMA, with_pos(expression)) COLON {
+    `EventList expr_list
+  }
+| EVENT vn = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
+     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    `EventFilter (var, expr)
   }
 
 rest_param_category:
@@ -841,6 +939,21 @@ rest_param_category:
 rest_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
+arrange_events_param:
+| SORT v0 = symbol_with_pos COMMA v1 = symbol_with_pos
+  COLON WITH expr = with_pos(expression) COLON {
+    let var0 = Pos.same_pos_as (Normal (Pos.unmark v0)) v0 in
+    let var1 = Pos.same_pos_as (Normal (Pos.unmark v1)) v1 in  
+    `ArrangeEventsSort (var0, var1, expr)
+  }
+| FILTER v = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
+    let var = Pos.same_pos_as (Normal (Pos.unmark v)) v in
+    `ArrangeEventsFilter (var, expr)
+  }
+| ADD expr = with_pos(expression) COLON {
+    `ArrangeEventsAdd (expr)
+  }
+
 formula_kind:
 | f = formula { SingleFormula f }
 | fs = for_formula { let (lv, ft) = fs in MultipleFormulaes (lv, ft) }
@@ -848,16 +961,30 @@ formula_kind:
 for_formula:
 | FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
-lvalue_name:
-| s = SYMBOL { parse_variable $sloc s }
+var_access:
+| s = symbol_with_pos {
+    let v = parse_variable $sloc (Pos.unmark s) in
+    Pos.same_pos_as (Com.VarAccess v) s
+  }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN {
+    (Com.FieldAccess (idx, f, -1), mk_position $sloc)
+  }
 
 lvalue:
-| s = with_pos(lvalue_name) i = with_pos(brackets)? { (s, i) }
+| access = var_access i = with_pos(brackets)? {
+    (access, i)
+  }
 
 formula:
-| lvalue = lvalue EQUALS e = with_pos(expression) {
-    let v, idx = lvalue in
-    (v, idx, e)
+| lval = lvalue EQUALS e = with_pos(expression) {
+    let access, idx = lval in
+    VarDecl (access, idx, e)
+  }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN REFERENCE v = symbol_with_pos {
+    let var = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    EventFieldRef (idx, f, -1, var)
   }
 
 verification_etc:
@@ -1025,10 +1152,15 @@ enumeration:
 
 enumeration_item:
 | bounds = interval { bounds }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN {
+    let pos = mk_position $sloc in
+    Com.VarValue (FieldAccess (idx, field, -1), pos)
+  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (v, pos)
+    | ParseVar v -> Com.VarValue (VarAccess v, pos)
     | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
@@ -1037,7 +1169,7 @@ interval:
     let pos = mk_position $sloc in
     let ir1 = parse_int $sloc i1, pos in
     let ir2 = parse_int $sloc i2, pos in
-    Com.Interval (ir1, ir2) : set_value
+    Com.IntervalValue (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)
 
@@ -1089,18 +1221,25 @@ product_expression:
 %inline product_operator:
 | TIMES { Com.Mul }
 | DIV { Com.Div }
-
-table_index_name:
-s = SYMBOL { parse_variable $sloc s }
+| MOD { Com.Mod }
 
 factor:
 | MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| s = with_pos(table_index_name) i = with_pos(brackets) { Com.Index (s, i) }
+| EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN i_opt = with_pos(brackets)? {
+    match i_opt with
+    | Some i -> Com.Index ((FieldAccess (idx, field, -1), mk_position $sloc), i)
+    | None -> Var (FieldAccess (idx, field, -1))
+  }
+| s = symbol_with_pos i = with_pos(brackets) {
+    let v = parse_variable $sloc (Pos.unmark s) in
+    Com.Index (Pos.same_pos_as (Com.VarAccess v) s, i)
+  }
 | a = with_pos(factor_atom) {
     match Pos.unmark a with
-    | Com.AtomVar v -> Com.Var v
+    | Com.AtomVar v -> Com.Var (VarAccess v)
     | Com.AtomLiteral l -> Com.Literal l
   }
 | LPAREN e = expression RPAREN { e }
@@ -1136,12 +1275,10 @@ function_call:
 | NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
     NbCategory (Com.CatVar.Map.from_string_list cats)
   }
-| ATTRIBUT LPAREN var = symbol_with_pos COMMA attr = symbol_with_pos RPAREN {
-    Attribut ((parse_variable $sloc (fst var), snd var), attr)
+| ATTRIBUT LPAREN access = var_access COMMA attr = symbol_with_pos RPAREN {
+    Attribut (access, attr)
   }
-| SIZE LPAREN var = symbol_with_pos RPAREN {
-    Size (parse_variable $sloc (fst var), snd var)
-  }
+| SIZE LPAREN access = var_access RPAREN { Size access }
 | NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }

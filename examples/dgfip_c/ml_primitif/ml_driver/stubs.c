@@ -18,6 +18,7 @@
 #if OCAML_VERSION < 41200
 
 #define Val_none Val_int(0)
+#define Some_val(v) Field(v, 0)
 
 CAMLexport value caml_alloc_some(value v) {
   CAMLparam1(v);
@@ -199,7 +200,7 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   CAMLlocal2(mlErrListTemp, mlErrListOut);
 
   T_irdata *tgv = Tgv_val(mlTgv);
-  T_discord *erreurs = enchainement_primitif(tgv);
+  T_discord *erreurs = enchainement_primitif_interpreteur(tgv);
   mlErrListOut = Val_emptylist;
   while (erreurs != NULL) {
     if (erreurs->erreur != NULL) {
@@ -212,4 +213,80 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   }
   CAMLreturn(mlErrListOut);
 }
+
+CAMLprim value ml_set_evt_list(value mlTgv, value mlEvtList) {
+  CAMLparam2(mlTgv, mlEvtList);
+  CAMLlocal3(mlList, mlEvt, mlField);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  int len = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    len++;
+    mlList = Field(mlList, 1);
+  }
+  if (len > 0) {
+    tgv->events = (T_event **)malloc(len * sizeof (T_event *));
+  } else {
+    tgv->events = NULL;
+  }
+  tgv->nb_events = len;
+
+  int i = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    T_event *evt = (T_event *)malloc(sizeof (T_event));
+    tgv->events[i] = evt;
+    mlEvt = Field(mlList, 0);
+
+    evt->field_numero_def = 1;
+    evt->field_numero_val = Double_val(Field(mlEvt, 0));
+
+    evt->field_rappel_def = 1;
+    evt->field_rappel_val = Double_val(Field(mlEvt, 1));
+
+    evt->field_code_var = cherche_var(tgv, String_val(Field(mlEvt, 2)));
+
+    evt->field_montant_def = 1;
+    evt->field_montant_val = Double_val(Field(mlEvt, 3));
+
+    evt->field_sens_def = 1;
+    evt->field_sens_val = Double_val(Field(mlEvt, 4));
+
+    mlField = Field(mlEvt, 5);
+    if (mlField == Val_none) {
+      evt->field_penalite_def = 0;
+      evt->field_penalite_val = 0.0;
+    } else {
+      evt->field_penalite_def = 1;
+      evt->field_penalite_val = Double_val(Some_val(mlField));
+    }
+
+    mlField = Field(mlEvt, 6);
+    if (mlField == Val_none) {
+      evt->field_base_tl_def = 0;
+      evt->field_base_tl_val = 0.0;
+    } else {
+      evt->field_base_tl_def = 1;
+      evt->field_base_tl_val = Double_val(Some_val(mlField));
+    }
+
+    evt->field_date_def = 1;
+    evt->field_date_val = Double_val(Field(mlEvt, 7));
+
+    mlField = Field(mlEvt, 8);
+    if (mlField == Val_none) {
+      evt->field_2042_rect_def = 0;
+      evt->field_2042_rect_val = 0.0;
+    } else {
+      evt->field_2042_rect_def = 1;
+      evt->field_2042_rect_val = Double_val(Some_val(mlField));
+    }
+
+    i++;
+    mlList = Field(mlList, 1);
+  }
+  CAMLreturn(Val_unit);
+}
+
 

@@ -116,6 +116,7 @@ let parse_function_name f_name =
     | "supzero" -> Supzero
     | "numero_verif" -> VerifNumber
     | "numero_compl" -> ComplNumber
+    | "nb_evenements" -> NbEvents
     | fn -> Func fn
   in
   Pos.map_under_mark map f_name

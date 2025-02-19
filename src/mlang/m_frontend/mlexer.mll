@@ -45,6 +45,7 @@ rule token = parse
 | '-' { MINUS }
 | '*' { TIMES }
 | '/' { DIV }
+| '%' { MOD }
 | '=' { EQUALS }
 | "!=" { NEQ }
 | '>' { GT }
@@ -62,12 +63,14 @@ rule token = parse
     | "REEL" -> REAL
     | "afficher" -> PRINT
     | "afficher_erreur" -> PRINT_ERR
+    | "ajouter" -> ADD
     | "alias" -> ALIAS
     | "alors" -> THEN
     | "anomalie" -> ANOMALY
     | "application" -> APPLICATION
     | "apres" -> AFTER
-    | "argument" -> INPUT_ARG
+    | "arguments" -> INPUT_ARGS
+    | "arranger_evenements" -> ARRANGE_EVENTS
     | "attribut" -> ATTRIBUT
     | "autorise" -> AUTHORIZE
     | "avec" -> WITH
@@ -76,6 +79,7 @@ rule token = parse
     | "calculee" -> COMPUTED
     | "calculer" -> COMPUTE
     | "categorie" -> CATEGORY
+    | "champ_evenement" -> EVENT_FIELD
     | "cible" -> TARGET
     | "const" -> CONST
     | "dans" -> IN
@@ -84,12 +88,16 @@ rule token = parse
     | "enchaineur" -> CHAINING
     | "erreur" -> ERROR
     | "et" -> AND
+    | "evenement" -> EVENT
+    | "evenements" -> EVENTS
     | "exporte_erreurs" -> EXPORT_ERRORS
     | "faire" -> DO
+    | "filtrer" -> FILTER
     | "finalise_erreurs" -> FINALIZE_ERRORS
     | "finquand" -> ENDWHEN
     | "finsi" -> ENDIF
     | "fonction" -> FONCTION
+    | "increment" -> STEP
     | "indefini" -> UNDEFINED
     | "indenter" -> INDENT
     | "informative" -> INFORMATIVE
@@ -111,6 +119,7 @@ rule token = parse
     | "pour" -> FOR
     | "puis_quand" -> THEN_WHEN
     | "quand" -> WHEN
+    | "reference" -> REFERENCE
     | "regle" -> RULE
     | "restaurer" -> RESTORE
     | "restituee" -> GIVEN_BACK
@@ -124,10 +133,12 @@ rule token = parse
     | "specialise" -> SPECIALIZE
     | "tableau" -> TABLE
     | "taille" -> SIZE
-    | "temporaire" -> TEMPORARY
+    | "trier" -> SORT
     | "type" -> TYPE
     | "un" -> ONE
+    | "valeur" -> VALUE
     | "variable" -> VARIABLE
+    | "variables_temporaires" -> TEMP_VARS
     | "verif" -> VERIFICATION
     | "verifiable" -> VERIFIABLE
     | "verifier" -> VERIFY

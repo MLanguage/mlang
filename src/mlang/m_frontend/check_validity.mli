@@ -12,18 +12,6 @@
 
 type rule_or_verif = Rule | Verif
 
-module MarkedVarNames : sig
-  type t
-
-  val compare : t -> t -> int
-
-  val pp_marked : Format.formatter -> t -> unit
-
-  module Set : SetExt.T with type elt = t
-
-  module Map : MapExt.T with type key = t
-end
-
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
 
 type 'a doms = 'a Com.domain Com.DomainIdMap.t
@@ -42,8 +30,8 @@ type rule = {
   rule_tmp_vars :
     (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
-  rule_in_vars : MarkedVarNames.Set.t;
-  rule_out_vars : MarkedVarNames.Set.t;
+  rule_in_vars : StrSet.t;
+  rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
 }
 
@@ -68,7 +56,10 @@ type program = {
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
-  prog_alias : Com.Var.t StrMap.t;
+  prog_alias : string Pos.marked StrMap.t;
+  prog_event_fields : Com.event_field StrMap.t;
+  prog_event_field_idxs : string IntMap.t;
+  prog_event_pos : Pos.t;
   prog_errors : Com.Error.t StrMap.t;
   prog_rdoms : Com.rule_domain_data doms;
   prog_rdom_syms : syms;

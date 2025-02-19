@@ -3,7 +3,6 @@
 cible regle_1:
 application: iliad;
 BIDON = 1;
-APPLI_OCEANS = 0;
 APPLI_BATCH = 0;
 APPLI_ILIAD = 1;
 
