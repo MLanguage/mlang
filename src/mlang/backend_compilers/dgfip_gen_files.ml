@@ -459,21 +459,19 @@ let gen_lib fmt (cprog : Mir.program) flags =
   let taille_saisie = count Com.CatVar.LocInput in
   let taille_calculee = count Com.CatVar.LocComputed in
   let taille_base = count Com.CatVar.LocBase in
-  let taille_totale = taille_saisie + taille_calculee + taille_base in
   let nb_ench = StrMap.cardinal cprog.program_chainings in
   let nb_err = StrMap.cardinal cprog.program_errors in
   let nb_call = IntMap.cardinal cprog.program_rules in
   let nb_verif = IntMap.cardinal cprog.program_verifs in
 
   Format.fprintf fmt
-    {|#define TAILLE_SAISIE %d
-#define TAILLE_CALCULEE %d
-#define TAILLE_BASE %d
-#define TAILLE_TOTALE %d
+    {|#define NB_SAISIE %d
+#define NB_CALCULEE %d
+#define NB_BASE %d
 #define NB_ENCH %d
 
 |}
-    taille_saisie taille_calculee taille_base taille_totale nb_ench;
+    taille_saisie taille_calculee taille_base nb_ench;
 
   Format.fprintf fmt {|#define TAILLE_TMP_VARS %d
 #define TAILLE_REFS %d
@@ -1124,17 +1122,17 @@ static void init_tab(char *p_def, double *p_val, int nb) {
 
 void init_saisie(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
+  init_tab(irdata->def_saisie, irdata->saisie, NB_SAISIE);
 }
 
 void init_calculee(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
+  init_tab(irdata->def_calculee, irdata->calculee, NB_CALCULEE);
 }
 
 void init_base(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+  init_tab(irdata->def_base, irdata->base, NB_BASE);
 }
 
 void init_erreur(T_irdata *irdata) {
@@ -1175,28 +1173,28 @@ T_irdata *cree_irdata(void) {
   if (irdata == NULL) return NULL;
   irdata->saisie = NULL;
   irdata->def_saisie = NULL;
-  if (TAILLE_SAISIE > 0) {
-    irdata->saisie = (double *)malloc(TAILLE_SAISIE * sizeof (double));
+  if (NB_SAISIE > 0) {
+    irdata->saisie = (double *)malloc(NB_SAISIE * sizeof (double));
     if (irdata->saisie == NULL) goto erreur_cree_irdata;
-    irdata->def_saisie = (char *)malloc(TAILLE_SAISIE * sizeof (char));
+    irdata->def_saisie = (char *)malloc(NB_SAISIE * sizeof (char));
     if (irdata->def_saisie == NULL) goto erreur_cree_irdata;
   }
   init_saisie(irdata);
   irdata->calculee = NULL;
   irdata->def_calculee = NULL;
-  if (TAILLE_CALCULEE > 0) {
-    irdata->calculee = (double *)malloc(TAILLE_CALCULEE * sizeof (double));
+  if (NB_CALCULEE > 0) {
+    irdata->calculee = (double *)malloc(NB_CALCULEE * sizeof (double));
     if (irdata->calculee == NULL) goto erreur_cree_irdata;
-    irdata->def_calculee = (char *)malloc(TAILLE_CALCULEE * sizeof (char));
+    irdata->def_calculee = (char *)malloc(NB_CALCULEE * sizeof (char));
     if (irdata->def_calculee == NULL) goto erreur_cree_irdata;
   }
   init_calculee(irdata);
   irdata->base = NULL;
   irdata->def_base = NULL;
-  if (TAILLE_BASE > 0) {
-    irdata->base = (double *)malloc(TAILLE_BASE * sizeof (double));
+  if (NB_BASE > 0) {
+    irdata->base = (double *)malloc(NB_BASE * sizeof (double));
     if (irdata->base == NULL) goto erreur_cree_irdata;
-    irdata->def_base = (char *)malloc(TAILLE_BASE * sizeof (char));
+    irdata->def_base = (char *)malloc(NB_BASE * sizeof (char));
     if (irdata->def_base == NULL) goto erreur_cree_irdata;
   }
   init_base(irdata);
@@ -1260,20 +1258,20 @@ void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
 
 void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double));
-  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE);
+  memcpy(irdata_dst->saisie, irdata_src->saisie, NB_SAISIE * sizeof(double));
+  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, NB_SAISIE);
 }
 
 void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double));
-  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE);
+  memcpy(irdata_dst->calculee, irdata_src->calculee, NB_CALCULEE * sizeof(double));
+  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, NB_CALCULEE);
 }
 
 void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double));
-  memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE);
+  memcpy(irdata_dst->base, irdata_src->base, NB_BASE * sizeof(double));
+  memcpy(irdata_dst->def_base, irdata_src->def_base, NB_BASE);
 }
 
 static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
@@ -1285,17 +1283,17 @@ static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, d
 
 void ecris_saisie(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE, idx, def, val);
+  ecris_tab(irdata->def_saisie, irdata->saisie, NB_SAISIE, idx, def, val);
 }
 
 void ecris_calculee(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE, idx, def, val);
+  ecris_tab(irdata->def_calculee, irdata->calculee, NB_CALCULEE, idx, def, val);
 }
 
 void ecris_base(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_base, irdata->base, TAILLE_BASE, idx, def, val);
+  ecris_tab(irdata->def_base, irdata->base, NB_BASE, idx, def, val);
 }
 
 static char lis_tab_def(char *t_def, int t_nb, int idx) {
@@ -1305,17 +1303,17 @@ static char lis_tab_def(char *t_def, int t_nb, int idx) {
 
 char lis_saisie_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_saisie, TAILLE_SAISIE, idx);
+  return lis_tab_def(irdata->def_saisie, NB_SAISIE, idx);
 }
 
 char lis_calculee_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_calculee, TAILLE_CALCULEE, idx);
+  return lis_tab_def(irdata->def_calculee, NB_CALCULEE, idx);
 }
 
 char lis_base_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_base, TAILLE_BASE, idx);
+  return lis_tab_def(irdata->def_base, NB_BASE, idx);
 }
 
 static double lis_tab_val(double *t_val, int t_nb, int idx) {
@@ -1325,17 +1323,17 @@ static double lis_tab_val(double *t_val, int t_nb, int idx) {
 
 double lis_saisie_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->saisie, TAILLE_SAISIE, idx);
+  return lis_tab_val(irdata->saisie, NB_SAISIE, idx);
 }
 
 double lis_calculee_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->calculee, TAILLE_CALCULEE, idx);
+  return lis_tab_val(irdata->calculee, NB_CALCULEE, idx);
 }
 
 double lis_base_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->base, TAILLE_BASE, idx);
+  return lis_tab_val(irdata->base, NB_BASE, idx);
 }
 
 static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
@@ -1345,17 +1343,17 @@ static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
 
 char *lis_saisie_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_saisie, TAILLE_SAISIE, idx);
+  return lis_tab_def_ref(irdata->def_saisie, NB_SAISIE, idx);
 }
 
 char *lis_calculee_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_calculee, TAILLE_CALCULEE, idx);
+  return lis_tab_def_ref(irdata->def_calculee, NB_CALCULEE, idx);
 }
 
 char *lis_base_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_base, TAILLE_BASE, idx);
+  return lis_tab_def_ref(irdata->def_base, NB_BASE, idx);
 }
 
 static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
@@ -1365,17 +1363,17 @@ static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
 
 double *lis_saisie_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->saisie, TAILLE_SAISIE, idx);
+  return lis_tab_val_ref(irdata->saisie, NB_SAISIE, idx);
 }
 
 double *lis_calculee_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->calculee, TAILLE_CALCULEE, idx);
+  return lis_tab_val_ref(irdata->calculee, NB_CALCULEE, idx);
 }
 
 double *lis_base_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->base, TAILLE_BASE, idx);
+  return lis_tab_val_ref(irdata->base, NB_BASE, idx);
 }
 
 T_discord *lis_discords(T_irdata *irdata) {
