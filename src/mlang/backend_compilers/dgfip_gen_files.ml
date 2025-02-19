@@ -22,7 +22,7 @@ let open_file filename =
 
 let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
     (stats, var_map) =
-  let oc, fmt = open_file (Pp.spr "varinfo_%s.c" id_str) in
+  let oc, fmt = open_file (Pp.spr "varinfo_%d.c" id_int) in
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
