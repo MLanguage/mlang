@@ -539,9 +539,9 @@ extern int nb_informatives(T_irdata *irdata);
 extern int nb_discordances(T_irdata *irdata);
 extern int nb_anomalies(T_irdata *irdata);
 extern int nb_bloquantes(T_irdata *irdata);
-extern void nettoie_erreur _PROTS((T_irdata *irdata ));
-extern void finalise_erreur _PROTS((T_irdata *irdata ));
-extern void exporte_erreur _PROTS((T_irdata *irdata ));
+extern void nettoie_erreur (T_irdata *irdata);
+extern void finalise_erreur (T_irdata *irdata);
+extern void exporte_erreur (T_irdata *irdata);
 
 extern T_irdata *cree_irdata(void);
 extern void init_saisie(T_irdata *irdata);
@@ -626,8 +626,6 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   pr "#include <setjmp.h>\n";
   pr "\n";
   pr "#include \"conf.h\"\n";
-  pr "\n";
-  pr "#define _PROTS(X) X\n";
   pr "\n";
   pr "#define ANNEE_REVENU %04d\n" flags.Dgfip_options.annee_revenu;
   pr "\n";
