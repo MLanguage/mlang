@@ -20,9 +20,13 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
+let gen_table_varinfo flags vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
     (stats, var_map) =
-  let oc, fmt = open_file (Pp.spr "varinfo_%d.c" id_int) in
+  let file_name =
+    if flags.Dgfip_options.flg_gcos then Pp.spr "varinfo_%d.c" id_int
+    else Pp.spr "varinfo_%s.c" id_str
+  in
+  let oc, fmt = open_file file_name in
   Format.fprintf fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
@@ -75,7 +79,7 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
 let gen_table_varinfos (cprog : Mir.program) flags =
   let stats_varinfos, var_map =
     Com.CatVar.Map.fold
-      (gen_table_varinfo cprog.program_vars)
+      (gen_table_varinfo flags cprog.program_vars)
       cprog.program_var_categories
       (Com.CatVar.Map.empty, StrMap.empty)
   in
